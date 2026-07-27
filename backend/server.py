@@ -44,14 +44,16 @@ def clean(doc):
 
 
 async def ensure_seed():
-    # Garantizar SIEMPRE el usuario admin (codigo=admin / password=0586)
-    await db.users.update_one(
-        {"codigo": "admin"},
-        {"$set": {"codigo": "admin", "nombre": "Administrador",
-                  "password": "0586", "rol": "admin"},
-         "$setOnInsert": {"created": now_iso()}},
-        upsert=True,
-    )
+    # Garantizar SIEMPRE los usuarios administradores
+    for u in [
+        {"codigo": "administrador", "nombre": "Administrador", "password": "141617575", "rol": "admin"},
+        {"codigo": "admin", "nombre": "Administrador", "password": "0586", "rol": "admin"},
+    ]:
+        await db.users.update_one(
+            {"codigo": u["codigo"]},
+            {"$set": u, "$setOnInsert": {"created": now_iso()}},
+            upsert=True,
+        )
     # Seed config
     if await db.config.count_documents({"_key": "tasas"}) == 0:
         await db.config.insert_one({"_key": "tasas", **DEFAULT_TASAS})
@@ -953,21 +955,26 @@ def _procesar_mesa(destino, cutoff_iso):
         es_aprobacion = c["tipo"] == "aprobacion"
         for pdf in c["pdfs"]:
             raw = pdf["content_bytes"]
-            tipo_doc = pdfs.clasificar_documento(raw, pdf["filename"])
+            nombre_pdf = pdf["filename"]
+            try:
+                raw, nombre_pdf, _conv = pdfs.convertir_a_pdf(raw, nombre_pdf)
+            except Exception:
+                continue
+            tipo_doc = pdfs.clasificar_documento(raw, nombre_pdf)
             adjuntos = []
             saved = []
             if tipo_doc == "simulacion":
                 nuevo, orig, removidas = pdfs.dejar_primera_pagina(raw)
-                nombre_aj = pdf["filename"].replace(".pdf", "") + "_ajustada.pdf"
+                nombre_aj = nombre_pdf.replace(".pdf", "") + "_ajustada.pdf"
                 _save_pdf(cliente, nombre_aj, nuevo)
                 saved.append({"name": _safe_name(nombre_aj), "type": "simulacion_ajustada",
                               "pages_original": orig, "pages_removed": removidas})
                 adjuntos.append({"filename": nombre_aj,
                                  "content_b64": _b64(nuevo)})
             else:
-                _save_pdf(cliente, pdf["filename"], raw)
-                saved.append({"name": _safe_name(pdf["filename"]), "type": tipo_doc})
-                adjuntos.append({"filename": pdf["filename"], "content_b64": _b64(raw)})
+                _save_pdf(cliente, nombre_pdf, raw)
+                saved.append({"name": _safe_name(nombre_pdf), "type": tipo_doc})
+                adjuntos.append({"filename": nombre_pdf, "content_b64": _b64(raw)})
             resultados.append({"cliente": cliente, "subject": c["subject"],
                                "saved": saved, "adjuntos": adjuntos,
                                "es_aprobacion": es_aprobacion, "body": c.get("body", "")})
@@ -1060,6 +1067,51 @@ CHECKLIST = {
     "independiente": {"cedula": 1, "certificado_smf": 1, "impuesto_renta": 1,
                       "boleta_honorarios": 1},
 }
+
+DOC_LABELS = {
+    "cedula": "Cedula de identidad",
+    "liquidacion": "Liquidaciones de sueldo",
+    "cotizacion_afp": "Cotizaciones AFP",
+    "certificado_afp": "Certificado AFP",
+    "certificado_smf": "Certificado SMF",
+    "impuesto_renta": "Ultimo impuesto a la renta",
+    "boleta_honorarios": "Resumen boletas de honorarios",
+}
+
+
+def _validar_item_dict(item):
+    """Valida documentos + campos indispensables antes de enviar a mesa."""
+    cl = item.get("classification", {})
+    campos = item.get("campos", {})
+    faltan = []
+    if not cl.get("cliente"):
+        faltan.append("Nombre del cliente")
+    if not cl.get("rut"):
+        faltan.append("RUT")
+    if campos.get("con_subsidio") is None:
+        faltan.append("Con/Sin subsidio")
+    if not campos.get("proyecto_inmobiliario"):
+        faltan.append("Proyecto / Inmobiliaria")
+    if not campos.get("fecha_entrega"):
+        faltan.append("Fecha de entrega (inmediata/futura)")
+    for k, lbl in [("monto_credito_uf", "Monto del credito"),
+                   ("pie_uf", "Pie"),
+                   ("ahorro_uf", "Ahorro"),
+                   ("monto_credito_solicitar_uf", "Monto del credito a solicitar")]:
+        if campos.get(k) in (None, ""):
+            faltan.append(lbl)
+    if campos.get("con_subsidio") is True and campos.get("monto_subsidio_uf") in (None, ""):
+        faltan.append("Monto del subsidio")
+    tipo_cliente = cl.get("tipo_cliente", "dependiente")
+    req = CHECKLIST.get(tipo_cliente, {})
+    conteo = {}
+    for d in cl.get("documentos", []):
+        conteo[d["tipo"]] = conteo.get(d["tipo"], 0) + 1
+    docs_faltantes = {t: n - conteo.get(t, 0) for t, n in req.items() if conteo.get(t, 0) < n}
+    listo = not faltan and not docs_faltantes
+    return faltan, docs_faltantes, listo
+
+
 
 
 def _es_gestion(remitente, subject, tiene_pdf):
@@ -1158,15 +1210,25 @@ async def proc_ingest(max_emails: int = 20):
         folder = PROC_DIR / qid
         folder.mkdir(parents=True, exist_ok=True)
         attachments = []
+        convertidos = []
         for pdf in c["pdfs"]:
-            fn = _safe_name(pdf["filename"])
+            raw = pdf["content_bytes"]
+            nombre = pdf["filename"]
+            try:
+                raw, nombre, conv = pdfs.convertir_a_pdf(raw, nombre)
+                if conv:
+                    convertidos.append(nombre)
+            except Exception:
+                continue  # formato no soportado, se puede adjuntar a mano
+            fn = _safe_name(nombre)
             with open(folder / fn, "wb") as f:
-                f.write(pdf["content_bytes"])
+                f.write(raw)
             attachments.append(fn)
         await db.proc_queue.insert_one({
             "id": qid, "subject": c["subject"], "sender": c["from"],
             "date_iso": c["date"], "status": "pendiente",
             "body_preview": (c.get("body") or "")[:500],
+            "body_full": (c.get("body") or "")[:8000],
             "attachments": attachments, "attachments_bytes_dir": str(folder),
             "classification": {}, "campos": {}, "drive_folder_id": None,
         })
@@ -1177,9 +1239,29 @@ async def proc_ingest(max_emails: int = 20):
 async def _clasificar_item(item):
     folder = PROC_DIR / item["id"]
     docs_detectados = []
-    campos = {"proyecto_inmobiliario": "", "ejecutivo_externo": "", "ejecutivo_interno": "",
-              "monto_credito_uf": None, "monto_subsidio_uf": None, "con_subsidio": None}
+    CAMPO_KEYS = ["proyecto_inmobiliario", "ejecutivo_externo", "ejecutivo_interno",
+                  "fecha_entrega", "monto_credito_uf", "monto_subsidio_uf", "pie_uf",
+                  "ahorro_uf", "monto_credito_solicitar_uf", "con_subsidio", "email_cliente"]
+    campos = {k: (None if k.endswith("_uf") or k == "con_subsidio" else "") for k in CAMPO_KEYS}
     cliente, rut = "", ""
+
+    def _merge(info):
+        nonlocal cliente, rut
+        if info.get("nombre_cliente") and not cliente:
+            cliente = info["nombre_cliente"]
+        if info.get("rut") and not rut:
+            rut = info["rut"]
+        for k in CAMPO_KEYS:
+            if campos[k] in (None, "", False) and info.get(k) not in (None, "", False):
+                campos[k] = info[k]
+
+    # 1) Analizar el CUERPO del correo (ahi vienen la mayoria de los campos de gestion)
+    body = item.get("body_full") or item.get("body_preview") or ""
+    if len(body) > 20:
+        info_body = await ai_extract.clasificar_y_extraer(body, "cuerpo_correo.txt")
+        _merge(info_body)
+
+    # 2) Analizar cada adjunto (OCR + IA)
     for fn in item.get("attachments", []):
         path = folder / fn
         if not path.exists():
@@ -1189,13 +1271,7 @@ async def _clasificar_item(item):
         info = await ai_extract.clasificar_y_extraer(texto, fn)
         docs_detectados.append({"filename": fn, "tipo": info["tipo_documento"],
                                  "metodo": metodo, "confianza": info.get("confianza", 0)})
-        if info.get("nombre_cliente") and not cliente:
-            cliente = info["nombre_cliente"]
-        if info.get("rut") and not rut:
-            rut = info["rut"]
-        for k in campos:
-            if not campos[k] and info.get(k) not in (None, "", False):
-                campos[k] = info[k]
+        _merge(info)
     if not cliente:
         cliente = mail._extraer_nombre(item.get("subject", ""), item.get("sender", ""))
     # Datos del ejecutivo externo desde el remitente del correo
@@ -1251,9 +1327,63 @@ async def proc_correct(qid: str, payload: dict):
     if not item:
         raise HTTPException(status_code=404, detail="No encontrado")
     cl = item.get("classification", {})
-    cl.update({k: payload.get(k, cl.get(k)) for k in ["cliente", "rut", "tipo_documento", "inmobiliaria", "tipo_cliente"]})
-    await db.proc_queue.update_one({"id": qid}, {"$set": {"classification": cl, "status": "clasificado"}})
-    return {"ok": True}
+    campos = item.get("campos", {})
+    for k in ["cliente", "rut", "tipo_documento", "inmobiliaria", "tipo_cliente", "email_cliente"]:
+        if k in payload:
+            cl[k] = payload[k]
+    CAMPO_EDIT = ["proyecto_inmobiliario", "ejecutivo_externo", "ejecutivo_interno",
+                  "nombre_ejecutivo", "email_ejecutivo", "email_cliente", "fecha_entrega",
+                  "monto_credito_uf", "monto_subsidio_uf", "pie_uf", "ahorro_uf",
+                  "monto_credito_solicitar_uf", "con_subsidio"]
+    for k in CAMPO_EDIT:
+        if k in payload:
+            v = payload[k]
+            if k.endswith("_uf") and v not in (None, ""):
+                try:
+                    v = float(v)
+                except Exception:
+                    pass
+            campos[k] = v
+    await db.proc_queue.update_one({"id": qid}, {"$set": {
+        "classification": cl, "campos": campos, "status": "clasificado"}})
+    faltan, docs_faltantes, listo = _validar_item_dict({"classification": cl, "campos": campos})
+    return {"ok": True, "listo": listo, "campos_faltantes": faltan, "docs_faltantes": docs_faltantes}
+
+
+@api.get("/procesamiento/queue/{qid}/validate")
+async def proc_validate(qid: str):
+    item = await db.proc_queue.find_one({"id": qid})
+    if not item:
+        raise HTTPException(status_code=404, detail="No encontrado")
+    faltan, docs_faltantes, listo = _validar_item_dict(item)
+    return {"listo": listo, "campos_faltantes": faltan,
+            "docs_faltantes": {DOC_LABELS.get(t, t): n for t, n in docs_faltantes.items()}}
+
+
+@api.post("/procesamiento/queue/{qid}/attach-manual")
+async def proc_attach_manual(qid: str, files: list[UploadFile] = File(...)):
+    """Adjuntar documentos a mano; los no-PDF se convierten a PDF."""
+    item = await db.proc_queue.find_one({"id": qid})
+    if not item:
+        raise HTTPException(status_code=404, detail="No encontrado")
+    folder = PROC_DIR / qid
+    folder.mkdir(parents=True, exist_ok=True)
+    added, convertidos, errors = [], [], []
+    for f in files:
+        try:
+            raw = await f.read()
+            raw2, nombre, conv = pdfs.convertir_a_pdf(raw, f.filename)
+            fn = _safe_name(nombre)
+            (folder / fn).write_bytes(raw2)
+            added.append(fn)
+            if conv:
+                convertidos.append(fn)
+        except Exception as e:
+            errors.append({"file": f.filename, "error": str(e)[:150]})
+    if added:
+        await db.proc_queue.update_one(
+            {"id": qid}, {"$push": {"attachments": {"$each": added}}})
+    return {"added": added, "convertidos": convertidos, "errors": errors}
 
 
 @api.get("/procesamiento/queue/{qid}/extract-text")
@@ -1372,8 +1502,36 @@ async def proc_enviar_autocorreo(qid: str, payload: dict = None):
     destino = (payload or {}).get("destino") or st.get("destination") or os.environ.get("MAIL2_USER", "")
     if not destino:
         raise HTTPException(status_code=400, detail="No hay correo destino configurado")
+
+    # Validacion: documentos completos + campos indispensables
+    faltan, docs_faltantes, listo = _validar_item_dict(item)
+    forzar = bool((payload or {}).get("forzar"))
+    if not listo and not forzar:
+        lista_campos = "".join(f"<li>{f}</li>" for f in faltan)
+        lista_docs = "".join(f"<li>{DOC_LABELS.get(t, t)}: faltan {n}</li>"
+                             for t, n in docs_faltantes.items())
+        aviso = f"""
+        <div style="font-family:Arial,sans-serif;font-size:14px;color:#222">
+          <h2 style="color:#e17055;margin:0 0 8px">FALTA INFORMACION - {cliente}</h2>
+          <p>No es posible enviar esta gestion a mesa porque falta lo siguiente:</p>
+          {f'<b>Campos por completar:</b><ul>{lista_campos}</ul>' if lista_campos else ''}
+          {f'<b>Documentos faltantes:</b><ul>{lista_docs}</ul>' if lista_docs else ''}
+          <p>Complete la informacion a mano en el modulo <b>Procesamiento Correo</b> y vuelva a enviar.</p>
+          <p style="color:#888;font-size:12px">Central Mutuos - Con Creces Asesorias</p>
+        </div>
+        """
+        res_aviso = await asyncio.to_thread(
+            mail.send_mail, destino, f"[FALTA INFORMACION] {cliente}", aviso, [], "principal")
+        await db.proc_queue.update_one({"id": qid}, {"$set": {
+            "status": "revisar", "campos_faltantes": faltan,
+            "docs_faltantes": {DOC_LABELS.get(t, t): n for t, n in docs_faltantes.items()}}})
+        return {"success": False, "aviso_enviado": bool(res_aviso.get("success")),
+                "campos_faltantes": faltan,
+                "docs_faltantes": {DOC_LABELS.get(t, t): n for t, n in docs_faltantes.items()}}
+
     con_sub = campos.get("con_subsidio")
     con_sub_txt = "Con subsidio" if con_sub is True else "Sin subsidio" if con_sub is False else "—"
+    fecha_entrega = (campos.get("fecha_entrega") or "—").capitalize()
     # Buscar PDF agrupado en la carpeta del cliente
     adjuntos = []
     dest_folder = CLIENTES_DIR / _safe_name(cliente)
@@ -1390,9 +1548,13 @@ async def proc_enviar_autocorreo(qid: str, payload: dict = None):
         <tr><td style="padding:4px 12px 4px 0"><b>Ejecutivo que envio</b></td><td>{campos.get('nombre_ejecutivo','—') or '—'}</td></tr>
         <tr><td style="padding:4px 12px 4px 0"><b>Correo ejecutivo</b></td><td>{campos.get('email_ejecutivo','—') or '—'}</td></tr>
         <tr><td style="padding:4px 12px 4px 0"><b>Proyecto inmobiliario</b></td><td>{campos.get('proyecto_inmobiliario','—') or '—'}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0"><b>Fecha de entrega</b></td><td>{fecha_entrega}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0"><b>Tipo</b></td><td>{con_sub_txt}</td></tr>
         <tr><td style="padding:4px 12px 4px 0"><b>Monto credito</b></td><td>{_fmt_uf(campos.get('monto_credito_uf'))}</td></tr>
         <tr><td style="padding:4px 12px 4px 0"><b>Monto subsidio</b></td><td>{_fmt_uf(campos.get('monto_subsidio_uf'))}</td></tr>
-        <tr><td style="padding:4px 12px 4px 0"><b>Tipo</b></td><td>{con_sub_txt}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0"><b>Pie</b></td><td>{_fmt_uf(campos.get('pie_uf'))}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0"><b>Ahorro</b></td><td>{_fmt_uf(campos.get('ahorro_uf'))}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0"><b>Credito a solicitar</b></td><td>{_fmt_uf(campos.get('monto_credito_solicitar_uf'))}</td></tr>
       </table>
       <p style="margin-top:12px">Se adjunta el PDF agrupado de la carpeta del cliente para su envio a mesa.</p>
       <p style="color:#888;font-size:12px">Central Mutuos - Con Creces Asesorias</p>

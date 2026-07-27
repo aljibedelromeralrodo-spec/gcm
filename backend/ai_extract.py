@@ -53,8 +53,12 @@ async def clasificar_y_extraer(texto, filename=""):
         "proyecto_inmobiliario": "",
         "ejecutivo_externo": "",
         "ejecutivo_interno": "",
+        "fecha_entrega": "",
         "monto_credito_uf": None,
         "monto_subsidio_uf": None,
+        "pie_uf": None,
+        "ahorro_uf": None,
+        "monto_credito_solicitar_uf": None,
         "con_subsidio": None,
         "confianza": 0.4,
         "metodo": "reglas",
@@ -71,8 +75,13 @@ async def clasificar_y_extraer(texto, filename=""):
             "nombre_cliente (string), rut (string formato chileno o ''), "
             "email_cliente (correo del cliente si aparece, o ''), "
             "proyecto_inmobiliario (string), ejecutivo_externo (string), "
-            "ejecutivo_interno (string), monto_credito_uf (numero o null), "
-            "monto_subsidio_uf (numero o null), con_subsidio (true/false/null), "
+            "ejecutivo_interno (string), "
+            "fecha_entrega ('inmediata', 'futura' o ''), "
+            "monto_credito_uf (numero o null), "
+            "monto_subsidio_uf (numero o null), "
+            "pie_uf (numero o null), ahorro_uf (numero o null), "
+            "monto_credito_solicitar_uf (numero o null), "
+            "con_subsidio (true/false/null), "
             "confianza (0 a 1). Si un dato no aparece, usa '' o null."
         )
         chat = LlmChat(api_key=key, session_id=f"extract-{uuid.uuid4()}",

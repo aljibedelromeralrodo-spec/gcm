@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import axios from "axios";
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -119,7 +119,30 @@ export default function EmailProcessingModule() {
     setBusy(true);
     try {
       const r = await axios.post(`${API}/api/procesamiento/queue/${id}/enviar-autocorreo`, {});
-      alert(`✅ Autocorreo enviado a ${r.data.destino}\n${r.data.adjunto ? "Con PDF agrupado adjunto" : "Sin PDF agrupado (arma la carpeta primero)"}\n\nRevisa tu bandeja y reenvíalo a mesa.`);
+      if (r.data.success) {
+        alert(`✅ Autocorreo enviado a ${r.data.destino}\n${r.data.adjunto ? "Con PDF agrupado adjunto" : "Sin PDF agrupado (arma la carpeta primero)"}\n\nRevisa tu bandeja y reenvíalo a mesa.`);
+      } else {
+        const campos = (r.data.campos_faltantes || []).map(f => `  • ${f}`).join("\n");
+        const docs = Object.entries(r.data.docs_faltantes || {}).map(([t, n]) => `  • ${t}: faltan ${n}`).join("\n");
+        alert(`⚠️ NO se envió: falta información.\n${r.data.aviso_enviado ? "Se envió un AVISO por correo con el detalle." : ""}\n\n${campos ? "Campos por completar:\n" + campos : ""}${docs ? "\n\nDocumentos faltantes:\n" + docs : ""}\n\nComplétalo a mano (Guardar corrección / Adjuntar documento) y vuelve a enviar.`);
+      }
+      load(); if (selected?.id === id) openDetail(id);
+    } catch (e) {
+      alert("Error: " + (e.response?.data?.detail || e.message));
+    } finally { setBusy(false); }
+  };
+
+  const attachManual = async (id, fileList) => {
+    setBusy(true);
+    try {
+      const fd = new FormData();
+      Array.from(fileList).forEach(f => fd.append("files", f));
+      const r = await axios.post(`${API}/api/procesamiento/queue/${id}/attach-manual`, fd);
+      let msg = `✅ ${r.data.added.length} documento(s) adjuntado(s)`;
+      if (r.data.convertidos?.length) msg += `\n${r.data.convertidos.length} convertido(s) a PDF: ${r.data.convertidos.join(", ")}`;
+      if (r.data.errors?.length) msg += `\n⚠️ Errores: ${r.data.errors.map(x => x.file).join(", ")}`;
+      msg += "\n\nUsa ♻ Reprocesar con IA para clasificarlos.";
+      alert(msg);
       load(); if (selected?.id === id) openDetail(id);
     } catch (e) {
       alert("Error: " + (e.response?.data?.detail || e.message));
@@ -281,21 +304,41 @@ export default function EmailProcessingModule() {
         <DetailModal item={selected} onClose={() => setSelected(null)}
                      onReprocess={reprocess} onSave={saveCorrection}
                      onUploadDrive={uploadToDrive} onExtractText={extractText}
-                     onEnviarAutocorreo={enviarAutocorreo}
+                     onEnviarAutocorreo={enviarAutocorreo} onAttachManual={attachManual}
                      driveConfigured={driveConfigured} busy={busy} />
       )}
     </div>
   );
 }
 
-function DetailModal({ item, onClose, onReprocess, onSave, onUploadDrive, onExtractText, onEnviarAutocorreo, driveConfigured, busy }) {
+function DetailModal({ item, onClose, onReprocess, onSave, onUploadDrive, onExtractText, onEnviarAutocorreo, onAttachManual, driveConfigured, busy }) {
   const cl = item.classification || {};
+  const campos = item.campos || {};
+  const fileRef = useRef(null);
   const [c, setC] = useState({
     cliente: cl.cliente || "",
     rut: cl.rut || "",
     tipo_documento: cl.tipo_documento || "otro",
     inmobiliaria: cl.inmobiliaria || "",
+    tipo_cliente: cl.tipo_cliente || "dependiente",
+    email_cliente: cl.email_cliente || campos.email_cliente || "",
+    proyecto_inmobiliario: campos.proyecto_inmobiliario || "",
+    fecha_entrega: campos.fecha_entrega || "",
+    con_subsidio: campos.con_subsidio === true ? "si" : campos.con_subsidio === false ? "no" : "",
+    monto_credito_uf: campos.monto_credito_uf ?? "",
+    monto_subsidio_uf: campos.monto_subsidio_uf ?? "",
+    pie_uf: campos.pie_uf ?? "",
+    ahorro_uf: campos.ahorro_uf ?? "",
+    monto_credito_solicitar_uf: campos.monto_credito_solicitar_uf ?? "",
   });
+  const guardar = () => {
+    const payload = { ...c };
+    payload.con_subsidio = c.con_subsidio === "si" ? true : c.con_subsidio === "no" ? false : null;
+    ["monto_credito_uf","monto_subsidio_uf","pie_uf","ahorro_uf","monto_credito_solicitar_uf"].forEach(k => {
+      payload[k] = c[k] === "" ? null : Number(c[k]);
+    });
+    onSave(item.id, payload);
+  };
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:100,
                   display:"flex", alignItems:"center", justifyContent:"center" }}
@@ -319,7 +362,7 @@ function DetailModal({ item, onClose, onReprocess, onSave, onUploadDrive, onExtr
           </div>
         )}
         <h4>Corregir clasificación</h4>
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap: 10, marginBottom: 16 }}>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap: 10, marginBottom: 12 }}>
           <label>Cliente <input data-testid="edit-cliente" value={c.cliente}
             onChange={e => setC({...c, cliente:e.target.value})} style={inp}/></label>
           <label>RUT <input data-testid="edit-rut" value={c.rut}
@@ -332,6 +375,52 @@ function DetailModal({ item, onClose, onReprocess, onSave, onUploadDrive, onExtr
           </label>
           <label>Inmobiliaria <input data-testid="edit-inmob" value={c.inmobiliaria}
             onChange={e => setC({...c, inmobiliaria:e.target.value})} style={inp}/></label>
+        </div>
+        <h4 style={{ marginBottom: 6 }}>Campos indispensables para enviar a mesa</h4>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
+          <label>Tipo cliente
+            <select value={c.tipo_cliente} onChange={e => setC({...c, tipo_cliente:e.target.value})} style={inp}>
+              <option value="dependiente">Dependiente</option>
+              <option value="independiente">Independiente</option>
+            </select>
+          </label>
+          <label>Correo cliente <input value={c.email_cliente}
+            onChange={e => setC({...c, email_cliente:e.target.value})} style={inp}/></label>
+          <label>Proyecto / Inmobiliaria <input data-testid="edit-proyecto" value={c.proyecto_inmobiliario}
+            onChange={e => setC({...c, proyecto_inmobiliario:e.target.value})} style={inp}/></label>
+          <label>Fecha de entrega
+            <select data-testid="edit-entrega" value={c.fecha_entrega}
+                    onChange={e => setC({...c, fecha_entrega:e.target.value})} style={inp}>
+              <option value="">—</option>
+              <option value="inmediata">Inmediata</option>
+              <option value="futura">Futura</option>
+            </select>
+          </label>
+          <label>Con / Sin subsidio
+            <select data-testid="edit-subsidio" value={c.con_subsidio}
+                    onChange={e => setC({...c, con_subsidio:e.target.value})} style={inp}>
+              <option value="">—</option>
+              <option value="si">Con subsidio</option>
+              <option value="no">Sin subsidio</option>
+            </select>
+          </label>
+          <label>Monto crédito (UF) <input type="number" value={c.monto_credito_uf}
+            onChange={e => setC({...c, monto_credito_uf:e.target.value})} style={inp}/></label>
+          <label>Monto subsidio (UF) <input type="number" value={c.monto_subsidio_uf}
+            onChange={e => setC({...c, monto_subsidio_uf:e.target.value})} style={inp}/></label>
+          <label>Pie (UF) <input type="number" value={c.pie_uf}
+            onChange={e => setC({...c, pie_uf:e.target.value})} style={inp}/></label>
+          <label>Ahorro (UF) <input type="number" value={c.ahorro_uf}
+            onChange={e => setC({...c, ahorro_uf:e.target.value})} style={inp}/></label>
+          <label>Crédito a solicitar (UF) <input type="number" value={c.monto_credito_solicitar_uf}
+            onChange={e => setC({...c, monto_credito_solicitar_uf:e.target.value})} style={inp}/></label>
+        </div>
+        <div style={{ marginBottom: 12 }}>
+          <input ref={fileRef} type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.tif,.tiff,.webp,.bmp"
+                 style={{ display:"none" }}
+                 onChange={e => { if (e.target.files?.length) { onAttachManual(item.id, e.target.files); e.target.value = ""; } }} />
+          <button data-testid="btn-attach-manual" onClick={() => fileRef.current?.click()} disabled={busy}
+                  style={btnStyle("#f59e0b")}>📎 Adjuntar documento a mano (auto-convierte a PDF)</button>
         </div>
         {item.drive_folder_id && (
           <div style={{ background:"#ecfdf5", border:"1px solid #86efac", padding:8, borderRadius:6,
@@ -363,7 +452,7 @@ function DetailModal({ item, onClose, onReprocess, onSave, onUploadDrive, onExtr
           </div>
           <div style={{ display:"flex", gap: 8 }}>
             <button onClick={onClose} style={btnStyle("#64748b")}>Cerrar</button>
-            <button data-testid="btn-save-correction" onClick={() => onSave(item.id, c)} disabled={busy}
+            <button data-testid="btn-save-correction" onClick={guardar} disabled={busy}
                     style={btnStyle("#22c55e")}>Guardar corrección</button>
           </div>
         </div>

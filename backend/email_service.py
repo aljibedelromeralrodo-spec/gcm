@@ -261,13 +261,17 @@ def fetch_pdf_attachments(sender_filter=None, limit=20):
                     fecha = fecha_raw or ""
                 pdfs = []
                 body_text = ""
+                CAPTURA_EXT = (".pdf", ".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp")
                 for part in msg.walk():
                     ctype = part.get_content_type()
                     disp = str(part.get("Content-Disposition") or "")
                     fname = part.get_filename()
                     if fname:
                         fname = _dec(fname)
-                    if ctype == "application/pdf" or (fname or "").lower().endswith(".pdf"):
+                    es_adjunto = (ctype == "application/pdf"
+                                  or ctype.startswith("image/") and "attachment" in disp
+                                  or (fname or "").lower().endswith(CAPTURA_EXT))
+                    if es_adjunto and fname:
                         try:
                             payload = part.get_payload(decode=True)
                             if payload:

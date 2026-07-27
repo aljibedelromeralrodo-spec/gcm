@@ -68,6 +68,11 @@
 ##     working: "NA"
 ##     file: "server.py, ai_extract.py, EmailProcessingModule.js"
 
+##   - task: "Credenciales administrador/141617575 + campos indispensables (validacion, aviso faltantes), attach-manual con conversion a PDF, correct ampliado, extraccion de campos desde cuerpo del correo"
+##     implemented: true
+##     working: "NA"
+##     file: "server.py, ai_extract.py, pdf_service.py, email_service.py, EmailProcessingModule.js"
+
 #====================================================================================================
 # START - Testing Protocol - DO NOT EDIT OR REMOVE THIS SECTION
 #====================================================================================================
@@ -237,12 +242,14 @@ frontend:
 metadata:
   created_by: "testing_agent"
   version: "1.0"
-  test_sequence: 3
+  test_sequence: 4
   run_ui: false
 
 test_plan:
   current_focus:
-    - "Procesamiento Correo module tested - all functionality working"
+    - "Nuevas credenciales administrador/141617575 tested - all functionality working"
+    - "Campos indispensables validation tested - all functionality working"
+    - "Adjunto manual con conversión a PDF tested - all functionality working"
   stuck_tasks: []
   test_all: true
   test_priority: "high_first"
@@ -268,6 +275,20 @@ agent_communication:
         agent: "testing"
         comment: "✅ ALL TESTS PASSED (16/16 - 100%). A) FIX LOGIN (crítico): All 5 login test cases passed. POST /api/auth/login with admin/0586 returns 200 with token and rol=admin. Case-insensitive login works (ADMIN/0586 returns 200). Trim spaces works ('  admin  '/0586 returns 200). Wrong password correctly returns 401 (admin/9999). Using 'codigo' field instead of 'rut' works (codigo=admin returns 200). B) ENVIAR AUTOCORREO enriquecido: Successfully tested complete workflow. POST /api/procesamiento/queue/{id}/enviar-autocorreo returns 200 with success=true, destino=gerardo.ext@centralmutuos.cl, adjunto=true. Email body includes enriched data: cliente, RUT, email_cliente, nombre_ejecutivo, email_ejecutivo, proyecto_inmobiliario, monto_credito_uf, monto_subsidio_uf, con_subsidio. PDF agrupado (merged PDF) is attached. autocorreo_enviado flag is correctly set to true after sending. 404 correctly returned for non-existent item ID. C) Verify ejecutivo data: After reprocessing items, campos correctly includes email_ejecutivo (e.g., 'fuchslocher@boetsch.cl'), nombre_ejecutivo (e.g., 'Rodrigo Salazar'), and classification includes email_cliente (can be empty string ''). D) Regression: GET /api/autocorreo/status returns 200. GET /api/central/email-status returns 200 with connected=true. CONCLUSION: All login fixes and autocorreo enriquecido functionality working correctly. Login is now robust (case-insensitive, trims spaces, accepts both 'rut' and 'codigo' fields). Autocorreo sends enriched emails with complete client/executive information and PDF attachment to user's own authorized email (gerardo.ext@centralmutuos.cl)."
 
+  - task: "Credenciales administrador/141617575 + campos indispensables (validacion, aviso faltantes), attach-manual con conversion a PDF"
+    implemented: true
+    working: true
+    file: "server.py, ai_extract.py, pdf_service.py, email_service.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ ALL TESTS PASSED (14/14 - 100%). A) NUEVAS CREDENCIALES (crítico): All 5 credential tests passed. POST /api/auth/login with administrador/141617575 returns 200 with token and rol=admin. Case-insensitive login works (ADMINISTRADOR/141617575 returns 200). Backup credential admin/0586 still active and working. Wrong password correctly returns 401 (administrador/mala). DELETE /api/admin/users/administrador correctly returns 400 with message 'No se puede eliminar el usuario administrador' (protected user). B) VALIDACIÓN DE CAMPOS INDISPENSABLES + AVISO DE FALTANTES: All 4 validation tests passed. GET /api/procesamiento/queue/{id}/validate returns correct structure with listo=False, campos_faltantes=['Con/Sin subsidio', 'Proyecto / Inmobiliaria', 'Fecha de entrega (inmediata/futura)', 'Monto del credito', 'Pie', 'Ahorro', 'Monto del credito a solicitar'], docs_faltantes={'Cedula de identidad': 1, 'Liquidaciones de sueldo': 5, 'Cotizaciones AFP': 11, 'Certificado AFP': 1, 'Certificado SMF': 1}. POST /api/procesamiento/queue/{id}/enviar-autocorreo with empty payload correctly returns success=false, aviso_enviado=true (sends AVISO email to gerardo.ext@centralmutuos.cl, does NOT send gestión). POST /api/procesamiento/queue/{id}/correct with complete data (cliente='María González Pérez', rut='11.111.111-1', con_subsidio=true, proyecto_inmobiliario='Edificio Vista Hermosa', fecha_entrega='inmediata', monto_credito_uf=2000, monto_subsidio_uf=500, pie_uf=100, ahorro_uf=50, monto_credito_solicitar_uf=2000) returns ok=true with campos_faltantes=[] (empty as expected). GET /api/procesamiento/queue/{id} verifies all campos saved correctly (fecha_entrega=inmediata, pie_uf=100.0, ahorro_uf=50.0, monto_credito_uf=2000.0, monto_subsidio_uf=500.0). C) ADJUNTO MANUAL CON CONVERSIÓN A PDF: All 3 attachment tests passed. PNG image uploaded and converted to PDF (test_image.pdf appears in both added and convertidos arrays). PDF uploaded without conversion (test_document.pdf appears in added but NOT in convertidos). Attachments verified in queue item (6 total including 2 new files). D) REGRESSION: Both regression tests passed. POST /api/simular-credito returns 200 with capacidad_credito_uf=2012.14. GET /api/autocorreo/status returns 200 with enabled=False. CONCLUSION: All new credentials working correctly. Both 'administrador' and 'admin' users are protected from deletion. Campos indispensables validation working correctly with proper aviso email when data is missing. Manual attachment with PDF conversion working correctly (images converted, PDFs not converted). All functionality per review request is working as specified."
+
 agent_communication:
   - agent: "testing"
     message: "Login fix and autocorreo enriquecido testing completed - ALL TESTS PASSED (16/16 - 100%). Tested per review request: A) FIX LOGIN - all 5 test cases passed (basic admin/0586, uppercase ADMIN/0586, spaces '  admin  '/0586, wrong password 401, 'codigo' field). Login is now case-insensitive, trims spaces, and accepts both 'rut' and 'codigo' fields. B) ENVIAR AUTOCORREO enriquecido - complete workflow tested successfully. Endpoint POST /api/procesamiento/queue/{id}/enviar-autocorreo sends enriched email to gerardo.ext@centralmutuos.cl with HTML body containing cliente, RUT, email_cliente, nombre_ejecutivo, email_ejecutivo, proyecto_inmobiliario, monto_credito_uf, monto_subsidio_uf, con_subsidio, and attaches merged PDF. autocorreo_enviado flag correctly set. 404 handling verified. C) Ejecutivo data verification - campos includes email_ejecutivo and nombre_ejecutivo (extracted from sender), classification includes email_cliente (can be empty). D) Regression tests passed - autocorreo/status and email-status both return 200 with correct data. NO CRITICAL ISSUES FOUND. All functionality working as specified."
+  - agent: "testing"
+    message: "Nuevas credenciales + campos indispensables testing completed - ALL TESTS PASSED (14/14 - 100%). Tested per review request: A) NUEVAS CREDENCIALES - all 5 credential tests passed (administrador/141617575 login, case-insensitive ADMINISTRADOR/141617575, backup admin/0586, wrong password 401, protected user deletion 400). Both 'administrador' and 'admin' users are protected from deletion. B) VALIDACIÓN DE CAMPOS INDISPENSABLES - all 4 validation tests passed. Validate endpoint returns correct structure with listo, campos_faltantes, docs_faltantes. Enviar-autocorreo with missing data correctly sends AVISO email (success=false, aviso_enviado=true) to gerardo.ext@centralmutuos.cl, does NOT send gestión. Correct endpoint with complete data successfully updates campos and clears campos_faltantes. All campos verified saved correctly. C) ADJUNTO MANUAL CON CONVERSIÓN A PDF - all 3 attachment tests passed. PNG image converted to PDF (appears in convertidos). PDF uploaded without conversion (NOT in convertidos). Attachments verified in queue. D) REGRESSION - simular-credito and autocorreo/status both return 200. NO CRITICAL ISSUES FOUND. All functionality per review request working as specified."
