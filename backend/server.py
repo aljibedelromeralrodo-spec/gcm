@@ -1033,44 +1033,313 @@ async def ac_manual(cliente: str = Form(...), files: list[UploadFile] = File(...
     return {"folder": _safe_name(cliente), "cliente": cliente, "saved": saved, "errors": errors}
 
 
-@api.get("/procesamiento/queue")
-async def proc_queue(status: str = ""):
-    return {"queue": [], "items": []}
+# ---------------------------------------------------------------------------
+# Procesamiento de Correo: ingesta, OCR+IA, carpeta por cliente, PDF agrupado
+# ---------------------------------------------------------------------------
+import ocr_service
+import ai_extract
+
+PROC_DIR = ROOT_DIR / "storage" / "proc"
+PROC_DIR.mkdir(parents=True, exist_ok=True)
+CLIENTES_DIR = ROOT_DIR / "storage" / "clientes"
+CLIENTES_DIR.mkdir(parents=True, exist_ok=True)
+GESTION_DOMINIOS = ["ecomac", "maestra"]
+
+# Orden preestablecido del PDF agrupado
+ORDEN_DEPENDIENTE = ["cedula", "liquidacion", "cotizacion_afp", "certificado_afp", "certificado_smf"]
+ORDEN_INDEPENDIENTE = ["cedula", "certificado_smf", "impuesto_renta", "boleta_honorarios"]
+CHECKLIST = {
+    "dependiente": {"cedula": 1, "liquidacion": 6, "cotizacion_afp": 12,
+                    "certificado_afp": 1, "certificado_smf": 1},
+    "independiente": {"cedula": 1, "certificado_smf": 1, "impuesto_renta": 1,
+                      "boleta_honorarios": 1},
+}
 
 
-@api.get("/procesamiento/stats")
-async def proc_stats():
-    return {"pendientes": 0, "procesados": 0, "errores": 0}
+def _es_gestion(remitente, subject, tiene_pdf):
+    r = (remitente or "").lower()
+    s = (subject or "").lower()
+    if any(d in r for d in GESTION_DOMINIOS):
+        return True
+    if re.search(r"solicitud (de )?(cr[eé]dito|financiamiento|pre.?aprobaci)", s):
+        return True
+    if tiene_pdf and re.search(r"evaluaci|liquidaci|antecedentes|carpeta|documento|preaprob", s):
+        return True
+    return False
 
 
-@api.get("/procesamiento/rules")
-async def proc_rules():
-    return {"rules": []}
-
-
-@api.post("/procesamiento/rules")
-async def proc_add_rule(payload: dict = None):
-    return {"ok": True}
-
-
-@api.delete("/procesamiento/rules/{rid}")
-async def proc_del_rule(rid: str):
-    return {"ok": True}
-
-
-@api.post("/procesamiento/ingest-from-inbox")
-async def proc_ingest(payload: dict = None):
-    return {"ok": True, "ingested": 0}
-
-
-@api.post("/procesamiento/process-pending")
-async def proc_process(payload: dict = None):
-    return {"ok": True, "procesados": 0}
+def _proc_public(d):
+    d = clean(dict(d))
+    d.pop("attachments_bytes_dir", None)
+    return d
 
 
 @api.get("/oauth/drive/status")
 async def drive_status():
-    return {"connected": False}
+    return {"configured": True, "connected": True, "storage": "local"}
+
+
+@api.get("/oauth/drive/start")
+async def drive_start():
+    return {"ok": True, "message": "Almacenamiento local activo (no requiere OAuth)"}
+
+
+@api.get("/procesamiento/stats")
+async def proc_stats():
+    estados = ["pendiente", "procesando", "clasificado", "revisar", "error", "descartado"]
+    out = {"total": await db.proc_queue.count_documents({})}
+    for e in estados:
+        out[e] = await db.proc_queue.count_documents({"status": e})
+    return out
+
+
+@api.get("/procesamiento/queue")
+async def proc_queue(status: str = ""):
+    q = {"status": status} if status else {}
+    docs = await db.proc_queue.find(q).sort("date_iso", -1).limit(200).to_list(200)
+    return {"rows": [_proc_public(d) for d in docs]}
+
+
+@api.get("/procesamiento/queue/{qid}")
+async def proc_detail(qid: str):
+    d = await db.proc_queue.find_one({"id": qid})
+    if not d:
+        raise HTTPException(status_code=404, detail="Item no encontrado")
+    return _proc_public(d)
+
+
+@api.get("/procesamiento/rules")
+async def proc_rules():
+    docs = await db.proc_rules.find().to_list(100)
+    return {"rules": [clean(d) for d in docs]}
+
+
+@api.post("/procesamiento/rules")
+async def proc_add_rule(payload: dict):
+    rule = {"id": str(uuid.uuid4()), "name": payload.get("name", ""),
+            "pattern": payload.get("pattern", ""), "kind": payload.get("kind", "contains"),
+            "priority": payload.get("priority", 10), "active": payload.get("active", True),
+            "classify_as": payload.get("classify_as", {})}
+    await db.proc_rules.insert_one(dict(rule))
+    return {"ok": True, "rule": clean(rule)}
+
+
+@api.delete("/procesamiento/rules/{rid}")
+async def proc_del_rule(rid: str):
+    await db.proc_rules.delete_one({"id": rid})
+    return {"ok": True}
+
+
+def _ingest_sync(max_emails):
+    correos = mail.fetch_pdf_attachments(sender_filter=None, limit=max_emails)
+    items = []
+    for c in correos:
+        if not _es_gestion(c["from"], c["subject"], bool(c["pdfs"])):
+            continue
+        items.append(c)
+    return items
+
+
+@api.post("/procesamiento/ingest-from-inbox")
+async def proc_ingest(max_emails: int = 20):
+    correos = await asyncio.to_thread(_ingest_sync, max_emails)
+    enqueued = 0
+    for c in correos:
+        exists = await db.proc_queue.find_one({"subject": c["subject"], "date_iso": c["date"]})
+        if exists:
+            continue
+        qid = str(uuid.uuid4())
+        folder = PROC_DIR / qid
+        folder.mkdir(parents=True, exist_ok=True)
+        attachments = []
+        for pdf in c["pdfs"]:
+            fn = _safe_name(pdf["filename"])
+            with open(folder / fn, "wb") as f:
+                f.write(pdf["content_bytes"])
+            attachments.append(fn)
+        await db.proc_queue.insert_one({
+            "id": qid, "subject": c["subject"], "sender": c["from"],
+            "date_iso": c["date"], "status": "pendiente",
+            "body_preview": (c.get("body") or "")[:500],
+            "attachments": attachments, "attachments_bytes_dir": str(folder),
+            "classification": {}, "campos": {}, "drive_folder_id": None,
+        })
+        enqueued += 1
+    return {"fetched": len(correos), "enqueued": enqueued}
+
+
+async def _clasificar_item(item):
+    folder = PROC_DIR / item["id"]
+    docs_detectados = []
+    campos = {"proyecto_inmobiliario": "", "ejecutivo_externo": "", "ejecutivo_interno": "",
+              "monto_credito_uf": None, "monto_subsidio_uf": None, "con_subsidio": None}
+    cliente, rut = "", ""
+    for fn in item.get("attachments", []):
+        path = folder / fn
+        if not path.exists():
+            continue
+        raw = path.read_bytes()
+        texto, metodo = await asyncio.to_thread(ocr_service.extraer_texto, raw, fn)
+        info = await ai_extract.clasificar_y_extraer(texto, fn)
+        docs_detectados.append({"filename": fn, "tipo": info["tipo_documento"],
+                                 "metodo": metodo, "confianza": info.get("confianza", 0)})
+        if info.get("nombre_cliente") and not cliente:
+            cliente = info["nombre_cliente"]
+        if info.get("rut") and not rut:
+            rut = info["rut"]
+        for k in campos:
+            if not campos[k] and info.get(k) not in (None, "", False):
+                campos[k] = info[k]
+    if not cliente:
+        cliente = mail._extraer_nombre(item.get("subject", ""), item.get("sender", ""))
+    # Detectar ejecutivo externo desde el remitente si no vino
+    if not campos["ejecutivo_externo"]:
+        campos["ejecutivo_externo"] = re.sub(r".*<|>.*", "", item.get("sender", "")).strip()
+    tipos = [d["tipo"] for d in docs_detectados]
+    tipo_cliente = "independiente" if ("boleta_honorarios" in tipos or "impuesto_renta" in tipos) else "dependiente"
+    status = "clasificado" if cliente else "revisar"
+    classification = {"cliente": cliente, "rut": rut, "tipo_cliente": tipo_cliente,
+                      "inmobiliaria": campos.get("proyecto_inmobiliario", ""),
+                      "documentos": docs_detectados,
+                      "confianza": max([d["confianza"] for d in docs_detectados] + [0.4])}
+    await db.proc_queue.update_one({"id": item["id"]}, {"$set": {
+        "status": status, "classification": classification, "campos": campos}})
+    return status
+
+
+@api.post("/procesamiento/process-pending")
+async def proc_process(limit: int = 5):
+    pend = await db.proc_queue.find({"status": "pendiente"}).limit(limit).to_list(limit)
+    processed = 0
+    for item in pend:
+        try:
+            await _clasificar_item(item)
+            processed += 1
+        except Exception as e:
+            await db.proc_queue.update_one({"id": item["id"]},
+                                            {"$set": {"status": "error", "error": str(e)[:200]}})
+    return {"processed": processed}
+
+
+@api.post("/procesamiento/queue/{qid}/reprocess")
+async def proc_reprocess(qid: str):
+    item = await db.proc_queue.find_one({"id": qid})
+    if not item:
+        raise HTTPException(status_code=404, detail="No encontrado")
+    await _clasificar_item(item)
+    return {"ok": True}
+
+
+@api.post("/procesamiento/queue/{qid}/correct")
+async def proc_correct(qid: str, payload: dict):
+    item = await db.proc_queue.find_one({"id": qid})
+    if not item:
+        raise HTTPException(status_code=404, detail="No encontrado")
+    cl = item.get("classification", {})
+    cl.update({k: payload.get(k, cl.get(k)) for k in ["cliente", "rut", "tipo_documento", "inmobiliaria", "tipo_cliente"]})
+    await db.proc_queue.update_one({"id": qid}, {"$set": {"classification": cl, "status": "clasificado"}})
+    return {"ok": True}
+
+
+@api.get("/procesamiento/queue/{qid}/extract-text")
+async def proc_extract_text(qid: str, allow_vision: bool = True):
+    item = await db.proc_queue.find_one({"id": qid})
+    if not item:
+        raise HTTPException(status_code=404, detail="No encontrado")
+    folder = PROC_DIR / qid
+    results = []
+    for fn in item.get("attachments", []):
+        path = folder / fn
+        if not path.exists():
+            continue
+        texto, metodo = await asyncio.to_thread(ocr_service.extraer_texto, path.read_bytes(), fn, not allow_vision is False)
+        results.append({"filename": fn, "method": metodo, "chars": len(texto)})
+    return {"results": results}
+
+
+@api.post("/procesamiento/queue/{qid}/upload-drive")
+async def proc_upload_drive(qid: str):
+    item = await db.proc_queue.find_one({"id": qid})
+    if not item:
+        raise HTTPException(status_code=404, detail="No encontrado")
+    cl = item.get("classification", {})
+    cliente = cl.get("cliente") or mail._extraer_nombre(item.get("subject", ""), item.get("sender", ""))
+    tipo_cliente = cl.get("tipo_cliente", "dependiente")
+    orden = ORDEN_DEPENDIENTE if tipo_cliente == "dependiente" else ORDEN_INDEPENDIENTE
+    docs = cl.get("documentos", [])
+    src = PROC_DIR / qid
+    dest = CLIENTES_DIR / _safe_name(cliente)
+    dest.mkdir(parents=True, exist_ok=True)
+    uploaded = []
+    # Copiar documentos a la carpeta del cliente
+    from pypdf import PdfReader, PdfWriter
+    for d in docs:
+        p = src / d["filename"]
+        if p.exists():
+            (dest / d["filename"]).write_bytes(p.read_bytes())
+            uploaded.append(d["filename"])
+    # Generar PDF agrupado en el orden establecido
+    def _rank(d):
+        t = d["tipo"]
+        return orden.index(t) if t in orden else len(orden) + 1
+    docs_ordenados = sorted(docs, key=_rank)
+    writer = PdfWriter()
+    for d in docs_ordenados:
+        p = src / d["filename"]
+        if not p.exists():
+            continue
+        try:
+            reader = PdfReader(str(p))
+            for pg in reader.pages:
+                writer.add_page(pg)
+        except Exception:
+            continue
+    merged_name = f"Carpeta_{_safe_name(cliente)}.pdf"
+    if len(writer.pages) > 0:
+        with open(dest / merged_name, "wb") as f:
+            writer.write(f)
+        uploaded.append(merged_name)
+    # Registrar carpeta cliente
+    folder_doc = await db.folders.find_one({"nombre": cliente})
+    if not folder_doc:
+        await db.folders.insert_one({"id": str(uuid.uuid4()), "nombre": cliente,
+                                     "rut": cl.get("rut", ""), "archivos": uploaded,
+                                     "created_at": now_iso(), "origen": "procesamiento"})
+    else:
+        await db.folders.update_one({"nombre": cliente},
+                                    {"$set": {"archivos": uploaded, "rut": cl.get("rut", "") or folder_doc.get("rut", "")}})
+    # Checklist de faltantes
+    req = CHECKLIST.get(tipo_cliente, {})
+    conteo = {}
+    for d in docs:
+        conteo[d["tipo"]] = conteo.get(d["tipo"], 0) + 1
+    faltantes = {t: n - conteo.get(t, 0) for t, n in req.items() if conteo.get(t, 0) < n}
+    completo = len(faltantes) == 0
+    await db.proc_queue.update_one({"id": qid}, {"$set": {
+        "drive_folder_id": _safe_name(cliente), "status": "clasificado",
+        "checklist_completo": completo, "faltantes": faltantes}})
+    return {"folder_name": _safe_name(cliente), "uploaded": uploaded,
+            "skipped_duplicates": [], "dropped_originals": [],
+            "checklist_completo": completo, "faltantes": faltantes, "tipo_cliente": tipo_cliente}
+
+
+@api.post("/procesamiento/drive/purge-all")
+async def proc_purge():
+    import shutil
+    deleted = 0
+    if CLIENTES_DIR.exists():
+        for d in CLIENTES_DIR.iterdir():
+            if d.is_dir():
+                shutil.rmtree(d, ignore_errors=True)
+                deleted += 1
+    await db.proc_queue.update_many({}, {"$set": {"drive_folder_id": None}})
+    return {"deleted": deleted, "errors": []}
+
+
+@api.get("/procesamiento/checklist")
+async def proc_checklist():
+    return {"checklist": CHECKLIST, "orden_dependiente": ORDEN_DEPENDIENTE,
+            "orden_independiente": ORDEN_INDEPENDIENTE}
 
 
 @api.post("/portal/consulta")
