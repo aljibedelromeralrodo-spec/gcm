@@ -1,0 +1,309 @@
+import { useEffect, useState } from "react";
+import axios from "axios";
+
+const API = process.env.REACT_APP_BACKEND_URL;
+
+// Lee el payload guardado por el service worker en IndexedDB.
+// Ojo: NO borramos automáticamente — solo cuando el usuario confirme el upload
+// o toque "Descartar". Así puede acumular archivos compartidos de a uno desde
+// WhatsApp Business que no permite multi-share externo.
+function readSharedPayload(consume) {
+  return new Promise((resolve) => {
+    try {
+      const req = indexedDB.open("cm-share", 1);
+      req.onupgradeneeded = () => req.result.createObjectStore("kv");
+      req.onerror = () => resolve(null);
+      req.onsuccess = () => {
+        const tx = req.result.transaction("kv", "readwrite");
+        const store = tx.objectStore("kv");
+        const g = store.get("lastShare");
+        g.onsuccess = () => {
+          const val = g.result || null;
+          if (consume && val) {
+            try { store.delete("lastShare"); } catch (_e) { /* ignore */ }
+          }
+          resolve(val);
+        };
+        g.onerror = () => resolve(null);
+      };
+    } catch (e) {
+      resolve(null);
+    }
+  });
+}
+
+function clearSharedPayload() {
+  return new Promise((resolve) => {
+    try {
+      const req = indexedDB.open("cm-share", 1);
+      req.onupgradeneeded = () => req.result.createObjectStore("kv");
+      req.onsuccess = () => {
+        const tx = req.result.transaction("kv", "readwrite");
+        tx.objectStore("kv").delete("lastShare");
+        tx.oncomplete = () => resolve();
+      };
+      req.onerror = () => resolve();
+    } catch (e) { resolve(); }
+  });
+}
+
+const MAX_ACCUMULATED_FILES = 20;
+
+export default function ShareTargetPage() {
+  const [payload, setPayload] = useState(null);
+  const [folders, setFolders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [selectedFolder, setSelectedFolder] = useState("");
+  const [folderSearch, setFolderSearch] = useState("");
+  const [newName, setNewName] = useState("");
+  const [newRut, setNewRut] = useState("");
+  const [mode, setMode] = useState("existing"); // existing | new
+  const [status, setStatus] = useState("");
+  const [routeToCodeudor, setRouteToCodeudor] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      // NO consumir — el usuario puede seguir compartiendo más archivos
+      const p = await readSharedPayload(false);
+      setPayload(p);
+      try {
+        const r = await axios.get(`${API}/api/clientes/folders`);
+        setFolders(r.data.folders || []);
+      } catch (e) { /* noop */ }
+      // Auto-detect: si el primer archivo es PDF/imagen, OCR para extraer RUT
+      if (p && p.files && p.files.length > 0) {
+        const first = p.files[0];
+        const isDetectable = /pdf|jpeg|jpg|png|heic|webp/i.test(first.type) ||
+                             /\.(pdf|jpg|jpeg|png|heic|webp)$/i.test(first.name || "");
+        if (isDetectable && !selectedFolder) {
+          try {
+            const fd = new FormData();
+            const blob = first.blob instanceof Blob ? first.blob : new Blob([first.blob], { type: first.type });
+            fd.append("file", blob, first.name);
+            const dr = await axios.post(`${API}/api/clientes/detect-client`, fd, {
+              headers: { "Content-Type": "multipart/form-data" },
+              timeout: 30000,
+            });
+            const match = dr.data?.matched_folder;
+            if (match) {
+              setSelectedFolder(match.id);
+              setMode("existing");
+              setStatus(`🎯 Detecté RUT ${dr.data.rut} → carpeta de ${match.nombre}. Confirmá abajo.`);
+            } else if (dr.data?.rut) {
+              setNewRut(dr.data.rut);
+              setStatus(`💡 Detecté RUT ${dr.data.rut} pero no encontré carpeta. Escribí el nombre para crear una nueva.`);
+              setMode("new");
+            }
+          } catch (e) { /* noop, usuario elige manualmente */ }
+        }
+      }
+      setLoading(false);
+    })();
+  }, []);
+
+  const handleDiscard = async () => {
+    if (!window.confirm(`¿Descartar los ${payload?.files?.length || 0} archivo(s) acumulados?`)) return;
+    await clearSharedPayload();
+    window.location.href = "/";
+  };
+
+  const doUpload = async (folderId, folderNameForToast) => {
+    if (!payload || !payload.files || payload.files.length === 0) {
+      alert("No hay archivos para subir.");
+      return;
+    }
+    setUploading(true);
+    let ok = 0;
+    const errors = [];
+    for (const f of payload.files) {
+      try {
+        const fd = new FormData();
+        const blob = f.blob instanceof Blob ? f.blob : new Blob([f.blob], { type: f.type });
+        fd.append("file", blob, f.name || "archivo");
+        if (routeToCodeudor) fd.append("route_to_codeudor", "true");
+        await axios.post(`${API}/api/clientes/folders/${folderId}/upload-file`, fd, {
+          headers: { "Content-Type": "multipart/form-data" },
+          timeout: 180000,
+        });
+        ok += 1;
+      } catch (err) {
+        errors.push(`${f.name}: ${err.response?.data?.detail || err.message}`);
+      }
+    }
+    // Consumir sesión: limpiar IDB para no repetir en próximo share
+    await clearSharedPayload();
+    setUploading(false);
+    setStatus(errors.length
+      ? `✅ ${ok}/${payload.files.length} subidos. Errores:\n${errors.join("\n")}`
+      : `✅ ${ok} archivo(s) subido(s) a ${folderNameForToast}. El COMBINADO_PROTOCOLO se está regenerando.`);
+    setTimeout(() => {
+      window.location.href = `/?open_folder=${folderId}`;
+    }, 2000);
+  };
+
+  const handleUploadExisting = () => {
+    const folder = folders.find((f) => f.id === selectedFolder);
+    if (!folder) { alert("Elegí una carpeta"); return; }
+    doUpload(folder.id, folder.nombre);
+  };
+
+  const handleCreateAndUpload = async () => {
+    const nombre = newName.trim();
+    if (!nombre) { alert("Escribí un nombre de cliente"); return; }
+    setUploading(true);
+    try {
+      const r = await axios.post(`${API}/api/clientes/folders`, { nombre, rut: newRut.trim() });
+      const newId = r.data.id;
+      setUploading(false);
+      await doUpload(newId, nombre);
+    } catch (err) {
+      setUploading(false);
+      alert("Error creando carpeta: " + (err.response?.data?.detail || err.message));
+    }
+  };
+
+  if (loading) {
+    return (
+      <div style={{ minHeight: "100vh", background: "#0a0f1c", color: "#e2e8f0", display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
+        <div><i className="fa fa-spinner fa-spin" /> Cargando archivos compartidos…</div>
+      </div>
+    );
+  }
+
+  if (!payload || !payload.files || payload.files.length === 0) {
+    return (
+      <div style={{ minHeight: "100vh", background: "#0a0f1c", color: "#e2e8f0", padding: "1.5rem" }}>
+        <h2>🤷 No llegaron archivos</h2>
+        <p>Volvé a WhatsApp, mantené presionado un archivo, seleccioná los que querés compartir, y elegí <b>Central Mutuos</b> en el menú de compartir.</p>
+        <a href="/" style={{ color: "#facc15" }}>← Volver a la app</a>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ minHeight: "100vh", background: "#0a0f1c", color: "#e2e8f0", padding: "1rem", paddingBottom: "3rem" }}>
+      <div style={{ maxWidth: 560, margin: "0 auto" }}>
+        <h2 style={{ marginTop: 0 }}>📥 Archivos recibidos</h2>
+        <div style={{ background: "rgba(59,130,246,0.1)", border: "1px solid rgba(59,130,246,0.5)", borderRadius: 8, padding: "0.75rem", marginBottom: "0.6rem" }}>
+          <b>{payload.files.length} / {MAX_ACCUMULATED_FILES} archivo(s) acumulado(s):</b>
+          {payload.files.length >= MAX_ACCUMULATED_FILES && (
+            <div style={{ fontSize: 11, color: "#facc15", marginTop: 4 }}>⚠️ Límite alcanzado. Confirmá esta tanda antes de sumar más.</div>
+          )}
+          <ul style={{ margin: "0.4rem 0 0 1rem", padding: 0, fontSize: 13 }}>
+            {payload.files.slice(0, MAX_ACCUMULATED_FILES).map((f, i) => (
+              <li key={i}>{f.name} <span style={{ color: "#94a3b8" }}>({Math.round((f.size || 0) / 1024)} KB)</span></li>
+            ))}
+          </ul>
+        </div>
+        <div style={{ background: "rgba(250,204,21,0.12)", border: "1px solid rgba(250,204,21,0.4)", borderRadius: 8, padding: "0.6rem 0.8rem", marginBottom: "1rem", fontSize: 12, color: "#facc15" }}>
+          💡 <b>WhatsApp Business no permite multi-share externo.</b> Podés volver a WhatsApp y compartir MÁS archivos de a uno — se van a ir acumulando acá (hasta 15 min). Cuando termines, confirmá abajo.
+          <div style={{ marginTop: 6 }}>
+            <button onClick={handleDiscard} data-testid="btn-discard"
+              style={{ background: "transparent", border: "1px solid rgba(248,113,113,0.5)", color: "#f87171", padding: "3px 10px", borderRadius: 4, fontSize: 11, cursor: "pointer" }}>
+              🗑️ Descartar todos y empezar de cero
+            </button>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: 6, marginBottom: "1rem" }}>
+          <button onClick={() => setMode("existing")} data-testid="mode-existing" style={{ flex: 1, padding: "0.6rem", background: mode === "existing" ? "#0ea5e9" : "rgba(255,255,255,0.08)", color: "#fff", border: "none", borderRadius: 6, fontWeight: 700, cursor: "pointer" }}>
+            📁 Cliente existente
+          </button>
+          <button onClick={() => setMode("new")} data-testid="mode-new" style={{ flex: 1, padding: "0.6rem", background: mode === "new" ? "#22c55e" : "rgba(255,255,255,0.08)", color: "#fff", border: "none", borderRadius: 6, fontWeight: 700, cursor: "pointer" }}>
+            ➕ Cliente nuevo
+          </button>
+        </div>
+
+        {mode === "existing" ? (
+          <div>
+            <label style={{ display: "block", fontSize: 12, marginBottom: 4, color: "#94a3b8" }}>🔍 Buscar carpeta cliente</label>
+            <input
+              type="text"
+              value={folderSearch}
+              onChange={(e) => setFolderSearch(e.target.value)}
+              placeholder="Escribí nombre o RUT (ej: Bryan, 20398906)"
+              data-testid="folder-search"
+              style={{ width: "100%", padding: "0.55rem 0.7rem", borderRadius: 6, background: "#1e293b", color: "#e2e8f0", border: "1px solid rgba(148,163,184,0.3)", fontSize: 14, marginBottom: "0.4rem" }}
+            />
+            <div style={{ maxHeight: 260, overflowY: "auto", background: "#0f172a", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 6, marginBottom: "0.8rem" }}>
+              {(() => {
+                const q = folderSearch.trim().toLowerCase();
+                const norm = (s) => (s || "").toLowerCase().replace(/[.\-\s]/g, "");
+                const list = folders.filter((f) => {
+                  if (!q) return true;
+                  return (f.nombre || "").toLowerCase().includes(q) ||
+                         norm(f.rut).includes(norm(q));
+                });
+                if (list.length === 0) {
+                  return <div style={{ padding: "0.8rem", fontSize: 12, color: "#94a3b8", textAlign: "center" }}>Sin resultados. Probá con &quot;Cliente nuevo&quot;.</div>;
+                }
+                return list.slice(0, 100).map((f) => (
+                  <div key={f.id} onClick={() => setSelectedFolder(f.id)} data-testid={`folder-opt-${f.id}`}
+                    style={{ padding: "0.55rem 0.7rem", cursor: "pointer", borderBottom: "1px solid rgba(148,163,184,0.08)", background: selectedFolder === f.id ? "rgba(14,165,233,0.25)" : "transparent", color: "#e2e8f0", fontSize: 13 }}>
+                    <div style={{ fontWeight: selectedFolder === f.id ? 700 : 500 }}>
+                      {selectedFolder === f.id && <span style={{ color: "#22d3ee" }}>✓ </span>}
+                      {f.nombre}
+                    </div>
+                    {f.rut && <div style={{ fontSize: 11, color: "#94a3b8" }}>RUT: {f.rut}</div>}
+                  </div>
+                ));
+              })()}
+            </div>
+            <button onClick={handleUploadExisting} disabled={!selectedFolder || uploading} data-testid="btn-upload-existing"
+              style={{ width: "100%", padding: "0.75rem", background: (!selectedFolder || uploading) ? "#475569" : "#0ea5e9", color: "#fff", border: "none", borderRadius: 6, fontWeight: 700, fontSize: 14, cursor: uploading ? "wait" : "pointer" }}>
+              <i className={`fa ${uploading ? "fa-spinner fa-spin" : "fa-upload"}`} /> {uploading ? "Subiendo…" : `Subir ${payload.files.length} archivo(s)${routeToCodeudor ? ' (Codeudor)' : ' (Titular)'}`}
+            </button>
+            {selectedFolder && (() => {
+              const folder = folders.find((x) => x.id === selectedFolder);
+              const hasCodeudor = folder && (folder.codeudor_nombre || "").trim().length > 0;
+              if (!hasCodeudor) return null;
+              return (
+                <div style={{ marginTop: 10, padding: "0.6rem 0.8rem", background: "rgba(139,92,246,0.12)", border: "1px solid rgba(139,92,246,0.5)", borderRadius: 6, fontSize: 12, color: "#c4b5fd" }}>
+                  <div style={{ marginBottom: 6, fontWeight: 700 }}>⚠️ Esta carpeta tiene CODEUDOR ({folder.codeudor_nombre})</div>
+                  <div style={{ marginBottom: 8 }}>Elegí a quién pertenecen estos {payload.files.length} archivo(s):</div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button onClick={() => setRouteToCodeudor(false)} data-testid="btn-route-titular"
+                      style={{ flex: 1, padding: "6px", background: !routeToCodeudor ? "#0ea5e9" : "transparent", border: `1px solid ${!routeToCodeudor ? "#0ea5e9" : "rgba(139,92,246,0.5)"}`, color: "#fff", borderRadius: 4, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                      👤 Titular ({folder.nombre.slice(0, 20)})
+                    </button>
+                    <button onClick={() => setRouteToCodeudor(true)} data-testid="btn-route-codeudor"
+                      style={{ flex: 1, padding: "6px", background: routeToCodeudor ? "#8b5cf6" : "transparent", border: `1px solid ${routeToCodeudor ? "#8b5cf6" : "rgba(139,92,246,0.5)"}`, color: "#fff", borderRadius: 4, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                      👥 Codeudor ({folder.codeudor_nombre.slice(0, 20)})
+                    </button>
+                  </div>
+                  <div style={{ marginTop: 6, fontSize: 10, color: "#a78bfa" }}>
+                    Titular → COMBINADO_PROTOCOLO principal. Codeudor → COMBINADO_CODEUDOR separado.
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        ) : (
+          <div>
+            <label style={{ display: "block", fontSize: 12, marginBottom: 4, color: "#94a3b8" }}>Nombre del cliente *</label>
+            <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Ej: Bryan Contreras" data-testid="new-name-input"
+              style={{ width: "100%", padding: "0.6rem", borderRadius: 6, background: "#1e293b", color: "#e2e8f0", border: "1px solid rgba(148,163,184,0.3)", fontSize: 14, marginBottom: "0.6rem" }} />
+            <label style={{ display: "block", fontSize: 12, marginBottom: 4, color: "#94a3b8" }}>RUT (opcional)</label>
+            <input value={newRut} onChange={(e) => setNewRut(e.target.value)} placeholder="15234567-8" data-testid="new-rut-input"
+              style={{ width: "100%", padding: "0.6rem", borderRadius: 6, background: "#1e293b", color: "#e2e8f0", border: "1px solid rgba(148,163,184,0.3)", fontSize: 14, marginBottom: "0.8rem" }} />
+            <button onClick={handleCreateAndUpload} disabled={!newName.trim() || uploading} data-testid="btn-create-and-upload"
+              style={{ width: "100%", padding: "0.75rem", background: (!newName.trim() || uploading) ? "#475569" : "#22c55e", color: "#fff", border: "none", borderRadius: 6, fontWeight: 700, fontSize: 14, cursor: uploading ? "wait" : "pointer" }}>
+              <i className={`fa ${uploading ? "fa-spinner fa-spin" : "fa-plus"}`} /> {uploading ? "Creando y subiendo…" : `Crear carpeta y subir ${payload.files.length} archivo(s)`}
+            </button>
+          </div>
+        )}
+
+        {status && (
+          <div style={{ marginTop: "1rem", padding: "0.75rem", background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.5)", borderRadius: 6, whiteSpace: "pre-wrap", fontSize: 13 }} data-testid="share-status">
+            {status}
+          </div>
+        )}
+
+        <div style={{ marginTop: "1.5rem", textAlign: "center" }}>
+          <a href="/" style={{ color: "#94a3b8", fontSize: 13 }}>← Cancelar y volver</a>
+        </div>
+      </div>
+    </div>
+  );
+}

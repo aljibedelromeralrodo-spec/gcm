@@ -1,0 +1,364 @@
+import React, { useEffect, useState } from "react";
+import axios from "axios";
+
+const API = process.env.REACT_APP_BACKEND_URL;
+
+const STATUS_META = {
+  pendiente:   { label: "Pendiente",   color: "#eab308", emoji: "🟡" },
+  procesando:  { label: "Procesando",  color: "#3b82f6", emoji: "🔵" },
+  clasificado: { label: "Clasificado", color: "#22c55e", emoji: "🟢" },
+  revisar:     { label: "Revisar",     color: "#f97316", emoji: "🟠" },
+  error:       { label: "Error",       color: "#ef4444", emoji: "🔴" },
+  descartado:  { label: "Descartado",  color: "#6b7280", emoji: "⚫" },
+};
+
+const TIPOS_DOC = ["liquidacion","cotizacion","cedula","dicom","carta_aprobacion","simulacion","solicitud","otro"];
+
+export default function EmailProcessingModule() {
+  const [stats, setStats] = useState({});
+  const [rows, setRows] = useState([]);
+  const [filter, setFilter] = useState("");
+  const [selected, setSelected] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [rules, setRules] = useState([]);
+  const [showRules, setShowRules] = useState(false);
+  const [driveConfigured, setDriveConfigured] = useState(false);
+
+  const load = async () => {
+    const [s, q, r, d] = await Promise.all([
+      axios.get(`${API}/api/procesamiento/stats`),
+      axios.get(`${API}/api/procesamiento/queue${filter ? `?status=${filter}` : ""}`),
+      axios.get(`${API}/api/procesamiento/rules`),
+      axios.get(`${API}/api/oauth/drive/status`).catch(() => ({ data: { configured: false } })),
+    ]);
+    setStats(s.data);
+    setRows(q.data.rows || []);
+    setRules(r.data.rules || []);
+    setDriveConfigured(!!d.data?.configured);
+  };
+
+  const connectDrive = () => {
+    // Drive uses a DIFFERENT account (personal @gmail) than Gmail (Workspace)
+    // because Workspace admin blocks Drive API access. Ensure you're logged in
+    // with the personal Gmail before clicking.
+    window.open(`${API}/api/oauth/drive/start`, "_blank", "width=560,height=720");
+  };
+
+  const purgeDrive = async () => {
+    if (!window.confirm("⚠️ Esto elimina TODAS las carpetas creadas por Procesamiento de Correo y limpia el cache de hashes. Las carpetas creadas manualmente NO se tocan. ¿Continuar?")) return;
+    setBusy(true);
+    try {
+      const r = await axios.post(`${API}/api/procesamiento/drive/purge-all`);
+      alert(`✅ Purga completada.\nCarpetas eliminadas: ${r.data.deleted}\nErrores: ${r.data.errors?.length || 0}`);
+      load();
+    } catch (e) {
+      alert("Error: " + (e.response?.data?.detail || e.message));
+    } finally { setBusy(false); }
+  };
+
+  useEffect(() => { load(); }, [filter]);
+
+  const ingest = async () => {
+    setBusy(true);
+    try {
+      const r = await axios.post(`${API}/api/procesamiento/ingest-from-inbox?max_emails=30`);
+      alert(`Ingest OK: ${r.data.fetched} correos, ${r.data.enqueued} nuevos en cola`);
+      load();
+    } catch (e) { alert("Error: " + e.message); } finally { setBusy(false); }
+  };
+
+  const processPending = async () => {
+    setBusy(true);
+    try {
+      const r = await axios.post(`${API}/api/procesamiento/process-pending?limit=20`);
+      alert(`Procesados ${r.data.processed}`);
+      load();
+    } catch (e) { alert("Error: " + e.message); } finally { setBusy(false); }
+  };
+
+  const reprocess = async (id) => {
+    setBusy(true);
+    try {
+      await axios.post(`${API}/api/procesamiento/queue/${id}/reprocess`);
+      load(); if (selected?.id === id) openDetail(id);
+    } finally { setBusy(false); }
+  };
+
+  const saveCorrection = async (id, corrected) => {
+    setBusy(true);
+    try {
+      await axios.post(`${API}/api/procesamiento/queue/${id}/correct`, corrected);
+      load(); setSelected(null);
+    } finally { setBusy(false); }
+  };
+
+  const openDetail = async (id) => {
+    const r = await axios.get(`${API}/api/procesamiento/queue/${id}`);
+    setSelected(r.data);
+  };
+
+  const uploadToDrive = async (id) => {
+    setBusy(true);
+    try {
+      const r = await axios.post(`${API}/api/procesamiento/queue/${id}/upload-drive`);
+      const upl = r.data.uploaded || [];
+      const dupes = r.data.skipped_duplicates || [];
+      const dropped = r.data.dropped_originals || [];
+      let msg = `✅ Carpeta local: ${r.data.folder_name}\n${upl.length} archivo(s) guardado(s)`;
+      if (dupes.length) msg += `\n${dupes.length} duplicado(s) omitidos por OCR`;
+      if (dropped.length) msg += `\n${dropped.length} original(es) no-PDF descartado(s)`;
+      msg += `\n\nVer en: Carpeta Clientes → ${r.data.folder_name}`;
+      alert(msg);
+      load(); if (selected?.id === id) openDetail(id);
+    } catch (e) {
+      alert("Error: " + (e.response?.data?.detail || e.message));
+    } finally { setBusy(false); }
+  };
+
+  const extractText = async (id) => {
+    setBusy(true);
+    try {
+      const r = await axios.get(`${API}/api/procesamiento/queue/${id}/extract-text?allow_vision=true`);
+      const lines = (r.data.results || []).map(x =>
+        `• ${x.filename} [${x.method || "?"}, ${x.chars || 0} chars]` +
+        (x.converted_from ? ` (conv de .${x.converted_from})` : "") +
+        (x.reason ? ` — ${x.reason}` : "")
+      );
+      alert(`Extracción OCR:\n\n${lines.join("\n")}`);
+    } catch (e) {
+      alert("Error: " + (e.response?.data?.detail || e.message));
+    } finally { setBusy(false); }
+  };
+
+  const addRule = async () => {
+    const name = prompt("Nombre de la regla:"); if (!name) return;
+    const pattern = prompt("Patrón (contains) — ej: 'Ecomac':"); if (!pattern) return;
+    const inmobiliaria = prompt("Inmobiliaria a asignar (o vacío):") || "";
+    const tipo = prompt("Tipo doc (liquidacion/cotizacion/simulacion/solicitud/otro):") || "otro";
+    await axios.post(`${API}/api/procesamiento/rules`, {
+      name, pattern, kind: "contains", priority: 10, active: true,
+      classify_as: { inmobiliaria, tipo_documento: tipo },
+    });
+    load();
+  };
+
+  const deleteRule = async (id) => {
+    if (!window.confirm("¿Eliminar regla?")) return;
+    await axios.delete(`${API}/api/procesamiento/rules/${id}`);
+    load();
+  };
+
+  return (
+    <div style={{ padding: 24 }} data-testid="email-processing-module">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 26, color: "#1a1f2e" }}>📥 Procesamiento de Correo</h2>
+          <p style={{ margin: "4px 0 0", color: "#64748b", fontSize: 13 }}>
+            Monitoreo, clasificación IA y corrección manual de correos entrantes
+          </p>
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button data-testid="btn-ingest" onClick={ingest} disabled={busy}
+                  style={btnStyle("#3b82f6")}>📨 Ingestar Inbox</button>
+          <button data-testid="btn-process" onClick={processPending} disabled={busy}
+                  style={btnStyle("#22c55e")}>⚡ Procesar pendientes</button>
+          <button data-testid="btn-rules" onClick={() => setShowRules(!showRules)}
+                  style={btnStyle("#8b5cf6")}>⚙️ Reglas ({rules.length})</button>
+          {driveConfigured ? (
+            <>
+              <span data-testid="drive-badge"
+                    style={{ padding: "6px 12px", borderRadius: 6, background: "#dcfce7", color: "#166534", fontWeight: 700, fontSize: 12, alignSelf: "center" }}>
+                📂 Almacenamiento local activo
+              </span>
+              <button data-testid="btn-purge" onClick={purgeDrive} disabled={busy}
+                      style={btnStyle("#dc2626")}>🗑️ Purga carpetas Procesamiento</button>
+            </>
+          ) : (
+            <span style={{ padding: "6px 12px", borderRadius: 6, background: "#fef3c7", color: "#92400e", fontWeight: 700, fontSize: 12, alignSelf: "center" }}>
+              ⚠️ Almacenamiento inactivo
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* KPI cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 12, marginBottom: 20 }}>
+        {["total","pendiente","clasificado","revisar","error","descartado"].map(k => {
+          const meta = STATUS_META[k] || { label: "Total", emoji: "📊", color: "#1a1f2e" };
+          return (
+            <div key={k} data-testid={`kpi-${k}`}
+                 onClick={() => setFilter(k === "total" ? "" : k)}
+                 style={{ cursor: "pointer", padding: 14, borderRadius: 10,
+                          background: filter===k ? "#fef3c7" : "#ffffff",
+                          border: `2px solid ${filter===k ? meta.color : "#e2e8f0"}` }}>
+              <div style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase" }}>
+                {meta.emoji} {meta.label}
+              </div>
+              <div style={{ fontSize: 26, fontWeight: 700, color: meta.color }}>
+                {stats[k] || 0}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {showRules && (
+        <div style={{ background: "#f8fafc", padding: 16, borderRadius: 10, marginBottom: 20, border: "1px solid #e2e8f0" }}>
+          <div style={{ display:"flex", justifyContent:"space-between", marginBottom: 10 }}>
+            <h3 style={{ margin: 0 }}>⚙️ Reglas de clasificación</h3>
+            <button onClick={addRule} style={btnStyle("#3b82f6")}>+ Nueva regla</button>
+          </div>
+          {rules.length === 0 && <div style={{ color: "#64748b" }}>Sin reglas configuradas — la IA clasifica todo.</div>}
+          {rules.map(r => (
+            <div key={r.id} data-testid={`rule-${r.id}`}
+                 style={{ display:"flex", justifyContent:"space-between", padding:"8px 12px", borderBottom:"1px solid #e2e8f0" }}>
+              <div>
+                <strong>{r.name}</strong> — si contiene <code>{r.pattern}</code> →
+                {" "}{JSON.stringify(r.classify_as || {})}
+              </div>
+              <button onClick={() => deleteRule(r.id)} style={btnStyle("#ef4444")}>Eliminar</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Table */}
+      <div style={{ background: "#ffffff", borderRadius: 10, overflow: "hidden", border: "1px solid #e2e8f0" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr style={{ background: "#1a1f2e", color: "#fff" }}>
+              <th style={th}>Estado</th>
+              <th style={th}>Fecha</th>
+              <th style={th}>Asunto</th>
+              <th style={th}>Cliente detectado</th>
+              <th style={th}>Tipo doc</th>
+              <th style={th}>Confianza</th>
+              <th style={th}>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(r => {
+              const meta = STATUS_META[r.status] || { emoji: "❓", color: "#64748b", label: r.status };
+              const cl = r.classification || {};
+              return (
+                <tr key={r.id} data-testid={`row-${r.id}`}
+                    style={{ borderBottom: "1px solid #f1f5f9", cursor: "pointer" }}
+                    onClick={() => openDetail(r.id)}>
+                  <td style={td}><span style={{ color: meta.color, fontWeight: 700 }}>{meta.emoji} {meta.label}</span></td>
+                  <td style={td}>{(r.date_iso || "").slice(0,10)}</td>
+                  <td style={td} title={r.subject}>{(r.subject || "").slice(0,60)}</td>
+                  <td style={td}>{cl.cliente || "—"}</td>
+                  <td style={td}>{cl.tipo_documento || "—"}</td>
+                  <td style={td}>{cl.confianza != null ? `${Math.round(cl.confianza*100)}%` : "—"}</td>
+                  <td style={td} onClick={(e) => e.stopPropagation()}>
+                    <button onClick={() => reprocess(r.id)} disabled={busy} style={btnStyle("#3b82f6", true)}>♻</button>
+                  </td>
+                </tr>
+              );
+            })}
+            {rows.length === 0 && (
+              <tr><td colSpan={7} style={{ ...td, textAlign:"center", color:"#94a3b8", padding: 30 }}>
+                Sin resultados. Hacé clic en <b>Ingestar Inbox</b> para traer correos.
+              </td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {selected && (
+        <DetailModal item={selected} onClose={() => setSelected(null)}
+                     onReprocess={reprocess} onSave={saveCorrection}
+                     onUploadDrive={uploadToDrive} onExtractText={extractText}
+                     driveConfigured={driveConfigured} busy={busy} />
+      )}
+    </div>
+  );
+}
+
+function DetailModal({ item, onClose, onReprocess, onSave, onUploadDrive, onExtractText, driveConfigured, busy }) {
+  const cl = item.classification || {};
+  const [c, setC] = useState({
+    cliente: cl.cliente || "",
+    rut: cl.rut || "",
+    tipo_documento: cl.tipo_documento || "otro",
+    inmobiliaria: cl.inmobiliaria || "",
+  });
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:100,
+                  display:"flex", alignItems:"center", justifyContent:"center" }}
+         onClick={onClose}>
+      <div style={{ background:"#fff", borderRadius:14, width:720, maxHeight:"85vh", overflow:"auto", padding:24 }}
+           onClick={(e) => e.stopPropagation()} data-testid="detail-modal">
+        <h3 style={{ marginTop:0 }}>{item.subject}</h3>
+        <div style={{ color:"#64748b", fontSize:12, marginBottom:12 }}>
+          {item.sender} · {(item.date_iso || "").slice(0,16).replace("T"," ")} · Status: <b>{item.status}</b>
+        </div>
+        <div style={{ background:"#f8fafc", padding:12, borderRadius:8, marginBottom:16,
+                      maxHeight:180, overflow:"auto", whiteSpace:"pre-wrap", fontSize:13 }}>
+          {item.body_preview || "(sin cuerpo)"}
+        </div>
+        <div style={{ marginBottom:8, fontSize:12, color:"#64748b" }}>
+          Adjuntos: {(item.attachments || []).join(", ") || "(sin adjuntos)"}
+        </div>
+        {cl.razonamiento && (
+          <div style={{ background:"#eff6ff", padding:8, borderRadius:6, fontSize:12, marginBottom:12 }}>
+            🤖 IA dice: {cl.razonamiento} (confianza: {Math.round((cl.confianza||0)*100)}%)
+          </div>
+        )}
+        <h4>Corregir clasificación</h4>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap: 10, marginBottom: 16 }}>
+          <label>Cliente <input data-testid="edit-cliente" value={c.cliente}
+            onChange={e => setC({...c, cliente:e.target.value})} style={inp}/></label>
+          <label>RUT <input data-testid="edit-rut" value={c.rut}
+            onChange={e => setC({...c, rut:e.target.value})} style={inp}/></label>
+          <label>Tipo documento
+            <select data-testid="edit-tipo" value={c.tipo_documento}
+                    onChange={e => setC({...c, tipo_documento:e.target.value})} style={inp}>
+              {TIPOS_DOC.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </label>
+          <label>Inmobiliaria <input data-testid="edit-inmob" value={c.inmobiliaria}
+            onChange={e => setC({...c, inmobiliaria:e.target.value})} style={inp}/></label>
+        </div>
+        {item.drive_folder_id && (
+          <div style={{ background:"#ecfdf5", border:"1px solid #86efac", padding:8, borderRadius:6,
+                        fontSize:12, marginBottom:12, color:"#065f46" }}>
+            📁 Ya subido a Drive (mock): <code>{item.drive_folder_id}</code>
+          </div>
+        )}
+        {item.drive_folder_id && (
+          <div style={{ background:"#ecfdf5", border:"1px solid #86efac", padding:8, borderRadius:6,
+                        fontSize:12, marginBottom:12, color:"#065f46" }}>
+            📂 Guardado en carpeta local: <b>{item.drive_folder_id}</b>
+          </div>
+        )}
+        <div style={{ display:"flex", justifyContent:"space-between", gap: 8, flexWrap:"wrap" }}>
+          <div style={{ display:"flex", gap: 8, flexWrap:"wrap" }}>
+            <button onClick={() => onReprocess(item.id)} disabled={busy} style={btnStyle("#3b82f6")}>
+              ♻ Reprocesar con IA
+            </button>
+            <button data-testid="btn-extract-text" onClick={() => onExtractText(item.id)} disabled={busy}
+                    style={btnStyle("#0891b2")}>🔍 Leer con OCR</button>
+            {item.status === "clasificado" && (
+              <button data-testid="btn-upload-drive" onClick={() => onUploadDrive(item.id)} disabled={busy}
+                      style={btnStyle("#22c55e")}>📂 Guardar en Carpeta Cliente</button>
+            )}
+          </div>
+          <div style={{ display:"flex", gap: 8 }}>
+            <button onClick={onClose} style={btnStyle("#64748b")}>Cerrar</button>
+            <button data-testid="btn-save-correction" onClick={() => onSave(item.id, c)} disabled={busy}
+                    style={btnStyle("#22c55e")}>Guardar corrección</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const btnStyle = (bg, small=false) => ({
+  background: bg, color: "#fff", padding: small ? "4px 10px" : "8px 14px",
+  border: "none", borderRadius: 6, cursor: "pointer", fontWeight: 600, fontSize: small ? 12 : 13,
+});
+const th = { padding: "10px 12px", textAlign: "left", fontSize: 12, textTransform: "uppercase" };
+const td = { padding: "10px 12px", fontSize: 13, color: "#1a1f2e" };
+const inp = { width: "100%", padding: "6px 10px", border: "1px solid #cbd5e1", borderRadius: 6, marginTop: 4 };
