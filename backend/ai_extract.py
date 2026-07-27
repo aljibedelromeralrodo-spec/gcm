@@ -17,6 +17,11 @@ def _rut_regex(texto):
     return m.group(1) if m else ""
 
 
+def _email_regex(texto):
+    m = re.search(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+", texto or "")
+    return m.group(0) if m else ""
+
+
 def _fallback_clasificar(texto, filename=""):
     t = (texto + " " + filename).lower()
     reglas = [
@@ -44,6 +49,7 @@ async def clasificar_y_extraer(texto, filename=""):
         "tipo_documento": _fallback_clasificar(texto, filename),
         "nombre_cliente": "",
         "rut": _rut_regex(texto),
+        "email_cliente": _email_regex(texto),
         "proyecto_inmobiliario": "",
         "ejecutivo_externo": "",
         "ejecutivo_interno": "",
@@ -63,6 +69,7 @@ async def clasificar_y_extraer(texto, filename=""):
             "SOLO con un objeto JSON valido, sin texto adicional, con estas claves: "
             "tipo_documento (uno de: " + ", ".join(TIPOS) + "), "
             "nombre_cliente (string), rut (string formato chileno o ''), "
+            "email_cliente (correo del cliente si aparece, o ''), "
             "proyecto_inmobiliario (string), ejecutivo_externo (string), "
             "ejecutivo_interno (string), monto_credito_uf (numero o null), "
             "monto_subsidio_uf (numero o null), con_subsidio (true/false/null), "

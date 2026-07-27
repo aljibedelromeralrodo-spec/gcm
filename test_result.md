@@ -63,6 +63,11 @@
 ##     working: "NA"
 ##     file: "server.py, ocr_service.py, ai_extract.py"
 
+##   - task: "Fix login robusto (admin/0586 case-insensitive, upsert admin) + enviar-autocorreo con info ejecutivo/correo cliente + PDF agrupado"
+##     implemented: true
+##     working: "NA"
+##     file: "server.py, ai_extract.py, EmailProcessingModule.js"
+
 #====================================================================================================
 # START - Testing Protocol - DO NOT EDIT OR REMOVE THIS SECTION
 #====================================================================================================
@@ -251,3 +256,18 @@ agent_communication:
     message: "Autocorreo flow testing completed. Found and fixed critical bug: missing 'import re' in server.py caused NameError in _safe_name() function, breaking manual-archive endpoint with 500 error. After fix, 7/10 autocorreo tests pass (70%). Core functionality works: status management, toggle/periodic controls, cutoff management, mailboxes listing (2 accounts), PDF adjustment (KEY TEST PASSED - correctly removes page 2+ from simulations, keeps only page 1), archive listing and download. The /run endpoint returns 502 due to Cloudflare/ingress timeout (>90s for IMAP operations), not a backend error. Backend remains stable. All critical autocorreo features are functional."
   - agent: "testing"
     message: "Procesamiento Correo module testing completed - ALL TESTS PASSED (100%). Tested complete workflow per review request: OAuth Drive status (configured, connected), Checklist endpoint (returns dependiente/independiente structures with orden arrays), Stats endpoint (returns all counters), Rules CRUD (create, list, delete all working), Ingest from inbox (returns 502 after 60s - INFRASTRUCTURE TIMEOUT from Cloudflare, NOT code bug - backend successfully processed emails in background and created 3 queue items), Queue listing (3 items with correct structure), Process-pending (OCR+AI classification working - 2 items processed, status changed to clasificado), Queue detail (returns full item with classification, documentos array with tipos: certificado_afp, liquidacion, otro), Correct endpoint (successfully updates classification), Upload-drive (creates client folder, uploads 5 files including merged PDF 'Carpeta_Cliente QA Test.pdf', calculates checklist faltantes), Extract-text (returns results with method: embebido/ocr and char counts). Regression tests pass (autocorreo/status, auth/login). CONCLUSION: Complete Procesamiento Correo module is fully functional. OCR extraction works (pypdf + Tesseract fallback). AI classification with Emergent LLM correctly identifies document types. Client folder creation and PDF merging in correct order works. Checklist tracking works. The ingest endpoint 502 is expected infrastructure behavior for long IMAP operations."
+  - task: "Fix login robusto (admin/0586 case-insensitive, upsert admin) + enviar-autocorreo con info ejecutivo/correo cliente + PDF agrupado"
+    implemented: true
+    working: true
+    file: "server.py, ai_extract.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ ALL TESTS PASSED (16/16 - 100%). A) FIX LOGIN (crítico): All 5 login test cases passed. POST /api/auth/login with admin/0586 returns 200 with token and rol=admin. Case-insensitive login works (ADMIN/0586 returns 200). Trim spaces works ('  admin  '/0586 returns 200). Wrong password correctly returns 401 (admin/9999). Using 'codigo' field instead of 'rut' works (codigo=admin returns 200). B) ENVIAR AUTOCORREO enriquecido: Successfully tested complete workflow. POST /api/procesamiento/queue/{id}/enviar-autocorreo returns 200 with success=true, destino=gerardo.ext@centralmutuos.cl, adjunto=true. Email body includes enriched data: cliente, RUT, email_cliente, nombre_ejecutivo, email_ejecutivo, proyecto_inmobiliario, monto_credito_uf, monto_subsidio_uf, con_subsidio. PDF agrupado (merged PDF) is attached. autocorreo_enviado flag is correctly set to true after sending. 404 correctly returned for non-existent item ID. C) Verify ejecutivo data: After reprocessing items, campos correctly includes email_ejecutivo (e.g., 'fuchslocher@boetsch.cl'), nombre_ejecutivo (e.g., 'Rodrigo Salazar'), and classification includes email_cliente (can be empty string ''). D) Regression: GET /api/autocorreo/status returns 200. GET /api/central/email-status returns 200 with connected=true. CONCLUSION: All login fixes and autocorreo enriquecido functionality working correctly. Login is now robust (case-insensitive, trims spaces, accepts both 'rut' and 'codigo' fields). Autocorreo sends enriched emails with complete client/executive information and PDF attachment to user's own authorized email (gerardo.ext@centralmutuos.cl)."
+
+agent_communication:
+  - agent: "testing"
+    message: "Login fix and autocorreo enriquecido testing completed - ALL TESTS PASSED (16/16 - 100%). Tested per review request: A) FIX LOGIN - all 5 test cases passed (basic admin/0586, uppercase ADMIN/0586, spaces '  admin  '/0586, wrong password 401, 'codigo' field). Login is now case-insensitive, trims spaces, and accepts both 'rut' and 'codigo' fields. B) ENVIAR AUTOCORREO enriquecido - complete workflow tested successfully. Endpoint POST /api/procesamiento/queue/{id}/enviar-autocorreo sends enriched email to gerardo.ext@centralmutuos.cl with HTML body containing cliente, RUT, email_cliente, nombre_ejecutivo, email_ejecutivo, proyecto_inmobiliario, monto_credito_uf, monto_subsidio_uf, con_subsidio, and attaches merged PDF. autocorreo_enviado flag correctly set. 404 handling verified. C) Ejecutivo data verification - campos includes email_ejecutivo and nombre_ejecutivo (extracted from sender), classification includes email_cliente (can be empty). D) Regression tests passed - autocorreo/status and email-status both return 200 with correct data. NO CRITICAL ISSUES FOUND. All functionality working as specified."

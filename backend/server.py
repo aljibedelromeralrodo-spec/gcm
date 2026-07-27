@@ -44,12 +44,14 @@ def clean(doc):
 
 
 async def ensure_seed():
-    # Seed default admin user (codigo=admin / password=0586)
-    if await db.users.count_documents({}) == 0:
-        await db.users.insert_many([
-            {"codigo": "admin", "nombre": "Administrador", "password": "0586",
-             "rol": "admin", "created": now_iso()},
-        ])
+    # Garantizar SIEMPRE el usuario admin (codigo=admin / password=0586)
+    await db.users.update_one(
+        {"codigo": "admin"},
+        {"$set": {"codigo": "admin", "nombre": "Administrador",
+                  "password": "0586", "rol": "admin"},
+         "$setOnInsert": {"created": now_iso()}},
+        upsert=True,
+    )
     # Seed config
     if await db.config.count_documents({"_key": "tasas"}) == 0:
         await db.config.insert_one({"_key": "tasas", **DEFAULT_TASAS})
@@ -87,7 +89,11 @@ async def startup():
 async def auth_login(payload: dict):
     codigo = (payload.get("rut") or payload.get("codigo") or "").strip()
     password = (payload.get("password") or "").strip()
-    user = await db.users.find_one({"codigo": codigo, "password": password})
+    # Busqueda tolerante a mayusculas/minusculas y espacios en el codigo
+    user = await db.users.find_one({
+        "codigo": {"$regex": f"^{re.escape(codigo)}$", "$options": "i"},
+        "password": password,
+    })
     if not user:
         raise HTTPException(status_code=401, detail="Credenciales invalidas")
     return {
@@ -1192,13 +1198,22 @@ async def _clasificar_item(item):
                 campos[k] = info[k]
     if not cliente:
         cliente = mail._extraer_nombre(item.get("subject", ""), item.get("sender", ""))
-    # Detectar ejecutivo externo desde el remitente si no vino
-    if not campos["ejecutivo_externo"]:
-        campos["ejecutivo_externo"] = re.sub(r".*<|>.*", "", item.get("sender", "")).strip()
+    # Datos del ejecutivo externo desde el remitente del correo
+    sender = item.get("sender", "")
+    em = re.search(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+", sender)
+    email_ejecutivo = em.group(0) if em else ""
+    nombre_ejecutivo = re.sub(r"<.*?>", "", sender).strip().strip('"') or email_ejecutivo.split("@")[0]
+    campos["email_ejecutivo"] = email_ejecutivo
+    campos["nombre_ejecutivo"] = nombre_ejecutivo
+    if not campos.get("ejecutivo_externo"):
+        campos["ejecutivo_externo"] = nombre_ejecutivo
+    # Correo del cliente detectado en los documentos (si aparecio)
+    campos.setdefault("email_cliente", "")
     tipos = [d["tipo"] for d in docs_detectados]
     tipo_cliente = "independiente" if ("boleta_honorarios" in tipos or "impuesto_renta" in tipos) else "dependiente"
     status = "clasificado" if cliente else "revisar"
     classification = {"cliente": cliente, "rut": rut, "tipo_cliente": tipo_cliente,
+                      "email_cliente": campos.get("email_cliente", ""),
                       "inmobiliaria": campos.get("proyecto_inmobiliario", ""),
                       "documentos": docs_detectados,
                       "confianza": max([d["confianza"] for d in docs_detectados] + [0.4])}
@@ -1334,6 +1349,64 @@ async def proc_purge():
                 deleted += 1
     await db.proc_queue.update_many({}, {"$set": {"drive_folder_id": None}})
     return {"deleted": deleted, "errors": []}
+
+
+def _fmt_uf(v):
+    if v in (None, "", False):
+        return "—"
+    try:
+        return f"{float(v):,.1f} UF".replace(",", ".")
+    except Exception:
+        return str(v)
+
+
+@api.post("/procesamiento/queue/{qid}/enviar-autocorreo")
+async def proc_enviar_autocorreo(qid: str, payload: dict = None):
+    item = await db.proc_queue.find_one({"id": qid})
+    if not item:
+        raise HTTPException(status_code=404, detail="No encontrado")
+    cl = item.get("classification", {})
+    campos = item.get("campos", {})
+    cliente = cl.get("cliente") or mail._extraer_nombre(item.get("subject", ""), item.get("sender", ""))
+    st = await _ac_state()
+    destino = (payload or {}).get("destino") or st.get("destination") or os.environ.get("MAIL2_USER", "")
+    if not destino:
+        raise HTTPException(status_code=400, detail="No hay correo destino configurado")
+    con_sub = campos.get("con_subsidio")
+    con_sub_txt = "Con subsidio" if con_sub is True else "Sin subsidio" if con_sub is False else "—"
+    # Buscar PDF agrupado en la carpeta del cliente
+    adjuntos = []
+    dest_folder = CLIENTES_DIR / _safe_name(cliente)
+    merged = dest_folder / f"Carpeta_{_safe_name(cliente)}.pdf"
+    if merged.exists():
+        adjuntos.append({"filename": merged.name, "content_b64": _b64(merged.read_bytes())})
+    cuerpo = f"""
+    <div style="font-family:Arial,sans-serif;font-size:14px;color:#222">
+      <h2 style="color:#6c5ce7;margin:0 0 8px">Gestion de credito - {cliente}</h2>
+      <table style="border-collapse:collapse">
+        <tr><td style="padding:4px 12px 4px 0"><b>Cliente</b></td><td>{cliente}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0"><b>RUT</b></td><td>{cl.get('rut','—') or '—'}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0"><b>Correo cliente</b></td><td>{cl.get('email_cliente') or campos.get('email_cliente') or '—'}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0"><b>Ejecutivo que envio</b></td><td>{campos.get('nombre_ejecutivo','—') or '—'}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0"><b>Correo ejecutivo</b></td><td>{campos.get('email_ejecutivo','—') or '—'}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0"><b>Proyecto inmobiliario</b></td><td>{campos.get('proyecto_inmobiliario','—') or '—'}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0"><b>Monto credito</b></td><td>{_fmt_uf(campos.get('monto_credito_uf'))}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0"><b>Monto subsidio</b></td><td>{_fmt_uf(campos.get('monto_subsidio_uf'))}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0"><b>Tipo</b></td><td>{con_sub_txt}</td></tr>
+      </table>
+      <p style="margin-top:12px">Se adjunta el PDF agrupado de la carpeta del cliente para su envio a mesa.</p>
+      <p style="color:#888;font-size:12px">Central Mutuos - Con Creces Asesorias</p>
+    </div>
+    """
+    asunto = f"[Gestion] {cliente} - {campos.get('proyecto_inmobiliario') or 'Credito Hipotecario'}"
+    res = await asyncio.to_thread(mail.send_mail, destino, asunto, cuerpo, adjuntos, "principal")
+    if not res.get("success"):
+        raise HTTPException(status_code=502, detail=res.get("error", "Error de envio"))
+    await db.proc_queue.update_one({"id": qid}, {"$set": {"autocorreo_enviado": True,
+                                                          "autocorreo_a": destino, "autocorreo_en": now_iso()}})
+    return {"success": True, "destino": destino, "adjunto": bool(adjuntos)}
+
+
 
 
 @api.get("/procesamiento/checklist")

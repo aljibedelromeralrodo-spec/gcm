@@ -115,6 +115,18 @@ export default function EmailProcessingModule() {
     } finally { setBusy(false); }
   };
 
+  const enviarAutocorreo = async (id) => {
+    setBusy(true);
+    try {
+      const r = await axios.post(`${API}/api/procesamiento/queue/${id}/enviar-autocorreo`, {});
+      alert(`✅ Autocorreo enviado a ${r.data.destino}\n${r.data.adjunto ? "Con PDF agrupado adjunto" : "Sin PDF agrupado (arma la carpeta primero)"}\n\nRevisa tu bandeja y reenvíalo a mesa.`);
+      load(); if (selected?.id === id) openDetail(id);
+    } catch (e) {
+      alert("Error: " + (e.response?.data?.detail || e.message));
+    } finally { setBusy(false); }
+  };
+
+
   const extractText = async (id) => {
     setBusy(true);
     try {
@@ -269,13 +281,14 @@ export default function EmailProcessingModule() {
         <DetailModal item={selected} onClose={() => setSelected(null)}
                      onReprocess={reprocess} onSave={saveCorrection}
                      onUploadDrive={uploadToDrive} onExtractText={extractText}
+                     onEnviarAutocorreo={enviarAutocorreo}
                      driveConfigured={driveConfigured} busy={busy} />
       )}
     </div>
   );
 }
 
-function DetailModal({ item, onClose, onReprocess, onSave, onUploadDrive, onExtractText, driveConfigured, busy }) {
+function DetailModal({ item, onClose, onReprocess, onSave, onUploadDrive, onExtractText, onEnviarAutocorreo, driveConfigured, busy }) {
   const cl = item.classification || {};
   const [c, setC] = useState({
     cliente: cl.cliente || "",
@@ -342,6 +355,10 @@ function DetailModal({ item, onClose, onReprocess, onSave, onUploadDrive, onExtr
             {item.status === "clasificado" && (
               <button data-testid="btn-upload-drive" onClick={() => onUploadDrive(item.id)} disabled={busy}
                       style={btnStyle("#22c55e")}>📂 Guardar en Carpeta Cliente</button>
+            )}
+            {item.status === "clasificado" && (
+              <button data-testid="btn-enviar-autocorreo" onClick={() => onEnviarAutocorreo(item.id)} disabled={busy}
+                      style={btnStyle("#6c5ce7")}>✉️ Enviar autocorreo (→ mí → mesa)</button>
             )}
           </div>
           <div style={{ display:"flex", gap: 8 }}>
