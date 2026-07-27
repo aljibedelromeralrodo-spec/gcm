@@ -228,6 +228,71 @@ def procesar_seguimiento(max_emails=30):
     return ops
 
 
+def fetch_pdf_attachments(sender_filter=None, limit=20):
+    """Trae correos recientes (de todas las casillas) que tengan PDFs adjuntos.
+
+    sender_filter: substring para filtrar por remitente (ej: 'aprobaciones@centralmutuos.cl').
+    Devuelve: [{from, subject, date, tipo, cuenta, body, pdfs:[{filename, content_bytes}]}]
+    """
+    if not configured():
+        return []
+    out = []
+    for acc in ACCOUNTS:
+        try:
+            m = _connect(acc)
+            m.select("INBOX", readonly=True)
+            crit = ["ALL"]
+            if sender_filter:
+                crit = ["FROM", f'"{sender_filter}"']
+            typ, data = m.search(None, *crit)
+            ids = data[0].split() if data and data[0] else []
+            ids = ids[-limit:]
+            for num in reversed(ids):
+                typ, msgdata = m.fetch(num, "(RFC822)")
+                if not msgdata or not isinstance(msgdata[0], tuple):
+                    continue
+                msg = email.message_from_bytes(msgdata[0][1])
+                subject = _dec(msg.get("Subject"))
+                remitente = _dec(msg.get("From"))
+                fecha_raw = msg.get("Date")
+                try:
+                    fecha = parsedate_to_datetime(fecha_raw).isoformat() if fecha_raw else ""
+                except Exception:
+                    fecha = fecha_raw or ""
+                pdfs = []
+                body_text = ""
+                for part in msg.walk():
+                    ctype = part.get_content_type()
+                    disp = str(part.get("Content-Disposition") or "")
+                    fname = part.get_filename()
+                    if fname:
+                        fname = _dec(fname)
+                    if ctype == "application/pdf" or (fname or "").lower().endswith(".pdf"):
+                        try:
+                            payload = part.get_payload(decode=True)
+                            if payload:
+                                pdfs.append({"filename": fname or "documento.pdf",
+                                             "content_bytes": payload})
+                        except Exception:
+                            continue
+                    elif ctype == "text/plain" and "attachment" not in disp and not body_text:
+                        try:
+                            body_text = (part.get_payload(decode=True) or b"").decode(
+                                part.get_content_charset() or "utf-8", errors="ignore")
+                        except Exception:
+                            pass
+                if pdfs:
+                    out.append({
+                        "from": remitente, "subject": subject, "date": fecha,
+                        "tipo": _clasificar(subject + " " + body_text),
+                        "cuenta": acc["user"], "body": body_text, "pdfs": pdfs,
+                    })
+            m.logout()
+        except Exception:
+            continue
+    return out
+
+
 def send_mail(to, subject, body_html, attachments=None, desde="secundaria"):
     """Envia un correo. attachments: [{filename, content_b64}]
     desde: 'secundaria' (gerardo.ext@, para PDFs a clientes) o 'principal'."""

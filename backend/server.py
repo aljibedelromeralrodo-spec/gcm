@@ -5,6 +5,7 @@ from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import io
+import re
 import uuid
 import asyncio
 import logging
@@ -805,64 +806,231 @@ async def wa_reject(aid: str, payload: dict = None):
 # ---------------------------------------------------------------------------
 # Autocorreo / Procesamiento / Formato / Portal (stubs returning valid data)
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Autocorreo: flujo de mesa (recibir simulacion -> dejar pag 1 -> archivar/enviar)
+# ---------------------------------------------------------------------------
+import pdf_service as pdfs
+from fastapi.responses import FileResponse
+
+STORAGE_DIR = ROOT_DIR / "storage" / "autocorreo"
+STORAGE_DIR.mkdir(parents=True, exist_ok=True)
+MESA_SENDER = os.environ.get("MESA_SENDER", "aprobaciones@centralmutuos.cl")
+
+
+def _safe_name(name):
+    return re.sub(r"[^A-Za-z0-9._ -]", "_", (name or "").strip()) or "cliente"
+
+
+async def _ac_state():
+    st = await db.config.find_one({"_key": "autocorreo_state"})
+    if not st:
+        st = {"_key": "autocorreo_state", "enabled": False, "periodic_enabled": False,
+              "cutoff_iso": None, "destination": os.environ.get("MAIL2_USER", "")}
+        await db.config.insert_one(dict(st))
+    st.pop("_id", None)
+    st.pop("_key", None)
+    return st
+
+
+async def _set_ac_state(upd):
+    await db.config.update_one({"_key": "autocorreo_state"}, {"$set": upd}, upsert=True)
+
+
+def _save_pdf(cliente, filename, content_bytes):
+    folder = STORAGE_DIR / _safe_name(cliente)
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / _safe_name(filename)
+    with open(path, "wb") as f:
+        f.write(content_bytes)
+    return path
+
+
 @api.get("/autocorreo/status")
 async def ac_status():
-    st = await asyncio.to_thread(mail.get_status)
+    st = await _ac_state()
+    log = await db.autocorreo_log.find().sort("processed_at", -1).limit(25).to_list(25)
+    sent = await db.autocorreo_log.count_documents({"status": "sent"})
+    failed = await db.autocorreo_log.count_documents({"status": "failed"})
+    total = await db.autocorreo_log.count_documents({})
     return {
-        "enabled": st.get("connected", False),
-        "running": False,
-        "last_run": None,
-        "mailboxes": [st.get("account")] if st.get("connected") else [],
-        "cutoff": None,
-        "connected": st.get("connected", False),
-        "account": st.get("account", ""),
+        "enabled": st.get("enabled", False),
+        "periodic_enabled": st.get("periodic_enabled", False),
+        "cutoff_iso": st.get("cutoff_iso"),
+        "destination": st.get("destination") or os.environ.get("MAIL2_USER", ""),
+        "sent": sent,
+        "failed": failed,
+        "total": total,
+        "recent": [clean(r) for r in log],
     }
 
 
 @api.get("/autocorreo/mailboxes")
-async def ac_mailboxes():
-    st = await asyncio.to_thread(mail.get_status)
-    return {"mailboxes": [st.get("account")] if st.get("connected") else []}
+async def ac_mailboxes(probe: bool = False):
+    status = await asyncio.to_thread(mail.get_status)
+    accounts = []
+    for i, a in enumerate(status.get("accounts", [])):
+        accounts.append({
+            "email": a.get("account"),
+            "role": "principal" if a.get("rol") == "principal" else "respaldo",
+            "slot": i,
+            "auth_method": "app_password" if a.get("connected") else "none",
+            "auth_live": a.get("connected", False),
+            "oauth_configured": False,
+            "backoff_remaining_s": 0,
+            "connect_url": "/api/oauth/drive/start",
+        })
+    return {"accounts": accounts}
 
 
 @api.get("/autocorreo/archive")
 async def ac_archive():
-    return {"items": []}
+    folders = []
+    if STORAGE_DIR.exists():
+        for d in sorted(STORAGE_DIR.iterdir()):
+            if not d.is_dir():
+                continue
+            files = [{"name": f.name, "size": f.stat().st_size}
+                     for f in sorted(d.iterdir()) if f.is_file()]
+            if files:
+                folders.append({"cliente": d.name, "count": len(files), "files": files})
+    return {"folders": folders}
+
+
+@api.get("/autocorreo/archive/{cliente}/{filename}")
+async def ac_archive_file(cliente: str, filename: str):
+    path = STORAGE_DIR / _safe_name(cliente) / _safe_name(filename)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Archivo no encontrado")
+    return FileResponse(str(path), media_type="application/pdf", filename=path.name)
 
 
 @api.post("/autocorreo/toggle")
 async def ac_toggle(payload: dict = None):
-    return {"enabled": False}
-
-
-@api.post("/autocorreo/run")
-async def ac_run(payload: dict = None):
-    return {"ok": True, "procesados": 0}
+    enabled = bool((payload or {}).get("enabled"))
+    await _set_ac_state({"enabled": enabled})
+    return {"enabled": enabled}
 
 
 @api.post("/autocorreo/periodic")
 async def ac_periodic(payload: dict = None):
-    return {"ok": True}
-
-
-@api.post("/autocorreo/manual-archive")
-async def ac_manual(payload: dict = None):
-    return {"ok": True}
+    enabled = bool((payload or {}).get("enabled"))
+    await _set_ac_state({"periodic_enabled": enabled})
+    return {"periodic_enabled": enabled}
 
 
 @api.post("/autocorreo/cutoff/now")
 async def ac_cutoff_now():
-    return {"cutoff": now_iso()}
+    iso = now_iso()
+    await _set_ac_state({"cutoff_iso": iso})
+    return {"cutoff_iso": iso}
 
 
 @api.post("/autocorreo/cutoff/clear")
 async def ac_cutoff_clear():
-    return {"cutoff": None}
+    await _set_ac_state({"cutoff_iso": None})
+    return {"cutoff_iso": None}
 
 
 @api.post("/autocorreo/imap/reset-backoff")
-async def ac_reset_backoff():
+async def ac_reset_backoff(account: str = ""):
     return {"ok": True}
+
+
+def _procesar_mesa(destino, cutoff_iso):
+    """Lee correos de mesa con PDF, deja pag 1 en simulaciones, archiva y envia. (sync)"""
+    correos = mail.fetch_pdf_attachments(sender_filter=MESA_SENDER, limit=20)
+    resultados = []
+    for c in correos:
+        if cutoff_iso and c.get("date") and c["date"] < cutoff_iso:
+            continue
+        cliente = mail._extraer_nombre(c["subject"], c["from"])
+        es_aprobacion = c["tipo"] == "aprobacion"
+        for pdf in c["pdfs"]:
+            raw = pdf["content_bytes"]
+            tipo_doc = pdfs.clasificar_documento(raw, pdf["filename"])
+            adjuntos = []
+            saved = []
+            if tipo_doc == "simulacion":
+                nuevo, orig, removidas = pdfs.dejar_primera_pagina(raw)
+                nombre_aj = pdf["filename"].replace(".pdf", "") + "_ajustada.pdf"
+                _save_pdf(cliente, nombre_aj, nuevo)
+                saved.append({"name": _safe_name(nombre_aj), "type": "simulacion_ajustada",
+                              "pages_original": orig, "pages_removed": removidas})
+                adjuntos.append({"filename": nombre_aj,
+                                 "content_b64": _b64(nuevo)})
+            else:
+                _save_pdf(cliente, pdf["filename"], raw)
+                saved.append({"name": _safe_name(pdf["filename"]), "type": tipo_doc})
+                adjuntos.append({"filename": pdf["filename"], "content_b64": _b64(raw)})
+            resultados.append({"cliente": cliente, "subject": c["subject"],
+                               "saved": saved, "adjuntos": adjuntos,
+                               "es_aprobacion": es_aprobacion, "body": c.get("body", "")})
+    # Enviar al destino (gerardo.ext@) los PDFs ajustados
+    enviados = 0
+    errores = []
+    logs = []
+    for r in resultados:
+        cuerpo = r["body"] or (
+            "Estimado/a,<br><br>Adjuntamos el documento correspondiente a su operacion.<br><br>"
+            "Saludos cordiales,<br>Central Mutuos")
+        cuerpo_html = cuerpo.replace("\n", "<br>") if "<br>" not in cuerpo else cuerpo
+        res = mail.send_mail(destino, r["subject"], cuerpo_html, r["adjuntos"], desde="principal")
+        estado = "sent" if res.get("success") else "failed"
+        if res.get("success"):
+            enviados += 1
+        else:
+            errores.append(f"{r['cliente']}: {res.get('error')}")
+        logs.append({
+            "id": str(uuid.uuid4()),
+            "processed_at": now_iso(),
+            "subject": r["subject"],
+            "cliente": r["cliente"],
+            "status": estado,
+            "error": res.get("error") if estado == "failed" else None,
+            "attachments_info": ", ".join(s["name"] for s in r["saved"]),
+        })
+    return {"processed": len(resultados), "sent": enviados, "errors": errores, "logs": logs}
+
+
+import base64 as _b64mod
+
+
+def _b64(data):
+    return _b64mod.b64encode(data).decode()
+
+
+@api.post("/autocorreo/run")
+async def ac_run(payload: dict = None):
+    st = await _ac_state()
+    destino = st.get("destination") or os.environ.get("MAIL2_USER", "")
+    if not destino:
+        raise HTTPException(status_code=400, detail="No hay correo destino configurado")
+    result = await asyncio.to_thread(_procesar_mesa, destino, st.get("cutoff_iso"))
+    for lg in result.pop("logs", []):
+        await db.autocorreo_log.insert_one(lg)
+    return result
+
+
+@api.post("/autocorreo/manual-archive")
+async def ac_manual(cliente: str = Form(...), files: list[UploadFile] = File(...)):
+    saved = []
+    errors = []
+    for f in files:
+        try:
+            raw = await f.read()
+            tipo_doc = pdfs.clasificar_documento(raw, f.filename)
+            if tipo_doc == "simulacion":
+                nuevo, orig, removidas = pdfs.dejar_primera_pagina(raw)
+                nombre_aj = f.filename.replace(".pdf", "") + "_ajustada.pdf"
+                _save_pdf(cliente, nombre_aj, nuevo)
+                saved.append({"name": _safe_name(nombre_aj), "type": "simulacion_ajustada",
+                              "pages_original": orig, "pages_removed": removidas})
+            else:
+                _save_pdf(cliente, f.filename, raw)
+                saved.append({"name": _safe_name(f.filename), "type": tipo_doc})
+        except Exception as e:
+            errors.append({"file": f.filename, "error": str(e)})
+    return {"folder": _safe_name(cliente), "cliente": cliente, "saved": saved, "errors": errors}
 
 
 @api.get("/procesamiento/queue")
