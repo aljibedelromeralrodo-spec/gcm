@@ -82,6 +82,8 @@ async def get_valor_uf():
 @app.on_event("startup")
 async def startup():
     await ensure_seed()
+    # Procesamiento automatico 24/7 de mesa (rechazos/aprobaciones al tiro)
+    asyncio.create_task(_periodic_mesa_loop())
 
 
 # ---------------------------------------------------------------------------
@@ -947,19 +949,23 @@ async def ac_reset_backoff(account: str = ""):
     return {"ok": True}
 
 
-def _procesar_mesa(destino, cutoff_iso, ejecutivos=None):
+def _procesar_mesa(destino, cutoff_iso, ejecutivos=None, ya_enviados=None):
     """Lee correos de mesa, deja pag 1 en simulaciones, archiva y envia. (sync)
 
     Incluye RECHAZOS aunque vengan sin PDF (solo texto).
-    ejecutivos: {cliente_lower: {nombre, email}} para incluir en el cuerpo a quien reenviar.
+    ejecutivos: {cliente_lower: {nombre, email, email_cliente}} para el encabezado.
+    ya_enviados: set de asuntos ya enviados (evita duplicados).
     """
     ejecutivos = ejecutivos or {}
+    ya_enviados = ya_enviados or set()
     correos = mail.fetch_pdf_attachments(sender_filter=MESA_SENDER, limit=8,
                                          incluir_sin_adjuntos=True)
     resultados = []
     for c in correos:
         if cutoff_iso and c.get("date") and c["date"] < cutoff_iso:
             continue
+        if (c.get("subject") or "").strip() in ya_enviados:
+            continue  # ya fue enviado antes, no duplicar
         cliente = mail._extraer_nombre(c["subject"], c["from"])
         es_aprobacion = c["tipo"] == "aprobacion"
         es_rechazo = c["tipo"] == "rechazo"
@@ -1009,8 +1015,9 @@ def _procesar_mesa(destino, cutoff_iso, ejecutivos=None):
         <div style="font-family:Arial,sans-serif;font-size:13px;background:#f5f6fa;
                     border-left:4px solid {color};padding:10px 14px;margin-bottom:12px">
           <b style="color:{color}">{resultado_txt}</b> — {r['cliente']}<br>
+          <b>Correo del cliente (para reenviar):</b> {info_ej.get('email_cliente') or '—'}<br>
           <b>Ejecutivo que envio la gestion:</b> {info_ej.get('nombre') or '—'}<br>
-          <b>Correo del ejecutivo (para reenviar):</b> {info_ej.get('email') or '—'}
+          <b>Correo del ejecutivo:</b> {info_ej.get('email') or '—'}
         </div>
         """
         cuerpo = r["body"] or (
@@ -1043,11 +1050,38 @@ def _b64(data):
     return _b64mod.b64encode(data).decode()
 
 
-async def _run_mesa_background(destino, cutoff_iso, ejecutivos):
+async def _mapa_ejecutivos():
+    """{cliente_lower: {nombre, email, email_cliente}} desde la cola de Procesamiento."""
+    ejecutivos = {}
+    items = await db.proc_queue.find(
+        {}, {"classification.cliente": 1, "classification.email_cliente": 1,
+             "campos.email_ejecutivo": 1, "campos.nombre_ejecutivo": 1,
+             "campos.email_cliente": 1}).limit(500).to_list(500)
+    for it in items:
+        cl = it.get("classification") or {}
+        campos_it = it.get("campos") or {}
+        cli = (cl.get("cliente") or "").strip().lower()
+        if cli:
+            ejecutivos[cli] = {
+                "nombre": campos_it.get("nombre_ejecutivo", ""),
+                "email": campos_it.get("email_ejecutivo", ""),
+                "email_cliente": cl.get("email_cliente") or campos_it.get("email_cliente", ""),
+            }
+    return ejecutivos
+
+
+async def _subjects_enviados():
+    """Asuntos ya enviados (para no duplicar reenvios)."""
+    logs = await db.autocorreo_log.find(
+        {"status": "sent"}, {"subject": 1}).limit(800).to_list(800)
+    return set((l.get("subject") or "").strip() for l in logs)
+
+
+async def _run_mesa_background(destino, cutoff_iso, ejecutivos, ya_enviados=None):
     try:
         await db.config.update_one({"_key": "autocorreo_state"},
                                    {"$set": {"running": True, "last_run_started": now_iso()}}, upsert=True)
-        result = await asyncio.to_thread(_procesar_mesa, destino, cutoff_iso, ejecutivos)
+        result = await asyncio.to_thread(_procesar_mesa, destino, cutoff_iso, ejecutivos, ya_enviados)
         for lg in result.pop("logs", []):
             await db.autocorreo_log.insert_one(lg)
         await db.config.update_one({"_key": "autocorreo_state"}, {"$set": {
@@ -1061,6 +1095,25 @@ async def _run_mesa_background(destino, cutoff_iso, ejecutivos):
             "last_run_result": {"error": str(e)[:200]}}})
 
 
+async def _periodic_mesa_loop():
+    """Procesamiento automatico 24/7: revisa mesa cada 5 minutos si esta activado.
+    Asi los rechazos/aprobaciones se reenvian 'al tiro' apenas llegan."""
+    while True:
+        try:
+            await asyncio.sleep(300)
+            st = await _ac_state()
+            if st.get("periodic_enabled") and not st.get("running"):
+                destino = st.get("destination") or os.environ.get("MAIL2_USER", "")
+                if destino:
+                    ejecutivos = await _mapa_ejecutivos()
+                    ya = await _subjects_enviados()
+                    await _run_mesa_background(destino, st.get("cutoff_iso"), ejecutivos, ya)
+        except asyncio.CancelledError:
+            break
+        except Exception:
+            continue
+
+
 @api.post("/autocorreo/run")
 async def ac_run(payload: dict = None):
     st = await _ac_state()
@@ -1070,20 +1123,46 @@ async def ac_run(payload: dict = None):
     if st.get("running"):
         return {"started": False, "running": True,
                 "message": "Ya hay un procesamiento en curso, espere a que termine"}
-    # Mapa cliente -> ejecutivo (nombre/correo) desde la cola de Procesamiento
-    ejecutivos = {}
-    items = await db.proc_queue.find(
-        {}, {"classification.cliente": 1, "campos.email_ejecutivo": 1,
-             "campos.nombre_ejecutivo": 1}).limit(500).to_list(500)
-    for it in items:
-        cli = ((it.get("classification") or {}).get("cliente") or "").strip().lower()
-        campos_it = it.get("campos") or {}
-        if cli and campos_it.get("email_ejecutivo"):
-            ejecutivos[cli] = {"nombre": campos_it.get("nombre_ejecutivo", ""),
-                               "email": campos_it.get("email_ejecutivo", "")}
-    asyncio.create_task(_run_mesa_background(destino, st.get("cutoff_iso"), ejecutivos))
+    ejecutivos = await _mapa_ejecutivos()
+    ya_enviados = await _subjects_enviados()
+    asyncio.create_task(_run_mesa_background(destino, st.get("cutoff_iso"), ejecutivos, ya_enviados))
     return {"started": True, "running": True,
             "message": "Procesamiento iniciado en segundo plano. Revise el panel en 1-2 minutos."}
+
+
+@api.post("/autocorreo/test-rechazo")
+async def ac_test_rechazo(payload: dict = None):
+    """Envia un correo de PRUEBA con el formato real de un rechazo reenviado."""
+    st = await _ac_state()
+    destino = (payload or {}).get("destino") or st.get("destination") or os.environ.get("MAIL2_USER", "")
+    if not destino:
+        raise HTTPException(status_code=400, detail="No hay correo destino configurado")
+    encabezado = """
+    <div style="font-family:Arial,sans-serif;font-size:13px;background:#f5f6fa;
+                border-left:4px solid #e17055;padding:10px 14px;margin-bottom:12px">
+      <b style="color:#e17055">RECHAZO</b> — Cliente De Prueba<br>
+      <b>Correo del cliente (para reenviar):</b> cliente.prueba@ejemplo.cl<br>
+      <b>Ejecutivo que envio la gestion:</b> Ejecutivo De Prueba<br>
+      <b>Correo del ejecutivo:</b> ejecutivo.prueba@ecomac.cl
+    </div>
+    <div style="font-family:Arial,sans-serif;font-size:13px;color:#222">
+      Estimados,<br><br>
+      Junto con saludar, informamos que la operacion del cliente <b>Cliente De Prueba</b>
+      ha sido <b>RECHAZADA</b> por politica de riesgo (carga financiera sobre el maximo permitido).<br><br>
+      Quedamos atentos a nuevos antecedentes que permitan reevaluar el caso.<br><br>
+      Saludos cordiales,<br>Mesa - Central Mutuos
+    </div>
+    <p style="font-family:Arial,sans-serif;color:#888;font-size:11px;margin-top:14px">
+      [CORREO DE PRUEBA] Asi llegara automaticamente cada rechazo de mesa cuando el
+      procesamiento automatico 24/7 este activado.</p>
+    """
+    res = await asyncio.to_thread(
+        mail.send_mail, destino, "[PRUEBA] Re: Cliente De Prueba (DS19 - INMEDIATA - RECHAZO)",
+        encabezado, [], "principal")
+    if not res.get("success"):
+        raise HTTPException(status_code=502, detail=res.get("error", "Error de envio"))
+    return {"success": True, "destino": destino,
+            "mensaje": "Correo de prueba de RECHAZO enviado. Revise su bandeja."}
 
 
 @api.post("/autocorreo/manual-archive")
@@ -1261,10 +1340,21 @@ def _ingest_sync(max_emails):
 
 
 @api.post("/procesamiento/ingest-from-inbox")
-async def proc_ingest(max_emails: int = 20):
+async def proc_ingest(max_emails: int = 20, dias: int = 0):
+    """Ingesta gestiones desde las bandejas. dias>0 = solo correos de los ultimos N dias."""
     correos = await asyncio.to_thread(_ingest_sync, max_emails)
+    desde_dt = (datetime.now(timezone.utc) - timedelta(days=dias)) if dias > 0 else None
     enqueued = 0
     for c in correos:
+        if desde_dt is not None:
+            try:
+                f = datetime.fromisoformat(c.get("date") or "")
+                if f.tzinfo is None:
+                    f = f.replace(tzinfo=timezone.utc)
+                if f < desde_dt:
+                    continue
+            except Exception:
+                pass
         exists = await db.proc_queue.find_one({"subject": c["subject"], "date_iso": c["date"]})
         if exists:
             continue
