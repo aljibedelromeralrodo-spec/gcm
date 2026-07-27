@@ -944,15 +944,30 @@ async def ac_reset_backoff(account: str = ""):
     return {"ok": True}
 
 
-def _procesar_mesa(destino, cutoff_iso):
-    """Lee correos de mesa con PDF, deja pag 1 en simulaciones, archiva y envia. (sync)"""
-    correos = mail.fetch_pdf_attachments(sender_filter=MESA_SENDER, limit=8)
+def _procesar_mesa(destino, cutoff_iso, ejecutivos=None):
+    """Lee correos de mesa, deja pag 1 en simulaciones, archiva y envia. (sync)
+
+    Incluye RECHAZOS aunque vengan sin PDF (solo texto).
+    ejecutivos: {cliente_lower: {nombre, email}} para incluir en el cuerpo a quien reenviar.
+    """
+    ejecutivos = ejecutivos or {}
+    correos = mail.fetch_pdf_attachments(sender_filter=MESA_SENDER, limit=8,
+                                         incluir_sin_adjuntos=True)
     resultados = []
     for c in correos:
         if cutoff_iso and c.get("date") and c["date"] < cutoff_iso:
             continue
         cliente = mail._extraer_nombre(c["subject"], c["from"])
         es_aprobacion = c["tipo"] == "aprobacion"
+        es_rechazo = c["tipo"] == "rechazo"
+        if not c["pdfs"]:
+            # Sin adjuntos: solo se reenvia si es un RECHAZO (viene solo el texto)
+            if es_rechazo:
+                resultados.append({"cliente": cliente, "subject": c["subject"],
+                                   "saved": [{"name": "(sin PDF - solo texto)", "type": "rechazo"}],
+                                   "adjuntos": [], "es_aprobacion": False,
+                                   "es_rechazo": True, "body": c.get("body", "")})
+            continue
         for pdf in c["pdfs"]:
             raw = pdf["content_bytes"]
             nombre_pdf = pdf["filename"]
@@ -977,17 +992,30 @@ def _procesar_mesa(destino, cutoff_iso):
                 adjuntos.append({"filename": nombre_pdf, "content_b64": _b64(raw)})
             resultados.append({"cliente": cliente, "subject": c["subject"],
                                "saved": saved, "adjuntos": adjuntos,
-                               "es_aprobacion": es_aprobacion, "body": c.get("body", "")})
-    # Enviar al destino (gerardo.ext@) los PDFs ajustados
+                               "es_aprobacion": es_aprobacion,
+                               "es_rechazo": es_rechazo, "body": c.get("body", "")})
+    # Enviar al destino (gerardo.ext@) los correos con la info para reenviar
     enviados = 0
     errores = []
     logs = []
     for r in resultados:
+        info_ej = ejecutivos.get((r["cliente"] or "").strip().lower(), {})
+        resultado_txt = "APROBACION" if r["es_aprobacion"] else "RECHAZO" if r.get("es_rechazo") else "DOCUMENTO"
+        color = "#e17055" if r.get("es_rechazo") else "#00b894" if r["es_aprobacion"] else "#6c5ce7"
+        encabezado = f"""
+        <div style="font-family:Arial,sans-serif;font-size:13px;background:#f5f6fa;
+                    border-left:4px solid {color};padding:10px 14px;margin-bottom:12px">
+          <b style="color:{color}">{resultado_txt}</b> — {r['cliente']}<br>
+          <b>Ejecutivo que envio la gestion:</b> {info_ej.get('nombre') or '—'}<br>
+          <b>Correo del ejecutivo (para reenviar):</b> {info_ej.get('email') or '—'}
+        </div>
+        """
         cuerpo = r["body"] or (
             "Estimado/a,<br><br>Adjuntamos el documento correspondiente a su operacion.<br><br>"
             "Saludos cordiales,<br>Central Mutuos")
         cuerpo_html = cuerpo.replace("\n", "<br>") if "<br>" not in cuerpo else cuerpo
-        res = mail.send_mail(destino, r["subject"], cuerpo_html, r["adjuntos"], desde="principal")
+        res = mail.send_mail(destino, r["subject"], encabezado + cuerpo_html,
+                             r["adjuntos"], desde="principal")
         estado = "sent" if res.get("success") else "failed"
         if res.get("success"):
             enviados += 1
@@ -1018,7 +1046,18 @@ async def ac_run(payload: dict = None):
     destino = st.get("destination") or os.environ.get("MAIL2_USER", "")
     if not destino:
         raise HTTPException(status_code=400, detail="No hay correo destino configurado")
-    result = await asyncio.to_thread(_procesar_mesa, destino, st.get("cutoff_iso"))
+    # Mapa cliente -> ejecutivo (nombre/correo) desde la cola de Procesamiento
+    ejecutivos = {}
+    items = await db.proc_queue.find(
+        {}, {"classification.cliente": 1, "campos.email_ejecutivo": 1,
+             "campos.nombre_ejecutivo": 1}).limit(500).to_list(500)
+    for it in items:
+        cli = ((it.get("classification") or {}).get("cliente") or "").strip().lower()
+        campos_it = it.get("campos") or {}
+        if cli and campos_it.get("email_ejecutivo"):
+            ejecutivos[cli] = {"nombre": campos_it.get("nombre_ejecutivo", ""),
+                               "email": campos_it.get("email_ejecutivo", "")}
+    result = await asyncio.to_thread(_procesar_mesa, destino, st.get("cutoff_iso"), ejecutivos)
     for lg in result.pop("logs", []):
         await db.autocorreo_log.insert_one(lg)
     return result

@@ -228,10 +228,11 @@ def procesar_seguimiento(max_emails=30):
     return ops
 
 
-def fetch_pdf_attachments(sender_filter=None, limit=20):
+def fetch_pdf_attachments(sender_filter=None, limit=20, incluir_sin_adjuntos=False):
     """Trae correos recientes (de todas las casillas) que tengan PDFs adjuntos.
 
     sender_filter: substring para filtrar por remitente (ej: 'aprobaciones@centralmutuos.cl').
+    incluir_sin_adjuntos: si True, incluye tambien correos SIN adjuntos (ej: rechazos solo texto).
     Devuelve: [{from, subject, date, tipo, cuenta, body, pdfs:[{filename, content_bytes}]}]
     """
     if not configured():
@@ -285,7 +286,7 @@ def fetch_pdf_attachments(sender_filter=None, limit=20):
                                 part.get_content_charset() or "utf-8", errors="ignore")
                         except Exception:
                             pass
-                if pdfs:
+                if pdfs or incluir_sin_adjuntos:
                     out.append({
                         "from": remitente, "subject": subject, "date": fecha,
                         "tipo": _clasificar(subject + " " + body_text),
