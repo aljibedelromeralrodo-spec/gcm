@@ -19,6 +19,21 @@
 ##     working: "NA"
 ##     file: "server.py"
 
+  - task: "Integracion correo real IMAP/SMTP (2 casillas: principal Gmail + secundaria gerardo.ext@centralmutuos.cl) - email-status, email-summary, email-stats, seguimiento process-emails, email/send, clientes/emails, autocorreo/status"
+    implemented: true
+    working: true
+    file: "server.py, email_service.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: false
+        agent: "testing"
+        comment: "Initial test failed. Email integration was not working because .env file was loaded AFTER email_service.py was imported in server.py. The email_service.py module reads environment variables at import time, so MAIL_USER, MAIL_APP_PASSWORD, MAIL2_USER, MAIL2_APP_PASSWORD were all empty, resulting in 0 configured accounts."
+      - working: true
+        agent: "testing"
+        comment: "✅ Fixed by moving load_dotenv() call BEFORE the imports in server.py. All email integration tests now pass (11/11): GET /api/central/email-status returns connected=true with 2 accounts (principal: ethangerardobarr@gmail.com with 2600 emails, secundaria: gerardo.ext@centralmutuos.cl with 9700 emails, total 12300 emails). GET /api/central/email-summary?limit=10 returns real emails with all required fields (from, subject, date, snippet, tipo, cuenta). GET /api/admin/learning/email-stats returns imap_status='conectado', analizados=40, aprobaciones=6, rechazos=0, observaciones=0. GET /api/central/dashboard-batch returns email_status.connected=true. POST /api/seguimiento/process-emails?max_emails=30 successfully processes emails and returns ok=true with procesados and nuevos counts. GET /api/seguimiento/clientes and GET /api/seguimiento/stats return valid structures after process-emails. GET /api/clientes/emails?limit=10 returns real emails. GET /api/autocorreo/status returns enabled=true, connected=true with account info. POST /api/email/send with valid payload successfully sends email and returns success=true with desde field. POST /api/email/send without 'to' correctly returns 400. Regression tests also pass: POST /api/auth/login (admin/0586) and POST /api/simular-credito work correctly."
+
 #====================================================================================================
 # START - Testing Protocol - DO NOT EDIT OR REMOVE THIS SECTION
 #====================================================================================================
@@ -188,12 +203,12 @@ frontend:
 metadata:
   created_by: "testing_agent"
   version: "1.0"
-  test_sequence: 1
+  test_sequence: 2
   run_ui: false
 
 test_plan:
   current_focus:
-    - "All backend endpoints tested and verified"
+    - "Email integration fully tested and working"
   stuck_tasks: []
   test_all: true
   test_priority: "high_first"
@@ -201,3 +216,5 @@ test_plan:
 agent_communication:
   - agent: "testing"
     message: "Backend testing completed successfully. All 43 backend API tests passed (100% pass rate). Tested: Auth (admin & inmobiliaria login), Configuration endpoints (valor-uf, criterios, tasas, seguros), Credit simulation (simular-credito, simulaciones list, PDF generation), Inmobiliaria PREDIC (predict, calc-deuda, comparar-competidores, leads, mi-dashboard, score-history), IA/AI endpoints (ia/predict, ia/insights, ai/analizar), Central dashboard (dashboard-batch, intelligence-panel, email-summary), Admin endpoints (learning/status, learning/email-stats, alertas, alertas/seguimiento), Admin users CRUD (create, list, delete with proper validation), Folders (create, list, get by id, search), and all stub endpoints (whatsapp, seguimiento, autocorreo, procesamiento). No 500 errors or unexpected structures found. All endpoints return correct status codes and expected data structures. Backend is fully functional and ready for production use."
+  - agent: "testing"
+    message: "Email integration testing completed. Found critical bug: .env file was being loaded AFTER email_service.py import in server.py, causing all email credentials to be empty. Fixed by moving load_dotenv() call before imports. All 11 email integration tests now pass: 2 Gmail accounts connected (12300 total emails), IMAP reading works, SMTP sending works, email processing works, all endpoints return correct data structures. Real email sending tested successfully between user's own accounts (gerardo.ext@centralmutuos.cl). Regression tests confirm core functionality still works (auth, credit simulation)."

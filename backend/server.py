@@ -6,17 +6,20 @@ from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import io
 import uuid
+import asyncio
 import logging
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
+
+# Load .env BEFORE importing modules that read environment variables
+ROOT_DIR = Path(__file__).parent
+load_dotenv(ROOT_DIR / '.env')
 
 from criterios_data import (
     DEFAULT_CRITERIOS, DEFAULT_TASAS, DEFAULT_SEGUROS, DEFAULT_UF, now_iso,
 )
 import credit_engine as ce
-
-ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
+import email_service as mail
 
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
@@ -436,20 +439,37 @@ async def central_dashboard():
 
 @api.get("/central/dashboard-batch")
 async def central_dashboard_batch():
+    status = await asyncio.to_thread(mail.get_status)
     return {
         "dashboard": await _dashboard_data(),
-        "email_status": {"connected": False, "account": "aprobaciones@centralmutuos.cl", "total_emails": 0},
+        "email_status": status,
     }
 
 
 @api.get("/central/email-status")
 async def email_status():
-    return {"connected": False, "account": "aprobaciones@centralmutuos.cl", "total_emails": 0}
+    return await asyncio.to_thread(mail.get_status)
 
 
 @api.get("/central/email-summary")
-async def email_summary():
-    return {"total": 0, "emails": []}
+async def email_summary(limit: int = 15):
+    emails = await asyncio.to_thread(mail.fetch_recent, limit)
+    return {"total": len(emails), "emails": emails}
+
+
+@api.post("/email/send")
+async def email_send(payload: dict):
+    to = payload.get("to")
+    if not to:
+        raise HTTPException(status_code=400, detail="Falta destinatario")
+    result = await asyncio.to_thread(
+        mail.send_mail, to, payload.get("subject", "Central Mutuos"),
+        payload.get("body", ""), payload.get("attachments"),
+        payload.get("desde", "secundaria"),
+    )
+    if not result.get("success"):
+        raise HTTPException(status_code=502, detail=result.get("error", "Error de envio"))
+    return result
 
 
 @api.get("/central/intelligence-panel")
@@ -582,8 +602,7 @@ async def learning_status():
 
 @api.get("/admin/learning/email-stats")
 async def learning_email_stats():
-    return {"imap_status": "no_configurado", "imap_backoff_restante_seg": 0,
-            "aprobaciones": 0, "rechazos": 0, "observaciones": 0}
+    return await asyncio.to_thread(mail.email_stats)
 
 
 @api.post("/admin/learning/trigger")
@@ -653,13 +672,20 @@ async def delete_folder(fid: str):
 
 
 @api.get("/clientes/emails")
-async def clientes_emails():
-    return {"emails": []}
+async def clientes_emails(limit: int = 20):
+    emails = await asyncio.to_thread(mail.fetch_recent, limit)
+    return {"emails": emails}
 
 
 @api.get("/clientes/emails/search")
 async def clientes_emails_search(q: str = ""):
-    return {"emails": []}
+    emails = await asyncio.to_thread(mail.fetch_recent, 50)
+    ql = (q or "").lower()
+    if ql:
+        emails = [e for e in emails
+                  if ql in (e.get("subject", "") or "").lower()
+                  or ql in (e.get("from", "") or "").lower()]
+    return {"emails": emails}
 
 
 @api.get("/clientes/ajustes")
@@ -678,26 +704,63 @@ async def detect_client(payload: dict):
 
 
 # ---------------------------------------------------------------------------
-# Seguimiento (email-based operations tracking) -- storage stubs
+# Seguimiento (operaciones detectadas desde el correo)
 # ---------------------------------------------------------------------------
 @api.get("/seguimiento/clientes")
 async def seg_clientes(q: str = ""):
-    return {"clientes": []}
+    query = {"cliente": {"$regex": q, "$options": "i"}} if q else {}
+    docs = await db.seguimiento.find(query).sort("fecha", -1).limit(200).to_list(200)
+    # agrupar por cliente
+    por_cliente = {}
+    for d in docs:
+        c = d.get("cliente", "Desconocido")
+        if c not in por_cliente:
+            por_cliente[c] = {
+                "id": d.get("cliente_id") or c,
+                "cliente": c,
+                "estado": d.get("estado"),
+                "ultima_actividad": d.get("fecha"),
+                "operaciones": 0,
+            }
+        por_cliente[c]["operaciones"] += 1
+    return {"clientes": list(por_cliente.values())}
 
 
 @api.get("/seguimiento/stats")
 async def seg_stats():
-    return {"total_clientes": 0, "total_operaciones": 0, "operaciones_semana": 0}
+    total_ops = await db.seguimiento.count_documents({})
+    clientes = len(await db.seguimiento.distinct("cliente"))
+    hace_7d = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    semana = await db.seguimiento.count_documents({"procesado_en": {"$gte": hace_7d}})
+    return {"total_clientes": clientes, "total_operaciones": total_ops,
+            "operaciones_semana": semana}
 
 
 @api.get("/seguimiento/clientes/{cid}/timeline")
 async def seg_timeline(cid: str):
-    return {"timeline": []}
+    docs = await db.seguimiento.find(
+        {"$or": [{"cliente_id": cid}, {"cliente": cid}]}
+    ).sort("fecha", -1).limit(100).to_list(100)
+    return {"timeline": [clean(d) for d in docs]}
 
 
 @api.post("/seguimiento/process-emails")
 async def seg_process(max_emails: int = 30):
-    return {"ok": True, "procesados": 0}
+    ops = await asyncio.to_thread(mail.procesar_seguimiento, max_emails)
+    nuevos = 0
+    for op in ops:
+        exists = await db.seguimiento.find_one(
+            {"asunto": op["asunto"], "fecha": op["fecha"]})
+        if exists:
+            continue
+        await db.seguimiento.insert_one({
+            "id": str(uuid.uuid4()),
+            "cliente_id": op["cliente"].lower().replace(" ", "-"),
+            **op,
+            "procesado_en": now_iso(),
+        })
+        nuevos += 1
+    return {"ok": True, "procesados": len(ops), "nuevos": nuevos}
 
 
 @api.get("/reportes/ficha-cliente/{cid}")
@@ -744,12 +807,22 @@ async def wa_reject(aid: str, payload: dict = None):
 # ---------------------------------------------------------------------------
 @api.get("/autocorreo/status")
 async def ac_status():
-    return {"enabled": False, "running": False, "last_run": None, "mailboxes": [], "cutoff": None}
+    st = await asyncio.to_thread(mail.get_status)
+    return {
+        "enabled": st.get("connected", False),
+        "running": False,
+        "last_run": None,
+        "mailboxes": [st.get("account")] if st.get("connected") else [],
+        "cutoff": None,
+        "connected": st.get("connected", False),
+        "account": st.get("account", ""),
+    }
 
 
 @api.get("/autocorreo/mailboxes")
 async def ac_mailboxes():
-    return {"mailboxes": []}
+    st = await asyncio.to_thread(mail.get_status)
+    return {"mailboxes": [st.get("account")] if st.get("connected") else []}
 
 
 @api.get("/autocorreo/archive")

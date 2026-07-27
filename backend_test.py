@@ -665,17 +665,236 @@ def test_folders():
         log_test("GET /api/search", False, str(e))
 
 
+def test_email_integration():
+    """Test 10: Email integration (IMAP/SMTP real)"""
+    print("\n=== Testing Email Integration (IMAP/SMTP) ===")
+    
+    # 1. GET /api/central/email-status
+    try:
+        response = requests.get(f"{BASE_URL}/central/email-status", timeout=60)
+        if response.status_code == 200:
+            data = response.json()
+            if data.get("connected") == True and data.get("total_emails", 0) > 0:
+                # Check accounts array
+                accounts = data.get("accounts", [])
+                if len(accounts) == 2:
+                    # Verify both accounts have required fields
+                    all_valid = all("account" in acc and "connected" in acc and "total_emails" in acc 
+                                   for acc in accounts)
+                    if all_valid:
+                        log_test("GET /api/central/email-status (2 accounts connected)", True)
+                    else:
+                        log_test("GET /api/central/email-status (2 accounts connected)", False,
+                                f"Accounts missing required fields. Got: {accounts}")
+                else:
+                    log_test("GET /api/central/email-status (2 accounts connected)", False,
+                            f"Expected 2 accounts, got {len(accounts)}")
+            else:
+                log_test("GET /api/central/email-status (2 accounts connected)", False,
+                        f"connected={data.get('connected')}, total_emails={data.get('total_emails')}")
+        else:
+            log_test("GET /api/central/email-status (2 accounts connected)", False,
+                    f"Status {response.status_code}: {response.text}")
+    except Exception as e:
+        log_test("GET /api/central/email-status (2 accounts connected)", False, str(e))
+    
+    # 2. GET /api/central/email-summary?limit=10
+    try:
+        response = requests.get(f"{BASE_URL}/central/email-summary?limit=10", timeout=60)
+        if response.status_code == 200:
+            data = response.json()
+            if data.get("total", 0) > 0 and "emails" in data:
+                emails = data["emails"]
+                if len(emails) > 0:
+                    # Check first email has required fields
+                    first = emails[0]
+                    required = ["from", "subject", "date", "snippet", "tipo", "cuenta"]
+                    missing = [f for f in required if f not in first]
+                    if not missing:
+                        log_test("GET /api/central/email-summary?limit=10", True)
+                    else:
+                        log_test("GET /api/central/email-summary?limit=10", False,
+                                f"Email missing fields: {missing}. Got: {first}")
+                else:
+                    log_test("GET /api/central/email-summary?limit=10", False,
+                            "No emails returned despite total > 0")
+            else:
+                log_test("GET /api/central/email-summary?limit=10", False,
+                        f"total={data.get('total')}, emails present={('emails' in data)}")
+        else:
+            log_test("GET /api/central/email-summary?limit=10", False,
+                    f"Status {response.status_code}: {response.text}")
+    except Exception as e:
+        log_test("GET /api/central/email-summary?limit=10", False, str(e))
+    
+    # 3. GET /api/admin/learning/email-stats
+    try:
+        response = requests.get(f"{BASE_URL}/admin/learning/email-stats", timeout=60)
+        if response.status_code == 200:
+            data = response.json()
+            if data.get("imap_status") == "conectado" and data.get("analizados", 0) > 0:
+                # Check for aprobaciones, rechazos, observaciones
+                required = ["aprobaciones", "rechazos", "observaciones"]
+                missing = [f for f in required if f not in data]
+                if not missing:
+                    log_test("GET /api/admin/learning/email-stats", True)
+                else:
+                    log_test("GET /api/admin/learning/email-stats", False,
+                            f"Missing fields: {missing}")
+            else:
+                log_test("GET /api/admin/learning/email-stats", False,
+                        f"imap_status={data.get('imap_status')}, analizados={data.get('analizados')}")
+        else:
+            log_test("GET /api/admin/learning/email-stats", False,
+                    f"Status {response.status_code}: {response.text}")
+    except Exception as e:
+        log_test("GET /api/admin/learning/email-stats", False, str(e))
+    
+    # 4. GET /api/central/dashboard-batch (check email_status.connected)
+    try:
+        response = requests.get(f"{BASE_URL}/central/dashboard-batch", timeout=60)
+        if response.status_code == 200:
+            data = response.json()
+            email_status = data.get("email_status", {})
+            if email_status.get("connected") == True:
+                log_test("GET /api/central/dashboard-batch (email_status.connected=true)", True)
+            else:
+                log_test("GET /api/central/dashboard-batch (email_status.connected=true)", False,
+                        f"email_status.connected={email_status.get('connected')}")
+        else:
+            log_test("GET /api/central/dashboard-batch (email_status.connected=true)", False,
+                    f"Status {response.status_code}")
+    except Exception as e:
+        log_test("GET /api/central/dashboard-batch (email_status.connected=true)", False, str(e))
+    
+    # 5. POST /api/seguimiento/process-emails?max_emails=30
+    try:
+        response = requests.post(f"{BASE_URL}/seguimiento/process-emails?max_emails=30", 
+                                json={}, timeout=60)
+        if response.status_code == 200:
+            data = response.json()
+            if data.get("ok") == True and "procesados" in data and "nuevos" in data:
+                # It's valid if procesados is 0 (no emails with keywords)
+                log_test("POST /api/seguimiento/process-emails?max_emails=30", True)
+            else:
+                log_test("POST /api/seguimiento/process-emails?max_emails=30", False,
+                        f"Invalid response structure. Got: {data}")
+        else:
+            log_test("POST /api/seguimiento/process-emails?max_emails=30", False,
+                    f"Status {response.status_code}: {response.text}")
+    except Exception as e:
+        log_test("POST /api/seguimiento/process-emails?max_emails=30", False, str(e))
+    
+    # 6. GET /api/seguimiento/clientes (after process-emails)
+    try:
+        response = requests.get(f"{BASE_URL}/seguimiento/clientes", timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            if "clientes" in data:
+                log_test("GET /api/seguimiento/clientes (after process-emails)", True)
+            else:
+                log_test("GET /api/seguimiento/clientes (after process-emails)", False,
+                        f"Missing clientes field. Got: {data}")
+        else:
+            log_test("GET /api/seguimiento/clientes (after process-emails)", False,
+                    f"Status {response.status_code}")
+    except Exception as e:
+        log_test("GET /api/seguimiento/clientes (after process-emails)", False, str(e))
+    
+    # 7. GET /api/seguimiento/stats (after process-emails)
+    try:
+        response = requests.get(f"{BASE_URL}/seguimiento/stats", timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            required = ["total_clientes", "total_operaciones", "operaciones_semana"]
+            missing = [f for f in required if f not in data]
+            if not missing:
+                log_test("GET /api/seguimiento/stats (after process-emails)", True)
+            else:
+                log_test("GET /api/seguimiento/stats (after process-emails)", False,
+                        f"Missing fields: {missing}")
+        else:
+            log_test("GET /api/seguimiento/stats (after process-emails)", False,
+                    f"Status {response.status_code}")
+    except Exception as e:
+        log_test("GET /api/seguimiento/stats (after process-emails)", False, str(e))
+    
+    # 8. GET /api/clientes/emails?limit=10
+    try:
+        response = requests.get(f"{BASE_URL}/clientes/emails?limit=10", timeout=60)
+        if response.status_code == 200:
+            data = response.json()
+            if "emails" in data:
+                log_test("GET /api/clientes/emails?limit=10", True)
+            else:
+                log_test("GET /api/clientes/emails?limit=10", False,
+                        f"Missing emails field. Got: {data}")
+        else:
+            log_test("GET /api/clientes/emails?limit=10", False,
+                    f"Status {response.status_code}: {response.text}")
+    except Exception as e:
+        log_test("GET /api/clientes/emails?limit=10", False, str(e))
+    
+    # 9. GET /api/autocorreo/status
+    try:
+        response = requests.get(f"{BASE_URL}/autocorreo/status", timeout=60)
+        if response.status_code == 200:
+            data = response.json()
+            if data.get("enabled") == True and data.get("connected") == True and data.get("account"):
+                log_test("GET /api/autocorreo/status", True)
+            else:
+                log_test("GET /api/autocorreo/status", False,
+                        f"enabled={data.get('enabled')}, connected={data.get('connected')}, account={data.get('account')}")
+        else:
+            log_test("GET /api/autocorreo/status", False,
+                    f"Status {response.status_code}: {response.text}")
+    except Exception as e:
+        log_test("GET /api/autocorreo/status", False, str(e))
+    
+    # 10. POST /api/email/send (real email between user's own accounts)
+    try:
+        response = requests.post(f"{BASE_URL}/email/send", json={
+            "to": "gerardo.ext@centralmutuos.cl",
+            "subject": "Prueba integración Central Mutuos",
+            "body": "<p>Correo de prueba de la integración SMTP.</p>",
+            "desde": "secundaria"
+        }, timeout=30)
+        if response.status_code == 200:
+            data = response.json()
+            if data.get("success") == True and "desde" in data:
+                log_test("POST /api/email/send (with valid payload)", True)
+            else:
+                log_test("POST /api/email/send (with valid payload)", False,
+                        f"success={data.get('success')}, desde present={('desde' in data)}")
+        else:
+            log_test("POST /api/email/send (with valid payload)", False,
+                    f"Status {response.status_code}: {response.text}")
+    except Exception as e:
+        log_test("POST /api/email/send (with valid payload)", False, str(e))
+    
+    # 11. POST /api/email/send without "to" (should return 400)
+    try:
+        response = requests.post(f"{BASE_URL}/email/send", json={
+            "subject": "Test",
+            "body": "Test"
+        }, timeout=10)
+        if response.status_code == 400:
+            log_test("POST /api/email/send (without 'to' returns 400)", True)
+        else:
+            log_test("POST /api/email/send (without 'to' returns 400)", False,
+                    f"Expected 400, got {response.status_code}")
+    except Exception as e:
+        log_test("POST /api/email/send (without 'to' returns 400)", False, str(e))
+
+
 def test_stub_endpoints():
-    """Test 10: Stub endpoints"""
+    """Test 11: Stub endpoints"""
     print("\n=== Testing Stub Endpoints ===")
     
     stub_endpoints = [
         "/whatsapp/status",
         "/whatsapp/qr",
         "/whatsapp/approvals",
-        "/seguimiento/clientes",
-        "/seguimiento/stats",
-        "/autocorreo/status",
         "/procesamiento/queue",
         "/procesamiento/stats"
     ]
@@ -722,6 +941,54 @@ def print_summary():
     return len(test_results['failed']) == 0
 
 
+def test_regression():
+    """Test 12: Regression tests for core functionality"""
+    print("\n=== Testing Regression (Core Functionality) ===")
+    
+    # POST /api/auth/login (admin/0586)
+    try:
+        response = requests.post(f"{BASE_URL}/auth/login", json={
+            "rut": "admin",
+            "password": "0586"
+        }, timeout=10)
+        
+        if response.status_code == 200:
+            data = response.json()
+            if "token" in data and data.get("rol") == "admin":
+                log_test("Regression: POST /api/auth/login (admin/0586)", True)
+            else:
+                log_test("Regression: POST /api/auth/login (admin/0586)", False, 
+                        f"Missing fields or incorrect rol. Got: {data}")
+        else:
+            log_test("Regression: POST /api/auth/login (admin/0586)", False, 
+                    f"Status {response.status_code}: {response.text}")
+    except Exception as e:
+        log_test("Regression: POST /api/auth/login (admin/0586)", False, str(e))
+    
+    # POST /api/simular-credito (minimal payload)
+    try:
+        response = requests.post(f"{BASE_URL}/simular-credito", json={
+            "renta_titular": 1500000,
+            "plazo_anos": 25,
+            "tasa_anual": 0.0635,
+            "valor_uf": 39842,
+            "edad_cliente": 35
+        }, timeout=10)
+        
+        if response.status_code == 200:
+            data = response.json()
+            if "capacidad_credito_uf" in data and "precalificacion_aprobada" in data:
+                log_test("Regression: POST /api/simular-credito (minimal payload)", True)
+            else:
+                log_test("Regression: POST /api/simular-credito (minimal payload)", False,
+                        f"Missing required fields. Got keys: {list(data.keys())}")
+        else:
+            log_test("Regression: POST /api/simular-credito (minimal payload)", False,
+                    f"Status {response.status_code}: {response.text}")
+    except Exception as e:
+        log_test("Regression: POST /api/simular-credito (minimal payload)", False, str(e))
+
+
 if __name__ == "__main__":
     print("="*70)
     print("Central Mutuos / Central PREDIC Backend API Tests")
@@ -738,7 +1005,9 @@ if __name__ == "__main__":
     test_admin_endpoints()
     test_admin_users()
     test_folders()
+    test_email_integration()
     test_stub_endpoints()
+    test_regression()
     
     # Print summary
     all_passed = print_summary()
