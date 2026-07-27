@@ -107,8 +107,24 @@ export default function AutocorreoModule() {
     setLoading(true);
     setRunResult(null);
     try {
-      const r = await axios.post(`${API_URL}/api/autocorreo/run`, {}, { timeout: 120000 });
-      setRunResult(r.data);
+      const r = await axios.post(`${API_URL}/api/autocorreo/run`, {}, { timeout: 60000 });
+      if (r.data.started || r.data.running) {
+        setRunResult({ message: r.data.message || "Procesamiento iniciado en segundo plano..." });
+        let tries = 0;
+        const poll = setInterval(async () => {
+          tries++;
+          try {
+            const s = await axios.get(`${API_URL}/api/autocorreo/status`);
+            if (!s.data.running || tries >= 18) {
+              clearInterval(poll);
+              if (s.data.last_run_result) setRunResult(s.data.last_run_result);
+              await load();
+            }
+          } catch { clearInterval(poll); }
+        }, 10000);
+      } else {
+        setRunResult(r.data);
+      }
       await load();
     } catch (e) {
       setMsg("Error ejecutando: " + (e.response?.data?.detail || e.message));
@@ -184,7 +200,13 @@ export default function AutocorreoModule() {
 
         {runResult && (
           <div style={{ marginTop: "1rem", padding: "0.75rem 1rem", background: "rgba(34,197,94,0.1)", border: "1px solid #22c55e", borderRadius: "10px", fontSize: "0.9rem" }} data-testid="run-result">
-            <strong style={{ color: "#22c55e" }}>Ejecucion completa:</strong> {runResult.sent || 0} enviados, {runResult.processed || 0} procesados
+            {runResult.message ? (
+              <span><strong style={{ color: "#eab308" }}>⏳ En proceso:</strong> {runResult.message}</span>
+            ) : runResult.error ? (
+              <span style={{ color: "#ef4444" }}>Error: {runResult.error}</span>
+            ) : (
+              <span><strong style={{ color: "#22c55e" }}>Ejecucion completa:</strong> {runResult.sent || 0} enviados, {runResult.processed || 0} procesados</span>
+            )}
             {runResult.errors && runResult.errors.length > 0 && (
               <div style={{ marginTop: "0.5rem", color: "#ef4444" }}>Errores: {runResult.errors.slice(0,3).join(" | ")}</div>
             )}

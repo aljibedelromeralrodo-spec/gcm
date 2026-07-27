@@ -865,6 +865,9 @@ async def ac_status():
         "periodic_enabled": st.get("periodic_enabled", False),
         "cutoff_iso": st.get("cutoff_iso"),
         "destination": st.get("destination") or os.environ.get("MAIL2_USER", ""),
+        "running": st.get("running", False),
+        "last_run": st.get("last_run"),
+        "last_run_result": st.get("last_run_result"),
         "sent": sent,
         "failed": failed,
         "total": total,
@@ -1040,12 +1043,33 @@ def _b64(data):
     return _b64mod.b64encode(data).decode()
 
 
+async def _run_mesa_background(destino, cutoff_iso, ejecutivos):
+    try:
+        await db.config.update_one({"_key": "autocorreo_state"},
+                                   {"$set": {"running": True, "last_run_started": now_iso()}}, upsert=True)
+        result = await asyncio.to_thread(_procesar_mesa, destino, cutoff_iso, ejecutivos)
+        for lg in result.pop("logs", []):
+            await db.autocorreo_log.insert_one(lg)
+        await db.config.update_one({"_key": "autocorreo_state"}, {"$set": {
+            "running": False, "last_run": now_iso(),
+            "last_run_result": {"processed": result.get("processed", 0),
+                                "sent": result.get("sent", 0),
+                                "errors": result.get("errors", [])[:5]}}})
+    except Exception as e:
+        await db.config.update_one({"_key": "autocorreo_state"}, {"$set": {
+            "running": False, "last_run": now_iso(),
+            "last_run_result": {"error": str(e)[:200]}}})
+
+
 @api.post("/autocorreo/run")
 async def ac_run(payload: dict = None):
     st = await _ac_state()
     destino = st.get("destination") or os.environ.get("MAIL2_USER", "")
     if not destino:
         raise HTTPException(status_code=400, detail="No hay correo destino configurado")
+    if st.get("running"):
+        return {"started": False, "running": True,
+                "message": "Ya hay un procesamiento en curso, espere a que termine"}
     # Mapa cliente -> ejecutivo (nombre/correo) desde la cola de Procesamiento
     ejecutivos = {}
     items = await db.proc_queue.find(
@@ -1057,10 +1081,9 @@ async def ac_run(payload: dict = None):
         if cli and campos_it.get("email_ejecutivo"):
             ejecutivos[cli] = {"nombre": campos_it.get("nombre_ejecutivo", ""),
                                "email": campos_it.get("email_ejecutivo", "")}
-    result = await asyncio.to_thread(_procesar_mesa, destino, st.get("cutoff_iso"), ejecutivos)
-    for lg in result.pop("logs", []):
-        await db.autocorreo_log.insert_one(lg)
-    return result
+    asyncio.create_task(_run_mesa_background(destino, st.get("cutoff_iso"), ejecutivos))
+    return {"started": True, "running": True,
+            "message": "Procesamiento iniciado en segundo plano. Revise el panel en 1-2 minutos."}
 
 
 @api.post("/autocorreo/manual-archive")
