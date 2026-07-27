@@ -938,7 +938,7 @@ async def ac_reset_backoff(account: str = ""):
 
 def _procesar_mesa(destino, cutoff_iso):
     """Lee correos de mesa con PDF, deja pag 1 en simulaciones, archiva y envia. (sync)"""
-    correos = mail.fetch_pdf_attachments(sender_filter=MESA_SENDER, limit=20)
+    correos = mail.fetch_pdf_attachments(sender_filter=MESA_SENDER, limit=8)
     resultados = []
     for c in correos:
         if cutoff_iso and c.get("date") and c["date"] < cutoff_iso:
