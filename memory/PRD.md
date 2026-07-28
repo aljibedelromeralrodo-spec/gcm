@@ -58,7 +58,35 @@ Idioma del usuario: **Español** (responder siempre en español).
     ejecutivo) del período 10:00 → 10:00. Config `reporte_diario` (enabled/hora/last_sent_date).
     Endpoints `/reportes/diario/{status,preview,toggle,enviar-ahora}`. Panel en AutocorreoModule.
 
+- 2026-07-28 (parte 3):
+  - **Módulo Gastos Operacionales**: plantilla profesional (buscar cliente por nombre/RUT
+    autocompleta + email OCR, cuadro editable con autosuma, datos de pago editables, preview,
+    envío desde gerardo.ext, plantilla por defecto guardable, historial). Endpoints
+    `/api/gastos-operacionales/{defaults,buscar-cliente,enviar,log}`.
+  - **UF siempre actualizada desde SII** (`_uf_desde_sii` parsea www.sii.cl, fallback
+    mindicador.cl) con loop cada 6 hrs (`_uf_auto_loop`).
+  - **Regla inviolable carta intacta**: `clasificar_documento` marca carta por filename
+    primero; `_procesar_mesa` doble chequeo; rechazos con asunto "RECHAZO - {cliente}" +
+    texto de mesa; log guarda `subject_original` para dedupe.
+  - **Prueba E2E con 3 últimos clientes reales**: Roberto Duran, Claudia Zurita (Maestra),
+    Franco Bahamondes — carpetas creadas con archivos vía OCR pipeline (script
+    `/app/backend/scripts_test_e2e.py`).
+  - **Módulo Envío Aprobación Cliente**: correo comercial de felicitaciones (asunto
+    "¡Felicitaciones! Ha obtenido su crédito hipotecario", banner dorado, botón grande
+    mailto "DESEO CONTINUAR CON EL PROCESO DE ESCRITURACIÓN"), detección automática de los
+    PDFs del cliente (simulación ajustada + carta intacta, por carpeta/filename fuzzy/log
+    del autocorreo), email del cliente auto-detectado (OCR) o manual, plantillas POR CLIENTE
+    (db.aprobacion_templates) + default, historial. Endpoints `/api/aprobacion-cliente/*`.
+  - `_extraer_nombre` mejorado (asuntos de mesa "Re: Nombre (…)") + migrados 164 logs con
+    cliente "Mesa Clientes" → nombre real.
+  - Testing: iteration_4.json (17/17 backend, frontend OK). Módulo Aprobación testeado
+    manualmente (curl + screenshot E2E).
+
 ## Backlog priorizado
+- **P0 (pedido por el usuario, SIN implementar)**: Mini-programa móvil para ejecutivos —
+  compartir archivos múltiples desde WhatsApp del teléfono al sistema, creando carpetas o
+  guardando en carpetas existentes. Enfoque sugerido: página web móvil (PWA share target o
+  portal de subida con link) — CONFIRMAR enfoque con el usuario antes de construir.
 - **P1**: Reporte 2 — cruce de solicitudes vs enviadas a mesa usando RUT real del OCR
   (pendiente, pedido del usuario en sesiones previas).
 - **P2**: Integración real de WhatsApp (hoy mock).

@@ -2708,6 +2708,261 @@ async def gastos_log():
     return {"log": [clean(d) for d in docs]}
 
 
+# ---------------------------------------------------------------------------
+# Envío Aprobación Cliente: felicitaciones con simulación ajustada + carta
+# ---------------------------------------------------------------------------
+APROBACION_DEFAULTS = {
+    "subject": "¡Felicitaciones! Ha obtenido su crédito hipotecario",
+    "boton_texto": "DESEO CONTINUAR CON EL PROCESO DE ESCRITURACIÓN",
+    "intro": ("Nos complace enormemente informarle que su crédito hipotecario ha sido APROBADO. "
+              "Este es un gran paso hacia la casa propia y queremos acompañarlo en cada etapa del camino.\n\n"
+              "Adjunto encontrará su simulación ajustada y la carta de aprobación oficial con todos los "
+              "detalles de su operación. Nuestro equipo ya está preparando los siguientes pasos para que "
+              "el proceso de escrituración sea rápido, simple y sin complicaciones.\n\n"
+              "Para avanzar, solo debe presionar el botón a continuación y un ejecutivo lo contactará de inmediato."),
+}
+
+
+def _tipo_pdf_aprobacion(nombre):
+    low = (nombre or "").lower()
+    if re.search(r"carta|aprobaci[oó]n|aprobacion", low):
+        return "carta_aprobacion"
+    if re.search(r"_ajustada|simulad|simulaci", low):
+        return "simulacion_ajustada"
+    return "otro"
+
+
+def _norm_texto(s):
+    import unicodedata
+    s = unicodedata.normalize("NFD", (s or "").lower())
+    s = "".join(ch for ch in s if unicodedata.category(ch) != "Mn")
+    return re.sub(r"[_\W]+", " ", s).strip()
+
+
+@api.get("/aprobacion-cliente/buscar-cliente")
+async def aprobacion_buscar(q: str = ""):
+    q = (q or "").strip()
+    if len(q) < 2:
+        return {"resultados": []}
+    base = await gastos_buscar_cliente(q)
+    resultados = list(base["resultados"])
+    vistos = {r["nombre"].lower() for r in resultados}
+    # Clientes vistos por el Autocorreo (log de mesa)
+    rx = {"$regex": re.escape(q), "$options": "i"}
+    logs = await db.autocorreo_log.find({"cliente": rx}).sort("processed_at", -1).limit(30).to_list(30)
+    for l in logs:
+        cli = (l.get("cliente") or "").strip()
+        if not cli or cli.lower() in vistos or cli.lower() in ("mesa clientes",):
+            continue
+        vistos.add(cli.lower())
+        email_cliente = ""
+        item = await db.proc_queue.find_one({"campos.email_cliente": {"$nin": ["", None]},
+                                             "classification.cliente": {"$regex": re.escape(cli.split()[0]), "$options": "i"}})
+        if item:
+            email_cliente = (item.get("campos") or {}).get("email_cliente", "")
+        resultados.append({"nombre": cli, "rut": "", "email": email_cliente, "folder_id": ""})
+    # Carpetas del archivo del autocorreo
+    if STORAGE_DIR.exists():
+        for d in STORAGE_DIR.iterdir():
+            if d.is_dir() and q.lower() in d.name.lower() and d.name.lower() not in vistos:
+                vistos.add(d.name.lower())
+                resultados.append({"nombre": d.name, "rut": "", "email": "", "folder_id": ""})
+    return {"resultados": resultados[:8]}
+
+
+@api.get("/aprobacion-cliente/archivos")
+async def aprobacion_archivos(cliente: str = ""):
+    archivos = []
+    rutas_vistas = set()
+    if cliente.strip():
+        tokens = [t for t in _norm_texto(cliente).split() if len(t) > 2]
+        minimo = min(2, len(tokens)) or 1
+
+        def _agregar(p, origen, ruta):
+            if ruta in rutas_vistas:
+                return
+            rutas_vistas.add(ruta)
+            tipo = _tipo_pdf_aprobacion(p.name)
+            archivos.append({"nombre": p.name, "origen": origen, "ruta": ruta,
+                             "tipo": tipo, "seleccionado": tipo != "otro",
+                             "tamano": p.stat().st_size})
+
+        # 1) Carpeta exacta del archivo autocorreo
+        dir_ac = STORAGE_DIR / _safe_name(cliente)
+        if dir_ac.exists():
+            for p in sorted(dir_ac.glob("*.pdf")):
+                _agregar(p, "autocorreo", str(p.relative_to(STORAGE_DIR)))
+        # 2) Cualquier PDF del archivo cuyo NOMBRE contenga al cliente (tolerante a truncados)
+        if STORAGE_DIR.exists() and tokens:
+            from difflib import get_close_matches
+            for p in sorted(STORAGE_DIR.rglob("*.pdf")):
+                palabras = _norm_texto(p.name).split()
+                hits = sum(1 for t in tokens
+                           if t in palabras or get_close_matches(t, palabras, n=1, cutoff=0.75))
+                if hits >= minimo:
+                    _agregar(p, "autocorreo", str(p.relative_to(STORAGE_DIR)))
+        # 2b) Archivos registrados en el log del autocorreo para este cliente
+        logs = await db.autocorreo_log.find(
+            {"cliente": {"$regex": f"^{re.escape(cliente.strip())}$", "$options": "i"},
+             "status": "sent"}).sort("processed_at", -1).limit(30).to_list(30)
+        nombres_log = set()
+        for l in logs:
+            for nom in (l.get("attachments_info") or "").split(", "):
+                nom = nom.strip()
+                if nom and nom.lower().endswith(".pdf"):
+                    nombres_log.add(nom)
+        if nombres_log and STORAGE_DIR.exists():
+            for p in STORAGE_DIR.rglob("*.pdf"):
+                if p.name in nombres_log:
+                    _agregar(p, "autocorreo", str(p.relative_to(STORAGE_DIR)))
+        # 3) Carpeta del cliente (módulo Clientes)
+        dir_cl = fsvc.folder_dir(cliente)
+        if dir_cl.exists():
+            for a in fsvc.scan_archivos(cliente):
+                if not a["nombre"].lower().endswith(".pdf"):
+                    continue
+                tipo = _tipo_pdf_aprobacion(a["nombre"])
+                if tipo == "otro":
+                    continue
+                archivos.append({"nombre": a["nombre"], "origen": "clientes", "ruta": a["ruta"],
+                                 "tipo": tipo, "seleccionado": True, "tamano": a["tamano"]})
+    return {"archivos": archivos}
+
+
+@api.get("/aprobacion-cliente/plantilla")
+async def aprobacion_plantilla(cliente: str = ""):
+    cfg = await db.config.find_one({"_key": "aprobacion_defaults"}) or {}
+    base = dict(APROBACION_DEFAULTS)
+    base.update({k: v for k, v in cfg.items() if k in APROBACION_DEFAULTS and v})
+    if cliente.strip():
+        propia = await db.aprobacion_templates.find_one({"cliente": cliente.strip()})
+        if propia:
+            base.update({k: v for k, v in propia.items() if k in APROBACION_DEFAULTS and v})
+            base["plantilla_propia"] = True
+    return base
+
+
+@api.patch("/aprobacion-cliente/plantilla")
+async def aprobacion_plantilla_patch(payload: dict):
+    payload = payload or {}
+    datos = {k: payload[k] for k in APROBACION_DEFAULTS if k in payload}
+    cliente = (payload.get("cliente") or "").strip()
+    if cliente:
+        await db.aprobacion_templates.update_one(
+            {"cliente": cliente}, {"$set": {**datos, "cliente": cliente, "updated_at": now_iso()}}, upsert=True)
+    if payload.get("como_default"):
+        await db.config.update_one({"_key": "aprobacion_defaults"}, {"$set": datos}, upsert=True)
+    return {"ok": True}
+
+
+def _aprobacion_html(payload):
+    nombre = payload.get("nombre", "")
+    rut = payload.get("rut", "")
+    intro = (payload.get("intro") or "").strip()
+    boton = payload.get("boton_texto") or APROBACION_DEFAULTS["boton_texto"]
+    contacto = _sender_por_rol("secundaria")
+    adjuntos = payload.get("_adjuntos_nombres") or []
+    intro_html = "".join(f"<p style='margin:0 0 14px;line-height:1.75;font-size:15px;color:#2b3245'>{p}</p>"
+                         for p in intro.split("\n") if p.strip())
+    docs_html = ""
+    if adjuntos:
+        filas = "".join(
+            f"<tr><td style='padding:8px 0;color:#2b3245;font-size:14px'>"
+            f"<span style='display:inline-block;width:22px;color:#d4af37;font-weight:700'>&#10003;</span>{n}</td></tr>"
+            for n in adjuntos)
+        docs_html = f"""
+        <div style="background:#f8f9fc;border:1px solid #eceef3;border-radius:10px;padding:16px 22px;margin:6px 0 22px">
+          <div style="color:#1a1f2e;font-weight:700;font-size:14px;margin-bottom:6px">Documentos adjuntos a este correo</div>
+          <table style="border-collapse:collapse">{filas}</table>
+        </div>"""
+    mailto = (f"mailto:{contacto}?subject=" +
+              f"Deseo continuar con el proceso de escrituración — {nombre}".replace(" ", "%20"))
+    return f"""
+    <div style="background:#eef0f5;padding:30px 12px;font-family:Georgia,'Times New Roman',serif">
+      <div style="max-width:640px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 6px 24px rgba(16,24,40,0.12)">
+        <div style="background:#1a1f2e;padding:40px 32px;text-align:center;border-bottom:4px solid #d4af37">
+          <div style="color:#9aa3b5;font-size:12px;letter-spacing:4px;margin-bottom:10px">CENTRAL MUTUOS · CON CRECES ASESORÍAS</div>
+          <div style="color:#d4af37;font-size:34px;font-weight:700;letter-spacing:1px;line-height:1.2">¡FELICITACIONES!</div>
+          <div style="color:#ffffff;font-size:17px;margin-top:10px">Su crédito hipotecario ha sido <b style="color:#d4af37">APROBADO</b></div>
+        </div>
+        <div style="padding:34px 36px 8px">
+          <p style="margin:0 0 4px;color:#1a1f2e;font-size:17px"><b>Estimada(o) {nombre}</b></p>
+          {f"<p style='margin:0 0 18px;color:#6b7280;font-size:13px'>RUT: {rut}</p>" if rut else "<div style='height:14px'></div>"}
+          {intro_html}
+          {docs_html}
+        </div>
+        <div style="padding:6px 36px 34px;text-align:center">
+          <a href="{mailto}" style="display:inline-block;background:#d4af37;color:#1a1f2e;
+             font-size:16px;font-weight:700;letter-spacing:1px;text-decoration:none;
+             padding:18px 40px;border-radius:50px;box-shadow:0 4px 14px rgba(212,175,55,0.45)">
+             {boton} &nbsp;&#8594;</a>
+          <p style="margin:16px 0 0;color:#9aa3b5;font-size:12px">Al presionar el botón se abrirá un correo dirigido a nuestro equipo para coordinar los siguientes pasos.</p>
+        </div>
+        <div style="background:#f8f9fc;border-top:1px solid #eceef3;padding:22px 36px">
+          <p style="margin:0;color:#2b3245;font-size:14px"><b>Central Mutuos</b> — Con Creces Asesorías</p>
+          <p style="margin:4px 0 0;color:#6b7280;font-size:12px">Especialistas en créditos hipotecarios · {contacto}</p>
+        </div>
+        <div style="background:#1a1f2e;padding:12px 32px;text-align:center">
+          <span style="color:#9aa3b5;font-size:11px">Este correo contiene información confidencial dirigida exclusivamente a su destinatario.</span>
+        </div>
+      </div>
+    </div>
+    """
+
+
+@api.post("/aprobacion-cliente/enviar")
+async def aprobacion_enviar(payload: dict):
+    payload = payload or {}
+    to = (payload.get("email_cliente") or "").strip()
+    nombre = (payload.get("nombre") or "").strip()
+    subject = payload.get("subject") or APROBACION_DEFAULTS["subject"]
+    adjuntos_sel = payload.get("adjuntos") or []
+    rutas = []
+    for a in adjuntos_sel:
+        try:
+            if a.get("origen") == "clientes":
+                p = fsvc.resolver_ruta(nombre, a.get("ruta", ""))
+            else:
+                p = (STORAGE_DIR / a.get("ruta", "")).resolve()
+                if not str(p).startswith(str(STORAGE_DIR.resolve())):
+                    continue
+            if p.exists() and p.suffix.lower() == ".pdf":
+                rutas.append(p)
+        except (ValueError, OSError):
+            continue
+    payload["_adjuntos_nombres"] = [p.name for p in rutas]
+    cuerpo = _aprobacion_html(payload)
+    if not payload.get("confirm"):
+        return {"to": to, "subject": subject, "body": cuerpo,
+                "attachments": [p.name for p in rutas], "sender": _sender_por_rol("secundaria")}
+    if not to or "@" not in to:
+        raise HTTPException(status_code=400, detail="Correo del cliente inválido")
+    if not rutas:
+        raise HTTPException(status_code=400, detail="Debe adjuntar al menos la simulación ajustada o la carta de aprobación")
+    adjuntos = [{"filename": p.name, "content_b64": _b64(p.read_bytes())} for p in rutas]
+    res = await asyncio.to_thread(mail.send_mail, to, subject, cuerpo, adjuntos, "secundaria")
+    if not res.get("success"):
+        raise HTTPException(status_code=502, detail=res.get("error", "Error de envío"))
+    # Guardar plantilla del cliente automáticamente
+    await db.aprobacion_templates.update_one(
+        {"cliente": nombre},
+        {"$set": {"cliente": nombre, "intro": payload.get("intro", ""),
+                  "subject": subject, "boton_texto": payload.get("boton_texto", ""),
+                  "updated_at": now_iso()}}, upsert=True)
+    await db.aprobacion_log.insert_one({
+        "id": str(uuid.uuid4()), "nombre": nombre, "rut": payload.get("rut", ""),
+        "to": to, "adjuntos": [p.name for p in rutas],
+        "enviado_en": now_iso(), "desde": res.get("desde", "")})
+    return {"ok": True, "to": to, "subject": subject,
+            "attachments": [p.name for p in rutas], "sender": res.get("desde", "")}
+
+
+@api.get("/aprobacion-cliente/log")
+async def aprobacion_log():
+    docs = await db.aprobacion_log.find({}).sort("enviado_en", -1).limit(20).to_list(20)
+    return {"log": [clean(d) for d in docs]}
+
+
 def _fmt_uf(v):
     if v in (None, "", False):
         return "—"

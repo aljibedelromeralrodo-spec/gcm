@@ -21,6 +21,7 @@ const CriteriosModule = lazy(() => import("./pages/CriteriosModule"));
 const WhatsAppModule = lazy(() => import("./pages/WhatsAppModule"));
 const AutocorreoModule = lazy(() => import("./pages/AutocorreoModule"));
 const GastosOperacionalesModule = lazy(() => import("./pages/GastosOperacionalesModule"));
+const AprobacionClienteModule = lazy(() => import("./pages/AprobacionClienteModule"));
 const EmailProcessingModule = lazy(() => import("./pages/EmailProcessingModule"));
 const GlobalSearch = lazy(() => import("./components/GlobalSearch"));
 const WelcomeTour = lazy(() => import("./components/WelcomeTour"));
@@ -38,6 +39,8 @@ const MODULE_TITLES = {
   'whatsapp': 'WhatsApp - Conexion y Aprobaciones',
   'autocorreo': 'Autocorreo - Reenvio Automatico de Aprobaciones',
   'procesamiento': 'Procesamiento de Correo',
+  gastos: 'Gastos Operacionales',
+  aprobacion: 'Envío Aprobación Cliente',
 };
 
 function App() {
@@ -123,6 +126,7 @@ function MainApp() {
     { key: 'seguimiento', icon: 'fa-road', label: 'Seguimiento' },
     { key: 'formato', icon: 'fa-file-pdf-o', label: 'Formato' },
     { key: 'gastos', icon: 'fa-money', label: 'Gastos Operacionales' },
+    { key: 'aprobacion', icon: 'fa-trophy', label: 'Aprobación Cliente' },
     ...(user.rol === 'admin' ? [{ key: 'usuarios', icon: 'fa-user-plus', label: 'Usuarios' }] : []),
     ...(user.rol === 'admin' ? [{ key: 'criterios', icon: 'fa-shield', label: 'Criterios' }] : []),
     ...(user.rol === 'admin' ? [{ key: 'whatsapp', icon: 'fa-whatsapp', label: 'WhatsApp' }] : []),
@@ -210,6 +214,7 @@ function MainApp() {
         {activeModule === 'autocorreo' && <AutocorreoModule />}
         {activeModule === 'procesamiento' && <EmailProcessingModule />}
         {activeModule === 'gastos' && <GastosOperacionalesModule />}
+        {activeModule === 'aprobacion' && <AprobacionClienteModule />}
         </Suspense>
       </main>
     </div>

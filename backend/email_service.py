@@ -203,6 +203,11 @@ def _extraer_nombre(subject, remitente):
     mm = re.search(r"(?:cliente|sr\.?|sra\.?|don|dona)\s*[:\-]?\s*([A-Za-zÁÉÍÓÚÑáéíóúñ ]{4,40})", s, re.I)
     if mm:
         return mm.group(1).strip().title()
+    # Formato mesa: "Re: Kevin Macaya (DS19 - INMEDIATA - XIMENA)" -> Kevin Macaya
+    limpio = re.sub(r"^\s*((re|fwd?|rv|fw)\s*:\s*)+", "", s, flags=re.I)
+    mm = re.search(r"^([A-Za-zÁÉÍÓÚÑáéíóúñ ]{4,45}?)\s*(?:\(|//|-\s|RUT)", limpio)
+    if mm and len(mm.group(1).split()) >= 2:
+        return mm.group(1).strip().title()
     mm = re.search(r'"?([A-Za-zÁÉÍÓÚÑáéíóúñ ]{4,40})"?\s*<', remitente or "")
     if mm:
         return mm.group(1).strip().title()
