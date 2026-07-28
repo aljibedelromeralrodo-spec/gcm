@@ -298,6 +298,156 @@ def fetch_pdf_attachments(sender_filter=None, limit=20, incluir_sin_adjuntos=Fal
     return out
 
 
+def _parse_full_message(msg, with_bytes=False):
+    subject = _dec(msg.get("Subject"))
+    remitente = _dec(msg.get("From"))
+    fecha_raw = msg.get("Date")
+    try:
+        fecha = parsedate_to_datetime(fecha_raw).isoformat() if fecha_raw else ""
+    except Exception:
+        fecha = fecha_raw or ""
+    body_text = ""
+    attachments = []
+    for part in msg.walk():
+        ctype = part.get_content_type()
+        disp = str(part.get("Content-Disposition") or "")
+        fname = part.get_filename()
+        if fname:
+            fname = _dec(fname)
+        if fname and ("attachment" in disp or not ctype.startswith("text/")):
+            try:
+                payload = part.get_payload(decode=True) or b""
+            except Exception:
+                payload = b""
+            att = {"filename": fname, "size": len(payload)}
+            if with_bytes:
+                att["content_bytes"] = payload
+            attachments.append(att)
+        elif ctype == "text/plain" and "attachment" not in disp and not body_text:
+            try:
+                body_text = (part.get_payload(decode=True) or b"").decode(
+                    part.get_content_charset() or "utf-8", errors="ignore")
+            except Exception:
+                pass
+    return {"from": remitente, "subject": subject, "date": fecha,
+            "tipo": _clasificar(subject + " " + body_text),
+            "body": body_text[:1500], "attachments": attachments}
+
+
+def fetch_recent_full(limit=20):
+    """Correos recientes con id ('rol|uid') y metadatos de adjuntos (sin bytes)."""
+    cache_key = f"recent_full_{limit}"
+    cached = _cached(cache_key)
+    if cached:
+        return cached
+    if not configured():
+        return []
+    out = []
+    per_acc = max(5, limit // max(len(ACCOUNTS), 1))
+    for acc in ACCOUNTS:
+        try:
+            m = _connect(acc)
+            typ, data = m.select("INBOX", readonly=True)
+            total = int(data[0]) if data and data[0] else 0
+            start = max(1, total - per_acc + 1)
+            for num in range(total, start - 1, -1):
+                try:
+                    typ, msgdata = m.fetch(str(num), "(UID BODY.PEEK[])")
+                    if not msgdata or not isinstance(msgdata[0], tuple):
+                        continue
+                    head = msgdata[0][0]
+                    head = head.decode(errors="ignore") if isinstance(head, bytes) else str(head)
+                    mu = re.search(r"UID (\d+)", head)
+                    uid = mu.group(1) if mu else str(num)
+                    info = _parse_full_message(email.message_from_bytes(msgdata[0][1]))
+                    info["id"] = f"{acc['rol']}|{uid}"
+                    info["cuenta"] = acc["user"]
+                    out.append(info)
+                except Exception:
+                    continue
+            m.logout()
+        except Exception:
+            continue
+    out.sort(key=lambda e: e.get("date", ""), reverse=True)
+    return _store(cache_key, out)
+
+
+def fetch_attachments_by_id(email_id, filename=None):
+    """Descarga los adjuntos (bytes) de un correo identificado como 'rol|uid'."""
+    rol, _, uid = (email_id or "").partition("|")
+    acc = next((a for a in ACCOUNTS if a["rol"] == rol), None)
+    if not acc or not uid:
+        return []
+    m = _connect(acc)
+    m.select("INBOX", readonly=True)
+    typ, msgdata = m.uid("fetch", uid, "(BODY.PEEK[])")
+    m.logout()
+    if not msgdata or not isinstance(msgdata[0], tuple):
+        return []
+    info = _parse_full_message(email.message_from_bytes(msgdata[0][1]), with_bytes=True)
+    atts = info["attachments"]
+    if filename:
+        atts = [a for a in atts if a["filename"] == filename]
+    return atts
+
+
+def search_attachments_by_person(person_name, limit=40):
+    """Busca correos que mencionen a la persona (SEARCH en servidor) y trae sus adjuntos."""
+    name = (person_name or "").lower().strip()
+    if not name:
+        return []
+    tokens = [t for t in name.split() if len(t) > 2] or [name]
+    clave = max(tokens, key=len).encode("ascii", "ignore").decode() or tokens[0]
+    CAPTURA_EXT = (".pdf", ".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp")
+    exactos, parciales = [], []
+    for acc in ACCOUNTS:
+        try:
+            m = _connect(acc)
+            m.select("INBOX", readonly=True)
+            try:
+                typ, data = m.search(None, "X-GM-RAW", f'"{clave}"')
+                if typ != "OK":
+                    raise Exception("gm-raw no soportado")
+            except Exception:
+                try:
+                    typ, data = m.search(None, "TEXT", f'"{clave}"')
+                except Exception:
+                    typ, data = m.search(None, "ALL")
+            ids = data[0].split() if data and data[0] else []
+            ids = ids[-25:]
+            # Pre-filtrar por cabeceras (rapido) antes de bajar el correo completo
+            candidatos = []
+            for num in reversed(ids):
+                typ, hd = m.fetch(num, "(BODY.PEEK[HEADER.FIELDS (FROM SUBJECT)])")
+                if not hd or not isinstance(hd[0], tuple):
+                    continue
+                hmsg = email.message_from_bytes(hd[0][1])
+                blob_h = f"{_dec(hmsg.get('Subject'))} {_dec(hmsg.get('From'))}".lower()
+                if any(t in blob_h for t in tokens):
+                    candidatos.append(num)
+                if len(candidatos) >= 8:
+                    break
+            for num in candidatos:
+                typ, msgdata = m.fetch(num, "(BODY.PEEK[])")
+                if not msgdata or not isinstance(msgdata[0], tuple):
+                    continue
+                info = _parse_full_message(email.message_from_bytes(msgdata[0][1]), with_bytes=True)
+                blob = f"{info['subject']} {info['from']} {info['body']}".lower()
+                hits = sum(1 for t in tokens if t in blob)
+                if hits == 0:
+                    continue
+                pdfs = [{"filename": a["filename"], "content_bytes": a["content_bytes"]}
+                        for a in info["attachments"]
+                        if (a["filename"] or "").lower().endswith(CAPTURA_EXT) and a.get("content_bytes")]
+                registro = {"from": info["from"], "subject": info["subject"],
+                            "date": info["date"], "body": info["body"], "pdfs": pdfs}
+                (exactos if hits == len(tokens) else parciales).append(registro)
+            m.logout()
+        except Exception:
+            continue
+    return exactos if exactos else parciales
+
+
 def send_mail(to, subject, body_html, attachments=None, desde="secundaria"):
     """Envia un correo. attachments: [{filename, content_b64}]
     desde: 'secundaria' (gerardo.ext@, para PDFs a clientes) o 'principal'."""

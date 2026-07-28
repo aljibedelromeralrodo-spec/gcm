@@ -421,10 +421,24 @@ export default function ClientesModule() {
     if (!name) return;
     setLoading(true);
     try {
-      const r = await axios.post(`${API}/api/clientes/save-all-attachments`, {
+      const start = await axios.post(`${API}/api/clientes/save-all-attachments`, {
         person_name: name, folder_id: currentFolder.id,
       });
-      alert(`Se encontraron ${r.data.total_found} adjuntos. Se guardaron ${r.data.total_saved}.`);
+      const jobId = start.data.job_id;
+      // Poll hasta que el trabajo en background termine (máx ~3 min)
+      let job = { status: "running" };
+      for (let i = 0; i < 60 && job.status === "running"; i++) {
+        await new Promise(res => setTimeout(res, 3000));
+        const st = await axios.get(`${API}/api/clientes/save-all-attachments/${jobId}`);
+        job = st.data;
+      }
+      if (job.status === "error") {
+        alert("Error buscando adjuntos: " + (job.error || "desconocido"));
+      } else if (job.status === "running") {
+        alert("La búsqueda sigue en segundo plano. Refrescá la carpeta en unos minutos.");
+      } else {
+        alert(`Se encontraron ${job.total_found} adjuntos. Se guardaron ${job.total_saved}.`);
+      }
       const reload = await axios.get(`${API}/api/clientes/folders/${currentFolder.id}`);
       setCurrentFolder(reload.data);
     } catch (err) { alert("Error buscando/guardando adjuntos"); }

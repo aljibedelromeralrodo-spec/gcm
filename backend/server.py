@@ -21,6 +21,7 @@ from criterios_data import (
 )
 import credit_engine as ce
 import email_service as mail
+import folders_service as fsvc
 
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
@@ -132,16 +133,36 @@ async def valor_uf():
     return {"valor_uf": await get_valor_uf(), "fecha": now_iso()}
 
 
+def _uf_desde_mindicador():
+    import urllib.request
+    import json as _json
+    with urllib.request.urlopen("https://mindicador.cl/api/uf", timeout=12) as r:
+        data = _json.loads(r.read().decode())
+    serie = (data.get("serie") or [{}])[0]
+    return float(serie.get("valor") or 0), (serie.get("fecha") or "")[:10]
+
+
 @api.get("/clientes/uf-actual")
-async def uf_actual():
-    return {"valor_uf": await get_valor_uf()}
+async def uf_actual(refresh: bool = False):
+    if refresh:
+        try:
+            v, dia = await asyncio.to_thread(_uf_desde_mindicador)
+            if v > 0:
+                await db.config.update_one({"_key": "uf"}, {"$set": {"valor_uf": v}}, upsert=True)
+                return {"valor": v, "valor_uf": v, "source": "mindicador.cl", "sii_day": dia}
+        except Exception as e:
+            v0 = await get_valor_uf()
+            return {"valor": v0, "valor_uf": v0, "source": "local",
+                    "error": f"No se pudo actualizar en línea: {str(e)[:120]}"}
+    v = await get_valor_uf()
+    return {"valor": v, "valor_uf": v}
 
 
 @api.patch("/clientes/uf-actual")
 async def set_uf(payload: dict):
-    v = float(payload.get("valor_uf") or DEFAULT_UF)
+    v = float(payload.get("valor") or payload.get("valor_uf") or DEFAULT_UF)
     await db.config.update_one({"_key": "uf"}, {"$set": {"valor_uf": v}}, upsert=True)
-    return {"valor_uf": v}
+    return {"valor": v, "valor_uf": v}
 
 
 @api.get("/admin/criterios")
@@ -646,13 +667,32 @@ async def search(q: str = "", limit: int = 15):
 
 
 # ---------------------------------------------------------------------------
-# Clientes / Carpetas (basic CRUD)
+# Clientes / Carpetas (archivos físicos en disco + metadata en Mongo)
 # ---------------------------------------------------------------------------
+def _folder_public(doc, con_archivos=False):
+    d = clean(dict(doc))
+    archivos = fsvc.scan_archivos(d.get("nombre", ""))
+    cats = sorted({fsvc.cat_de_archivo(a["nombre"], a["subfolder"]) for a in archivos} - {"combinado"})
+    cr = d.get("credit_request") or {}
+    cr["doc_categories"] = cats
+    d["credit_request"] = cr
+    d["total_archivos"] = len(archivos)
+    ct = cr.get("client_type") or "dependiente"
+    missing = [r for r in fsvc.required_cats(ct) if r not in cats]
+    df = d.get("datos_financieros") or {}
+    d["is_ready_to_send"] = bool(archivos) and not missing and bool(df.get("valor_propiedad"))
+    if con_archivos:
+        d["archivos"] = archivos
+    else:
+        d.pop("archivos", None)
+    return d
+
+
 @api.get("/clientes/folders")
 async def list_folders(q: str = ""):
     query = {"nombre": {"$regex": q, "$options": "i"}} if q else {}
     docs = await db.folders.find(query).sort("created_at", -1).limit(200).to_list(200)
-    return {"folders": [clean(d) for d in docs]}
+    return {"folders": [_folder_public(d) for d in docs]}
 
 
 @api.post("/clientes/folders")
@@ -661,11 +701,14 @@ async def create_folder(payload: dict):
         "id": str(uuid.uuid4()),
         "nombre": payload.get("nombre", ""),
         "rut": payload.get("rut", ""),
+        "codeudor_nombre": payload.get("codeudor_nombre", ""),
+        "codeudor_rut": payload.get("codeudor_rut", ""),
         "archivos": [],
         "created_at": now_iso(),
     }
     await db.folders.insert_one(dict(doc))
-    return clean(doc)
+    fsvc.folder_dir(doc["nombre"]).mkdir(parents=True, exist_ok=True)
+    return _folder_public(doc)
 
 
 @api.get("/clientes/folders/{fid}")
@@ -673,40 +716,426 @@ async def get_folder(fid: str):
     doc = await db.folders.find_one({"id": fid})
     if not doc:
         raise HTTPException(status_code=404, detail="Carpeta no encontrada")
-    return clean(doc)
+    return _folder_public(doc, con_archivos=True)
 
 
 @api.delete("/clientes/folders/{fid}")
 async def delete_folder(fid: str):
+    doc = await db.folders.find_one({"id": fid})
+    if doc:
+        import shutil
+        shutil.rmtree(fsvc.folder_dir(doc.get("nombre", "")), ignore_errors=True)
     await db.folders.delete_one({"id": fid})
     return {"ok": True}
 
 
+async def _get_folder_doc(fid):
+    doc = await db.folders.find_one({"id": fid})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Carpeta no encontrada")
+    return doc
+
+
+@api.get("/clientes/folders/{fid}/download-all")
+async def folder_download_all(fid: str):
+    doc = await _get_folder_doc(fid)
+    data = await asyncio.to_thread(fsvc.zip_folder, doc.get("nombre", ""))
+    fname = f"{fsvc.safe_name(doc.get('nombre',''))}.zip"
+    return StreamingResponse(io.BytesIO(data), media_type="application/zip",
+                             headers={"Content-Disposition": f'attachment; filename="{fname}"'})
+
+
+@api.get("/clientes/folders/{fid}/download/{file_path:path}")
+async def folder_download(fid: str, file_path: str, inline: bool = False):
+    doc = await _get_folder_doc(fid)
+    try:
+        target = fsvc.resolver_ruta(doc.get("nombre", ""), file_path)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Ruta inválida")
+    if not target.exists() or not target.is_file():
+        raise HTTPException(status_code=404, detail="Archivo no encontrado")
+    import mimetypes
+    mt = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
+    disp = "inline" if inline else "attachment"
+    return FileResponse(str(target), media_type=mt,
+                        headers={"Content-Disposition": f'{disp}; filename="{target.name}"'})
+
+
+async def _regen_combinado_bg(doc):
+    try:
+        cr = doc.get("credit_request") or {}
+        await asyncio.to_thread(fsvc.merge_protocol, doc.get("nombre", ""),
+                                cr.get("client_type") or "dependiente", True)
+    except Exception as e:
+        logger.warning(f"Regeneración de combinado falló: {e}")
+
+
+@api.post("/clientes/folders/{fid}/upload-file")
+async def folder_upload_file(fid: str, file: UploadFile = File(...), subfolder: str = Form("")):
+    doc = await _get_folder_doc(fid)
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(status_code=400, detail="Archivo vacío")
+    nombre_archivo = file.filename or "archivo"
+    try:
+        raw, nombre_archivo, _conv = pdfs.convertir_a_pdf(raw, nombre_archivo)
+    except ValueError:
+        pass  # formato no convertible: se guarda tal cual
+    rel = await asyncio.to_thread(fsvc.guardar_archivo, doc.get("nombre", ""),
+                                  nombre_archivo, raw, subfolder)
+    asyncio.create_task(_regen_combinado_bg(doc))
+    return {"ok": True, "saved": rel}
+
+
+@api.post("/clientes/folders/{fid}/delete-file")
+async def folder_delete_file(fid: str, payload: dict):
+    doc = await _get_folder_doc(fid)
+    try:
+        target = fsvc.resolver_ruta(doc.get("nombre", ""), payload.get("file_path", ""))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Ruta inválida")
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="Archivo no encontrado")
+    target.unlink()
+    return {"ok": True}
+
+
+@api.post("/clientes/folders/{fid}/merge-pdfs")
+async def folder_merge_pdfs(fid: str, payload: dict):
+    doc = await _get_folder_doc(fid)
+    files = payload.get("files") or []
+    res = await asyncio.to_thread(fsvc.merge_pdfs, doc.get("nombre", ""), files)
+    if not res["merged_file"]:
+        raise HTTPException(status_code=400, detail="; ".join(res["errors"]) or "Sin PDFs válidos")
+    return res
+
+
+@api.post("/clientes/folders/{fid}/merge-protocol")
+async def folder_merge_protocol(fid: str, payload: dict = None):
+    doc = await _get_folder_doc(fid)
+    cr = doc.get("credit_request") or {}
+    include_extras = bool((payload or {}).get("include_extras", True))
+    res = await asyncio.to_thread(fsvc.merge_protocol, doc.get("nombre", ""),
+                                  cr.get("client_type") or "dependiente", include_extras)
+    if not res["merged_file"]:
+        raise HTTPException(status_code=400, detail="No hay PDFs para combinar en esta carpeta")
+    return res
+
+
+@api.post("/clientes/folders/{fid}/split-bundled")
+async def folder_split_bundled(fid: str, payload: dict):
+    doc = await _get_folder_doc(fid)
+    try:
+        res = await asyncio.to_thread(
+            fsvc.split_bundled, doc.get("nombre", ""), payload.get("file_path", ""),
+            bool(payload.get("route_to_codeudor")), bool(payload.get("delete_original")))
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Archivo no encontrado")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Ruta inválida")
+    asyncio.create_task(_regen_combinado_bg(doc))
+    return res
+
+
+@api.post("/clientes/save-attachment")
+async def save_attachment(payload: dict):
+    doc = await _get_folder_doc(payload.get("folder_id", ""))
+    email_id = payload.get("email_id", "")
+    filename = payload.get("filename", "")
+    atts = await asyncio.to_thread(mail.fetch_attachments_by_id, email_id, filename)
+    if not atts:
+        raise HTTPException(status_code=404, detail="Adjunto no encontrado en el correo")
+    saved = []
+    for att in atts:
+        raw, nombre_a = att["content_bytes"], att["filename"]
+        try:
+            raw, nombre_a, _ = pdfs.convertir_a_pdf(raw, nombre_a)
+        except ValueError:
+            pass
+        rel = await asyncio.to_thread(fsvc.guardar_archivo, doc.get("nombre", ""), nombre_a, raw, "")
+        saved.append(rel)
+    asyncio.create_task(_regen_combinado_bg(doc))
+    return {"ok": True, "saved": saved}
+
+
+async def _save_all_attachments_job(job_id, doc, person):
+    try:
+        correos = await asyncio.to_thread(mail.search_attachments_by_person, person, 40)
+        existentes = {a["nombre"] for a in fsvc.scan_archivos(doc.get("nombre", ""))}
+        total_found, total_saved, saved = 0, 0, []
+        for c in correos:
+            for pdf in c.get("pdfs", []):
+                total_found += 1
+                raw, nombre_a = pdf["content_bytes"], pdf["filename"]
+                try:
+                    raw, nombre_a, _ = pdfs.convertir_a_pdf(raw, nombre_a)
+                except ValueError:
+                    pass
+                if fsvc.safe_name(nombre_a) in existentes:
+                    continue
+                rel = await asyncio.to_thread(fsvc.guardar_archivo, doc.get("nombre", ""), nombre_a, raw, "")
+                existentes.add(fsvc.safe_name(nombre_a))
+                saved.append(rel)
+                total_saved += 1
+        if correos and not doc.get("source_email"):
+            await db.folders.update_one({"id": doc["id"]}, {"$set": {"source_email": correos[0].get("from", "")}})
+        if total_saved:
+            asyncio.create_task(_regen_combinado_bg(doc))
+        await db.save_jobs.update_one({"id": job_id}, {"$set": {
+            "status": "done", "total_found": total_found,
+            "total_saved": total_saved, "saved": saved}})
+    except Exception as e:
+        await db.save_jobs.update_one({"id": job_id}, {"$set": {
+            "status": "error", "error": str(e)[:200],
+            "total_found": 0, "total_saved": 0}})
+
+
+@api.post("/clientes/save-all-attachments")
+async def save_all_attachments(payload: dict):
+    doc = await _get_folder_doc(payload.get("folder_id", ""))
+    person = payload.get("person_name", "")
+    if not person.strip():
+        raise HTTPException(status_code=400, detail="Falta el nombre de la persona")
+    job_id = str(uuid.uuid4())
+    await db.save_jobs.insert_one({"id": job_id, "status": "running", "created_at": now_iso()})
+    asyncio.create_task(_save_all_attachments_job(job_id, doc, person))
+    return {"job_id": job_id, "status": "running"}
+
+
+@api.get("/clientes/save-all-attachments/{job_id}")
+async def save_all_attachments_status(job_id: str):
+    job = await db.save_jobs.find_one({"id": job_id})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job no encontrado")
+    return clean(job)
+
+
+@api.patch("/clientes/folders/{fid}/clasificacion")
+async def folder_clasificacion(fid: str, payload: dict):
+    doc = await _get_folder_doc(fid)
+    cr = doc.get("credit_request") or {}
+    if payload.get("reset"):
+        auto = doc.get("credit_request_auto")
+        newcr = dict(auto) if auto else {k: v for k, v in cr.items() if k != "manual_override"}
+        newcr.pop("manual_override", None)
+        await db.folders.update_one({"id": fid}, {"$set": {"credit_request": newcr},
+                                                  "$unset": {"credit_request_auto": ""}})
+        return {"ok": True, "reset": True}
+    if not doc.get("credit_request_auto"):
+        await db.folders.update_one({"id": fid}, {"$set": {"credit_request_auto": cr}})
+    cr.update({
+        "client_type": payload.get("client_type", cr.get("client_type", "desconocido")),
+        "is_request": bool(payload.get("is_request", cr.get("is_request", False))),
+        "subsidy": {"tipo": payload.get("subsidy_tipo", (cr.get("subsidy") or {}).get("tipo", "sin_subsidio"))},
+        "codeudor": {"has_codeudor": bool(payload.get("codeudor_has")),
+                     "name": payload.get("codeudor_name", "")},
+        "manual_override": True,
+    })
+    await db.folders.update_one({"id": fid}, {"$set": {"credit_request": cr}})
+    return {"ok": True}
+
+
+@api.get("/clientes/folders/{fid}/datos-financieros")
+async def folder_fin_get(fid: str):
+    doc = await _get_folder_doc(fid)
+    return {"datos_financieros": doc.get("datos_financieros") or {}}
+
+
+@api.patch("/clientes/folders/{fid}/datos-financieros")
+async def folder_fin_patch(fid: str, payload: dict):
+    doc = await _get_folder_doc(fid)
+    df = doc.get("datos_financieros") or {}
+    df.update({k: v for k, v in (payload or {}).items() if v is not None})
+    await db.folders.update_one({"id": fid}, {"$set": {"datos_financieros": df}})
+    return {"ok": True, "datos_financieros": df}
+
+
+@api.post("/clientes/folders/{fid}/ocr-datos-financieros")
+async def folder_fin_ocr(fid: str):
+    doc = await _get_folder_doc(fid)
+    base = fsvc.folder_dir(doc.get("nombre", ""))
+    candidatos = [a for a in fsvc.scan_archivos(doc.get("nombre", ""))
+                  if a["nombre"].lower().endswith(".pdf")
+                  and fsvc.cat_de_archivo(a["nombre"], a["subfolder"]) != "combinado"][:5]
+    extracted, analizados = {}, []
+    for a in candidatos:
+        raw = (base / a["ruta"]).read_bytes()
+        texto, _metodo = await asyncio.to_thread(ocr_service.extraer_texto, raw, a["nombre"])
+        info = await ai_extract.clasificar_y_extraer(texto, a["nombre"])
+        analizados.append(a["nombre"])
+        mapa = {
+            "proyecto": info.get("proyecto_inmobiliario"),
+            "inmobiliaria": info.get("proyecto_inmobiliario"),
+            "con_subsidio": info.get("con_subsidio"),
+            "monto_subsidio": info.get("monto_subsidio_uf"),
+            "ahorro": info.get("ahorro_uf"),
+            "monto_pie": info.get("pie_uf"),
+            "monto_credito": info.get("monto_credito_uf") or info.get("monto_credito_solicitar_uf"),
+        }
+        for k, v in mapa.items():
+            if extracted.get(k) in (None, "") and v not in (None, ""):
+                extracted[k] = v
+    return {"extracted": extracted, "pdfs_analyzed": analizados}
+
+
+@api.patch("/clientes/folders/{fid}/envio-manual")
+async def folder_envio_manual(fid: str, payload: dict):
+    await _get_folder_doc(fid)
+    enviado = bool((payload or {}).get("enviado"))
+    await db.folders.update_one({"id": fid}, {"$set": {"envio_manual": enviado}})
+    return {"ok": True, "envio_manual": enviado}
+
+
+def _sender_por_rol(rol="secundaria"):
+    acc = next((a for a in mail.ACCOUNTS if a["rol"] == rol), None)
+    if not acc and mail.ACCOUNTS:
+        acc = mail.ACCOUNTS[0]
+    return acc["user"] if acc else ""
+
+
+def _fin_resumen_html(doc):
+    df = doc.get("datos_financieros") or {}
+    if not df:
+        return ""
+    filas = [("Proyecto", df.get("proyecto")), ("Inmobiliaria", df.get("inmobiliaria")),
+             ("Tipo propiedad", df.get("tipo_propiedad")),
+             ("Operación", "Con subsidio" if df.get("con_subsidio") else "Sin subsidio"),
+             ("Valor propiedad", _fmt_uf(df.get("valor_propiedad"))),
+             ("Monto subsidio", _fmt_uf(df.get("monto_subsidio"))),
+             ("Ahorro", _fmt_uf(df.get("ahorro"))), ("Pie", _fmt_uf(df.get("monto_pie"))),
+             ("Reserva", _fmt_uf(df.get("monto_reserva"))),
+             ("Monto crédito", _fmt_uf(df.get("monto_credito")))]
+    rows = "".join(f"<tr><td style='padding:3px 12px 3px 0'><b>{k}</b></td><td>{v}</td></tr>"
+                   for k, v in filas if v not in (None, "", "—"))
+    return f"<table style='border-collapse:collapse'>{rows}</table>" if rows else ""
+
+
+@api.post("/clientes/folders/{fid}/send-email")
+async def folder_send_email(fid: str, payload: dict):
+    doc = await _get_folder_doc(fid)
+    payload = payload or {}
+    to = (payload.get("to_addr") or "").strip()
+    if not to or "@" not in to:
+        raise HTTPException(status_code=400, detail="Destinatario inválido")
+    nombre = doc.get("nombre", "")
+    rut = doc.get("rut", "")
+    base = fsvc.folder_dir(nombre)
+    cr = doc.get("credit_request") or {}
+    attach_names = []
+    attach_paths = []
+    if payload.get("include_merged", True):
+        merged = base / f"COMBINADO_PROTOCOLO_{fsvc.safe_name(nombre)}.pdf"
+        if not merged.exists():
+            res = await asyncio.to_thread(fsvc.merge_protocol, nombre,
+                                          cr.get("client_type") or "dependiente", True)
+            merged = base / res["merged_file"] if res["merged_file"] else merged
+        if merged.exists():
+            attach_paths.append(merged)
+            attach_names.append(merged.name)
+    if payload.get("include_codeudor_merged"):
+        for p in sorted(base.glob("COMBINADO_CODEUDOR*.pdf")):
+            attach_paths.append(p)
+            attach_names.append(p.name)
+    for rel in payload.get("attach_files") or []:
+        try:
+            p = fsvc.resolver_ruta(nombre, rel)
+            if p.exists() and p not in attach_paths:
+                attach_paths.append(p)
+                attach_names.append(p.name)
+        except ValueError:
+            continue
+    subject = payload.get("subject") or f"Antecedentes crédito hipotecario — {nombre}" + (f" ({rut})" if rut else "")
+    fin_html = _fin_resumen_html(doc)
+    cuerpo = f"""
+    <div style="font-family:Arial,sans-serif;font-size:14px;color:#222">
+      <h2 style="color:#6c5ce7;margin:0 0 8px">Carpeta cliente — {nombre}</h2>
+      <p><b>Cliente:</b> {nombre}{f' · <b>RUT:</b> {rut}' if rut else ''}</p>
+      {fin_html}
+      {f'<p style="margin-top:10px">{(payload.get("body_extra") or "").strip()}</p>' if (payload.get("body_extra") or "").strip() else ''}
+      <p style="margin-top:12px">Se adjunta la carpeta con los antecedentes del cliente.</p>
+      <p style="color:#888;font-size:12px">Central Mutuos - Con Creces Asesorias</p>
+    </div>
+    """
+    sender = _sender_por_rol("secundaria")
+    if not payload.get("confirm"):
+        return {"to": to, "subject": subject, "body": cuerpo,
+                "attachments": attach_names, "sender": sender}
+    adjuntos = [{"filename": p.name, "content_b64": _b64(p.read_bytes())} for p in attach_paths]
+    res = await asyncio.to_thread(mail.send_mail, to, subject, cuerpo, adjuntos, "secundaria")
+    if not res.get("success"):
+        raise HTTPException(status_code=502, detail=res.get("error", "Error de envío"))
+    await db.folders.update_one({"id": fid}, {"$inc": {"emails_sent_count": 1},
+                                              "$set": {"last_email_sent_at": now_iso()}})
+    return {"to": to, "subject": subject, "attachments": attach_names,
+            "sender": res.get("desde", sender)}
+
+
+@api.post("/clientes/folders/{fid}/send-missing-docs")
+async def folder_send_missing_docs(fid: str, payload: dict = None):
+    doc = await _get_folder_doc(fid)
+    payload = payload or {}
+    pub = _folder_public(doc)
+    cats = pub["credit_request"].get("doc_categories", [])
+    ct = pub["credit_request"].get("client_type") or "dependiente"
+    missing = [fsvc.MISSING_LABELS.get(c, c) for c in fsvc.required_cats(ct) if c not in cats]
+    src = doc.get("source_email", "") or ""
+    m_addr = re.search(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+", src)
+    default_to = m_addr.group(0) if m_addr else ""
+    to = (payload.get("to_addr") or default_to).strip()
+    nombre = doc.get("nombre", "")
+    subject = f"Documentos faltantes — {nombre}"
+    lista = "".join(f"<li>{d}</li>" for d in missing)
+    extra = (payload.get("body_extra") or "").strip()
+    cuerpo = f"""
+    <div style="font-family:Arial,sans-serif;font-size:14px;color:#222">
+      <h2 style="color:#e17055;margin:0 0 8px">Documentos faltantes — {nombre}</h2>
+      <p>Para continuar con la evaluación del crédito de <b>{nombre}</b> necesitamos los siguientes documentos:</p>
+      <ul>{lista if lista else '<li>Sin faltantes detectados</li>'}</ul>
+      {f'<p>{extra}</p>' if extra else ''}
+      <p style="color:#888;font-size:12px">Central Mutuos - Con Creces Asesorias</p>
+    </div>
+    """
+    sender = _sender_por_rol("secundaria")
+    if not payload.get("confirm"):
+        return {"to": to, "subject": subject, "missing": missing, "body": cuerpo, "sender": sender}
+    if not to or "@" not in to:
+        raise HTTPException(status_code=400, detail="Destinatario inválido")
+    res = await asyncio.to_thread(mail.send_mail, to, subject, cuerpo, [], "secundaria")
+    if not res.get("success"):
+        raise HTTPException(status_code=502, detail=res.get("error", "Error de envío"))
+    return {"to": to, "subject": subject, "missing": missing, "sender": res.get("desde", sender)}
+
+
 @api.get("/clientes/emails")
-async def clientes_emails(limit: int = 20):
-    emails = await asyncio.to_thread(mail.fetch_recent, limit)
+async def clientes_emails(limit: int = 20, max_results: int = 0):
+    n = max_results or limit
+    emails = await asyncio.to_thread(mail.fetch_recent_full, n)
     return {"emails": emails}
 
 
 @api.get("/clientes/emails/search")
 async def clientes_emails_search(q: str = ""):
-    emails = await asyncio.to_thread(mail.fetch_recent, 50)
+    emails = await asyncio.to_thread(mail.fetch_recent_full, 40)
     ql = (q or "").lower()
     if ql:
         emails = [e for e in emails
                   if ql in (e.get("subject", "") or "").lower()
-                  or ql in (e.get("from", "") or "").lower()]
-    return {"emails": emails}
+                  or ql in (e.get("from", "") or "").lower()
+                  or ql in (e.get("body", "") or "").lower()]
+    return {"emails": emails, "results": emails}
 
 
 @api.get("/clientes/ajustes")
 async def clientes_ajustes():
-    return {"ajustes": {}}
+    docs = await db.folders.find({}).sort("created_at", -1).limit(200).to_list(200)
+    return {"folders": [_folder_public(d, con_archivos=True) for d in docs], "ajustes": {}}
 
 
 @api.get("/clientes/autocorreo-dest")
 async def autocorreo_dest():
-    return {"destinatarios": []}
+    st = await _ac_state()
+    dest = st.get("destination") or os.environ.get("MAIL2_USER", "")
+    return {"destination": dest, "destinatarios": [dest] if dest else []}
 
 
 @api.post("/clientes/detect-client")
@@ -1568,13 +1997,16 @@ async def proc_upload_drive(qid: str):
     dest = CLIENTES_DIR / _safe_name(cliente)
     dest.mkdir(parents=True, exist_ok=True)
     uploaded = []
-    # Copiar documentos a la carpeta del cliente
+    # Copiar documentos a subcarpetas protocolo (01_cedula, 02_liquidaciones, ...)
     from pypdf import PdfReader, PdfWriter
     for d in docs:
         p = src / d["filename"]
         if p.exists():
-            (dest / d["filename"]).write_bytes(p.read_bytes())
-            uploaded.append(d["filename"])
+            sub = fsvc.SUBFOLDER_POR_TIPO.get(d["tipo"], "99_otros")
+            sd = dest / sub
+            sd.mkdir(parents=True, exist_ok=True)
+            (sd / d["filename"]).write_bytes(p.read_bytes())
+            uploaded.append(f"{sub}/{d['filename']}")
     # Generar PDF agrupado en el orden establecido
     def _rank(d):
         t = d["tipo"]
@@ -1596,15 +2028,44 @@ async def proc_upload_drive(qid: str):
         with open(dest / merged_name, "wb") as f:
             writer.write(f)
         uploaded.append(merged_name)
-    # Registrar carpeta cliente
+    # Registrar carpeta cliente (con clasificación y datos financieros de la gestión)
     folder_doc = await db.folders.find_one({"nombre": cliente})
+    campos = item.get("campos", {}) or {}
+    con_sub = campos.get("con_subsidio")
+    credit_request = {
+        "is_request": True,
+        "client_type": tipo_cliente,
+        "subsidy": {"tipo": "con_subsidio" if con_sub is True else "sin_subsidio"},
+        "codeudor": {"has_codeudor": False, "name": ""},
+    }
+    fin_nuevos = {k: v for k, v in {
+        "proyecto": campos.get("proyecto_inmobiliario") or "",
+        "inmobiliaria": campos.get("proyecto_inmobiliario") or "",
+        "con_subsidio": con_sub,
+        "monto_subsidio": campos.get("monto_subsidio_uf"),
+        "ahorro": campos.get("ahorro_uf"),
+        "monto_pie": campos.get("pie_uf"),
+        "monto_credito": campos.get("monto_credito_uf") or campos.get("monto_credito_solicitar_uf"),
+    }.items() if v not in (None, "")}
     if not folder_doc:
         await db.folders.insert_one({"id": str(uuid.uuid4()), "nombre": cliente,
                                      "rut": cl.get("rut", ""), "archivos": uploaded,
+                                     "source_email": item.get("sender", ""),
+                                     "credit_request": credit_request,
+                                     "datos_financieros": fin_nuevos,
                                      "created_at": now_iso(), "origen": "procesamiento"})
     else:
-        await db.folders.update_one({"nombre": cliente},
-                                    {"$set": {"archivos": uploaded, "rut": cl.get("rut", "") or folder_doc.get("rut", "")}})
+        upd = {"archivos": uploaded,
+               "rut": cl.get("rut", "") or folder_doc.get("rut", ""),
+               "source_email": folder_doc.get("source_email") or item.get("sender", "")}
+        if not (folder_doc.get("credit_request") or {}).get("manual_override"):
+            upd["credit_request"] = credit_request
+        fin_actual = folder_doc.get("datos_financieros") or {}
+        for k, v in fin_nuevos.items():
+            if fin_actual.get(k) in (None, ""):
+                fin_actual[k] = v
+        upd["datos_financieros"] = fin_actual
+        await db.folders.update_one({"nombre": cliente}, {"$set": upd})
     # Checklist de faltantes
     req = CHECKLIST.get(tipo_cliente, {})
     conteo = {}

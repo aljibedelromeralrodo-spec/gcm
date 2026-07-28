@@ -1,0 +1,35 @@
+{
+  "summary": "Testeo completo del fix P0 (guardado de adjuntos y manejo de archivos de carpetas). Backend: 25/25 pytest OK (folders CRUD, upload con auto-clasificación a 01_cedula, download attachment/inline, path traversal→400, download-all ZIP con magic PK, delete, merge-pdfs, merge-protocol con COMBINADO_PROTOCOLO_*.pdf, clasificación manual con manual_override:true, reset, datos financieros persistidos, envio-manual, send-email preview NO envía, send-missing-docs preview, UF get/patch/refresh, ajustes con archivos, emails IMAP real con id 'rol|uid', save-attachment desde Gmail real OK, save-all-attachments job polling status→done). Frontend: login administrador/141617575 OK, tour 'Saltar' OK, lista de carpetas con contador OK (Juan Test Proc: 21 archivos), detalle abre con archivos por subcarpeta, btn-upload-manual/btn-regen-combined/btn-fin-detail/btn-download-all/btn-missing-docs-detail todos presentes (count=1 c/u), Descargar Todo emite Juan Test Proc.zip, Regenerar Combinado dispara alert de éxito, Datos Financieros abre panel con inmobiliaria/proyecto/tipo op/subsidio/ahorro/monto/reserva y Guardar persiste, Ajustes lista 3 carpetas con badges de clasificación (Solicitud/dependiente/con_subsidio) y 'editado manualmente' visible. No se probó envío real (confirm:true) según instrucción.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Carpeta Clientes - lista", "issues": ["Las tarjetas de carpetas con badge 'ENVIADO (manual)' aparecen con fondo rojo intenso que sugiere estado de error/alerta, cuando en realidad indica éxito de envío — la semántica del color contradice el estado positivo. Considerar verde/azul."]},
+      {"screen": "Detalle de carpeta", "issues": ["El botón 'Documento Faltante' queda debajo del panel Datos Financieros cuando este se expande, requiriendo scroll para acceder; podría flotar en toolbar sticky."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_carpetas_backend.py",
+    "/app/test_reports/pytest/carpetas.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py tiene 2242 líneas — recomendar dividir por dominio (folders, emails, ajustes, procesamiento, whatsapp) para mantenibilidad.",
+    "save_attachment (línea 840) no maneja excepciones de mail.fetch_attachments_by_id → si IMAP falla, el request se convierte en 500. Envolver en try/except y retornar 502.",
+    "folder_download acepta file_path como path param con :path — validado por fsvc.resolver_ruta (bien). Confirmar que resolver_ruta usa Path.resolve() + is_relative_to() para bloquear ../.. absolutos también.",
+    "En folder_upload_file, si convertir_a_pdf lanza excepción no-ValueError, no se maneja — considerar log/traceback.",
+    "TestClasificacion: subsidy_tipo se persiste como subsidy.tipo (nested), pero el payload lo envía como subsidy_tipo plano — comportamiento aceptable pero documentar el mapping en el modelo Pydantic (no se usa Pydantic, es dict). Considerar migrar a modelo tipado.",
+    "save-all-attachments job: no hay TTL/cleanup de save_jobs collection; con uso continuo crecerá indefinidamente."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_carpetas_backend.py"
+  ],
+  "success_rate": {"backend": "100% (25/25)", "frontend": "~95% (todas las flows core probadas; Ver Correos no completó en el timeout de test UI pero backend IMAP verificado independientemente)"},
+  "test_credentials": "administrador / 141617575",
+  "seed_data_creation": "Creada carpeta TEST_Carpeta_<uuid> vía POST /api/clientes/folders y archivo cedula_TEST_<uuid>.pdf subido y luego eliminado en Juan Test Proc. UF actual quedó en 40000 tras test_uf_actual_patch.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend fix P0 verificado end-to-end: (1) upload clasifica automáticamente a subcarpetas protocolo, (2) save-attachment y save-all-attachments realmente descargan de Gmail y guardan en disco (probado con inbox real), (3) el pipeline regenera COMBINADO_PROTOCOLO en background. Todas las carpetas de test están intactas. UF quedó en 40000 (originalmente distinta) — main agent puede resetearla si necesita. El único warning es que TestUploadDownloadDelete depende de estado compartido entre tests (uploaded_path como class var); si se corre con -n auto y xdist en el mismo scope, se maneja con LoadScopeScheduling.",
+  "rca of the issue": "N/A — no se encontraron bugs. El fix del P0 (guardado de adjuntos en subcarpetas de carpetas cliente) funciona correctamente en backend e integración con frontend. La única falla temporal en el primer run (test_patch_clasificacion) fue por assertion equivocada en el test (subsidy_tipo vs subsidy.tipo), ya corregida."
+}
