@@ -20,6 +20,7 @@ const UsuariosModule = lazy(() => import("./pages/UsuariosModule"));
 const CriteriosModule = lazy(() => import("./pages/CriteriosModule"));
 const WhatsAppModule = lazy(() => import("./pages/WhatsAppModule"));
 const AutocorreoModule = lazy(() => import("./pages/AutocorreoModule"));
+const GastosOperacionalesModule = lazy(() => import("./pages/GastosOperacionalesModule"));
 const EmailProcessingModule = lazy(() => import("./pages/EmailProcessingModule"));
 const GlobalSearch = lazy(() => import("./components/GlobalSearch"));
 const WelcomeTour = lazy(() => import("./components/WelcomeTour"));
@@ -121,6 +122,7 @@ function MainApp() {
     { key: 'calculadora', icon: 'fa-percent', label: 'Calculadora' },
     { key: 'seguimiento', icon: 'fa-road', label: 'Seguimiento' },
     { key: 'formato', icon: 'fa-file-pdf-o', label: 'Formato' },
+    { key: 'gastos', icon: 'fa-money', label: 'Gastos Operacionales' },
     ...(user.rol === 'admin' ? [{ key: 'usuarios', icon: 'fa-user-plus', label: 'Usuarios' }] : []),
     ...(user.rol === 'admin' ? [{ key: 'criterios', icon: 'fa-shield', label: 'Criterios' }] : []),
     ...(user.rol === 'admin' ? [{ key: 'whatsapp', icon: 'fa-whatsapp', label: 'WhatsApp' }] : []),
@@ -207,6 +209,7 @@ function MainApp() {
         {activeModule === 'whatsapp' && <WhatsAppModule />}
         {activeModule === 'autocorreo' && <AutocorreoModule />}
         {activeModule === 'procesamiento' && <EmailProcessingModule />}
+        {activeModule === 'gastos' && <GastosOperacionalesModule />}
         </Suspense>
       </main>
     </div>

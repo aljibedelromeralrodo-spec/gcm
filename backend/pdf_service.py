@@ -35,8 +35,15 @@ def contar_paginas(pdf_bytes):
 
 
 def clasificar_documento(pdf_bytes, filename=""):
-    """Devuelve 'simulacion', 'carta_aprobacion' u 'otro'."""
-    texto = (leer_texto(pdf_bytes) + " " + (filename or "")).lower()
+    """Devuelve 'simulacion', 'carta_aprobacion' u 'otro'.
+
+    REGLA INVIOLABLE: cualquier indicio de que es una carta de aprobacion
+    (nombre o contenido) la clasifica como carta y NUNCA se modifica.
+    """
+    fn = (filename or "").lower()
+    if re.search(r"carta|aprobaci[oó]n|aprobacion", fn):
+        return "carta_aprobacion"
+    texto = (leer_texto(pdf_bytes) + " " + fn).lower()
     if re.search(r"agrado de informar|ha sido aprobad|carta de aprobaci|mutuo hipotecario.*aprobad", texto):
         return "carta_aprobacion"
     if re.search(r"simulaci[oó]n|dividendo|gastos operacionales|tasa|plazo|financiamiento|pie", texto):

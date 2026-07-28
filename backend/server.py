@@ -89,6 +89,8 @@ async def startup():
     asyncio.create_task(_periodic_proc_loop())
     # Reporte diario 10:00 AM (hora Chile)
     asyncio.create_task(_daily_report_loop())
+    # UF siempre actualizada desde SII (cada 6 horas)
+    asyncio.create_task(_uf_auto_loop())
 
 
 # ---------------------------------------------------------------------------
@@ -146,20 +148,80 @@ def _uf_desde_mindicador():
     return float(serie.get("valor") or 0), (serie.get("fecha") or "")[:10]
 
 
+_MESES_ES = {1: "enero", 2: "febrero", 3: "marzo", 4: "abril", 5: "mayo", 6: "junio",
+             7: "julio", 8: "agosto", 9: "septiembre", 10: "octubre", 11: "noviembre", 12: "diciembre"}
+
+
+def _uf_desde_sii():
+    """UF oficial del día desde www.sii.cl (tabla anual por mes)."""
+    import urllib.request
+    from zoneinfo import ZoneInfo
+    hoy = datetime.now(ZoneInfo("America/Santiago"))
+    url = f"https://www.sii.cl/valores_y_fechas/uf/uf{hoy.year}.htm"
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    html = urllib.request.urlopen(req, timeout=15).read().decode("latin-1", errors="ignore")
+    marca = f"id='mes_{_MESES_ES[hoy.month]}'"
+    if marca not in html:
+        raise ValueError(f"SII: no se encontró el mes {_MESES_ES[hoy.month]}")
+    bloque = html.split(marca, 1)[1]
+    fin = bloque.find("id='mes_")
+    if fin > 0:
+        bloque = bloque[:fin]
+    filas = re.findall(r"<th[^>]*><strong>(\d{1,2})</strong></th>\s*<td[^>]*>([\d.,]*)</td>", bloque)
+    valores = {}
+    for d, v in filas:
+        v = v.strip()
+        if v:
+            valores[int(d)] = float(v.replace(".", "").replace(",", "."))
+    if not valores:
+        raise ValueError("SII: tabla del mes sin valores")
+    dias = sorted(d for d in valores if d <= hoy.day) or sorted(valores)
+    dia = dias[-1]
+    return valores[dia], f"{hoy.year}-{hoy.month:02d}-{dia:02d}"
+
+
+async def _actualizar_uf():
+    """Intenta SII primero, luego mindicador.cl. Guarda en config."""
+    try:
+        v, dia = await asyncio.to_thread(_uf_desde_sii)
+        fuente = "sii.cl"
+    except Exception:
+        v, dia = await asyncio.to_thread(_uf_desde_mindicador)
+        fuente = "mindicador.cl"
+    if v > 0:
+        await db.config.update_one({"_key": "uf"}, {"$set": {
+            "valor_uf": v, "uf_source": fuente, "uf_day": dia,
+            "uf_updated_at": now_iso()}}, upsert=True)
+    return v, fuente, dia
+
+
+async def _uf_auto_loop():
+    """Mantiene la UF siempre actualizada (revisa cada 6 horas)."""
+    await asyncio.sleep(10)
+    while True:
+        try:
+            await _actualizar_uf()
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.warning(f"Actualización automática de UF falló: {e}")
+        await asyncio.sleep(6 * 3600)
+
+
 @api.get("/clientes/uf-actual")
 async def uf_actual(refresh: bool = False):
     if refresh:
         try:
-            v, dia = await asyncio.to_thread(_uf_desde_mindicador)
-            if v > 0:
-                await db.config.update_one({"_key": "uf"}, {"$set": {"valor_uf": v}}, upsert=True)
-                return {"valor": v, "valor_uf": v, "source": "mindicador.cl", "sii_day": dia}
+            v, fuente, dia = await _actualizar_uf()
+            return {"valor": v, "valor_uf": v, "source": fuente, "sii_day": dia}
         except Exception as e:
             v0 = await get_valor_uf()
             return {"valor": v0, "valor_uf": v0, "source": "local",
                     "error": f"No se pudo actualizar en línea: {str(e)[:120]}"}
     v = await get_valor_uf()
-    return {"valor": v, "valor_uf": v}
+    cfg = await db.config.find_one({"_key": "uf"}) or {}
+    return {"valor": v, "valor_uf": v, "source": cfg.get("uf_source", "local"),
+            "sii_day": cfg.get("uf_day", ""), "updated_at": cfg.get("uf_updated_at", "")}
 
 
 @api.patch("/clientes/uf-actual")
@@ -1481,9 +1543,12 @@ def _procesar_mesa(destino, cutoff_iso, ejecutivos=None, ya_enviados=None):
             except Exception:
                 continue
             tipo_doc = pdfs.clasificar_documento(raw, nombre_pdf)
+            # REGLA INVIOLABLE: cartas de aprobacion SIEMPRE intactas, formato sin modificar.
+            es_carta = tipo_doc == "carta_aprobacion" or re.search(
+                r"carta|aprobaci[oó]n|aprobacion", (nombre_pdf or "").lower())
             adjuntos = []
             saved = []
-            if tipo_doc == "simulacion":
+            if tipo_doc == "simulacion" and not es_carta:
                 nuevo, orig, removidas = pdfs.dejar_primera_pagina(raw)
                 nombre_aj = nombre_pdf.replace(".pdf", "") + "_ajustada.pdf"
                 _save_pdf(cliente, nombre_aj, nuevo)
@@ -1569,8 +1634,8 @@ async def _mapa_ejecutivos():
 async def _subjects_enviados():
     """Asuntos ya enviados (para no duplicar reenvios)."""
     logs = await db.autocorreo_log.find(
-        {"status": "sent"}, {"subject": 1}).limit(800).to_list(800)
-    return set((l.get("subject") or "").strip() for l in logs)
+        {"status": "sent"}, {"subject": 1, "subject_original": 1}).limit(800).to_list(800)
+    return set((l.get("subject_original") or l.get("subject") or "").strip() for l in logs)
 
 
 async def _run_mesa_background(destino, cutoff_iso, ejecutivos, ya_enviados=None):
@@ -2456,6 +2521,191 @@ async def reporte_diario_enviar_ahora():
     if not res.get("success"):
         raise HTTPException(status_code=502, detail=res.get("error") or "Error de envío")
     return res
+
+
+# ---------------------------------------------------------------------------
+# Gastos Operacionales: plantilla profesional editable con autosuma
+# ---------------------------------------------------------------------------
+GASTOS_OP_DEFAULTS = {
+    "intro": ("Buenas tardes. Adjunto envío el primer paso del proceso: la Declaración Personal de Salud. "
+              "Este es el único documento que debe ser completado de puño y letra. Los documentos restantes "
+              "se le enviarán próximamente ya completados para facilitar su firma.\n\n"
+              "Asimismo, detallo a continuación la información correspondiente al pago de los gastos operacionales:"),
+    "items": [
+        {"concepto": "Conservador de Bienes Raíces", "valor": 21, "texto": ""},
+        {"concepto": "Escrituración y servicios relacionados", "valor": 5.6, "texto": ""},
+        {"concepto": "Estudio de Títulos", "valor": 3, "texto": ""},
+        {"concepto": "Notaría", "valor": None, "texto": "Pago directo del cliente en notaría"},
+        {"concepto": "Servicio de Inscripción", "valor": 0, "texto": ""},
+        {"concepto": "Tasación", "valor": None, "texto": "Pagada"},
+    ],
+    "datos_pago": {
+        "nombre": "MUTUARIAS Y LEASING LIMITADA",
+        "rut": "77.771.552-6",
+        "banco": "Prepago Los Héroes",
+        "tipo_cuenta": "Cuenta Vista",
+        "numero_cuenta": "277771552",
+    },
+}
+
+
+async def _gastos_defaults():
+    st = await db.config.find_one({"_key": "gastos_op"}) or {}
+    st.pop("_id", None)
+    st.pop("_key", None)
+    base = {k: v for k, v in GASTOS_OP_DEFAULTS.items()}
+    base.update({k: v for k, v in st.items() if v})
+    return base
+
+
+@api.get("/gastos-operacionales/defaults")
+async def gastos_defaults():
+    return await _gastos_defaults()
+
+
+@api.patch("/gastos-operacionales/defaults")
+async def gastos_defaults_patch(payload: dict):
+    upd = {k: payload[k] for k in ("intro", "items", "datos_pago") if k in payload}
+    if upd:
+        await db.config.update_one({"_key": "gastos_op"}, {"$set": upd}, upsert=True)
+    return await _gastos_defaults()
+
+
+@api.get("/gastos-operacionales/buscar-cliente")
+async def gastos_buscar_cliente(q: str = ""):
+    q = (q or "").strip()
+    if len(q) < 2:
+        return {"resultados": []}
+    rx = {"$regex": re.escape(q), "$options": "i"}
+    docs = await db.folders.find({"$or": [{"nombre": rx}, {"rut": rx}]}).limit(6).to_list(6)
+    resultados = []
+    for d in docs:
+        email_cliente = ""
+        item = await db.proc_queue.find_one({"classification.cliente": d.get("nombre", ""),
+                                             "campos.email_cliente": {"$nin": ["", None]}})
+        if item:
+            email_cliente = (item.get("campos") or {}).get("email_cliente", "")
+        resultados.append({"nombre": d.get("nombre", ""), "rut": d.get("rut", ""),
+                           "email": email_cliente, "folder_id": d.get("id", "")})
+    return {"resultados": resultados}
+
+
+def _gastos_total(items):
+    total = 0.0
+    for it in items or []:
+        v = it.get("valor")
+        try:
+            if v is not None and str(v) != "":
+                total += float(v)
+        except (TypeError, ValueError):
+            continue
+    return round(total, 2)
+
+
+def _num_uf(v):
+    try:
+        f = float(v)
+        s = f"{f:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        return s.rstrip("0").rstrip(",") if "," in s else s
+    except (TypeError, ValueError):
+        return str(v)
+
+
+def _gastos_html(payload):
+    nombre = payload.get("nombre", "")
+    rut = payload.get("rut", "")
+    intro = (payload.get("intro") or "").strip()
+    items = payload.get("items") or []
+    dp = payload.get("datos_pago") or {}
+    total = _gastos_total(items)
+    intro_html = "".join(f"<p style='margin:0 0 12px;line-height:1.6'>{p}</p>"
+                         for p in intro.split("\n") if p.strip())
+    filas = ""
+    for i, it in enumerate(items):
+        bg = "#f8f9fc" if i % 2 == 0 else "#ffffff"
+        if it.get("valor") is None or str(it.get("valor")) == "":
+            valor_html = f"<span style='color:#8a6d1a;font-style:italic'>{it.get('texto') or '—'}</span>"
+        else:
+            valor_html = f"<b>{_num_uf(it['valor'])} UF</b>"
+        filas += (f"<tr style='background:{bg}'>"
+                  f"<td style='padding:11px 18px;border-bottom:1px solid #eceef3;color:#2b3245'>{it.get('concepto','')}</td>"
+                  f"<td style='padding:11px 18px;border-bottom:1px solid #eceef3;text-align:right;color:#1a1f2e;white-space:nowrap'>{valor_html}</td></tr>")
+    filas += (f"<tr style='background:#1a1f2e'>"
+              f"<td style='padding:13px 18px;color:#d4af37;font-weight:700;letter-spacing:0.5px'>TOTAL</td>"
+              f"<td style='padding:13px 18px;text-align:right;color:#d4af37;font-weight:700;font-size:16px;white-space:nowrap'>{_num_uf(total)} UF</td></tr>")
+    pago_filas = "".join(
+        f"<tr><td style='padding:5px 14px 5px 0;color:#6b7280;font-size:13px;white-space:nowrap'>{lbl}</td>"
+        f"<td style='padding:5px 0;color:#1a1f2e;font-size:13px;font-weight:600'>{val}</td></tr>"
+        for lbl, val in [("Nombre", dp.get("nombre", "")), ("RUT", dp.get("rut", "")),
+                         ("Banco", dp.get("banco", "")), ("Tipo de cuenta", dp.get("tipo_cuenta", "")),
+                         ("N° de cuenta", dp.get("numero_cuenta", ""))] if val)
+    return f"""
+    <div style="background:#f2f4f8;padding:28px 12px;font-family:Georgia,'Times New Roman',serif">
+      <div style="max-width:640px;margin:0 auto;background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 4px 18px rgba(16,24,40,0.10)">
+        <div style="background:#1a1f2e;padding:26px 32px;border-bottom:3px solid #d4af37">
+          <div style="color:#d4af37;font-size:22px;font-weight:700;letter-spacing:1px">Central Mutuos</div>
+          <div style="color:#9aa3b5;font-size:11px;letter-spacing:3px;margin-top:2px">CON CRECES ASESORÍAS</div>
+        </div>
+        <div style="padding:30px 32px 12px">
+          <p style="margin:0 0 4px;color:#1a1f2e;font-size:16px"><b>Estimada(o) {nombre}</b></p>
+          <p style="margin:0 0 18px;color:#6b7280;font-size:13px">RUT: {rut}</p>
+          <div style="color:#2b3245;font-size:14px">{intro_html}</div>
+        </div>
+        <div style="padding:6px 32px 4px">
+          <div style="color:#1a1f2e;font-size:15px;font-weight:700;border-left:4px solid #d4af37;padding-left:10px;margin-bottom:12px">Detalle de Gastos Operacionales</div>
+          <table style="width:100%;border-collapse:collapse;font-size:14px;border:1px solid #eceef3;border-radius:8px;overflow:hidden">
+            <tr style="background:#eef1f7">
+              <th style="padding:10px 18px;text-align:left;color:#4b5563;font-size:12px;letter-spacing:1px;text-transform:uppercase">Concepto</th>
+              <th style="padding:10px 18px;text-align:right;color:#4b5563;font-size:12px;letter-spacing:1px;text-transform:uppercase">Valor</th>
+            </tr>
+            {filas}
+          </table>
+        </div>
+        <div style="padding:22px 32px 8px">
+          <div style="color:#1a1f2e;font-size:15px;font-weight:700;border-left:4px solid #d4af37;padding-left:10px;margin-bottom:12px">Datos para el Pago</div>
+          <div style="background:#f8f9fc;border:1px solid #eceef3;border-radius:8px;padding:16px 20px">
+            <table style="border-collapse:collapse">{pago_filas}</table>
+          </div>
+        </div>
+        <div style="padding:20px 32px 28px">
+          <p style="margin:0;color:#6b7280;font-size:13px;line-height:1.6">Ante cualquier consulta sobre el detalle de estos valores o el proceso de pago, no dude en responder este correo. Estamos a su disposición.</p>
+          <p style="margin:14px 0 0;color:#1a1f2e;font-size:14px"><b>Central Mutuos</b><br>
+          <span style="color:#6b7280;font-size:12px">Con Creces Asesorías · Créditos Hipotecarios</span></p>
+        </div>
+        <div style="background:#1a1f2e;padding:12px 32px;text-align:center">
+          <span style="color:#9aa3b5;font-size:11px">Este correo contiene información confidencial dirigida exclusivamente a su destinatario.</span>
+        </div>
+      </div>
+    </div>
+    """
+
+
+@api.post("/gastos-operacionales/enviar")
+async def gastos_enviar(payload: dict):
+    payload = payload or {}
+    to = (payload.get("email_cliente") or "").strip()
+    nombre = (payload.get("nombre") or "").strip()
+    total = _gastos_total(payload.get("items"))
+    subject = payload.get("subject") or f"Gastos Operacionales — {nombre}"
+    cuerpo = _gastos_html(payload)
+    if not payload.get("confirm"):
+        return {"to": to, "subject": subject, "body": cuerpo, "total": total,
+                "sender": _sender_por_rol("secundaria")}
+    if not to or "@" not in to:
+        raise HTTPException(status_code=400, detail="Correo del cliente inválido")
+    res = await asyncio.to_thread(mail.send_mail, to, subject, cuerpo, [], "secundaria")
+    if not res.get("success"):
+        raise HTTPException(status_code=502, detail=res.get("error", "Error de envío"))
+    await db.gastos_op_log.insert_one({
+        "id": str(uuid.uuid4()), "nombre": nombre, "rut": payload.get("rut", ""),
+        "to": to, "total": total, "enviado_en": now_iso(), "desde": res.get("desde", "")})
+    return {"ok": True, "to": to, "subject": subject, "total": total, "sender": res.get("desde", "")}
+
+
+@api.get("/gastos-operacionales/log")
+async def gastos_log():
+    docs = await db.gastos_op_log.find({}).sort("enviado_en", -1).limit(20).to_list(20)
+    return {"log": [clean(d) for d in docs]}
 
 
 def _fmt_uf(v):

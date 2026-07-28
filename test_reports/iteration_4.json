@@ -1,0 +1,32 @@
+{
+  "summary": "Iteration 4: tested (1) Gastos Operacionales module (backend + frontend), (2) UF SII refresh, (3) Autocorreo 'Reenviado a' column, (4) Reporte diario endpoints, (5) Procesamiento auto status, (6) regla inviolable de carta_aprobacion en clasificar_documento. Backend: 17/17 pytest OK. Frontend: Login administrador OK, tour cerrado con Saltar, módulo Gastos Operacionales completo (búsqueda 'franco' → Franco Bahamondes autocompleta nombre='Franco Bahamondes' rut='18.312.893-0', total inicial 29,6 UF con defaults, tras editar gastos-valor-0=25 → 33,6 UF, add/del rows recalcula, modal preview renderiza HTML con Central Mutuos+TOTAL+Datos para el Pago, guardar-plantilla muestra mensaje ✅). Autocorreo: tabla presente, columna 'Reenviado a' visible con 25 celdas reenviado-N, card reporte-diario-card con los 3 botones. Carpeta Clientes muestra las 3 carpetas reales (Roberto Duran, CLAUDIA ANDREA ZURITA SOTO, Franco Bahamondes) con archivos. UF actual = 40.845 (SII OK). NO se hicieron envíos reales (todo con confirm:false).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "MainApp header title", "issue": "MODULE_TITLES en /app/frontend/src/App.js NO tiene la key 'gastos' → cuando el usuario abre Gastos Operacionales el header muestra 'Dashboard' (fallback) en lugar de 'Gastos Operacionales'. Fix: agregar `gastos: 'Gastos Operacionales'` en el objeto MODULE_TITLES (línea 28-41).", "selector": ".topbar-title", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_gastos_uf_reportes.py",
+    "/app/test_reports/pytest/iter4.xml"
+  ],
+  "action_items": [
+    "Agregar `gastos: 'Gastos Operacionales'` en MODULE_TITLES (App.js línea ~28) para que el header muestre el nombre correcto del módulo.",
+    "(Opcional/menor) pdf_service.clasificar_documento no reconoce la palabra 'Simulador' en el nombre de archivo (solo 'simulaci[oó]n'). PDFs reales sí clasifican por contenido, pero si solo se dispone del nombre 'Simulador_...' cae a 'otro'. Ampliar regex a `simulad[oa]r?|simulaci[oó]n`."
+  ],
+  "critical_code_review_comments": [
+    "server.py sigue en 2856 líneas — recomendación previa de dividir por dominio sigue vigente.",
+    "gastos_buscar_cliente hace una query por resultado en proc_queue para obtener email → N+1 sobre 6 clientes está bien, pero si se aumenta el limit deberá aggregarse.",
+    "GASTOS_OP_DEFAULTS['items'] tiene valores como None y 0 mezclados; _gastos_total ignora None y textos correctamente (verificado por test)."
+  ],
+  "updated_files": ["/app/backend/tests/test_gastos_uf_reportes.py"],
+  "success_rate": {"backend": "100% (17/17)", "frontend": "~95% (1 bug menor de título en header)"},
+  "test_credentials": "administrador / 141617575",
+  "seed_data_creation": "Ninguna. PATCH gastos-operacionales/defaults temporalmente añadió '[TEST_ITER4]' al intro y se restauró en el mismo test.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Todos los endpoints nuevos del módulo Gastos Operacionales funcionan (defaults GET/PATCH, buscar-cliente, enviar con confirm:false devuelve preview con total correcto ignorando None/texto, log). UF SII refresca correctamente (40.844+ CLP). Regla inviolable carta_aprobacion verificada por filename y no puede ser sobreescrita por keywords de simulación. Autocorreo/status devuelve items con campos reenviado/reenviado_a/reenviado_fecha. Único bug detectado: header title fallback a 'Dashboard' en módulo Gastos por MODULE_TITLES faltante. Fix trivial de 1 línea en App.js.",
+  "rca of the issue": "Header title bug: en /app/frontend/src/App.js el objeto MODULE_TITLES define keys para dashboard/simulador/clientes/etc pero omite 'gastos'. La expresión `MODULE_TITLES[activeModule] || 'Dashboard'` (línea 173) evalúa a 'Dashboard' cuando activeModule==='gastos'. Reproducción: login → click nav-gastos → observar topbar-title='Dashboard'. Fix: agregar entry `gastos: 'Gastos Operacionales'`."
+}
