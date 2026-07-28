@@ -82,11 +82,29 @@ Idioma del usuario: **Español** (responder siempre en español).
   - Testing: iteration_4.json (17/17 backend, frontend OK). Módulo Aprobación testeado
     manualmente (curl + screenshot E2E).
 
+- 2026-07-28 (parte 4) — **App móvil para ejecutivos (PWA Share Target)**:
+  - `public/manifest.json` con share_target (POST /share-receive multipart), iconos CM
+    192/512 generados, `public/sw.js` (service worker que acumula archivos compartidos en
+    IndexedDB `cm-share`, máx 20, expira 15 min) y registro del SW en index.html.
+  - El frontend original ya traía `/share-target` (acumulación, elegir carpeta existente o
+    crear nueva, titular/codeudor) y `/portal` (consulta de estado por RUT) — ahora con
+    backend completo: `upload-file` acepta `route_to_codeudor` (guarda en 05_codeudor con
+    prefijo CODEUDOR_ y genera COMBINADO_CODEUDOR automático, excluido del combinado del
+    titular), y `GET /api/portal/consulta?rut=` real (carpetas + proc_queue + autocorreo_log
+    → estado aprobado/rechazado/en proceso + simulaciones).
+  - Tarjeta de instrucciones + "Copiar link" + "Enviar por WhatsApp" en el módulo WhatsApp.
+  - E2E verificado: SW registrado, archivo compartido → share-target → carpeta de Franco
+    Bahamondes ✓; portal consulta RUT 18.312.893-0 → "Aprobado" con proyecto ✓.
+  - LIMITACIÓN: Web Share Target funciona en Android/Chrome con la app instalada;
+    iOS/Safari no lo soporta (los ejecutivos con iPhone deben subir desde la app instalada
+    con el selector de archivos del módulo Clientes).
+
 ## Backlog priorizado
 - **P0 (pedido por el usuario, SIN implementar)**: Mini-programa móvil para ejecutivos —
   compartir archivos múltiples desde WhatsApp del teléfono al sistema, creando carpetas o
   guardando en carpetas existentes. Enfoque sugerido: página web móvil (PWA share target o
   portal de subida con link) — CONFIRMAR enfoque con el usuario antes de construir.
+  → HECHO 2026-07-28 (parte 4). Queda validación del usuario en un teléfono Android real.
 - **P1**: Reporte 2 — cruce de solicitudes vs enviadas a mesa usando RUT real del OCR
   (pendiente, pedido del usuario en sesiones previas).
 - **P2**: Integración real de WhatsApp (hoy mock).

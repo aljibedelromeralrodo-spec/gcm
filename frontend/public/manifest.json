@@ -1,0 +1,29 @@
+{
+  "name": "Central Mutuos",
+  "short_name": "Central Mutuos",
+  "description": "Compartir documentos de clientes directo al sistema Central Mutuos",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1a1f2e",
+  "theme_color": "#1a1f2e",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "share_target": {
+    "action": "/share-receive",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url",
+      "files": [
+        {
+          "name": "files",
+          "accept": ["application/pdf", "image/*", ".pdf", ".jpg", ".jpeg", ".png", ".heic", ".webp", ".doc", ".docx"]
+        }
+      ]
+    }
+  }
+}

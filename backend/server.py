@@ -738,7 +738,7 @@ async def search(q: str = "", limit: int = 15):
 def _folder_public(doc, con_archivos=False):
     d = clean(dict(doc))
     archivos = fsvc.scan_archivos(d.get("nombre", ""))
-    cats = sorted({fsvc.cat_de_archivo(a["nombre"], a["subfolder"]) for a in archivos} - {"combinado"})
+    cats = sorted({fsvc.cat_de_archivo(a["nombre"], a["subfolder"]) for a in archivos} - {"combinado", "codeudor"})
     cr = d.get("credit_request") or {}
     cr["doc_categories"] = cats
     d["credit_request"] = cr
@@ -832,12 +832,14 @@ async def _regen_combinado_bg(doc):
         cr = doc.get("credit_request") or {}
         await asyncio.to_thread(fsvc.merge_protocol, doc.get("nombre", ""),
                                 cr.get("client_type") or "dependiente", True)
+        await asyncio.to_thread(fsvc.merge_codeudor, doc.get("nombre", ""))
     except Exception as e:
         logger.warning(f"Regeneración de combinado falló: {e}")
 
 
 @api.post("/clientes/folders/{fid}/upload-file")
-async def folder_upload_file(fid: str, file: UploadFile = File(...), subfolder: str = Form("")):
+async def folder_upload_file(fid: str, file: UploadFile = File(...), subfolder: str = Form(""),
+                             route_to_codeudor: str = Form("")):
     doc = await _get_folder_doc(fid)
     raw = await file.read()
     if not raw:
@@ -847,10 +849,15 @@ async def folder_upload_file(fid: str, file: UploadFile = File(...), subfolder: 
         raw, nombre_archivo, _conv = pdfs.convertir_a_pdf(raw, nombre_archivo)
     except ValueError:
         pass  # formato no convertible: se guarda tal cual
+    es_codeudor = str(route_to_codeudor).lower() in ("true", "1", "si", "sí")
+    if es_codeudor:
+        subfolder = "05_codeudor"
+        if not nombre_archivo.upper().startswith("CODEUDOR_"):
+            nombre_archivo = f"CODEUDOR_{nombre_archivo}"
     rel = await asyncio.to_thread(fsvc.guardar_archivo, doc.get("nombre", ""),
                                   nombre_archivo, raw, subfolder)
     asyncio.create_task(_regen_combinado_bg(doc))
-    return {"ok": True, "saved": rel}
+    return {"ok": True, "saved": rel, "codeudor": es_codeudor}
 
 
 @api.post("/clientes/folders/{fid}/delete-file")
@@ -3064,9 +3071,71 @@ async def portal_consulta(payload: dict = None):
     return {"encontrado": False, "operaciones": []}
 
 
+def _norm_rut(r):
+    return re.sub(r"[^0-9kK]", "", (r or "")).lower()
+
+
+async def _portal_consulta_impl(rut: str):
+    rn = _norm_rut(rut)
+    if len(rn) < 7:
+        return {"found": False, "rut": rut, "operaciones": [], "simulaciones": []}
+    operaciones = []
+    # Carpetas de clientes con ese RUT
+    folders = await db.folders.find({}).limit(300).to_list(300)
+    nombres_match = set()
+    for f in folders:
+        if _norm_rut(f.get("rut")) == rn:
+            nombres_match.add((f.get("nombre") or "").strip())
+    # Gestiones procesadas con ese RUT
+    items = await db.proc_queue.find({}).limit(300).to_list(300)
+    for it in items:
+        cl = it.get("classification", {}) or {}
+        if _norm_rut(cl.get("rut")) == rn and (cl.get("cliente") or "").strip():
+            nombres_match.add(cl.get("cliente").strip())
+    for nombre in nombres_match:
+        rx = {"$regex": f"^{re.escape(nombre)}$", "$options": "i"}
+        logs = await db.autocorreo_log.find({"cliente": rx}).sort("processed_at", -1).limit(50).to_list(50)
+        estado = "en proceso"
+        ultimo = ""
+        for l in logs:
+            subj = (l.get("subject") or "").upper()
+            if not ultimo:
+                ultimo = l.get("processed_at", "")
+            if subj.startswith("RECHAZO"):
+                estado = "rechazado"
+                break
+            if l.get("status") == "sent":
+                estado = "aprobado"
+                break
+        it_cliente = await db.proc_queue.find_one({"classification.cliente": rx})
+        campos = (it_cliente or {}).get("campos", {}) or {}
+        operaciones.append({
+            "id": nombre, "cliente_display": nombre, "estado": estado,
+            "proyecto": campos.get("proyecto_inmobiliario") or "",
+            "ejecutivo_cm": "Gerardo — Central Mutuos",
+            "total_correos": len(logs),
+            "ultimo_correo": ultimo or (it_cliente or {}).get("date_iso", ""),
+            "resumen": ("Su operación fue aprobada. Pronto recibirá los documentos." if estado == "aprobado"
+                        else "Su operación fue evaluada por la mesa. Contacte a su ejecutivo." if estado == "rechazado"
+                        else "Su solicitud está en revisión de antecedentes."),
+        })
+    sims = []
+    async for s in db.simulaciones.find({}).sort("timestamp", -1).limit(200):
+        if _norm_rut(s.get("rut")) == rn:
+            sims.append({"nombre_completo": s.get("nombre_completo", ""),
+                         "precalificacion_aprobada": bool(s.get("precalificacion_aprobada")),
+                         "capacidad_credito_uf": s.get("capacidad_credito_uf") or 0,
+                         "timestamp": s.get("timestamp", "")})
+        if len(sims) >= 5:
+            break
+    found = bool(operaciones or sims)
+    return {"found": found, "encontrado": found, "rut": rut,
+            "operaciones": operaciones, "simulaciones": sims}
+
+
 @api.get("/portal/consulta")
 async def portal_consulta_get(rut: str = ""):
-    return {"encontrado": False, "operaciones": []}
+    return await _portal_consulta_impl(rut)
 
 
 @api.post("/formato/upload")

@@ -28,6 +28,7 @@ SUBFOLDER_A_CAT = {
     "01_cedula": "cedula", "02_liquidaciones": "liquidacion",
     "02_impuesto_renta": "imp_renta", "03_afp": "afp",
     "03_boletas": "boletas", "04_cmf": "cmf", "99_otros": "extras",
+    "05_codeudor": "codeudor",
 }
 
 CAT_KEYWORDS = [
@@ -72,6 +73,8 @@ def cat_de_archivo(nombre, subfolder=""):
     sub = (subfolder or "").split("/")[0]
     if es_combinado(nombre) or sub == "00_combinados":
         return "combinado"
+    if sub == "05_codeudor" or (nombre or "").upper().startswith("CODEUDOR_"):
+        return "codeudor"
     if sub in SUBFOLDER_A_CAT:
         return SUBFOLDER_A_CAT[sub]
     return cat_de_texto(nombre)
@@ -129,7 +132,7 @@ def merge_protocol(nombre, client_type="dependiente", include_extras=True):
         if not a["nombre"].lower().endswith(".pdf"):
             continue
         cat = cat_de_archivo(a["nombre"], a["subfolder"])
-        if cat == "combinado":
+        if cat in ("combinado", "codeudor"):
             continue
         if cat not in order:
             if not include_extras:
@@ -155,6 +158,31 @@ def merge_protocol(nombre, client_type="dependiente", include_extras=True):
     return {"merged_file": merged_name if used else "", "files_used": used,
             "errors": errors, "client_type": client_type,
             "protocol_order": order}
+
+
+def merge_codeudor(nombre):
+    """Combina los PDFs del codeudor (05_codeudor) en COMBINADO_CODEUDOR_*.pdf."""
+    base = folder_dir(nombre)
+    sub = base / "05_codeudor"
+    if not sub.exists():
+        return {"merged_file": "", "files_used": [], "errors": []}
+    writer = PdfWriter()
+    used, errors = [], []
+    for p in sorted(sub.glob("*.pdf")):
+        if es_combinado(p.name):
+            continue
+        try:
+            reader = PdfReader(str(p))
+            for pg in reader.pages:
+                writer.add_page(pg)
+            used.append(f"05_codeudor/{p.name}")
+        except Exception as e:
+            errors.append(f"{p.name}: {str(e)[:120]}")
+    merged_name = f"COMBINADO_CODEUDOR_{safe_name(nombre)}.pdf"
+    if used:
+        with open(base / merged_name, "wb") as f:
+            writer.write(f)
+    return {"merged_file": merged_name if used else "", "files_used": used, "errors": errors}
 
 
 def merge_pdfs(nombre, rel_files):
