@@ -842,7 +842,10 @@ async def save_attachment(payload: dict):
     doc = await _get_folder_doc(payload.get("folder_id", ""))
     email_id = payload.get("email_id", "")
     filename = payload.get("filename", "")
-    atts = await asyncio.to_thread(mail.fetch_attachments_by_id, email_id, filename)
+    try:
+        atts = await asyncio.to_thread(mail.fetch_attachments_by_id, email_id, filename)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Error leyendo el correo: {str(e)[:120]}")
     if not atts:
         raise HTTPException(status_code=404, detail="Adjunto no encontrado en el correo")
     saved = []
@@ -897,6 +900,8 @@ async def save_all_attachments(payload: dict):
     if not person.strip():
         raise HTTPException(status_code=400, detail="Falta el nombre de la persona")
     job_id = str(uuid.uuid4())
+    corte = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+    await db.save_jobs.delete_many({"created_at": {"$lt": corte}})
     await db.save_jobs.insert_one({"id": job_id, "status": "running", "created_at": now_iso()})
     asyncio.create_task(_save_all_attachments_job(job_id, doc, person))
     return {"job_id": job_id, "status": "running"}
