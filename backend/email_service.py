@@ -448,6 +448,59 @@ def search_attachments_by_person(person_name, limit=40):
     return exactos if exactos else parciales
 
 
+def _sent_folder(m):
+    """Detecta la carpeta de Enviados (flag \\Sent) de la cuenta."""
+    try:
+        typ, boxes = m.list()
+        for b in boxes or []:
+            s = b.decode(errors="ignore") if isinstance(b, bytes) else str(b)
+            if "\\Sent" in s:
+                mm = re.findall(r'"([^"]+)"', s)
+                if mm:
+                    return mm[-1]
+    except Exception:
+        pass
+    return "[Gmail]/Sent Mail"
+
+
+def fetch_sent_headers(limit=60):
+    """Cabeceras (TO, SUBJECT, DATE) de los últimos correos ENVIADOS de todas las cuentas."""
+    global SENT_LAST
+    cached = _cached("sent_headers")
+    if cached is not None:
+        return cached
+    out = []
+    for acc in ACCOUNTS:
+        try:
+            m = _connect(acc)
+            folder = _sent_folder(m)
+            typ, data = m.select(f'"{folder}"', readonly=True)
+            total = int(data[0]) if data and data[0] else 0
+            if total:
+                start = max(1, total - limit + 1)
+                ids = ",".join(str(i) for i in range(total, start - 1, -1))
+                typ, msgs = m.fetch(ids, "(BODY.PEEK[HEADER.FIELDS (TO SUBJECT DATE)])")
+                for part in msgs or []:
+                    if not isinstance(part, tuple):
+                        continue
+                    h = email.message_from_bytes(part[1])
+                    fecha_raw = h.get("Date")
+                    try:
+                        fecha = parsedate_to_datetime(fecha_raw).isoformat() if fecha_raw else ""
+                    except Exception:
+                        fecha = fecha_raw or ""
+                    out.append({"subject": _dec(h.get("Subject")), "to": _dec(h.get("To")),
+                                "date": fecha, "cuenta": acc["user"]})
+            m.logout()
+        except Exception:
+            continue
+    SENT_LAST = out
+    return _store("sent_headers", out)
+
+
+SENT_LAST = []
+
+
 def send_mail(to, subject, body_html, attachments=None, desde="secundaria"):
     """Envia un correo. attachments: [{filename, content_b64}]
     desde: 'secundaria' (gerardo.ext@, para PDFs a clientes) o 'principal'."""

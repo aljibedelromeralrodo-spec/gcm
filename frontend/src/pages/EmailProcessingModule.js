@@ -23,6 +23,50 @@ export default function EmailProcessingModule() {
   const [rules, setRules] = useState([]);
   const [showRules, setShowRules] = useState(false);
   const [driveConfigured, setDriveConfigured] = useState(false);
+  const [auto, setAuto] = useState(null);
+  const [alertas, setAlertas] = useState([]);
+
+  const loadAuto = async () => {
+    try {
+      const [a, al] = await Promise.all([
+        axios.get(`${API}/api/procesamiento/auto/status`),
+        axios.get(`${API}/api/admin/alertas`),
+      ]);
+      setAuto(a.data);
+      setAlertas((al.data.alertas || []).filter(x => !x.leida));
+    } catch (_e) { /* noop */ }
+  };
+
+  useEffect(() => {
+    loadAuto();
+    const t = setInterval(loadAuto, 30000);
+    return () => clearInterval(t);
+  }, []);
+
+  const toggleAuto = async () => {
+    const r = await axios.post(`${API}/api/procesamiento/auto/toggle`, { enabled: !(auto?.enabled) });
+    setAuto(prev => ({ ...prev, ...r.data }));
+  };
+
+  const changeInterval = async () => {
+    const v = prompt("¿Cada cuántos minutos revisar el correo? (2 a 120)", String(auto?.interval_min || 10));
+    if (!v) return;
+    const n = parseInt(v, 10);
+    if (isNaN(n) || n < 2 || n > 120) return alert("Valor inválido (debe ser entre 2 y 120 minutos)");
+    const r = await axios.post(`${API}/api/procesamiento/auto/toggle`, { interval_min: n });
+    setAuto(prev => ({ ...prev, ...r.data }));
+  };
+
+  const runAutoNow = async () => {
+    const r = await axios.post(`${API}/api/procesamiento/auto/run-now`);
+    alert(r.data.message);
+    setTimeout(() => { loadAuto(); load(); }, 5000);
+  };
+
+  const markAlertRead = async (aid) => {
+    await axios.post(`${API}/api/admin/alertas/${aid}/leida`);
+    setAlertas(prev => prev.filter(a => a.id !== aid));
+  };
 
   const load = async () => {
     const [s, q, r, d] = await Promise.all([
@@ -215,6 +259,46 @@ export default function EmailProcessingModule() {
           )}
         </div>
       </div>
+
+      {/* PANEL AUTOMÁTICO 24/7 */}
+      <div data-testid="auto-panel" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "10px 14px", borderRadius: 10, marginBottom: 16, background: auto?.enabled ? "#dcfce7" : "#f1f5f9", border: `1px solid ${auto?.enabled ? "#22c55e" : "#cbd5e1"}` }}>
+        <span style={{ fontSize: 14, fontWeight: 700, color: auto?.enabled ? "#166534" : "#475569" }}>
+          🤖 Procesamiento automático {auto?.enabled ? "ACTIVADO" : "desactivado"}
+        </span>
+        <button data-testid="btn-auto-toggle" onClick={toggleAuto} disabled={!auto}
+                style={btnStyle(auto?.enabled ? "#dc2626" : "#22c55e", true)}>
+          {auto?.enabled ? "Desactivar" : "Activar"}
+        </button>
+        {auto?.enabled && (
+          <>
+            <button data-testid="btn-auto-interval" onClick={changeInterval} style={btnStyle("#3b82f6", true)}
+                    title="Cambiar frecuencia de revisión">
+              ⏱ cada {auto?.interval_min || 10} min
+            </button>
+            <button data-testid="btn-auto-run-now" onClick={runAutoNow} disabled={auto?.running} style={btnStyle("#8b5cf6", true)}>
+              {auto?.running ? "⏳ Corriendo…" : "▶ Ejecutar ahora"}
+            </button>
+            <span style={{ fontSize: 12, color: "#64748b" }}>
+              {auto?.last_run
+                ? `Última revisión: ${String(auto.last_run).slice(0, 16).replace("T", " ")} — ${auto.last_result?.enqueued || 0} nuevos, ${auto.last_result?.carpetas || 0} carpetas armadas, ${auto.last_result?.alertas || 0} alertas`
+                : "Todavía no corrió ningún ciclo."}
+            </span>
+          </>
+        )}
+      </div>
+
+      {alertas.length > 0 && (
+        <div data-testid="alertas-panel" style={{ padding: "10px 14px", borderRadius: 10, marginBottom: 16, background: "#fefce8", border: "1px solid #facc15" }}>
+          <div style={{ fontWeight: 700, color: "#854d0e", marginBottom: 6 }}>🔔 Carpetas listas para enviar a mesa</div>
+          {alertas.map(a => (
+            <div key={a.id} data-testid={`alerta-${a.id}`} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0", fontSize: 13, color: "#713f12" }}>
+              <span>✅ {a.mensaje} <small style={{ opacity: 0.6 }}>({String(a.fecha || "").slice(0, 16).replace("T", " ")})</small></span>
+              <button onClick={() => markAlertRead(a.id)} style={btnStyle("#64748b", true)} title="Marcar como vista">✔ Vista</button>
+            </div>
+          ))}
+          <div style={{ fontSize: 11, color: "#a16207", marginTop: 4 }}>Andá a <b>Carpeta Clientes</b> para revisar y enviar el autocorreo.</div>
+        </div>
+      )}
 
       {/* KPI cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 12, marginBottom: 20 }}>

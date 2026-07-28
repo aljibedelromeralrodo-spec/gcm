@@ -44,6 +44,20 @@ Idioma del usuario: **Español** (responder siempre en español).
   - Frontend: `saveAllAttachments` usa polling de job (evita timeout 60s del ingress).
   - Testing: 25/25 backend, frontend OK (`/app/test_reports/iteration_3.json`).
 
+- 2026-07-28 (esta sesión, parte 2):
+  - **Procesamiento automático 24/7**: loop en backend (config `proc_auto`: enabled/interval_min)
+    que ingesta correos → OCR/IA → arma carpetas → genera alertas cuando una carpeta queda
+    lista para mesa. Endpoints: GET/POST `/procesamiento/auto/{status,toggle,run-now}`.
+    Alertas reales en `db.alertas` (+ marcar leída). Badge verde en topbar (App.js) y panel
+    de control + lista de alertas en EmailProcessingModule.
+  - **Columna "Reenviado a" en Autocorreo**: `ac_status` cruza el historial con la carpeta
+    Enviados de Gmail (fetch_sent_headers, caché + background) y detecta si el usuario reenvió
+    cada correo y a quién (solo envíos posteriores al procesamiento, hacia externos, o con Fwd:).
+  - **Reporte diario 10:00 AM (hora Chile)**: loop `_daily_report_loop` envía cada día al
+    destino el listado de solicitudes recibidas y enviadas a mesa (nombre, RUT, inmobiliaria,
+    ejecutivo) del período 10:00 → 10:00. Config `reporte_diario` (enabled/hora/last_sent_date).
+    Endpoints `/reportes/diario/{status,preview,toggle,enviar-ahora}`. Panel en AutocorreoModule.
+
 ## Backlog priorizado
 - **P1**: Reporte 2 — cruce de solicitudes vs enviadas a mesa usando RUT real del OCR
   (pendiente, pedido del usuario en sesiones previas).

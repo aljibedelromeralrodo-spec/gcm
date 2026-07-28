@@ -9,6 +9,7 @@ export default function AutocorreoModule() {
   const [msg, setMsg] = useState("");
   const [archive, setArchive] = useState([]);
   const [mailboxes, setMailboxes] = useState([]);
+  const [reporte, setReporte] = useState(null);
 
   const formatDate = (iso) => {
     if (!iso) return "—";
@@ -22,14 +23,16 @@ export default function AutocorreoModule() {
 
   const load = async () => {
     try {
-      const [r, a, m] = await Promise.all([
+      const [r, a, m, rd] = await Promise.all([
         axios.get(`${API_URL}/api/autocorreo/status`),
         axios.get(`${API_URL}/api/autocorreo/archive`).catch(() => ({ data: { folders: [] } })),
         axios.get(`${API_URL}/api/autocorreo/mailboxes?probe=true`).catch(() => ({ data: { accounts: [] } })),
+        axios.get(`${API_URL}/api/reportes/diario/status`).catch(() => ({ data: null })),
       ]);
       setData(r.data);
       setArchive(a.data?.folders || []);
       setMailboxes(m.data?.accounts || []);
+      setReporte(rd.data);
     } catch (e) {
       setMsg("Error cargando estado: " + (e.response?.data?.detail || e.message));
     }
@@ -132,6 +135,41 @@ export default function AutocorreoModule() {
     setLoading(false);
   };
 
+  const toggleReporte = async () => {
+    setLoading(true);
+    try {
+      const r = await axios.post(`${API_URL}/api/reportes/diario/toggle`, { enabled: !(reporte?.enabled) });
+      setReporte(r.data);
+      setMsg(r.data.enabled ? "Reporte diario ACTIVADO" : "Reporte diario desactivado");
+    } catch (e) {
+      setMsg("Error: " + (e.response?.data?.detail || e.message));
+    }
+    setLoading(false);
+  };
+
+  const cambiarHoraReporte = async () => {
+    const v = prompt("¿A qué hora enviar el reporte diario? (0 a 23, hora Chile)", String(reporte?.hora ?? 10));
+    if (v === null) return;
+    const n = parseInt(v, 10);
+    if (isNaN(n) || n < 0 || n > 23) return setMsg("Hora inválida (0 a 23)");
+    const r = await axios.post(`${API_URL}/api/reportes/diario/toggle`, { hora: n });
+    setReporte(r.data);
+    setMsg(`Reporte diario programado a las ${n}:00 (hora Chile)`);
+  };
+
+  const enviarReporteAhora = async () => {
+    if (!window.confirm("¿Enviar el reporte diario AHORA al correo destino?")) return;
+    setLoading(true);
+    try {
+      const r = await axios.post(`${API_URL}/api/reportes/diario/enviar-ahora`, {}, { timeout: 60000 });
+      setMsg(`✅ Reporte enviado a ${r.data.destino}: ${r.data.recibidas} recibidas, ${r.data.enviadas} enviadas a mesa`);
+      await load();
+    } catch (e) {
+      setMsg("Error enviando reporte: " + (e.response?.data?.detail || e.message));
+    }
+    setLoading(false);
+  };
+
   if (!data) {
     return <div style={{ padding: "2rem", color: "var(--white)" }}>Cargando...</div>;
   }
@@ -210,6 +248,42 @@ export default function AutocorreoModule() {
             {runResult.errors && runResult.errors.length > 0 && (
               <div style={{ marginTop: "0.5rem", color: "#ef4444" }}>Errores: {runResult.errors.slice(0,3).join(" | ")}</div>
             )}
+          </div>
+        )}
+      </div>
+
+      {/* REPORTE DIARIO 10:00 AM */}
+      <div className="card" data-testid="reporte-diario-card" style={{ background: "rgba(15,23,42,0.6)", padding: "1.5rem", borderRadius: "14px", border: "1px solid rgba(255,255,255,0.08)", marginBottom: "1.5rem" }}>
+        <h3 style={{ margin: "0 0 1rem", color: "var(--gold)", fontSize: "1.1rem" }}>
+          <i className="fa fa-calendar-check-o" style={{ marginRight: "0.5rem" }} />Reporte Diario {reporte ? `(${reporte.hora ?? 10}:00 hrs Chile)` : ""}
+        </h3>
+        <p style={{ fontSize: "0.85rem", opacity: 0.75, margin: "0 0 0.8rem" }}>
+          Todos los días a las {reporte?.hora ?? 10}:00 se envía al correo destino el listado de las últimas 24 hrs
+          ({reporte?.hora ?? 10}:00 del día anterior → {reporte?.hora ?? 10}:00): <b>solicitudes de crédito recibidas</b> y
+          las <b>enviadas efectivamente a mesa</b>, con nombre, RUT, inmobiliaria y ejecutivo.
+        </p>
+        <Row label="Envío automático diario" right={<StatusPill active={!!reporte?.enabled} />}>
+          <button onClick={toggleReporte} disabled={loading} className="autocorreo-btn"
+            data-testid="btn-toggle-reporte"
+            style={{ background: reporte?.enabled ? "#ef4444" : "#22c55e", color: "#fff" }}>
+            {reporte?.enabled ? "Desactivar" : "Activar"}
+          </button>
+          <button onClick={cambiarHoraReporte} disabled={loading} className="autocorreo-btn"
+            data-testid="btn-hora-reporte"
+            style={{ background: "#3b82f6", color: "#fff", marginLeft: "0.5rem" }}>
+            <i className="fa fa-clock-o" style={{ marginRight: "0.4rem" }} />{reporte?.hora ?? 10}:00
+          </button>
+          <button onClick={enviarReporteAhora} disabled={loading} className="autocorreo-btn"
+            data-testid="btn-reporte-ahora"
+            style={{ background: "var(--gold)", color: "#0a0e17", marginLeft: "0.5rem" }}>
+            <i className="fa fa-paper-plane" style={{ marginRight: "0.4rem" }} />Enviar AHORA
+          </button>
+        </Row>
+        {reporte?.last_result?.enviado_en && (
+          <div style={{ fontSize: "0.82rem", opacity: 0.8, marginTop: "0.4rem" }} data-testid="reporte-last-result">
+            Último envío: {formatDate(reporte.last_result.enviado_en)} → {reporte.last_result.destino} ·{" "}
+            {reporte.last_result.recibidas} recibidas · {reporte.last_result.enviadas} enviadas a mesa
+            {reporte.last_result.error && <span style={{ color: "#ef4444" }}> · Error: {reporte.last_result.error}</span>}
           </div>
         )}
       </div>
@@ -413,16 +487,17 @@ export default function AutocorreoModule() {
                 <th style={{ textAlign: "left", padding: "0.6rem" }}>Fecha</th>
                 <th style={{ textAlign: "left", padding: "0.6rem" }}>Cliente / Asunto</th>
                 <th style={{ textAlign: "left", padding: "0.6rem" }}>Estado</th>
+                <th style={{ textAlign: "left", padding: "0.6rem" }}>Reenviado a</th>
                 <th style={{ textAlign: "left", padding: "0.6rem" }}>Detalle</th>
               </tr>
             </thead>
             <tbody>
               {(!data.recent || data.recent.length === 0) ? (
-                <tr><td colSpan={4} style={{ padding: "1.5rem", textAlign: "center", opacity: 0.6 }}>Sin envios todavia</td></tr>
+                <tr><td colSpan={5} style={{ padding: "1.5rem", textAlign: "center", opacity: 0.6 }}>Sin envios todavia</td></tr>
               ) : data.recent.map((r, i) => (
                 <tr key={i} style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }} data-testid={`row-${i}`}>
                   <td style={{ padding: "0.6rem", whiteSpace: "nowrap", opacity: 0.8 }}>{formatDate(r.processed_at)}</td>
-                  <td style={{ padding: "0.6rem", maxWidth: "350px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.subject || "—"}</td>
+                  <td style={{ padding: "0.6rem", maxWidth: "300px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.subject || "—"}</td>
                   <td style={{ padding: "0.6rem" }}>
                     <span style={{
                       padding: "0.15rem 0.55rem", borderRadius: "999px", fontSize: "0.78rem", fontWeight: 700,
@@ -430,7 +505,13 @@ export default function AutocorreoModule() {
                       color: r.status === "sent" ? "#22c55e" : "#ef4444",
                     }}>{r.status === "sent" ? "Enviado" : "Fallido"}</span>
                   </td>
-                  <td style={{ padding: "0.6rem", opacity: 0.7, fontSize: "0.8rem", maxWidth: "300px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <td style={{ padding: "0.6rem", maxWidth: "220px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} data-testid={`reenviado-${i}`}
+                      title={r.reenviado ? `Reenviado a ${r.reenviado_a}${r.reenviado_fecha ? " el " + formatDate(r.reenviado_fecha) : ""}` : "Sin reenvío detectado en Enviados"}>
+                    {r.reenviado
+                      ? <span style={{ color: "#22c55e", fontWeight: 600 }}><i className="fa fa-share" style={{ marginRight: "0.35rem" }} />{r.reenviado_a || "Sí"}</span>
+                      : <span style={{ opacity: 0.35 }}>—</span>}
+                  </td>
+                  <td style={{ padding: "0.6rem", opacity: 0.7, fontSize: "0.8rem", maxWidth: "240px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {r.error ? <span style={{ color: "#ef4444" }}>{r.error}</span> : (r.attachments_info || "—")}
                   </td>
                 </tr>

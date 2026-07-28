@@ -85,6 +85,10 @@ async def startup():
     await ensure_seed()
     # Procesamiento automatico 24/7 de mesa (rechazos/aprobaciones al tiro)
     asyncio.create_task(_periodic_mesa_loop())
+    # Procesamiento automatico de correos entrantes (ingesta + OCR + carpetas + alertas)
+    asyncio.create_task(_periodic_proc_loop())
+    # Reporte diario 10:00 AM (hora Chile)
+    asyncio.create_task(_daily_report_loop())
 
 
 # ---------------------------------------------------------------------------
@@ -1289,6 +1293,53 @@ def _save_pdf(cliente, filename, content_bytes):
     return path
 
 
+def _norm_subject(s):
+    return re.sub(r"^\s*((re|fwd?|rv|fw)\s*:\s*)+", "", (s or ""), flags=re.I).strip().lower()
+
+
+def _marcar_reenvios(recent, enviados, destino):
+    """Cruza el historial con la carpeta Enviados para saber si el usuario reenvió y a quién.
+    Solo cuenta envíos POSTERIORES al procesamiento y hacia destinos externos (no mesa/propios)."""
+    propios = {a["user"].lower() for a in mail.ACCOUNTS}
+    propios.add((destino or "").lower())
+    propios.add((MESA_SENDER or "").lower())
+
+    def _ts(iso):
+        try:
+            dt = datetime.fromisoformat(iso)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt
+        except Exception:
+            return None
+
+    for r in recent:
+        base = _norm_subject(r.get("subject"))
+        r["reenviado"] = False
+        r["reenviado_a"] = ""
+        r["reenviado_fecha"] = ""
+        if not base:
+            continue
+        procesado = _ts(r.get("processed_at") or "")
+        for e in enviados:
+            if _norm_subject(e.get("subject")) != base:
+                continue
+            raw = (e.get("subject") or "").strip().lower()
+            es_fwd = bool(re.match(r"^(fwd?|rv|fw)\s*:", raw))
+            to = (e.get("to") or "").strip()
+            to_l = to.lower()
+            if not to_l or any(p and p in to_l for p in propios):
+                continue  # auto-envío o hacia mesa: no es un reenvío del usuario
+            fecha_envio = _ts(e.get("date") or "")
+            if procesado and fecha_envio and fecha_envio < procesado and not es_fwd:
+                continue  # se envió ANTES de que llegara la respuesta de mesa
+            r["reenviado"] = True
+            r["reenviado_a"] = to
+            r["reenviado_fecha"] = e.get("date", "")
+            break
+    return recent
+
+
 @api.get("/autocorreo/status")
 async def ac_status():
     st = await _ac_state()
@@ -1296,6 +1347,17 @@ async def ac_status():
     sent = await db.autocorreo_log.count_documents({"status": "sent"})
     failed = await db.autocorreo_log.count_documents({"status": "failed"})
     total = await db.autocorreo_log.count_documents({})
+    recent = [clean(r) for r in log]
+    try:
+        destino_cfg = st.get("destination") or os.environ.get("MAIL2_USER", "")
+        enviados = mail._cached("sent_headers")
+        if enviados is None:
+            # Refrescar en background para no bloquear la carga del módulo
+            asyncio.create_task(asyncio.to_thread(mail.fetch_sent_headers, 80))
+            enviados = mail.SENT_LAST or []
+        recent = _marcar_reenvios(recent, enviados, destino_cfg)
+    except Exception:
+        pass
     return {
         "enabled": st.get("enabled", False),
         "periodic_enabled": st.get("periodic_enabled", False),
@@ -1307,7 +1369,7 @@ async def ac_status():
         "sent": sent,
         "failed": failed,
         "total": total,
-        "recent": [clean(r) for r in log],
+        "recent": recent,
     }
 
 
@@ -2097,6 +2159,303 @@ async def proc_purge():
                 deleted += 1
     await db.proc_queue.update_many({}, {"$set": {"drive_folder_id": None}})
     return {"deleted": deleted, "errors": []}
+
+
+# ---------------------------------------------------------------------------
+# Procesamiento automático 24/7: ingesta -> OCR/IA -> carpetas -> alertas
+# ---------------------------------------------------------------------------
+async def _proc_auto_state():
+    st = await db.config.find_one({"_key": "proc_auto"})
+    if not st:
+        st = {"_key": "proc_auto", "enabled": False, "interval_min": 10,
+              "last_run": None, "running": False, "last_result": {}}
+        await db.config.insert_one(dict(st))
+    st.pop("_id", None)
+    st.pop("_key", None)
+    return st
+
+
+async def _crear_alerta_carpeta(folder_doc):
+    existe = await db.alertas.find_one({"folder_id": folder_doc["id"],
+                                        "tipo": "carpeta_lista", "leida": False})
+    if existe:
+        return False
+    await db.alertas.insert_one({
+        "id": str(uuid.uuid4()), "tipo": "carpeta_lista",
+        "cliente": folder_doc.get("nombre", ""), "folder_id": folder_doc["id"],
+        "mensaje": f"La carpeta de {folder_doc.get('nombre', '')} está lista para enviar a mesa",
+        "fecha": now_iso(), "leida": False})
+    return True
+
+
+async def _run_proc_auto():
+    resumen = {"enqueued": 0, "processed": 0, "carpetas": 0, "alertas": 0, "errors": []}
+    await db.config.update_one({"_key": "proc_auto"},
+                               {"$set": {"running": True, "last_run_started": now_iso()}}, upsert=True)
+    try:
+        try:
+            r = await proc_ingest(max_emails=15)
+            resumen["enqueued"] = r.get("enqueued", 0)
+        except Exception as e:
+            resumen["errors"].append(f"ingesta: {str(e)[:100]}")
+        try:
+            r = await proc_process(limit=10)
+            resumen["processed"] = r.get("processed", 0)
+        except Exception as e:
+            resumen["errors"].append(f"proceso: {str(e)[:100]}")
+        items = await db.proc_queue.find({"status": "clasificado",
+                                          "drive_folder_id": None}).limit(10).to_list(10)
+        for it in items:
+            try:
+                await proc_upload_drive(it["id"])
+                resumen["carpetas"] += 1
+            except Exception as e:
+                resumen["errors"].append(f"carpeta '{(it.get('subject') or '')[:30]}': {str(e)[:80]}")
+        folders = await db.folders.find({}).limit(300).to_list(300)
+        for f in folders:
+            try:
+                pub = _folder_public(f)
+                if pub.get("is_ready_to_send") and not f.get("envio_manual"):
+                    if await _crear_alerta_carpeta(f):
+                        resumen["alertas"] += 1
+            except Exception:
+                continue
+    finally:
+        await db.config.update_one({"_key": "proc_auto"}, {"$set": {
+            "running": False, "last_run": now_iso(), "last_result": resumen}}, upsert=True)
+    return resumen
+
+
+async def _periodic_proc_loop():
+    """Ciclo automático: cada minuto revisa si toca correr según el intervalo configurado."""
+    while True:
+        try:
+            await asyncio.sleep(60)
+            st = await _proc_auto_state()
+            if not st.get("enabled") or st.get("running"):
+                continue
+            intervalo = max(2, int(st.get("interval_min") or 10))
+            last = st.get("last_run")
+            if last:
+                try:
+                    dt = datetime.fromisoformat(last)
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
+                    if datetime.now(timezone.utc) - dt < timedelta(minutes=intervalo):
+                        continue
+                except Exception:
+                    pass
+            await _run_proc_auto()
+        except asyncio.CancelledError:
+            break
+        except Exception:
+            continue
+
+
+@api.get("/procesamiento/auto/status")
+async def proc_auto_status():
+    st = await _proc_auto_state()
+    st["alertas_pendientes"] = await db.alertas.count_documents({"leida": False})
+    return st
+
+
+@api.post("/procesamiento/auto/toggle")
+async def proc_auto_toggle(payload: dict = None):
+    payload = payload or {}
+    upd = {}
+    if "enabled" in payload:
+        upd["enabled"] = bool(payload["enabled"])
+    if "interval_min" in payload:
+        try:
+            upd["interval_min"] = max(2, min(120, int(payload["interval_min"])))
+        except (TypeError, ValueError):
+            pass
+    if upd:
+        await db.config.update_one({"_key": "proc_auto"}, {"$set": upd}, upsert=True)
+    return await _proc_auto_state()
+
+
+@api.post("/procesamiento/auto/run-now")
+async def proc_auto_run_now():
+    st = await _proc_auto_state()
+    if st.get("running"):
+        return {"started": False, "message": "Ya hay un ciclo automático en curso"}
+    asyncio.create_task(_run_proc_auto())
+    return {"started": True, "message": "Ciclo iniciado en segundo plano. Revisá en 1-2 minutos."}
+
+
+# ---------------------------------------------------------------------------
+# Reporte diario 10:00 AM: solicitudes recibidas y enviadas a mesa (24 hrs)
+# ---------------------------------------------------------------------------
+def _tz_chile():
+    from zoneinfo import ZoneInfo
+    return ZoneInfo("America/Santiago")
+
+
+async def _reporte_diario_state():
+    st = await db.config.find_one({"_key": "reporte_diario"})
+    if not st:
+        # last_sent_date = hoy para que el primer envío sea mañana a la hora configurada
+        hoy = datetime.now(_tz_chile()).strftime("%Y-%m-%d")
+        st = {"_key": "reporte_diario", "enabled": True, "hora": 10,
+              "last_sent_date": hoy, "last_result": {}}
+        await db.config.insert_one(dict(st))
+    st.pop("_id", None)
+    st.pop("_key", None)
+    return st
+
+
+async def _datos_reporte_diario():
+    tz = _tz_chile()
+    ahora = datetime.now(tz)
+    st = await _reporte_diario_state()
+    hora = int(st.get("hora") or 10)
+    corte_hoy = ahora.replace(hour=hora, minute=0, second=0, microsecond=0)
+    fin = corte_hoy if ahora >= corte_hoy else corte_hoy - timedelta(days=1)
+    inicio = fin - timedelta(days=1)
+    items = await db.proc_queue.find({}).sort("date_iso", -1).limit(500).to_list(500)
+    recibidas, enviadas = [], []
+    for it in items:
+        cl = it.get("classification", {}) or {}
+        campos = it.get("campos", {}) or {}
+        fila = {
+            "cliente": cl.get("cliente") or mail._extraer_nombre(it.get("subject", ""), it.get("sender", "")),
+            "rut": cl.get("rut") or "—",
+            "inmobiliaria": campos.get("proyecto_inmobiliario") or cl.get("inmobiliaria") or "—",
+            "ejecutivo": campos.get("nombre_ejecutivo") or campos.get("ejecutivo_externo") or "—",
+            "asunto": it.get("subject", ""),
+            "fecha": it.get("date_iso", ""),
+        }
+        try:
+            f = datetime.fromisoformat(it.get("date_iso") or "")
+            if f.tzinfo is None:
+                f = f.replace(tzinfo=timezone.utc)
+            if inicio <= f < fin:
+                recibidas.append(fila)
+        except Exception:
+            pass
+        if it.get("autocorreo_enviado"):
+            try:
+                fe = datetime.fromisoformat(it.get("autocorreo_en") or "")
+                if fe.tzinfo is None:
+                    fe = fe.replace(tzinfo=timezone.utc)
+                if inicio <= fe < fin:
+                    enviadas.append({**fila, "enviado_a": it.get("autocorreo_a", ""),
+                                     "fecha_envio": it.get("autocorreo_en", "")})
+            except Exception:
+                pass
+    return {"desde": inicio.isoformat(), "hasta": fin.isoformat(),
+            "recibidas": recibidas, "enviadas": enviadas}
+
+
+def _tabla_reporte_html(filas, con_envio=False):
+    if not filas:
+        return "<p style='color:#888;margin:6px 0 16px'>Sin registros en el período.</p>"
+    extra_th = "<th style='padding:6px 10px;text-align:left'>Enviado a</th>" if con_envio else ""
+    head = ("<tr style='background:#1a1f2e;color:#fff'>"
+            "<th style='padding:6px 10px;text-align:left'>Cliente</th>"
+            "<th style='padding:6px 10px;text-align:left'>RUT</th>"
+            "<th style='padding:6px 10px;text-align:left'>Inmobiliaria</th>"
+            "<th style='padding:6px 10px;text-align:left'>Ejecutivo</th>"
+            f"{extra_th}"
+            "<th style='padding:6px 10px;text-align:left'>Fecha</th></tr>")
+    rows = ""
+    for i, f in enumerate(filas):
+        bg = "#f8fafc" if i % 2 == 0 else "#ffffff"
+        extra_td = f"<td style='padding:6px 10px'>{f.get('enviado_a', '') or '—'}</td>" if con_envio else ""
+        fecha = (f.get("fecha_envio") or f.get("fecha") or "")[:16].replace("T", " ")
+        rows += (f"<tr style='background:{bg};border-bottom:1px solid #e2e8f0'>"
+                 f"<td style='padding:6px 10px'><b>{f['cliente']}</b></td>"
+                 f"<td style='padding:6px 10px'>{f['rut']}</td>"
+                 f"<td style='padding:6px 10px'>{f['inmobiliaria']}</td>"
+                 f"<td style='padding:6px 10px'>{f['ejecutivo']}</td>"
+                 f"{extra_td}"
+                 f"<td style='padding:6px 10px;white-space:nowrap'>{fecha}</td></tr>")
+    return f"<table style='border-collapse:collapse;font-size:13px;width:100%'>{head}{rows}</table>"
+
+
+async def _enviar_reporte_diario():
+    datos = await _datos_reporte_diario()
+    st_ac = await _ac_state()
+    destino = st_ac.get("destination") or os.environ.get("MAIL2_USER", "")
+    tz = _tz_chile()
+    hoy = datetime.now(tz)
+    fecha_txt = hoy.strftime("%d-%m-%Y")
+    cuerpo = f"""
+    <div style="font-family:Arial,sans-serif;font-size:14px;color:#222">
+      <h2 style="color:#6c5ce7;margin:0 0 4px">Reporte diario — {fecha_txt}</h2>
+      <p style="color:#666;margin:0 0 16px">Período: {datos['desde'][:16].replace('T',' ')} → {datos['hasta'][:16].replace('T',' ')} (hora Chile)</p>
+      <h3 style="color:#1a1f2e;margin:0 0 6px">📥 Solicitudes de crédito recibidas ({len(datos['recibidas'])})</h3>
+      {_tabla_reporte_html(datos['recibidas'])}
+      <h3 style="color:#1a1f2e;margin:16px 0 6px">📤 Enviadas efectivamente a mesa ({len(datos['enviadas'])})</h3>
+      {_tabla_reporte_html(datos['enviadas'], con_envio=True)}
+      <p style="color:#888;font-size:12px;margin-top:18px">Central Mutuos - Con Creces Asesorias · Reporte automático de las {int((await _reporte_diario_state()).get('hora') or 10)}:00</p>
+    </div>
+    """
+    asunto = f"[Reporte Diario] Solicitudes y envíos a mesa — {fecha_txt}"
+    res = await asyncio.to_thread(mail.send_mail, destino, asunto, cuerpo, [], "principal")
+    resultado = {"success": bool(res.get("success")), "destino": destino,
+                 "recibidas": len(datos["recibidas"]), "enviadas": len(datos["enviadas"]),
+                 "error": res.get("error"), "enviado_en": now_iso()}
+    upd = {"last_result": resultado}
+    if res.get("success"):
+        upd["last_sent_date"] = hoy.strftime("%Y-%m-%d")
+    await db.config.update_one({"_key": "reporte_diario"}, {"$set": upd}, upsert=True)
+    return resultado
+
+
+async def _daily_report_loop():
+    """Envía el reporte todos los días a la hora configurada (hora de Chile)."""
+    while True:
+        try:
+            await asyncio.sleep(60)
+            st = await _reporte_diario_state()
+            if not st.get("enabled"):
+                continue
+            tz = _tz_chile()
+            ahora = datetime.now(tz)
+            hoy = ahora.strftime("%Y-%m-%d")
+            if ahora.hour >= int(st.get("hora") or 10) and st.get("last_sent_date") != hoy:
+                await _enviar_reporte_diario()
+        except asyncio.CancelledError:
+            break
+        except Exception:
+            continue
+
+
+@api.get("/reportes/diario/status")
+async def reporte_diario_status():
+    st = await _reporte_diario_state()
+    return st
+
+
+@api.get("/reportes/diario/preview")
+async def reporte_diario_preview():
+    return await _datos_reporte_diario()
+
+
+@api.post("/reportes/diario/toggle")
+async def reporte_diario_toggle(payload: dict = None):
+    payload = payload or {}
+    upd = {}
+    if "enabled" in payload:
+        upd["enabled"] = bool(payload["enabled"])
+    if "hora" in payload:
+        try:
+            upd["hora"] = max(0, min(23, int(payload["hora"])))
+        except (TypeError, ValueError):
+            pass
+    if upd:
+        await db.config.update_one({"_key": "reporte_diario"}, {"$set": upd}, upsert=True)
+    return await _reporte_diario_state()
+
+
+@api.post("/reportes/diario/enviar-ahora")
+async def reporte_diario_enviar_ahora():
+    res = await _enviar_reporte_diario()
+    if not res.get("success"):
+        raise HTTPException(status_code=502, detail=res.get("error") or "Error de envío")
+    return res
 
 
 def _fmt_uf(v):
