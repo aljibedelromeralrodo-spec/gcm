@@ -303,7 +303,7 @@ def _build_pdf(title, lines):
             y = h - 3 * cm
     c.setFont("Helvetica-Oblique", 8)
     c.setFillColorRGB(0.4, 0.4, 0.4)
-    c.drawString(2 * cm, 1.5 * cm, "Documento referencial. No constituye preaprobacion ni aprobacion crediticia. Con Creces Asesorias.")
+    c.drawString(2 * cm, 1.5 * cm, "Documento referencial. No constituye preaprobacion ni aprobacion crediticia. Con Creces.")
     c.showPage()
     c.save()
     buf.seek(0)
@@ -1131,7 +1131,7 @@ async def folder_send_email(fid: str, payload: dict):
       {fin_html}
       {f'<p style="margin-top:10px">{(payload.get("body_extra") or "").strip()}</p>' if (payload.get("body_extra") or "").strip() else ''}
       <p style="margin-top:12px">Se adjunta la carpeta con los antecedentes del cliente.</p>
-      <p style="color:#888;font-size:12px">Central Mutuos - Con Creces Asesorias</p>
+      <p style="color:#888;font-size:12px">Central Mutuos - Con Creces</p>
     </div>
     """
     sender = _sender_por_rol("secundaria")
@@ -1170,7 +1170,7 @@ async def folder_send_missing_docs(fid: str, payload: dict = None):
       <p>Para continuar con la evaluación del crédito de <b>{nombre}</b> necesitamos los siguientes documentos:</p>
       <ul>{lista if lista else '<li>Sin faltantes detectados</li>'}</ul>
       {f'<p>{extra}</p>' if extra else ''}
-      <p style="color:#888;font-size:12px">Central Mutuos - Con Creces Asesorias</p>
+      <p style="color:#888;font-size:12px">Central Mutuos - Con Creces</p>
     </div>
     """
     sender = _sender_por_rol("secundaria")
@@ -2461,7 +2461,7 @@ async def _enviar_reporte_diario():
       {_tabla_reporte_html(datos['recibidas'])}
       <h3 style="color:#1a1f2e;margin:16px 0 6px">📤 Enviadas efectivamente a mesa ({len(datos['enviadas'])})</h3>
       {_tabla_reporte_html(datos['enviadas'], con_envio=True)}
-      <p style="color:#888;font-size:12px;margin-top:18px">Central Mutuos - Con Creces Asesorias · Reporte automático de las {int((await _reporte_diario_state()).get('hora') or 10)}:00</p>
+      <p style="color:#888;font-size:12px;margin-top:18px">Central Mutuos - Con Creces · Reporte automático de las {int((await _reporte_diario_state()).get('hora') or 10)}:00</p>
     </div>
     """
     asunto = f"[Reporte Diario] Solicitudes y envíos a mesa — {fecha_txt}"
@@ -2677,7 +2677,7 @@ def _gastos_html(payload):
         <div style="padding:20px 32px 28px">
           <p style="margin:0;color:#6b7280;font-size:13px;line-height:1.6">Ante cualquier consulta sobre el detalle de estos valores o el proceso de pago, no dude en responder este correo. Estamos a su disposición.</p>
           <p style="margin:14px 0 0;color:#1a1f2e;font-size:14px"><b>Central Mutuos</b><br>
-          <span style="color:#6b7280;font-size:12px">Con Creces Asesorías · Créditos Hipotecarios</span></p>
+          <span style="color:#6b7280;font-size:12px">Con Creces · Créditos Hipotecarios</span></p>
         </div>
         <div style="background:#1a1f2e;padding:12px 32px;text-align:center">
           <span style="color:#9aa3b5;font-size:11px">Este correo contiene información confidencial dirigida exclusivamente a su destinatario.</span>
@@ -2734,7 +2734,8 @@ def _tipo_pdf_aprobacion(nombre):
     low = (nombre or "").lower()
     if re.search(r"carta|aprobaci[oó]n|aprobacion", low):
         return "carta_aprobacion"
-    if re.search(r"_ajustada|simulad|simulaci", low):
+    # Solo la simulación AJUSTADA (la que genera el autocorreo) — no la simulación normal
+    if re.search(r"ajustad", low):
         return "simulacion_ajustada"
     return "otro"
 
@@ -2906,7 +2907,7 @@ def _aprobacion_html(payload):
           <p style="margin:16px 0 0;color:#9aa3b5;font-size:12px">Al presionar el botón se abrirá un correo dirigido a nuestro equipo para coordinar los siguientes pasos.</p>
         </div>
         <div style="background:#f8f9fc;border-top:1px solid #eceef3;padding:22px 36px">
-          <p style="margin:0;color:#2b3245;font-size:14px"><b>Central Mutuos</b> — Con Creces Asesorías</p>
+          <p style="margin:0;color:#2b3245;font-size:14px"><b>Central Mutuos</b> — Con Creces</p>
           <p style="margin:4px 0 0;color:#6b7280;font-size:12px">Especialistas en créditos hipotecarios · {contacto}</p>
         </div>
         <div style="background:#1a1f2e;padding:12px 32px;text-align:center">
@@ -2970,6 +2971,249 @@ async def aprobacion_log():
     return {"log": [clean(d) for d in docs]}
 
 
+# ---------------------------------------------------------------------------
+# Set de Crédito + Firma de documentos (integración migrup / eCert)
+# ---------------------------------------------------------------------------
+import migrup_service as migrup
+
+SETCRED_DIR = ROOT_DIR / "storage" / "set_credito"
+SETCRED_DIR.mkdir(parents=True, exist_ok=True)
+SET_DOC_TIPOS = ["seguros", "solicitud_credito", "declaracion_salud"]
+SET_DOC_LABELS = {"seguros": "Seguros", "solicitud_credito": "Solicitud de crédito",
+                  "declaracion_salud": "Declaración de salud"}
+
+
+def _set_dir(nombre):
+    return SETCRED_DIR / fsvc.safe_name(nombre)
+
+
+def _set_archivos(nombre):
+    base = _set_dir(nombre)
+    out = []
+    if base.exists():
+        for p in sorted(base.glob("*.pdf")):
+            tipo = "otro"
+            for t in SET_DOC_TIPOS:
+                if p.name.lower().startswith(t):
+                    tipo = t
+                    break
+            out.append({"nombre": p.name, "ruta": p.name, "tipo": tipo,
+                        "tamano": p.stat().st_size})
+    return out
+
+
+def _set_public(doc):
+    d = clean(dict(doc))
+    d["archivos"] = _set_archivos(d.get("nombre", ""))
+    d["total_archivos"] = len(d["archivos"])
+    return d
+
+
+@api.get("/set-credito/sets")
+async def setcred_list(q: str = ""):
+    query = {"nombre": {"$regex": q, "$options": "i"}} if q else {}
+    docs = await db.set_credito.find(query).sort("created_at", -1).limit(200).to_list(200)
+    return {"sets": [_set_public(d) for d in docs], "doc_tipos": SET_DOC_LABELS}
+
+
+@api.post("/set-credito/sets")
+async def setcred_create(payload: dict):
+    doc = {"id": str(uuid.uuid4()), "nombre": payload.get("nombre", ""),
+           "rut": payload.get("rut", ""), "email": payload.get("email", ""),
+           "created_at": now_iso(), "firmas": []}
+    if not doc["nombre"].strip():
+        raise HTTPException(status_code=400, detail="Falta el nombre del cliente")
+    await db.set_credito.insert_one(dict(doc))
+    _set_dir(doc["nombre"]).mkdir(parents=True, exist_ok=True)
+    return _set_public(doc)
+
+
+async def _get_set(sid):
+    doc = await db.set_credito.find_one({"id": sid})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Set no encontrado")
+    return doc
+
+
+@api.get("/set-credito/sets/{sid}")
+async def setcred_get(sid: str):
+    return _set_public(await _get_set(sid))
+
+
+@api.delete("/set-credito/sets/{sid}")
+async def setcred_delete(sid: str):
+    doc = await db.set_credito.find_one({"id": sid})
+    if doc:
+        import shutil
+        shutil.rmtree(_set_dir(doc.get("nombre", "")), ignore_errors=True)
+    await db.set_credito.delete_one({"id": sid})
+    return {"ok": True}
+
+
+@api.post("/set-credito/sets/{sid}/upload")
+async def setcred_upload(sid: str, file: UploadFile = File(...), tipo: str = Form("otro")):
+    doc = await _get_set(sid)
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(status_code=400, detail="Archivo vacío")
+    nombre_archivo = file.filename or "documento"
+    try:
+        raw, nombre_archivo, _ = pdfs.convertir_a_pdf(raw, nombre_archivo)
+    except ValueError:
+        pass
+    if tipo in SET_DOC_TIPOS and not nombre_archivo.lower().startswith(tipo):
+        stem = fsvc.safe_name(nombre_archivo)
+        nombre_archivo = f"{tipo}_{stem}"
+    base = _set_dir(doc.get("nombre", ""))
+    base.mkdir(parents=True, exist_ok=True)
+    (base / fsvc.safe_name(nombre_archivo)).write_bytes(raw)
+    return {"ok": True, "saved": fsvc.safe_name(nombre_archivo)}
+
+
+@api.post("/set-credito/sets/{sid}/delete-file")
+async def setcred_delete_file(sid: str, payload: dict):
+    doc = await _get_set(sid)
+    try:
+        p = fsvc.resolver_ruta.__wrapped__ if False else None
+    except Exception:
+        p = None
+    fn = fsvc.safe_name(payload.get("file_path", ""))
+    target = _set_dir(doc.get("nombre", "")) / fn
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="Archivo no encontrado")
+    target.unlink()
+    return {"ok": True}
+
+
+@api.get("/set-credito/sets/{sid}/download/{file_path:path}")
+async def setcred_download(sid: str, file_path: str, inline: bool = False):
+    doc = await _get_set(sid)
+    fn = fsvc.safe_name(file_path)
+    target = _set_dir(doc.get("nombre", "")) / fn
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="Archivo no encontrado")
+    disp = "inline" if inline else "attachment"
+    return FileResponse(str(target), media_type="application/pdf",
+                        headers={"Content-Disposition": f'{disp}; filename="{target.name}"'})
+
+
+def _set_combinar(nombre):
+    """Une todos los PDFs del set (excepto el combinado previo) en uno solo."""
+    from pypdf import PdfReader, PdfWriter
+    base = _set_dir(nombre)
+    writer = PdfWriter()
+    usados = []
+    orden = {t: i for i, t in enumerate(SET_DOC_TIPOS)}
+    archivos = sorted(_set_archivos(nombre), key=lambda a: (orden.get(a["tipo"], 99), a["nombre"]))
+    for a in archivos:
+        if a["nombre"].startswith("COMBINADO_SET"):
+            continue
+        try:
+            for pg in PdfReader(str(base / a["ruta"])).pages:
+                writer.add_page(pg)
+            usados.append(a["nombre"])
+        except Exception:
+            continue
+    if not usados:
+        return {"combinado": "", "usados": []}
+    out = f"COMBINADO_SET_{fsvc.safe_name(nombre)}.pdf"
+    with open(base / out, "wb") as f:
+        writer.write(f)
+    return {"combinado": out, "usados": usados}
+
+
+@api.post("/set-credito/sets/{sid}/combinar")
+async def setcred_combinar(sid: str):
+    doc = await _get_set(sid)
+    res = await asyncio.to_thread(_set_combinar, doc.get("nombre", ""))
+    if not res["combinado"]:
+        raise HTTPException(status_code=400, detail="No hay documentos PDF para combinar")
+    return {"ok": True, **res}
+
+
+@api.post("/set-credito/sets/{sid}/enviar-firma-completo")
+async def setcred_enviar_firma_completo(sid: str, payload: dict):
+    """Combina todo el set en un PDF y lo envía a firmar en todas las páginas (firmar todo de una vez)."""
+    doc = await _get_set(sid)
+    firmante = {
+        "nombres": payload.get("nombres") or doc.get("nombre", ""),
+        "aPaterno": payload.get("aPaterno", ""),
+        "aMaterno": payload.get("aMaterno", ""),
+        "rut": payload.get("rut") or doc.get("rut", ""),
+        "email": payload.get("email") or doc.get("email", ""),
+    }
+    if not firmante["email"] or "@" not in firmante["email"]:
+        raise HTTPException(status_code=400, detail="Correo del firmante inválido")
+    if not firmante["rut"]:
+        raise HTTPException(status_code=400, detail="RUT del firmante requerido")
+    res_comb = await asyncio.to_thread(_set_combinar, doc.get("nombre", ""))
+    if not res_comb["combinado"]:
+        raise HTTPException(status_code=400, detail="No hay documentos para combinar y firmar")
+    target = _set_dir(doc.get("nombre", "")) / res_comb["combinado"]
+    res = await asyncio.to_thread(
+        migrup.enviar_a_firmar_tercero, target.read_bytes(), target.stem, firmante,
+        payload.get("comentario", "Set de crédito - firma completa"),
+        None, True)
+    if not res.get("success"):
+        raise HTTPException(status_code=502, detail=str(res.get("error") or res.get("raw"))[:250])
+    await db.set_credito.update_one({"id": sid}, {"$push": {"firmas": {
+        "documento": target.name, "firmante": firmante["email"], "rut": firmante["rut"],
+        "paginas": res.get("paginas"), "completo": True, "enviado_en": now_iso()}}})
+    return {"ok": True, "firmante": firmante["email"], "combinado": res_comb["combinado"],
+            "documentos_incluidos": res_comb["usados"], "paginas": res.get("paginas")}
+
+
+@api.get("/migrup/status")
+async def migrup_status():
+    if not migrup.configured():
+        return {"configured": False}
+    lg = await asyncio.to_thread(migrup.login)
+    if not lg.get("success"):
+        return {"configured": True, "connected": False, "error": lg.get("error")}
+    sem = await asyncio.to_thread(migrup.semaforo)
+    return {"configured": True, "connected": True, "user": lg.get("user"),
+            "forzar_renovacion": lg.get("forzar_renovacion"),
+            "firmas_terceros_disponibles": (sem or {}).get("cantFirmasDisponiblesTerceros"),
+            "documentos_disponibles": (sem or {}).get("cantDocumentosDisponibles")}
+
+
+@api.get("/migrup/documentos")
+async def migrup_documentos(nombre: str = "", estado: int = 0):
+    res = await asyncio.to_thread(migrup.listar_documentos, nombre, estado, 1, 20)
+    if isinstance(res, dict) and res.get("_error"):
+        raise HTTPException(status_code=502, detail=res["_error"])
+    return {"documentos": (res or {}).get("paginatedList", [])}
+
+
+@api.post("/set-credito/sets/{sid}/enviar-firma")
+async def setcred_enviar_firma(sid: str, payload: dict):
+    doc = await _get_set(sid)
+    fn = fsvc.safe_name(payload.get("file_path", ""))
+    target = _set_dir(doc.get("nombre", "")) / fn
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="Documento no encontrado")
+    firmante = {
+        "nombres": payload.get("nombres") or doc.get("nombre", ""),
+        "aPaterno": payload.get("aPaterno", ""),
+        "aMaterno": payload.get("aMaterno", ""),
+        "rut": payload.get("rut") or doc.get("rut", ""),
+        "email": payload.get("email") or doc.get("email", ""),
+    }
+    if not firmante["email"] or "@" not in firmante["email"]:
+        raise HTTPException(status_code=400, detail="Correo del firmante inválido")
+    if not firmante["rut"]:
+        raise HTTPException(status_code=400, detail="RUT del firmante requerido")
+    comentario = payload.get("comentario", "")
+    res = await asyncio.to_thread(migrup.enviar_a_firmar_tercero, target.read_bytes(),
+                                  target.stem, firmante, comentario)
+    if not res.get("success"):
+        raise HTTPException(status_code=502, detail=str(res.get("error") or res.get("raw"))[:250])
+    await db.set_credito.update_one({"id": sid}, {"$push": {"firmas": {
+        "documento": target.name, "firmante": firmante["email"], "rut": firmante["rut"],
+        "enviado_en": now_iso()}}})
+    return {"ok": True, "firmante": firmante["email"], "raw": res.get("raw")}
+
+
 def _fmt_uf(v):
     if v in (None, "", False):
         return "—"
@@ -3006,7 +3250,7 @@ async def proc_enviar_autocorreo(qid: str, payload: dict = None):
           {f'<b>Campos por completar:</b><ul>{lista_campos}</ul>' if lista_campos else ''}
           {f'<b>Documentos faltantes:</b><ul>{lista_docs}</ul>' if lista_docs else ''}
           <p>Complete la informacion a mano en el modulo <b>Procesamiento Correo</b> y vuelva a enviar.</p>
-          <p style="color:#888;font-size:12px">Central Mutuos - Con Creces Asesorias</p>
+          <p style="color:#888;font-size:12px">Central Mutuos - Con Creces</p>
         </div>
         """
         res_aviso = await asyncio.to_thread(
@@ -3046,7 +3290,7 @@ async def proc_enviar_autocorreo(qid: str, payload: dict = None):
         <tr><td style="padding:4px 12px 4px 0"><b>Credito a solicitar</b></td><td>{_fmt_uf(campos.get('monto_credito_solicitar_uf'))}</td></tr>
       </table>
       <p style="margin-top:12px">Se adjunta el PDF agrupado de la carpeta del cliente para su envio a mesa.</p>
-      <p style="color:#888;font-size:12px">Central Mutuos - Con Creces Asesorias</p>
+      <p style="color:#888;font-size:12px">Central Mutuos - Con Creces</p>
     </div>
     """
     asunto = f"[Gestion] {cliente} - {campos.get('proyecto_inmobiliario') or 'Credito Hipotecario'}"

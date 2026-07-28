@@ -100,11 +100,32 @@ Idioma del usuario: **Español** (responder siempre en español).
     con el selector de archivos del módulo Clientes).
 
 ## Backlog priorizado
-- **P0 (pedido por el usuario, SIN implementar)**: Mini-programa móvil para ejecutivos —
-  compartir archivos múltiples desde WhatsApp del teléfono al sistema, creando carpetas o
-  guardando en carpetas existentes. Enfoque sugerido: página web móvil (PWA share target o
-  portal de subida con link) — CONFIRMAR enfoque con el usuario antes de construir.
-  → HECHO 2026-07-28 (parte 4). Queda validación del usuario en un teléfono Android real.
+- 2026-07-28 (parte 5) — **Módulo Set de Crédito + Firma electrónica (migrup/eCert)**:
+  - Correcciones pedidas: "Con Creces Asesorías" → "Central Mutuos - Con Creces" en todos los
+    correos/PDFs; detección de aprobación cliente ahora solo pre-selecciona la simulación
+    AJUSTADA (nombre con "ajustada") + carta de aprobación.
+  - Exploración migrup.cl: es plataforma eCert Chile con API `ApiGatewayGrup`. Login por API
+    funciona (`Usuarios/UsuariosPorRutyClave` con RutUsuario/DVUsuario/ClaveUsuario → JWT).
+    Endpoints de firma: `ProcesoFirma/{CargaDocumentos,ProcesoFirmaDocumentos,FirmarTercero,
+    ValidaTercero,...}`, `Dashboard/{ListadoDocumentosConFiltros,TraerSemaforo}`. Campos del
+    firmante tercero: nombres, aPaterno, aMaterno, rut, email.
+  - `backend/migrup_service.py`: login cacheado (JWT 20min), semaforo, listar_documentos,
+    enviar_a_firmar_tercero (soporta firmar_todas_paginas). Credenciales en .env
+    (MIGRUP_RUT/MIGRUP_CLAVE).
+  - Módulo **Set de Crédito** (`SetCreditoModule.js`): sets por cliente, subir docs manual
+    (seguros, solicitud_credito, declaracion_salud), ver/descargar/eliminar, estado migrup,
+    "Combinar y enviar a firmar todo" (une todos los PDFs en uno y firma en TODAS las páginas
+    = firmar todo de una vez), y firma individual por documento. Endpoints
+    `/api/set-credito/*` y `/api/migrup/{status,documentos}`.
+  - VERIFICADO: login migrup + semáforo (15 firmas terceros disp.) + listado docs +
+    crear set + upload + combinar (4 págs) + UI. NO se probó un envío de firma real
+    (firma en nombre del titular y correo a terceros).
+  - ⚠️ PENDIENTE DE VALIDACIÓN: el payload de `ProcesoFirma/ProcesoFirmaDocumentos` es
+    best-effort (no se capturó un envío exitoso real por ser sobre terceros reales). Requiere
+    UNA prueba real con el usuario para confirmar/ajustar el formato exacto (posición de firma,
+    nombres de campos). La API es interna de migrup y podría cambiar.
+
+## Backlog priorizado
 - **P1**: Reporte 2 — cruce de solicitudes vs enviadas a mesa usando RUT real del OCR
   (pendiente, pedido del usuario en sesiones previas).
 - **P2**: Integración real de WhatsApp (hoy mock).
