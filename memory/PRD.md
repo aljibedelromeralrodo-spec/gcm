@@ -139,3 +139,25 @@ Idioma del usuario: **Español** (responder siempre en español).
 - `POST /api/procesamiento/ingest-from-inbox` puede exceder 60s vía ingress (preexistente).
 - No enviar correos reales en tests (usar previews `confirm:false`).
 - Usar yarn, no npm. No tocar .env keys protegidas.
+
+## Sesión Junio 2026 (fork) — Completado
+- VERIFICADO en UI: ingesta de "Set de Crédito" desde correo evaluacionesmutuos@gmail.com
+  (búsqueda por job async, import-from-email crea el set con Titular/Codeudor, combinar OK).
+- **Reporte 2 (diario)**: cruce Solicitudes vs Enviadas a mesa ahora por **RUT y NOMBRE**
+  contra la carpeta Enviados (además del flag `autocorreo_enviado`). `_datos_reporte_diario`
+  devuelve `enviada_mesa`, `match` (app/rut/nombre) y `pendientes`. La tabla HTML del correo
+  muestra columna "¿A mesa?" (✓ con método / ✗ Pendiente). Verificado con preview: 3/3 matched.
+- **Contactos eCert (migrup)**: nuevo requisito — SIEMPRE crear el contacto del cliente antes
+  de firmar. Implementado:
+  - `migrup_service.py`: `listar_contactos`, `buscar_contacto_por_rut`, `crear_contacto`,
+    `asegurar_contacto` (auto-crea el contacto dentro de `enviar_a_firmar_tercero`).
+  - Endpoints: `GET/POST /api/migrup/contactos` (con validación email/email2, RUN, dedup por
+    RUT) y `POST /api/migrup/ocr-cedula` (foto/PDF de cédula → OCR tesseract → IA extrae
+    nombres/apellidos/RUN).
+  - UI (`SetCreditoModule.js`): botón "Nuevo contacto eCert" + modal réplica del form de eCert
+    (Nombres, Ap. Paterno, Ap. Materno, RUN, Correo, Confirmar correo) con botón
+    "Capturar desde cédula (OCR)" y prefill desde el set abierto.
+  - VERIFICADO contra API real: ListarContactos (27 contactos), CrearContacto (creado y luego
+    eliminado contacto de prueba vía `Contacto/EliminarContacto {IdContacto}`), OCR cédula OK.
+- ⚠️ Dependencias de sistema: `poppler-utils`, `tesseract-ocr`, `tesseract-ocr-spa` se
+  reinstalaron en el fork (se pierden al forkear; reinstalar con apt si OCR devuelve vacío).

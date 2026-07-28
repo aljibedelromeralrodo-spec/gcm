@@ -2397,6 +2397,8 @@ async def _datos_reporte_diario():
             "ejecutivo": campos.get("nombre_ejecutivo") or campos.get("ejecutivo_externo") or "—",
             "asunto": it.get("subject", ""),
             "fecha": it.get("date_iso", ""),
+            "enviada_mesa": bool(it.get("autocorreo_enviado")),
+            "match": "app" if it.get("autocorreo_enviado") else "",
         }
         try:
             f = datetime.fromisoformat(it.get("date_iso") or "")
@@ -2416,14 +2418,56 @@ async def _datos_reporte_diario():
                                      "fecha_envio": it.get("autocorreo_en", "")})
             except Exception:
                 pass
+    # Cruce por RUT y NOMBRE contra la carpeta Enviados (reenvíos manuales a mesa)
+    try:
+        hdrs = mail._cached("sent_headers")
+        if hdrs is None:
+            hdrs = await asyncio.to_thread(mail.fetch_sent_headers, 120)
+    except Exception:
+        hdrs = []
+    st_ac = await _ac_state()
+    claves_mesa = {c for c in [(MESA_SENDER or "").lower(),
+                               (st_ac.get("destination") or "").lower(), "aprobaciones", "mesa"] if c}
+    a_mesa = []
+    for h in hdrs or []:
+        to_l = (h.get("to") or "").lower()
+        if to_l and any(c in to_l for c in claves_mesa):
+            a_mesa.append({**h, "subj_norm": _norm_texto(h.get("subject", "")),
+                           "subj_digits": _norm_rut(h.get("subject", ""))})
+    ya = {_norm_rut(e.get("rut")) or _norm_texto(e.get("cliente")) for e in enviadas}
+    for fila in recibidas:
+        if fila["enviada_mesa"]:
+            continue
+        rut_n = _norm_rut(fila.get("rut"))
+        tokens = [t for t in _norm_texto(fila.get("cliente")).split() if len(t) > 2]
+        for h in a_mesa:
+            por_rut = len(rut_n) >= 7 and rut_n in h["subj_digits"]
+            por_nombre = len(tokens) >= 2 and all(t in h["subj_norm"] for t in tokens)
+            if not (por_rut or por_nombre):
+                continue
+            fila["enviada_mesa"] = True
+            fila["match"] = "rut" if por_rut else "nombre"
+            clave = rut_n or _norm_texto(fila.get("cliente"))
+            try:
+                fe = datetime.fromisoformat(h.get("date") or "")
+                if fe.tzinfo is None:
+                    fe = fe.replace(tzinfo=timezone.utc)
+                if inicio <= fe < fin and clave not in ya:
+                    enviadas.append({**fila, "enviado_a": h.get("to", ""),
+                                     "fecha_envio": h.get("date", "")})
+                    ya.add(clave)
+            except Exception:
+                pass
+            break
     return {"desde": inicio.isoformat(), "hasta": fin.isoformat(),
-            "recibidas": recibidas, "enviadas": enviadas}
+            "recibidas": recibidas, "enviadas": enviadas,
+            "pendientes": [f for f in recibidas if not f["enviada_mesa"]]}
 
 
 def _tabla_reporte_html(filas, con_envio=False):
     if not filas:
         return "<p style='color:#888;margin:6px 0 16px'>Sin registros en el período.</p>"
-    extra_th = "<th style='padding:6px 10px;text-align:left'>Enviado a</th>" if con_envio else ""
+    extra_th = "<th style='padding:6px 10px;text-align:left'>Enviado a</th>" if con_envio else "<th style='padding:6px 10px;text-align:left'>¿A mesa?</th>"
     head = ("<tr style='background:#1a1f2e;color:#fff'>"
             "<th style='padding:6px 10px;text-align:left'>Cliente</th>"
             "<th style='padding:6px 10px;text-align:left'>RUT</th>"
@@ -2434,7 +2478,12 @@ def _tabla_reporte_html(filas, con_envio=False):
     rows = ""
     for i, f in enumerate(filas):
         bg = "#f8fafc" if i % 2 == 0 else "#ffffff"
-        extra_td = f"<td style='padding:6px 10px'>{f.get('enviado_a', '') or '—'}</td>" if con_envio else ""
+        if con_envio:
+            extra_td = f"<td style='padding:6px 10px'>{f.get('enviado_a', '') or '—'}</td>"
+        else:
+            marca = {"app": "app", "rut": "por RUT", "nombre": "por nombre"}.get(f.get("match", ""), "")
+            extra_td = (f"<td style='padding:6px 10px;color:#16a34a'><b>✓</b> {marca}</td>"
+                        if f.get("enviada_mesa") else "<td style='padding:6px 10px;color:#dc2626'><b>✗ Pendiente</b></td>")
         fecha = (f.get("fecha_envio") or f.get("fecha") or "")[:16].replace("T", " ")
         rows += (f"<tr style='background:{bg};border-bottom:1px solid #e2e8f0'>"
                  f"<td style='padding:6px 10px'><b>{f['cliente']}</b></td>"
@@ -2983,6 +3032,9 @@ SET_DOC_LABELS = {"seguros": "Seguros", "solicitud_credito": "Solicitud de créd
                   "declaracion_salud": "Declaración de salud"}
 
 
+SETCRED_SENDER_DEFAULT = "evaluacionesmutuos@gmail.com"
+
+
 def _set_dir(nombre):
     return SETCRED_DIR / fsvc.safe_name(nombre)
 
@@ -2990,16 +3042,47 @@ def _set_dir(nombre):
 def _set_archivos(nombre):
     base = _set_dir(nombre)
     out = []
-    if base.exists():
-        for p in sorted(base.glob("*.pdf")):
-            tipo = "otro"
-            for t in SET_DOC_TIPOS:
-                if p.name.lower().startswith(t):
-                    tipo = t
-                    break
-            out.append({"nombre": p.name, "ruta": p.name, "tipo": tipo,
-                        "tamano": p.stat().st_size})
+    if not base.exists():
+        return out
+    for p in sorted(base.rglob("*.pdf")):
+        rel = p.relative_to(base).as_posix()
+        es_codeudor = rel.startswith("codeudor/")
+        low = p.name.lower()
+        tipo = "otro"
+        for t in SET_DOC_TIPOS:
+            if low.startswith(t):
+                tipo = t
+                break
+        out.append({"nombre": p.name, "ruta": rel, "tipo": tipo,
+                    "codeudor": es_codeudor, "tamano": p.stat().st_size})
+    out.sort(key=lambda a: (a["codeudor"], a["ruta"]))
     return out
+
+
+RUT_RE = re.compile(r"\b(\d{1,2}\.?\d{3}\.?\d{3}\-?[\dkK])\b")
+
+
+def _detectar_datos_email(info):
+    """Detecta nombre, RUT y si hay codeudor desde el asunto/adjuntos del correo de evaluaciones."""
+    subject = info.get("subject", "") or ""
+    body = info.get("body", "") or ""
+    # "Fwd: Set Javier Perez" / "Set Aleidys Aponte y de su codeudor ok"
+    limpio = re.sub(r"^\s*((re|fwd?|rv|fw)\s*:\s*)+", "", subject, flags=re.I)
+    nombre = ""
+    m = re.search(r"\bset\s+(?:de\s+)?([A-Za-zÁÉÍÓÚÑáéíóúñ ]+?)(?:\s+y\s+(?:de\s+)?su\s+codeudor|\s+ok\b|\s*[\(\-]|$)",
+                  limpio, re.I)
+    if m:
+        nombre = m.group(1).strip().title()
+    if not nombre:
+        nombre = mail._extraer_nombre(subject, info.get("from", ""))
+    texto = f"{subject}\n{body}"
+    rut = ""
+    mr = RUT_RE.search(texto)
+    if mr:
+        rut = mr.group(1)
+    nombres_adj = " ".join(a.get("filename", "") for a in info.get("attachments", []))
+    tiene_codeudor = bool(re.search(r"codeudor", subject + " " + nombres_adj, re.I))
+    return {"nombre": nombre, "rut": rut, "tiene_codeudor": tiene_codeudor}
 
 
 def _set_public(doc):
@@ -3051,7 +3134,8 @@ async def setcred_delete(sid: str):
 
 
 @api.post("/set-credito/sets/{sid}/upload")
-async def setcred_upload(sid: str, file: UploadFile = File(...), tipo: str = Form("otro")):
+async def setcred_upload(sid: str, file: UploadFile = File(...), tipo: str = Form("otro"),
+                         codeudor: str = Form("")):
     doc = await _get_set(sid)
     raw = await file.read()
     if not raw:
@@ -3064,21 +3148,131 @@ async def setcred_upload(sid: str, file: UploadFile = File(...), tipo: str = For
     if tipo in SET_DOC_TIPOS and not nombre_archivo.lower().startswith(tipo):
         stem = fsvc.safe_name(nombre_archivo)
         nombre_archivo = f"{tipo}_{stem}"
-    base = _set_dir(doc.get("nombre", ""))
+    es_cod = str(codeudor).lower() in ("true", "1", "si", "sí")
+    base = _set_dir(doc.get("nombre", "")) / ("codeudor" if es_cod else "")
     base.mkdir(parents=True, exist_ok=True)
     (base / fsvc.safe_name(nombre_archivo)).write_bytes(raw)
-    return {"ok": True, "saved": fsvc.safe_name(nombre_archivo)}
+    rel = f"codeudor/{fsvc.safe_name(nombre_archivo)}" if es_cod else fsvc.safe_name(nombre_archivo)
+    return {"ok": True, "saved": rel}
+
+
+async def _setcred_emails_job(job_id, sender, limit):
+    try:
+        correos = await asyncio.to_thread(mail.fetch_emails_from_sender, sender, limit)
+        out = []
+        for c in correos:
+            datos = _detectar_datos_email(c)
+            out.append({"id": c["id"], "from": c.get("from", ""), "subject": c.get("subject", ""),
+                        "date": c.get("date", ""), "cuenta": c.get("cuenta", ""),
+                        "attachments": [a for a in c.get("attachments", [])
+                                        if (a.get("filename") or "").lower().endswith((".pdf", ".jpg", ".jpeg", ".png"))],
+                        "detectado": datos})
+        await db.setcred_email_jobs.update_one({"id": job_id},
+                                               {"$set": {"status": "done", "sender": sender, "emails": out}})
+    except Exception as e:
+        await db.setcred_email_jobs.update_one({"id": job_id},
+                                               {"$set": {"status": "error", "error": str(e)[:200], "emails": []}})
+
+
+@api.post("/set-credito/emails")
+async def setcred_emails_start(payload: dict = None):
+    payload = payload or {}
+    sender = (payload.get("sender") or SETCRED_SENDER_DEFAULT).strip()
+    limit = int(payload.get("limit") or 12)
+    job_id = str(uuid.uuid4())
+    corte = (datetime.now(timezone.utc) - timedelta(hours=6)).isoformat()
+    await db.setcred_email_jobs.delete_many({"created_at": {"$lt": corte}})
+    await db.setcred_email_jobs.insert_one({"id": job_id, "status": "running",
+                                            "created_at": now_iso()})
+    asyncio.create_task(_setcred_emails_job(job_id, sender, limit))
+    return {"job_id": job_id, "status": "running", "sender": sender}
+
+
+@api.get("/set-credito/emails/{job_id}")
+async def setcred_emails_status(job_id: str):
+    job = await db.setcred_email_jobs.find_one({"id": job_id})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job no encontrado")
+    return clean(job)
+
+
+@api.post("/set-credito/import-from-email")
+async def setcred_import_from_email(payload: dict):
+    """Crea/actualiza un set desde un correo de Evaluaciones y baja sus adjuntos."""
+    email_id = payload.get("email_id", "")
+    nombre = (payload.get("nombre") or "").strip()
+    rut = (payload.get("rut") or "").strip()
+    es_codeudor = bool(payload.get("codeudor"))
+    filenames = payload.get("filenames")  # opcional: subconjunto
+    if not email_id or not nombre:
+        raise HTTPException(status_code=400, detail="Falta correo o nombre del cliente")
+    atts = await asyncio.to_thread(mail.fetch_attachments_by_id, email_id, None)
+    if filenames:
+        atts = [a for a in atts if a["filename"] in filenames]
+    atts = [a for a in atts if (a["filename"] or "").lower().endswith((".pdf", ".jpg", ".jpeg", ".png"))]
+    if not atts:
+        raise HTTPException(status_code=404, detail="El correo no tiene adjuntos válidos")
+    doc = await db.set_credito.find_one({"nombre": nombre})
+    if not doc:
+        doc = {"id": str(uuid.uuid4()), "nombre": nombre, "rut": rut,
+               "email": payload.get("email", ""), "created_at": now_iso(),
+               "origen": "evaluaciones", "firmas": []}
+        await db.set_credito.insert_one(dict(doc))
+    elif rut and not doc.get("rut"):
+        await db.set_credito.update_one({"id": doc["id"]}, {"$set": {"rut": rut}})
+    base_dir = _set_dir(nombre)
+    guardados = []
+    for a in atts:
+        raw, fn = a["content_bytes"], a["filename"]
+        try:
+            raw, fn, _ = pdfs.convertir_a_pdf(raw, fn)
+        except ValueError:
+            pass
+        cod = es_codeudor or bool(re.search(r"codeudor", fn, re.I))
+        dest = base_dir / ("codeudor" if cod else "")
+        dest.mkdir(parents=True, exist_ok=True)
+        (dest / fsvc.safe_name(fn)).write_bytes(raw)
+        guardados.append((f"codeudor/" if cod else "") + fsvc.safe_name(fn))
+    return {"ok": True, "set_id": doc["id"], "nombre": nombre,
+            "guardados": guardados}
+
+
+@api.post("/set-credito/sets/{sid}/save-from-email")
+async def setcred_save_from_email(sid: str, payload: dict):
+    doc = await _get_set(sid)
+    email_id = payload.get("email_id", "")
+    filenames = payload.get("filenames")
+    es_codeudor = bool(payload.get("codeudor"))
+    atts = await asyncio.to_thread(mail.fetch_attachments_by_id, email_id, None)
+    if filenames:
+        atts = [a for a in atts if a["filename"] in filenames]
+    atts = [a for a in atts if (a["filename"] or "").lower().endswith((".pdf", ".jpg", ".jpeg", ".png"))]
+    if not atts:
+        raise HTTPException(status_code=404, detail="Sin adjuntos válidos en el correo")
+    base_dir = _set_dir(doc.get("nombre", ""))
+    guardados = []
+    for a in atts:
+        raw, fn = a["content_bytes"], a["filename"]
+        try:
+            raw, fn, _ = pdfs.convertir_a_pdf(raw, fn)
+        except ValueError:
+            pass
+        cod = es_codeudor or bool(re.search(r"codeudor", fn, re.I))
+        dest = base_dir / ("codeudor" if cod else "")
+        dest.mkdir(parents=True, exist_ok=True)
+        (dest / fsvc.safe_name(fn)).write_bytes(raw)
+        guardados.append((f"codeudor/" if cod else "") + fsvc.safe_name(fn))
+    return {"ok": True, "guardados": guardados}
 
 
 @api.post("/set-credito/sets/{sid}/delete-file")
 async def setcred_delete_file(sid: str, payload: dict):
     doc = await _get_set(sid)
-    try:
-        p = fsvc.resolver_ruta.__wrapped__ if False else None
-    except Exception:
-        p = None
-    fn = fsvc.safe_name(payload.get("file_path", ""))
-    target = _set_dir(doc.get("nombre", "")) / fn
+    rel = (payload.get("file_path", "") or "").strip()
+    base = _set_dir(doc.get("nombre", "")).resolve()
+    target = (base / rel).resolve()
+    if not str(target).startswith(str(base)):
+        raise HTTPException(status_code=400, detail="Ruta inválida")
     if not target.exists():
         raise HTTPException(status_code=404, detail="Archivo no encontrado")
     target.unlink()
@@ -3088,9 +3282,9 @@ async def setcred_delete_file(sid: str, payload: dict):
 @api.get("/set-credito/sets/{sid}/download/{file_path:path}")
 async def setcred_download(sid: str, file_path: str, inline: bool = False):
     doc = await _get_set(sid)
-    fn = fsvc.safe_name(file_path)
-    target = _set_dir(doc.get("nombre", "")) / fn
-    if not target.exists():
+    base = _set_dir(doc.get("nombre", "")).resolve()
+    target = (base / file_path).resolve()
+    if not str(target).startswith(str(base)) or not target.exists():
         raise HTTPException(status_code=404, detail="Archivo no encontrado")
     disp = "inline" if inline else "attachment"
     return FileResponse(str(target), media_type="application/pdf",
@@ -3177,6 +3371,87 @@ async def migrup_status():
             "documentos_disponibles": (sem or {}).get("cantDocumentosDisponibles")}
 
 
+@api.get("/migrup/contactos")
+async def migrup_contactos(q: str = ""):
+    res = await asyncio.to_thread(migrup.listar_contactos)
+    if isinstance(res, dict) and res.get("_error"):
+        raise HTTPException(status_code=502, detail=res["_error"])
+    items = (res or {}).get("items") or []
+    if q:
+        qn = _norm_texto(q)
+        items = [c for c in items if qn in _norm_texto(
+            f"{c.get('contNombres','')} {c.get('contApPaterno','')} {c.get('contApMaterno','')} {c.get('contRut','')} {c.get('contEmail','')}")]
+    return {"contactos": [{"id": c.get("contId"), "nombres": c.get("contNombres", ""),
+                           "aPaterno": c.get("contApPaterno", ""), "aMaterno": c.get("contApMaterno", ""),
+                           "rut": f"{c.get('contRut','')}-{c.get('contRutDv','')}",
+                           "email": c.get("contEmail", "")} for c in items]}
+
+
+@api.post("/migrup/contactos")
+async def migrup_crear_contacto(payload: dict):
+    nombres = (payload.get("nombres") or "").strip()
+    paterno = (payload.get("aPaterno") or "").strip()
+    materno = (payload.get("aMaterno") or "").strip()
+    run = (payload.get("rut") or "").strip()
+    email = (payload.get("email") or "").strip().lower()
+    email2 = (payload.get("email2") or email).strip().lower()
+    if not nombres:
+        raise HTTPException(status_code=400, detail="Por favor ingrese nombre(s)")
+    if not paterno:
+        raise HTTPException(status_code=400, detail="Falta el apellido paterno")
+    if len(_norm_rut(run)) < 7:
+        raise HTTPException(status_code=400, detail="RUN inválido")
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="Correo electrónico inválido")
+    if email != email2:
+        raise HTTPException(status_code=400, detail="Los correos no coinciden")
+    existente = await asyncio.to_thread(migrup.buscar_contacto_por_rut, run)
+    if existente:
+        return {"ok": True, "existia": True,
+                "mensaje": f"El contacto ya existe en eCert ({existente.get('contNombres','')} {existente.get('contApPaterno','')})"}
+    res = await asyncio.to_thread(migrup.crear_contacto, nombres, paterno, materno, run, email)
+    if not res.get("success"):
+        raise HTTPException(status_code=502, detail=str(res.get("error"))[:250])
+    return {"ok": True, "existia": False, "mensaje": f"Contacto {nombres} {paterno} creado en eCert"}
+
+
+@api.post("/migrup/ocr-cedula")
+async def migrup_ocr_cedula(file: UploadFile = File(...)):
+    """Lee una cédula de identidad (foto o PDF) y extrae los datos del contacto."""
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(status_code=400, detail="Archivo vacío")
+    fn = file.filename or "cedula"
+    try:
+        raw, fn, _ = pdfs.convertir_a_pdf(raw, fn)
+    except ValueError:
+        pass
+    texto, _met = await asyncio.to_thread(ocr_service.extraer_texto, raw, fn, True)
+    if len(texto or "") < 15:
+        raise HTTPException(status_code=422, detail="No se pudo leer texto en la cédula. Probá con una foto más nítida.")
+    datos = {"nombres": "", "aPaterno": "", "aMaterno": "", "rut": ai_extract._rut_regex(texto), "email": ""}
+    key = os.environ.get("EMERGENT_LLM_KEY", "")
+    if key:
+        try:
+            from emergentintegrations.llm.chat import LlmChat, UserMessage
+            chat = LlmChat(api_key=key, session_id=f"cedula-{uuid.uuid4()}", system_message=(
+                "Recibes el texto OCR de una cédula de identidad chilena. Responde SOLO un JSON válido con: "
+                "nombres (string, solo los nombres de pila), aPaterno (apellido paterno), "
+                "aMaterno (apellido materno o ''), rut (RUN formato 12.345.678-9 o ''). "
+                "Si un dato no aparece, usa ''.")).with_model("openai", "gpt-5.4-mini")
+            resp = await chat.send_message(UserMessage(text=texto[:3000]))
+            m = re.search(r"\{.*\}", str(resp), re.S)
+            if m:
+                import json as _json
+                d = _json.loads(m.group(0))
+                for k in ("nombres", "aPaterno", "aMaterno"):
+                    datos[k] = (d.get(k) or "").strip()
+                datos["rut"] = (d.get("rut") or "").strip() or datos["rut"]
+        except Exception as e:
+            logging.warning(f"ocr-cedula IA: {e}")
+    return {"ok": True, **datos}
+
+
 @api.get("/migrup/documentos")
 async def migrup_documentos(nombre: str = "", estado: int = 0):
     res = await asyncio.to_thread(migrup.listar_documentos, nombre, estado, 1, 20)
@@ -3188,9 +3463,9 @@ async def migrup_documentos(nombre: str = "", estado: int = 0):
 @api.post("/set-credito/sets/{sid}/enviar-firma")
 async def setcred_enviar_firma(sid: str, payload: dict):
     doc = await _get_set(sid)
-    fn = fsvc.safe_name(payload.get("file_path", ""))
-    target = _set_dir(doc.get("nombre", "")) / fn
-    if not target.exists():
+    base = _set_dir(doc.get("nombre", "")).resolve()
+    target = (base / (payload.get("file_path", "") or "")).resolve()
+    if not str(target).startswith(str(base)) or not target.exists():
         raise HTTPException(status_code=404, detail="Documento no encontrado")
     firmante = {
         "nombres": payload.get("nombres") or doc.get("nombre", ""),

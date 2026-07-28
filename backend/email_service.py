@@ -506,6 +506,74 @@ def fetch_sent_headers(limit=60):
 SENT_LAST = []
 
 
+def _attachments_from_bodystructure(raw):
+    """Extrae nombres de adjuntos desde el BODYSTRUCTURE (sin descargar el mensaje)."""
+    s = raw.decode(errors="ignore") if isinstance(raw, bytes) else str(raw)
+    nombres = []
+    for m in re.finditer(r'"(?:FILENAME|NAME)"\s+"([^"]+)"', s, re.I):
+        val = m.group(1)
+        try:
+            val = str(email.header.make_header(email.header.decode_header(val)))
+        except Exception:
+            pass
+        if val not in nombres:
+            nombres.append(val)
+    return nombres
+
+
+def fetch_emails_from_sender(sender_kw, limit=15):
+    """Correos recientes de un remitente (ej. 'evaluaciones') con sus adjuntos (metadata).
+
+    Rápido: usa cabeceras + BODYSTRUCTURE, no descarga los adjuntos.
+    """
+    kw = (sender_kw or "").strip()
+    if not kw:
+        return []
+    out = []
+    vistos = set()
+    for acc in ACCOUNTS:
+        try:
+            m = _connect(acc)
+            m.select("INBOX", readonly=True)
+            try:
+                typ, data = m.search(None, "X-GM-RAW", f'from:{kw}')
+                if typ != "OK":
+                    raise Exception("gm-raw")
+            except Exception:
+                typ, data = m.search(None, "FROM", f'"{kw}"')
+            ids = data[0].split() if data and data[0] else []
+            for num in reversed(ids[-limit:]):
+                typ, msgdata = m.fetch(num, "(UID BODYSTRUCTURE BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE)])")
+                if not msgdata or not isinstance(msgdata[0], tuple):
+                    continue
+                descriptor = msgdata[0][0]
+                descriptor = descriptor.decode(errors="ignore") if isinstance(descriptor, bytes) else str(descriptor)
+                header_bytes = msgdata[0][1] or b""
+                mu = re.search(r"UID (\d+)", descriptor)
+                uid = mu.group(1) if mu else str(num)
+                hmsg = email.message_from_bytes(header_bytes)
+                subject = _dec(hmsg.get("Subject"))
+                remitente = _dec(hmsg.get("From"))
+                fecha_raw = hmsg.get("Date")
+                try:
+                    fecha = parsedate_to_datetime(fecha_raw).isoformat() if fecha_raw else ""
+                except Exception:
+                    fecha = fecha_raw or ""
+                nombres = _attachments_from_bodystructure(descriptor)
+                clave = f"{subject}|{len(nombres)}"
+                if clave in vistos:
+                    continue
+                vistos.add(clave)
+                out.append({"id": f"{acc['rol']}|{uid}", "cuenta": acc["user"],
+                            "from": remitente, "subject": subject, "date": fecha, "body": "",
+                            "attachments": [{"filename": n, "size": 0} for n in nombres]})
+            m.logout()
+        except Exception:
+            continue
+    out.sort(key=lambda e: e.get("date", ""), reverse=True)
+    return out
+
+
 def send_mail(to, subject, body_html, attachments=None, desde="secundaria"):
     """Envia un correo. attachments: [{filename, content_b64}]
     desde: 'secundaria' (gerardo.ext@, para PDFs a clientes) o 'principal'."""

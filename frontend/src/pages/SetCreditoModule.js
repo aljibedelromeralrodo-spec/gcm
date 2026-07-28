@@ -17,7 +17,10 @@ export default function SetCreditoModule() {
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState("");
   const [firmaModal, setFirmaModal] = useState(null);
+  const [contactoModal, setContactoModal] = useState(null);
+  const [ocrLoading, setOcrLoading] = useState(false);
   const fileRef = useRef();
+  const cedulaRef = useRef();
   const [tipoUpload, setTipoUpload] = useState("solicitud_credito");
 
   const loadSets = useCallback(async () => {
@@ -113,6 +116,51 @@ export default function SetCreditoModule() {
     setLoading(false);
   };
 
+  const abrirContacto = () => {
+    const base = { nombres: "", aPaterno: "", aMaterno: "", rut: "", email: "", email2: "" };
+    if (current) {
+      const partes = (current.nombre || "").trim().split(/\s+/);
+      base.nombres = partes.slice(0, Math.max(1, partes.length - 2)).join(" ");
+      base.aPaterno = partes.length >= 3 ? partes[partes.length - 2] : (partes[1] || "");
+      base.aMaterno = partes.length >= 3 ? partes[partes.length - 1] : "";
+      base.rut = current.rut || "";
+      base.email = current.email || "";
+      base.email2 = current.email || "";
+    }
+    setContactoModal(base);
+  };
+
+  const ocrCedula = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setOcrLoading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const r = await axios.post(`${API}/api/migrup/ocr-cedula`, fd, { timeout: 120000 });
+      setContactoModal(c => ({
+        ...c,
+        nombres: r.data.nombres || c.nombres,
+        aPaterno: r.data.aPaterno || c.aPaterno,
+        aMaterno: r.data.aMaterno || c.aMaterno,
+        rut: r.data.rut || c.rut,
+      }));
+      setMsg("✅ Datos capturados desde la cédula. Revisá y completá el correo.");
+    } catch (err) { setMsg("Error leyendo la cédula: " + (err.response?.data?.detail || err.message)); }
+    setOcrLoading(false);
+    if (cedulaRef.current) cedulaRef.current.value = "";
+  };
+
+  const crearContacto = async () => {
+    setLoading(true);
+    try {
+      const r = await axios.post(`${API}/api/migrup/contactos`, contactoModal, { timeout: 60000 });
+      setMsg(`✅ ${r.data.mensaje}`);
+      setContactoModal(null);
+    } catch (e) { setMsg("Error: " + (e.response?.data?.detail || e.message)); }
+    setLoading(false);
+  };
+
   return (
     <div style={{ padding: "1.5rem", color: "var(--white)", maxWidth: "1050px" }} data-testid="setcredito-module">
       {msg && <div data-testid="setcred-msg" style={{ padding: "0.7rem 1rem", borderRadius: "8px", marginBottom: "1rem", background: msg.startsWith("✅") ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)", color: msg.startsWith("✅") ? "#22c55e" : "#ef4444", fontWeight: 600 }}>{msg}</div>}
@@ -128,6 +176,7 @@ export default function SetCreditoModule() {
               : migrup?.configured ? "No se pudo conectar (revisar credenciales)" : "No configurado"}
           </div>
         </div>
+        <button data-testid="setcred-nuevo-contacto" onClick={abrirContacto} disabled={!migrup?.connected} style={btn("#3b82f6", true)}><i className="fa fa-user-plus" style={{ marginRight: "0.4rem" }} />Nuevo contacto eCert</button>
         <span style={{ padding: "0.2rem 0.7rem", borderRadius: "999px", fontSize: "0.8rem", fontWeight: 700, background: migrup?.connected ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)", color: migrup?.connected ? "#22c55e" : "#ef4444" }}>
           {migrup?.connected ? "● Conectado" : "○ Desconectado"}
         </span>
@@ -209,6 +258,39 @@ export default function SetCreditoModule() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Modal nuevo contacto eCert */}
+      {contactoModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem" }} onClick={() => setContactoModal(null)}>
+          <div style={{ background: "#1a1f2e", borderRadius: "12px", maxWidth: "500px", width: "100%", padding: "1.5rem", border: "1px solid rgba(255,255,255,0.15)" }} onClick={e => e.stopPropagation()} data-testid="setcred-contacto-modal">
+            <h3 style={{ margin: "0 0 0.3rem", color: "var(--gold)" }}>Añade un nuevo contacto para firmar</h3>
+            <p style={{ fontSize: "0.83rem", opacity: 0.7, margin: "0 0 1rem" }}>El contacto se crea en eCert Chile (migrup). Podés capturar los datos con el lector de cédula o llenarlos a mano.</p>
+            <div style={{ display: "flex", gap: "0.6rem", marginBottom: "1rem", flexWrap: "wrap" }}>
+              <input ref={cedulaRef} type="file" accept="application/pdf,image/*" onChange={ocrCedula} style={{ display: "none" }} data-testid="contacto-cedula-input" />
+              <button data-testid="contacto-ocr-btn" onClick={() => cedulaRef.current?.click()} disabled={ocrLoading} style={btn("#8b5cf6", true)}>
+                <i className={`fa ${ocrLoading ? "fa-spinner fa-spin" : "fa-id-card-o"}`} style={{ marginRight: "0.4rem" }} />{ocrLoading ? "Leyendo cédula..." : "Capturar desde cédula (OCR)"}
+              </button>
+            </div>
+            <div style={{ display: "grid", gap: "0.8rem" }}>
+              <div><label style={lbl}>Nombres *</label><input data-testid="contacto-nombres" style={inp} value={contactoModal.nombres} onChange={e => setContactoModal({ ...contactoModal, nombres: e.target.value })} placeholder="Por favor ingrese nombre(s)" /></div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.8rem" }}>
+                <div><label style={lbl}>Apellido Paterno *</label><input data-testid="contacto-apaterno" style={inp} value={contactoModal.aPaterno} onChange={e => setContactoModal({ ...contactoModal, aPaterno: e.target.value })} /></div>
+                <div><label style={lbl}>Apellido Materno</label><input data-testid="contacto-amaterno" style={inp} value={contactoModal.aMaterno} onChange={e => setContactoModal({ ...contactoModal, aMaterno: e.target.value })} /></div>
+              </div>
+              <div><label style={lbl}>RUN *</label><input data-testid="contacto-rut" style={inp} value={contactoModal.rut} onChange={e => setContactoModal({ ...contactoModal, rut: e.target.value })} placeholder="12.345.678-9" /></div>
+              <div><label style={lbl}>Correo electrónico *</label><input data-testid="contacto-email" style={inp} value={contactoModal.email} onChange={e => setContactoModal({ ...contactoModal, email: e.target.value })} /></div>
+              <div><label style={lbl}>Confirmar correo electrónico *</label><input data-testid="contacto-email2" style={inp} value={contactoModal.email2} onChange={e => setContactoModal({ ...contactoModal, email2: e.target.value })} /></div>
+              {contactoModal.email && contactoModal.email2 && contactoModal.email !== contactoModal.email2 && (
+                <div style={{ color: "#ef4444", fontSize: "0.8rem" }} data-testid="contacto-email-error">Los correos no coinciden</div>
+              )}
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.6rem", marginTop: "1.2rem" }}>
+              <button onClick={() => setContactoModal(null)} style={btn("rgba(255,255,255,0.15)", true)}>Cancelar</button>
+              <button data-testid="contacto-crear" onClick={crearContacto} disabled={loading || !contactoModal.nombres || !contactoModal.aPaterno || !contactoModal.rut || !contactoModal.email || contactoModal.email !== contactoModal.email2} style={btn("var(--gold)", true)}><i className="fa fa-user-plus" style={{ marginRight: "0.4rem" }} />Crear contacto</button>
+            </div>
+          </div>
         </div>
       )}
 

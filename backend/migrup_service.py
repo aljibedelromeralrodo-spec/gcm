@@ -86,6 +86,58 @@ def listar_documentos(nombre="", estado_id=0, pagina=1, cantidad=15):
                   "estadoId": estado_id, "pagina": pagina, "cantidad": cantidad})
 
 
+def listar_contactos(pagina=1, cantidad=1000):
+    lg = login()
+    if not lg.get("success"):
+        return {"_error": lg.get("error")}
+    return _post("Contacto/ListarContactos", {
+        "pageNumber": pagina, "pageSize": cantidad, "idUsuario": _CACHE["uid"],
+        "nombre": "", "apellidoPaterno": "", "apellidoMaterno": "",
+        "rut": 0, "rutDv": "", "correo": ""})
+
+
+def buscar_contacto_por_rut(rut):
+    num, _dv = _split_rut(rut)
+    if not num:
+        return None
+    res = listar_contactos()
+    for c in (res or {}).get("items") or []:
+        if str(c.get("contRut", "")).strip() == str(num):
+            return c
+    return None
+
+
+def crear_contacto(nombres, paterno, materno, rut, email):
+    lg = login()
+    if not lg.get("success"):
+        return {"success": False, "error": lg.get("error")}
+    num, dv = _split_rut(rut)
+    if not num or not dv:
+        return {"success": False, "error": "RUN inválido"}
+    res = _post("Contacto/CrearContacto", {
+        "idUsuario": _CACHE["uid"], "nombres": nombres, "paterno": paterno,
+        "materno": materno or "", "rut": num, "digitoVerificador": dv,
+        "email": (email or "").lower()})
+    if isinstance(res, dict) and res.get("_error"):
+        return {"success": False, "error": res["_error"]}
+    if isinstance(res, dict) and res.get("_status", 200) >= 400:
+        return {"success": False, "error": res.get("_text") or f"HTTP {res.get('_status')}"}
+    return {"success": True, "raw": res}
+
+
+def asegurar_contacto(firmante):
+    """Crea el contacto en eCert si no existe (requisito para firmas de terceros)."""
+    existente = buscar_contacto_por_rut(firmante.get("rut", ""))
+    if existente:
+        return {"success": True, "existia": True, "contacto": existente}
+    res = crear_contacto(firmante.get("nombres", ""), firmante.get("aPaterno", ""),
+                         firmante.get("aMaterno", ""), firmante.get("rut", ""),
+                         firmante.get("email", ""))
+    res["existia"] = False
+    return res
+
+
+
 def _b64(raw):
     return base64.b64encode(raw).decode()
 
@@ -102,6 +154,7 @@ def enviar_a_firmar_tercero(pdf_bytes, nombre_documento, firmante, comentario=""
     lg = login()
     if not lg.get("success"):
         return {"success": False, "error": lg.get("error")}
+    asegurar_contacto(firmante)
     pos = pos or {"x": 60, "y": 60, "width": 130, "height": 60}
     n_pages = 1
     try:
