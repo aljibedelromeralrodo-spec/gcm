@@ -161,3 +161,23 @@ Idioma del usuario: **Español** (responder siempre en español).
     eliminado contacto de prueba vía `Contacto/EliminarContacto {IdContacto}`), OCR cédula OK.
 - ⚠️ Dependencias de sistema: `poppler-utils`, `tesseract-ocr`, `tesseract-ocr-spa` se
   reinstalaron en el fork (se pierden al forkear; reinstalar con apt si OCR devuelve vacío).
+
+## Validación REAL de firma eCert — EXITOSA (Jun 2026)
+- Payload REAL de `ProcesoFirma/ProcesoFirmaDocumentos` (extraído del bundle JS):
+  `{usuarioId, comentario, nroDocumentos, texto: <clave certificado, "" si solo firman
+  terceros>, documentos: [{doctoBase64, doctoNombre (MÁX 20 chars), modoFirma: 1,
+  firmantes: [{usuarioId: null, contactoId: <contId eCert>, firmaOrden, firmaPagina,
+  firmaPosX, firmaPosY}]}], enviarCopiaAMi, enviarCopiaAFirmantes, listaCorreosEnvioCopia}`.
+  Éxito = `{codigo: 200}`. Límites: 10MB, 6 docs, nombre 20 chars.
+- REGLAS CONFIRMADAS:
+  - El firmante tercero SIEMPRE se referencia por `contactoId` → el contacto debe existir
+    (auto-creado vía `asegurar_contacto`). REGLA DEL USUARIO: siempre agregar al cliente
+    como contacto de terceros.
+  - eCert NO permite crear contacto con el RUT del dueño ("el usuario no puede agregarse
+    como contacto"). Si firmante == dueño, el código usa modo "mi firma" (usuarioId).
+  - `texto` (clave del certificado) va VACÍO cuando solo firman terceros. Con la clave de
+    login da error 147 "La clave no es correcta". Env opcional: MIGRUP_CLAVE_CERT.
+- PRUEBA REAL: set combinado de Javier Perez (25 págs) enviado al contacto yerile barrera
+  (delabarreraethan@gmail.com — correo del propio usuario). Resultado: codigo 200, doc
+  "SET_JavierPerez_TEST" en estado "Por Firmar Otros", semáforo 15→14 firmas de terceros.
+- `crear_contacto` ahora detecta errores de validación RFC7231 (`errors`/`status` 400).
