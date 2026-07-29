@@ -223,3 +223,17 @@ Idioma del usuario: **Español** (responder siempre en español).
 - Verificado localmente: 7 etiquetas en set Javier Perez (oficial pág 6, referencias en
   7,10,14,20,23,25); preview de la marca correcta sobre "Firma Cliente".
 - PENDIENTE: envío real cuando el usuario compre firmas (eCert codigo 145: 0 prepagadas).
+
+## Reglas de posiciones de firma refinadas por el usuario (Jun 2026)
+- Cliente principal = DEUDOR (nunca firma en etiquetas de codeudor). Codeudor solo codeudor.
+- `posiciones_firma_cliente(pdf_bytes, rol="titular"|"codeudor")` reescrita:
+  titular = firma + (cliente|asegurad|declarante|deudor|titular|solicitante|representante|
+  poderdante|mandante|apoderad), + líneas "nombre y firma", + línea con SOLO "firma"
+  (apoderado notificante, PEP). Excluye "firma ejecutivo" y "firma codeudor".
+- Set Javier Perez (titular): 10 etiquetas → págs 6 (asegurado Sura, ahí va la estampa
+  OFICIAL), 7 cliente, 9 nombre y firma (origen de fondos), 10 declarante, 11 firma sola
+  (apoderado), 14 cliente, 20 asegurado, 21 firma sola (PEP), 23 deudor, 25 deudor.
+  Codeudor: págs 23 y 25 (quedan libres para el codeudor).
+- Ejemplo v2 enviado por correo al usuario (2 cuentas) con estampa simulada pág 6 +
+  marcas FEA en las otras 9. Verificado visualmente (pág 23 no pisa codeudor).
+- Script de ejemplo: /tmp/enviar_ejemplo.py (regenerable).

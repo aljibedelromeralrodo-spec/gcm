@@ -122,14 +122,22 @@ def convertir_a_pdf(raw_bytes, filename):
     raise ValueError(f"Formato no soportado para conversion: {fn}")
 
 
-FIRMA_LABELS = re.compile(
-    r"^(del?\s+|de\s+la\s+)?(cliente|asegurad|declarante|apoderad|poderdante|"
-    r"mandante|representante|solicitante|titular|codeudor)")
+ROLES_TITULAR = re.compile(
+    r"^(del?\s+|de\s+la\s+)?(cliente|asegurad|declarante|deudor|titular|"
+    r"solicitante|representante|poderdante|mandante|apoderad)")
+ROLES_CODEUDOR = re.compile(r"^(del?\s+|de\s+la\s+)?codeudor")
 
 
-def posiciones_firma_cliente(pdf_bytes):
-    """Detecta etiquetas tipo 'Firma cliente/asegurado/declarante/...' y devuelve
-    sus posiciones [{pagina, x, top, alto_pagina}] para estampar la firma encima."""
+def posiciones_firma_cliente(pdf_bytes, rol="titular"):
+    """Detecta las etiquetas donde debe firmar el cliente y devuelve sus posiciones
+    [{pagina, x, top, alto_pagina, ancho_pagina, etiqueta}].
+
+    Reglas (rol=titular, el cliente principal):
+      - "Firma cliente/asegurado/declarante/deudor/titular/..." (NUNCA codeudor)
+      - "Nombre y firma ..." (ej: declaración origen de fondos)
+      - "Firma" sola en su línea (ej: designación de apoderado, PEP)
+      - Se excluye "Firma ejecutivo ..."
+    Con rol=codeudor solo se toman las etiquetas de codeudor."""
     import io as _io
     import unicodedata
     import pdfplumber
@@ -150,15 +158,32 @@ def posiciones_firma_cliente(pdf_bytes):
                 lineas.setdefault(round(w["top"] / 4), []).append(w)
             for ws in lineas.values():
                 ws.sort(key=lambda w: w["x0"])
+                texto_linea = _norm(" ".join(x["text"] for x in ws))
                 for i, w in enumerate(ws):
-                    if not _norm(w["text"]).startswith("firma"):
+                    wt = _norm(w["text"])
+                    if not wt.startswith("firma"):
                         continue
                     resto = _norm(" ".join(x["text"] for x in ws[i + 1:i + 4]))
-                    if FIRMA_LABELS.match(resto):
+                    prev = _norm(" ".join(x["text"] for x in ws[max(0, i - 2):i]))
+                    es_codeudor_lbl = bool(ROLES_CODEUDOR.match(resto))
+                    if rol == "codeudor":
+                        ok = es_codeudor_lbl
+                        etiqueta = "firma codeudor"
+                    else:
+                        if es_codeudor_lbl or resto.startswith("ejecutiv"):
+                            continue
+                        sola = re.fullmatch(r"firma[\s:_.]*", texto_linea) is not None
+                        nombre_y = prev.endswith("nombre y")
+                        con_rol = bool(ROLES_TITULAR.match(resto))
+                        ok = con_rol or nombre_y or sola
+                        etiqueta = ("firma " + resto.split(" ")[0]) if con_rol else \
+                            ("nombre y firma" if nombre_y else "firma")
+                    if ok:
                         out.append({"pagina": pnum, "x": float(w["x0"]),
                                     "top": float(w["top"]),
                                     "alto_pagina": float(page.height),
-                                    "ancho_pagina": float(page.width)})
+                                    "ancho_pagina": float(page.width),
+                                    "etiqueta": etiqueta})
     return out
 
 
