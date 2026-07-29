@@ -107,8 +107,8 @@ export default function SetCreditoModule() {
         : `${API}/api/set-credito/sets/${current.id}/enviar-firma`;
       const r = await axios.post(url, firmaModal, { timeout: 90000 });
       setMsg(firmaModal.completo
-        ? `✅ Set completo enviado a firmar a ${firmaModal.email} (${r.data.paginas} hojas, ${r.data.estampas || 1} estampas de firma donde dice "Firma cliente")`
-        : `✅ Documento enviado a firmar a ${firmaModal.email} (${r.data.estampas || 1} estampa(s) de firma)`);
+        ? `✅ Set completo enviado a firmar a ${firmaModal.email} (${r.data.paginas} hojas, firma en ${r.data.estampas || 1} lugares, solo 1 firma del plan consumida)`
+        : `✅ Documento enviado a firmar a ${firmaModal.email} (firma en ${r.data.estampas || 1} lugar(es))`);
       setFirmaModal(null);
       await abrir(current.id);
       loadMigrup();
@@ -231,7 +231,7 @@ export default function SetCreditoModule() {
           {current.archivos.length > 0 && (
             <div data-testid="setcred-firmar-todo-bar" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.8rem", flexWrap: "wrap", padding: "0.9rem 1rem", background: "rgba(212,175,55,0.1)", border: "1px solid rgba(212,175,55,0.35)", borderRadius: "10px", marginBottom: "1rem" }}>
               <div style={{ fontSize: "0.88rem" }}>
-                <b style={{ color: "var(--gold)" }}>Firmar todo de una vez</b> — combina los {current.archivos.filter(a => !a.nombre.startsWith("COMBINADO_SET")).length} documentos en un solo PDF y el cliente firma todas las hojas con un clic.
+                <b style={{ color: "var(--gold)" }}>Firmar todo de una vez</b> — combina los {current.archivos.filter(a => !a.nombre.startsWith("COMBINADO_SET")).length} documentos en un solo PDF. La firma eCert va en la primera etiqueta "Firma cliente" y en las demás queda la marca de Firma Electrónica Avanzada. <span style={{ opacity: 0.7 }}>(consume solo 1 firma de terceros)</span>
               </div>
               <button data-testid="setcred-firmar-todo" onClick={abrirFirmaCompleta} disabled={!migrup?.connected || loading} style={btn("var(--gold)")}><i className="fa fa-check-square-o" style={{ marginRight: "0.4rem" }} />Combinar y enviar a firmar todo</button>
             </div>

@@ -210,3 +210,16 @@ Idioma del usuario: **Español** (responder siempre en español).
   migrup.cl → AJUSTES. PENDIENTE validar tras la compra: ¿el cliente firma 1 vez y se
   estampan todas, o debe firmar N veces?
 - pdfplumber agregado a requirements.txt.
+
+## Solución "1 firma, constancia en todas partes" (Jun 2026)
+- El usuario NO quiere pagar 1 firma por estampa. Solución implementada:
+  - La estampa OFICIAL de eCert va en la PRIMERA etiqueta detectada (posiciones[:1]) →
+    consume solo 1 firma de terceros.
+  - En las demás etiquetas, `pdf_service.estampar_referencias_firma()` imprime ANTES del
+    envío una marca: "Firmado con Firma Electrónica Avanzada / <NOMBRE> / FEA e-CertChile
+    válida para todo el documento (Ley 19.799)" (reportlab overlay + pypdf merge).
+  - Aplicado en ambos endpoints (enviar-firma y enviar-firma-completo). Respuesta incluye
+    estampas y firmas_consumidas=1.
+- Verificado localmente: 7 etiquetas en set Javier Perez (oficial pág 6, referencias en
+  7,10,14,20,23,25); preview de la marca correcta sobre "Firma Cliente".
+- PENDIENTE: envío real cuando el usuario compre firmas (eCert codigo 145: 0 prepagadas).

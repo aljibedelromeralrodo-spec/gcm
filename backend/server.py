@@ -3346,10 +3346,16 @@ async def setcred_enviar_firma_completo(sid: str, payload: dict):
     target = _set_dir(doc.get("nombre", "")) / res_comb["combinado"]
     pdf_bytes = target.read_bytes()
     posiciones = await asyncio.to_thread(pdfs.posiciones_firma_cliente, pdf_bytes)
+    nombre_completo = " ".join(x for x in [firmante["nombres"], firmante["aPaterno"],
+                                           firmante["aMaterno"]] if x).strip()
+    if len(posiciones) > 1:
+        # 1 sola firma del plan: estampa oficial en la 1ª etiqueta, referencia FEA en el resto
+        pdf_bytes = await asyncio.to_thread(pdfs.estampar_referencias_firma, pdf_bytes,
+                                            posiciones[1:], nombre_completo)
     res = await asyncio.to_thread(
         migrup.enviar_a_firmar_tercero, pdf_bytes, target.stem, firmante,
         payload.get("comentario", "Set de crédito - firma completa"),
-        None, True, posiciones or None)
+        None, False, posiciones[:1] or None)
     if not res.get("success"):
         raise HTTPException(status_code=502, detail=str(res.get("error") or res.get("raw"))[:250])
     await db.set_credito.update_one({"id": sid}, {"$push": {"firmas": {
@@ -3358,7 +3364,7 @@ async def setcred_enviar_firma_completo(sid: str, payload: dict):
         "completo": True, "enviado_en": now_iso()}}})
     return {"ok": True, "firmante": firmante["email"], "combinado": res_comb["combinado"],
             "documentos_incluidos": res_comb["usados"], "paginas": res.get("paginas"),
-            "estampas": len(posiciones) or 1,
+            "estampas": len(posiciones) or 1, "firmas_consumidas": 1,
             "estampas_detalle": [{"pagina": p["pagina"]} for p in posiciones]}
 
 
@@ -3486,16 +3492,21 @@ async def setcred_enviar_firma(sid: str, payload: dict):
     comentario = payload.get("comentario", "")
     pdf_bytes = target.read_bytes()
     posiciones = await asyncio.to_thread(pdfs.posiciones_firma_cliente, pdf_bytes)
+    nombre_completo = " ".join(x for x in [firmante["nombres"], firmante["aPaterno"],
+                                           firmante["aMaterno"]] if x).strip()
+    if len(posiciones) > 1:
+        pdf_bytes = await asyncio.to_thread(pdfs.estampar_referencias_firma, pdf_bytes,
+                                            posiciones[1:], nombre_completo)
     res = await asyncio.to_thread(migrup.enviar_a_firmar_tercero, pdf_bytes,
                                   target.stem, firmante, comentario, None, False,
-                                  posiciones or None)
+                                  posiciones[:1] or None)
     if not res.get("success"):
         raise HTTPException(status_code=502, detail=str(res.get("error") or res.get("raw"))[:250])
     await db.set_credito.update_one({"id": sid}, {"$push": {"firmas": {
         "documento": target.name, "firmante": firmante["email"], "rut": firmante["rut"],
         "estampas": len(posiciones) or 1, "enviado_en": now_iso()}}})
     return {"ok": True, "firmante": firmante["email"], "estampas": len(posiciones) or 1,
-            "raw": res.get("raw")}
+            "firmas_consumidas": 1, "raw": res.get("raw")}
 
 
 def _fmt_uf(v):

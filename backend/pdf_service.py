@@ -160,3 +160,42 @@ def posiciones_firma_cliente(pdf_bytes):
                                     "alto_pagina": float(page.height),
                                     "ancho_pagina": float(page.width)})
     return out
+
+
+def estampar_referencias_firma(pdf_bytes, posiciones, nombre_firmante):
+    """Imprime en cada etiqueta (menos la primera) una marca de referencia a la
+    Firma Electrónica Avanzada única que cubre todo el documento (Ley 19.799)."""
+    if not posiciones:
+        return pdf_bytes
+    from reportlab.pdfgen import canvas
+    from pypdf import PdfReader, PdfWriter
+    reader = PdfReader(io.BytesIO(pdf_bytes))
+    por_pagina = {}
+    for p in posiciones:
+        por_pagina.setdefault(int(p["pagina"]), []).append(p)
+    writer = PdfWriter()
+    for i, page in enumerate(reader.pages, start=1):
+        marcas = por_pagina.get(i)
+        if marcas:
+            w = float(page.mediabox.width)
+            h = float(page.mediabox.height)
+            buf = io.BytesIO()
+            c = canvas.Canvas(buf, pagesize=(w, h))
+            for m in marcas:
+                x = max(8, min(float(m["x"]), w - 210))
+                y = h - float(m["top"]) + 3
+                c.setFillColorRGB(0.13, 0.23, 0.42)
+                c.setFont("Helvetica-Bold", 7.5)
+                c.drawString(x, y + 17, "Firmado con Firma Electrónica Avanzada")
+                c.setFont("Helvetica", 7.5)
+                c.drawString(x, y + 8, (nombre_firmante or "").upper()[:48])
+                c.setFont("Helvetica-Oblique", 6.3)
+                c.drawString(x, y, "FEA e-CertChile válida para todo el documento (Ley 19.799)")
+            c.save()
+            buf.seek(0)
+            overlay = PdfReader(buf).pages[0]
+            page.merge_page(overlay)
+        writer.add_page(page)
+    out = io.BytesIO()
+    writer.write(out)
+    return out.getvalue()
