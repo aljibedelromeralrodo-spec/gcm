@@ -181,3 +181,14 @@ Idioma del usuario: **Español** (responder siempre en español).
   (delabarreraethan@gmail.com — correo del propio usuario). Resultado: codigo 200, doc
   "SET_JavierPerez_TEST" en estado "Por Firmar Otros", semáforo 15→14 firmas de terceros.
 - `crear_contacto` ahora detecta errores de validación RFC7231 (`errors`/`status` 400).
+
+## Envío real a Benjamín Rivera Chandía — OK (Jun 2026)
+- Set combinado (25 págs) enviado vía endpoint real a contacto eCert existente
+  (RUT 20912882-9, briverachandia@gmail.com). Doc "COMBINADO_SET_Javier" quedó
+  "Por Firmar Otros". Firmas terceros 15→14.
+- Endpoints eCert nuevos descubiertos: `ProcesoFirma/CancelarSolicitud`
+  {idDocumento, idUsuario, mantenerDoc} (codigo 200, devuelve la firma al plan);
+  `ProcesoFirma/EliminarDocumento` {idDocumento, texto, idUsuario} (falla si el doc
+  tiene proceso pendiente).
+- ⚠️ CUSTODIA eCert AL 98.8%: si un envío falla con "No queda espacio en custodia",
+  hay que cancelar/eliminar docs antiguos en migrup o ampliar el plan.
