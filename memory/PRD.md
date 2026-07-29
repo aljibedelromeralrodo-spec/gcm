@@ -192,3 +192,21 @@ Idioma del usuario: **Español** (responder siempre en español).
   tiene proceso pendiente).
 - ⚠️ CUSTODIA eCert AL 98.8%: si un envío falla con "No queda espacio en custodia",
   hay que cancelar/eliminar docs antiguos en migrup o ampliar el plan.
+
+## Estampas múltiples "Firma cliente" (Jun 2026)
+- Requisito del usuario: la firma debe estamparse en TODAS las etiquetas: "Firma cliente",
+  "Firma asegurado", "Firma cliente o representante legal", "Firma declarante" (decl. jurada
+  estado civil), designación de apoderado, DPS, etc.
+- Implementado: `pdf_service.posiciones_firma_cliente()` (pdfplumber) detecta las etiquetas
+  "firma + (cliente|asegurad|declarante|apoderad|poderdante|mandante|representante|solicitante|
+  titular|codeudor)" y devuelve página/x/top. `enviar_a_firmar_tercero(posiciones=...)` genera
+  un firmante por estampa con firmaOrden incremental. Ambos endpoints de firma lo usan.
+- En el set real de Javier Perez detectó 7 estampas (págs 6,7,10,14,20,23,25).
+- DESCUBRIMIENTO DE COSTOS eCert: cada estampa (firmaOrden distinto) consume 1 firma de
+  terceros (respuesta: firmasTerceroVaUtilizar=4 con 4 posiciones). Entradas duplicadas con
+  el MISMO firmaOrden se deduplican (1 estampa, 1 firma).
+- ⚠️ BLOQUEADO: "No quedan firmas prepagadas para enviar a terceros" (codigo 145). El envío
+  de Benjamín usó la última adicional (18/18 usadas). El usuario debe comprar firmas en
+  migrup.cl → AJUSTES. PENDIENTE validar tras la compra: ¿el cliente firma 1 vez y se
+  estampan todas, o debe firmar N veces?
+- pdfplumber agregado a requirements.txt.

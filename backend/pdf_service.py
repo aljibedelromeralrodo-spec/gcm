@@ -120,3 +120,43 @@ def convertir_a_pdf(raw_bytes, filename):
         c.showPage(); c.save(); buf.seek(0)
         return buf.getvalue(), base + ".pdf", True
     raise ValueError(f"Formato no soportado para conversion: {fn}")
+
+
+FIRMA_LABELS = re.compile(
+    r"^(del?\s+|de\s+la\s+)?(cliente|asegurad|declarante|apoderad|poderdante|"
+    r"mandante|representante|solicitante|titular|codeudor)")
+
+
+def posiciones_firma_cliente(pdf_bytes):
+    """Detecta etiquetas tipo 'Firma cliente/asegurado/declarante/...' y devuelve
+    sus posiciones [{pagina, x, top, alto_pagina}] para estampar la firma encima."""
+    import io as _io
+    import unicodedata
+    import pdfplumber
+
+    def _norm(s):
+        s = unicodedata.normalize("NFD", (s or "").lower())
+        return "".join(ch for ch in s if unicodedata.category(ch) != "Mn")
+
+    out = []
+    with pdfplumber.open(_io.BytesIO(pdf_bytes)) as pdf:
+        for pnum, page in enumerate(pdf.pages, start=1):
+            try:
+                words = page.extract_words() or []
+            except Exception:
+                continue
+            lineas = {}
+            for w in words:
+                lineas.setdefault(round(w["top"] / 4), []).append(w)
+            for ws in lineas.values():
+                ws.sort(key=lambda w: w["x0"])
+                for i, w in enumerate(ws):
+                    if not _norm(w["text"]).startswith("firma"):
+                        continue
+                    resto = _norm(" ".join(x["text"] for x in ws[i + 1:i + 4]))
+                    if FIRMA_LABELS.match(resto):
+                        out.append({"pagina": pnum, "x": float(w["x0"]),
+                                    "top": float(w["top"]),
+                                    "alto_pagina": float(page.height),
+                                    "ancho_pagina": float(page.width)})
+    return out

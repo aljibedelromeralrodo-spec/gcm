@@ -107,8 +107,8 @@ export default function SetCreditoModule() {
         : `${API}/api/set-credito/sets/${current.id}/enviar-firma`;
       const r = await axios.post(url, firmaModal, { timeout: 90000 });
       setMsg(firmaModal.completo
-        ? `✅ Set completo enviado a firmar a ${firmaModal.email} (${r.data.paginas} hojas, ${r.data.documentos_incluidos?.length || 0} documentos)`
-        : `✅ Documento enviado a firmar a ${firmaModal.email}`);
+        ? `✅ Set completo enviado a firmar a ${firmaModal.email} (${r.data.paginas} hojas, ${r.data.estampas || 1} estampas de firma donde dice "Firma cliente")`
+        : `✅ Documento enviado a firmar a ${firmaModal.email} (${r.data.estampas || 1} estampa(s) de firma)`);
       setFirmaModal(null);
       await abrir(current.id);
       loadMigrup();
@@ -316,6 +316,13 @@ export default function SetCreditoModule() {
               <button onClick={() => setFirmaModal(null)} style={btn("rgba(255,255,255,0.15)", true)}>Cancelar</button>
               <button data-testid="firma-enviar" onClick={enviarFirma} disabled={loading} style={btn("var(--gold)", true)}><i className="fa fa-paper-plane" style={{ marginRight: "0.4rem" }} />Enviar a firmar</button>
             </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+     </div>
           </div>
         </div>
       )}

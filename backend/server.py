@@ -3344,17 +3344,22 @@ async def setcred_enviar_firma_completo(sid: str, payload: dict):
     if not res_comb["combinado"]:
         raise HTTPException(status_code=400, detail="No hay documentos para combinar y firmar")
     target = _set_dir(doc.get("nombre", "")) / res_comb["combinado"]
+    pdf_bytes = target.read_bytes()
+    posiciones = await asyncio.to_thread(pdfs.posiciones_firma_cliente, pdf_bytes)
     res = await asyncio.to_thread(
-        migrup.enviar_a_firmar_tercero, target.read_bytes(), target.stem, firmante,
+        migrup.enviar_a_firmar_tercero, pdf_bytes, target.stem, firmante,
         payload.get("comentario", "Set de crédito - firma completa"),
-        None, True)
+        None, True, posiciones or None)
     if not res.get("success"):
         raise HTTPException(status_code=502, detail=str(res.get("error") or res.get("raw"))[:250])
     await db.set_credito.update_one({"id": sid}, {"$push": {"firmas": {
         "documento": target.name, "firmante": firmante["email"], "rut": firmante["rut"],
-        "paginas": res.get("paginas"), "completo": True, "enviado_en": now_iso()}}})
+        "paginas": res.get("paginas"), "estampas": len(posiciones) or 1,
+        "completo": True, "enviado_en": now_iso()}}})
     return {"ok": True, "firmante": firmante["email"], "combinado": res_comb["combinado"],
-            "documentos_incluidos": res_comb["usados"], "paginas": res.get("paginas")}
+            "documentos_incluidos": res_comb["usados"], "paginas": res.get("paginas"),
+            "estampas": len(posiciones) or 1,
+            "estampas_detalle": [{"pagina": p["pagina"]} for p in posiciones]}
 
 
 @api.get("/migrup/status")
@@ -3479,14 +3484,18 @@ async def setcred_enviar_firma(sid: str, payload: dict):
     if not firmante["rut"]:
         raise HTTPException(status_code=400, detail="RUT del firmante requerido")
     comentario = payload.get("comentario", "")
-    res = await asyncio.to_thread(migrup.enviar_a_firmar_tercero, target.read_bytes(),
-                                  target.stem, firmante, comentario)
+    pdf_bytes = target.read_bytes()
+    posiciones = await asyncio.to_thread(pdfs.posiciones_firma_cliente, pdf_bytes)
+    res = await asyncio.to_thread(migrup.enviar_a_firmar_tercero, pdf_bytes,
+                                  target.stem, firmante, comentario, None, False,
+                                  posiciones or None)
     if not res.get("success"):
         raise HTTPException(status_code=502, detail=str(res.get("error") or res.get("raw"))[:250])
     await db.set_credito.update_one({"id": sid}, {"$push": {"firmas": {
         "documento": target.name, "firmante": firmante["email"], "rut": firmante["rut"],
-        "enviado_en": now_iso()}}})
-    return {"ok": True, "firmante": firmante["email"], "raw": res.get("raw")}
+        "estampas": len(posiciones) or 1, "enviado_en": now_iso()}}})
+    return {"ok": True, "firmante": firmante["email"], "estampas": len(posiciones) or 1,
+            "raw": res.get("raw")}
 
 
 def _fmt_uf(v):

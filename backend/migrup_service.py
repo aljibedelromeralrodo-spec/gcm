@@ -145,7 +145,7 @@ def _b64(raw):
 
 
 def enviar_a_firmar_tercero(pdf_bytes, nombre_documento, firmante, comentario="",
-                            pos=None, firmar_todas_paginas=False):
+                            pos=None, firmar_todas_paginas=False, posiciones=None):
     """Carga un PDF y lo envía a firmar por un tercero (el cliente) vía eCert.
 
     Flujo real de migrup: el firmante se referencia por contactoId, por lo que el
@@ -175,11 +175,26 @@ def enviar_a_firmar_tercero(pdf_bytes, nombre_documento, firmante, comentario=""
         pass
     pos = pos or {"x": 60, "y": 60}
     pos_y = max(8, int(alto - 53 - pos["y"]) - 8)
-    paginas = list(range(1, n_pages + 1)) if firmar_todas_paginas else [1]
-    firmantes = [{"usuarioId": _CACHE["uid"] if es_propio else None,
-                  "contactoId": None if es_propio else contacto["contId"], "firmaOrden": 1,
-                  "firmaPagina": pg, "firmaPosX": int(pos["x"]), "firmaPosY": pos_y}
-                 for pg in paginas]
+    if posiciones:
+        # Una estampa por cada etiqueta 'Firma cliente/asegurado/...' detectada.
+        # OJO: eCert cobra 1 firma de terceros POR ESTAMPA (firmaOrden distinto).
+        firmantes = []
+        for i, p in enumerate(posiciones, start=1):
+            alto_pg = float(p.get("alto_pagina") or alto)
+            fy = int(alto_pg - float(p["top"]))  # base de la estampa = borde superior de la etiqueta
+            fy = max(8, min(fy, int(alto_pg) - 62))
+            ancho_pg = float(p.get("ancho_pagina") or 612)
+            fx = max(8, min(int(float(p["x"])), int(ancho_pg) - 132))
+            firmantes.append({"usuarioId": _CACHE["uid"] if es_propio else None,
+                              "contactoId": None if es_propio else contacto["contId"],
+                              "firmaOrden": i, "firmaPagina": int(p["pagina"]),
+                              "firmaPosX": fx, "firmaPosY": fy})
+    else:
+        paginas = list(range(1, n_pages + 1)) if firmar_todas_paginas else [1]
+        firmantes = [{"usuarioId": _CACHE["uid"] if es_propio else None,
+                      "contactoId": None if es_propio else contacto["contId"], "firmaOrden": 1,
+                      "firmaPagina": pg, "firmaPosX": int(pos["x"]), "firmaPosY": pos_y}
+                     for pg in paginas]
     payload = {
         "usuarioId": _CACHE["uid"],
         "comentario": comentario or "",
@@ -200,8 +215,9 @@ def enviar_a_firmar_tercero(pdf_bytes, nombre_documento, firmante, comentario=""
         return {"success": False, "error": res["_error"]}
     codigo = (res or {}).get("codigo") or (res or {}).get("Codigo")
     if codigo != 200:
-        msg = (res or {}).get("mensaje") or (res or {}).get("Mensaje") or str(res)[:200]
-        if firmar_todas_paginas and len(paginas) > 1:
+        msg = ((res or {}).get("descripcionError") or (res or {}).get("mensaje")
+               or (res or {}).get("Mensaje") or str(res)[:200])
+        if not posiciones and firmar_todas_paginas and len(firmantes) > 1:
             # Algunos planes no aceptan multi-página: reintentar con una sola firma en pág 1
             return enviar_a_firmar_tercero(pdf_bytes, nombre_documento, firmante,
                                            comentario, pos, firmar_todas_paginas=False)
