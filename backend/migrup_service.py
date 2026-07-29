@@ -120,8 +120,10 @@ def crear_contacto(nombres, paterno, materno, rut, email):
         "email": (email or "").lower()})
     if isinstance(res, dict) and res.get("_error"):
         return {"success": False, "error": res["_error"]}
-    if isinstance(res, dict) and res.get("_status", 200) >= 400:
-        return {"success": False, "error": res.get("_text") or f"HTTP {res.get('_status')}"}
+    if isinstance(res, dict) and (res.get("_status", 200) >= 400 or res.get("status", 200) >= 400
+                                  or res.get("errors")):
+        detalle = res.get("errors") or res.get("_text") or res.get("title") or res
+        return {"success": False, "error": str(detalle)[:200]}
     return {"success": True, "raw": res}
 
 
@@ -144,51 +146,51 @@ def _b64(raw):
 
 def enviar_a_firmar_tercero(pdf_bytes, nombre_documento, firmante, comentario="",
                             pos=None, firmar_todas_paginas=False):
-    """Carga un PDF y lo envía a firmar por un tercero (el cliente).
+    """Carga un PDF y lo envía a firmar por un tercero (el cliente) vía eCert.
 
-    firmante: {nombres, aPaterno, aMaterno, rut, email}
-    pos: posición de la firma {x,y,width,height} (por defecto abajo-izquierda).
-    firmar_todas_paginas: si True, coloca un campo de firma en TODAS las páginas
-        para que el cliente firme el set completo de una vez.
+    Flujo real de migrup: el firmante se referencia por contactoId, por lo que el
+    contacto SIEMPRE se crea primero. texto = clave del certificado del titular.
     """
     lg = login()
     if not lg.get("success"):
         return {"success": False, "error": lg.get("error")}
-    asegurar_contacto(firmante)
-    pos = pos or {"x": 60, "y": 60, "width": 130, "height": 60}
-    n_pages = 1
+    propio = _split_rut(os.environ.get("MIGRUP_RUT", ""))[0]
+    es_propio = _split_rut(firmante.get("rut", ""))[0] == propio
+    contacto = None
+    if not es_propio:
+        cont = asegurar_contacto(firmante)
+        contacto = cont.get("contacto") or buscar_contacto_por_rut(firmante.get("rut", ""))
+        if not contacto or not contacto.get("contId"):
+            return {"success": False, "error": f"No se pudo crear el contacto en eCert: {cont.get('error') or ''}"}
+    if len(pdf_bytes) > 10 * 1024 * 1024:
+        return {"success": False, "error": "El PDF supera los 10MB permitidos por eCert"}
+    n_pages, alto = 1, 792
     try:
         from pypdf import PdfReader
         import io as _io
-        n_pages = len(PdfReader(_io.BytesIO(pdf_bytes)).pages)
+        reader = PdfReader(_io.BytesIO(pdf_bytes))
+        n_pages = len(reader.pages)
+        alto = float(reader.pages[0].mediabox.height or 792)
     except Exception:
         pass
+    pos = pos or {"x": 60, "y": 60}
+    pos_y = max(8, int(alto - 53 - pos["y"]) - 8)
     paginas = list(range(1, n_pages + 1)) if firmar_todas_paginas else [1]
-    rut_limpio = (firmante.get("rut", "") or "").replace(".", "")
-    base_firmante = {
-        "nombre": firmante.get("nombres", ""),
-        "aPaterno": firmante.get("aPaterno", ""),
-        "aMaterno": firmante.get("aMaterno", ""),
-        "rut": rut_limpio,
-        "correo": firmante.get("email", ""),
-    }
-    firmantes = [dict(base_firmante, posicionFirma=pos, pagina=pg) for pg in paginas]
-    contacto = dict(base_firmante, item={"position": {"x": pos["x"], "y": pos["y"]}}, signMode=1)
-    documento = {
-        "nombreDocumento": nombre_documento,
-        "documentoBase64": _b64(pdf_bytes),
-        "base64": _b64(pdf_bytes),
-        "extension": ".pdf",
-        "signMode": 1,
-        "paginas": n_pages,
-        "firmarTodasLasPaginas": firmar_todas_paginas,
-        "contacts": [contacto],
-        "firmantes": firmantes,
-    }
+    firmantes = [{"usuarioId": _CACHE["uid"] if es_propio else None,
+                  "contactoId": None if es_propio else contacto["contId"], "firmaOrden": 1,
+                  "firmaPagina": pg, "firmaPosX": int(pos["x"]), "firmaPosY": pos_y}
+                 for pg in paginas]
     payload = {
-        "documentos": [documento],
-        "idUsuario": _CACHE["uid"],
-        "comentario": comentario,
+        "usuarioId": _CACHE["uid"],
+        "comentario": comentario or "",
+        "nroDocumentos": 1,
+        "texto": os.environ.get("MIGRUP_CLAVE_CERT") or os.environ.get("MIGRUP_CLAVE", ""),
+        "documentos": [{
+            "doctoBase64": _b64(pdf_bytes),
+            "doctoNombre": (nombre_documento or "documento")[:20],
+            "modoFirma": 1,
+            "firmantes": firmantes,
+        }],
         "enviarCopiaAMi": False,
         "enviarCopiaAFirmantes": False,
         "listaCorreosEnvioCopia": "",
@@ -196,6 +198,14 @@ def enviar_a_firmar_tercero(pdf_bytes, nombre_documento, firmante, comentario=""
     res = _post("ProcesoFirma/ProcesoFirmaDocumentos", payload)
     if isinstance(res, dict) and res.get("_error"):
         return {"success": False, "error": res["_error"]}
-    ok = not (isinstance(res, dict) and (res.get("_status", 200) >= 400))
-    return {"success": ok, "raw": res, "paginas": n_pages}
+    codigo = (res or {}).get("codigo") or (res or {}).get("Codigo")
+    if codigo != 200:
+        msg = (res or {}).get("mensaje") or (res or {}).get("Mensaje") or str(res)[:200]
+        if firmar_todas_paginas and len(paginas) > 1:
+            # Algunos planes no aceptan multi-página: reintentar con una sola firma en pág 1
+            return enviar_a_firmar_tercero(pdf_bytes, nombre_documento, firmante,
+                                           comentario, pos, firmar_todas_paginas=False)
+        return {"success": False, "error": f"eCert: {msg}", "raw": res}
+    return {"success": True, "raw": {k: v for k, v in (res or {}).items() if k != "documentos"},
+            "paginas": n_pages, "contacto_id": (contacto or {}).get("contId")}
 
