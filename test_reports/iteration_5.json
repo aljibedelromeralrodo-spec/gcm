@@ -1,0 +1,40 @@
+{
+  "summary": "Backend testing del endpoint POST /api/set-credito/sets/{id}/enviar-firmados y verificación IMAP de entrega real en INBOX. Los 4 tests pasaron (4/4 = 100%). El correo SÍ LLEGA a la INBOX de ethangerardobarr@gmail.com (verificado vía IMAP conectándose a imap.gmail.com con MAIL_USER/MAIL_APP_PASSWORD limpiada con _clean_pwd). El reporte del usuario 'no llegó el correo' se explica porque, al enviar la cuenta a sí misma, Gmail agrupa el mensaje en el hilo de Enviados (comportamiento de Gmail), pero el mensaje SÍ está en INBOX técnicamente (SEARCH IMAP lo encuentra).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_set_credito_enviar_firmados.py",
+    "/app/test_reports/pytest/set_firmados.xml"
+  ],
+  "test_results_detail": {
+    "test_1_enviar_firmados_ok": "PASSED - endpoint respondió 200, ok:true, enviados incluye ethangerardobarr@gmail.com, archivos=9 (8 FIRMADO_* + 1 FIRMADO_COMPLETO)",
+    "test_2_imap_verify_delivery": "PASSED - correo con SUBJECT '[TEST AGENT] Set firmado - verificacion <ts>' encontrado en INBOX vía IMAP en el primer intento (dentro de ~6s). ENTREGA REAL CONFIRMADA.",
+    "test_3_correo_invalido_400": "PASSED - POST con correos='sin-arroba' responde 400 con mensaje 'Indica al menos un correo válido'",
+    "test_4_get_set_firmados_9_archivos": "PASSED - GET del set retorna campo 'firmados' con 9 archivos: 8 con prefijo FIRMADO_* y 1 *_FIRMADO_COMPLETO.pdf"
+  },
+  "action_items": [
+    "Ninguna acción de código necesaria. El backend funciona correctamente y el correo llega al INBOX del usuario.",
+    "Sugerencia UX (opcional) para el agente principal: cuando el destinatario coincide con la cuenta remitente (self-send), mostrar en la UI un aviso al usuario del tipo: 'Al enviarte el correo a ti mismo desde la misma cuenta Gmail, es posible que lo veas agrupado en el hilo de Enviados en lugar de en Recibidos. También ha sido reenviado a tu cuenta secundaria.' Esto evitaría reportes futuros de 'no llegó el correo'."
+  ],
+  "critical_code_review_comments": [
+    "email_service._clean_pwd elimina espacios de la app password - correcto, evita fallos por MAIL_APP_PASSWORD con espacios en .env.",
+    "SMTP a Gmail (465 SSL) funciona con la cuenta 'principal' y attachments (9 PDFs) sin problemas."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_set_credito_enviar_firmados.py (nuevo)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "N/A (backend only)"},
+  "test_credentials": "IMAP/SMTP cargadas desde /app/backend/.env (MAIL_USER, MAIL_APP_PASSWORD limpiada). NO se usaron credenciales de app.",
+  "seed_data_creation": "Ninguna. Se usó el set ya existente 264f84d0-8ffb-4a76-8da1-bcfa2e166ac6 (Javier Perez) con carpeta firmados/ poblada con 8 extractos + 1 archivo madre.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "El endpoint enviar-firmados envía 9 archivos (8 FIRMADO_* + COMBINADO_SET_..._FIRMADO_COMPLETO.pdf). La entrega SMTP a Gmail y presencia en INBOX vía IMAP están verificadas. NO ejecutar tests que consuman firmas en migrup (enviar-firma / enviar-firma-completo). NO enviar correos a danielagalindo@ ni victoriavilches@.",
+  "rca of the issue": "RCA: El usuario reportó 'no llegó el correo'. Investigación: el endpoint funciona correctamente (200 ok, archivos=9) y el mensaje SÍ está en INBOX de ethangerardobarr@gmail.com (confirmado por búsqueda IMAP SUBJECT). Causa raíz del reporte del usuario: cuando remitente=destinatario en Gmail, el cliente web/movil agrupa la conversación bajo la carpeta 'Enviados' en la vista de hilos, dando la impresión de que el correo no llegó. Mitigación: (a) el agente principal ya reenvió a la cuenta secundaria del usuario; (b) recomendación UX de mostrar aviso en la UI cuando se envía a la propia cuenta remitente. NO hay bug de código."
+}
