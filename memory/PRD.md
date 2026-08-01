@@ -237,3 +237,31 @@ Idioma del usuario: **Español** (responder siempre en español).
 - Ejemplo v2 enviado por correo al usuario (2 cuentas) con estampa simulada pág 6 +
   marcas FEA en las otras 9. Verificado visualmente (pág 23 no pisa codeudor).
 - Script de ejemplo: /tmp/enviar_ejemplo.py (regenerable).
+
+## Orden de documentos a mesa + Set firmado separado (Ago 2026)
+NOTA: App DEPLOYADA en producción (https://risk-assess-17.emergent.host). Cambios en preview
+requieren re-deploy para llegar a producción.
+1. ORDEN CARPETA → MESA (proc_upload_drive):
+   - ORDEN_INDEPENDIENTE corregido: cedula → impuesto_renta → boleta_honorarios →
+     certificado_smf (antes CMF iba 2do). Dependiente ya estaba bien: cedula → liquidacion →
+     AFP → CMF. Extras siempre al final.
+   - Causa raíz del desorden: OCR clasifica muchos docs como "otro". Se agregó respaldo por
+     NOMBRE de archivo (fsvc.cat_de_texto → _cat_a_tipo) en el _rank. Verificado con caso
+     real FRANCO BAHAMONDES (CARNET→LIQUIDACIONES→AFP→informe_deudas→extras).
+   - ORDEN MANUAL: endpoint POST /api/procesamiento/queue/{qid}/ordenar-docs {filenames}
+     guarda classification.documentos + flag docs_orden_manual y REGENERA Carpeta_<cliente>.pdf.
+     upload-drive respeta el orden manual. UI: sección "Orden de los documentos" con flechas
+     ↑/↓ en el DetailModal de Procesamiento (data-testid docs-orden-section).
+2. SET FIRMADO (SetCreditoModule):
+   - migrup.get_file(idDocumento) → Dashboard/GetFile (base64). listar_documentos ahora hace
+     login() primero (bug uid=None tras hot-reload).
+   - POST /set-credito/sets/{sid}/traer-firmado: busca en eCert el COMBINADO_SET_* Finalizado,
+     descarga y SEPARA en los archivos originales (por conteo de páginas, mismo orden de
+     _set_combinar) → carpeta firmados/ (FIRMADO_*.pdf + _FIRMADO_COMPLETO.pdf).
+     VERIFICADO con el set real de Benjamín: 8 archivos, páginas calzan 1:1.
+   - POST /set-credito/sets/{sid}/enviar-firmados {correos}: envía los FIRMADO_* adjuntos.
+     Default: danielagalindo@centralmutuos.cl, victoriavilches@centralmutuos.cl (editable).
+     VERIFICADO enviando a ethangerardobarr@gmail.com (8 adjuntos OK).
+   - _set_archivos excluye firmados/ para no re-combinarlos. UI sección verde
+     "Set firmado por el cliente" con input de correos + botón enviar.
+   - Bug arreglado: correosEnvio no declarado (ReferenceError) + JSX duplicado previo.

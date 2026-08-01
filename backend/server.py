@@ -1769,7 +1769,7 @@ GESTION_DOMINIOS = ["ecomac", "maestra"]
 
 # Orden preestablecido del PDF agrupado
 ORDEN_DEPENDIENTE = ["cedula", "liquidacion", "cotizacion_afp", "certificado_afp", "certificado_smf"]
-ORDEN_INDEPENDIENTE = ["cedula", "certificado_smf", "impuesto_renta", "boleta_honorarios"]
+ORDEN_INDEPENDIENTE = ["cedula", "impuesto_renta", "boleta_honorarios", "certificado_smf"]
 CHECKLIST = {
     "dependiente": {"cedula": 1, "liquidacion": 6, "cotizacion_afp": 12,
                     "certificado_afp": 1, "certificado_smf": 1},
@@ -2122,6 +2122,45 @@ async def proc_extract_text(qid: str, allow_vision: bool = True):
     return {"results": results}
 
 
+@api.post("/procesamiento/queue/{qid}/ordenar-docs")
+async def proc_ordenar_docs(qid: str, payload: dict):
+    """Guarda el orden manual de los documentos y regenera la Carpeta_ combinada."""
+    item = await db.proc_queue.find_one({"id": qid})
+    if not item:
+        raise HTTPException(status_code=404, detail="No encontrado")
+    filenames = payload.get("filenames") or []
+    cl = item.get("classification", {}) or {}
+    docs = cl.get("documentos", []) or []
+    por_nombre = {d.get("filename"): d for d in docs}
+    nuevos = [por_nombre[f] for f in filenames if f in por_nombre]
+    nuevos += [d for d in docs if d.get("filename") not in set(filenames)]
+    await db.proc_queue.update_one({"id": qid}, {"$set": {
+        "classification.documentos": nuevos, "docs_orden_manual": True}})
+    # Regenerar Carpeta_ si la carpeta del cliente ya existe
+    cliente = cl.get("cliente") or mail._extraer_nombre(item.get("subject", ""), item.get("sender", ""))
+    dest = CLIENTES_DIR / _safe_name(cliente)
+    regenerada = False
+    if dest.exists():
+        from pypdf import PdfReader, PdfWriter
+        src = PROC_DIR / qid
+        writer = PdfWriter()
+        for d in nuevos:
+            p = src / d.get("filename", "")
+            if not p.exists():
+                continue
+            try:
+                for pg in PdfReader(str(p)).pages:
+                    writer.add_page(pg)
+            except Exception:
+                continue
+        if len(writer.pages) > 0:
+            with open(dest / f"Carpeta_{_safe_name(cliente)}.pdf", "wb") as f:
+                writer.write(f)
+            regenerada = True
+    return {"ok": True, "orden": [d.get("filename") for d in nuevos],
+            "carpeta_regenerada": regenerada}
+
+
 @api.post("/procesamiento/queue/{qid}/upload-drive")
 async def proc_upload_drive(qid: str):
     item = await db.proc_queue.find_one({"id": qid})
@@ -2146,11 +2185,18 @@ async def proc_upload_drive(qid: str):
             sd.mkdir(parents=True, exist_ok=True)
             (sd / d["filename"]).write_bytes(p.read_bytes())
             uploaded.append(f"{sub}/{d['filename']}")
-    # Generar PDF agrupado en el orden establecido
+    # Generar PDF agrupado en el orden establecido (o el orden manual del usuario)
+    _cat_a_tipo = {"cedula": "cedula", "liquidacion": "liquidacion", "afp": "cotizacion_afp",
+                   "cmf": "certificado_smf", "imp_renta": "impuesto_renta",
+                   "boletas": "boleta_honorarios"}
+
     def _rank(d):
         t = d["tipo"]
+        if t not in orden:
+            # respaldo: clasificar por nombre de archivo (CARNET, LIQUIDACIONES, informe_deudas...)
+            t = _cat_a_tipo.get(fsvc.cat_de_texto(d.get("filename", "")), t)
         return orden.index(t) if t in orden else len(orden) + 1
-    docs_ordenados = sorted(docs, key=_rank)
+    docs_ordenados = list(docs) if item.get("docs_orden_manual") else sorted(docs, key=_rank)
     writer = PdfWriter()
     for d in docs_ordenados:
         p = src / d["filename"]
@@ -3046,6 +3092,8 @@ def _set_archivos(nombre):
         return out
     for p in sorted(base.rglob("*.pdf")):
         rel = p.relative_to(base).as_posix()
+        if rel.startswith("firmados/"):
+            continue
         es_codeudor = rel.startswith("codeudor/")
         low = p.name.lower()
         tipo = "otro"
@@ -3089,6 +3137,7 @@ def _set_public(doc):
     d = clean(dict(doc))
     d["archivos"] = _set_archivos(d.get("nombre", ""))
     d["total_archivos"] = len(d["archivos"])
+    d["firmados"] = _set_firmados(d.get("nombre", ""))
     return d
 
 
@@ -3314,6 +3363,114 @@ def _set_combinar(nombre):
     with open(base / out, "wb") as f:
         writer.write(f)
     return {"combinado": out, "usados": usados}
+
+
+def _set_firmados(nombre):
+    dest = _set_dir(nombre) / "firmados"
+    if not dest.exists():
+        return []
+    return [{"nombre": p.name, "ruta": f"firmados/{p.name}", "tamano": p.stat().st_size}
+            for p in sorted(dest.glob("*.pdf"))]
+
+
+def _set_separar_firmado(nombre, signed_bytes):
+    """Separa el PDF combinado FIRMADO en los archivos originales del set."""
+    from pypdf import PdfReader, PdfWriter
+    base = _set_dir(nombre)
+    reader = PdfReader(io.BytesIO(signed_bytes))
+    orden = {t: i for i, t in enumerate(SET_DOC_TIPOS)}
+    archivos = sorted(_set_archivos(nombre), key=lambda a: (orden.get(a["tipo"], 99), a["nombre"]))
+    dest = base / "firmados"
+    dest.mkdir(parents=True, exist_ok=True)
+    guardados = []
+    idx = 0
+    for a in archivos:
+        if a["nombre"].startswith("COMBINADO_SET"):
+            continue
+        try:
+            n = len(PdfReader(str(base / a["ruta"])).pages)
+        except Exception:
+            continue
+        if idx >= len(reader.pages):
+            break
+        w = PdfWriter()
+        for i in range(idx, min(idx + n, len(reader.pages))):
+            w.add_page(reader.pages[i])
+        idx += n
+        out = dest / f"FIRMADO_{a['nombre']}"
+        with open(out, "wb") as f:
+            w.write(f)
+        guardados.append(out.name)
+    return guardados
+
+
+@api.post("/set-credito/sets/{sid}/traer-firmado")
+async def setcred_traer_firmado(sid: str):
+    """Busca el combinado firmado en eCert, lo descarga y lo separa archivo por archivo."""
+    doc = await _get_set(sid)
+    stem = f"COMBINADO_SET_{fsvc.safe_name(doc.get('nombre', ''))}"[:20]
+    docs = await asyncio.to_thread(migrup.listar_documentos, "", 0, 1, 30)
+    items = (docs or {}).get("paginatedList") or []
+    cand = [d for d in items if (d.get("nombre") or "").startswith(stem)]
+    if not cand:
+        raise HTTPException(status_code=404, detail="No hay ningún envío de este set en eCert")
+    cand.sort(key=lambda d: d.get("fechaCreacion") or "", reverse=True)
+    best = next((d for d in cand if (d.get("estadoDocumento") or "").lower() == "finalizado"), None)
+    if not best:
+        raise HTTPException(status_code=409,
+                            detail=f"El cliente aún no firma (estado: {cand[0].get('estadoDocumento')})")
+    f = await asyncio.to_thread(migrup.get_file, best["idDocumento"])
+    if not isinstance(f, dict) or not f.get("base64"):
+        raise HTTPException(status_code=502, detail="No se pudo descargar el firmado desde eCert")
+    signed = _b64mod.b64decode(f["base64"])
+    guardados = await asyncio.to_thread(_set_separar_firmado, doc.get("nombre", ""), signed)
+    (_set_dir(doc.get("nombre", "")) / "firmados").mkdir(parents=True, exist_ok=True)
+    (_set_dir(doc.get("nombre", "")) / "firmados" / f"{stem}_FIRMADO_COMPLETO.pdf").write_bytes(signed)
+    await db.set_credito.update_one({"id": sid}, {"$set": {
+        "firmado_recibido_en": now_iso(), "firmado_ecert_id": best["idDocumento"]}})
+    return {"ok": True, "estado": best.get("estadoDocumento"),
+            "archivos": guardados, "total": len(guardados)}
+
+
+SETCRED_ENVIO_DEFAULT = "danielagalindo@centralmutuos.cl, victoriavilches@centralmutuos.cl"
+
+
+@api.post("/set-credito/sets/{sid}/enviar-firmados")
+async def setcred_enviar_firmados(sid: str, payload: dict = None):
+    """Envía por correo el set firmado, separado archivo por archivo."""
+    payload = payload or {}
+    doc = await _get_set(sid)
+    correos = payload.get("correos") or SETCRED_ENVIO_DEFAULT
+    if isinstance(correos, str):
+        correos = [c.strip() for c in re.split(r"[,;]", correos) if c.strip()]
+    correos = [c for c in correos if "@" in c]
+    if not correos:
+        raise HTTPException(status_code=400, detail="Indica al menos un correo válido")
+    dest_dir = _set_dir(doc.get("nombre", "")) / "firmados"
+    files = sorted(dest_dir.glob("FIRMADO_*.pdf")) if dest_dir.exists() else []
+    if not files:
+        raise HTTPException(status_code=400, detail="Primero trae el set firmado desde eCert")
+    adjuntos = [{"filename": p.name, "content_b64": _b64(p.read_bytes())} for p in files]
+    nombre = doc.get("nombre", "")
+    cuerpo = f"""
+    <div style="font-family:Arial,sans-serif;font-size:14px;color:#222">
+      <h2 style="color:#6c5ce7;margin:0 0 8px">Set de crédito firmado — {nombre}</h2>
+      <p>Se adjunta el set de crédito de <b>{nombre}</b>{(' (RUT ' + doc.get('rut') + ')') if doc.get('rut') else ''},
+      firmado electrónicamente vía eCert Chile, separado documento por documento ({len(adjuntos)} archivos).</p>
+      <ul>{"".join(f"<li>{p.name}</li>" for p in files)}</ul>
+      <p style="color:#888;font-size:12px">Central Mutuos - Con Creces</p>
+    </div>
+    """
+    asunto = payload.get("asunto") or f"Set de crédito firmado - {nombre}"
+    enviados, errores = [], []
+    for c in correos:
+        r = await asyncio.to_thread(mail.send_mail, c, asunto, cuerpo, adjuntos, "principal")
+        (enviados if r.get("success") else errores).append(c)
+    await db.set_credito.update_one({"id": sid}, {"$push": {"envios_firmado": {
+        "a": enviados, "archivos": len(adjuntos), "en": now_iso()}}})
+    if not enviados:
+        raise HTTPException(status_code=502, detail=f"No se pudo enviar a: {', '.join(errores)}")
+    return {"ok": True, "enviados": enviados, "errores": errores, "archivos": len(adjuntos)}
 
 
 @api.post("/set-credito/sets/{sid}/combinar")

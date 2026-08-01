@@ -19,6 +19,7 @@ export default function SetCreditoModule() {
   const [firmaModal, setFirmaModal] = useState(null);
   const [contactoModal, setContactoModal] = useState(null);
   const [ocrLoading, setOcrLoading] = useState(false);
+  const [correosEnvio, setCorreosEnvio] = useState("danielagalindo@centralmutuos.cl, victoriavilches@centralmutuos.cl");
   const fileRef = useRef();
   const cedulaRef = useRef();
   const [tipoUpload, setTipoUpload] = useState("solicitud_credito");
@@ -161,6 +162,26 @@ export default function SetCreditoModule() {
     setLoading(false);
   };
 
+  const traerFirmado = async () => {
+    setLoading(true);
+    try {
+      const r = await axios.post(`${API}/api/set-credito/sets/${current.id}/traer-firmado`, {}, { timeout: 120000 });
+      setMsg(`✅ Set firmado descargado desde eCert y separado en ${r.data.total} archivos`);
+      await abrir(current.id);
+    } catch (e) { setMsg("⚠️ " + (e.response?.data?.detail || e.message)); }
+    setLoading(false);
+  };
+
+  const enviarFirmados = async () => {
+    setLoading(true);
+    try {
+      const r = await axios.post(`${API}/api/set-credito/sets/${current.id}/enviar-firmados`,
+        { correos: correosEnvio }, { timeout: 120000 });
+      setMsg(`✅ Set firmado (${r.data.archivos} archivos) enviado a: ${r.data.enviados.join(", ")}`);
+    } catch (e) { setMsg("Error: " + (e.response?.data?.detail || e.message)); }
+    setLoading(false);
+  };
+
   return (
     <div style={{ padding: "1.5rem", color: "var(--white)", maxWidth: "1050px" }} data-testid="setcredito-module">
       {msg && <div data-testid="setcred-msg" style={{ padding: "0.7rem 1rem", borderRadius: "8px", marginBottom: "1rem", background: msg.startsWith("✅") ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)", color: msg.startsWith("✅") ? "#22c55e" : "#ef4444", fontWeight: 600 }}>{msg}</div>}
@@ -258,6 +279,37 @@ export default function SetCreditoModule() {
               ))}
             </div>
           )}
+
+          {/* Set firmado: traer desde eCert, separar y enviar por correo */}
+          <div data-testid="setcred-firmados-section" style={{ marginTop: "1.4rem", padding: "1rem", background: "rgba(34,197,94,0.07)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "10px" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.8rem", flexWrap: "wrap" }}>
+              <h4 style={{ color: "#22c55e", fontSize: "0.95rem", margin: 0 }}><i className="fa fa-check-circle" style={{ marginRight: "0.4rem" }} />Set firmado por el cliente</h4>
+              <button data-testid="setcred-traer-firmado" onClick={traerFirmado} disabled={loading || !migrup?.connected} style={btn("#22c55e", true)}>
+                <i className="fa fa-cloud-download" style={{ marginRight: "0.4rem" }} />Traer firmado desde eCert y separar
+              </button>
+            </div>
+            {(current.firmados || []).length === 0 ? (
+              <div style={{ fontSize: "0.8rem", opacity: 0.6, marginTop: "0.5rem" }}>Cuando el cliente firme, trae el PDF firmado: se separa automáticamente archivo por archivo (cobranza, cesantía, origen de fondos, etc.).</div>
+            ) : (
+              <>
+                {(current.firmados || []).map((f, i) => (
+                  <div key={i} data-testid={`setcred-firmado-${i}`} style={{ display: "flex", alignItems: "center", gap: "0.7rem", padding: "0.4rem 0.2rem", borderBottom: "1px solid rgba(255,255,255,0.05)", fontSize: "0.85rem" }}>
+                    <i className="fa fa-file-pdf-o" style={{ color: "#22c55e" }} />
+                    <span style={{ flex: 1 }}>{f.nombre}</span>
+                    <a href={`${API}/api/set-credito/sets/${current.id}/download/${encodeURIComponent(f.ruta)}?inline=true`} target="_blank" rel="noreferrer" style={{ color: "#3b82f6" }} title="Ver"><i className="fa fa-eye" /></a>
+                  </div>
+                ))}
+                <div style={{ display: "flex", gap: "0.6rem", marginTop: "0.9rem", flexWrap: "wrap", alignItems: "center" }}>
+                  <input data-testid="setcred-correos-envio" value={correosEnvio} onChange={e => setCorreosEnvio(e.target.value)}
+                         placeholder="correo1@..., correo2@..." style={{ ...inp, flex: 1, minWidth: "280px" }} />
+                  <button data-testid="setcred-enviar-firmados" onClick={enviarFirmados} disabled={loading} style={btn("#22c55e")}>
+                    <i className="fa fa-paper-plane" style={{ marginRight: "0.4rem" }} />Enviar set firmado por correo
+                  </button>
+                </div>
+                <div style={{ fontSize: "0.72rem", opacity: 0.55, marginTop: "0.3rem" }}>Se envía separado archivo por archivo. Puedes cambiar los destinatarios (separados por coma).</div>
+              </>
+            )}
+          </div>
         </div>
       )}
 

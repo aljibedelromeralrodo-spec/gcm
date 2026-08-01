@@ -399,6 +399,21 @@ function DetailModal({ item, onClose, onReprocess, onSave, onUploadDrive, onExtr
   const cl = item.classification || {};
   const campos = item.campos || {};
   const fileRef = useRef(null);
+  const [docs, setDocs] = useState(cl.documentos || []);
+  const [ordenando, setOrdenando] = useState(false);
+  const moverDoc = async (i, dir) => {
+    const j = i + dir;
+    if (j < 0 || j >= docs.length) return;
+    const nuevos = [...docs];
+    [nuevos[i], nuevos[j]] = [nuevos[j], nuevos[i]];
+    setDocs(nuevos);
+    setOrdenando(true);
+    try {
+      await axios.post(`${API}/api/procesamiento/queue/${item.id}/ordenar-docs`,
+        { filenames: nuevos.map(d => d.filename) });
+    } catch (e) { alert("Error guardando orden: " + (e.response?.data?.detail || e.message)); }
+    setOrdenando(false);
+  };
   const [c, setC] = useState({
     cliente: cl.cliente || "",
     rut: cl.rut || "",
@@ -440,6 +455,25 @@ function DetailModal({ item, onClose, onReprocess, onSave, onUploadDrive, onExtr
         <div style={{ marginBottom:8, fontSize:12, color:"#64748b" }}>
           Adjuntos: {(item.attachments || []).join(", ") || "(sin adjuntos)"}
         </div>
+        {docs.length > 0 && (
+          <div style={{ background:"#fffbeb", border:"1px solid #fcd34d", borderRadius:8, padding:10, marginBottom:12 }} data-testid="docs-orden-section">
+            <div style={{ fontWeight:700, fontSize:13, marginBottom:4 }}>📑 Orden de los documentos (carpeta → mesa)</div>
+            <div style={{ fontSize:11, color:"#92400e", marginBottom:8 }}>
+              Protocolo: dependiente = cédula → liquidaciones → AFP → CMF · honorarios = cédula → imp. renta → boletas → CMF. Usa las flechas para ajustar el orden a mano (se regenera la Carpeta).
+            </div>
+            {docs.map((d, i) => (
+              <div key={d.filename + i} style={{ display:"flex", alignItems:"center", gap:8, padding:"3px 0", fontSize:12, borderTop: i ? "1px solid #fde68a" : "none" }} data-testid={`doc-orden-row-${i}`}>
+                <span style={{ width:18, textAlign:"right", color:"#92400e", fontWeight:700 }}>{i + 1}.</span>
+                <span style={{ flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{d.filename}</span>
+                <span style={{ color:"#64748b" }}>{d.tipo || "otro"}</span>
+                <button data-testid={`doc-subir-${i}`} onClick={() => moverDoc(i, -1)} disabled={ordenando || i === 0}
+                        style={{ border:"1px solid #d1d5db", background:"#fff", borderRadius:4, cursor:"pointer", padding:"1px 7px" }}>↑</button>
+                <button data-testid={`doc-bajar-${i}`} onClick={() => moverDoc(i, 1)} disabled={ordenando || i === docs.length - 1}
+                        style={{ border:"1px solid #d1d5db", background:"#fff", borderRadius:4, cursor:"pointer", padding:"1px 7px" }}>↓</button>
+              </div>
+            ))}
+          </div>
+        )}
         {cl.razonamiento && (
           <div style={{ background:"#eff6ff", padding:8, borderRadius:6, fontSize:12, marginBottom:12 }}>
             🤖 IA dice: {cl.razonamiento} (confianza: {Math.round((cl.confianza||0)*100)}%)

@@ -81,9 +81,20 @@ def semaforo():
 
 
 def listar_documentos(nombre="", estado_id=0, pagina=1, cantidad=15):
+    lg = login()
+    if not lg.get("success"):
+        return {"_error": lg.get("error")}
     return _post("Dashboard/ListadoDocumentosConFiltros",
                  {"idUsuario": _CACHE["uid"], "nombreDocumento": nombre,
                   "estadoId": estado_id, "pagina": pagina, "cantidad": cantidad})
+
+
+def get_file(id_documento):
+    """Descarga un documento (incluido el firmado) desde eCert. Devuelve dict con base64."""
+    lg = login()
+    if not lg.get("success"):
+        return {"_error": lg.get("error")}
+    return _post("Dashboard/GetFile", {"idDocumento": id_documento})
 
 
 def listar_contactos(pagina=1, cantidad=1000):
