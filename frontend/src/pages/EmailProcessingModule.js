@@ -352,6 +352,7 @@ export default function EmailProcessingModule() {
               <th style={th}>Cliente detectado</th>
               <th style={th}>Tipo doc</th>
               <th style={th}>Confianza</th>
+              <th style={th}>% Aprobación</th>
               <th style={th}>Acciones</th>
             </tr>
           </thead>
@@ -369,6 +370,15 @@ export default function EmailProcessingModule() {
                   <td style={td}>{cl.cliente || "—"}</td>
                   <td style={td}>{cl.tipo_documento || "—"}</td>
                   <td style={td}>{cl.confianza != null ? `${Math.round(cl.confianza*100)}%` : "—"}</td>
+                  <td style={td} data-testid={`prob-aprobacion-${r.id}`} title={(r.prob_aprobacion?.factores || []).join("\n")}>
+                    {r.prob_aprobacion ? (
+                      <span style={{ fontWeight: 800, padding: "2px 8px", borderRadius: 999,
+                        background: r.prob_aprobacion.porcentaje >= 75 ? "#dcfce7" : r.prob_aprobacion.porcentaje >= 50 ? "#fef9c3" : "#fee2e2",
+                        color: r.prob_aprobacion.porcentaje >= 75 ? "#15803d" : r.prob_aprobacion.porcentaje >= 50 ? "#a16207" : "#b91c1c" }}>
+                        {r.prob_aprobacion.porcentaje}%
+                      </span>
+                    ) : "—"}
+                  </td>
                   <td style={td} onClick={(e) => e.stopPropagation()}>
                     <button onClick={() => reprocess(r.id)} disabled={busy} style={btnStyle("#3b82f6", true)}>♻</button>
                   </td>
@@ -376,7 +386,7 @@ export default function EmailProcessingModule() {
               );
             })}
             {rows.length === 0 && (
-              <tr><td colSpan={7} style={{ ...td, textAlign:"center", color:"#94a3b8", padding: 30 }}>
+              <tr><td colSpan={8} style={{ ...td, textAlign:"center", color:"#94a3b8", padding: 30 }}>
                 Sin resultados. Hacé clic en <b>Ingestar Inbox</b> para traer correos.
               </td></tr>
             )}
@@ -455,6 +465,17 @@ function DetailModal({ item, onClose, onReprocess, onSave, onUploadDrive, onExtr
         <div style={{ marginBottom:8, fontSize:12, color:"#64748b" }}>
           Adjuntos: {(item.attachments || []).join(", ") || "(sin adjuntos)"}
         </div>
+        {item.prob_aprobacion && (
+          <div style={{ background:"#eff6ff", border:"1px solid #93c5fd", borderRadius:8, padding:10, marginBottom:12 }} data-testid="prob-aprobacion-detalle">
+            <div style={{ fontWeight:700, fontSize:13, marginBottom:4 }}>
+              📊 Posibilidad de aprobación: <span style={{ fontSize:16, color: item.prob_aprobacion.porcentaje >= 75 ? "#15803d" : item.prob_aprobacion.porcentaje >= 50 ? "#a16207" : "#b91c1c" }}>{item.prob_aprobacion.porcentaje}%</span>
+            </div>
+            <ul style={{ margin:0, paddingLeft:18, fontSize:11.5, color:"#374151" }}>
+              {(item.prob_aprobacion.factores || []).map((f, i) => <li key={i}>{f}</li>)}
+            </ul>
+            <div style={{ fontSize:10.5, color:"#64748b", marginTop:4 }}>Se recalibra automáticamente con cada aprobación/rechazo real que llega de mesa.</div>
+          </div>
+        )}
         {docs.length > 0 && (
           <div style={{ background:"#fffbeb", border:"1px solid #fcd34d", borderRadius:8, padding:10, marginBottom:12 }} data-testid="docs-orden-section">
             <div style={{ fontWeight:700, fontSize:13, marginBottom:4 }}>📑 Orden de los documentos (carpeta → mesa)</div>

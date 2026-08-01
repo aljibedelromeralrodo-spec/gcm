@@ -35,7 +35,7 @@ CAT_KEYWORDS = [
     ("cedula", r"c[eé]?dula|carnet|identidad|registro civil"),
     ("liquidacion", r"liquidaci[oó]?n|sueldo|remuneraci|haberes|\bliq[\d_ ]|^liq"),
     ("afp", r"afp|cotizaci|previred|afiliaci|habitat|provida|planvital|cuprum|capital"),
-    ("cmf", r"cmf|smf|sbif|informe de deuda|deuda"),
+    ("cmf", r"cmf|smf|sbif|infnomat|informe[_ ]de[_ ]deuda|informe_deudas|deuda"),
     ("imp_renta", r"impuesto|renta|formulario 22|f22|declaraci[oó]n"),
     ("boletas", r"boleta|honorario"),
 ]

@@ -1862,11 +1862,70 @@ async def proc_stats():
     return out
 
 
+async def _stats_mesa():
+    apro = await db.seguimiento.count_documents({"estado": {"$in": ["aprobacion", "aprobado"]}})
+    rech = await db.seguimiento.count_documents({"estado": {"$in": ["rechazo", "rechazado"]}})
+    total = apro + rech
+    base = (apro / total) if total else 0.85
+    return {"aprobadas": apro, "rechazadas": rech, "base": base}
+
+
+def _prob_aprobacion(item, stats):
+    """% de posibilidades de aprobación, calibrado con las respuestas reales de mesa."""
+    cl = item.get("classification", {}) or {}
+    campos = item.get("campos", {}) or {}
+    prob = stats["base"] * 100.0
+    factores = [f"Base mesa: {round(stats['base']*100)}% ({stats['aprobadas']} aprobadas / {stats['rechazadas']} rechazadas)"]
+    tipos = {d.get("tipo") for d in cl.get("documentos", []) or []}
+    for d in cl.get("documentos", []) or []:
+        if d.get("tipo") not in ("cedula", "liquidacion", "cotizacion_afp", "certificado_afp",
+                                 "certificado_smf", "impuesto_renta", "boleta_honorarios"):
+            cat = fsvc.cat_de_texto(d.get("filename", ""))
+            tipos.add({"cedula": "cedula", "liquidacion": "liquidacion", "afp": "cotizacion_afp",
+                       "cmf": "certificado_smf", "imp_renta": "impuesto_renta",
+                       "boletas": "boleta_honorarios"}.get(cat, "otro"))
+    tipo_cliente = cl.get("tipo_cliente") or "dependiente"
+    requeridos = (["cedula", "liquidacion"] if tipo_cliente == "dependiente"
+                  else ["cedula", "impuesto_renta", "boleta_honorarios"])
+    faltan = [t for t in requeridos if t not in tipos]
+    if faltan:
+        prob -= 8 * len(faltan)
+        factores.append(f"-{8*len(faltan)}%: faltan documentos clave ({', '.join(faltan)})")
+    if "certificado_smf" not in tipos:
+        prob -= 5
+        factores.append("-5%: falta informe CMF")
+    try:
+        monto = float(campos.get("monto_credito_solicitar_uf") or campos.get("monto_credito_uf") or 0)
+    except (TypeError, ValueError):
+        monto = 0
+    if monto:
+        if monto <= 2000:
+            prob += 4
+            factores.append("+4%: monto acotado (≤2.000 UF)")
+        elif monto > 4000:
+            prob -= 8
+            factores.append("-8%: monto alto (>4.000 UF)")
+    if campos.get("con_subsidio"):
+        prob += 5
+        factores.append("+5%: con subsidio")
+    if tipo_cliente == "independiente":
+        prob -= 5
+        factores.append("-5%: independiente (boletas)")
+    prob = max(5, min(98, round(prob)))
+    return {"porcentaje": prob, "factores": factores}
+
+
 @api.get("/procesamiento/queue")
 async def proc_queue(status: str = ""):
     q = {"status": status} if status else {}
     docs = await db.proc_queue.find(q).sort("date_iso", -1).limit(200).to_list(200)
-    return {"rows": [_proc_public(d) for d in docs]}
+    stats = await _stats_mesa()
+    rows = []
+    for d in docs:
+        r = _proc_public(d)
+        r["prob_aprobacion"] = _prob_aprobacion(d, stats)
+        rows.append(r)
+    return {"rows": rows}
 
 
 @api.get("/procesamiento/queue/{qid}")
@@ -1874,7 +1933,9 @@ async def proc_detail(qid: str):
     d = await db.proc_queue.find_one({"id": qid})
     if not d:
         raise HTTPException(status_code=404, detail="Item no encontrado")
-    return _proc_public(d)
+    r = _proc_public(d)
+    r["prob_aprobacion"] = _prob_aprobacion(d, await _stats_mesa())
+    return r
 
 
 @api.get("/procesamiento/rules")
@@ -2138,29 +2199,65 @@ async def proc_ordenar_docs(qid: str, payload: dict):
     nuevos += [d for d in docs if d.get("filename") not in set(filenames)]
     await db.proc_queue.update_one({"id": qid}, {"$set": {
         "classification.documentos": nuevos, "docs_orden_manual": True}})
-    # Regenerar Carpeta_ si la carpeta del cliente ya existe
+    # Regenerar Carpeta_ con TODO lo acumulado, respetando el orden manual
     cliente = cl.get("cliente") or mail._extraer_nombre(item.get("subject", ""), item.get("sender", ""))
-    dest = CLIENTES_DIR / _safe_name(cliente)
-    regenerada = False
-    if dest.exists():
-        from pypdf import PdfReader, PdfWriter
-        src = PROC_DIR / qid
-        writer = PdfWriter()
-        for d in nuevos:
-            p = src / d.get("filename", "")
-            if not p.exists():
-                continue
-            try:
-                for pg in PdfReader(str(p)).pages:
-                    writer.add_page(pg)
-            except Exception:
-                continue
-        if len(writer.pages) > 0:
-            with open(dest / f"Carpeta_{_safe_name(cliente)}.pdf", "wb") as f:
-                writer.write(f)
-            regenerada = True
+    existente = await _buscar_carpeta_existente(cliente, cl.get("rut", ""))
+    if existente and existente.get("nombre"):
+        cliente = existente["nombre"]
+    regenerado = await asyncio.to_thread(_regen_carpeta_cliente, cliente,
+                                         [d.get("filename") for d in nuevos])
     return {"ok": True, "orden": [d.get("filename") for d in nuevos],
-            "carpeta_regenerada": regenerada}
+            "carpeta_regenerada": bool(regenerado)}
+
+
+async def _buscar_carpeta_existente(cliente, rut=""):
+    """Encuentra la carpeta ya existente de la misma persona (por RUT o nombre similar)."""
+    rut_n = _norm_rut(rut or "")
+    folders = await db.folders.find({}).to_list(500)
+    if rut_n and len(rut_n) >= 7:
+        for f in folders:
+            if _norm_rut(f.get("rut", "")) == rut_n:
+                return f
+    cn = [t for t in _norm_texto(cliente or "").split() if len(t) > 2]
+    if len(cn) < 2:
+        return None
+    for f in folders:
+        fn = [t for t in _norm_texto(f.get("nombre", "")).split() if len(t) > 2]
+        chico, grande = (cn, fn) if len(cn) <= len(fn) else (fn, cn)
+        if len(chico) >= 2 and all(t in grande for t in chico):
+            return f
+    return None
+
+
+def _regen_carpeta_cliente(cliente, orden_manual=None):
+    """Reconstruye Carpeta_<cliente>.pdf con TODOS los documentos acumulados de
+    todos los correos, en orden de protocolo (prefijos 01_..99_)."""
+    from pypdf import PdfReader, PdfWriter
+    dest = CLIENTES_DIR / _safe_name(cliente)
+    if not dest.exists():
+        return None
+    manual = {fn: i for i, fn in enumerate(orden_manual or [])}
+    archivos = []
+    for p in sorted(dest.rglob("*.pdf")):
+        if p.name.startswith("Carpeta_"):
+            continue
+        rel = p.relative_to(dest).as_posix()
+        key = (0, manual[p.name], "") if p.name in manual else (1, 0, rel)
+        archivos.append((key, p))
+    archivos.sort(key=lambda t: t[0])
+    writer = PdfWriter()
+    for _k, p in archivos:
+        try:
+            for pg in PdfReader(str(p)).pages:
+                writer.add_page(pg)
+        except Exception:
+            continue
+    if len(writer.pages) == 0:
+        return None
+    out = dest / f"Carpeta_{_safe_name(cliente)}.pdf"
+    with open(out, "wb") as f:
+        writer.write(f)
+    return out.name
 
 
 @api.post("/procesamiento/queue/{qid}/upload-drive")
@@ -2172,48 +2269,54 @@ async def proc_upload_drive(qid: str):
     cliente = cl.get("cliente") or mail._extraer_nombre(item.get("subject", ""), item.get("sender", ""))
     tipo_cliente = cl.get("tipo_cliente", "dependiente")
     orden = ORDEN_DEPENDIENTE if tipo_cliente == "dependiente" else ORDEN_INDEPENDIENTE
-    docs = cl.get("documentos", [])
+    docs = []
+    vistos = set()
+    for d in cl.get("documentos", []):
+        fn = d.get("filename")
+        if fn and fn not in vistos:
+            vistos.add(fn)
+            docs.append(d)
     src = PROC_DIR / qid
+    docs = [d for d in docs if (src / d["filename"]).exists()]
+    if not docs:
+        # REGLA: nunca crear carpeta sin adjuntos descargados y clasificados
+        raise HTTPException(status_code=409, detail=(
+            "No hay adjuntos descargados/clasificados para este correo. "
+            "Reprocesa el correo primero: no se crea carpeta vacía."))
+    # ENRIQUECER: si ya existe carpeta de la misma persona (otro correo), usarla
+    existente = await _buscar_carpeta_existente(cliente, cl.get("rut", ""))
+    if existente and existente.get("nombre"):
+        cliente = existente["nombre"]
     dest = CLIENTES_DIR / _safe_name(cliente)
     dest.mkdir(parents=True, exist_ok=True)
     uploaded = []
+    _cat_a_tipo = {"cedula": "cedula", "liquidacion": "liquidacion", "afp": "cotizacion_afp",
+                   "cmf": "certificado_smf", "imp_renta": "impuesto_renta",
+                   "boletas": "boleta_honorarios"}
+
+    def _tipo_efectivo(d):
+        t = d["tipo"]
+        if t not in orden:
+            t = _cat_a_tipo.get(fsvc.cat_de_texto(d.get("filename", "")), t)
+        return t
     # Copiar documentos a subcarpetas protocolo (01_cedula, 02_liquidaciones, ...)
     from pypdf import PdfReader, PdfWriter
     for d in docs:
         p = src / d["filename"]
         if p.exists():
-            sub = fsvc.SUBFOLDER_POR_TIPO.get(d["tipo"], "99_otros")
+            sub = fsvc.SUBFOLDER_POR_TIPO.get(_tipo_efectivo(d), "99_otros")
             sd = dest / sub
             sd.mkdir(parents=True, exist_ok=True)
             (sd / d["filename"]).write_bytes(p.read_bytes())
+            # si el mismo archivo quedó antes en otra subcarpeta, quitarlo (evita duplicados)
+            for viejo in dest.rglob(d["filename"]):
+                if viejo.parent != sd:
+                    viejo.unlink(missing_ok=True)
             uploaded.append(f"{sub}/{d['filename']}")
-    # Generar PDF agrupado en el orden establecido (o el orden manual del usuario)
-    _cat_a_tipo = {"cedula": "cedula", "liquidacion": "liquidacion", "afp": "cotizacion_afp",
-                   "cmf": "certificado_smf", "imp_renta": "impuesto_renta",
-                   "boletas": "boleta_honorarios"}
-
-    def _rank(d):
-        t = d["tipo"]
-        if t not in orden:
-            # respaldo: clasificar por nombre de archivo (CARNET, LIQUIDACIONES, informe_deudas...)
-            t = _cat_a_tipo.get(fsvc.cat_de_texto(d.get("filename", "")), t)
-        return orden.index(t) if t in orden else len(orden) + 1
-    docs_ordenados = list(docs) if item.get("docs_orden_manual") else sorted(docs, key=_rank)
-    writer = PdfWriter()
-    for d in docs_ordenados:
-        p = src / d["filename"]
-        if not p.exists():
-            continue
-        try:
-            reader = PdfReader(str(p))
-            for pg in reader.pages:
-                writer.add_page(pg)
-        except Exception:
-            continue
-    merged_name = f"Carpeta_{_safe_name(cliente)}.pdf"
-    if len(writer.pages) > 0:
-        with open(dest / merged_name, "wb") as f:
-            writer.write(f)
+    # Regenerar la Carpeta combinada con TODO lo acumulado (todos los correos)
+    orden_manual = [d["filename"] for d in docs] if item.get("docs_orden_manual") else None
+    merged_name = await asyncio.to_thread(_regen_carpeta_cliente, cliente, orden_manual)
+    if merged_name:
         uploaded.append(merged_name)
     # Registrar carpeta cliente (con clasificación y datos financieros de la gestión)
     folder_doc = await db.folders.find_one({"nombre": cliente})
@@ -2242,7 +2345,8 @@ async def proc_upload_drive(qid: str):
                                      "datos_financieros": fin_nuevos,
                                      "created_at": now_iso(), "origen": "procesamiento"})
     else:
-        upd = {"archivos": uploaded,
+        vistos_arch = set(folder_doc.get("archivos") or [])
+        upd = {"archivos": (folder_doc.get("archivos") or []) + [a for a in uploaded if a not in vistos_arch],
                "rut": cl.get("rut", "") or folder_doc.get("rut", ""),
                "source_email": folder_doc.get("source_email") or item.get("sender", "")}
         if not (folder_doc.get("credit_request") or {}).get("manual_override"):

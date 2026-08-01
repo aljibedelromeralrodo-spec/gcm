@@ -283,3 +283,36 @@ requieren re-deploy para llegar a producción.
   adjuntos (8 extractos + madre) a ethangerardobarr@gmail.com.
 - ⚠️ poppler-utils se volvió a desinstalar del entorno (2ª vez); reinstalar con apt si
   pdf2image falla. PENDIENTE re-deploy para llevar todo esto a producción.
+
+## Rearmado de carpetas + regla anti-vacías + % aprobación (Ago 2026)
+1. CARPETAS REARMADAS: backup de carpetas antiguas en storage/clientes_backup_20260801_1614,
+   db.folders limpiada, y se armaron SOLO las de hoy (ERNESTO LEONARDO DÍAZ SILVA y PAULA
+   MACARENA RIVERA ROMERO) con orden de protocolo + subcarpetas 01_cedula...04_cmf/99_otros.
+2. REGLA DEL USUARIO (inviolable): NUNCA crear carpeta sin adjuntos descargados/clasificados.
+   proc_upload_drive ahora responde 409 si no hay docs físicos; además deduplica documentos
+   por filename (antes copiaba/mergeaba duplicados).
+3. Patrón CMF ampliado en folders_service: infnomat|informe_de_deuda|informe_deudas.
+4. % POSIBILIDAD DE APROBACIÓN calibrado con mesa:
+   - `_stats_mesa()`: base = aprobaciones/(apro+rech) de db.seguimiento (auto-recalibra con
+     cada respuesta real de mesa; hoy 2/0 → 100%).
+   - `_prob_aprobacion(item, stats)`: ajustes por docs clave faltantes (-8% c/u, según
+     dependiente/independiente), falta CMF (-5%), monto (≤2000UF +4% / >4000UF -8%),
+     subsidio (+5%), independiente (-5%). Clamp 5-98%.
+   - Expuesto en GET /procesamiento/queue y /{qid} como prob_aprobacion {porcentaje, factores}.
+   - UI: columna "% Aprobación" con badge de color (verde ≥75, amarillo ≥50, rojo <50) +
+     desglose de factores en el DetailModal (data-testid prob-aprobacion-detalle).
+   - VERIFICADO: curl + screenshot (7 badges, detalle 92% Paula).
+
+## Enriquecimiento de carpetas multi-correo (Ago 2026)
+- REGLA: documentos de la MISMA persona llegados en DISTINTOS correos van a la MISMA carpeta.
+- `_buscar_carpeta_existente(cliente, rut)`: matchea por RUT normalizado o por nombre
+  similar (tokens del nombre corto contenidos en el largo, ej "Ernesto Diaz Silva" ⊆
+  "ERNESTO LEONARDO DÍAZ SILVA").
+- `_regen_carpeta_cliente(cliente, orden_manual)`: reconstruye Carpeta_<cliente>.pdf con
+  TODO lo acumulado de todos los correos, orden por prefijos de subcarpeta (01_cedula →
+  02_* → 03_* → 04_cmf → 99_otros); el orden manual (ordenar-docs) va primero.
+- Subcarpeta ahora se asigna con `_tipo_efectivo` (fallback por nombre de archivo), y al
+  reubicar un archivo se elimina su copia vieja de otra subcarpeta (sin duplicados).
+- db.folders "archivos" acumula (union) en vez de sobrescribir.
+- VERIFICADO con datos reales de hoy: 2 correos de Ernesto Díaz → 1 sola carpeta,
+  Carpeta combinada 12 págs en orden cédula→liquidaciones→AFP→CMF→otros, sin duplicados.
