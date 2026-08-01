@@ -91,6 +91,8 @@ async def startup():
     asyncio.create_task(_daily_report_loop())
     # UF siempre actualizada desde SII (cada 6 horas)
     asyncio.create_task(_uf_auto_loop())
+    # Autocorreo de sets firmados en eCert (cada 10 min)
+    asyncio.create_task(_firmados_auto_loop())
 
 
 # ---------------------------------------------------------------------------
@@ -3404,52 +3406,40 @@ def _set_separar_firmado(nombre, signed_bytes):
     return guardados
 
 
-@api.post("/set-credito/sets/{sid}/traer-firmado")
-async def setcred_traer_firmado(sid: str):
-    """Busca el combinado firmado en eCert, lo descarga y lo separa archivo por archivo."""
-    doc = await _get_set(sid)
+async def _traer_firmado_interno(doc):
+    """Descarga el combinado firmado desde eCert y lo separa. Lanza ValueError si no está listo."""
     stem = f"COMBINADO_SET_{fsvc.safe_name(doc.get('nombre', ''))}"[:20]
     docs = await asyncio.to_thread(migrup.listar_documentos, "", 0, 1, 30)
     items = (docs or {}).get("paginatedList") or []
     cand = [d for d in items if (d.get("nombre") or "").startswith(stem)]
     if not cand:
-        raise HTTPException(status_code=404, detail="No hay ningún envío de este set en eCert")
+        raise ValueError("No hay ningún envío de este set en eCert")
     cand.sort(key=lambda d: d.get("fechaCreacion") or "", reverse=True)
     best = next((d for d in cand if (d.get("estadoDocumento") or "").lower() == "finalizado"), None)
     if not best:
-        raise HTTPException(status_code=409,
-                            detail=f"El cliente aún no firma (estado: {cand[0].get('estadoDocumento')})")
+        raise ValueError(f"El cliente aún no firma (estado: {cand[0].get('estadoDocumento')})")
     f = await asyncio.to_thread(migrup.get_file, best["idDocumento"])
     if not isinstance(f, dict) or not f.get("base64"):
-        raise HTTPException(status_code=502, detail="No se pudo descargar el firmado desde eCert")
+        raise ValueError("No se pudo descargar el firmado desde eCert")
     signed = _b64mod.b64decode(f["base64"])
     guardados = await asyncio.to_thread(_set_separar_firmado, doc.get("nombre", ""), signed)
     (_set_dir(doc.get("nombre", "")) / "firmados").mkdir(parents=True, exist_ok=True)
     (_set_dir(doc.get("nombre", "")) / "firmados" / f"{stem}_FIRMADO_COMPLETO.pdf").write_bytes(signed)
-    await db.set_credito.update_one({"id": sid}, {"$set": {
+    await db.set_credito.update_one({"id": doc["id"]}, {"$set": {
         "firmado_recibido_en": now_iso(), "firmado_ecert_id": best["idDocumento"]}})
-    return {"ok": True, "estado": best.get("estadoDocumento"),
-            "archivos": guardados, "total": len(guardados)}
+    return {"estado": best.get("estadoDocumento"), "archivos": guardados}
 
 
-SETCRED_ENVIO_DEFAULT = "danielagalindo@centralmutuos.cl, victoriavilches@centralmutuos.cl"
-
-
-@api.post("/set-credito/sets/{sid}/enviar-firmados")
-async def setcred_enviar_firmados(sid: str, payload: dict = None):
-    """Envía por correo el set firmado, separado archivo por archivo."""
-    payload = payload or {}
-    doc = await _get_set(sid)
-    correos = payload.get("correos") or SETCRED_ENVIO_DEFAULT
+async def _enviar_firmados_interno(doc, correos, asunto=None):
     if isinstance(correos, str):
         correos = [c.strip() for c in re.split(r"[,;]", correos) if c.strip()]
     correos = [c for c in correos if "@" in c]
     if not correos:
-        raise HTTPException(status_code=400, detail="Indica al menos un correo válido")
+        raise ValueError("Indica al menos un correo válido")
     dest_dir = _set_dir(doc.get("nombre", "")) / "firmados"
     files = sorted(dest_dir.glob("FIRMADO_*.pdf")) if dest_dir.exists() else []
     if not files:
-        raise HTTPException(status_code=400, detail="Primero trae el set firmado desde eCert")
+        raise ValueError("Primero trae el set firmado desde eCert")
     adjuntos = [{"filename": p.name, "content_b64": _b64(p.read_bytes())} for p in files]
     nombre = doc.get("nombre", "")
     cuerpo = f"""
@@ -3461,16 +3451,70 @@ async def setcred_enviar_firmados(sid: str, payload: dict = None):
       <p style="color:#888;font-size:12px">Central Mutuos - Con Creces</p>
     </div>
     """
-    asunto = payload.get("asunto") or f"Set de crédito firmado - {nombre}"
+    asunto = asunto or f"Set de crédito firmado - {nombre}"
     enviados, errores = [], []
     for c in correos:
         r = await asyncio.to_thread(mail.send_mail, c, asunto, cuerpo, adjuntos, "principal")
         (enviados if r.get("success") else errores).append(c)
-    await db.set_credito.update_one({"id": sid}, {"$push": {"envios_firmado": {
+    await db.set_credito.update_one({"id": doc["id"]}, {"$push": {"envios_firmado": {
         "a": enviados, "archivos": len(adjuntos), "en": now_iso()}}})
-    if not enviados:
-        raise HTTPException(status_code=502, detail=f"No se pudo enviar a: {', '.join(errores)}")
-    return {"ok": True, "enviados": enviados, "errores": errores, "archivos": len(adjuntos)}
+    return {"enviados": enviados, "errores": errores, "archivos": len(adjuntos)}
+
+
+@api.post("/set-credito/sets/{sid}/traer-firmado")
+async def setcred_traer_firmado(sid: str):
+    """Busca el combinado firmado en eCert, lo descarga y lo separa archivo por archivo."""
+    doc = await _get_set(sid)
+    try:
+        res = await _traer_firmado_interno(doc)
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    return {"ok": True, "estado": res["estado"], "archivos": res["archivos"],
+            "total": len(res["archivos"])}
+
+
+SETCRED_ENVIO_DEFAULT = "danielagalindo@centralmutuos.cl, victoriavilches@centralmutuos.cl"
+
+
+@api.post("/set-credito/sets/{sid}/enviar-firmados")
+async def setcred_enviar_firmados(sid: str, payload: dict = None):
+    """Envía por correo el set firmado, separado archivo por archivo."""
+    payload = payload or {}
+    doc = await _get_set(sid)
+    try:
+        res = await _enviar_firmados_interno(doc, payload.get("correos") or SETCRED_ENVIO_DEFAULT,
+                                             payload.get("asunto"))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if not res["enviados"]:
+        raise HTTPException(status_code=502, detail=f"No se pudo enviar a: {', '.join(res['errores'])}")
+    return {"ok": True, **res}
+
+
+async def _firmados_auto_loop():
+    """AUTOCORREO de sets firmados: cuando el cliente firma en eCert, descarga el set,
+    lo separa y lo envía automáticamente a los correos por defecto."""
+    await asyncio.sleep(90)
+    while True:
+        try:
+            pendientes = await db.set_credito.find(
+                {"firmas.0": {"$exists": True}, "firmado_recibido_en": {"$exists": False}}
+            ).to_list(50)
+            for doc in pendientes:
+                try:
+                    res = await _traer_firmado_interno(doc)
+                except ValueError:
+                    continue
+                try:
+                    env = await _enviar_firmados_interno(doc, SETCRED_ENVIO_DEFAULT)
+                    await db.set_credito.update_one({"id": doc["id"]}, {"$set": {
+                        "autocorreo_firmado": {"a": env["enviados"], "en": now_iso()}}})
+                    logging.info(f"Autocorreo set firmado '{doc.get('nombre')}' → {env['enviados']}")
+                except Exception as e:
+                    logging.warning(f"Autocorreo set firmado {doc.get('nombre')}: {e}")
+        except Exception as e:
+            logging.warning(f"_firmados_auto_loop: {e}")
+        await asyncio.sleep(600)
 
 
 @api.post("/set-credito/sets/{sid}/combinar")
