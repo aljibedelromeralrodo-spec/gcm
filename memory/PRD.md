@@ -25,6 +25,29 @@ Idioma del usuario: **Español** (responder siempre en español).
 - IMAP/SMTP: en `/app/backend/.env` (MAIL_USER, MAIL2_USER + app passwords)
 
 ## Implementado
+- 2026-08-01 (parte 5) — **Brokers + Vendedor libre + Firma de Escritura**:
+  - **Brokers administrables** (`db.brokers`, GET/POST/DELETE /api/brokers), seed con emails
+    reales encontrados en el correo: World Consultores (jgarrido@ y fdelacuadra@
+    worldconsultores.com — Javier Garrido y Felipe de la Cuadra), Kiara Fernández
+    (kiara.fernandez0312@gmail.com), Gestión Hipotecaria (contacto@hipotecariogestion.cl).
+    Panel `BrokersPanel` en modales de Tasación y Estudio de Título: checkbox agrega/quita
+    sus correos de los destinatarios + agregar/eliminar brokers manualmente.
+  - **Vendedor libre**: campos nombre + mail en ambos modales; el mail se agrega al envío
+    pero NO aparece en el texto del correo.
+  - **Firma de Escritura** (botón rosado en tarjeta): notarías por ciudad (`db.notarias`,
+    seed: La Serena — Av. Cristóbal Colón 352 Local 2 Edif. Studio Office; Santiago —
+    Notaría Cristian Camilla, Paseo Ahumada 179 piso 7; Osorno — Notaría Sada, Manuel
+    Antonio Matta 680) con CRUD + campo email de notaría. Modal: correo cliente, notaría,
+    fecha (calendario), hora (10:00 por defecto / horario a sugerir). Correo entusiasta al
+    cliente con botón "CONFIRMO QUE ASISTIRÉ" → página pública
+    `/api/escritura/confirmar/{token}` que pregunta con quién asistirá (solo / mandatario /
+    codeudor / ambos). Al confirmar: email automático a la notaría ("Cliente X RUT Y
+    confirmó asistencia...") y a Victoria Vilches + Daniela Galindo + Rodrigo Ibáñez con
+    día, hora y acompañantes. Botón de tarjeta muestra ✓ (enviada) / ✅ confirmada.
+  - Testeado: seeds OK, preview OK, página de confirmación renderiza (token válido e
+    inválido), broker checkbox suma correos, screenshots OK. NO se enviaron correos reales
+    (la confirmación POST avisa a los correos reales del equipo).
+
 - 2026-08-01 (parte 4) — **Tasación v2 + Estudio de Título funcional**:
   - Tasación: destinatarios EDITABLES (Victoria Vilches siempre se fuerza server-side),
     selector vivienda nueva (inmobiliaria) / usada. Inmobiliaria: input con datalist de

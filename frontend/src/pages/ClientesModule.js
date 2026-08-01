@@ -4,6 +4,54 @@ import axios from "axios";
 const API = process.env.REACT_APP_BACKEND_URL;
 const CAT_LABELS = { cedula: "Cédula", liquidacion: "Liquidaciones", afp: "AFP", cmf: "CMF", imp_renta: "Imp. Renta", boletas: "Boletas" };
 
+const BrokersPanel = ({ brokers, dest, setDest, reloadBrokers }) => {
+  const [nuevo, setNuevo] = useState({ nombre: "", emails: "" });
+  const [showAdd, setShowAdd] = useState(false);
+  const destList = dest.split(",").map(s => s.trim()).filter(Boolean);
+  const isOn = (b) => (b.emails || []).length > 0 && b.emails.every(e => destList.some(d => d.toLowerCase() === e.toLowerCase()));
+  const toggle = (b) => {
+    if (isOn(b)) setDest(destList.filter(d => !b.emails.some(e => e.toLowerCase() === d.toLowerCase())).join(", "));
+    else setDest([...destList, ...b.emails.filter(e => !destList.some(d => d.toLowerCase() === e.toLowerCase()))].join(", "));
+  };
+  const agregar = async () => {
+    if (!nuevo.nombre.trim() || !nuevo.emails.trim()) return;
+    try { await axios.post(`${API}/api/brokers`, nuevo); setNuevo({ nombre: "", emails: "" }); setShowAdd(false); reloadBrokers(); } catch (_e) { /* noop */ }
+  };
+  const quitar = async (b) => {
+    if (!window.confirm(`¿Quitar el broker "${b.nombre}"?`)) return;
+    try { await axios.delete(`${API}/api/brokers/${b.id}`); reloadBrokers(); } catch (_e) { /* noop */ }
+  };
+  const inpS = { padding: "0.4rem 0.6rem", borderRadius: 6, border: "1px solid rgba(148,163,184,0.3)", background: "#1e293b", color: "#e2e8f0", fontSize: 12 };
+  return (
+    <div data-testid="brokers-panel" style={{ background: "rgba(59,130,246,0.06)", border: "1px solid rgba(59,130,246,0.25)", borderRadius: 8, padding: "0.7rem 0.9rem" }}>
+      <div style={{ opacity: 0.8, fontSize: 11, textTransform: "uppercase", marginBottom: 6, fontWeight: 700 }}>Brokers — marca para agregarlos al envío</div>
+      <div style={{ display: "grid", gap: 4 }}>
+        {brokers.map(b => (
+          <div key={b.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", flex: 1 }}>
+              <input type="checkbox" checked={isOn(b)} onChange={() => toggle(b)} data-testid={`broker-check-${b.id}`} />
+              <span><b>{b.nombre}</b>{b.contactos ? ` — ${b.contactos}` : ""} <span style={{ opacity: 0.55 }}>({(b.emails || []).join(", ")})</span></span>
+            </label>
+            <button onClick={() => quitar(b)} title="Quitar broker" data-testid={`broker-del-${b.id}`}
+              style={{ background: "transparent", border: "none", color: "#f87171", cursor: "pointer" }}><i className="fa fa-trash" /></button>
+          </div>
+        ))}
+      </div>
+      {showAdd ? (
+        <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+          <input value={nuevo.nombre} onChange={e => setNuevo({ ...nuevo, nombre: e.target.value })} placeholder="Nombre broker" data-testid="broker-new-nombre" style={{ ...inpS, flex: 1, minWidth: 120 }} />
+          <input value={nuevo.emails} onChange={e => setNuevo({ ...nuevo, emails: e.target.value })} placeholder="correos separados por coma" data-testid="broker-new-emails" style={{ ...inpS, flex: 2, minWidth: 180 }} />
+          <button onClick={agregar} data-testid="broker-new-save" style={{ ...inpS, background: "#2563eb", border: "none", fontWeight: 700, cursor: "pointer" }}>Guardar</button>
+        </div>
+      ) : (
+        <button onClick={() => setShowAdd(true)} data-testid="broker-add-btn" style={{ marginTop: 8, background: "transparent", border: "1px dashed rgba(59,130,246,0.5)", color: "#93c5fd", borderRadius: 6, padding: "0.3rem 0.7rem", fontSize: 11.5, cursor: "pointer" }}>
+          <i className="fa fa-plus" /> Agregar broker
+        </button>
+      )}
+    </div>
+  );
+};
+
 // Input inteligente para montos en UF. Si el usuario ingresa un número
 // grande (>= 20000) se asume que es CLP y se convierte automáticamente
 // dividiendo por el valor de la UF del día (al hacer blur o pegar).
@@ -115,7 +163,10 @@ export default function ClientesModule({ onNavigate }) {
   const [emailModal, setEmailModal] = useState(null);
   const [tasacionModal, setTasacionModal] = useState(null); // { folder, archivos, campos... }
   const [tasacionContactos, setTasacionContactos] = useState([]); // plantillas inmobiliaria
+  const [brokers, setBrokers] = useState([]);
   const [estudioModal, setEstudioModal] = useState(null); // estudio de título
+  const [escrituraModal, setEscrituraModal] = useState(null); // firma de escritura
+  const [notarias, setNotarias] = useState([]);
   const [missingDocsModal, setMissingDocsModal] = useState(null); // { folder, to, extra, preview, sending }
   const [ufValue, setUfValue] = useState(40842);
   const fileInputRef = useRef(null);
@@ -139,8 +190,12 @@ export default function ClientesModule({ onNavigate }) {
         .sort((a, b) => (b.sel ? 1 : 0) - (a.sel ? 1 : 0));
     } catch (_e) { /* sin archivos */ }
     try {
-      const c = await axios.get(`${API}/api/tasacion/contactos`);
+      const [c, b] = await Promise.all([
+        axios.get(`${API}/api/tasacion/contactos`),
+        axios.get(`${API}/api/brokers`),
+      ]);
       setTasacionContactos(c.data.contactos || []);
+      setBrokers(b.data.brokers || []);
     } catch (_e) { setTasacionContactos([]); }
     setTasacionModal({
       folder: f, archivos, tipo: "Individual",
@@ -148,6 +203,7 @@ export default function ClientesModule({ onNavigate }) {
       modalidad: "inmobiliaria",
       inmobiliaria: f.datos_financieros?.inmobiliaria || "",
       inmo_contacto_nombre: "", inmo_contacto_email: "",
+      vl_nombre: "", vl_email: "",
       direccion: "", rol_avaluo: "",
       valor_uf: "", vendedor: "", vendedor_email: "", contacto_nombre: "", contacto_telefono: "",
       observaciones: "", preview: null, loading: false, msg: "",
@@ -163,9 +219,19 @@ export default function ClientesModule({ onNavigate }) {
     }));
   };
 
+  const reloadBrokers = async () => {
+    try {
+      const b = await axios.get(`${API}/api/brokers`);
+      setBrokers(b.data.brokers || []);
+    } catch (_e) { /* noop */ }
+  };
+
+  const _destConVendedorLibre = (m) =>
+    m.destinatarios + (m.vl_email && m.vl_email.includes("@") ? `, ${m.vl_email}` : "");
+
   const tasacionPayload = (m, confirm) => ({
     folder_id: m.folder.id, nombre: m.folder.nombre, rut: m.folder.rut || "",
-    destinatarios: m.destinatarios, modalidad: m.modalidad,
+    destinatarios: _destConVendedorLibre(m), modalidad: m.modalidad,
     inmobiliaria: m.inmobiliaria, inmo_contacto_nombre: m.inmo_contacto_nombre,
     inmo_contacto_email: m.inmo_contacto_email,
     tipo: m.tipo, direccion: m.direccion, rol_avaluo: m.rol_avaluo,
@@ -210,11 +276,13 @@ export default function ClientesModule({ onNavigate }) {
         .sort((a, b) => (b.sel ? 1 : 0) - (a.sel ? 1 : 0));
       defaults = d.data;
     } catch (_e) { /* defaults */ }
+    reloadBrokers();
     setEstudioModal({
       folder: f, archivos,
       destinatarios: defaults.destinatarios.join(", "),
       tipo_vivienda: "nueva",
       inmobiliaria: f.datos_financieros?.inmobiliaria || "",
+      vl_nombre: "", vl_email: "",
       direccion: "", observaciones: "",
       docs_texto: (defaults.docs_usada || []).join("\n"),
       preview: null, loading: false, msg: "",
@@ -223,7 +291,7 @@ export default function ClientesModule({ onNavigate }) {
 
   const estudioPayload = (m, confirm) => ({
     folder_id: m.folder.id, nombre: m.folder.nombre, rut: m.folder.rut || "",
-    destinatarios: m.destinatarios, tipo_vivienda: m.tipo_vivienda,
+    destinatarios: _destConVendedorLibre(m), tipo_vivienda: m.tipo_vivienda,
     inmobiliaria: m.inmobiliaria, direccion: m.direccion,
     observaciones: m.observaciones,
     docs_lista: m.tipo_vivienda === "usada" ? m.docs_texto.split("\n").map(s => s.trim()).filter(Boolean) : [],
@@ -242,7 +310,7 @@ export default function ClientesModule({ onNavigate }) {
   };
 
   const estudioEnviar = async () => {
-    if (!window.confirm(`¿Enviar la solicitud de estudio de títulos de ${estudioModal.folder.nombre} a: ${estudioModal.destinatarios}?`)) return;
+    if (!window.confirm(`¿Enviar la solicitud de estudio de títulos de ${estudioModal.folder.nombre} a: ${_destConVendedorLibre(estudioModal)}?`)) return;
     setEstudioModal(m => ({ ...m, loading: true, msg: "" }));
     try {
       const r = await axios.post(`${API}/api/estudio-titulo/enviar`, estudioPayload(estudioModal, true));
@@ -251,6 +319,75 @@ export default function ClientesModule({ onNavigate }) {
     } catch (e) {
       setEstudioModal(m => ({ ...m, loading: false, msg: "Error: " + (e.response?.data?.detail || e.message) }));
     }
+  };
+
+  const openEscritura = async (f) => {
+    try {
+      const n = await axios.get(`${API}/api/escritura/notarias`);
+      setNotarias(n.data.notarias || []);
+    } catch (_e) { setNotarias([]); }
+    setEscrituraModal({
+      folder: f, email_cliente: f.credit_request?.email_cliente || "",
+      notaria_id: "", fecha: "", hora: "10:00",
+      addNotaria: false, nn: { ciudad: "", nombre: "", direccion: "", email: "" },
+      notaria_email_edit: "", preview: null, loading: false, msg: "",
+    });
+  };
+
+  const reloadNotarias = async () => {
+    try {
+      const n = await axios.get(`${API}/api/escritura/notarias`);
+      setNotarias(n.data.notarias || []);
+      return n.data.notarias || [];
+    } catch (_e) { return []; }
+  };
+
+  const escrituraPayload = (m, confirm) => ({
+    folder_id: m.folder.id, nombre: m.folder.nombre, rut: m.folder.rut || "",
+    email_cliente: m.email_cliente, notaria_id: m.notaria_id,
+    fecha: m.fecha, hora: m.hora, base_url: window.location.origin, confirm,
+  });
+
+  const escrituraPreview = async () => {
+    setEscrituraModal(m => ({ ...m, loading: true, msg: "" }));
+    try {
+      const r = await axios.post(`${API}/api/escritura/enviar`, escrituraPayload(escrituraModal, false));
+      setEscrituraModal(m => ({ ...m, preview: r.data, loading: false }));
+    } catch (e) {
+      setEscrituraModal(m => ({ ...m, loading: false, msg: "Error: " + (e.response?.data?.detail || e.message) }));
+    }
+  };
+
+  const escrituraEnviar = async () => {
+    if (!window.confirm(`¿Enviar el aviso de firma de escritura a ${escrituraModal.email_cliente}?`)) return;
+    setEscrituraModal(m => ({ ...m, loading: true, msg: "" }));
+    try {
+      const r = await axios.post(`${API}/api/escritura/enviar`, escrituraPayload(escrituraModal, true));
+      setEscrituraModal(m => ({ ...m, loading: false, msg: `✅ Aviso enviado a ${r.data.to}. Cuando el cliente confirme, se avisará a la notaría y a Victoria, Daniela y Rodrigo.` }));
+      loadFolders();
+    } catch (e) {
+      setEscrituraModal(m => ({ ...m, loading: false, msg: "Error: " + (e.response?.data?.detail || e.message) }));
+    }
+  };
+
+  const escrituraAddNotaria = async () => {
+    const m = escrituraModal;
+    if (!m.nn.ciudad.trim() || !m.nn.direccion.trim()) return;
+    try {
+      const r = await axios.post(`${API}/api/escritura/notarias`, m.nn);
+      await reloadNotarias();
+      setEscrituraModal(prev => ({ ...prev, addNotaria: false, notaria_id: r.data.notaria.id, nn: { ciudad: "", nombre: "", direccion: "", email: "" } }));
+    } catch (_e) { /* noop */ }
+  };
+
+  const escrituraSaveNotariaEmail = async () => {
+    const m = escrituraModal;
+    if (!m.notaria_id || !m.notaria_email_edit.includes("@")) return;
+    try {
+      await axios.patch(`${API}/api/escritura/notarias/${m.notaria_id}`, { email: m.notaria_email_edit });
+      await reloadNotarias();
+      setEscrituraModal(prev => ({ ...prev, notaria_email_edit: "", msg: "✅ Correo de la notaría guardado" }));
+    } catch (_e) { /* noop */ }
   };
   const refreshUfFromSii = async () => {
     try {
@@ -1107,6 +1244,11 @@ export default function ClientesModule({ onNavigate }) {
                       style={modBtn("rgba(20,184,166,0.12)", "#14b8a6", enviadoManual ? "#fff" : "#0d9488")}>
                       <i className="fa fa-balance-scale"></i> Solicitud de Estudio de Título{f.estudio_titulo_solicitado_at ? " ✓" : ""}
                     </button>
+                    <button data-testid={`btn-escritura-${f.id}`} onClick={() => openEscritura(f)}
+                      title={`Avisar a ${f.nombre} la fecha de firma de su escritura (con confirmación de asistencia)`}
+                      style={modBtn("rgba(236,72,153,0.12)", "#ec4899", enviadoManual ? "#fff" : "#db2777")}>
+                      <i className="fa fa-pencil"></i> Firma de Escritura{f.escritura_confirmada_at ? " ✅ confirmada" : (f.escritura_solicitada_at ? " ✓" : "")}
+                    </button>
                   </div>
                 </div>
               );
@@ -1857,6 +1999,15 @@ export default function ClientesModule({ onNavigate }) {
                 <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Destinatarios (editable, separados por coma) <span style={{ color: "#4ade80" }}>· Victoria Vilches siempre va incluida</span></b>
                   <input value={m.destinatarios} onChange={e => set("destinatarios", e.target.value)} data-testid="tasacion-destinatarios" style={inpS} />
                 </label>
+                <BrokersPanel brokers={brokers} dest={m.destinatarios} setDest={(v) => set("destinatarios", v)} reloadBrokers={reloadBrokers} />
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: "0.6rem" }}>
+                  <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Vendedor libre (nombre)</b>
+                    <input value={m.vl_nombre} onChange={e => set("vl_nombre", e.target.value)} placeholder="Vende una sola vez" data-testid="tasacion-vl-nombre" style={inpS} />
+                  </label>
+                  <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Mail vendedor libre <span style={{ opacity: 0.6 }}>(se agrega al envío, no aparece en el texto)</span></b>
+                    <input value={m.vl_email} onChange={e => set("vl_email", e.target.value)} placeholder="vendedor@correo.cl" data-testid="tasacion-vl-email" style={inpS} />
+                  </label>
+                </div>
                 <div style={{ background: "rgba(30,41,59,0.7)", borderRadius: 8, padding: "0.5rem 0.9rem", fontSize: 12, opacity: 0.85 }}>
                   Asunto: SOLICITUD TASACION // {m.folder.nombre}{m.folder.rut ? ` Rut: ${m.folder.rut}` : ""}
                 </div>
@@ -1985,6 +2136,15 @@ export default function ClientesModule({ onNavigate }) {
                 <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Destinatarios (editable, separados por coma) <span style={{ color: "#4ade80" }}>· Victoria Vilches siempre va incluida</span></b>
                   <input value={m.destinatarios} onChange={e => set("destinatarios", e.target.value)} data-testid="estudio-destinatarios" style={inpS} />
                 </label>
+                <BrokersPanel brokers={brokers} dest={m.destinatarios} setDest={(v) => set("destinatarios", v)} reloadBrokers={reloadBrokers} />
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: "0.6rem" }}>
+                  <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Vendedor libre (nombre)</b>
+                    <input value={m.vl_nombre} onChange={e => set("vl_nombre", e.target.value)} placeholder="Vende una sola vez" data-testid="estudio-vl-nombre" style={inpS} />
+                  </label>
+                  <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Mail vendedor libre <span style={{ opacity: 0.6 }}>(se agrega al envío, no aparece en el texto)</span></b>
+                    <input value={m.vl_email} onChange={e => set("vl_email", e.target.value)} placeholder="vendedor@correo.cl" data-testid="estudio-vl-email" style={inpS} />
+                  </label>
+                </div>
                 <div style={{ background: "rgba(30,41,59,0.7)", borderRadius: 8, padding: "0.5rem 0.9rem", fontSize: 12, opacity: 0.85 }}>
                   Asunto: SOLICITUD ESTUDIO DE TITULOS // {m.folder.nombre}{m.folder.rut ? ` ${m.folder.rut}` : ""}
                 </div>
@@ -2047,6 +2207,91 @@ export default function ClientesModule({ onNavigate }) {
                   <button onClick={estudioEnviar} disabled={m.loading} data-testid="btn-estudio-enviar"
                     style={{ padding: "0.55rem 1.1rem", borderRadius: 8, border: "none", background: "#0d9488", color: "#fff", fontWeight: 800, cursor: "pointer", opacity: m.loading ? 0.6 : 1 }}>
                     <i className={`fa ${m.loading ? "fa-spinner fa-spin" : "fa-paper-plane"}`} /> Enviar solicitud
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {escrituraModal && (() => {
+        const m = escrituraModal;
+        const set = (k, v) => setEscrituraModal(prev => ({ ...prev, [k]: v, preview: null }));
+        const inpS = { width: "100%", padding: "0.5rem", borderRadius: 6, border: "1px solid rgba(148,163,184,0.3)", background: "#1e293b", color: "#e2e8f0", fontSize: 13 };
+        const lblS = { fontSize: 12 };
+        const notariaSel = notarias.find(n => n.id === m.notaria_id);
+        return (
+          <div data-testid="escritura-modal" onClick={() => setEscrituraModal(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9998, padding: "3vh 3vw" }}>
+            <div onClick={(e) => e.stopPropagation()} style={{ background: "#0f172a", color: "#e2e8f0", borderRadius: 12, width: "min(760px, 96vw)", maxHeight: "94vh", overflow: "auto", border: "1px solid rgba(148,163,184,0.25)", boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}>
+              <div style={{ padding: "0.9rem 1.1rem", borderBottom: "1px solid rgba(148,163,184,0.2)", display: "flex", alignItems: "center", gap: 10 }}>
+                <i className="fa fa-pencil" style={{ color: "#f472b6" }} />
+                <h4 style={{ margin: 0, flex: 1 }}>Firma de Escritura — {m.folder.nombre}</h4>
+                <button onClick={() => setEscrituraModal(null)} data-testid="btn-escritura-close" style={{ background: "transparent", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 18 }}><i className="fa fa-times" /></button>
+              </div>
+              <div style={{ padding: "1rem 1.1rem", display: "grid", gap: "0.75rem" }}>
+                {m.msg && (
+                  <div data-testid="escritura-msg" style={{ padding: "0.6rem 0.9rem", borderRadius: 8, background: m.msg.startsWith("✅") ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)", color: m.msg.startsWith("✅") ? "#4ade80" : "#f87171", fontWeight: 600, fontSize: 13 }}>{m.msg}</div>
+                )}
+                <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Correo del cliente <span style={{ color: "#f87171" }}>*</span></b>
+                  <input value={m.email_cliente} onChange={e => set("email_cliente", e.target.value)} placeholder="cliente@correo.cl" data-testid="escritura-email" style={inpS} />
+                </label>
+                <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Notaría (por ciudad) <span style={{ color: "#f87171" }}>*</span></b>
+                  <select value={m.notaria_id} onChange={e => set("notaria_id", e.target.value)} data-testid="escritura-notaria" style={inpS}>
+                    <option value="">— Seleccionar notaría —</option>
+                    {notarias.map(n => <option key={n.id} value={n.id}>{n.ciudad} — {n.nombre} · {n.direccion}</option>)}
+                  </select>
+                </label>
+                {notariaSel && !notariaSel.email && (
+                  <div style={{ display: "flex", gap: 6, alignItems: "center", background: "rgba(250,204,21,0.08)", border: "1px solid rgba(250,204,21,0.3)", borderRadius: 8, padding: "0.5rem 0.8rem", fontSize: 12 }}>
+                    <span style={{ color: "#facc15" }}>⚠️ Esta notaría no tiene correo: no recibirá el aviso de confirmación.</span>
+                    <input value={m.notaria_email_edit} onChange={e => setEscrituraModal(prev => ({ ...prev, notaria_email_edit: e.target.value }))} placeholder="correo@notaria.cl" data-testid="escritura-notaria-email" style={{ ...inpS, flex: 1, width: "auto" }} />
+                    <button onClick={escrituraSaveNotariaEmail} data-testid="escritura-notaria-email-save" style={{ ...inpS, width: "auto", background: "#a16207", border: "none", fontWeight: 700, cursor: "pointer" }}>Guardar</button>
+                  </div>
+                )}
+                {m.addNotaria ? (
+                  <div style={{ background: "rgba(236,72,153,0.06)", border: "1px dashed rgba(236,72,153,0.4)", borderRadius: 8, padding: "0.7rem 0.9rem", display: "grid", gap: "0.5rem" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1.5fr", gap: "0.5rem" }}>
+                      <input value={m.nn.ciudad} onChange={e => setEscrituraModal(prev => ({ ...prev, nn: { ...prev.nn, ciudad: e.target.value } }))} placeholder="Ciudad *" data-testid="notaria-new-ciudad" style={inpS} />
+                      <input value={m.nn.nombre} onChange={e => setEscrituraModal(prev => ({ ...prev, nn: { ...prev.nn, nombre: e.target.value } }))} placeholder="Nombre notaría" data-testid="notaria-new-nombre" style={inpS} />
+                    </div>
+                    <input value={m.nn.direccion} onChange={e => setEscrituraModal(prev => ({ ...prev, nn: { ...prev.nn, direccion: e.target.value } }))} placeholder="Dirección completa *" data-testid="notaria-new-direccion" style={inpS} />
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <input value={m.nn.email} onChange={e => setEscrituraModal(prev => ({ ...prev, nn: { ...prev.nn, email: e.target.value } }))} placeholder="Correo notaría (para avisarle la confirmación)" data-testid="notaria-new-email" style={{ ...inpS, flex: 1 }} />
+                      <button onClick={escrituraAddNotaria} data-testid="notaria-new-save" style={{ ...inpS, width: "auto", background: "#db2777", border: "none", fontWeight: 700, cursor: "pointer" }}>Guardar notaría</button>
+                    </div>
+                  </div>
+                ) : (
+                  <button onClick={() => setEscrituraModal(prev => ({ ...prev, addNotaria: true }))} data-testid="btn-add-notaria" style={{ justifySelf: "start", background: "transparent", border: "1px dashed rgba(236,72,153,0.5)", color: "#f9a8d4", borderRadius: 6, padding: "0.3rem 0.7rem", fontSize: 11.5, cursor: "pointer" }}>
+                    <i className="fa fa-plus" /> Agregar notaría nueva
+                  </button>
+                )}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                  <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Día de la firma <span style={{ color: "#f87171" }}>*</span></b>
+                    <input type="date" value={m.fecha} onChange={e => set("fecha", e.target.value)} data-testid="escritura-fecha" style={inpS} />
+                  </label>
+                  <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Horario <span style={{ opacity: 0.6 }}>(10:00 por defecto — horario a sugerir si es distinto)</span></b>
+                    <input type="time" value={m.hora} onChange={e => set("hora", e.target.value)} data-testid="escritura-hora" style={inpS} />
+                  </label>
+                </div>
+                <div style={{ fontSize: 11.5, opacity: 0.75, background: "rgba(34,197,94,0.06)", border: "1px solid rgba(34,197,94,0.25)", borderRadius: 8, padding: "0.5rem 0.8rem", lineHeight: 1.6 }}>
+                  El cliente recibe el correo con el botón <b>"CONFIRMO QUE ASISTIRÉ"</b>. Al confirmar, indica si va solo, con mandatario y/o codeudor,
+                  y se avisa automáticamente a la <b>notaría</b> (si tiene correo) y a <b>Victoria Vilches, Daniela Galindo y Rodrigo Ibáñez</b> con el día, horario y acompañantes.
+                </div>
+                {m.preview && (
+                  <div style={{ background: "#fff", borderRadius: 8, padding: "0.9rem", maxHeight: 280, overflow: "auto" }}>
+                    <div dangerouslySetInnerHTML={{ __html: m.preview.body }} />
+                  </div>
+                )}
+                <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+                  <button onClick={escrituraPreview} disabled={m.loading} data-testid="btn-escritura-preview"
+                    style={{ padding: "0.55rem 1.1rem", borderRadius: 8, border: "1px solid rgba(148,163,184,0.4)", background: "transparent", color: "#e2e8f0", fontWeight: 700, cursor: "pointer" }}>
+                    <i className={`fa ${m.loading ? "fa-spinner fa-spin" : "fa-eye"}`} /> Ver preview
+                  </button>
+                  <button onClick={escrituraEnviar} disabled={m.loading || !m.email_cliente.includes("@") || !m.fecha || !m.notaria_id} data-testid="btn-escritura-enviar"
+                    title={!m.email_cliente.includes("@") ? "Falta el correo del cliente" : (!m.fecha ? "Falta la fecha" : (!m.notaria_id ? "Falta la notaría" : ""))}
+                    style={{ padding: "0.55rem 1.1rem", borderRadius: 8, border: "none", background: "#db2777", color: "#fff", fontWeight: 800, cursor: "pointer", opacity: (m.loading || !m.email_cliente.includes("@") || !m.fecha || !m.notaria_id) ? 0.6 : 1 }}>
+                    <i className={`fa ${m.loading ? "fa-spinner fa-spin" : "fa-paper-plane"}`} /> Enviar aviso al cliente
                   </button>
                 </div>
               </div>

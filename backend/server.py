@@ -1,5 +1,5 @@
 from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Form, Request, Query
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.responses import StreamingResponse, JSONResponse, HTMLResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -3298,6 +3298,271 @@ async def estudio_enviar(payload: dict):
 @api.get("/estudio-titulo/log")
 async def estudio_log():
     docs = await db.estudio_titulo_log.find({}).sort("enviado_en", -1).limit(20).to_list(20)
+    return {"log": [clean(d) for d in docs]}
+
+
+# ---------------------------------------------------------------------------
+# Brokers (canales de tasación / estudio de título) — administrables
+# ---------------------------------------------------------------------------
+BROKERS_SEED = [
+    {"nombre": "World Consultores", "contactos": "Javier Garrido y Felipe de la Cuadra",
+     "emails": ["jgarrido@worldconsultores.com", "fdelacuadra@worldconsultores.com"]},
+    {"nombre": "Kiara Fernández", "contactos": "Kiara Fernández",
+     "emails": ["kiara.fernandez0312@gmail.com"]},
+    {"nombre": "Gestión Hipotecaria", "contactos": "Gestión Hipotecaria",
+     "emails": ["contacto@hipotecariogestion.cl"]},
+]
+
+
+async def _seed_brokers():
+    if await db.brokers.count_documents({}) == 0:
+        for b in BROKERS_SEED:
+            await db.brokers.insert_one({"id": str(uuid.uuid4()), **b, "creado_en": now_iso()})
+
+
+@api.get("/brokers")
+async def brokers_list():
+    await _seed_brokers()
+    docs = await db.brokers.find({}).sort("nombre", 1).to_list(100)
+    return {"brokers": [clean(d) for d in docs]}
+
+
+@api.post("/brokers")
+async def brokers_add(payload: dict):
+    payload = payload or {}
+    nombre = (payload.get("nombre") or "").strip()
+    emails = payload.get("emails") or []
+    if isinstance(emails, str):
+        emails = [e.strip() for e in re.split(r"[,;\n]+", emails) if e.strip()]
+    emails = [e for e in emails if "@" in e]
+    if not nombre or not emails:
+        raise HTTPException(status_code=400, detail="Falta nombre o correos del broker")
+    doc = {"id": str(uuid.uuid4()), "nombre": nombre,
+           "contactos": (payload.get("contactos") or "").strip(),
+           "emails": emails, "creado_en": now_iso()}
+    await db.brokers.insert_one(dict(doc))
+    return {"ok": True, "broker": clean(doc)}
+
+
+@api.delete("/brokers/{bid}")
+async def brokers_del(bid: str):
+    await db.brokers.delete_one({"id": bid})
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Firma de Escritura: aviso al cliente + confirmación pública + notarías
+# ---------------------------------------------------------------------------
+NOTARIAS_SEED = [
+    {"ciudad": "La Serena", "nombre": "Notaría La Serena",
+     "direccion": "Avenida Cristóbal Colón 352, Local 2, Edificio Studio Office, La Serena", "email": ""},
+    {"ciudad": "Santiago", "nombre": "Notaría Cristian Camilla",
+     "direccion": "Paseo Ahumada 179, Piso 7, Santiago", "email": ""},
+    {"ciudad": "Osorno", "nombre": "Notaría Sada",
+     "direccion": "Manuel Antonio Matta 680, Osorno", "email": ""},
+]
+ESCRITURA_COPIAS = ["victoriavilches@centralmutuos.cl",
+                    "danielagalindo@centralmutuos.cl",
+                    "rodrigoibanez@centralmutuos.cl"]
+
+
+async def _seed_notarias():
+    if await db.notarias.count_documents({}) == 0:
+        for n in NOTARIAS_SEED:
+            await db.notarias.insert_one({"id": str(uuid.uuid4()), **n, "creado_en": now_iso()})
+
+
+@api.get("/escritura/notarias")
+async def notarias_list():
+    await _seed_notarias()
+    docs = await db.notarias.find({}).sort("ciudad", 1).to_list(100)
+    return {"notarias": [clean(d) for d in docs]}
+
+
+@api.post("/escritura/notarias")
+async def notarias_add(payload: dict):
+    payload = payload or {}
+    if not (payload.get("ciudad") or "").strip() or not (payload.get("direccion") or "").strip():
+        raise HTTPException(status_code=400, detail="Falta ciudad o dirección")
+    doc = {"id": str(uuid.uuid4()), "ciudad": payload["ciudad"].strip(),
+           "nombre": (payload.get("nombre") or "").strip() or f"Notaría {payload['ciudad'].strip()}",
+           "direccion": payload["direccion"].strip(),
+           "email": (payload.get("email") or "").strip(), "creado_en": now_iso()}
+    await db.notarias.insert_one(dict(doc))
+    return {"ok": True, "notaria": clean(doc)}
+
+
+@api.patch("/escritura/notarias/{nid}")
+async def notarias_patch(nid: str, payload: dict):
+    upd = {k: (payload.get(k) or "").strip() for k in ("ciudad", "nombre", "direccion", "email") if k in (payload or {})}
+    if upd:
+        await db.notarias.update_one({"id": nid}, {"$set": upd})
+    return {"ok": True}
+
+
+@api.delete("/escritura/notarias/{nid}")
+async def notarias_del(nid: str):
+    await db.notarias.delete_one({"id": nid})
+    return {"ok": True}
+
+
+def _fecha_larga(fecha):
+    try:
+        d = datetime.fromisoformat(fecha)
+        meses = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
+                 "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
+        return f"{d.day} de {meses[d.month-1]} de {d.year}"
+    except Exception:
+        return fecha
+
+
+def _escritura_html(p, notaria, confirm_url):
+    fecha = _fecha_larga(p.get("fecha", ""))
+    hora = p.get("hora") or "10:00"
+    return f"""
+    <div style="font-family:Arial,sans-serif;font-size:15px;color:#222;max-width:620px;margin:0 auto">
+      <div style="background:#0a0e17;color:#d4af37;padding:18px 24px;border-radius:10px 10px 0 0;text-align:center">
+        <h2 style="margin:0">Central Mutuos — Con Creces</h2>
+        <div style="color:#e2e8f0;font-size:13px;margin-top:4px">Firma de Escritura</div>
+      </div>
+      <div style="border:1px solid #e2e8f0;border-top:none;border-radius:0 0 10px 10px;padding:22px 26px">
+        <p>Estimado(a) <b>{p.get('nombre','')}</b>:</p>
+        <p>¡Con mucho entusiasmo le informamos que llegó el momento de la <b>firma de su escritura</b>!</p>
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px 18px;margin:14px 0">
+          <p style="margin:4px 0"><b>📅 Fecha:</b> {fecha}</p>
+          <p style="margin:4px 0"><b>🕙 Hora:</b> {hora} hrs</p>
+          <p style="margin:4px 0"><b>🏛 Notaría:</b> {notaria.get('nombre','')}</p>
+          <p style="margin:4px 0"><b>📍 Dirección:</b> {notaria.get('direccion','')}</p>
+        </div>
+        <p>Debe acudir con su <b>codeudor</b> (si lo tiene) y con su <b>mandatario</b>.
+        Si no pueden asistir juntos, pueden firmar en fechas distintas, pero usted debe
+        concurrir a la firma el día y horario indicados.</p>
+        <div style="text-align:center;margin:22px 0">
+          <a href="{confirm_url}" style="display:inline-block;background:#16a34a;color:#fff;
+             padding:14px 26px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:15px">
+            ✅ CONFIRMO QUE ASISTIRÉ A LA FIRMA EN LA FECHA Y HORARIO INDICADOS
+          </a>
+        </div>
+        <p style="font-size:12px;color:#777">Al confirmar podrá indicarnos con quién asistirá
+        (solo, con mandatario y/o con codeudor).</p>
+        <p style="margin-top:16px;color:#555">Saludos cordiales,<br/><b>Central Mutuos — Con Creces</b></p>
+      </div>
+    </div>
+    """
+
+
+@api.post("/escritura/enviar")
+async def escritura_enviar(payload: dict):
+    payload = payload or {}
+    nombre = (payload.get("nombre") or "").strip()
+    email_cliente = (payload.get("email_cliente") or "").strip()
+    notaria = await db.notarias.find_one({"id": payload.get("notaria_id", "")}) or {}
+    token = str(uuid.uuid4())
+    base = (payload.get("base_url") or "").rstrip("/")
+    confirm_url = f"{base}/api/escritura/confirmar/{token}"
+    cuerpo = _escritura_html(payload, notaria, confirm_url)
+    subject = f"Firma de Escritura — {nombre} · {_fecha_larga(payload.get('fecha',''))} {payload.get('hora') or '10:00'} hrs"
+    sender = _sender_por_rol("secundaria")
+    if not payload.get("confirm"):
+        return {"to": email_cliente, "subject": subject, "body": cuerpo, "sender": sender}
+    if not nombre or not (payload.get("fecha") or "").strip():
+        raise HTTPException(status_code=400, detail="Falta el nombre del cliente o la fecha de firma")
+    if not email_cliente or "@" not in email_cliente:
+        raise HTTPException(status_code=400, detail="Correo del cliente inválido")
+    if not notaria:
+        raise HTTPException(status_code=400, detail="Debe seleccionar la notaría")
+    res = await asyncio.to_thread(mail.send_mail, email_cliente, subject, cuerpo, [], "secundaria")
+    if not res.get("success"):
+        raise HTTPException(status_code=502, detail=res.get("error", "Error de envío"))
+    await db.escritura_solicitudes.insert_one({
+        "id": str(uuid.uuid4()), "token": token, "folder_id": payload.get("folder_id", ""),
+        "nombre": nombre, "rut": (payload.get("rut") or "").strip(),
+        "email_cliente": email_cliente, "notaria": clean(dict(notaria)),
+        "fecha": payload.get("fecha", ""), "hora": payload.get("hora") or "10:00",
+        "status": "enviada", "acompanantes": "", "enviado_en": now_iso()})
+    if payload.get("folder_id"):
+        await db.folders.update_one({"id": payload["folder_id"]},
+                                    {"$set": {"escritura_solicitada_at": now_iso()}})
+    return {"ok": True, "to": email_cliente, "subject": subject, "sender": res.get("desde", sender)}
+
+
+_ESC_PAGE = """<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Confirmación de Firma — Central Mutuos</title>
+<style>body{{font-family:Arial,sans-serif;background:#0a0e17;color:#e2e8f0;margin:0;padding:24px}}
+.card{{max-width:560px;margin:30px auto;background:#0f172a;border:1px solid #33415580;border-radius:14px;padding:28px}}
+h2{{color:#d4af37;margin:0 0 6px}} .dato{{background:#1e293b;border-radius:8px;padding:12px 16px;margin:14px 0;font-size:14px;line-height:1.7}}
+label{{display:flex;align-items:center;gap:10px;background:#1e293b;border-radius:8px;padding:12px 14px;margin:8px 0;cursor:pointer;font-size:14px}}
+button{{width:100%;background:#16a34a;color:#fff;border:none;border-radius:8px;padding:15px;font-size:15px;font-weight:bold;cursor:pointer;margin-top:14px}}
+.ok{{color:#4ade80;font-size:16px;text-align:center;padding:20px 0}}</style></head>
+<body><div class="card">{contenido}</div></body></html>"""
+
+
+@api.get("/escritura/confirmar/{token}")
+async def escritura_confirmar_page(token: str):
+    sol = await db.escritura_solicitudes.find_one({"token": token})
+    if not sol:
+        return HTMLResponse(_ESC_PAGE.format(contenido="<h2>Enlace no válido</h2><p>Esta solicitud no existe o expiró.</p>"))
+    if sol.get("status") == "confirmada":
+        return HTMLResponse(_ESC_PAGE.format(contenido=f"<h2>¡Gracias!</h2><div class='ok'>Su asistencia ya fue confirmada ✅<br/>{_fecha_larga(sol.get('fecha',''))} · {sol.get('hora','')} hrs</div>"))
+    n = sol.get("notaria") or {}
+    contenido = f"""
+    <h2>Central Mutuos — Firma de Escritura</h2>
+    <p>Estimado(a) <b>{sol.get('nombre','')}</b>, confirme su asistencia a la firma:</p>
+    <div class="dato">📅 <b>{_fecha_larga(sol.get('fecha',''))}</b> · 🕙 <b>{sol.get('hora','')} hrs</b><br/>
+    🏛 {n.get('nombre','')}<br/>📍 {n.get('direccion','')}</div>
+    <form method="post" action="">
+      <p style="font-size:14px"><b>¿Con quién asistirá a la firma?</b></p>
+      <label><input type="radio" name="acompanantes" value="solo" checked> Asistiré solo(a)</label>
+      <label><input type="radio" name="acompanantes" value="con mandatario"> Con mi mandatario</label>
+      <label><input type="radio" name="acompanantes" value="con codeudor"> Con mi codeudor</label>
+      <label><input type="radio" name="acompanantes" value="con mandatario y codeudor"> Con mandatario y codeudor</label>
+      <button type="submit">✅ Confirmo que asistiré a la firma en la fecha y horario indicados</button>
+    </form>"""
+    return HTMLResponse(_ESC_PAGE.format(contenido=contenido))
+
+
+@api.post("/escritura/confirmar/{token}")
+async def escritura_confirmar_post(token: str, request: Request):
+    sol = await db.escritura_solicitudes.find_one({"token": token})
+    if not sol:
+        return HTMLResponse(_ESC_PAGE.format(contenido="<h2>Enlace no válido</h2>"))
+    form = await request.form()
+    acomp = (form.get("acompanantes") or "solo").strip()
+    await db.escritura_solicitudes.update_one({"token": token}, {"$set": {
+        "status": "confirmada", "acompanantes": acomp, "confirmado_en": now_iso()}})
+    if sol.get("folder_id"):
+        await db.folders.update_one({"id": sol["folder_id"]},
+                                    {"$set": {"escritura_confirmada_at": now_iso()}})
+    n = sol.get("notaria") or {}
+    fecha, hora = _fecha_larga(sol.get("fecha", "")), sol.get("hora", "")
+    detalle = (f"El cliente <b>{sol.get('nombre','')}</b>, RUT <b>{sol.get('rut','') or '—'}</b>, "
+               f"ha confirmado su asistencia a la <b>{n.get('nombre','notaría')}</b> "
+               f"({n.get('direccion','')}) el día <b>{fecha}</b> a las <b>{hora} hrs</b>.")
+    html_int = f"""
+    <div style="font-family:Arial,sans-serif;font-size:14px;color:#222;max-width:620px">
+      <h3 style="color:#16a34a">✅ Confirmación de firma de escritura</h3>
+      <p>{detalle}</p>
+      <p><b>Asistirá:</b> {acomp}.</p>
+      <p style="color:#888;font-size:12px">Aviso automático — Central Mutuos</p>
+    </div>"""
+    subject_int = f"Confirmación firma escritura — {sol.get('nombre','')} · {fecha} {hora} hrs"
+    # Copia interna: Victoria, Daniela y Rodrigo (a Rodrigo se le detalla acompañantes)
+    await asyncio.to_thread(mail.send_mail, ESCRITURA_COPIAS, subject_int, html_int, [], "secundaria")
+    # Aviso a la notaría (si tiene correo configurado)
+    if n.get("email") and "@" in n.get("email"):
+        html_not = f"""
+        <div style="font-family:Arial,sans-serif;font-size:14px;color:#222;max-width:620px">
+          <p>Estimados,</p><p>{detalle}</p>
+          <p style="color:#888;font-size:12px">Central Mutuos — Con Creces</p>
+        </div>"""
+        await asyncio.to_thread(mail.send_mail, n["email"], subject_int, html_not, [], "secundaria")
+    return HTMLResponse(_ESC_PAGE.format(contenido=f"<h2>¡Gracias, {sol.get('nombre','')}!</h2><div class='ok'>Su asistencia quedó confirmada ✅<br/>{fecha} · {hora} hrs<br/><br/>Asistirá: {acomp}</div>"))
+
+
+@api.get("/escritura/log")
+async def escritura_log():
+    docs = await db.escritura_solicitudes.find({}).sort("enviado_en", -1).limit(30).to_list(30)
     return {"log": [clean(d) for d in docs]}
 
 
