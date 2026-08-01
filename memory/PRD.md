@@ -265,3 +265,21 @@ requieren re-deploy para llegar a producción.
    - _set_archivos excluye firmados/ para no re-combinarlos. UI sección verde
      "Set firmado por el cliente" con input de correos + botón enviar.
    - Bug arreglado: correosEnvio no declarado (ReferenceError) + JSX duplicado previo.
+
+## Rastro de firma en extractos + autocorreo con archivo madre (Ago 2026)
+- HALLAZGO CONFIRMADO: al separar el PDF firmado, los extractos PIERDEN la firma
+  criptográfica (AcroForm/Sig solo sobrevive en el archivo madre). Verificado con pypdf.
+- Solución implementada:
+  - `pdf_service.estampar_pie_rastro()`: pie en TODAS las páginas de cada extracto:
+    "EXTRACTO DE DOCUMENTO FIRMADO ELECTRONICAMENTE - FEA e-CertChile (Ley 19.799)..." +
+    archivo madre + Doc eCert ID + huella SHA-256 del madre.
+  - `_set_separar_firmado(nombre, bytes, ecert_id)` aplica el rastro al separar.
+  - `_enviar_firmados_interno` adjunta TAMBIÉN el archivo madre (*_FIRMADO_COMPLETO.pdf)
+    y explica en el cuerpo cómo verificar (la FEA se valida en eCert con el madre).
+- Autocorreo automático `_firmados_auto_loop()` (cada 10 min): detecta sets Finalizados en
+  eCert → descarga → separa con rastro → envía a SETCRED_ENVIO_DEFAULT (Daniela Galindo +
+  Victoria Vilches) sin intervención. Solo sets sin firmado_recibido_en (sin duplicados).
+- VERIFICADO: re-split del set Javier Perez con rastro (render OK) + envío real con 9
+  adjuntos (8 extractos + madre) a ethangerardobarr@gmail.com.
+- ⚠️ poppler-utils se volvió a desinstalar del entorno (2ª vez); reinstalar con apt si
+  pdf2image falla. PENDIENTE re-deploy para llevar todo esto a producción.

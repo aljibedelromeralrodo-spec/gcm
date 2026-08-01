@@ -224,3 +224,29 @@ def estampar_referencias_firma(pdf_bytes, posiciones, nombre_firmante):
     out = io.BytesIO()
     writer.write(out)
     return out.getvalue()
+
+
+def estampar_pie_rastro(pdf_bytes, lineas):
+    """Imprime un pie de rastro (trazabilidad de firma) en todas las páginas."""
+    from reportlab.pdfgen import canvas
+    from pypdf import PdfReader, PdfWriter
+    reader = PdfReader(io.BytesIO(pdf_bytes))
+    writer = PdfWriter()
+    for page in reader.pages:
+        w = float(page.mediabox.width)
+        h = float(page.mediabox.height)
+        buf = io.BytesIO()
+        c = canvas.Canvas(buf, pagesize=(w, h))
+        c.setFillColorRGB(0.32, 0.32, 0.32)
+        y = 7
+        for ln in reversed(lineas):
+            c.setFont("Helvetica", 5.6)
+            c.drawString(14, y, ln[:170])
+            y += 7
+        c.save()
+        buf.seek(0)
+        page.merge_page(PdfReader(buf).pages[0])
+        writer.add_page(page)
+    out = io.BytesIO()
+    writer.write(out)
+    return out.getvalue()

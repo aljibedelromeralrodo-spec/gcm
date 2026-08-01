@@ -3375,15 +3375,24 @@ def _set_firmados(nombre):
             for p in sorted(dest.glob("*.pdf"))]
 
 
-def _set_separar_firmado(nombre, signed_bytes):
-    """Separa el PDF combinado FIRMADO en los archivos originales del set."""
+def _set_separar_firmado(nombre, signed_bytes, ecert_id=""):
+    """Separa el PDF combinado FIRMADO en los archivos originales del set.
+    Cada extracto lleva pie de rastro con referencia al archivo madre firmado."""
     from pypdf import PdfReader, PdfWriter
+    import hashlib
     base = _set_dir(nombre)
     reader = PdfReader(io.BytesIO(signed_bytes))
     orden = {t: i for i, t in enumerate(SET_DOC_TIPOS)}
     archivos = sorted(_set_archivos(nombre), key=lambda a: (orden.get(a["tipo"], 99), a["nombre"]))
     dest = base / "firmados"
     dest.mkdir(parents=True, exist_ok=True)
+    master = f"COMBINADO_SET_{fsvc.safe_name(nombre)}"[:20] + "_FIRMADO_COMPLETO.pdf"
+    sha = hashlib.sha256(signed_bytes).hexdigest()
+    lineas_rastro = [
+        "EXTRACTO DE DOCUMENTO FIRMADO ELECTRONICAMENTE - Firma Electronica Avanzada e-CertChile (Ley 19.799). "
+        "La firma criptografica verificable en eCert esta en el archivo madre.",
+        f"Archivo madre: {master}  |  Doc eCert: {ecert_id or 's/i'}  |  Huella SHA-256 del madre: {sha}",
+    ]
     guardados = []
     idx = 0
     for a in archivos:
@@ -3399,9 +3408,14 @@ def _set_separar_firmado(nombre, signed_bytes):
         for i in range(idx, min(idx + n, len(reader.pages))):
             w.add_page(reader.pages[i])
         idx += n
+        buf = io.BytesIO()
+        w.write(buf)
+        try:
+            data = pdfs.estampar_pie_rastro(buf.getvalue(), lineas_rastro)
+        except Exception:
+            data = buf.getvalue()
         out = dest / f"FIRMADO_{a['nombre']}"
-        with open(out, "wb") as f:
-            w.write(f)
+        out.write_bytes(data)
         guardados.append(out.name)
     return guardados
 
@@ -3422,7 +3436,8 @@ async def _traer_firmado_interno(doc):
     if not isinstance(f, dict) or not f.get("base64"):
         raise ValueError("No se pudo descargar el firmado desde eCert")
     signed = _b64mod.b64decode(f["base64"])
-    guardados = await asyncio.to_thread(_set_separar_firmado, doc.get("nombre", ""), signed)
+    guardados = await asyncio.to_thread(_set_separar_firmado, doc.get("nombre", ""),
+                                        signed, best["idDocumento"])
     (_set_dir(doc.get("nombre", "")) / "firmados").mkdir(parents=True, exist_ok=True)
     (_set_dir(doc.get("nombre", "")) / "firmados" / f"{stem}_FIRMADO_COMPLETO.pdf").write_bytes(signed)
     await db.set_credito.update_one({"id": doc["id"]}, {"$set": {
@@ -3440,14 +3455,19 @@ async def _enviar_firmados_interno(doc, correos, asunto=None):
     files = sorted(dest_dir.glob("FIRMADO_*.pdf")) if dest_dir.exists() else []
     if not files:
         raise ValueError("Primero trae el set firmado desde eCert")
-    adjuntos = [{"filename": p.name, "content_b64": _b64(p.read_bytes())} for p in files]
+    masters = sorted(dest_dir.glob("*_FIRMADO_COMPLETO.pdf"))
+    adjuntos = [{"filename": p.name, "content_b64": _b64(p.read_bytes())}
+                for p in files + masters]
     nombre = doc.get("nombre", "")
     cuerpo = f"""
     <div style="font-family:Arial,sans-serif;font-size:14px;color:#222">
       <h2 style="color:#6c5ce7;margin:0 0 8px">Set de crédito firmado — {nombre}</h2>
       <p>Se adjunta el set de crédito de <b>{nombre}</b>{(' (RUT ' + doc.get('rut') + ')') if doc.get('rut') else ''},
-      firmado electrónicamente vía eCert Chile, separado documento por documento ({len(adjuntos)} archivos).</p>
+      firmado electrónicamente vía eCert Chile, separado documento por documento ({len(files)} archivos).</p>
       <ul>{"".join(f"<li>{p.name}</li>" for p in files)}</ul>
+      <p><b>Verificación:</b> cada extracto lleva al pie su rastro de firma (archivo madre, ID eCert y huella
+      SHA-256). La firma electrónica avanzada se verifica en la página de eCert con el archivo madre adjunto
+      ({masters[0].name if masters else 'COMBINADO_FIRMADO_COMPLETO.pdf'}), que contiene el set completo firmado.</p>
       <p style="color:#888;font-size:12px">Central Mutuos - Con Creces</p>
     </div>
     """
