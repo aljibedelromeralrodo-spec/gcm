@@ -495,3 +495,33 @@ requieren re-deploy para llegar a producción.
   del selector con destino Voucher Tasación activo.
 - NOTA: hot-reload del backend puede colgarse en shutdown (loops de polling); usar
   `sudo supervisorctl restart backend` tras editar server.py.
+
+## Reparos de Estudio de Título + Cobro de Tasación (Jun 2026)
+### Reparos Estudio de Título
+- Loop `_estudio_reparos_loop` (45 min): busca respuestas del abogado en el hilo IMAP
+  (por asunto "SOLICITUD ESTUDIO DE TITULOS // {nombre}"), clasifica con IA (gpt-5.4-mini):
+  tipo reparos → extrae ítems, los reenvía AUTOMÁTICAMENTE al vendedor (CC Victoria) y
+  aprende el correo del abogado (db.config estudio_abogado_email);
+  tipo satisfecho → marca todo resuelto y avisa a admin + vendedor + Victoria
+  ("se procede con el estudio de título en tiempo y forma").
+- Recordatorio ÚNICO a los 5 días en el mismo hilo (In-Reply-To) — SOLO vivienda usada.
+- UI: botón "Reparos E. Título" en card (badge pendientes) + modal con checkbox
+  "Reparo satisfecho" por ítem y botón "Declaro que han quedado satisfechos todos los reparos"
+  (habilitado solo cuando todos marcados). Endpoints: GET/scan/PATCH item/POST declarar
+  bajo /api/estudio-titulo/reparos/{fid}.
+- estudio_enviar ahora persiste en folder: estudio_titulo_subject, tipo_vivienda, vendedor.
+- mail.buscar_hilo_por_asunto + send_mail(cc=, headers=) nuevos en email_service.py.
+### Cobro de Tasación (SOLO vivienda usada) — 4,5 UF
+- REGLA INVIOLABLE: el correo de cobro de tasación se envía SOLO al solicitante, SIN COPIA A NADIE JAMÁS.
+- Cuenta Recaudadora (gastos op + cobro tasación): MUTUARIAS Y LEASING LIMITADA ·
+  RUT 77.771.552-6 · Mercado Pago · Cuenta Vista · 1030937838. Email gastos dice "Cuenta Recaudadora".
+- Loop `_cobro_tasacion_loop` (30 min): detecta correos entrantes con "tasacion" en asunto,
+  excluye valueproperty/centralmutuos, IA confirma que es SOLICITUD de tasación de vivienda
+  USADA (no inmobiliaria, no coordinación) → responde en el hilo pidiendo datos + voucher
+  4,5 UF (equivalente CLP con UF del día). Solo procesa correos posteriores a la activación
+  (db.config cobro_tasacion.since). Registro en db.tasacion_cobros.
+- UI Gastos Operacionales: sección "Cobro de Tasación — Vivienda Usada" con envío manual,
+  "Buscar solicitudes" y botón "Tasación pagada" por cobro.
+- VERIFICADO: curl (previews con marca/cuenta/monto $183.802, GET/PATCH/scan reparos,
+  scan cobros), IA clasificadores (reparos/satisfecho y solicitud usada vs coordinación
+  vs inmobiliaria) y screenshots (modal reparos + sección cobros).

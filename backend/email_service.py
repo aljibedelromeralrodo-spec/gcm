@@ -576,9 +576,77 @@ def fetch_emails_from_sender(sender_kw, limit=15):
     return out
 
 
-def send_mail(to, subject, body_html, attachments=None, desde="secundaria"):
+def _texto_de_msg(msg, cap=6000):
+    """Texto plano del mensaje (fallback: HTML sin tags)."""
+    plano, html = "", ""
+    for part in msg.walk():
+        ctype = part.get_content_type()
+        disp = str(part.get("Content-Disposition") or "")
+        if "attachment" in disp:
+            continue
+        try:
+            raw = (part.get_payload(decode=True) or b"").decode(
+                part.get_content_charset() or "utf-8", errors="ignore")
+        except Exception:
+            continue
+        if ctype == "text/plain" and not plano:
+            plano = raw
+        elif ctype == "text/html" and not html:
+            html = raw
+    texto = plano or re.sub(r"<[^>]+>", " ", html)
+    return re.sub(r"[ \t]+", " ", texto).strip()[:cap]
+
+
+def buscar_hilo_por_asunto(subject_kw, limit=8):
+    """Mensajes recibidos cuyo asunto contiene subject_kw, excluyendo los enviados
+    por nuestras propias cuentas. Devuelve [{msgid, from, from_email, subject, date, body}]."""
+    kw = (subject_kw or "").strip()
+    if not kw:
+        return []
+    propios = {a["user"].lower() for a in ACCOUNTS}
+    out, vistos = [], set()
+    for acc in ACCOUNTS:
+        try:
+            m = _connect(acc)
+            m.select("INBOX", readonly=True)
+            try:
+                typ, data = m.search(None, "X-GM-RAW", f'subject:"{kw}"')
+                if typ != "OK":
+                    raise Exception("gm-raw")
+            except Exception:
+                typ, data = m.search(None, "SUBJECT", kw[:60].encode("ascii", "ignore").decode())
+            ids = data[0].split() if data and data[0] else []
+            for num in reversed(ids[-limit:]):
+                typ, msgdata = m.fetch(num, "(RFC822)")
+                if not msgdata or not isinstance(msgdata[0], tuple):
+                    continue
+                msg = email.message_from_bytes(msgdata[0][1])
+                msgid = (msg.get("Message-ID") or "").strip()
+                remitente = _dec(msg.get("From"))
+                em = re.search(r"[\w.+-]+@[\w.-]+", remitente or "")
+                from_email = em.group(0).lower() if em else ""
+                if not msgid or msgid in vistos or from_email in propios:
+                    continue
+                vistos.add(msgid)
+                fecha_raw = msg.get("Date")
+                try:
+                    fecha = parsedate_to_datetime(fecha_raw).isoformat() if fecha_raw else ""
+                except Exception:
+                    fecha = fecha_raw or ""
+                out.append({"msgid": msgid, "from": remitente, "from_email": from_email,
+                            "subject": _dec(msg.get("Subject")), "date": fecha,
+                            "body": _texto_de_msg(msg)})
+            m.logout()
+        except Exception:
+            continue
+    out.sort(key=lambda e: e.get("date", ""))
+    return out
+
+
+def send_mail(to, subject, body_html, attachments=None, desde="secundaria", cc=None, headers=None):
     """Envia un correo. attachments: [{filename, content_b64}]
-    desde: 'secundaria' (gerardo.ext@, para PDFs a clientes) o 'principal'."""
+    desde: 'secundaria' (gerardo.ext@, para PDFs a clientes) o 'principal'.
+    cc: str o lista. headers: dict extra (ej In-Reply-To, References)."""
     if not configured():
         return {"success": False, "error": "Correo no configurado"}
     acc = None
@@ -591,6 +659,11 @@ def send_mail(to, subject, body_html, attachments=None, desde="secundaria"):
     msg = MIMEMultipart()
     msg["From"] = formataddr((FROM_NAME, acc["user"]))
     msg["To"] = to if isinstance(to, str) else ", ".join(to)
+    if cc:
+        msg["Cc"] = cc if isinstance(cc, str) else ", ".join(cc)
+    for hk, hv in (headers or {}).items():
+        if hv:
+            msg[hk] = hv
     msg["Subject"] = subject
     msg.attach(MIMEText(body_html or "", "html", "utf-8"))
     for att in attachments or []:

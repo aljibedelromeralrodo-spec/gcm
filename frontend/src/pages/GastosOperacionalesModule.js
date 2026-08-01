@@ -21,6 +21,48 @@ export default function GastosOperacionalesModule({ onNavigate }) {
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState("");
   const [log, setLog] = useState([]);
+  const [cobros, setCobros] = useState({ cobros: [], monto_uf: 4.5, valor_uf: 0, monto_clp: "" });
+  const [cobroEmail, setCobroEmail] = useState("");
+  const [cobroCliente, setCobroCliente] = useState("");
+  const [cobroLoading, setCobroLoading] = useState(false);
+
+  const loadCobros = useCallback(async () => {
+    try {
+      const r = await axios.get(`${API}/api/gastos-operacionales/cobros-tasacion`);
+      setCobros(r.data);
+    } catch (_e) { /* noop */ }
+  }, []);
+
+  useEffect(() => { loadCobros(); }, [loadCobros]);
+
+  const enviarCobroManual = async () => {
+    if (!window.confirm(`¿Enviar la solicitud de datos + cobro de tasación (${cobros.monto_uf} UF ≈ ${cobros.monto_clp}) a ${cobroEmail}? (sin copia a nadie)`)) return;
+    setCobroLoading(true);
+    try {
+      await axios.post(`${API}/api/gastos-operacionales/cobros-tasacion/manual`, { email: cobroEmail, cliente: cobroCliente, confirm: true });
+      setMsg(`✅ Solicitud de datos y cobro de tasación enviada a ${cobroEmail}`);
+      setCobroEmail(""); setCobroCliente("");
+      loadCobros();
+    } catch (e) { setMsg("Error: " + (e.response?.data?.detail || e.message)); }
+    setCobroLoading(false);
+  };
+
+  const scanCobros = async () => {
+    setCobroLoading(true);
+    try {
+      const r = await axios.post(`${API}/api/gastos-operacionales/cobros-tasacion/scan`);
+      setMsg(r.data.nuevos ? `✅ ${r.data.nuevos} solicitud(es) de tasación detectadas y respondidas con el cobro.` : "✅ Correo revisado: sin solicitudes de tasación nuevas.");
+      loadCobros();
+    } catch (e) { setMsg("Error: " + (e.response?.data?.detail || e.message)); }
+    setCobroLoading(false);
+  };
+
+  const marcarPagado = async (c) => {
+    try {
+      await axios.post(`${API}/api/gastos-operacionales/cobros-tasacion/${c.id}/pagado`, { pagado: !c.pagado });
+      loadCobros();
+    } catch (e) { setMsg("Error: " + (e.response?.data?.detail || e.message)); }
+  };
 
   const loadDefaults = useCallback(async () => {
     const [d, l] = await Promise.all([
@@ -175,7 +217,7 @@ export default function GastosOperacionalesModule({ onNavigate }) {
 
       {/* DATOS DE PAGO */}
       <div style={card}>
-        <h3 style={{ margin: "0 0 1rem", color: "var(--gold)", fontSize: "1.1rem" }}><i className="fa fa-university" style={{ marginRight: "0.5rem" }} />Datos para el Pago (editable)</h3>
+        <h3 style={{ margin: "0 0 1rem", color: "var(--gold)", fontSize: "1.1rem" }}><i className="fa fa-university" style={{ marginRight: "0.5rem" }} />Cuenta Recaudadora (editable)</h3>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "1rem" }}>
           {[["nombre", "Nombre"], ["rut", "RUT"], ["banco", "Banco"], ["tipo_cuenta", "Tipo de cuenta"], ["numero_cuenta", "N° de cuenta"]].map(([k, label]) => (
             <div key={k}><label style={lbl}>{label}</label>
@@ -190,6 +232,56 @@ export default function GastosOperacionalesModule({ onNavigate }) {
         <button data-testid="gastos-preview-btn" onClick={verPreview} disabled={loading} style={btn("#3b82f6")}><i className="fa fa-eye" style={{ marginRight: "0.4rem" }} />Vista previa</button>
         <button data-testid="gastos-enviar-btn" onClick={enviar} disabled={loading || !emailCliente} style={btn("var(--gold)")}><i className="fa fa-paper-plane" style={{ marginRight: "0.4rem" }} />Enviar al cliente</button>
         <button data-testid="gastos-guardar-plantilla" onClick={guardarPlantilla} disabled={loading} style={btn("rgba(255,255,255,0.12)")}><i className="fa fa-save" style={{ marginRight: "0.4rem" }} />Guardar como plantilla</button>
+      </div>
+
+      {/* COBRO DE TASACIÓN — VIVIENDA USADA */}
+      <div style={card} data-testid="cobro-tasacion-card">
+        <h3 style={{ margin: "0 0 0.4rem", color: "var(--gold)", fontSize: "1.1rem" }}>
+          <i className="fa fa-home" style={{ marginRight: "0.5rem" }} />Cobro de Tasación — Vivienda Usada
+        </h3>
+        <div style={{ fontSize: "0.85rem", opacity: 0.8, marginBottom: "1rem" }}>
+          <b style={{ color: "var(--gold)" }}>{cobros.monto_uf} UF ≈ {cobros.monto_clp}</b> (UF hoy: ${Number(cobros.valor_uf || 0).toLocaleString("es-CL")}).
+          🤖 Detección automática activa: cuando llega una solicitud de tasación de vivienda usada (brokers, vendedores — no inmobiliarias),
+          se responde de inmediato en el mismo hilo pidiendo los datos + voucher de pago a la Cuenta Recaudadora. <b>Se envía solo al solicitante, sin copia a nadie.</b>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "2fr 2fr auto auto", gap: "0.7rem", alignItems: "end", marginBottom: "1rem" }}>
+          <div><label style={lbl}>Correo del solicitante (broker/vendedor)</label>
+            <input data-testid="cobro-email" style={inp} value={cobroEmail} onChange={e => setCobroEmail(e.target.value)} placeholder="broker@correo.cl" /></div>
+          <div><label style={lbl}>Cliente (opcional)</label>
+            <input data-testid="cobro-cliente" style={inp} value={cobroCliente} onChange={e => setCobroCliente(e.target.value)} placeholder="Nombre del comprador" /></div>
+          <button data-testid="cobro-enviar-manual" onClick={enviarCobroManual} disabled={cobroLoading || !cobroEmail.includes("@")} style={btn("var(--gold)")}>
+            <i className={`fa ${cobroLoading ? "fa-spinner fa-spin" : "fa-paper-plane"}`} style={{ marginRight: "0.4rem" }} />Solicitar datos + cobro
+          </button>
+          <button data-testid="cobro-scan" onClick={scanCobros} disabled={cobroLoading} style={btn("rgba(59,130,246,0.8)")}>
+            <i className={`fa ${cobroLoading ? "fa-spinner fa-spin" : "fa-refresh"}`} style={{ marginRight: "0.4rem" }} />Buscar solicitudes
+          </button>
+        </div>
+        {cobros.cobros.length === 0 ? (
+          <div style={{ fontSize: "0.85rem", opacity: 0.6, textAlign: "center", padding: "0.6rem" }} data-testid="cobros-vacio">
+            Aún no hay cobros de tasación registrados.
+          </div>
+        ) : (
+          <div style={{ display: "grid", gap: 6 }} data-testid="cobros-lista">
+            {cobros.cobros.map((c) => (
+              <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 10, background: c.pagado ? "rgba(34,197,94,0.08)" : "rgba(255,255,255,0.04)", border: `1px solid ${c.pagado ? "rgba(34,197,94,0.35)" : "rgba(255,255,255,0.1)"}`, borderRadius: 8, padding: "0.55rem 0.9rem", fontSize: "0.85rem" }}>
+                <div style={{ flex: 1 }}>
+                  <b>{c.cliente || c.subject || c.from_email}</b>
+                  <span style={{ opacity: 0.6 }}> · {c.from_email}</span>
+                  <div style={{ fontSize: "0.75rem", opacity: 0.6 }}>
+                    {String(c.detectado_en || "").slice(0, 16).replace("T", " ")} · {c.origen === "manual" ? "envío manual" : "detectado automático"}
+                    {c.respondido_at ? " · solicitud de datos + cobro enviada ✓" : (c.envio_error ? ` · ⚠️ ${c.envio_error}` : "")}
+                    {c.monto_clp ? ` · ${c.monto_uf} UF ≈ ${c.monto_clp}` : ""}
+                  </div>
+                </div>
+                <button data-testid={`cobro-pagado-${c.id}`} onClick={() => marcarPagado(c)}
+                  style={{ ...btn(c.pagado ? "rgba(34,197,94,0.85)" : "rgba(255,255,255,0.12)", true), whiteSpace: "nowrap" }}>
+                  <i className={`fa ${c.pagado ? "fa-check-circle" : "fa-money"}`} style={{ marginRight: "0.3rem" }} />
+                  {c.pagado ? `Tasación pagada ✓ ${String(c.pagado_at || "").slice(0, 10)}` : "Tasación pagada"}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* HISTORIAL */}

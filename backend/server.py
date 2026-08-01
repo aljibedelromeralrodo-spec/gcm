@@ -106,6 +106,8 @@ async def startup():
     asyncio.create_task(_task_blindada(_uf_auto_loop, "uf"))
     asyncio.create_task(_task_blindada(_firmados_auto_loop, "autocorreo_firmados"))
     asyncio.create_task(_task_blindada(_tasacion_fecha_loop, "fecha_tasacion"))
+    asyncio.create_task(_task_blindada(_estudio_reparos_loop, "reparos_estudio"))
+    asyncio.create_task(_task_blindada(_cobro_tasacion_loop, "cobro_tasacion"))
 
 
 # ---------------------------------------------------------------------------
@@ -3114,9 +3116,9 @@ GASTOS_OP_DEFAULTS = {
     "datos_pago": {
         "nombre": "MUTUARIAS Y LEASING LIMITADA",
         "rut": "77.771.552-6",
-        "banco": "Prepago Los Héroes",
+        "banco": "Mercado Pago",
         "tipo_cuenta": "Cuenta Vista",
-        "numero_cuenta": "277771552",
+        "numero_cuenta": "1030937838",
     },
 }
 
@@ -3141,6 +3143,184 @@ async def gastos_defaults_patch(payload: dict):
     if upd:
         await db.config.update_one({"_key": "gastos_op"}, {"$set": upd}, upsert=True)
     return await _gastos_defaults()
+
+
+# ---------------------------------------------------------------------------
+# Cobro de Tasación — SOLO vivienda usada (4,5 UF a la Cuenta Recaudadora)
+# ---------------------------------------------------------------------------
+TASACION_COBRO_UF = 4.5
+
+
+def _fmt_clp(v):
+    return "$" + f"{round(v):,.0f}".replace(",", ".")
+
+
+async def _cobro_ai_clasificar(texto, subject=""):
+    key = os.environ.get("EMERGENT_LLM_KEY", "")
+    if not key or not (texto or subject or "").strip():
+        return {"es_solicitud_usada": False, "cliente": ""}
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        chat = LlmChat(api_key=key, session_id=f"cobro-{uuid.uuid4()}", system_message=(
+            "Recibes el asunto y texto de un correo dirigido a una mutuaria de créditos hipotecarios. "
+            "Responde SOLO un JSON válido con: es_solicitud_usada (true SOLO si es un broker, vendedor o "
+            "tercero SOLICITANDO/pidiendo iniciar una TASACIÓN de una vivienda USADA — no proyecto nuevo de "
+            "inmobiliaria, no una respuesta/coordinación de una tasación ya en curso, no un informe de tasación) "
+            "y cliente (nombre del cliente/comprador si se menciona, o '').")
+        ).with_model("openai", "gpt-5.4-mini")
+        resp = await chat.send_message(UserMessage(text=f"ASUNTO: {subject}\n\n{(texto or '')[:4000]}"))
+        m = re.search(r"\{.*\}", str(resp), re.S)
+        if m:
+            import json as _json
+            d = _json.loads(m.group(0))
+            return {"es_solicitud_usada": bool(d.get("es_solicitud_usada")),
+                    "cliente": str(d.get("cliente") or "").strip()}
+    except Exception as e:
+        logging.warning(f"cobro tasacion IA: {e}")
+    return {"es_solicitud_usada": False, "cliente": ""}
+
+
+async def _cobro_tasacion_html(cliente=""):
+    uf = await get_valor_uf()
+    monto_clp = _fmt_clp(TASACION_COBRO_UF * uf)
+    dp = (await _gastos_defaults()).get("datos_pago") or {}
+    pago_filas = "".join(
+        f"<tr><td style='padding:5px 14px 5px 0;color:#6b7280;font-size:13px;white-space:nowrap'>{lbl}</td>"
+        f"<td style='padding:5px 0;color:#1a1f2e;font-size:13px;font-weight:600'>{val}</td></tr>"
+        for lbl, val in [("Nombre", dp.get("nombre", "")), ("RUT", dp.get("rut", "")),
+                         ("Banco", dp.get("banco", "")), ("Tipo de cuenta", dp.get("tipo_cuenta", "")),
+                         ("N° de cuenta", dp.get("numero_cuenta", ""))] if val)
+    datos = ["Nombre completo y RUT del cliente (comprador)",
+             "Dirección completa de la propiedad (calle, número, depto/casa y comuna)",
+             "Rol de Avalúo de la propiedad",
+             "Valor aproximado de la propiedad (UF)",
+             "Nombre, teléfono y correo del contacto para coordinar la visita del tasador",
+             "Nombre y correo de la parte vendedora"]
+    lis = "".join(f'<li style="margin:5px 0">{d}</li>' for d in datos)
+    inner = f"""
+      <p>Estimada(o), junto con saludar:</p>
+      <p>Hemos recibido su solicitud de tasación{f" para <b>{cliente}</b>" if cliente else ""} (vivienda usada).
+      <b>Para proceder con la tasación, favor indicar los siguientes datos:</b></p>
+      <ol style="margin:6px 0 0;padding-left:22px;color:#111">{lis}</ol>
+      <p style="margin-top:16px">Adicionalmente, para agendar la visita necesitamos el
+      <b>voucher de pago de la tasación</b>:</p>
+      <div style="background:#f8f9fc;border:1px solid #eceef3;border-radius:8px;padding:14px 20px;margin:8px 0">
+        <div style="color:#1a1f2e;font-size:15px"><b>Valor tasación: {_num_uf(TASACION_COBRO_UF)} UF</b>
+        &nbsp;·&nbsp; equivalente a <b>{monto_clp}</b> (UF del día: {_fmt_clp(uf)})</div>
+      </div>
+      <div style="color:#1a1f2e;font-size:15px;font-weight:700;border-left:4px solid #d4af37;padding-left:10px;margin:14px 0 10px">Cuenta Recaudadora</div>
+      <div style="background:#f8f9fc;border:1px solid #eceef3;border-radius:8px;padding:14px 20px">
+        <table style="border-collapse:collapse">{pago_filas}</table>
+      </div>
+      <p style="margin-top:14px">Una vez recibidos los datos y el comprobante de pago, coordinaremos la
+      tasación a la brevedad. Quedamos atentos.</p>
+      <p style="margin-top:16px;color:#555">Saludos cordiales,</p>"""
+    return _marca_wrap(inner, "Solicitud de Datos y Pago — Tasación Vivienda Usada"), uf, monto_clp
+
+
+_COBRO_EXCLUIR = ("valueproperty", "centralmutuos.cl")
+
+
+async def _procesar_cobros_tasacion():
+    """Detecta correos entrantes que SOLICITAN tasación de vivienda usada (brokers/vendedores)
+    y responde de inmediato en el hilo pidiendo los datos + voucher de 4,5 UF."""
+    cfg = await db.config.find_one({"_key": "cobro_tasacion"}) or {}
+    since = cfg.get("since")
+    if not since:
+        since = now_iso()
+        await db.config.update_one({"_key": "cobro_tasacion"},
+                                   {"$set": {"_key": "cobro_tasacion", "since": since}}, upsert=True)
+    msgs = await asyncio.to_thread(mail.buscar_hilo_por_asunto, "tasacion", 10)
+    nuevos = []
+    for msg in msgs:
+        fe = msg.get("from_email", "")
+        if any(x in fe for x in _COBRO_EXCLUIR):
+            continue
+        if (msg.get("date") or "") < since:
+            continue
+        if await db.tasacion_cobros.find_one({"msgid": msg["msgid"]}):
+            continue
+        cls = await _cobro_ai_clasificar(msg.get("body", ""), msg.get("subject", ""))
+        rec = {"id": str(uuid.uuid4()), "msgid": msg["msgid"], "from": msg.get("from", ""),
+               "from_email": fe, "subject": msg.get("subject", ""), "fecha_correo": msg.get("date", ""),
+               "cliente": cls.get("cliente", ""), "es_solicitud": cls["es_solicitud_usada"],
+               "detectado_en": now_iso(), "monto_uf": TASACION_COBRO_UF,
+               "pagado": False, "pagado_at": None, "origen": "auto"}
+        if cls["es_solicitud_usada"] and fe:
+            cuerpo, uf, monto_clp = await _cobro_tasacion_html(cls.get("cliente", ""))
+            subject = msg.get("subject", "") or "Solicitud de Tasación"
+            if not subject.lower().startswith("re:"):
+                subject = f"Re: {subject}"
+            res = await asyncio.to_thread(mail.send_mail, fe, subject, cuerpo, [], "secundaria",
+                                          None, {"In-Reply-To": msg["msgid"],
+                                                 "References": msg["msgid"]})
+            rec.update({"respondido_at": now_iso() if res.get("success") else None,
+                        "valor_uf": uf, "monto_clp": monto_clp,
+                        "envio_error": None if res.get("success") else res.get("error", "")})
+            await db.tasacion_cobros.insert_one(rec)
+            nuevos.append(rec)
+        else:
+            rec["ignorado"] = True
+            await db.tasacion_cobros.insert_one(rec)
+    return nuevos
+
+
+async def _cobro_tasacion_loop():
+    """Cada 30 min: detecta solicitudes de tasación de vivienda usada y envía el cobro."""
+    while True:
+        await asyncio.sleep(1800)
+        try:
+            await _procesar_cobros_tasacion()
+        except Exception as e:
+            logging.warning(f"cobro tasacion loop: {e}")
+
+
+@api.get("/gastos-operacionales/cobros-tasacion")
+async def cobros_tasacion_list():
+    docs = await db.tasacion_cobros.find({"ignorado": {"$ne": True}}).sort("detectado_en", -1).limit(30).to_list(30)
+    uf = await get_valor_uf()
+    return {"cobros": [clean(d) for d in docs], "monto_uf": TASACION_COBRO_UF,
+            "valor_uf": uf, "monto_clp": _fmt_clp(TASACION_COBRO_UF * uf)}
+
+
+@api.post("/gastos-operacionales/cobros-tasacion/scan")
+async def cobros_tasacion_scan():
+    nuevos = await _procesar_cobros_tasacion()
+    return {"ok": True, "nuevos": len(nuevos)}
+
+
+@api.post("/gastos-operacionales/cobros-tasacion/{cid}/pagado")
+async def cobros_tasacion_pagado(cid: str, payload: dict = None):
+    pagado = bool((payload or {}).get("pagado", True))
+    r = await db.tasacion_cobros.update_one({"id": cid}, {"$set": {
+        "pagado": pagado, "pagado_at": now_iso() if pagado else None}})
+    if not r.matched_count:
+        raise HTTPException(status_code=404, detail="Cobro no encontrado")
+    return {"ok": True, "pagado": pagado}
+
+
+@api.post("/gastos-operacionales/cobros-tasacion/manual")
+async def cobros_tasacion_manual(payload: dict):
+    payload = payload or {}
+    to = (payload.get("email") or "").strip()
+    cliente = (payload.get("cliente") or "").strip()
+    if not to or "@" not in to:
+        raise HTTPException(status_code=400, detail="Correo del solicitante inválido")
+    cuerpo, uf, monto_clp = await _cobro_tasacion_html(cliente)
+    subject = f"Solicitud de Datos y Pago — Tasación{f' {cliente}' if cliente else ''}"
+    if not payload.get("confirm"):
+        return {"to": to, "subject": subject, "body": cuerpo, "monto_uf": TASACION_COBRO_UF,
+                "valor_uf": uf, "monto_clp": monto_clp, "sender": _sender_por_rol("secundaria")}
+    res = await asyncio.to_thread(mail.send_mail, to, subject, cuerpo, [], "secundaria")
+    if not res.get("success"):
+        raise HTTPException(status_code=502, detail=res.get("error", "Error de envío"))
+    rec = {"id": str(uuid.uuid4()), "msgid": "", "from": to, "from_email": to,
+           "subject": subject, "cliente": cliente, "es_solicitud": True,
+           "detectado_en": now_iso(), "respondido_at": now_iso(),
+           "monto_uf": TASACION_COBRO_UF, "valor_uf": uf, "monto_clp": monto_clp,
+           "pagado": False, "pagado_at": None, "origen": "manual"}
+    await db.tasacion_cobros.insert_one(rec)
+    return {"ok": True, "to": to, "cobro": clean(rec)}
 
 
 @api.get("/gastos-operacionales/buscar-cliente")
@@ -3259,7 +3439,7 @@ def _gastos_html(payload):
           </table>
         </div>
         <div style="padding:22px 32px 8px">
-          <div style="color:#1a1f2e;font-size:15px;font-weight:700;border-left:4px solid #d4af37;padding-left:10px;margin-bottom:12px">Datos para el Pago</div>
+          <div style="color:#1a1f2e;font-size:15px;font-weight:700;border-left:4px solid #d4af37;padding-left:10px;margin-bottom:12px">Cuenta Recaudadora</div>
           <div style="background:#f8f9fc;border:1px solid #eceef3;border-radius:8px;padding:16px 20px">
             <table style="border-collapse:collapse">{pago_filas}</table>
           </div>
@@ -3637,8 +3817,14 @@ async def estudio_enviar(payload: dict):
         "to": destinos, "adjuntos": attach_names,
         "enviado_en": now_iso(), "desde": res.get("desde", "")})
     if payload.get("folder_id"):
-        await db.folders.update_one({"id": payload["folder_id"]},
-                                    {"$set": {"estudio_titulo_solicitado_at": now_iso()}})
+        await db.folders.update_one({"id": payload["folder_id"]}, {"$set": {
+            "estudio_titulo_solicitado_at": now_iso(),
+            "estudio_titulo_subject": subject,
+            "estudio_titulo_tipo_vivienda": payload.get("tipo_vivienda", ""),
+            "estudio_titulo_vendedor": {
+                "nombre": (payload.get("vendedor_nombre") or "").strip(),
+                "email": (payload.get("vendedor_email") or "").strip(),
+                "telefono": (payload.get("vendedor_telefono") or "").strip()}}})
     return {"ok": True, "to": destinos, "subject": subject,
             "attachments": attach_names, "sender": res.get("desde", sender)}
 
@@ -3647,6 +3833,248 @@ async def estudio_enviar(payload: dict):
 async def estudio_log():
     docs = await db.estudio_titulo_log.find({}).sort("enviado_en", -1).limit(20).to_list(20)
     return {"log": [clean(d) for d in docs]}
+
+
+# ---------------------------------------------------------------------------
+# Reparos de Estudio de Título (respuestas del abogado en el hilo)
+# ---------------------------------------------------------------------------
+async def _reparos_ai_clasificar(texto):
+    key = os.environ.get("EMERGENT_LLM_KEY", "")
+    if not key or not (texto or "").strip():
+        return {"tipo": "otro", "reparos": []}
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        chat = LlmChat(api_key=key, session_id=f"reparos-{uuid.uuid4()}", system_message=(
+            "Recibes el texto de un correo de un abogado (o su estudio jurídico) sobre un "
+            "ESTUDIO DE TÍTULOS de una propiedad. Responde SOLO un JSON válido con: "
+            "tipo ('reparos' si el correo pide subsanar observaciones/reparos/documentos "
+            "faltantes del estudio de títulos; 'satisfecho' si declara que TODOS los reparos "
+            "fueron subsanados/resueltos o que el estudio está aprobado sin observaciones; "
+            "'otro' en cualquier otro caso) y reparos (lista de strings, cada reparo u "
+            "observación solicitada, texto breve y claro; [] si no aplica).")
+        ).with_model("openai", "gpt-5.4-mini")
+        resp = await chat.send_message(UserMessage(text=texto[:5000]))
+        m = re.search(r"\{.*\}", str(resp), re.S)
+        if m:
+            import json as _json
+            d = _json.loads(m.group(0))
+            tipo = d.get("tipo") if d.get("tipo") in ("reparos", "satisfecho", "otro") else "otro"
+            return {"tipo": tipo, "reparos": [str(r).strip() for r in (d.get("reparos") or []) if str(r).strip()]}
+    except Exception as e:
+        logging.warning(f"reparos IA: {e}")
+    return {"tipo": "otro", "reparos": []}
+
+
+def _reparos_vendedor_de(doc):
+    v = doc.get("estudio_titulo_vendedor") or {}
+    return v.get("nombre", ""), v.get("email", ""), v.get("telefono", "")
+
+
+async def _reparos_enviar_vendedor(doc, rep, nuevos):
+    v_nombre, v_email, _tel = _reparos_vendedor_de(doc)
+    lis = "".join(f'<li style="margin:6px 0">{t}</li>' for t in nuevos)
+    inner = f"""
+      <p>Estimado(a) {v_nombre or 'vendedor(a)'}:</p>
+      <p>En el marco del <b>estudio de títulos</b> de la propiedad asociada a la compraventa de
+      <b>{doc.get('nombre','')}</b>{f" (RUT {doc.get('rut')})" if doc.get('rut') else ""}, el abogado a cargo
+      nos ha informado los siguientes <b>reparos</b> que necesitamos subsanar para poder continuar:</p>
+      <ol style="margin:6px 0 0;padding-left:22px;color:#111">{lis}</ol>
+      <p style="margin-top:14px">Le solicitamos hacernos llegar los antecedentes indicados a la brevedad,
+      respondiendo directamente a este correo. Ante cualquier duda, quedamos a su disposición.</p>
+      <p style="margin-top:16px;color:#555">Saludos cordiales,</p>"""
+    cuerpo = _marca_wrap(inner, "Reparos — Estudio de Títulos")
+    if not v_email or "@" not in v_email:
+        rep["reenvio_vendedor_error"] = "Sin correo del vendedor en el sistema"
+        return
+    res = await asyncio.to_thread(mail.send_mail, v_email,
+                                  f"Reparos Estudio de Título — {doc.get('nombre','')}",
+                                  cuerpo, [], "secundaria", VICTORIA_EMAIL)
+    if res.get("success"):
+        rep["reenviado_vendedor_at"] = now_iso()
+        rep.pop("reenvio_vendedor_error", None)
+    else:
+        rep["reenvio_vendedor_error"] = res.get("error", "Error de envío")
+
+
+async def _reparos_enviar_resuelto(doc, rep):
+    v_nombre, v_email, _tel = _reparos_vendedor_de(doc)
+    lis = "".join(f'<li style="margin:6px 0">&#10003; {i.get("texto","")}</li>' for i in rep.get("items", []))
+    inner = f"""
+      <p>Estimados:</p>
+      <p>Informamos que los <b>reparos de la solicitud de estudio de título</b> de
+      <b>{doc.get('nombre','')}</b>{f" (RUT {doc.get('rut')})" if doc.get('rut') else ""} <b>han sido resueltos</b>.</p>
+      <ul style="margin:6px 0 0;padding-left:22px;color:#111;list-style:none">{lis}</ul>
+      <p style="margin-top:14px">Se procede con el procedimiento del estudio de título correspondiente,
+      en tiempo y forma.</p>
+      <p style="margin-top:16px;color:#555">Saludos cordiales,</p>"""
+    cuerpo = _marca_wrap(inner, "Reparos Resueltos — Estudio de Títulos")
+    destinos = [_sender_por_rol("principal")]
+    if v_email and "@" in v_email:
+        destinos.append(v_email)
+    res = await asyncio.to_thread(mail.send_mail, destinos,
+                                  f"Reparos resueltos — Estudio de Título {doc.get('nombre','')}",
+                                  cuerpo, [], "secundaria", VICTORIA_EMAIL)
+    rep["aviso_resuelto_at"] = now_iso() if res.get("success") else rep.get("aviso_resuelto_at")
+    if not res.get("success"):
+        rep["aviso_resuelto_error"] = res.get("error", "Error de envío")
+
+
+async def _reparos_recordatorio(doc, rep):
+    """Recordatorio único a los 5 días en el mismo hilo del abogado (solo vivienda usada)."""
+    abogado = rep.get("abogado_email") or ""
+    if not abogado:
+        cfg = await db.config.find_one({"key": "estudio_abogado_email"}) or {}
+        abogado = cfg.get("value", "")
+    if not abogado or "@" not in abogado:
+        return False
+    inner = f"""
+      <p>Estimados, junto con saludar:</p>
+      <p>Han transcurrido 5 días desde el último intercambio sobre los <b>reparos del estudio de títulos</b> de
+      <b>{doc.get('nombre','')}</b>{f" (RUT {doc.get('rut')})" if doc.get('rut') else ""}.</p>
+      <p>Agradeceremos indicarnos <b>en qué estado se encuentran los reparos y el estudio de títulos</b>
+      de la propiedad en referencia, para poder avanzar con el proceso en tiempo y forma.</p>
+      <p style="margin-top:14px">Quedamos atentos. Muchas gracias.</p>
+      <p style="margin-top:16px;color:#555">Saludos cordiales,</p>"""
+    cuerpo = _marca_wrap(inner, "Consulta de Estado — Estudio de Títulos")
+    subject = doc.get("estudio_titulo_subject") or f"SOLICITUD ESTUDIO DE TITULOS // {doc.get('nombre','')}"
+    if not subject.lower().startswith("re:"):
+        subject = f"Re: {subject}"
+    headers = {}
+    if rep.get("thread_msgid"):
+        headers = {"In-Reply-To": rep["thread_msgid"], "References": rep["thread_msgid"]}
+    res = await asyncio.to_thread(mail.send_mail, abogado, subject, cuerpo, [],
+                                  "secundaria", VICTORIA_EMAIL, headers)
+    if res.get("success"):
+        rep["recordatorio_enviado_at"] = now_iso()
+        return True
+    return False
+
+
+async def _procesar_reparos_folder(doc):
+    """Busca respuestas del abogado en el hilo del estudio, extrae reparos con IA,
+    los reenvía al vendedor (CC Victoria) y detecta la declaración de satisfacción."""
+    subject_kw = doc.get("estudio_titulo_subject") or f"ESTUDIO DE TITULOS // {doc.get('nombre','')}"
+    rep = doc.get("estudio_reparos") or {"items": [], "procesados_msgids": [], "estado": "sin_reparos"}
+    rep.setdefault("items", [])
+    rep.setdefault("procesados_msgids", [])
+    msgs = await asyncio.to_thread(mail.buscar_hilo_por_asunto, subject_kw, 8)
+    cambios = False
+    for msg in msgs:
+        if msg["msgid"] in rep["procesados_msgids"]:
+            continue
+        rep["procesados_msgids"].append(msg["msgid"])
+        cambios = True
+        if msg.get("from_email"):
+            rep["abogado_email"] = msg["from_email"]
+            rep["thread_msgid"] = msg["msgid"]
+            await db.config.update_one({"key": "estudio_abogado_email"},
+                                       {"$set": {"key": "estudio_abogado_email",
+                                                 "value": msg["from_email"]}}, upsert=True)
+        res = await _reparos_ai_clasificar(msg.get("body", ""))
+        if res["tipo"] == "reparos" and res["reparos"]:
+            existentes = {i["texto"].strip().lower() for i in rep["items"]}
+            nuevos = [t for t in res["reparos"] if t.lower() not in existentes]
+            for t in nuevos:
+                rep["items"].append({"n": len(rep["items"]) + 1, "texto": t,
+                                     "satisfecho": False, "satisfecho_en": None})
+            rep["detectado_en"] = rep.get("detectado_en") or now_iso()
+            rep["estado"] = "pendiente"
+            if nuevos:
+                await _reparos_enviar_vendedor(doc, rep, nuevos)
+        elif res["tipo"] == "satisfecho" and rep["items"] and rep.get("estado") != "satisfecho":
+            for i in rep["items"]:
+                i["satisfecho"] = True
+                i["satisfecho_en"] = i.get("satisfecho_en") or now_iso()
+            rep["estado"] = "satisfecho"
+            rep["declarado_satisfecho_at"] = now_iso()
+            rep["declarado_por"] = "abogado"
+            await _reparos_enviar_resuelto(doc, rep)
+    if cambios:
+        await db.folders.update_one({"id": doc["id"]}, {"$set": {"estudio_reparos": rep}})
+    return rep
+
+
+def _dias_desde(iso_str):
+    try:
+        dt = datetime.fromisoformat(iso_str)
+        return (datetime.now(timezone.utc) - dt).days
+    except Exception:
+        return 0
+
+
+async def _estudio_reparos_loop():
+    """Cada 45 min: procesa hilos de estudio de título y envía el recordatorio de 5 días
+    (una sola vez, SOLO vivienda usada)."""
+    while True:
+        await asyncio.sleep(2700)
+        docs = await db.folders.find({
+            "estudio_titulo_solicitado_at": {"$exists": True, "$ne": None},
+            "estudio_reparos.estado": {"$ne": "satisfecho"}}).limit(15).to_list(15)
+        for d in docs:
+            try:
+                rep = await _procesar_reparos_folder(d)
+                if (d.get("estudio_titulo_tipo_vivienda") == "usada"
+                        and rep.get("items") and rep.get("estado") != "satisfecho"
+                        and rep.get("reenviado_vendedor_at")
+                        and not rep.get("recordatorio_enviado_at")
+                        and _dias_desde(rep["reenviado_vendedor_at"]) >= 5):
+                    if await _reparos_recordatorio(d, rep):
+                        await db.folders.update_one({"id": d["id"]},
+                                                    {"$set": {"estudio_reparos": rep}})
+            except Exception as e:
+                logging.warning(f"reparos loop {d.get('nombre','')}: {e}")
+                continue
+
+
+@api.get("/estudio-titulo/reparos/{fid}")
+async def reparos_get(fid: str):
+    doc = await _get_folder_doc(fid)
+    rep = doc.get("estudio_reparos") or {"items": [], "estado": "sin_reparos"}
+    return {"reparos": clean(rep), "vendedor": doc.get("estudio_titulo_vendedor") or {},
+            "tipo_vivienda": doc.get("estudio_titulo_tipo_vivienda", ""),
+            "subject": doc.get("estudio_titulo_subject", "")}
+
+
+@api.post("/estudio-titulo/reparos/{fid}/scan")
+async def reparos_scan(fid: str):
+    doc = await _get_folder_doc(fid)
+    rep = await _procesar_reparos_folder(doc)
+    return {"ok": True, "reparos": clean(rep)}
+
+
+@api.patch("/estudio-titulo/reparos/{fid}/item/{n}")
+async def reparos_item(fid: str, n: int, payload: dict):
+    doc = await _get_folder_doc(fid)
+    rep = doc.get("estudio_reparos") or {}
+    items = rep.get("items") or []
+    item = next((i for i in items if i.get("n") == n), None)
+    if not item:
+        raise HTTPException(status_code=404, detail="Reparo no encontrado")
+    sat = bool((payload or {}).get("satisfecho"))
+    item["satisfecho"] = sat
+    item["satisfecho_en"] = now_iso() if sat else None
+    if not all(i.get("satisfecho") for i in items):
+        rep["estado"] = "pendiente"
+        rep.pop("declarado_satisfecho_at", None)
+    await db.folders.update_one({"id": fid}, {"$set": {"estudio_reparos": rep}})
+    return {"ok": True, "reparos": clean(rep)}
+
+
+@api.post("/estudio-titulo/reparos/{fid}/declarar")
+async def reparos_declarar(fid: str):
+    doc = await _get_folder_doc(fid)
+    rep = doc.get("estudio_reparos") or {}
+    if not rep.get("items"):
+        raise HTTPException(status_code=400, detail="No hay reparos registrados")
+    for i in rep["items"]:
+        i["satisfecho"] = True
+        i["satisfecho_en"] = i.get("satisfecho_en") or now_iso()
+    rep["estado"] = "satisfecho"
+    rep["declarado_satisfecho_at"] = now_iso()
+    rep["declarado_por"] = "manual"
+    await _reparos_enviar_resuelto(doc, rep)
+    await db.folders.update_one({"id": fid}, {"$set": {"estudio_reparos": rep}})
+    return {"ok": True, "reparos": clean(rep)}
 
 
 # ---------------------------------------------------------------------------

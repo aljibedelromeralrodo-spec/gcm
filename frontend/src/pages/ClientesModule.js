@@ -185,6 +185,7 @@ export default function ClientesModule({ onNavigate }) {
   const [tasacionContactos, setTasacionContactos] = useState([]); // plantillas inmobiliaria
   const [brokers, setBrokers] = useState([]);
   const [estudioModal, setEstudioModal] = useState(null); // estudio de título
+  const [reparosModal, setReparosModal] = useState(null); // reparos estudio de título
   const [escrituraModal, setEscrituraModal] = useState(null); // firma de escritura
   const [notarias, setNotarias] = useState([]);
   const [pedirModal, setPedirModal] = useState(null); // pedir documentos faltantes
@@ -359,6 +360,51 @@ export default function ClientesModule({ onNavigate }) {
       loadFolders();
     } catch (e) {
       setTasacionModal(m => ({ ...m, loading: false, msg: "Error: " + (e.response?.data?.detail || e.message) }));
+    }
+  };
+
+  const openReparos = async (f) => {
+    setReparosModal({ folder: f, loading: true, data: null, msg: "" });
+    try {
+      const r = await axios.get(`${API}/api/estudio-titulo/reparos/${f.id}`);
+      setReparosModal(prev => prev && ({ ...prev, loading: false, data: r.data }));
+    } catch (e) {
+      setReparosModal(prev => prev && ({ ...prev, loading: false, msg: "Error: " + (e.response?.data?.detail || e.message) }));
+    }
+  };
+
+  const scanReparos = async () => {
+    const m = reparosModal;
+    setReparosModal(prev => ({ ...prev, scanning: true, msg: "" }));
+    try {
+      const r = await axios.post(`${API}/api/estudio-titulo/reparos/${m.folder.id}/scan`);
+      const items = r.data.reparos?.items || [];
+      setReparosModal(prev => ({ ...prev, scanning: false, data: { ...prev.data, reparos: r.data.reparos },
+        msg: items.length ? `🔍 Hilo revisado: ${items.length} reparo(s) registrados.` : "🔍 Hilo revisado: no se detectaron reparos del abogado todavía." }));
+      loadFolders();
+    } catch (e) {
+      setReparosModal(prev => ({ ...prev, scanning: false, msg: "Error: " + (e.response?.data?.detail || e.message) }));
+    }
+  };
+
+  const toggleReparo = async (n, satisfecho) => {
+    const m = reparosModal;
+    try {
+      const r = await axios.patch(`${API}/api/estudio-titulo/reparos/${m.folder.id}/item/${n}`, { satisfecho });
+      setReparosModal(prev => ({ ...prev, data: { ...prev.data, reparos: r.data.reparos } }));
+    } catch (e) { alert("Error: " + (e.response?.data?.detail || e.message)); }
+  };
+
+  const declararReparos = async () => {
+    const m = reparosModal;
+    if (!window.confirm("¿Declarás que han quedado satisfechos TODOS los reparos de la solicitud de estudio de título?\n\nSe enviará un correo de aviso a ti, al vendedor y a Victoria Vilches.")) return;
+    setReparosModal(prev => ({ ...prev, declarando: true, msg: "" }));
+    try {
+      const r = await axios.post(`${API}/api/estudio-titulo/reparos/${m.folder.id}/declarar`);
+      setReparosModal(prev => ({ ...prev, declarando: false, data: { ...prev.data, reparos: r.data.reparos }, msg: "✅ Reparos declarados satisfechos. Aviso enviado por correo (tú + vendedor + Victoria)." }));
+      loadFolders();
+    } catch (e) {
+      setReparosModal(prev => ({ ...prev, declarando: false, msg: "Error: " + (e.response?.data?.detail || e.message) }));
     }
   };
 
@@ -1395,6 +1441,21 @@ export default function ClientesModule({ onNavigate }) {
                       style={modBtn("rgba(20,184,166,0.12)", "#14b8a6", enviadoManual ? "#fff" : "#0d9488")}>
                       <i className="fa fa-balance-scale"></i> Solicitud de Estudio de Título{f.estudio_titulo_solicitado_at ? " ✓" : ""}
                     </button>
+                    {f.estudio_titulo_solicitado_at && (() => {
+                      const rep = f.estudio_reparos || {};
+                      const items = rep.items || [];
+                      const pendientes = items.filter(i => !i.satisfecho).length;
+                      const satisfecho = rep.estado === "satisfecho";
+                      return (
+                        <button data-testid={`btn-reparos-${f.id}`} onClick={() => openReparos(f)}
+                          title={`Reparos del estudio de título de ${f.nombre} (detección automática en el hilo del abogado)`}
+                          style={modBtn(satisfecho ? "rgba(34,197,94,0.12)" : (pendientes ? "rgba(239,68,68,0.14)" : "rgba(148,163,184,0.1)"),
+                            satisfecho ? "#22c55e" : (pendientes ? "#ef4444" : "#94a3b8"),
+                            satisfecho ? "#4ade80" : (pendientes ? "#f87171" : (enviadoManual ? "#fff" : "#94a3b8")))}>
+                          <i className="fa fa-gavel"></i> Reparos E. Título{satisfecho ? " ✅ resueltos" : (items.length ? ` (${pendientes} pendiente${pendientes === 1 ? "" : "s"})` : "")}
+                        </button>
+                      );
+                    })()}
                     <button data-testid={`btn-escritura-${f.id}`} onClick={() => openEscritura(f)}
                       title={`Avisar a ${f.nombre} la fecha de firma de su escritura (con confirmación de asistencia)`}
                       style={modBtn("rgba(236,72,153,0.12)", "#ec4899", enviadoManual ? "#fff" : "#db2777")}>
@@ -2808,6 +2869,89 @@ export default function ClientesModule({ onNavigate }) {
                   style={{ background: "#16a34a", border: "1px solid #15803d", color: "#fff", borderRadius: 6, padding: "6px 18px", cursor: "pointer", fontSize: 13, fontWeight: 700, boxShadow: "0 2px 8px rgba(22,163,74,0.4)" }}>
                   <i className={`fa ${missingDocsModal.sending ? "fa-spinner fa-spin" : "fa-paper-plane"}`} /> {missingDocsModal.sending ? "Procesando…" : "Enviar Autocorreo"}
                 </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {reparosModal && (() => {
+        const m = reparosModal;
+        const rep = m.data?.reparos || {};
+        const items = rep.items || [];
+        const vendedor = m.data?.vendedor || {};
+        const satisfecho = rep.estado === "satisfecho";
+        const pendientes = items.filter(i => !i.satisfecho).length;
+        const fmtF = (iso) => iso ? new Date(iso).toLocaleString("es-CL", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
+        return (
+          <div data-testid="reparos-modal" onClick={() => setReparosModal(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9998, padding: "3vh 3vw" }}>
+            <div onClick={(e) => e.stopPropagation()} style={{ background: "#0f172a", color: "#e2e8f0", borderRadius: 12, width: "min(720px, 96vw)", maxHeight: "94vh", overflow: "auto", border: "1px solid rgba(148,163,184,0.25)", boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}>
+              <div style={{ padding: "0.9rem 1.1rem", borderBottom: "1px solid rgba(148,163,184,0.2)", display: "flex", alignItems: "center", gap: 10 }}>
+                <i className="fa fa-gavel" style={{ color: satisfecho ? "#4ade80" : "#f87171" }} />
+                <h4 style={{ margin: 0, flex: 1 }}>Reparos Estudio de Título — {m.folder.nombre}</h4>
+                <button onClick={() => setReparosModal(null)} data-testid="btn-reparos-close" style={{ background: "transparent", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 18 }}><i className="fa fa-times" /></button>
+              </div>
+              <div style={{ padding: "1rem 1.1rem", display: "grid", gap: "0.75rem" }}>
+                {m.msg && (
+                  <div data-testid="reparos-msg" style={{ padding: "0.6rem 0.9rem", borderRadius: 8, background: m.msg.startsWith("Error") ? "rgba(239,68,68,0.15)" : "rgba(34,197,94,0.15)", color: m.msg.startsWith("Error") ? "#f87171" : "#4ade80", fontWeight: 600, fontSize: 13 }}>{m.msg}</div>
+                )}
+                {m.loading ? (
+                  <div style={{ textAlign: "center", padding: "1.5rem" }}><i className="fa fa-spinner fa-spin" /> Cargando reparos…</div>
+                ) : (
+                  <>
+                    <div style={{ fontSize: 12, color: "#94a3b8", background: "rgba(148,163,184,0.07)", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 8, padding: "0.6rem 0.9rem", display: "grid", gap: 3 }}>
+                      <div>🤖 El sistema revisa automáticamente el <b>hilo del correo</b> del estudio de título. Cuando el abogado envía reparos, se reenvían de inmediato al vendedor (CC Victoria Vilches).</div>
+                      {rep.abogado_email && <div>⚖ Abogado detectado en el hilo: <b style={{ color: "#e2e8f0" }}>{rep.abogado_email}</b></div>}
+                      {vendedor.email && <div>🏠 Vendedor: <b style={{ color: "#e2e8f0" }}>{vendedor.nombre || "—"}</b> · {vendedor.email}{vendedor.telefono ? ` · ${vendedor.telefono}` : ""}</div>}
+                      {!vendedor.email && <div style={{ color: "#facc15" }}>⚠️ No hay correo del vendedor registrado — el reenvío automático de reparos no podrá enviarse.</div>}
+                      {rep.detectado_en && <div>📥 Primeros reparos detectados: {fmtF(rep.detectado_en)}</div>}
+                      {rep.reenviado_vendedor_at && <div>📤 Reparos reenviados al vendedor: {fmtF(rep.reenviado_vendedor_at)}</div>}
+                      {rep.reenvio_vendedor_error && <div style={{ color: "#f87171" }}>⚠️ Reenvío al vendedor: {rep.reenvio_vendedor_error}</div>}
+                      {rep.recordatorio_enviado_at && <div>⏰ Recordatorio de estado enviado al abogado: {fmtF(rep.recordatorio_enviado_at)}</div>}
+                      {m.data?.tipo_vivienda === "usada" && !rep.recordatorio_enviado_at && !satisfecho && items.length > 0 && (
+                        <div>⏰ Vivienda usada: si a los 5 días no hay avance, se consultará el estado en el mismo hilo (una vez).</div>
+                      )}
+                    </div>
+
+                    {items.length === 0 ? (
+                      <div style={{ textAlign: "center", padding: "1rem", color: "#94a3b8", fontSize: 13 }} data-testid="reparos-vacio">
+                        Aún no se han detectado reparos del abogado en el hilo de este estudio de título.
+                      </div>
+                    ) : (
+                      <div style={{ display: "grid", gap: 6 }}>
+                        {items.map((it) => (
+                          <label key={it.n} data-testid={`reparo-item-${it.n}`} style={{ display: "flex", alignItems: "flex-start", gap: 10, background: it.satisfecho ? "rgba(34,197,94,0.08)" : "rgba(239,68,68,0.06)", border: `1px solid ${it.satisfecho ? "rgba(34,197,94,0.35)" : "rgba(239,68,68,0.25)"}`, borderRadius: 8, padding: "0.6rem 0.9rem", cursor: "pointer" }}>
+                            <input type="checkbox" checked={!!it.satisfecho} onChange={(e) => toggleReparo(it.n, e.target.checked)} data-testid={`reparo-check-${it.n}`} style={{ marginTop: 3, width: 16, height: 16, accentColor: "#22c55e", cursor: "pointer" }} />
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontSize: 13, color: it.satisfecho ? "#86efac" : "#e2e8f0", textDecoration: it.satisfecho ? "line-through" : "none" }}>{it.n}. {it.texto}</div>
+                              <div style={{ fontSize: 11, color: it.satisfecho ? "#4ade80" : "#f87171", fontWeight: 700, marginTop: 2 }}>
+                                {it.satisfecho ? `✅ Reparo satisfecho${it.satisfecho_en ? ` · ${fmtF(it.satisfecho_en)}` : ""}` : "Pendiente — marcar cuando quede satisfecho"}
+                              </div>
+                            </div>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end", borderTop: "1px solid rgba(148,163,184,0.15)", paddingTop: "0.8rem" }}>
+                      <button onClick={scanReparos} disabled={m.scanning} data-testid="btn-reparos-scan"
+                        style={{ background: "rgba(59,130,246,0.15)", border: "1px solid #3b82f6", color: "#60a5fa", borderRadius: 6, padding: "8px 14px", cursor: "pointer", fontSize: 13, fontWeight: 700 }}>
+                        <i className={`fa ${m.scanning ? "fa-spinner fa-spin" : "fa-refresh"}`} /> {m.scanning ? "Revisando hilo…" : "Buscar reparos ahora"}
+                      </button>
+                      {satisfecho ? (
+                        <div data-testid="reparos-satisfecho-badge" style={{ background: "rgba(34,197,94,0.15)", border: "1px solid #22c55e", color: "#4ade80", borderRadius: 6, padding: "8px 14px", fontSize: 13, fontWeight: 700 }}>
+                          ✅ Todos los reparos satisfechos {rep.declarado_satisfecho_at ? `· ${fmtF(rep.declarado_satisfecho_at)}` : ""} {rep.declarado_por === "abogado" ? "(confirmado por el abogado)" : ""}
+                        </div>
+                      ) : (
+                        <button onClick={declararReparos} disabled={m.declarando || items.length === 0 || pendientes > 0} data-testid="btn-reparos-declarar"
+                          title={pendientes > 0 ? `Faltan ${pendientes} reparo(s) por marcar como satisfechos` : ""}
+                          style={{ background: (m.declarando || items.length === 0 || pendientes > 0) ? "#475569" : "#16a34a", border: "none", color: "#fff", borderRadius: 6, padding: "8px 16px", cursor: (items.length === 0 || pendientes > 0) ? "not-allowed" : "pointer", fontSize: 13, fontWeight: 700 }}>
+                          <i className={`fa ${m.declarando ? "fa-spinner fa-spin" : "fa-check-circle"}`} /> {m.declarando ? "Enviando aviso…" : "Declaro que han quedado satisfechos todos los reparos"}
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </div>
