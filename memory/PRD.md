@@ -25,6 +25,27 @@ Idioma del usuario: **Español** (responder siempre en español).
 - IMAP/SMTP: en `/app/backend/.env` (MAIL_USER, MAIL2_USER + app passwords)
 
 ## Implementado
+- 2026-08-01 (parte 4) — **Tasación v2 + Estudio de Título funcional**:
+  - Tasación: destinatarios EDITABLES (Victoria Vilches siempre se fuerza server-side),
+    selector vivienda nueva (inmobiliaria) / usada. Inmobiliaria: input con datalist de
+    plantillas guardadas (`db.tasacion_contactos`, GET /api/tasacion/contactos) — al enviar
+    se guarda/actualiza el contacto (nombre+email) como plantilla y el email del contacto
+    se agrega a los destinatarios. Vivienda usada: campos nombre + mail del vendedor
+    (aparecen en el cuerpo). Saludo: "Estimados, se envía solicitud de tasación para X,
+    con copia a la inmobiliaria Y y a Victoria Vilches". Adjuntos: SOLO la carta de
+    aprobación va preseleccionada (regex carta|oferta|aprobaci en el nombre), nada más.
+  - Estudio de Título: `POST /api/estudio-titulo/enviar` (preview/confirm),
+    `GET /api/estudio-titulo/defaults`, `GET /api/estudio-titulo/log`. Destinatario por
+    defecto **contacto@hipotecariogestion.cl** (detectado en el correo real) + Victoria
+    SIEMPRE. Asunto "SOLICITUD ESTUDIO DE TITULOS // {nombre} {rut}". Vivienda nueva:
+    solicitud formal sin listado. Vivienda usada: listado editable de 8 documentos estándar
+    (derivado de los hilos reales del correo: escritura anterior/personería, inscripción
+    dominio CBR, GP, no expropiación, contribuciones, gastos comunes, junta accionistas,
+    tasación). Marca `estudio_titulo_solicitado_at` (botón muestra ✓).
+  - Frontend: modal `estudio-modal` + tasación ampliado, botón Estudio de Título activado
+    (teal). Verificado: curl previews OK + screenshots de ambos modales OK. NO se enviaron
+    correos reales.
+
 - 2026-08-01 (parte 3) — **Solicitud de Tasación funcional**:
   - Formulario armado según las solicitudes reales cruzadas con **contacto@valueproperty.cl**
     (OJO: el usuario dijo "volvetproperty" pero el dominio real en los correos es

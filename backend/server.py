@@ -3052,9 +3052,27 @@ async def gastos_log():
 
 
 # ---------------------------------------------------------------------------
-# Solicitud de Tasación (Value Property + Victoria Vilches)
+# Solicitud de Tasación (Value Property + Victoria Vilches + inmobiliaria)
 # ---------------------------------------------------------------------------
-TASACION_DESTINOS = ["contacto@valueproperty.cl", "victoriavilches@centralmutuos.cl"]
+TASACION_DEST_DEFAULT = ["contacto@valueproperty.cl", "victoriavilches@centralmutuos.cl"]
+VICTORIA_EMAIL = "victoriavilches@centralmutuos.cl"
+
+
+def _parse_destinatarios(payload, defaults):
+    dest = payload.get("destinatarios")
+    if isinstance(dest, str):
+        dest = [d.strip() for d in re.split(r"[,;\n]+", dest) if d.strip()]
+    if not dest:
+        dest = list(defaults)
+    dest = [d for d in dest if "@" in d]
+    if VICTORIA_EMAIL not in [d.lower() for d in dest]:
+        dest.append(VICTORIA_EMAIL)
+    vistos, out = set(), []
+    for d in dest:
+        if d.lower() not in vistos:
+            vistos.add(d.lower())
+            out.append(d)
+    return out
 
 
 def _tasacion_html(p):
@@ -3070,18 +3088,36 @@ def _tasacion_html(p):
 
     cliente = p.get("nombre", "") + (f" · RUT {p.get('rut')}" if p.get("rut") else "")
     fila("Cliente", cliente)
+    modalidad = p.get("modalidad", "")
+    fila("Tipo de vivienda", "Vivienda usada" if modalidad == "usada" else ("Vivienda nueva (inmobiliaria)" if modalidad == "inmobiliaria" else ""))
     fila("Tipo de tasación", p.get("tipo", ""))
+    if modalidad == "inmobiliaria":
+        fila("Inmobiliaria", p.get("inmobiliaria", ""))
+        contacto_inmo = " · ".join(x for x in [(p.get("inmo_contacto_nombre") or "").strip(),
+                                               (p.get("inmo_contacto_email") or "").strip()] if x)
+        fila("Contacto inmobiliaria", contacto_inmo)
     fila("Dirección de la propiedad", p.get("direccion", ""))
     fila("Rol de Avalúo", p.get("rol_avaluo", ""))
     fila("Valor aproximado (UF)", p.get("valor_uf", ""))
-    fila("Vendedor", p.get("vendedor", ""))
+    if modalidad == "usada":
+        vend = " · ".join(x for x in [(p.get("vendedor") or "").strip(),
+                                      (p.get("vendedor_email") or "").strip()] if x)
+        fila("Vendedor (contacto)", vend)
+    else:
+        fila("Vendedor", p.get("vendedor", ""))
     contacto = " · ".join(x for x in [(p.get("contacto_nombre") or "").strip(),
                                       (p.get("contacto_telefono") or "").strip()] if x)
     fila("Contacto para coordinar la visita", contacto)
     obs = (p.get("observaciones") or "").strip()
+    copias = []
+    if modalidad == "inmobiliaria" and (p.get("inmobiliaria") or "").strip():
+        copias.append(f"la inmobiliaria {p.get('inmobiliaria').strip()}")
+    copias.append("Victoria Vilches")
+    saludo = (f"Estimados, se envía solicitud de tasación para {p.get('nombre', '')}, "
+              f"con copia a {' y a '.join(copias)}.")
     return f"""
     <div style="font-family:Arial,sans-serif;font-size:14px;color:#222;max-width:640px">
-      <p>Estimado equipo Value Property, junto con saludar:</p>
+      <p>{saludo}</p>
       <p>A continuación, detallo los antecedentes de la propiedad para la coordinación de la tasación:</p>
       <table style="border-collapse:collapse;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;width:100%">{''.join(filas)}</table>
       {f'<p style="margin-top:12px"><b>Observaciones:</b> {obs}</p>' if obs else ''}
@@ -3098,6 +3134,11 @@ async def tasacion_enviar(payload: dict):
     rut = (payload.get("rut") or "").strip()
     if not nombre:
         raise HTTPException(status_code=400, detail="Falta el nombre del cliente")
+    destinos = _parse_destinatarios(payload, TASACION_DEST_DEFAULT)
+    inmo_email = (payload.get("inmo_contacto_email") or "").strip()
+    if payload.get("modalidad") == "inmobiliaria" and inmo_email and "@" in inmo_email:
+        if inmo_email.lower() not in [d.lower() for d in destinos]:
+            destinos.append(inmo_email)
     subject = f"SOLICITUD TASACION // {nombre}" + (f" Rut: {rut}" if rut else "")
     cuerpo = _tasacion_html(payload)
     attach_names, attach_paths = [], []
@@ -3111,29 +3152,152 @@ async def tasacion_enviar(payload: dict):
             continue
     sender = _sender_por_rol("secundaria")
     if not payload.get("confirm"):
-        return {"to": TASACION_DESTINOS, "subject": subject, "body": cuerpo,
+        return {"to": destinos, "subject": subject, "body": cuerpo,
                 "attachments": attach_names, "sender": sender}
     if not (payload.get("direccion") or "").strip():
         raise HTTPException(status_code=400, detail="Falta la dirección de la propiedad")
     adjuntos = [{"filename": pth.name, "content_b64": _b64(pth.read_bytes())} for pth in attach_paths]
-    res = await asyncio.to_thread(mail.send_mail, TASACION_DESTINOS, subject, cuerpo, adjuntos, "secundaria")
+    res = await asyncio.to_thread(mail.send_mail, destinos, subject, cuerpo, adjuntos, "secundaria")
     if not res.get("success"):
         raise HTTPException(status_code=502, detail=res.get("error", "Error de envío"))
+    # Guardar plantilla de contacto de la inmobiliaria (para autocompletar la próxima vez)
+    inmo = (payload.get("inmobiliaria") or "").strip()
+    if payload.get("modalidad") == "inmobiliaria" and inmo:
+        await db.tasacion_contactos.update_one(
+            {"inmobiliaria_key": inmo.lower()},
+            {"$set": {"inmobiliaria_key": inmo.lower(), "inmobiliaria": inmo,
+                      "contacto_nombre": (payload.get("inmo_contacto_nombre") or "").strip(),
+                      "contacto_email": inmo_email, "actualizado_en": now_iso()}},
+            upsert=True)
     await db.tasacion_log.insert_one({
         "id": str(uuid.uuid4()), "nombre": nombre, "rut": rut,
         "direccion": payload.get("direccion", ""), "tipo": payload.get("tipo", ""),
-        "to": TASACION_DESTINOS, "adjuntos": attach_names,
+        "modalidad": payload.get("modalidad", ""), "inmobiliaria": inmo,
+        "to": destinos, "adjuntos": attach_names,
         "enviado_en": now_iso(), "desde": res.get("desde", "")})
     if payload.get("folder_id"):
         await db.folders.update_one({"id": payload["folder_id"]},
                                     {"$set": {"tasacion_solicitada_at": now_iso()}})
-    return {"ok": True, "to": TASACION_DESTINOS, "subject": subject,
+    return {"ok": True, "to": destinos, "subject": subject,
             "attachments": attach_names, "sender": res.get("desde", sender)}
+
+
+@api.get("/tasacion/contactos")
+async def tasacion_contactos():
+    docs = await db.tasacion_contactos.find({}).sort("inmobiliaria", 1).to_list(100)
+    return {"contactos": [clean(d) for d in docs]}
 
 
 @api.get("/tasacion/log")
 async def tasacion_log():
     docs = await db.tasacion_log.find({}).sort("enviado_en", -1).limit(20).to_list(20)
+    return {"log": [clean(d) for d in docs]}
+
+
+# ---------------------------------------------------------------------------
+# Solicitud de Estudio de Título (Hipotecario Gestión, siempre CC Victoria)
+# ---------------------------------------------------------------------------
+ESTUDIO_DEST_DEFAULT = ["contacto@hipotecariogestion.cl", VICTORIA_EMAIL]
+DOCS_ESTUDIO_USADA = [
+    "Copia de escritura de compraventa anterior (título del vendedor), incluyendo personería si el vendedor es una sociedad",
+    "Copia de inscripción de dominio con vigencia en el Conservador de Bienes Raíces",
+    "Certificado de hipotecas, gravámenes y prohibiciones (CBR)",
+    "Certificado de no expropiación municipal y SERVIU, emitido con fecha reciente",
+    "Certificado de contribuciones al día (Tesorería General de la República)",
+    "Certificado del administrador del condominio que acredite que no hay deudas de gastos comunes (si aplica)",
+    "Copia de Junta Extraordinaria de Accionistas / autorización de enajenación (si el vendedor es sociedad)",
+    "Tasación de la propiedad",
+]
+
+
+def _estudio_html(p):
+    filas = []
+
+    def fila(lbl, val):
+        v = str(val or "").strip()
+        if v:
+            filas.append(
+                f'<tr><td style="padding:7px 14px;font-weight:bold;color:#334155;'
+                f'white-space:nowrap;border-bottom:1px solid #e2e8f0">{lbl}</td>'
+                f'<td style="padding:7px 14px;color:#111;border-bottom:1px solid #e2e8f0">{v}</td></tr>')
+
+    tipo = p.get("tipo_vivienda", "nueva")
+    fila("Cliente", p.get("nombre", "") + (f" · RUT {p.get('rut')}" if p.get("rut") else ""))
+    fila("Tipo de vivienda", "Vivienda usada" if tipo == "usada" else "Vivienda nueva (inmobiliaria)")
+    if tipo == "nueva":
+        fila("Inmobiliaria / Proyecto", p.get("inmobiliaria", ""))
+    fila("Dirección de la propiedad", p.get("direccion", ""))
+    docs = [d for d in (p.get("docs_lista") or []) if str(d).strip()]
+    docs_html = ""
+    if tipo == "usada" and docs:
+        lis = "".join(f'<li style="margin:4px 0">{str(d).strip()}</li>' for d in docs)
+        docs_html = (
+            '<p style="margin-top:14px"><b>Para el estudio de títulos de vivienda usada '
+            'necesitamos los siguientes documentos:</b></p>'
+            f'<ol style="margin:6px 0 0;padding-left:22px;color:#111">{lis}</ol>')
+    obs = (p.get("observaciones") or "").strip()
+    return f"""
+    <div style="font-family:Arial,sans-serif;font-size:14px;color:#222;max-width:640px">
+      <p>Estimados, junto con saludar:</p>
+      <p>Solicitamos dar inicio al <b>estudio de títulos</b> del cliente en referencia,
+      con copia a Victoria Vilches. Se detallan los antecedentes:</p>
+      <table style="border-collapse:collapse;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;width:100%">{''.join(filas)}</table>
+      {docs_html}
+      {f'<p style="margin-top:12px"><b>Observaciones:</b> {obs}</p>' if obs else ''}
+      <p style="margin-top:14px">Quedamos atentos a sus comentarios y a cualquier antecedente adicional que sea necesario.</p>
+      <p style="margin-top:16px;color:#555">Saludos cordiales,<br/><b>Central Mutuos — Con Creces</b></p>
+    </div>
+    """
+
+
+@api.get("/estudio-titulo/defaults")
+async def estudio_defaults():
+    return {"destinatarios": ESTUDIO_DEST_DEFAULT, "docs_usada": DOCS_ESTUDIO_USADA}
+
+
+@api.post("/estudio-titulo/enviar")
+async def estudio_enviar(payload: dict):
+    payload = payload or {}
+    nombre = (payload.get("nombre") or "").strip()
+    rut = (payload.get("rut") or "").strip()
+    if not nombre:
+        raise HTTPException(status_code=400, detail="Falta el nombre del cliente")
+    destinos = _parse_destinatarios(payload, ESTUDIO_DEST_DEFAULT)
+    subject = f"SOLICITUD ESTUDIO DE TITULOS // {nombre}" + (f" {rut}" if rut else "")
+    cuerpo = _estudio_html(payload)
+    attach_names, attach_paths = [], []
+    for rel in payload.get("attach_files") or []:
+        try:
+            pth = fsvc.resolver_ruta(nombre, rel)
+            if pth.exists() and pth not in attach_paths:
+                attach_paths.append(pth)
+                attach_names.append(pth.name)
+        except ValueError:
+            continue
+    sender = _sender_por_rol("secundaria")
+    if not payload.get("confirm"):
+        return {"to": destinos, "subject": subject, "body": cuerpo,
+                "attachments": attach_names, "sender": sender}
+    adjuntos = [{"filename": pth.name, "content_b64": _b64(pth.read_bytes())} for pth in attach_paths]
+    res = await asyncio.to_thread(mail.send_mail, destinos, subject, cuerpo, adjuntos, "secundaria")
+    if not res.get("success"):
+        raise HTTPException(status_code=502, detail=res.get("error", "Error de envío"))
+    await db.estudio_titulo_log.insert_one({
+        "id": str(uuid.uuid4()), "nombre": nombre, "rut": rut,
+        "tipo_vivienda": payload.get("tipo_vivienda", ""),
+        "inmobiliaria": payload.get("inmobiliaria", ""),
+        "to": destinos, "adjuntos": attach_names,
+        "enviado_en": now_iso(), "desde": res.get("desde", "")})
+    if payload.get("folder_id"):
+        await db.folders.update_one({"id": payload["folder_id"]},
+                                    {"$set": {"estudio_titulo_solicitado_at": now_iso()}})
+    return {"ok": True, "to": destinos, "subject": subject,
+            "attachments": attach_names, "sender": res.get("desde", sender)}
+
+
+@api.get("/estudio-titulo/log")
+async def estudio_log():
+    docs = await db.estudio_titulo_log.find({}).sort("enviado_en", -1).limit(20).to_list(20)
     return {"log": [clean(d) for d in docs]}
 
 

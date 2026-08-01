@@ -114,6 +114,8 @@ export default function ClientesModule({ onNavigate }) {
   const [splittingRel, setSplittingRel] = useState(null); // rel path currently splitting
   const [emailModal, setEmailModal] = useState(null);
   const [tasacionModal, setTasacionModal] = useState(null); // { folder, archivos, campos... }
+  const [tasacionContactos, setTasacionContactos] = useState([]); // plantillas inmobiliaria
+  const [estudioModal, setEstudioModal] = useState(null); // estudio de título
   const [missingDocsModal, setMissingDocsModal] = useState(null); // { folder, to, extra, preview, sending }
   const [ufValue, setUfValue] = useState(40842);
   const fileInputRef = useRef(null);
@@ -132,19 +134,42 @@ export default function ClientesModule({ onNavigate }) {
     let archivos = [];
     try {
       const r = await axios.get(`${API}/api/clientes/folders/${f.id}`);
-      archivos = (r.data.archivos || []).map(a => ({ ...a, sel: false }));
+      // Solo la carta de aprobación va preseleccionada — nada más de la carpeta
+      archivos = (r.data.archivos || []).map(a => ({ ...a, sel: /carta|oferta|aprobaci/i.test(a.nombre) }))
+        .sort((a, b) => (b.sel ? 1 : 0) - (a.sel ? 1 : 0));
     } catch (_e) { /* sin archivos */ }
+    try {
+      const c = await axios.get(`${API}/api/tasacion/contactos`);
+      setTasacionContactos(c.data.contactos || []);
+    } catch (_e) { setTasacionContactos([]); }
     setTasacionModal({
-      folder: f, archivos, tipo: "Individual", direccion: "", rol_avaluo: "",
-      valor_uf: "", vendedor: "", contacto_nombre: "", contacto_telefono: "",
+      folder: f, archivos, tipo: "Individual",
+      destinatarios: "contacto@valueproperty.cl, victoriavilches@centralmutuos.cl",
+      modalidad: "inmobiliaria",
+      inmobiliaria: f.datos_financieros?.inmobiliaria || "",
+      inmo_contacto_nombre: "", inmo_contacto_email: "",
+      direccion: "", rol_avaluo: "",
+      valor_uf: "", vendedor: "", vendedor_email: "", contacto_nombre: "", contacto_telefono: "",
       observaciones: "", preview: null, loading: false, msg: "",
     });
   };
 
+  const pickInmoPlantilla = (nombre) => {
+    const p = tasacionContactos.find(c => (c.inmobiliaria || "").toLowerCase() === (nombre || "").toLowerCase());
+    setTasacionModal(m => ({
+      ...m, inmobiliaria: nombre, preview: null,
+      inmo_contacto_nombre: p ? (p.contacto_nombre || m.inmo_contacto_nombre) : m.inmo_contacto_nombre,
+      inmo_contacto_email: p ? (p.contacto_email || m.inmo_contacto_email) : m.inmo_contacto_email,
+    }));
+  };
+
   const tasacionPayload = (m, confirm) => ({
     folder_id: m.folder.id, nombre: m.folder.nombre, rut: m.folder.rut || "",
+    destinatarios: m.destinatarios, modalidad: m.modalidad,
+    inmobiliaria: m.inmobiliaria, inmo_contacto_nombre: m.inmo_contacto_nombre,
+    inmo_contacto_email: m.inmo_contacto_email,
     tipo: m.tipo, direccion: m.direccion, rol_avaluo: m.rol_avaluo,
-    valor_uf: m.valor_uf, vendedor: m.vendedor,
+    valor_uf: m.valor_uf, vendedor: m.vendedor, vendedor_email: m.vendedor_email,
     contacto_nombre: m.contacto_nombre, contacto_telefono: m.contacto_telefono,
     observaciones: m.observaciones,
     attach_files: m.archivos.filter(a => a.sel).map(a => a.ruta),
@@ -162,14 +187,69 @@ export default function ClientesModule({ onNavigate }) {
   };
 
   const tasacionEnviar = async () => {
-    if (!window.confirm(`¿Enviar la solicitud de tasación de ${tasacionModal.folder.nombre} a Value Property y Victoria Vilches?`)) return;
+    if (!window.confirm(`¿Enviar la solicitud de tasación de ${tasacionModal.folder.nombre} a: ${tasacionModal.destinatarios}?`)) return;
     setTasacionModal(m => ({ ...m, loading: true, msg: "" }));
     try {
       const r = await axios.post(`${API}/api/tasacion/enviar`, tasacionPayload(tasacionModal, true));
-      setTasacionModal(m => ({ ...m, loading: false, msg: `✅ Solicitud enviada a ${r.data.to.join(" y ")}` }));
+      setTasacionModal(m => ({ ...m, loading: false, msg: `✅ Solicitud enviada a ${r.data.to.join(", ")}` }));
       loadFolders();
     } catch (e) {
       setTasacionModal(m => ({ ...m, loading: false, msg: "Error: " + (e.response?.data?.detail || e.message) }));
+    }
+  };
+
+  const openEstudio = async (f) => {
+    let archivos = [];
+    let defaults = { destinatarios: ["contacto@hipotecariogestion.cl", "victoriavilches@centralmutuos.cl"], docs_usada: [] };
+    try {
+      const [r, d] = await Promise.all([
+        axios.get(`${API}/api/clientes/folders/${f.id}`),
+        axios.get(`${API}/api/estudio-titulo/defaults`),
+      ]);
+      archivos = (r.data.archivos || []).map(a => ({ ...a, sel: /carta|oferta|aprobaci/i.test(a.nombre) }))
+        .sort((a, b) => (b.sel ? 1 : 0) - (a.sel ? 1 : 0));
+      defaults = d.data;
+    } catch (_e) { /* defaults */ }
+    setEstudioModal({
+      folder: f, archivos,
+      destinatarios: defaults.destinatarios.join(", "),
+      tipo_vivienda: "nueva",
+      inmobiliaria: f.datos_financieros?.inmobiliaria || "",
+      direccion: "", observaciones: "",
+      docs_texto: (defaults.docs_usada || []).join("\n"),
+      preview: null, loading: false, msg: "",
+    });
+  };
+
+  const estudioPayload = (m, confirm) => ({
+    folder_id: m.folder.id, nombre: m.folder.nombre, rut: m.folder.rut || "",
+    destinatarios: m.destinatarios, tipo_vivienda: m.tipo_vivienda,
+    inmobiliaria: m.inmobiliaria, direccion: m.direccion,
+    observaciones: m.observaciones,
+    docs_lista: m.tipo_vivienda === "usada" ? m.docs_texto.split("\n").map(s => s.trim()).filter(Boolean) : [],
+    attach_files: m.archivos.filter(a => a.sel).map(a => a.ruta),
+    confirm,
+  });
+
+  const estudioPreview = async () => {
+    setEstudioModal(m => ({ ...m, loading: true, msg: "" }));
+    try {
+      const r = await axios.post(`${API}/api/estudio-titulo/enviar`, estudioPayload(estudioModal, false));
+      setEstudioModal(m => ({ ...m, preview: r.data, loading: false }));
+    } catch (e) {
+      setEstudioModal(m => ({ ...m, loading: false, msg: "Error: " + (e.response?.data?.detail || e.message) }));
+    }
+  };
+
+  const estudioEnviar = async () => {
+    if (!window.confirm(`¿Enviar la solicitud de estudio de títulos de ${estudioModal.folder.nombre} a: ${estudioModal.destinatarios}?`)) return;
+    setEstudioModal(m => ({ ...m, loading: true, msg: "" }));
+    try {
+      const r = await axios.post(`${API}/api/estudio-titulo/enviar`, estudioPayload(estudioModal, true));
+      setEstudioModal(m => ({ ...m, loading: false, msg: `✅ Solicitud enviada a ${r.data.to.join(", ")}` }));
+      loadFolders();
+    } catch (e) {
+      setEstudioModal(m => ({ ...m, loading: false, msg: "Error: " + (e.response?.data?.detail || e.message) }));
     }
   };
   const refreshUfFromSii = async () => {
@@ -1022,9 +1102,10 @@ export default function ClientesModule({ onNavigate }) {
                       style={modBtn("rgba(234,88,12,0.12)", "#ea580c", enviadoManual ? "#fff" : "#ea580c")}>
                       <i className="fa fa-home"></i> Solicitud de Tasación{f.tasacion_solicitada_at ? " ✓" : ""}
                     </button>
-                    <button data-testid={`btn-estudio-titulo-${f.id}`} title="Solicitud de estudio de título (próximamente)"
-                      style={{ ...modBtn("rgba(255,255,255,0.05)", "rgba(148,163,184,0.5)", enviadoManual ? "#fff" : "#94a3b8"), opacity: 0.7 }}>
-                      <i className="fa fa-balance-scale"></i> Solicitud de Estudio de Título
+                    <button data-testid={`btn-estudio-titulo-${f.id}`} onClick={() => openEstudio(f)}
+                      title={`Solicitar estudio de títulos de ${f.nombre} (siempre con copia a Victoria Vilches)`}
+                      style={modBtn("rgba(20,184,166,0.12)", "#14b8a6", enviadoManual ? "#fff" : "#0d9488")}>
+                      <i className="fa fa-balance-scale"></i> Solicitud de Estudio de Título{f.estudio_titulo_solicitado_at ? " ✓" : ""}
                     </button>
                   </div>
                 </div>
@@ -1773,12 +1854,19 @@ export default function ClientesModule({ onNavigate }) {
                 {m.msg && (
                   <div data-testid="tasacion-msg" style={{ padding: "0.6rem 0.9rem", borderRadius: 8, background: m.msg.startsWith("✅") ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)", color: m.msg.startsWith("✅") ? "#4ade80" : "#f87171", fontWeight: 600, fontSize: 13 }}>{m.msg}</div>
                 )}
-                <div style={{ background: "rgba(30,41,59,0.7)", borderRadius: 8, padding: "0.7rem 0.9rem", fontSize: 12.5, lineHeight: 1.5 }}>
-                  <div style={{ opacity: 0.7, fontSize: 11, textTransform: "uppercase", marginBottom: 4 }}>Destinatarios <span style={{ color: "#f87171" }}>🔒 fijos</span></div>
-                  <div><b>contacto@valueproperty.cl</b> + <b>victoriavilches@centralmutuos.cl</b></div>
-                  <div style={{ opacity: 0.7, marginTop: 4 }}>Asunto: SOLICITUD TASACION // {m.folder.nombre}{m.folder.rut ? ` Rut: ${m.folder.rut}` : ""}</div>
+                <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Destinatarios (editable, separados por coma) <span style={{ color: "#4ade80" }}>· Victoria Vilches siempre va incluida</span></b>
+                  <input value={m.destinatarios} onChange={e => set("destinatarios", e.target.value)} data-testid="tasacion-destinatarios" style={inpS} />
+                </label>
+                <div style={{ background: "rgba(30,41,59,0.7)", borderRadius: 8, padding: "0.5rem 0.9rem", fontSize: 12, opacity: 0.85 }}>
+                  Asunto: SOLICITUD TASACION // {m.folder.nombre}{m.folder.rut ? ` Rut: ${m.folder.rut}` : ""}
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                  <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Tipo de vivienda</b>
+                    <select value={m.modalidad} onChange={e => set("modalidad", e.target.value)} data-testid="tasacion-modalidad" style={inpS}>
+                      <option value="inmobiliaria">Vivienda nueva (inmobiliaria)</option>
+                      <option value="usada">Vivienda usada</option>
+                    </select>
+                  </label>
                   <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Tipo de tasación</b>
                     <select value={m.tipo} onChange={e => set("tipo", e.target.value)} data-testid="tasacion-tipo" style={inpS}>
                       <option>Individual</option>
@@ -1786,20 +1874,46 @@ export default function ClientesModule({ onNavigate }) {
                       <option>Individual (proyecto con tasaciones previas)</option>
                     </select>
                   </label>
-                  <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Rol de Avalúo</b>
-                    <input value={m.rol_avaluo} onChange={e => set("rol_avaluo", e.target.value)} placeholder="Ej: 12324-00005" data-testid="tasacion-rol" style={inpS} />
-                  </label>
                 </div>
+                {m.modalidad === "inmobiliaria" && (
+                  <div style={{ background: "rgba(139,92,246,0.08)", border: "1px solid rgba(139,92,246,0.3)", borderRadius: 8, padding: "0.7rem 0.9rem", display: "grid", gap: "0.6rem" }}>
+                    <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Inmobiliaria <span style={{ opacity: 0.6 }}>(si ya tiene plantilla guardada, autocompleta el contacto)</span></b>
+                      <input value={m.inmobiliaria} onChange={e => pickInmoPlantilla(e.target.value)} list="inmo-plantillas" placeholder="Ej: Ecomac" data-testid="tasacion-inmobiliaria" style={inpS} />
+                      <datalist id="inmo-plantillas">
+                        {tasacionContactos.map(c => <option key={c.inmobiliaria_key} value={c.inmobiliaria} />)}
+                      </datalist>
+                    </label>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.6rem" }}>
+                      <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Contacto inmobiliaria (nombre)</b>
+                        <input value={m.inmo_contacto_nombre} onChange={e => set("inmo_contacto_nombre", e.target.value)} placeholder="A quién se le solicita" data-testid="tasacion-inmo-nombre" style={inpS} />
+                      </label>
+                      <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Mail contacto inmobiliaria <span style={{ opacity: 0.6 }}>(se agrega al envío)</span></b>
+                        <input value={m.inmo_contacto_email} onChange={e => set("inmo_contacto_email", e.target.value)} placeholder="contacto@inmobiliaria.cl" data-testid="tasacion-inmo-email" style={inpS} />
+                      </label>
+                    </div>
+                    <div style={{ fontSize: 11, opacity: 0.7 }}>💾 Al enviar, el contacto queda guardado como plantilla para esta inmobiliaria.</div>
+                  </div>
+                )}
                 <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Dirección de la propiedad <span style={{ color: "#f87171" }}>*</span></b>
                   <input value={m.direccion} onChange={e => set("direccion", e.target.value)} placeholder="Ej: ELISA CORREA 527, LOS SAUCES, LA FLORIDA" data-testid="tasacion-direccion" style={inpS} />
                 </label>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                  <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Rol de Avalúo</b>
+                    <input value={m.rol_avaluo} onChange={e => set("rol_avaluo", e.target.value)} placeholder="Ej: 12324-00005" data-testid="tasacion-rol" style={inpS} />
+                  </label>
                   <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Valor aproximado (UF)</b>
                     <input value={m.valor_uf} onChange={e => set("valor_uf", e.target.value)} placeholder="Ej: 3.200" data-testid="tasacion-valor" style={inpS} />
                   </label>
-                  <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Vendedor</b>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: m.modalidad === "usada" ? "1fr 1fr" : "1fr", gap: "0.75rem" }}>
+                  <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Vendedor {m.modalidad === "usada" ? "(nombre)" : ""}</b>
                     <input value={m.vendedor} onChange={e => set("vendedor", e.target.value)} placeholder="Nombre del vendedor" data-testid="tasacion-vendedor" style={inpS} />
                   </label>
+                  {m.modalidad === "usada" && (
+                    <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Mail de contacto del vendedor</b>
+                      <input value={m.vendedor_email} onChange={e => set("vendedor_email", e.target.value)} placeholder="vendedor@correo.cl" data-testid="tasacion-vendedor-email" style={inpS} />
+                    </label>
+                  )}
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
                   <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Contacto para coordinar (nombre)</b>
@@ -1814,7 +1928,7 @@ export default function ClientesModule({ onNavigate }) {
                 </label>
                 {m.archivos.length > 0 && (
                   <div style={{ background: "rgba(30,41,59,0.7)", borderRadius: 8, padding: "0.7rem 0.9rem" }}>
-                    <div style={{ opacity: 0.7, fontSize: 11, textTransform: "uppercase", marginBottom: 6 }}>Adjuntar documentos de la carpeta (opcional, ej: carta oferta / comprobante de pago)</div>
+                    <div style={{ opacity: 0.7, fontSize: 11, textTransform: "uppercase", marginBottom: 6 }}>Adjuntos — solo la carta de aprobación va preseleccionada, nada más de la carpeta</div>
                     <div style={{ display: "grid", gap: 4, maxHeight: 140, overflow: "auto" }}>
                       {m.archivos.map((a, i) => (
                         <label key={a.ruta} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, cursor: "pointer" }}>
@@ -1842,6 +1956,96 @@ export default function ClientesModule({ onNavigate }) {
                   <button onClick={tasacionEnviar} disabled={m.loading || !m.direccion.trim()} data-testid="btn-tasacion-enviar"
                     title={!m.direccion.trim() ? "Falta la dirección de la propiedad" : ""}
                     style={{ padding: "0.55rem 1.1rem", borderRadius: 8, border: "none", background: "#ea580c", color: "#fff", fontWeight: 800, cursor: "pointer", opacity: (m.loading || !m.direccion.trim()) ? 0.6 : 1 }}>
+                    <i className={`fa ${m.loading ? "fa-spinner fa-spin" : "fa-paper-plane"}`} /> Enviar solicitud
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {estudioModal && (() => {
+        const m = estudioModal;
+        const set = (k, v) => setEstudioModal(prev => ({ ...prev, [k]: v, preview: null }));
+        const inpS = { width: "100%", padding: "0.5rem", borderRadius: 6, border: "1px solid rgba(148,163,184,0.3)", background: "#1e293b", color: "#e2e8f0", fontSize: 13 };
+        const lblS = { fontSize: 12 };
+        return (
+          <div data-testid="estudio-modal" onClick={() => setEstudioModal(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9998, padding: "3vh 3vw" }}>
+            <div onClick={(e) => e.stopPropagation()} style={{ background: "#0f172a", color: "#e2e8f0", borderRadius: 12, width: "min(760px, 96vw)", maxHeight: "94vh", overflow: "auto", border: "1px solid rgba(148,163,184,0.25)", boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}>
+              <div style={{ padding: "0.9rem 1.1rem", borderBottom: "1px solid rgba(148,163,184,0.2)", display: "flex", alignItems: "center", gap: 10 }}>
+                <i className="fa fa-balance-scale" style={{ color: "#2dd4bf" }} />
+                <h4 style={{ margin: 0, flex: 1 }}>Solicitud de Estudio de Título — {m.folder.nombre}</h4>
+                <button onClick={() => setEstudioModal(null)} data-testid="btn-estudio-close" style={{ background: "transparent", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 18 }}><i className="fa fa-times" /></button>
+              </div>
+              <div style={{ padding: "1rem 1.1rem", display: "grid", gap: "0.75rem" }}>
+                {m.msg && (
+                  <div data-testid="estudio-msg" style={{ padding: "0.6rem 0.9rem", borderRadius: 8, background: m.msg.startsWith("✅") ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)", color: m.msg.startsWith("✅") ? "#4ade80" : "#f87171", fontWeight: 600, fontSize: 13 }}>{m.msg}</div>
+                )}
+                <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Destinatarios (editable, separados por coma) <span style={{ color: "#4ade80" }}>· Victoria Vilches siempre va incluida</span></b>
+                  <input value={m.destinatarios} onChange={e => set("destinatarios", e.target.value)} data-testid="estudio-destinatarios" style={inpS} />
+                </label>
+                <div style={{ background: "rgba(30,41,59,0.7)", borderRadius: 8, padding: "0.5rem 0.9rem", fontSize: 12, opacity: 0.85 }}>
+                  Asunto: SOLICITUD ESTUDIO DE TITULOS // {m.folder.nombre}{m.folder.rut ? ` ${m.folder.rut}` : ""}
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                  <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Tipo de vivienda</b>
+                    <select value={m.tipo_vivienda} onChange={e => set("tipo_vivienda", e.target.value)} data-testid="estudio-tipo" style={inpS}>
+                      <option value="nueva">Vivienda nueva (inmobiliaria)</option>
+                      <option value="usada">Vivienda usada</option>
+                    </select>
+                  </label>
+                  {m.tipo_vivienda === "nueva" ? (
+                    <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Inmobiliaria / Proyecto</b>
+                      <input value={m.inmobiliaria} onChange={e => set("inmobiliaria", e.target.value)} placeholder="Ej: Ecomac" data-testid="estudio-inmobiliaria" style={inpS} />
+                    </label>
+                  ) : <div />}
+                </div>
+                <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Dirección de la propiedad</b>
+                  <input value={m.direccion} onChange={e => set("direccion", e.target.value)} placeholder="Dirección completa" data-testid="estudio-direccion" style={inpS} />
+                </label>
+                {m.tipo_vivienda === "usada" && (
+                  <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Documentos solicitados para vivienda usada <span style={{ opacity: 0.6 }}>(uno por línea — se listan en el correo)</span></b>
+                    <textarea value={m.docs_texto} onChange={e => set("docs_texto", e.target.value)} rows={8} data-testid="estudio-docs" style={{ ...inpS, resize: "vertical", fontSize: 12 }} />
+                  </label>
+                )}
+                {m.tipo_vivienda === "nueva" && (
+                  <div style={{ fontSize: 11.5, opacity: 0.7, background: "rgba(20,184,166,0.08)", border: "1px solid rgba(20,184,166,0.25)", borderRadius: 8, padding: "0.5rem 0.8rem" }}>
+                    Vivienda nueva con inmobiliaria: no se agrega listado de documentos, solo la solicitud formal con los adjuntos.
+                  </div>
+                )}
+                <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Observaciones</b>
+                  <textarea value={m.observaciones} onChange={e => set("observaciones", e.target.value)} rows={2} data-testid="estudio-observaciones" style={{ ...inpS, resize: "vertical" }} />
+                </label>
+                {m.archivos.length > 0 && (
+                  <div style={{ background: "rgba(30,41,59,0.7)", borderRadius: 8, padding: "0.7rem 0.9rem" }}>
+                    <div style={{ opacity: 0.7, fontSize: 11, textTransform: "uppercase", marginBottom: 6 }}>Adjuntos — la carta de aprobación va preseleccionada</div>
+                    <div style={{ display: "grid", gap: 4, maxHeight: 140, overflow: "auto" }}>
+                      {m.archivos.map((a, i) => (
+                        <label key={a.ruta} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, cursor: "pointer" }}>
+                          <input type="checkbox" checked={!!a.sel} data-testid={`estudio-adj-${i}`}
+                            onChange={() => setEstudioModal(prev => ({ ...prev, preview: null, archivos: prev.archivos.map(x => x.ruta === a.ruta ? { ...x, sel: !x.sel } : x) }))} />
+                          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.nombre} <span style={{ opacity: 0.5 }}>{a.subfolder ? `(${a.subfolder})` : ""}</span></span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {m.preview && (
+                  <div style={{ background: "#fff", borderRadius: 8, padding: "0.9rem", maxHeight: 260, overflow: "auto" }}>
+                    <div dangerouslySetInnerHTML={{ __html: m.preview.body }} />
+                    {m.preview.attachments.length > 0 && (
+                      <div style={{ marginTop: 8, fontSize: 12, color: "#334155" }}>📎 Adjuntos: {m.preview.attachments.join(", ")}</div>
+                    )}
+                  </div>
+                )}
+                <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+                  <button onClick={estudioPreview} disabled={m.loading} data-testid="btn-estudio-preview"
+                    style={{ padding: "0.55rem 1.1rem", borderRadius: 8, border: "1px solid rgba(148,163,184,0.4)", background: "transparent", color: "#e2e8f0", fontWeight: 700, cursor: "pointer" }}>
+                    <i className={`fa ${m.loading ? "fa-spinner fa-spin" : "fa-eye"}`} /> Ver preview
+                  </button>
+                  <button onClick={estudioEnviar} disabled={m.loading} data-testid="btn-estudio-enviar"
+                    style={{ padding: "0.55rem 1.1rem", borderRadius: 8, border: "none", background: "#0d9488", color: "#fff", fontWeight: 800, cursor: "pointer", opacity: m.loading ? 0.6 : 1 }}>
                     <i className={`fa ${m.loading ? "fa-spinner fa-spin" : "fa-paper-plane"}`} /> Enviar solicitud
                   </button>
                 </div>
