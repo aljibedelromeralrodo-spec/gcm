@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 
 const API = process.env.REACT_APP_BACKEND_URL;
+const CAT_LABELS = { cedula: "Cédula", liquidacion: "Liquidaciones", afp: "AFP", cmf: "CMF", imp_renta: "Imp. Renta", boletas: "Boletas" };
 
 // Input inteligente para montos en UF. Si el usuario ingresa un número
 // grande (>= 20000) se asume que es CLP y se convierte automáticamente
@@ -896,11 +897,30 @@ export default function ClientesModule() {
                       ) : (
                         <span style={{ fontSize: 10, background: "rgba(250,204,21,0.15)", color: "#a16207", padding: "2px 6px", borderRadius: 4 }}>💰 Sin datos financieros</span>
                       )}
-                      {missing.length > 0 && (
-                        <span style={{ fontSize: 10, background: "rgba(220,38,38,0.15)", color: "#dc2626", padding: "2px 6px", borderRadius: 4 }}>⚠️ Faltan {missing.length} doc{missing.length > 1 ? "s" : ""}</span>
-                      )}
                     </div>
+                    {missing.length > 0 && (
+                      <div data-testid={`missing-docs-${f.id}`} style={{ display: "flex", gap: 4, marginTop: 5, flexWrap: "wrap", alignItems: "center" }}>
+                        <span style={{ fontSize: 10, fontWeight: 800, color: enviadoManual ? "#fff" : "#dc2626" }}>⚠️ FALTA:</span>
+                        {missing.map(m => (
+                          <span key={m} style={{ fontSize: 10, fontWeight: 700, background: enviadoManual ? "rgba(255,255,255,0.25)" : "rgba(220,38,38,0.15)", color: enviadoManual ? "#fff" : "#dc2626", padding: "2px 7px", borderRadius: 10, border: enviadoManual ? "1px solid rgba(255,255,255,0.4)" : "1px solid rgba(220,38,38,0.35)" }}>
+                            {CAT_LABELS[m] || m}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
+                  {f.prob_aprobacion && f.prob_aprobacion.porcentaje != null && (
+                    <div data-testid={`prob-aprobacion-${f.id}`}
+                      title={`Posibilidades de aprobación\n${(f.prob_aprobacion.factores || []).join("\n")}`}
+                      style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minWidth: 88, padding: "6px 10px", borderRadius: 12, flexShrink: 0,
+                        background: enviadoManual ? "rgba(255,255,255,0.15)" : (f.prob_aprobacion.porcentaje >= 75 ? "rgba(34,197,94,0.12)" : f.prob_aprobacion.porcentaje >= 50 ? "rgba(250,204,21,0.18)" : "rgba(220,38,38,0.12)") }}>
+                      <span style={{ fontSize: 36, fontWeight: 900, lineHeight: 1,
+                        color: enviadoManual ? "#fff" : (f.prob_aprobacion.porcentaje >= 75 ? "#16a34a" : f.prob_aprobacion.porcentaje >= 50 ? "#a16207" : "#dc2626") }}>
+                        {f.prob_aprobacion.porcentaje}%
+                      </span>
+                      <span style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, opacity: 0.85, color: enviadoManual ? "#fff" : undefined }}>aprobación</span>
+                    </div>
+                  )}
                   <div className="clientes-card-actions">
                     <button
                       className="docs-btn"
@@ -1102,8 +1122,12 @@ export default function ClientesModule() {
                 <p>Carpeta vacía. Use "Buscar Adjuntos" para traer archivos del correo.</p>
               </div>
             )}
-            {currentFolder.archivos?.map((file, i) => (
-              <div key={i} className="clientes-file-item" data-testid={`file-${i}`}>
+            {(() => {
+              const esCod = (a) => a.subfolder === "05_codeudor" || /^CODEUDOR_/i.test(a.nombre || "");
+              const titularFiles = (currentFolder.archivos || []).filter(a => !esCod(a));
+              const codFiles = (currentFolder.archivos || []).filter(esCod);
+              const renderFile = (file, i) => (
+              <div key={file.ruta || i} className="clientes-file-item" data-testid={`file-${i}`}>
                 <i className={`fa ${file.nombre.endsWith('.pdf') ? 'fa-file-pdf-o' : file.nombre.match(/\.(jpg|png|jpeg)$/i) ? 'fa-file-image-o' : file.nombre.match(/\.(doc|docx)$/i) ? 'fa-file-word-o' : 'fa-file-o'}`}></i>
                 <div className="clientes-file-info">
                   <span className="clientes-file-name">{file.nombre}</span>
@@ -1136,7 +1160,22 @@ export default function ClientesModule() {
                   <i className="fa fa-trash"></i>
                 </button>
               </div>
-            ))}
+              );
+              return (
+                <>
+                  {titularFiles.map(renderFile)}
+                  {codFiles.length > 0 && (
+                    <div data-testid="codeudor-subfolder" style={{ marginTop: 14, border: "1.5px dashed #8b5cf6", borderRadius: 10, padding: "10px 12px", background: "rgba(139,92,246,0.06)" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, color: "#7c3aed", fontWeight: 800, fontSize: 13 }}>
+                        <i className="fa fa-folder"></i> Subcarpeta Codeudor{currentFolder.codeudor_nombre ? `: ${currentFolder.codeudor_nombre}` : ""}
+                        <span style={{ fontWeight: 600, opacity: 0.7 }}>({codFiles.length} archivo{codFiles.length !== 1 ? "s" : ""})</span>
+                      </div>
+                      {codFiles.map((f2, j) => renderFile(f2, titularFiles.length + j))}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
         </div>
       )}

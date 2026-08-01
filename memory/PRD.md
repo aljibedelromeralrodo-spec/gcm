@@ -25,6 +25,24 @@ Idioma del usuario: **Español** (responder siempre en español).
 - IMAP/SMTP: en `/app/backend/.env` (MAIL_USER, MAIL2_USER + app passwords)
 
 ## Implementado
+- 2026-08-01 (esta sesión) — **Codeudor + porcentaje visible en tarjeta**:
+  - FIX P0: `GET /api/clientes/folders` daba 500 (`_prob_aprobacion_folder` no existía,
+    quedó a medias en sesión anterior) → función creada (score por docs faltantes, CMF,
+    monto, subsidio, tipo cliente, calibrada con mesa).
+  - **Detección de codeudor en ingesta** (`proc_upload_drive`): keyword codeudor/aval en
+    asunto+cuerpo + match de titular existente por nombre/RUT (`_buscar_titular_en_texto`).
+    Correo del codeudor → archivos van a `05_codeudor/CODEUDOR_*` DENTRO de la carpeta del
+    titular (no crea carpeta separada), enriquece `codeudor_nombre/rut` y
+    `credit_request.codeudor` (aditivo), genera COMBINADO_CODEUDOR, y NUNCA pisa los datos
+    financieros del titular. `Carpeta_<cliente>.pdf` ahora excluye 05_codeudor y COMBINADO_.
+  - **UI tarjetas** (ClientesModule.js): % de aprobación EN GRANDE (36px, verde/amarillo/rojo,
+    tooltip con factores, testid `prob-aprobacion-{id}`) + documentos faltantes por nombre
+    ("⚠️ FALTA: Cédula…", testid `missing-docs-{id}`) sin abrir la carpeta.
+  - **UI detalle**: sección "Subcarpeta Codeudor: {nombre}" (caja punteada violeta,
+    testid `codeudor-subfolder`) agrupando los archivos 05_codeudor.
+  - Testeado e2e con correo simulado de codeudora para titular real (ruteo, enriquecimiento,
+    sin carpeta duplicada) + screenshots UI OK. Datos de prueba limpiados.
+
 - 2026-07 (sesiones previas): frontend recuperado; motor de score; Autocorreo (pág 1 + reenvío
   con datos del ejecutivo); reenvío de Rechazos sin PDF; OCR+IA en Procesamiento Correo;
   validaciones de campos obligatorios antes de mesa; login actualizado.

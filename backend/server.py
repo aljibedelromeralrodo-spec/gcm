@@ -760,7 +760,13 @@ def _folder_public(doc, con_archivos=False):
 async def list_folders(q: str = ""):
     query = {"nombre": {"$regex": q, "$options": "i"}} if q else {}
     docs = await db.folders.find(query).sort("created_at", -1).limit(200).to_list(200)
-    return {"folders": [_folder_public(d) for d in docs]}
+    stats = await _stats_mesa()
+    out = []
+    for d in docs:
+        f = _folder_public(d)
+        f["prob_aprobacion"] = _prob_aprobacion_folder(d, stats)
+        out.append(f)
+    return {"folders": out}
 
 
 @api.post("/clientes/folders")
@@ -784,7 +790,9 @@ async def get_folder(fid: str):
     doc = await db.folders.find_one({"id": fid})
     if not doc:
         raise HTTPException(status_code=404, detail="Carpeta no encontrada")
-    return _folder_public(doc, con_archivos=True)
+    res = _folder_public(doc, con_archivos=True)
+    res["prob_aprobacion"] = _prob_aprobacion_folder(doc, await _stats_mesa())
+    return res
 
 
 @api.delete("/clientes/folders/{fid}")
@@ -1915,6 +1923,51 @@ def _prob_aprobacion(item, stats):
     return {"porcentaje": prob, "factores": factores}
 
 
+def _prob_aprobacion_folder(doc, stats):
+    """% de posibilidades de aprobación de una CARPETA de cliente, calibrado con mesa."""
+    prob = stats["base"] * 100.0
+    factores = [f"Base mesa: {round(stats['base']*100)}% ({stats['aprobadas']} aprobadas / {stats['rechazadas']} rechazadas)"]
+    archivos = fsvc.scan_archivos(doc.get("nombre", ""))
+    cats = {fsvc.cat_de_archivo(a["nombre"], a["subfolder"]) for a in archivos} - {"combinado", "codeudor"}
+    cr = doc.get("credit_request") or {}
+    tipo_cliente = cr.get("client_type") or "dependiente"
+    requeridos = (["cedula", "imp_renta", "boletas"] if tipo_cliente == "independiente"
+                  else ["cedula", "liquidacion"])
+    faltan = [c for c in requeridos if c not in cats]
+    if faltan:
+        prob -= 8 * len(faltan)
+        factores.append(f"-{8*len(faltan)}%: faltan documentos clave ({', '.join(faltan)})")
+    if "cmf" not in cats:
+        prob -= 5
+        factores.append("-5%: falta informe CMF")
+    df = doc.get("datos_financieros") or {}
+    try:
+        monto = float(df.get("monto_credito") or 0)
+    except (TypeError, ValueError):
+        monto = 0
+    if monto:
+        if monto <= 2000:
+            prob += 4
+            factores.append("+4%: monto acotado (≤2.000 UF)")
+        elif monto > 4000:
+            prob -= 8
+            factores.append("-8%: monto alto (>4.000 UF)")
+    con_sub = df.get("con_subsidio")
+    if con_sub is None:
+        con_sub = (cr.get("subsidy") or {}).get("tipo") == "con_subsidio"
+    if con_sub:
+        prob += 5
+        factores.append("+5%: con subsidio")
+    if tipo_cliente == "independiente":
+        prob -= 5
+        factores.append("-5%: independiente (boletas)")
+    if not df.get("valor_propiedad"):
+        prob -= 3
+        factores.append("-3%: sin datos financieros completos")
+    prob = max(5, min(98, round(prob)))
+    return {"porcentaje": prob, "factores": factores}
+
+
 @api.get("/procesamiento/queue")
 async def proc_queue(status: str = ""):
     q = {"status": status} if status else {}
@@ -2229,6 +2282,28 @@ async def _buscar_carpeta_existente(cliente, rut=""):
     return None
 
 
+async def _buscar_titular_en_texto(texto, excluir_nombre=""):
+    """Encuentra la carpeta de un TITULAR ya existente mencionado en el texto del correo."""
+    tx = _norm_texto(texto or "")
+    excl = _norm_texto(excluir_nombre or "")
+    folders = await db.folders.find({}).to_list(500)
+    for f in folders:
+        fn_norm = _norm_texto(f.get("nombre", ""))
+        if not fn_norm or fn_norm == excl:
+            continue
+        toks = [t for t in fn_norm.split() if len(t) > 2]
+        if len(toks) >= 2 and all(t in tx for t in toks):
+            return f
+    for r in re.findall(r"\d{1,2}\.?\d{3}\.?\d{3}-?[\dkK]", texto or ""):
+        rn = _norm_rut(r)
+        if not rn or len(rn) < 7:
+            continue
+        for f in folders:
+            if _norm_rut(f.get("rut", "")) == rn and _norm_texto(f.get("nombre", "")) != excl:
+                return f
+    return None
+
+
 def _regen_carpeta_cliente(cliente, orden_manual=None):
     """Reconstruye Carpeta_<cliente>.pdf con TODOS los documentos acumulados de
     todos los correos, en orden de protocolo (prefijos 01_..99_)."""
@@ -2239,9 +2314,11 @@ def _regen_carpeta_cliente(cliente, orden_manual=None):
     manual = {fn: i for i, fn in enumerate(orden_manual or [])}
     archivos = []
     for p in sorted(dest.rglob("*.pdf")):
-        if p.name.startswith("Carpeta_"):
+        rel0 = p.relative_to(dest).as_posix()
+        # La carpeta del titular NUNCA incluye los papeles del codeudor ni combinados previos
+        if p.name.startswith(("Carpeta_", "COMBINADO_")) or rel0.startswith("05_codeudor/"):
             continue
-        rel = p.relative_to(dest).as_posix()
+        rel = rel0
         key = (0, manual[p.name], "") if p.name in manual else (1, 0, rel)
         archivos.append((key, p))
     archivos.sort(key=lambda t: t[0])
@@ -2285,6 +2362,22 @@ async def proc_upload_drive(qid: str):
             "Reprocesa el correo primero: no se crea carpeta vacía."))
     # ENRIQUECER: si ya existe carpeta de la misma persona (otro correo), usarla
     existente = await _buscar_carpeta_existente(cliente, cl.get("rut", ""))
+    # Deteccion de CODEUDOR: el correo puede traer los papeles del codeudor del titular
+    subj_body = f"{item.get('subject') or ''} {item.get('body_full') or item.get('body_preview') or ''}"
+    kw_cod = bool(re.search(r"co-?deudor|\baval\b", subj_body, re.I))
+    es_correo_codeudor = False
+    cod_nombre, cod_rut = "", ""
+    if kw_cod:
+        m = re.search(r"co-?deudor[a]?\s*(?:es|:)?\s+([A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+){1,3})", subj_body)
+        if m:
+            cod_nombre = m.group(1).strip()
+        titular_doc = await _buscar_titular_en_texto(subj_body, excluir_nombre=cliente)
+        if titular_doc and not (existente and existente.get("id") == titular_doc.get("id")):
+            # Correo DEL codeudor: sus papeles van a la subcarpeta dentro del titular
+            es_correo_codeudor = True
+            cod_nombre = cod_nombre or cliente
+            cod_rut = cl.get("rut", "")
+            existente = titular_doc
     if existente and existente.get("nombre"):
         cliente = existente["nombre"]
     dest = CLIENTES_DIR / _safe_name(cliente)
@@ -2304,15 +2397,28 @@ async def proc_upload_drive(qid: str):
     for d in docs:
         p = src / d["filename"]
         if p.exists():
-            sub = fsvc.SUBFOLDER_POR_TIPO.get(_tipo_efectivo(d), "99_otros")
+            fn_orig = d["filename"]
+            es_cod_arch = es_correo_codeudor or bool(re.search(r"co-?deudor", fn_orig, re.I))
+            if es_cod_arch:
+                sub = "05_codeudor"
+                fn_dest = fn_orig if fn_orig.upper().startswith("CODEUDOR_") else f"CODEUDOR_{fn_orig}"
+            else:
+                sub = fsvc.SUBFOLDER_POR_TIPO.get(_tipo_efectivo(d), "99_otros")
+                fn_dest = fn_orig
             sd = dest / sub
             sd.mkdir(parents=True, exist_ok=True)
-            (sd / d["filename"]).write_bytes(p.read_bytes())
+            (sd / fn_dest).write_bytes(p.read_bytes())
             # si el mismo archivo quedó antes en otra subcarpeta, quitarlo (evita duplicados)
-            for viejo in dest.rglob(d["filename"]):
-                if viejo.parent != sd:
+            for viejo in list(dest.rglob(fn_orig)) + list(dest.rglob(fn_dest)):
+                if viejo.parent != sd or viejo.name != fn_dest:
                     viejo.unlink(missing_ok=True)
-            uploaded.append(f"{sub}/{d['filename']}")
+            uploaded.append(f"{sub}/{fn_dest}")
+    hay_codeudor_files = any(u.startswith("05_codeudor/") for u in uploaded)
+    if hay_codeudor_files:
+        try:
+            await asyncio.to_thread(fsvc.merge_codeudor, cliente)
+        except Exception:
+            pass
     # Regenerar la Carpeta combinada con TODO lo acumulado (todos los correos)
     orden_manual = [d["filename"] for d in docs] if item.get("docs_orden_manual") else None
     merged_name = await asyncio.to_thread(_regen_carpeta_cliente, cliente, orden_manual)
@@ -2326,7 +2432,7 @@ async def proc_upload_drive(qid: str):
         "is_request": True,
         "client_type": tipo_cliente,
         "subsidy": {"tipo": "con_subsidio" if con_sub is True else "sin_subsidio"},
-        "codeudor": {"has_codeudor": False, "name": ""},
+        "codeudor": {"has_codeudor": bool(cod_nombre or hay_codeudor_files), "name": cod_nombre},
     }
     fin_nuevos = {k: v for k, v in {
         "proyecto": campos.get("proyecto_inmobiliario") or "",
@@ -2340,6 +2446,7 @@ async def proc_upload_drive(qid: str):
     if not folder_doc:
         await db.folders.insert_one({"id": str(uuid.uuid4()), "nombre": cliente,
                                      "rut": cl.get("rut", ""), "archivos": uploaded,
+                                     "codeudor_nombre": cod_nombre, "codeudor_rut": cod_rut,
                                      "source_email": item.get("sender", ""),
                                      "credit_request": credit_request,
                                      "datos_financieros": fin_nuevos,
@@ -2348,16 +2455,25 @@ async def proc_upload_drive(qid: str):
     else:
         vistos_arch = set(folder_doc.get("archivos") or [])
         upd = {"archivos": (folder_doc.get("archivos") or []) + [a for a in uploaded if a not in vistos_arch],
-               "rut": cl.get("rut", "") or folder_doc.get("rut", ""),
                "source_email": folder_doc.get("source_email") or item.get("sender", "")}
+        if not es_correo_codeudor:
+            upd["rut"] = cl.get("rut", "") or folder_doc.get("rut", "")
         fin_actual = folder_doc.get("datos_financieros") or {}
         fecha_vigente = folder_doc.get("datos_financieros_fecha") or ""
         fecha_item = item.get("date_iso") or ""
-        if fecha_item >= fecha_vigente:
+        if es_correo_codeudor:
+            # Correo del CODEUDOR: nunca pisa los datos financieros del titular
+            for k, v in fin_nuevos.items():
+                if fin_actual.get(k) in (None, ""):
+                    fin_actual[k] = v
+        elif fecha_item >= fecha_vigente:
             # El correo MÁS NUEVO manda: sus datos financieros sobrescriben los antiguos
             fin_actual.update(fin_nuevos)
             upd["datos_financieros_fecha"] = fecha_item
             if not (folder_doc.get("credit_request") or {}).get("manual_override"):
+                cod_prev = (folder_doc.get("credit_request") or {}).get("codeudor") or {}
+                if not credit_request["codeudor"]["has_codeudor"] and cod_prev.get("has_codeudor"):
+                    credit_request["codeudor"] = cod_prev
                 upd["credit_request"] = credit_request
         else:
             # Correo ANTIGUO: solo completa campos vacíos, nunca pisa datos más recientes
@@ -2365,6 +2481,16 @@ async def proc_upload_drive(qid: str):
                 if fin_actual.get(k) in (None, ""):
                     fin_actual[k] = v
         upd["datos_financieros"] = fin_actual
+        # Enriquecer info del codeudor en la carpeta del titular (aditivo, nunca borra)
+        if cod_nombre and not folder_doc.get("codeudor_nombre"):
+            upd["codeudor_nombre"] = cod_nombre
+        if cod_rut and not folder_doc.get("codeudor_rut"):
+            upd["codeudor_rut"] = cod_rut
+        if (cod_nombre or hay_codeudor_files) and "credit_request" not in upd:
+            cr_act = folder_doc.get("credit_request") or credit_request
+            cr_act["codeudor"] = {"has_codeudor": True,
+                                  "name": cod_nombre or folder_doc.get("codeudor_nombre", "")}
+            upd["credit_request"] = cr_act
         await db.folders.update_one({"nombre": cliente}, {"$set": upd})
     # Checklist de faltantes
     req = CHECKLIST.get(tipo_cliente, {})
