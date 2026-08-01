@@ -3052,6 +3052,92 @@ async def gastos_log():
 
 
 # ---------------------------------------------------------------------------
+# Solicitud de Tasación (Value Property + Victoria Vilches)
+# ---------------------------------------------------------------------------
+TASACION_DESTINOS = ["contacto@valueproperty.cl", "victoriavilches@centralmutuos.cl"]
+
+
+def _tasacion_html(p):
+    filas = []
+
+    def fila(lbl, val):
+        v = str(val or "").strip()
+        if v:
+            filas.append(
+                f'<tr><td style="padding:7px 14px;font-weight:bold;color:#334155;'
+                f'white-space:nowrap;border-bottom:1px solid #e2e8f0">{lbl}</td>'
+                f'<td style="padding:7px 14px;color:#111;border-bottom:1px solid #e2e8f0">{v}</td></tr>')
+
+    cliente = p.get("nombre", "") + (f" · RUT {p.get('rut')}" if p.get("rut") else "")
+    fila("Cliente", cliente)
+    fila("Tipo de tasación", p.get("tipo", ""))
+    fila("Dirección de la propiedad", p.get("direccion", ""))
+    fila("Rol de Avalúo", p.get("rol_avaluo", ""))
+    fila("Valor aproximado (UF)", p.get("valor_uf", ""))
+    fila("Vendedor", p.get("vendedor", ""))
+    contacto = " · ".join(x for x in [(p.get("contacto_nombre") or "").strip(),
+                                      (p.get("contacto_telefono") or "").strip()] if x)
+    fila("Contacto para coordinar la visita", contacto)
+    obs = (p.get("observaciones") or "").strip()
+    return f"""
+    <div style="font-family:Arial,sans-serif;font-size:14px;color:#222;max-width:640px">
+      <p>Estimado equipo Value Property, junto con saludar:</p>
+      <p>A continuación, detallo los antecedentes de la propiedad para la coordinación de la tasación:</p>
+      <table style="border-collapse:collapse;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;width:100%">{''.join(filas)}</table>
+      {f'<p style="margin-top:12px"><b>Observaciones:</b> {obs}</p>' if obs else ''}
+      <p style="margin-top:14px">Quedo atento a sus comentarios y a cualquier antecedente adicional que requieran.</p>
+      <p style="margin-top:16px;color:#555">Saludos cordiales,<br/><b>Central Mutuos — Con Creces</b></p>
+    </div>
+    """
+
+
+@api.post("/tasacion/enviar")
+async def tasacion_enviar(payload: dict):
+    payload = payload or {}
+    nombre = (payload.get("nombre") or "").strip()
+    rut = (payload.get("rut") or "").strip()
+    if not nombre:
+        raise HTTPException(status_code=400, detail="Falta el nombre del cliente")
+    subject = f"SOLICITUD TASACION // {nombre}" + (f" Rut: {rut}" if rut else "")
+    cuerpo = _tasacion_html(payload)
+    attach_names, attach_paths = [], []
+    for rel in payload.get("attach_files") or []:
+        try:
+            pth = fsvc.resolver_ruta(nombre, rel)
+            if pth.exists() and pth not in attach_paths:
+                attach_paths.append(pth)
+                attach_names.append(pth.name)
+        except ValueError:
+            continue
+    sender = _sender_por_rol("secundaria")
+    if not payload.get("confirm"):
+        return {"to": TASACION_DESTINOS, "subject": subject, "body": cuerpo,
+                "attachments": attach_names, "sender": sender}
+    if not (payload.get("direccion") or "").strip():
+        raise HTTPException(status_code=400, detail="Falta la dirección de la propiedad")
+    adjuntos = [{"filename": pth.name, "content_b64": _b64(pth.read_bytes())} for pth in attach_paths]
+    res = await asyncio.to_thread(mail.send_mail, TASACION_DESTINOS, subject, cuerpo, adjuntos, "secundaria")
+    if not res.get("success"):
+        raise HTTPException(status_code=502, detail=res.get("error", "Error de envío"))
+    await db.tasacion_log.insert_one({
+        "id": str(uuid.uuid4()), "nombre": nombre, "rut": rut,
+        "direccion": payload.get("direccion", ""), "tipo": payload.get("tipo", ""),
+        "to": TASACION_DESTINOS, "adjuntos": attach_names,
+        "enviado_en": now_iso(), "desde": res.get("desde", "")})
+    if payload.get("folder_id"):
+        await db.folders.update_one({"id": payload["folder_id"]},
+                                    {"$set": {"tasacion_solicitada_at": now_iso()}})
+    return {"ok": True, "to": TASACION_DESTINOS, "subject": subject,
+            "attachments": attach_names, "sender": res.get("desde", sender)}
+
+
+@api.get("/tasacion/log")
+async def tasacion_log():
+    docs = await db.tasacion_log.find({}).sort("enviado_en", -1).limit(20).to_list(20)
+    return {"log": [clean(d) for d in docs]}
+
+
+# ---------------------------------------------------------------------------
 # Envío Aprobación Cliente: felicitaciones con simulación ajustada + carta
 # ---------------------------------------------------------------------------
 APROBACION_DEFAULTS = {

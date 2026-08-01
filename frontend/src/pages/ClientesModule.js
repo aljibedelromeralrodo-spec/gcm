@@ -113,6 +113,7 @@ export default function ClientesModule({ onNavigate }) {
   const [mergingProto, setMergingProto] = useState(null); // folder_id in progress
   const [splittingRel, setSplittingRel] = useState(null); // rel path currently splitting
   const [emailModal, setEmailModal] = useState(null);
+  const [tasacionModal, setTasacionModal] = useState(null); // { folder, archivos, campos... }
   const [missingDocsModal, setMissingDocsModal] = useState(null); // { folder, to, extra, preview, sending }
   const [ufValue, setUfValue] = useState(40842);
   const fileInputRef = useRef(null);
@@ -125,6 +126,51 @@ export default function ClientesModule({ onNavigate }) {
       const r = await axios.get(`${API}/api/clientes/uf-actual`);
       setUfValue(r.data?.valor || 40842);
     } catch { /* keep default */ }
+  };
+
+  const openTasacion = async (f) => {
+    let archivos = [];
+    try {
+      const r = await axios.get(`${API}/api/clientes/folders/${f.id}`);
+      archivos = (r.data.archivos || []).map(a => ({ ...a, sel: false }));
+    } catch (_e) { /* sin archivos */ }
+    setTasacionModal({
+      folder: f, archivos, tipo: "Individual", direccion: "", rol_avaluo: "",
+      valor_uf: "", vendedor: "", contacto_nombre: "", contacto_telefono: "",
+      observaciones: "", preview: null, loading: false, msg: "",
+    });
+  };
+
+  const tasacionPayload = (m, confirm) => ({
+    folder_id: m.folder.id, nombre: m.folder.nombre, rut: m.folder.rut || "",
+    tipo: m.tipo, direccion: m.direccion, rol_avaluo: m.rol_avaluo,
+    valor_uf: m.valor_uf, vendedor: m.vendedor,
+    contacto_nombre: m.contacto_nombre, contacto_telefono: m.contacto_telefono,
+    observaciones: m.observaciones,
+    attach_files: m.archivos.filter(a => a.sel).map(a => a.ruta),
+    confirm,
+  });
+
+  const tasacionPreview = async () => {
+    setTasacionModal(m => ({ ...m, loading: true, msg: "" }));
+    try {
+      const r = await axios.post(`${API}/api/tasacion/enviar`, tasacionPayload(tasacionModal, false));
+      setTasacionModal(m => ({ ...m, preview: r.data, loading: false }));
+    } catch (e) {
+      setTasacionModal(m => ({ ...m, loading: false, msg: "Error: " + (e.response?.data?.detail || e.message) }));
+    }
+  };
+
+  const tasacionEnviar = async () => {
+    if (!window.confirm(`¿Enviar la solicitud de tasación de ${tasacionModal.folder.nombre} a Value Property y Victoria Vilches?`)) return;
+    setTasacionModal(m => ({ ...m, loading: true, msg: "" }));
+    try {
+      const r = await axios.post(`${API}/api/tasacion/enviar`, tasacionPayload(tasacionModal, true));
+      setTasacionModal(m => ({ ...m, loading: false, msg: `✅ Solicitud enviada a ${r.data.to.join(" y ")}` }));
+      loadFolders();
+    } catch (e) {
+      setTasacionModal(m => ({ ...m, loading: false, msg: "Error: " + (e.response?.data?.detail || e.message) }));
+    }
   };
   const refreshUfFromSii = async () => {
     try {
@@ -971,9 +1017,10 @@ export default function ClientesModule({ onNavigate }) {
                       style={modBtn("rgba(59,130,246,0.12)", "#3b82f6", enviadoManual ? "#fff" : "#2563eb")}>
                       <i className="fa fa-pencil-square-o"></i> Firma Set de Crédito
                     </button>
-                    <button data-testid={`btn-tasacion-${f.id}`} title="Solicitud de tasación (próximamente)"
-                      style={{ ...modBtn("rgba(255,255,255,0.05)", "rgba(148,163,184,0.5)", enviadoManual ? "#fff" : "#94a3b8"), opacity: 0.7 }}>
-                      <i className="fa fa-home"></i> Solicitud de Tasación
+                    <button data-testid={`btn-tasacion-${f.id}`} onClick={() => openTasacion(f)}
+                      title={`Solicitar tasación de la propiedad de ${f.nombre} (Value Property + Victoria Vilches)`}
+                      style={modBtn("rgba(234,88,12,0.12)", "#ea580c", enviadoManual ? "#fff" : "#ea580c")}>
+                      <i className="fa fa-home"></i> Solicitud de Tasación{f.tasacion_solicitada_at ? " ✓" : ""}
                     </button>
                     <button data-testid={`btn-estudio-titulo-${f.id}`} title="Solicitud de estudio de título (próximamente)"
                       style={{ ...modBtn("rgba(255,255,255,0.05)", "rgba(148,163,184,0.5)", enviadoManual ? "#fff" : "#94a3b8"), opacity: 0.7 }}>
@@ -1709,6 +1756,101 @@ export default function ClientesModule({ onNavigate }) {
       />
 
       {/* EMAIL MODAL */}
+      {tasacionModal && (() => {
+        const m = tasacionModal;
+        const set = (k, v) => setTasacionModal(prev => ({ ...prev, [k]: v, preview: null }));
+        const inpS = { width: "100%", padding: "0.5rem", borderRadius: 6, border: "1px solid rgba(148,163,184,0.3)", background: "#1e293b", color: "#e2e8f0", fontSize: 13 };
+        const lblS = { fontSize: 12 };
+        return (
+          <div data-testid="tasacion-modal" onClick={() => setTasacionModal(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9998, padding: "3vh 3vw" }}>
+            <div onClick={(e) => e.stopPropagation()} style={{ background: "#0f172a", color: "#e2e8f0", borderRadius: 12, width: "min(760px, 96vw)", maxHeight: "94vh", overflow: "auto", border: "1px solid rgba(148,163,184,0.25)", boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}>
+              <div style={{ padding: "0.9rem 1.1rem", borderBottom: "1px solid rgba(148,163,184,0.2)", display: "flex", alignItems: "center", gap: 10 }}>
+                <i className="fa fa-home" style={{ color: "#fb923c" }} />
+                <h4 style={{ margin: 0, flex: 1 }}>Solicitud de Tasación — {m.folder.nombre}</h4>
+                <button onClick={() => setTasacionModal(null)} data-testid="btn-tasacion-close" style={{ background: "transparent", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 18 }}><i className="fa fa-times" /></button>
+              </div>
+              <div style={{ padding: "1rem 1.1rem", display: "grid", gap: "0.75rem" }}>
+                {m.msg && (
+                  <div data-testid="tasacion-msg" style={{ padding: "0.6rem 0.9rem", borderRadius: 8, background: m.msg.startsWith("✅") ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)", color: m.msg.startsWith("✅") ? "#4ade80" : "#f87171", fontWeight: 600, fontSize: 13 }}>{m.msg}</div>
+                )}
+                <div style={{ background: "rgba(30,41,59,0.7)", borderRadius: 8, padding: "0.7rem 0.9rem", fontSize: 12.5, lineHeight: 1.5 }}>
+                  <div style={{ opacity: 0.7, fontSize: 11, textTransform: "uppercase", marginBottom: 4 }}>Destinatarios <span style={{ color: "#f87171" }}>🔒 fijos</span></div>
+                  <div><b>contacto@valueproperty.cl</b> + <b>victoriavilches@centralmutuos.cl</b></div>
+                  <div style={{ opacity: 0.7, marginTop: 4 }}>Asunto: SOLICITUD TASACION // {m.folder.nombre}{m.folder.rut ? ` Rut: ${m.folder.rut}` : ""}</div>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                  <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Tipo de tasación</b>
+                    <select value={m.tipo} onChange={e => set("tipo", e.target.value)} data-testid="tasacion-tipo" style={inpS}>
+                      <option>Individual</option>
+                      <option>Propiedad usada</option>
+                      <option>Individual (proyecto con tasaciones previas)</option>
+                    </select>
+                  </label>
+                  <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Rol de Avalúo</b>
+                    <input value={m.rol_avaluo} onChange={e => set("rol_avaluo", e.target.value)} placeholder="Ej: 12324-00005" data-testid="tasacion-rol" style={inpS} />
+                  </label>
+                </div>
+                <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Dirección de la propiedad <span style={{ color: "#f87171" }}>*</span></b>
+                  <input value={m.direccion} onChange={e => set("direccion", e.target.value)} placeholder="Ej: ELISA CORREA 527, LOS SAUCES, LA FLORIDA" data-testid="tasacion-direccion" style={inpS} />
+                </label>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                  <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Valor aproximado (UF)</b>
+                    <input value={m.valor_uf} onChange={e => set("valor_uf", e.target.value)} placeholder="Ej: 3.200" data-testid="tasacion-valor" style={inpS} />
+                  </label>
+                  <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Vendedor</b>
+                    <input value={m.vendedor} onChange={e => set("vendedor", e.target.value)} placeholder="Nombre del vendedor" data-testid="tasacion-vendedor" style={inpS} />
+                  </label>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                  <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Contacto para coordinar (nombre)</b>
+                    <input value={m.contacto_nombre} onChange={e => set("contacto_nombre", e.target.value)} placeholder="Quién recibe al tasador" data-testid="tasacion-contacto-nombre" style={inpS} />
+                  </label>
+                  <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Teléfono del contacto</b>
+                    <input value={m.contacto_telefono} onChange={e => set("contacto_telefono", e.target.value)} placeholder="+56 9 …" data-testid="tasacion-contacto-fono" style={inpS} />
+                  </label>
+                </div>
+                <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Observaciones / antecedentes adicionales</b>
+                  <textarea value={m.observaciones} onChange={e => set("observaciones", e.target.value)} rows={2} placeholder="Ej: Se adjunta carta oferta. Ya contamos con tasaciones de este proyecto." data-testid="tasacion-observaciones" style={{ ...inpS, resize: "vertical" }} />
+                </label>
+                {m.archivos.length > 0 && (
+                  <div style={{ background: "rgba(30,41,59,0.7)", borderRadius: 8, padding: "0.7rem 0.9rem" }}>
+                    <div style={{ opacity: 0.7, fontSize: 11, textTransform: "uppercase", marginBottom: 6 }}>Adjuntar documentos de la carpeta (opcional, ej: carta oferta / comprobante de pago)</div>
+                    <div style={{ display: "grid", gap: 4, maxHeight: 140, overflow: "auto" }}>
+                      {m.archivos.map((a, i) => (
+                        <label key={a.ruta} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, cursor: "pointer" }}>
+                          <input type="checkbox" checked={!!a.sel} data-testid={`tasacion-adj-${i}`}
+                            onChange={() => setTasacionModal(prev => ({ ...prev, preview: null, archivos: prev.archivos.map(x => x.ruta === a.ruta ? { ...x, sel: !x.sel } : x) }))} />
+                          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.nombre} <span style={{ opacity: 0.5 }}>{a.subfolder ? `(${a.subfolder})` : ""}</span></span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {m.preview && (
+                  <div style={{ background: "#fff", borderRadius: 8, padding: "0.9rem", maxHeight: 260, overflow: "auto" }}>
+                    <div dangerouslySetInnerHTML={{ __html: m.preview.body }} />
+                    {m.preview.attachments.length > 0 && (
+                      <div style={{ marginTop: 8, fontSize: 12, color: "#334155" }}>📎 Adjuntos: {m.preview.attachments.join(", ")}</div>
+                    )}
+                  </div>
+                )}
+                <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+                  <button onClick={tasacionPreview} disabled={m.loading} data-testid="btn-tasacion-preview"
+                    style={{ padding: "0.55rem 1.1rem", borderRadius: 8, border: "1px solid rgba(148,163,184,0.4)", background: "transparent", color: "#e2e8f0", fontWeight: 700, cursor: "pointer" }}>
+                    <i className={`fa ${m.loading ? "fa-spinner fa-spin" : "fa-eye"}`} /> Ver preview
+                  </button>
+                  <button onClick={tasacionEnviar} disabled={m.loading || !m.direccion.trim()} data-testid="btn-tasacion-enviar"
+                    title={!m.direccion.trim() ? "Falta la dirección de la propiedad" : ""}
+                    style={{ padding: "0.55rem 1.1rem", borderRadius: 8, border: "none", background: "#ea580c", color: "#fff", fontWeight: 800, cursor: "pointer", opacity: (m.loading || !m.direccion.trim()) ? 0.6 : 1 }}>
+                    <i className={`fa ${m.loading ? "fa-spinner fa-spin" : "fa-paper-plane"}`} /> Enviar solicitud
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {emailModal && (() => {
         const f = emailModal.folder;
         const df = f.datos_financieros || {};

@@ -25,6 +25,20 @@ Idioma del usuario: **Español** (responder siempre en español).
 - IMAP/SMTP: en `/app/backend/.env` (MAIL_USER, MAIL2_USER + app passwords)
 
 ## Implementado
+- 2026-08-01 (parte 3) — **Solicitud de Tasación funcional**:
+  - Formulario armado según las solicitudes reales cruzadas con **contacto@valueproperty.cl**
+    (OJO: el usuario dijo "volvetproperty" pero el dominio real en los correos es
+    **valueproperty.cl**). Campos: tipo de tasación, dirección (obligatoria), rol de avalúo,
+    valor aproximado UF (Value lo pide), vendedor, contacto para coordinar (nombre+teléfono),
+    observaciones y adjuntos opcionales desde la carpeta del cliente (carta oferta/comprobante).
+  - Backend: `POST /api/tasacion/enviar` (preview/confirm), `GET /api/tasacion/log`.
+    Destinatarios FIJOS: contacto@valueproperty.cl + victoriavilches@centralmutuos.cl.
+    Asunto: "SOLICITUD TASACION // {nombre} Rut: {rut}". Envía desde gerardo.ext (secundaria).
+    Marca `tasacion_solicitada_at` en la carpeta (el botón muestra ✓).
+  - Frontend: modal `tasacion-modal` en ClientesModule, botón activado en la tarjeta
+    (naranja). Verificado con screenshot: preview OK, validación de dirección OK.
+    NO se envió correo real a Value Property (para no molestar con pruebas).
+
 - 2026-08-01 (esta sesión, parte 2) — **Botones de módulos en la tarjeta del cliente**:
   - Cada tarjeta de Carpeta Clientes ahora tiene una fila de botones (sin abrir la carpeta),
     en orden: Enviar Aprobación Cliente → GASTO OPERACIONAL (grande, dorado) →
