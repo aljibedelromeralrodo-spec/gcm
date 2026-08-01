@@ -25,6 +25,28 @@ Idioma del usuario: **Español** (responder siempre en español).
 - IMAP/SMTP: en `/app/backend/.env` (MAIL_USER, MAIL2_USER + app passwords)
 
 ## Implementado
+- 2026-08-01 (parte 8) — **Automatización 24/7 blindada + Resumen diario + Logo**:
+  - **Ingesta de carpetas 24/7**: `_proc_auto_state` fuerza enabled=True siempre + resetea
+    flag "running" colgado (>30 min). Todos los loops de fondo van dentro de
+    `_task_blindada` (supervisor que loguea el error en db.system_log y reinicia el loop).
+  - **BUG CRÍTICO RESUELTO**: al activar la ingesta 24/7 el backend se CONGELÓ (0% CPU,
+    API muerta) porque `pdfs.convertir_a_pdf` corría síncrono en el event loop →
+    ahora va en `asyncio.to_thread`. Blindaje extra: `socket.setdefaulttimeout(90)` en
+    email_service (ningún IMAP/SMTP puede colgarse indefinidamente). Se requirió
+    `supervisorctl restart backend`.
+  - **Faltantes automáticos AL TIRO**: `_enviar_faltantes_auto` en proc_upload_drive —
+    si tras procesar el correo faltan documentos y hay source_email, envía el correo de
+    faltantes automáticamente (una vez por lista, guarda faltantes_auto_lista + alerta).
+  - **Fecha tasación automática**: `_tasacion_fecha_loop` cada 60 min busca respuestas de
+    Value Property para carpetas con tasación solicitada sin fecha.
+  - **Resumen diario Martín**: GET /api/central/resumen-diario (faltantes, listas para
+    mesa, tasación sin fecha, escritura sin confirmar). CentralChat lo muestra y LO LEE EN
+    VOZ ALTA al abrir el chat la primera vez del día (localStorage martin_resumen_dia).
+  - **Logo sidebar**: "Central Mutuos" Playfair dorado grande + "CON CRECES" espaciado con
+    línea dorada (mismo estilo de los documentos enviados).
+  - Verificado: ingesta creó carpetas nuevas sola (Vanesa, Lilian), resumen OK, saludo con
+    voz OK, logo OK.
+
 - 2026-08-01 (parte 7) — **Criterios mesa + Pedir faltantes + Volver + Voz Martín**:
   - Tarjeta: junto al % de aprobación, cuadro MESA (✅ APROBADA / ❌ RECHAZADA / Sin
     respuesta, cruzado con db.seguimiento por nombre) + contador "criterios N/M". Abajo,

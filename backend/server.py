@@ -80,19 +80,32 @@ async def get_valor_uf():
     return float(doc["valor_uf"]) if doc else DEFAULT_UF
 
 
+async def _task_blindada(coro_fn, nombre):
+    """Supervisor: si un loop de fondo muere, se registra y se reinicia solo."""
+    while True:
+        try:
+            await coro_fn()
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            try:
+                await db.system_log.insert_one({"id": str(uuid.uuid4()), "loop": nombre,
+                                                "error": str(e)[:300], "fecha": now_iso()})
+            except Exception:
+                pass
+        await asyncio.sleep(30)
+
+
 @app.on_event("startup")
 async def startup():
     await ensure_seed()
-    # Procesamiento automatico 24/7 de mesa (rechazos/aprobaciones al tiro)
-    asyncio.create_task(_periodic_mesa_loop())
-    # Procesamiento automatico de correos entrantes (ingesta + OCR + carpetas + alertas)
-    asyncio.create_task(_periodic_proc_loop())
-    # Reporte diario 10:00 AM (hora Chile)
-    asyncio.create_task(_daily_report_loop())
-    # UF siempre actualizada desde SII (cada 6 horas)
-    asyncio.create_task(_uf_auto_loop())
-    # Autocorreo de sets firmados en eCert (cada 10 min)
-    asyncio.create_task(_firmados_auto_loop())
+    # BLINDADO 24/7: cada loop se reinicia solo si falla
+    asyncio.create_task(_task_blindada(_periodic_mesa_loop, "mesa"))
+    asyncio.create_task(_task_blindada(_periodic_proc_loop, "ingesta_carpetas"))
+    asyncio.create_task(_task_blindada(_daily_report_loop, "reporte_diario"))
+    asyncio.create_task(_task_blindada(_uf_auto_loop, "uf"))
+    asyncio.create_task(_task_blindada(_firmados_auto_loop, "autocorreo_firmados"))
+    asyncio.create_task(_task_blindada(_tasacion_fecha_loop, "fecha_tasacion"))
 
 
 # ---------------------------------------------------------------------------
@@ -700,6 +713,31 @@ async def central_tts(payload: dict):
         return {"audio": audio_b64}
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"TTS no disponible: {str(e)[:100]}")
+
+
+@api.get("/central/resumen-diario")
+async def central_resumen_diario():
+    folders = await db.folders.find({}).sort("created_at", -1).limit(100).to_list(100)
+    acciones = []
+    for f in folders:
+        nombre = f.get("nombre", "")
+        faltan = [c["nombre"] for c in _criterios_folder(f)
+                  if not c["ok"] and c["nombre"] not in ("Enviada a mesa", "Datos financieros completos")]
+        if faltan:
+            acciones.append(f"📄 {nombre}: faltan {', '.join(faltan)}")
+        elif not f.get("emails_sent_count"):
+            acciones.append(f"📤 {nombre}: carpeta completa, lista para enviar a mesa")
+        if f.get("tasacion_solicitada_at") and not f.get("tasacion_fecha"):
+            acciones.append(f"📐 {nombre}: tasación solicitada, aún sin fecha de Value Property")
+        if f.get("escritura_solicitada_at") and not f.get("escritura_confirmada_at"):
+            acciones.append(f"🖊 {nombre}: aviso de firma enviado, el cliente aún no confirma")
+    hoy = datetime.now(_tz_chile()).strftime("%d-%m-%Y")
+    if acciones:
+        texto = (f"¡Buenos días! Soy Martín ☀️ Resumen de hoy {hoy}:\n\n" + "\n".join(acciones[:12])
+                 + ("\n\n…y más carpetas en la lista." if len(acciones) > 12 else ""))
+    else:
+        texto = f"¡Buenos días! Soy Martín ☀️ Hoy {hoy} no hay carpetas que necesiten acción. Todo al día 💪"
+    return {"resumen": texto, "acciones": len(acciones)}
 
 
 # ---------------------------------------------------------------------------
@@ -2182,7 +2220,7 @@ async def proc_ingest(max_emails: int = 20, dias: int = 0):
             raw = pdf["content_bytes"]
             nombre = pdf["filename"]
             try:
-                raw, nombre, conv = pdfs.convertir_a_pdf(raw, nombre)
+                raw, nombre, conv = await asyncio.to_thread(pdfs.convertir_a_pdf, raw, nombre)
                 if conv:
                     convertidos.append(nombre)
             except Exception:
@@ -2633,9 +2671,46 @@ async def proc_upload_drive(qid: str):
     await db.proc_queue.update_one({"id": qid}, {"$set": {
         "drive_folder_id": _safe_name(cliente), "status": "clasificado",
         "checklist_completo": completo, "faltantes": faltantes}})
+    # AL TIRO: si faltan documentos, se piden automáticamente al remitente de la solicitud
+    if not completo:
+        asyncio.create_task(_enviar_faltantes_auto(cliente))
     return {"folder_name": _safe_name(cliente), "uploaded": uploaded,
             "skipped_duplicates": [], "dropped_originals": [],
             "checklist_completo": completo, "faltantes": faltantes, "tipo_cliente": tipo_cliente}
+
+
+async def _enviar_faltantes_auto(cliente):
+    """Envía AL TIRO el correo de documentos faltantes al remitente de la solicitud (una vez por lista)."""
+    doc = await db.folders.find_one({"nombre": cliente})
+    if not doc or not doc.get("source_email"):
+        return
+    faltan = [c["nombre"] for c in _criterios_folder(doc)
+              if not c["ok"] and c["nombre"] not in ("Enviada a mesa", "Datos financieros completos")]
+    if not faltan:
+        return
+    lista_key = "|".join(sorted(faltan))
+    if doc.get("faltantes_auto_lista") == lista_key:
+        return  # ya se pidió esta misma lista
+    nombre = doc.get("nombre", "")
+    subject = f"Documentos faltantes — Solicitud de crédito {nombre}"
+    lis = "".join(f'<li style="margin:4px 0">{f}</li>' for f in faltan)
+    cuerpo = f"""
+    <div style="font-family:Arial,sans-serif;font-size:14px;color:#222;max-width:620px">
+      <p>Estimados, junto con saludar:</p>
+      <p>Hemos recibido la solicitud de crédito de <b>{nombre}</b>{f" (RUT {doc.get('rut')})" if doc.get('rut') else ""}.
+      Para continuar con la evaluación necesitamos que nos hagan llegar los siguientes documentos faltantes:</p>
+      <ol style="margin:6px 0 0;padding-left:22px;color:#111">{lis}</ol>
+      <p style="margin-top:14px">Quedamos atentos. Muchas gracias.</p>
+      <p style="margin-top:16px;color:#555">Saludos cordiales,<br/><b>Central Mutuos — Con Creces</b></p>
+    </div>"""
+    res = await asyncio.to_thread(mail.send_mail, doc["source_email"], subject, cuerpo, [], "secundaria")
+    if res.get("success"):
+        await db.folders.update_one({"id": doc["id"]}, {"$set": {
+            "faltantes_auto_lista": lista_key, "faltantes_pedidos_at": now_iso()}})
+        await db.alertas.insert_one({"id": str(uuid.uuid4()), "tipo": "faltantes_auto",
+                                     "cliente": nombre, "folder_id": doc["id"],
+                                     "mensaje": f"Se pidieron automáticamente los faltantes de {nombre}: {', '.join(faltan)}",
+                                     "fecha": now_iso(), "leida": False})
 
 
 @api.post("/procesamiento/drive/purge-all")
@@ -2657,9 +2732,24 @@ async def proc_purge():
 async def _proc_auto_state():
     st = await db.config.find_one({"_key": "proc_auto"})
     if not st:
-        st = {"_key": "proc_auto", "enabled": False, "interval_min": 10,
+        st = {"_key": "proc_auto", "enabled": True, "interval_min": 10,
               "last_run": None, "running": False, "last_result": {}}
         await db.config.insert_one(dict(st))
+    # BLINDAJE 24/7: la creación de carpetas SIEMPRE está activa
+    if not st.get("enabled"):
+        st["enabled"] = True
+        await db.config.update_one({"_key": "proc_auto"}, {"$set": {"enabled": True}})
+    # Si quedó marcado "running" hace más de 30 min, se resetea (proceso colgado)
+    if st.get("running") and st.get("last_run"):
+        try:
+            dt = datetime.fromisoformat(st["last_run"])
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            if datetime.now(timezone.utc) - dt > timedelta(minutes=30):
+                st["running"] = False
+                await db.config.update_one({"_key": "proc_auto"}, {"$set": {"running": False}})
+        except Exception:
+            pass
     st.pop("_id", None)
     st.pop("_key", None)
     return st
@@ -3384,6 +3474,24 @@ async def tasacion_detectar_fecha(fid: str):
                                                        "tasacion_fecha_origen": "auto",
                                                        "tasacion_fecha_detectada_en": now_iso()}})
     return {"ok": True, "fecha": fecha}
+
+
+async def _tasacion_fecha_loop():
+    """Cada 60 min: detecta automáticamente la fecha de tasación en las respuestas de Value Property."""
+    while True:
+        await asyncio.sleep(3600)
+        docs = await db.folders.find({"tasacion_solicitada_at": {"$exists": True, "$ne": None},
+                                      "$or": [{"tasacion_fecha": {"$exists": False}},
+                                              {"tasacion_fecha": ""}]}).limit(10).to_list(10)
+        for d in docs:
+            try:
+                fecha = await asyncio.to_thread(_buscar_fecha_tasacion_imap, d.get("nombre", ""))
+                if fecha:
+                    await db.folders.update_one({"id": d["id"]}, {"$set": {
+                        "tasacion_fecha": fecha, "tasacion_fecha_origen": "auto",
+                        "tasacion_fecha_detectada_en": now_iso()}})
+            except Exception:
+                continue
 
 
 # ---------------------------------------------------------------------------

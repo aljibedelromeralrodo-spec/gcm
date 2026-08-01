@@ -8,6 +8,8 @@ Funciones sincronas; llamar via asyncio.to_thread desde FastAPI.
 Incluye cache simple con TTL para no reconectar en cada request.
 """
 import imaplib
+import socket
+socket.setdefaulttimeout(90)  # blindaje: ningún socket IMAP/SMTP puede colgarse indefinidamente
 import smtplib
 import ssl
 import os

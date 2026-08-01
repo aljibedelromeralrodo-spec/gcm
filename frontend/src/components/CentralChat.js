@@ -104,13 +104,18 @@ export default function CentralChat({ userName, activeModule }) {
   useEffect(() => {
     if (open && !greeted && msgs.length === 0) {
       setGreeted(true);
-      axios.get(`${API}/api/central/proactive`).then(r => {
-        if (r.data?.message) {
-          const greetMsg = { role: "assistant", text: r.data.message, time: new Date() };
+      const hoy = new Date().toISOString().slice(0, 10);
+      const yaResumen = localStorage.getItem("martin_resumen_dia") === hoy;
+      const url = yaResumen ? `${API}/api/central/proactive` : `${API}/api/central/resumen-diario`;
+      axios.get(url).then(r => {
+        const texto = r.data?.resumen || r.data?.message;
+        if (texto) {
+          if (!yaResumen) localStorage.setItem("martin_resumen_dia", hoy);
+          const greetMsg = { role: "assistant", text: texto, time: new Date() };
           setMsgs([greetMsg]);
           if (autoVoice) {
             setSpeaking(true);
-            speakText(r.data.message, () => setSpeaking(false));
+            speakText(texto, () => setSpeaking(false));
           }
         }
       }).catch(() => {});

@@ -43,8 +43,9 @@ body { font-family: 'Inter', sans-serif; background: var(--bg-dark); color: var(
 /* Sidebar */
 .sidebar { width: 280px; background: var(--bg-sidebar); border-right: 1px solid var(--border); display: flex; flex-direction: column; position: fixed; top: 0; bottom: 0; left: 0; z-index: 100; }
 .sidebar-brand { padding: 1rem 1.5rem; border-bottom: 2px solid var(--border-gold); }
-.sidebar-title { font-family: 'Playfair Display', serif; font-size: 1.3rem; color: var(--gold); letter-spacing: 1px; }
-.sidebar-sub { font-size: 0.85rem; color: var(--text-muted); letter-spacing: 2px; text-transform: uppercase; margin-top: 0.3rem; }
+.sidebar-title { font-family: 'Playfair Display', serif; font-size: 1.55rem; font-weight: 800; color: var(--gold); letter-spacing: 1.5px; line-height: 1.1; text-shadow: 0 1px 8px rgba(212,175,55,0.25); }
+.sidebar-sub { font-family: 'Playfair Display', serif; font-size: 0.9rem; color: var(--gold); letter-spacing: 4px; text-transform: uppercase; margin-top: 0.35rem; opacity: 0.85; position: relative; padding-top: 0.35rem; }
+.sidebar-sub::before { content: ""; position: absolute; top: 0; left: 0; width: 44px; height: 1.5px; background: linear-gradient(90deg, var(--gold), transparent); }
 .sidebar-nav { flex: 1; padding: 0.75rem 0.75rem; display: flex; flex-direction: column; gap: 0.15rem; overflow-y: auto; min-height: 0; }
 .sidebar-item { display: flex; align-items: center; gap: 0.85rem; padding: 0.45rem 1.1rem; border-radius: 12px; border: none; background: transparent; color: var(--text-secondary); font-size: 0.88rem; font-weight: 500; cursor: pointer; transition: all 0.2s; text-align: left; width: 100%; }
 .sidebar-item:hover { background: rgba(212,175,55,0.08); color: var(--gold-light); }
