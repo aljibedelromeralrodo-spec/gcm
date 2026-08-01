@@ -3322,6 +3322,19 @@ async def _detectar_pagos_tasacion():
                     "cliente": c.get("cliente") or c.get("from_email", ""),
                     "mensaje": f"💰 Voucher de pago de tasación detectado — {c.get('cliente') or c.get('from_email','')} marcada como PAGADA automáticamente.",
                     "fecha": now_iso(), "leida": False})
+                quien = c.get("cliente") or c.get("from_email", "")
+                aviso = _marca_wrap(f"""
+                  <p>Le informamos que <b>llegó el pago de la tasación</b> (voucher/comprobante detectado
+                  en el correo) correspondiente a:</p>
+                  <div style="background:#f8f9fc;border:1px solid #eceef3;border-radius:8px;padding:14px 20px;margin:8px 0">
+                    <div style="color:#1a1f2e;font-size:15px"><b>{quien}</b></div>
+                    <div style="color:#6b7280;font-size:13px;margin-top:4px">Solicitante: {c.get('from_email','')}
+                    · Monto: {_num_uf(c.get('monto_uf', TASACION_COBRO_UF))} UF{f" ≈ {c.get('monto_clp')}" if c.get('monto_clp') else ""}</div>
+                  </div>
+                  <p>El cobro quedó marcado automáticamente como <b>TASACIÓN PAGADA</b> en el sistema.</p>""",
+                  "Pago de Tasación Recibido")
+                await asyncio.to_thread(mail.send_mail, _sender_por_rol("principal"),
+                                        f"💰 Tasación pagada — {quien}", aviso, [], "secundaria")
             await db.tasacion_cobros.update_one({"id": c["id"]}, {"$set": upd})
         except Exception as e:
             logging.warning(f"detectar pago tasacion: {e}")
@@ -3357,22 +3370,21 @@ async def cobros_tasacion_list():
 
 
 async def _faltantes_recordatorio_loop():
-    """Cada hora: si a los 3 días de pedir documentos faltantes siguen faltando,
-    envía UN recordatorio al mismo destinatario."""
+    """Cada hora: mientras sigan faltando documentos, reenvía el recordatorio
+    CADA 3 días al mismo destinatario (vendedor/solicitante)."""
     while True:
         await asyncio.sleep(3600)
         docs = await db.folders.find({"faltantes_pedidos_at": {"$exists": True, "$ne": None},
-                                      "faltantes_recordatorio_at": {"$exists": False},
                                       "source_email": {"$exists": True, "$nin": [None, ""]}}
-                                     ).limit(20).to_list(20)
+                                     ).limit(30).to_list(30)
         for d in docs:
             try:
-                if _dias_desde(d["faltantes_pedidos_at"]) < 3:
+                ultimo = d.get("faltantes_recordatorio_at") or d["faltantes_pedidos_at"]
+                if _dias_desde(ultimo) < 3:
                     continue
                 faltan = [c["nombre"] for c in _criterios_folder(d)
                           if not c["ok"] and c["nombre"] not in ("Enviada a mesa", "Datos financieros completos")]
                 if not faltan:
-                    await db.folders.update_one({"id": d["id"]}, {"$set": {"faltantes_recordatorio_at": now_iso()}})
                     continue
                 nombre = d.get("nombre", "")
                 lis = "".join(f'<li style="margin:4px 0">{f}</li>' for f in faltan)

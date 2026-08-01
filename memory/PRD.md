@@ -545,3 +545,14 @@ requieren re-deploy para llegar a producción.
   ejemplo (luego eliminados).
 - LECCIÓN: algunos search_replace reportan éxito pero no persisten (3 casos en esta
   sesión). SIEMPRE re-grep después de editar archivos frontend grandes.
+
+## Ajustes reglas de envío (Jun 2026)
+- REGLA INVIOLABLE ampliada: gastos operacionales Y cobro de tasación se envían SOLO al
+  cliente/solicitante, SIN COPIA A NADIE JAMÁS, y el gasto operacional es SIEMPRE manual
+  (verificado: gastos_enviar no lleva CC y solo se dispara por botón).
+- Recordatorio de documentos faltantes ahora es RECURRENTE: se reenvía CADA 3 días
+  mientras sigan faltando documentos (faltantes_recordatorio_at = último envío).
+- Al detectar pago de tasación automáticamente, además de marcar el botón "Tasación
+  pagada" y la alerta, se envía CORREO DE AVISO al administrador (cuenta principal)
+  con cliente, solicitante y monto.
+- Prueba eCert en vivo: usuario confirmó que la hará después (sin firmas prepagadas aún).
