@@ -962,7 +962,8 @@ async def folder_pedir_faltantes(fid: str, payload: dict):
         raise HTTPException(status_code=502, detail=res.get("error", "Error de envío"))
     await db.folders.update_one({"id": fid}, {"$set": {"faltantes_pedidos_at": now_iso(),
                                                        "source_email": destinatario},
-                                              "$unset": {"faltantes_recordatorio_at": ""}})
+                                              "$unset": {"faltantes_recordatorio_at": "",
+                                                         "faltantes_recordatorio_count": ""}})
     return {"ok": True, "to": destinatario, "faltantes": faltantes}
 
 
@@ -2717,7 +2718,7 @@ async def _enviar_faltantes_auto(cliente):
     if res.get("success"):
         await db.folders.update_one({"id": doc["id"]}, {"$set": {
             "faltantes_auto_lista": lista_key, "faltantes_pedidos_at": now_iso()},
-            "$unset": {"faltantes_recordatorio_at": ""}})
+            "$unset": {"faltantes_recordatorio_at": "", "faltantes_recordatorio_count": ""}})
         await db.alertas.insert_one({"id": str(uuid.uuid4()), "tipo": "faltantes_auto",
                                      "cliente": nombre, "folder_id": doc["id"],
                                      "mensaje": f"Se pidieron automáticamente los faltantes de {nombre}: {', '.join(faltan)}",
@@ -3379,6 +3380,8 @@ async def _faltantes_recordatorio_loop():
                                      ).limit(30).to_list(30)
         for d in docs:
             try:
+                if int(d.get("faltantes_recordatorio_count") or 0) >= 2:
+                    continue
                 ultimo = d.get("faltantes_recordatorio_at") or d["faltantes_pedidos_at"]
                 if _dias_desde(ultimo) < 3:
                     continue
@@ -3402,12 +3405,27 @@ async def _faltantes_recordatorio_loop():
                                               f"Recordatorio: Documentos faltantes — {nombre}",
                                               cuerpo, [], "secundaria")
                 if res.get("success"):
-                    await db.folders.update_one({"id": d["id"]}, {"$set": {"faltantes_recordatorio_at": now_iso()}})
+                    n = int(d.get("faltantes_recordatorio_count") or 0) + 1
+                    await db.folders.update_one({"id": d["id"]}, {"$set": {
+                        "faltantes_recordatorio_at": now_iso(),
+                        "faltantes_recordatorio_count": n}})
                     await db.alertas.insert_one({
                         "id": str(uuid.uuid4()), "tipo": "faltantes_recordatorio",
                         "cliente": nombre, "folder_id": d["id"],
-                        "mensaje": f"⏰ Recordatorio de documentos faltantes enviado (3 días) — {nombre}: {', '.join(faltan)}",
+                        "mensaje": f"⏰ Recordatorio {n}/2 de documentos faltantes enviado — {nombre}: {', '.join(faltan)}",
                         "fecha": now_iso(), "leida": False})
+                    if n >= 2:
+                        aviso = _marca_wrap(f"""
+                          <p>Ya se enviaron <b>2 recordatorios</b> de documentos faltantes para la solicitud de
+                          crédito de <b>{nombre}</b>{f" (RUT {d.get('rut')})" if d.get('rut') else ""} sin respuesta.</p>
+                          <p>Documentos que siguen faltando:</p>
+                          <ol style="margin:6px 0 0;padding-left:22px;color:#111">{lis}</ol>
+                          <p style="margin-top:14px">No se enviarán más recordatorios automáticos.
+                          Se sugiere contactar directamente al solicitante: <b>{d.get('source_email','')}</b>.</p>""",
+                          "Tope de Recordatorios — Requiere Gestión Directa")
+                        await asyncio.to_thread(mail.send_mail, _sender_por_rol("principal"),
+                                                f"⚠️ Sin respuesta tras 2 recordatorios — {nombre}",
+                                                aviso, [], "secundaria")
             except Exception as e:
                 logging.warning(f"recordatorio faltantes {d.get('nombre','')}: {e}")
                 continue

@@ -556,3 +556,9 @@ requieren re-deploy para llegar a producción.
   pagada" y la alerta, se envía CORREO DE AVISO al administrador (cuenta principal)
   con cliente, solicitante y monto.
 - Prueba eCert en vivo: usuario confirmó que la hará después (sin firmas prepagadas aún).
+
+## Tope de recordatorios (Jun 2026)
+- Recordatorios de documentos faltantes: MÁXIMO 2 (cada 3 días). Al llegar al 2°,
+  correo de aviso al administrador ("requiere gestión directa") y se detienen.
+- Contador faltantes_recordatorio_count se resetea al volver a pedir faltantes
+  (manual y automático). Alertas muestran "Recordatorio n/2".
