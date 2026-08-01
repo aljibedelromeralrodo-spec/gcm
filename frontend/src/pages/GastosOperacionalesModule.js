@@ -8,7 +8,7 @@ const inp = { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,
 const btn = (bg, small) => ({ background: bg, color: bg === "var(--gold)" ? "#0a0e17" : "#fff", border: "none", borderRadius: "8px", padding: small ? "0.4rem 0.8rem" : "0.6rem 1.2rem", fontWeight: 700, cursor: "pointer", fontSize: small ? "0.8rem" : "0.9rem" });
 const lbl = { display: "block", fontSize: "0.75rem", opacity: 0.6, marginBottom: "0.3rem", textTransform: "uppercase", letterSpacing: "0.5px" };
 
-export default function GastosOperacionalesModule() {
+export default function GastosOperacionalesModule({ onNavigate }) {
   const [q, setQ] = useState("");
   const [resultados, setResultados] = useState([]);
   const [nombre, setNombre] = useState("");
@@ -110,6 +110,11 @@ export default function GastosOperacionalesModule() {
 
   return (
     <div style={{ padding: "1.5rem", color: "var(--white)", maxWidth: "1000px" }} data-testid="gastos-module">
+      {onNavigate && (
+        <button data-testid="gastos-volver" onClick={() => onNavigate("clientes")} style={{ marginBottom: "1rem", background: "transparent", border: "1px solid rgba(212,175,55,0.5)", color: "var(--gold)", borderRadius: 8, padding: "0.45rem 1rem", fontWeight: 700, cursor: "pointer" }}>
+          <i className="fa fa-arrow-left" /> Volver a Carpeta Clientes
+        </button>
+      )}
       {msg && <div data-testid="gastos-msg" style={{ padding: "0.7rem 1rem", borderRadius: "8px", marginBottom: "1rem", background: msg.startsWith("✅") ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)", color: msg.startsWith("✅") ? "#22c55e" : "#ef4444", fontWeight: 600 }}>{msg}</div>}
 
       {/* BUSCADOR */}

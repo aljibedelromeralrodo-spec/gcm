@@ -215,9 +215,9 @@ function MainApp() {
         {activeModule === 'whatsapp' && <WhatsAppModule />}
         {activeModule === 'autocorreo' && <AutocorreoModule />}
         {activeModule === 'procesamiento' && <EmailProcessingModule />}
-        {activeModule === 'gastos' && <GastosOperacionalesModule />}
-        {activeModule === 'aprobacion' && <AprobacionClienteModule />}
-        {activeModule === 'setcredito' && <SetCreditoModule />}
+        {activeModule === 'gastos' && <GastosOperacionalesModule onNavigate={setActiveModule} />}
+        {activeModule === 'aprobacion' && <AprobacionClienteModule onNavigate={setActiveModule} />}
+        {activeModule === 'setcredito' && <SetCreditoModule onNavigate={setActiveModule} />}
         </Suspense>
       </main>
     </div>

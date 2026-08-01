@@ -689,8 +689,17 @@ async def central_chat_files():
 
 
 @api.post("/central/tts")
-async def central_tts():
-    raise HTTPException(status_code=503, detail="TTS no disponible")
+async def central_tts(payload: dict):
+    text = ((payload or {}).get("text") or "").strip()[:4000]
+    if not text:
+        raise HTTPException(status_code=400, detail="Sin texto")
+    try:
+        from emergentintegrations.llm.openai import OpenAITextToSpeech
+        tts = OpenAITextToSpeech(api_key=os.environ.get("EMERGENT_LLM_KEY", ""))
+        audio_b64 = await tts.generate_speech_base64(text=text, model="tts-1", voice="onyx")
+        return {"audio": audio_b64}
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"TTS no disponible: {str(e)[:100]}")
 
 
 # ---------------------------------------------------------------------------
@@ -800,6 +809,43 @@ def _folder_public(doc, con_archivos=False):
     return d
 
 
+async def _mesa_respuesta_folder(d):
+    """Busca la respuesta de mesa (aprobación/rechazo) para esta carpeta en seguimiento."""
+    toks = [t for t in _norm_texto(d.get("nombre", "")).split() if len(t) > 2]
+    if not toks:
+        return None
+    segs = await db.seguimiento.find({}).sort("fecha", -1).limit(200).to_list(200)
+    for s in segs:
+        texto = _norm_texto(f"{s.get('cliente','')} {s.get('asunto','')}")
+        hits = sum(1 for t in toks if t in texto)
+        if hits >= min(2, len(toks)):
+            est = (s.get("estado") or "").lower()
+            if est.startswith("aprob"):
+                return "aprobada"
+            if est.startswith("rech"):
+                return "rechazada"
+    return None
+
+
+def _criterios_folder(d):
+    archivos = fsvc.scan_archivos(d.get("nombre", ""))
+    cats = {fsvc.cat_de_archivo(a["nombre"], a["subfolder"]) for a in archivos} - {"combinado", "codeudor"}
+    cr = d.get("credit_request") or {}
+    tipo_cliente = cr.get("client_type") or "dependiente"
+    df = d.get("datos_financieros") or {}
+    if tipo_cliente == "independiente":
+        docs_req = [("Cédula de identidad", "cedula"), ("Impuesto a la renta", "imp_renta"),
+                    ("Boletas de honorarios", "boletas"), ("Informe CMF", "cmf")]
+    else:
+        docs_req = [("Cédula de identidad", "cedula"), ("Liquidaciones de sueldo", "liquidacion"),
+                    ("Cotizaciones AFP", "afp"), ("Informe CMF", "cmf")]
+    criterios = [{"nombre": lbl, "ok": cat in cats} for lbl, cat in docs_req]
+    criterios.append({"nombre": "Datos financieros completos",
+                      "ok": bool(df.get("valor_propiedad") and df.get("monto_credito"))})
+    criterios.append({"nombre": "Enviada a mesa", "ok": bool(d.get("emails_sent_count"))})
+    return criterios
+
+
 @api.get("/clientes/folders")
 async def list_folders(q: str = ""):
     query = {"nombre": {"$regex": q, "$options": "i"}} if q else {}
@@ -809,6 +855,8 @@ async def list_folders(q: str = ""):
     for d in docs:
         f = _folder_public(d)
         f["prob_aprobacion"] = _prob_aprobacion_folder(d, stats)
+        f["criterios"] = _criterios_folder(d)
+        f["mesa_respuesta"] = await _mesa_respuesta_folder(d)
         out.append(f)
     return {"folders": out}
 
@@ -836,7 +884,46 @@ async def get_folder(fid: str):
         raise HTTPException(status_code=404, detail="Carpeta no encontrada")
     res = _folder_public(doc, con_archivos=True)
     res["prob_aprobacion"] = _prob_aprobacion_folder(doc, await _stats_mesa())
+    res["criterios"] = _criterios_folder(doc)
     return res
+
+
+@api.post("/clientes/folders/{fid}/pedir-faltantes")
+async def folder_pedir_faltantes(fid: str, payload: dict):
+    payload = payload or {}
+    doc = await db.folders.find_one({"id": fid})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Carpeta no encontrada")
+    destinatario = (payload.get("destinatario") or doc.get("source_email") or "").strip()
+    faltantes = [f for f in (payload.get("faltantes") or []) if str(f).strip()]
+    if not faltantes:
+        faltantes = [c["nombre"] for c in _criterios_folder(doc)
+                     if not c["ok"] and c["nombre"] not in ("Enviada a mesa", "Datos financieros completos")]
+    nombre = doc.get("nombre", "")
+    subject = f"Documentos faltantes — Solicitud de crédito {nombre}"
+    lis = "".join(f'<li style="margin:4px 0">{f}</li>' for f in faltantes)
+    extra = (payload.get("mensaje") or "").strip()
+    cuerpo = f"""
+    <div style="font-family:Arial,sans-serif;font-size:14px;color:#222;max-width:620px">
+      <p>Estimados, junto con saludar:</p>
+      <p>En relación a la solicitud de crédito de <b>{nombre}</b>{f" (RUT {doc.get('rut')})" if doc.get('rut') else ""},
+      para continuar con la evaluación necesitamos que nos hagan llegar los siguientes documentos faltantes:</p>
+      <ol style="margin:6px 0 0;padding-left:22px;color:#111">{lis}</ol>
+      {f'<p style="margin-top:12px">{extra}</p>' if extra else ''}
+      <p style="margin-top:14px">Quedamos atentos. Muchas gracias.</p>
+      <p style="margin-top:16px;color:#555">Saludos cordiales,<br/><b>Central Mutuos — Con Creces</b></p>
+    </div>"""
+    if not payload.get("confirm"):
+        return {"to": destinatario, "subject": subject, "body": cuerpo, "faltantes": faltantes,
+                "sender": _sender_por_rol("secundaria")}
+    if not destinatario or "@" not in destinatario:
+        raise HTTPException(status_code=400, detail="No hay correo del remitente de la solicitud (destinatario)")
+    res = await asyncio.to_thread(mail.send_mail, destinatario, subject, cuerpo, [], "secundaria")
+    if not res.get("success"):
+        raise HTTPException(status_code=502, detail=res.get("error", "Error de envío"))
+    await db.folders.update_one({"id": fid}, {"$set": {"faltantes_pedidos_at": now_iso(),
+                                                       "source_email": destinatario}})
+    return {"ok": True, "to": destinatario, "faltantes": faltantes}
 
 
 @api.delete("/clientes/folders/{fid}")

@@ -187,6 +187,7 @@ export default function ClientesModule({ onNavigate }) {
   const [estudioModal, setEstudioModal] = useState(null); // estudio de título
   const [escrituraModal, setEscrituraModal] = useState(null); // firma de escritura
   const [notarias, setNotarias] = useState([]);
+  const [pedirModal, setPedirModal] = useState(null); // pedir documentos faltantes
   const [missingDocsModal, setMissingDocsModal] = useState(null); // { folder, to, extra, preview, sending }
   const [ufValue, setUfValue] = useState(40842);
   const fileInputRef = useRef(null);
@@ -241,7 +242,7 @@ export default function ClientesModule({ onNavigate }) {
       const r = await axios.post(`${API}/api/clientes/folders/${m.folder.id}/upload-file`, fd);
       const ruta = r.data.saved || `99_otros/${file.name}`;
       setTasacionModal(prev => ({
-        ...prev, preview: null, voucher_nombre: file.name,
+        ...prev, preview: null, voucher_nombre: file.name, voucher_ruta: ruta,
         archivos: [{ nombre: file.name, ruta, subfolder: "99_otros", sel: true },
                    ...prev.archivos.filter(a => a.ruta !== ruta)],
       }));
@@ -289,6 +290,39 @@ export default function ClientesModule({ onNavigate }) {
       const b = await axios.get(`${API}/api/brokers`);
       setBrokers(b.data.brokers || []);
     } catch (_e) { /* noop */ }
+  };
+
+  const openPedirFaltantes = (f) => {
+    const faltan = (f.criterios || []).filter(c => !c.ok && !["Enviada a mesa", "Datos financieros completos"].includes(c.nombre)).map(c => c.nombre);
+    setPedirModal({ folder: f, destinatario: f.source_email || "", faltantes: faltan.join("\n"), mensaje: "", preview: null, loading: false, msg: "" });
+  };
+
+  const pedirPayload = (m, confirm) => ({
+    destinatario: m.destinatario,
+    faltantes: m.faltantes.split("\n").map(s => s.trim()).filter(Boolean),
+    mensaje: m.mensaje, confirm,
+  });
+
+  const pedirPreview = async () => {
+    setPedirModal(m => ({ ...m, loading: true, msg: "" }));
+    try {
+      const r = await axios.post(`${API}/api/clientes/folders/${pedirModal.folder.id}/pedir-faltantes`, pedirPayload(pedirModal, false));
+      setPedirModal(m => ({ ...m, preview: r.data, loading: false }));
+    } catch (e) {
+      setPedirModal(m => ({ ...m, loading: false, msg: "Error: " + (e.response?.data?.detail || e.message) }));
+    }
+  };
+
+  const pedirEnviar = async () => {
+    if (!window.confirm(`¿Pedir los documentos faltantes de ${pedirModal.folder.nombre} a ${pedirModal.destinatario}?`)) return;
+    setPedirModal(m => ({ ...m, loading: true, msg: "" }));
+    try {
+      const r = await axios.post(`${API}/api/clientes/folders/${pedirModal.folder.id}/pedir-faltantes`, pedirPayload(pedirModal, true));
+      setPedirModal(m => ({ ...m, loading: false, msg: `✅ Correo enviado a ${r.data.to}` }));
+      loadFolders();
+    } catch (e) {
+      setPedirModal(m => ({ ...m, loading: false, msg: "Error: " + (e.response?.data?.detail || e.message) }));
+    }
   };
 
   const tasacionPayload = (m, confirm) => ({
@@ -1254,17 +1288,60 @@ export default function ClientesModule({ onNavigate }) {
                         ))}
                       </div>
                     )}
+                    {(f.criterios || []).length > 0 && (
+                      <div data-testid={`criterios-list-${f.id}`} style={{ display: "flex", gap: 4, marginTop: 5, flexWrap: "wrap", alignItems: "center" }}>
+                        {f.criterios.map(c => (
+                          <span key={c.nombre} title={c.nombre} style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 10,
+                            background: enviadoManual ? "rgba(255,255,255,0.2)" : (c.ok ? "rgba(34,197,94,0.12)" : "rgba(148,163,184,0.12)"),
+                            color: enviadoManual ? "#fff" : (c.ok ? "#16a34a" : "#94a3b8"),
+                            border: `1px solid ${c.ok ? "rgba(34,197,94,0.4)" : "rgba(148,163,184,0.3)"}` }}>
+                            {c.ok ? "✓" : "✗"} {c.nombre}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <div style={{ display: "flex", gap: 8, marginTop: 5, alignItems: "center", flexWrap: "wrap" }}>
+                      {f.source_email && (
+                        <span data-testid={`recibido-de-${f.id}`} style={{ fontSize: 10.5, opacity: 0.75, color: enviadoManual ? "#fff" : undefined }}>
+                          📥 Solicitud recibida de: <b>{f.source_email}</b>
+                        </span>
+                      )}
+                      {missing.length > 0 && f.source_email && (
+                        <button data-testid={`btn-pedir-faltantes-${f.id}`} onClick={() => openPedirFaltantes(f)}
+                          style={{ fontSize: 10.5, fontWeight: 800, padding: "3px 10px", borderRadius: 10, cursor: "pointer",
+                            background: "rgba(220,38,38,0.12)", color: enviadoManual ? "#fff" : "#dc2626", border: "1.5px solid rgba(220,38,38,0.5)" }}>
+                          📩 Pedir faltantes al remitente{f.faltantes_pedidos_at ? " ✓" : ""}
+                        </button>
+                      )}
+                    </div>
+
                   </div>
                   {f.prob_aprobacion && f.prob_aprobacion.porcentaje != null && (
-                    <div data-testid={`prob-aprobacion-${f.id}`}
-                      title={`Posibilidades de aprobación\n${(f.prob_aprobacion.factores || []).join("\n")}`}
-                      style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minWidth: 88, padding: "6px 10px", borderRadius: 12, flexShrink: 0,
-                        background: enviadoManual ? "rgba(255,255,255,0.15)" : (f.prob_aprobacion.porcentaje >= 75 ? "rgba(34,197,94,0.12)" : f.prob_aprobacion.porcentaje >= 50 ? "rgba(250,204,21,0.18)" : "rgba(220,38,38,0.12)") }}>
-                      <span style={{ fontSize: 36, fontWeight: 900, lineHeight: 1,
-                        color: enviadoManual ? "#fff" : (f.prob_aprobacion.porcentaje >= 75 ? "#16a34a" : f.prob_aprobacion.porcentaje >= 50 ? "#a16207" : "#dc2626") }}>
-                        {f.prob_aprobacion.porcentaje}%
-                      </span>
-                      <span style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, opacity: 0.85, color: enviadoManual ? "#fff" : undefined }}>aprobación</span>
+                    <div style={{ display: "flex", gap: 8, alignItems: "stretch", flexShrink: 0 }}>
+                      <div data-testid={`prob-aprobacion-${f.id}`}
+                        title={`Posibilidades de aprobación\n${(f.prob_aprobacion.factores || []).join("\n")}`}
+                        style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minWidth: 88, padding: "6px 10px", borderRadius: 12,
+                          background: enviadoManual ? "rgba(255,255,255,0.15)" : (f.prob_aprobacion.porcentaje >= 75 ? "rgba(34,197,94,0.12)" : f.prob_aprobacion.porcentaje >= 50 ? "rgba(250,204,21,0.18)" : "rgba(220,38,38,0.12)") }}>
+                        <span style={{ fontSize: 36, fontWeight: 900, lineHeight: 1,
+                          color: enviadoManual ? "#fff" : (f.prob_aprobacion.porcentaje >= 75 ? "#16a34a" : f.prob_aprobacion.porcentaje >= 50 ? "#a16207" : "#dc2626") }}>
+                          {f.prob_aprobacion.porcentaje}%
+                        </span>
+                        <span style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, opacity: 0.85, color: enviadoManual ? "#fff" : undefined }}>aprobación</span>
+                      </div>
+                      <div data-testid={`mesa-criterios-${f.id}`}
+                        style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minWidth: 92, padding: "6px 10px", borderRadius: 12,
+                          background: f.mesa_respuesta === "aprobada" ? "rgba(34,197,94,0.15)" : (f.mesa_respuesta === "rechazada" ? "rgba(220,38,38,0.15)" : "rgba(148,163,184,0.1)"),
+                          border: f.mesa_respuesta ? "1.5px solid " + (f.mesa_respuesta === "aprobada" ? "#22c55e" : "#dc2626") : "1px dashed rgba(148,163,184,0.4)" }}>
+                        <span style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, opacity: 0.8, color: enviadoManual ? "#fff" : undefined }}>Mesa</span>
+                        {f.mesa_respuesta === "aprobada" && <span style={{ fontSize: 13, fontWeight: 900, color: "#16a34a" }}>✅ APROBADA</span>}
+                        {f.mesa_respuesta === "rechazada" && <span style={{ fontSize: 13, fontWeight: 900, color: "#dc2626" }}>❌ RECHAZADA</span>}
+                        {!f.mesa_respuesta && <span style={{ fontSize: 11, fontWeight: 700, opacity: 0.6, color: enviadoManual ? "#fff" : undefined }}>Sin respuesta</span>}
+                        {(f.criterios || []).length > 0 && (
+                          <span style={{ fontSize: 10, fontWeight: 700, marginTop: 2, color: enviadoManual ? "#fff" : ((f.criterios.filter(c => c.ok).length === f.criterios.length) ? "#16a34a" : "#a16207") }}>
+                            criterios {f.criterios.filter(c => c.ok).length}/{f.criterios.length}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   )}
                   <div className="clientes-card-actions">
@@ -2180,15 +2257,18 @@ export default function ClientesModule({ onNavigate }) {
                 </label>
                 {m.archivos.length > 0 && (
                   <div style={{ background: "rgba(30,41,59,0.7)", borderRadius: 8, padding: "0.7rem 0.9rem" }}>
-                    <div style={{ opacity: 0.7, fontSize: 11, textTransform: "uppercase", marginBottom: 6 }}>Adjuntos — solo la carta de aprobación va preseleccionada, nada más de la carpeta</div>
+                    <div style={{ opacity: 0.7, fontSize: 11, textTransform: "uppercase", marginBottom: 6 }}>Adjuntos — SOLO la carta de aprobación y el voucher pueden enviarse; el resto está bloqueado</div>
                     <div style={{ display: "grid", gap: 4, maxHeight: 140, overflow: "auto" }}>
-                      {m.archivos.map((a, i) => (
-                        <label key={a.ruta} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, cursor: "pointer" }}>
-                          <input type="checkbox" checked={!!a.sel} data-testid={`tasacion-adj-${i}`}
-                            onChange={() => setTasacionModal(prev => ({ ...prev, preview: null, archivos: prev.archivos.map(x => x.ruta === a.ruta ? { ...x, sel: !x.sel } : x) }))} />
-                          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.nombre} <span style={{ opacity: 0.5 }}>{a.subfolder ? `(${a.subfolder})` : ""}</span></span>
+                      {m.archivos.map((a, i) => {
+                        const permitido = /carta|oferta|aprobaci|voucher/i.test(a.nombre) || a.ruta === m.voucher_ruta;
+                        return (
+                        <label key={a.ruta} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, cursor: permitido ? "pointer" : "not-allowed", opacity: permitido ? 1 : 0.45 }}>
+                          <input type="checkbox" checked={!!a.sel} disabled={!permitido} data-testid={`tasacion-adj-${i}`}
+                            onChange={() => permitido && setTasacionModal(prev => ({ ...prev, preview: null, archivos: prev.archivos.map(x => x.ruta === a.ruta ? { ...x, sel: !x.sel } : x) }))} />
+                          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.nombre} <span style={{ opacity: 0.5 }}>{a.subfolder ? `(${a.subfolder})` : ""}</span>{!permitido && <span style={{ fontSize: 10, color: "#94a3b8" }}> 🔒</span>}</span>
                         </label>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -2336,6 +2416,53 @@ export default function ClientesModule({ onNavigate }) {
                   <button onClick={estudioEnviar} disabled={m.loading} data-testid="btn-estudio-enviar"
                     style={{ padding: "0.55rem 1.1rem", borderRadius: 8, border: "none", background: "#0d9488", color: "#fff", fontWeight: 800, cursor: "pointer", opacity: m.loading ? 0.6 : 1 }}>
                     <i className={`fa ${m.loading ? "fa-spinner fa-spin" : "fa-paper-plane"}`} /> Enviar solicitud
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {pedirModal && (() => {
+        const m = pedirModal;
+        const set = (k, v) => setPedirModal(prev => ({ ...prev, [k]: v, preview: null }));
+        const inpS = { width: "100%", padding: "0.5rem", borderRadius: 6, border: "1px solid rgba(148,163,184,0.3)", background: "#1e293b", color: "#e2e8f0", fontSize: 13 };
+        const lblS = { fontSize: 12 };
+        return (
+          <div data-testid="pedir-modal" onClick={() => setPedirModal(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9998, padding: "3vh 3vw" }}>
+            <div onClick={(e) => e.stopPropagation()} style={{ background: "#0f172a", color: "#e2e8f0", borderRadius: 12, width: "min(680px, 96vw)", maxHeight: "94vh", overflow: "auto", border: "1px solid rgba(148,163,184,0.25)", boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}>
+              <div style={{ padding: "0.9rem 1.1rem", borderBottom: "1px solid rgba(148,163,184,0.2)", display: "flex", alignItems: "center", gap: 10 }}>
+                <i className="fa fa-envelope" style={{ color: "#f87171" }} />
+                <h4 style={{ margin: 0, flex: 1 }}>Pedir documentos faltantes — {m.folder.nombre}</h4>
+                <button onClick={() => setPedirModal(null)} data-testid="btn-pedir-close" style={{ background: "transparent", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 18 }}><i className="fa fa-times" /></button>
+              </div>
+              <div style={{ padding: "1rem 1.1rem", display: "grid", gap: "0.75rem" }}>
+                {m.msg && (
+                  <div data-testid="pedir-msg" style={{ padding: "0.6rem 0.9rem", borderRadius: 8, background: m.msg.startsWith("✅") ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)", color: m.msg.startsWith("✅") ? "#4ade80" : "#f87171", fontWeight: 600, fontSize: 13 }}>{m.msg}</div>
+                )}
+                <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Destinatario (quien nos envió la solicitud de crédito)</b>
+                  <input value={m.destinatario} onChange={e => set("destinatario", e.target.value)} data-testid="pedir-destinatario" style={inpS} />
+                </label>
+                <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Documentos faltantes (uno por línea)</b>
+                  <textarea value={m.faltantes} onChange={e => set("faltantes", e.target.value)} rows={4} data-testid="pedir-faltantes-lista" style={{ ...inpS, resize: "vertical" }} />
+                </label>
+                <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Mensaje adicional (opcional)</b>
+                  <textarea value={m.mensaje} onChange={e => set("mensaje", e.target.value)} rows={2} data-testid="pedir-mensaje" style={{ ...inpS, resize: "vertical" }} />
+                </label>
+                {m.preview && (
+                  <div style={{ background: "#fff", borderRadius: 8, padding: "0.9rem", maxHeight: 240, overflow: "auto" }}>
+                    <div dangerouslySetInnerHTML={{ __html: m.preview.body }} />
+                  </div>
+                )}
+                <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+                  <button onClick={pedirPreview} disabled={m.loading} data-testid="btn-pedir-preview"
+                    style={{ padding: "0.55rem 1.1rem", borderRadius: 8, border: "1px solid rgba(148,163,184,0.4)", background: "transparent", color: "#e2e8f0", fontWeight: 700, cursor: "pointer" }}>
+                    <i className={`fa ${m.loading ? "fa-spinner fa-spin" : "fa-eye"}`} /> Ver preview
+                  </button>
+                  <button onClick={pedirEnviar} disabled={m.loading || !m.destinatario.includes("@")} data-testid="btn-pedir-enviar"
+                    style={{ padding: "0.55rem 1.1rem", borderRadius: 8, border: "none", background: "#dc2626", color: "#fff", fontWeight: 800, cursor: "pointer", opacity: (m.loading || !m.destinatario.includes("@")) ? 0.6 : 1 }}>
+                    <i className={`fa ${m.loading ? "fa-spinner fa-spin" : "fa-paper-plane"}`} /> Enviar solicitud de faltantes
                   </button>
                 </div>
               </div>

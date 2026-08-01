@@ -10,7 +10,7 @@ const lbl = { display: "block", fontSize: "0.75rem", opacity: 0.6, marginBottom:
 
 const TIPO_LABEL = { simulacion_ajustada: "Simulación ajustada", carta_aprobacion: "Carta de aprobación", otro: "Otro documento" };
 
-export default function AprobacionClienteModule() {
+export default function AprobacionClienteModule({ onNavigate }) {
   const [q, setQ] = useState("");
   const [resultados, setResultados] = useState([]);
   const [nombre, setNombre] = useState("");
@@ -123,6 +123,11 @@ export default function AprobacionClienteModule() {
 
   return (
     <div style={{ padding: "1.5rem", color: "var(--white)", maxWidth: "1000px" }} data-testid="aprobacion-module">
+      {onNavigate && (
+        <button data-testid="aprobacion-volver" onClick={() => onNavigate("clientes")} style={{ marginBottom: "1rem", background: "transparent", border: "1px solid rgba(212,175,55,0.5)", color: "var(--gold)", borderRadius: 8, padding: "0.45rem 1rem", fontWeight: 700, cursor: "pointer" }}>
+          <i className="fa fa-arrow-left" /> Volver a Carpeta Clientes
+        </button>
+      )}
       {msg && <div data-testid="aprobacion-msg" style={{ padding: "0.7rem 1rem", borderRadius: "8px", marginBottom: "1rem", background: msg.startsWith("✅") ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)", color: msg.startsWith("✅") ? "#22c55e" : "#ef4444", fontWeight: 600 }}>{msg}</div>}
 
       {/* BUSCADOR */}

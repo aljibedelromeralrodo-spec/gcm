@@ -25,6 +25,26 @@ Idioma del usuario: **Español** (responder siempre en español).
 - IMAP/SMTP: en `/app/backend/.env` (MAIL_USER, MAIL2_USER + app passwords)
 
 ## Implementado
+- 2026-08-01 (parte 7) — **Criterios mesa + Pedir faltantes + Volver + Voz Martín**:
+  - Tarjeta: junto al % de aprobación, cuadro MESA (✅ APROBADA / ❌ RECHAZADA / Sin
+    respuesta, cruzado con db.seguimiento por nombre) + contador "criterios N/M". Abajo,
+    chips ✓/✗ por criterio (docs requeridos según tipo cliente, datos financieros,
+    enviada a mesa) — `_criterios_folder` y `_mesa_respuesta_folder` en list_folders.
+  - "📥 Solicitud recibida de: {source_email}" SIEMPRE visible en tarjeta (dato clave del
+    vendedor/inmobiliaria/broker remitente, se preserva en merges).
+  - **Pedir faltantes**: botón en tarjeta → modal (destinatario prefill = remitente
+    original, lista editable, mensaje extra, preview) → POST
+    /api/clientes/folders/{fid}/pedir-faltantes. Marca faltantes_pedidos_at (✓).
+  - **Botón Volver** a Carpeta Clientes en Gastos, Aprobación y Set de Crédito
+    (prop onNavigate desde App.js).
+  - **Tasación**: adjuntos restringidos — SOLO carta de aprobación/oferta y voucher
+    habilitados; el resto bloqueado (🔒 disabled).
+  - **Voz de Martín**: /api/central/tts real con OpenAITextToSpeech (emergentintegrations,
+    tts-1, voz onyx) → devuelve {audio: base64 mp3}; el frontend CentralChat ya lo consumía.
+  - Testeado: curls (criterios Paula, pedir-faltantes a xgomez@ecomac.cl, TTS 47KB audio)
+    + screenshots UI. Aprobación Cliente ya incluía carta + PDF ajustado del autocorreo
+    (endpoint /aprobacion-cliente/archivos preexistente).
+
 - 2026-08-01 (parte 6) — **Tasación v3 + Estudio v2 + Chat Martín REAL**:
   - Tasación: destinatarios SIEMPRE fijos (Value Property + Victoria; el mail de la
     inmobiliaria YA NO se agrega a destinatarios). Canal: inmobiliaria (plantilla) / broker
