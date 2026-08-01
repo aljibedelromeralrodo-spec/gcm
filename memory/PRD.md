@@ -602,3 +602,13 @@ requieren re-deploy para llegar a producción.
   hilo de reparos (reenvío al vendedor, recordatorio al abogado, resolución) para que
   todos (vendedor, nosotros, oficina abogado, cliente) sigan informados del proceso.
 - VERIFICADO: preview curl (cc parseado, Victoria excluida) + screenshot del modal.
+
+## Plantillas manuales + activación detección (Jun 2026)
+- CRUD /api/plantillas (tipo estudio|gastos): guardar/aplicar/eliminar SOLO manual.
+- Estudio de Título: fila "📋 Plantillas" en modal (select aplicar, guardar, eliminar).
+  Guarda destinatarios, cc, tipo_vivienda, intro, docs_texto, observaciones.
+- Gastos Op: "Guardar como plantilla" (con nombre) + "Guardar como predeterminada"
+  (PATCH defaults, función renombrada guardarPredeterminada para evitar duplicado
+  que causó SyntaxError reportado por el usuario — FIXED).
+- Detección de solicitudes de tasación ACTIVA desde 2026-08-01T19:52 (config
+  cobro_tasacion.since). Usuario hará redeploy.

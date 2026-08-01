@@ -4096,6 +4096,37 @@ async def estudio_log():
 
 
 # ---------------------------------------------------------------------------
+# Plantillas guardadas (estudio de título / gastos operacionales) — uso MANUAL
+# ---------------------------------------------------------------------------
+@api.get("/plantillas")
+async def plantillas_list(tipo: str = ""):
+    q = {"tipo": tipo} if tipo else {}
+    docs = await db.plantillas.find(q).sort("nombre", 1).to_list(100)
+    return {"plantillas": [clean(d) for d in docs]}
+
+
+@api.post("/plantillas")
+async def plantillas_create(payload: dict):
+    tipo = (payload.get("tipo") or "").strip()
+    nombre = (payload.get("nombre") or "").strip()
+    if tipo not in ("estudio", "gastos") or not nombre:
+        raise HTTPException(status_code=400, detail="tipo (estudio|gastos) y nombre son requeridos")
+    doc = {"id": str(uuid.uuid4()), "tipo": tipo, "nombre": nombre,
+           "data": payload.get("data") or {}, "creado_en": now_iso()}
+    await db.plantillas.update_one({"tipo": tipo, "nombre": nombre},
+                                   {"$set": doc}, upsert=True)
+    return {"ok": True, "plantilla": clean(doc)}
+
+
+@api.delete("/plantillas/{pid}")
+async def plantillas_delete(pid: str):
+    r = await db.plantillas.delete_one({"id": pid})
+    if not r.deleted_count:
+        raise HTTPException(status_code=404, detail="Plantilla no encontrada")
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
 # Reparos de Estudio de Título (respuestas del abogado en el hilo)
 # ---------------------------------------------------------------------------
 async def _reparos_ai_clasificar(texto):

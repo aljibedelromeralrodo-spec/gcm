@@ -422,6 +422,10 @@ export default function ClientesModule({ onNavigate }) {
     } catch (_e) { /* defaults */ }
     reloadBrokers();
     try {
+      const p = await axios.get(`${API}/api/plantillas?tipo=estudio`);
+      setEstudioPlantillas(p.data.plantillas || []);
+    } catch (_e) { /* noop */ }
+    try {
       const c = await axios.get(`${API}/api/tasacion/contactos`);
       setTasacionContactos(c.data.contactos || []);
     } catch (_e) { /* noop */ }
@@ -438,6 +442,35 @@ export default function ClientesModule({ onNavigate }) {
       docs_texto: (defaults.docs_usada || []).join("\n"),
       preview: null, loading: false, msg: "",
     });
+  };
+
+  const guardarPlantillaEstudio = async () => {
+    const m = estudioModal;
+    const nombre = window.prompt("Nombre de la plantilla (ej: Vivienda usada — World Consultores):");
+    if (!nombre) return;
+    try {
+      await axios.post(`${API}/api/plantillas`, { tipo: "estudio", nombre, data: {
+        destinatarios: m.destinatarios, cc: m.cc || "", tipo_vivienda: m.tipo_vivienda,
+        intro: m.intro, docs_texto: m.docs_texto, observaciones: m.observaciones } });
+      const p = await axios.get(`${API}/api/plantillas?tipo=estudio`);
+      setEstudioPlantillas(p.data.plantillas || []);
+      setEstudioModal(prev => ({ ...prev, msg: `✅ Plantilla "${nombre}" guardada.` }));
+    } catch (e) { setEstudioModal(prev => ({ ...prev, msg: "Error: " + (e.response?.data?.detail || e.message) })); }
+  };
+
+  const aplicarPlantillaEstudio = (pid) => {
+    const p = estudioPlantillas.find(x => x.id === pid);
+    if (!p) return;
+    setEstudioModal(prev => ({ ...prev, ...p.data, preview: null, msg: `📋 Plantilla "${p.nombre}" aplicada.` }));
+  };
+
+  const eliminarPlantillaEstudio = async (pid) => {
+    const p = estudioPlantillas.find(x => x.id === pid);
+    if (!p || !window.confirm(`¿Eliminar la plantilla "${p.nombre}"?`)) return;
+    try {
+      await axios.delete(`${API}/api/plantillas/${pid}`);
+      setEstudioPlantillas(prev => prev.filter(x => x.id !== pid));
+    } catch (e) { alert("Error: " + (e.response?.data?.detail || e.message)); }
   };
 
   const estudioPayload = (m, confirm) => ({
@@ -2376,6 +2409,25 @@ export default function ClientesModule({ onNavigate }) {
                 {m.msg && (
                   <div data-testid="estudio-msg" style={{ padding: "0.6rem 0.9rem", borderRadius: 8, background: m.msg.startsWith("✅") ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)", color: m.msg.startsWith("✅") ? "#4ade80" : "#f87171", fontWeight: 600, fontSize: 13 }}>{m.msg}</div>
                 )}
+                <div style={{ display: "flex", gap: 8, alignItems: "center", background: "rgba(212,175,55,0.06)", border: "1px solid rgba(212,175,55,0.25)", borderRadius: 8, padding: "0.5rem 0.9rem", flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: "var(--gold, #d4af37)" }}>📋 Plantillas</span>
+                  <select data-testid="estudio-plantilla-select" onChange={e => { if (e.target.value) aplicarPlantillaEstudio(e.target.value); e.target.value = ""; }}
+                    style={{ ...inpS, width: "auto", flex: 1, minWidth: 180, padding: "5px 8px", fontSize: 12 }} defaultValue="">
+                    <option value="">Aplicar plantilla guardada…</option>
+                    {estudioPlantillas.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                  </select>
+                  <button data-testid="estudio-plantilla-guardar" onClick={guardarPlantillaEstudio}
+                    style={{ background: "rgba(212,175,55,0.15)", border: "1px solid rgba(212,175,55,0.5)", color: "#d4af37", borderRadius: 6, padding: "5px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                    💾 Guardar plantilla
+                  </button>
+                  {estudioPlantillas.length > 0 && (
+                    <select data-testid="estudio-plantilla-eliminar" onChange={e => { if (e.target.value) eliminarPlantillaEstudio(e.target.value); e.target.value = ""; }}
+                      style={{ ...inpS, width: "auto", padding: "5px 8px", fontSize: 12 }} defaultValue="">
+                      <option value="">🗑 Eliminar…</option>
+                      {estudioPlantillas.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                    </select>
+                  )}
+                </div>
                 <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Destinatarios <span style={{ color: "#4ade80" }}>· broker seleccionado + Victoria Vilches siempre en copia</span></b>
                   <input value={m.destinatarios} onChange={e => set("destinatarios", e.target.value)} data-testid="estudio-destinatarios" style={inpS} />
                 </label>

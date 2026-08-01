@@ -26,6 +26,44 @@ export default function GastosOperacionalesModule({ onNavigate }) {
   const [cobroCliente, setCobroCliente] = useState("");
   const [cobroLoading, setCobroLoading] = useState(false);
   const [historial, setHistorial] = useState([]);
+  const [plantillas, setPlantillas] = useState([]);
+
+  const loadPlantillas = useCallback(async () => {
+    try {
+      const r = await axios.get(`${API}/api/plantillas?tipo=gastos`);
+      setPlantillas(r.data.plantillas || []);
+    } catch (_e) { /* noop */ }
+  }, []);
+
+  useEffect(() => { loadPlantillas(); }, [loadPlantillas]);
+
+  const guardarPlantilla = async () => {
+    const nombre = window.prompt("Nombre de la plantilla (ej: Gastos estándar vivienda usada):");
+    if (!nombre) return;
+    try {
+      await axios.post(`${API}/api/plantillas`, { tipo: "gastos", nombre, data: { intro, items, datos_pago: datosPago } });
+      setMsg(`✅ Plantilla "${nombre}" guardada.`);
+      loadPlantillas();
+    } catch (e) { setMsg("Error: " + (e.response?.data?.detail || e.message)); }
+  };
+
+  const aplicarPlantilla = (pid) => {
+    const p = plantillas.find(x => x.id === pid);
+    if (!p) return;
+    if (p.data.intro !== undefined) setIntro(p.data.intro);
+    if (p.data.items) setItems(p.data.items);
+    if (p.data.datos_pago) setDatosPago(p.data.datos_pago);
+    setMsg(`📋 Plantilla "${p.nombre}" aplicada.`);
+  };
+
+  const eliminarPlantilla = async (pid) => {
+    const p = plantillas.find(x => x.id === pid);
+    if (!p || !window.confirm(`¿Eliminar la plantilla "${p.nombre}"?`)) return;
+    try {
+      await axios.delete(`${API}/api/plantillas/${pid}`);
+      loadPlantillas();
+    } catch (e) { setMsg("Error: " + (e.response?.data?.detail || e.message)); }
+  };
 
   const loadHistorial = useCallback(async () => {
     try {
@@ -156,7 +194,7 @@ export default function GastosOperacionalesModule({ onNavigate }) {
     setLoading(false);
   };
 
-  const guardarPlantilla = async () => {
+  const guardarPredeterminada = async () => {
     await axios.patch(`${API}/api/gastos-operacionales/defaults`, { intro, items: payload().items, datos_pago: datosPago });
     setMsg("✅ Plantilla guardada como predeterminada");
   };
@@ -239,10 +277,25 @@ export default function GastosOperacionalesModule({ onNavigate }) {
       </div>
 
       {/* ACCIONES */}
-      <div style={{ display: "flex", gap: "0.8rem", flexWrap: "wrap", marginBottom: "1.5rem" }}>
+      <div style={{ display: "flex", gap: "0.8rem", flexWrap: "wrap", marginBottom: "1.5rem", alignItems: "center" }}>
         <button data-testid="gastos-preview-btn" onClick={verPreview} disabled={loading} style={btn("#3b82f6")}><i className="fa fa-eye" style={{ marginRight: "0.4rem" }} />Vista previa</button>
         <button data-testid="gastos-enviar-btn" onClick={enviar} disabled={loading || !emailCliente} style={btn("var(--gold)")}><i className="fa fa-paper-plane" style={{ marginRight: "0.4rem" }} />Enviar al cliente</button>
         <button data-testid="gastos-guardar-plantilla" onClick={guardarPlantilla} disabled={loading} style={btn("rgba(255,255,255,0.12)")}><i className="fa fa-save" style={{ marginRight: "0.4rem" }} />Guardar como plantilla</button>
+        <button data-testid="gastos-guardar-predeterminada" onClick={guardarPredeterminada} disabled={loading} style={btn("rgba(255,255,255,0.08)")}><i className="fa fa-star" style={{ marginRight: "0.4rem" }} />Guardar como predeterminada</button>
+        {plantillas.length > 0 && (
+          <>
+            <select data-testid="gastos-plantilla-select" onChange={e => { if (e.target.value) aplicarPlantilla(e.target.value); e.target.value = ""; }} defaultValue=""
+              style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(212,175,55,0.4)", color: "#e2e8f0", borderRadius: 8, padding: "0.55rem 0.8rem", fontSize: "0.85rem" }}>
+              <option value="">📋 Aplicar plantilla…</option>
+              {plantillas.map(p => <option key={p.id} value={p.id} style={{ color: "#111" }}>{p.nombre}</option>)}
+            </select>
+            <select data-testid="gastos-plantilla-eliminar" onChange={e => { if (e.target.value) eliminarPlantilla(e.target.value); e.target.value = ""; }} defaultValue=""
+              style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(239,68,68,0.35)", color: "#f87171", borderRadius: 8, padding: "0.55rem 0.8rem", fontSize: "0.85rem" }}>
+              <option value="">🗑 Eliminar plantilla…</option>
+              {plantillas.map(p => <option key={p.id} value={p.id} style={{ color: "#111" }}>{p.nombre}</option>)}
+            </select>
+          </>
+        )}
       </div>
 
       {/* COBRO DE TASACIÓN — VIVIENDA USADA */}
