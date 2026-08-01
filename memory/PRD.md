@@ -525,3 +525,23 @@ requieren re-deploy para llegar a producción.
 - VERIFICADO: curl (previews con marca/cuenta/monto $183.802, GET/PATCH/scan reparos,
   scan cobros), IA clasificadores (reparos/satisfecho y solicitud usada vs coordinación
   vs inmobiliaria) y screenshots (modal reparos + sección cobros).
+
+## Recordatorio Faltantes + Auto-Pago Tasación + Panel Dashboard (Jun 2026)
+- `_faltantes_recordatorio_loop` (1h): a los 3 días de pedido de faltantes, si siguen
+  faltando docs, envía UN recordatorio formal (_marca_wrap) al source_email y registra
+  alerta. Se resetea (\$unset faltantes_recordatorio_at) al volver a pedir faltantes
+  (manual y automático). Email auto-faltantes ahora también usa _marca_wrap.
+- `_detectar_pagos_tasacion` (dentro de _cobro_tasacion_loop y del scan): revisa el hilo
+  del cobro (mismo remitente, posterior a respondido_at), heurística por nombre de adjunto
+  (voucher/comprobante/transferencia/pago) + IA confirma pago → marca pagado
+  automáticamente (pagado_origen "auto") + alerta en db.alertas. buscar_hilo_por_asunto
+  ahora devuelve nombres de adjuntos.
+- GET cobros-tasacion incluye `resumen` mensual {enviadas, pagadas, pendientes, montos CLP}.
+- Dashboard: panel "Cobros de Tasación — Vivienda Usada" (testid panel-cobros-tasacion)
+  con 3 estadísticas. Solo se muestra si hay resumen.
+- PENDIENTE (bloqueado por usuario): prueba en vivo Autocorreo eCert — requiere recargar
+  firmas prepagadas en migrup.cl.
+- VERIFICADO: curl resumen, dry-run query recordatorio, screenshot panel con datos de
+  ejemplo (luego eliminados).
+- LECCIÓN: algunos search_replace reportan éxito pero no persisten (3 casos en esta
+  sesión). SIEMPRE re-grep después de editar archivos frontend grandes.

@@ -8,6 +8,7 @@ import LearningStatusPanel from "../components/LearningStatusPanel";
 
 export default function DashboardModule({ valorUF, userName, onNavigate }) {
   const [data, setData] = useState(null);
+  const [cobrosResumen, setCobrosResumen] = useState(null);
   const [emailStatus, setEmailStatus] = useState(null);
   const [emailSummary, setEmailSummary] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -27,6 +28,7 @@ export default function DashboardModule({ valorUF, userName, onNavigate }) {
     });
     // Email summary loaded separately (slower, cached 5min)
     axios.get(`${API_URL}/api/central/email-summary`).then(r => setEmailSummary(r.data)).catch(() => {});
+    axios.get(`${API_URL}/api/gastos-operacionales/cobros-tasacion`).then(r => setCobrosResumen(r.data)).catch(() => {});
   }, []);
 
   const refreshKnowledge = async () => {
@@ -53,6 +55,28 @@ export default function DashboardModule({ valorUF, userName, onNavigate }) {
       <ProactiveAlertsPanel />
       <LearningStatusPanel />
       <AlertasPanel />
+      {cobrosResumen?.resumen && (
+        <div data-testid="panel-cobros-tasacion" style={{ background: "rgba(15,23,42,0.6)", border: "1px solid rgba(212,175,55,0.25)", borderRadius: 14, padding: "1rem 1.3rem", marginBottom: "1rem" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: "0.7rem" }}>
+            <i className="fa fa-home" style={{ color: "var(--gold)" }} />
+            <b style={{ color: "var(--gold)" }}>Cobros de Tasación — Vivienda Usada ({cobrosResumen.resumen.mes})</b>
+            <span style={{ fontSize: 12, opacity: 0.6 }}>· {cobrosResumen.monto_uf} UF ≈ {cobrosResumen.monto_clp} c/u</span>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "0.7rem" }}>
+            {[
+              { lbl: "Cobros enviados", val: cobrosResumen.resumen.enviadas, color: "#60a5fa", extra: "" },
+              { lbl: "Pagadas", val: cobrosResumen.resumen.pagadas, color: "#4ade80", extra: cobrosResumen.resumen.monto_pagado_clp },
+              { lbl: "Pendientes de pago", val: cobrosResumen.resumen.pendientes, color: "#f87171", extra: cobrosResumen.resumen.monto_pendiente_clp },
+            ].map((s, i) => (
+              <div key={i} data-testid={`cobros-stat-${i}`} style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, padding: "0.7rem 1rem", textAlign: "center" }}>
+                <div style={{ fontSize: "1.6rem", fontWeight: 800, color: s.color }}>{s.val}</div>
+                <div style={{ fontSize: "0.72rem", opacity: 0.7, textTransform: "uppercase", letterSpacing: 0.5 }}>{s.lbl}</div>
+                {s.extra && <div style={{ fontSize: "0.8rem", color: s.color, fontWeight: 700, marginTop: 2 }}>{s.extra}</div>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       {emailStatus && (
         <div className="dash-email-status" data-testid="email-status-bar">
           <span className="dash-email-dot" style={{
@@ -169,3 +193,4 @@ export default function DashboardModule({ valorUF, userName, onNavigate }) {
     </div>
   );
 }
+

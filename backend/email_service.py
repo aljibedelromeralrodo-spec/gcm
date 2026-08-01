@@ -635,7 +635,8 @@ def buscar_hilo_por_asunto(subject_kw, limit=8):
                     fecha = fecha_raw or ""
                 out.append({"msgid": msgid, "from": remitente, "from_email": from_email,
                             "subject": _dec(msg.get("Subject")), "date": fecha,
-                            "body": _texto_de_msg(msg)})
+                            "body": _texto_de_msg(msg),
+                            "attachments": [_dec(p.get_filename()) for p in msg.walk() if p.get_filename()]})
             m.logout()
         except Exception:
             continue

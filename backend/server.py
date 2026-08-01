@@ -108,6 +108,7 @@ async def startup():
     asyncio.create_task(_task_blindada(_tasacion_fecha_loop, "fecha_tasacion"))
     asyncio.create_task(_task_blindada(_estudio_reparos_loop, "reparos_estudio"))
     asyncio.create_task(_task_blindada(_cobro_tasacion_loop, "cobro_tasacion"))
+    asyncio.create_task(_task_blindada(_faltantes_recordatorio_loop, "recordatorio_faltantes"))
 
 
 # ---------------------------------------------------------------------------
@@ -960,7 +961,8 @@ async def folder_pedir_faltantes(fid: str, payload: dict):
     if not res.get("success"):
         raise HTTPException(status_code=502, detail=res.get("error", "Error de envío"))
     await db.folders.update_one({"id": fid}, {"$set": {"faltantes_pedidos_at": now_iso(),
-                                                       "source_email": destinatario}})
+                                                       "source_email": destinatario},
+                                              "$unset": {"faltantes_recordatorio_at": ""}})
     return {"ok": True, "to": destinatario, "faltantes": faltantes}
 
 
@@ -2704,19 +2706,18 @@ async def _enviar_faltantes_auto(cliente):
     nombre = doc.get("nombre", "")
     subject = f"Documentos faltantes — Solicitud de crédito {nombre}"
     lis = "".join(f'<li style="margin:4px 0">{f}</li>' for f in faltan)
-    cuerpo = f"""
-    <div style="font-family:Arial,sans-serif;font-size:14px;color:#222;max-width:620px">
+    cuerpo = _marca_wrap(f"""
       <p>Estimados, junto con saludar:</p>
       <p>Hemos recibido la solicitud de crédito de <b>{nombre}</b>{f" (RUT {doc.get('rut')})" if doc.get('rut') else ""}.
       Para continuar con la evaluación necesitamos que nos hagan llegar los siguientes documentos faltantes:</p>
       <ol style="margin:6px 0 0;padding-left:22px;color:#111">{lis}</ol>
       <p style="margin-top:14px">Quedamos atentos. Muchas gracias.</p>
-      <p style="margin-top:16px;color:#555">Saludos cordiales,<br/><b>Central Mutuos — Con Creces</b></p>
-    </div>"""
+      <p style="margin-top:16px;color:#555">Saludos cordiales,</p>""", "Documentos Faltantes — Solicitud de Crédito")
     res = await asyncio.to_thread(mail.send_mail, doc["source_email"], subject, cuerpo, [], "secundaria")
     if res.get("success"):
         await db.folders.update_one({"id": doc["id"]}, {"$set": {
-            "faltantes_auto_lista": lista_key, "faltantes_pedidos_at": now_iso()}})
+            "faltantes_auto_lista": lista_key, "faltantes_pedidos_at": now_iso()},
+            "$unset": {"faltantes_recordatorio_at": ""}})
         await db.alertas.insert_one({"id": str(uuid.uuid4()), "tipo": "faltantes_auto",
                                      "cliente": nombre, "folder_id": doc["id"],
                                      "mensaje": f"Se pidieron automáticamente los faltantes de {nombre}: {', '.join(faltan)}",
@@ -3265,12 +3266,75 @@ async def _procesar_cobros_tasacion():
     return nuevos
 
 
+async def _pago_ai_confirmar(texto, adjuntos=""):
+    if re.search(r"voucher|comprobante|transferencia|deposito|depósito|pago", adjuntos, re.I):
+        return True
+    key = os.environ.get("EMERGENT_LLM_KEY", "")
+    if not key or not (texto or "").strip():
+        return False
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        chat = LlmChat(api_key=key, session_id=f"pago-{uuid.uuid4()}", system_message=(
+            "Recibes el texto de un correo (y nombres de archivos adjuntos) en el hilo de un cobro "
+            "de tasación de una propiedad. Responde SOLO un JSON válido con: pago_confirmado "
+            "(true SOLO si el correo adjunta o confirma explícitamente el pago/voucher/comprobante "
+            "de transferencia de la tasación; false si solo envía datos, pregunta o coordina).")
+        ).with_model("openai", "gpt-5.4-mini")
+        resp = await chat.send_message(UserMessage(text=f"ADJUNTOS: {adjuntos}\n\n{(texto or '')[:3000]}"))
+        m = re.search(r"\{.*\}", str(resp), re.S)
+        if m:
+            import json as _json
+            return bool(_json.loads(m.group(0)).get("pago_confirmado"))
+    except Exception as e:
+        logging.warning(f"pago tasacion IA: {e}")
+    return False
+
+
+async def _detectar_pagos_tasacion():
+    """Marca automáticamente 'Tasación pagada' cuando llega el voucher en el hilo del cobro."""
+    cobros = await db.tasacion_cobros.find({"es_solicitud": True, "pagado": False,
+                                            "respondido_at": {"$ne": None}}).limit(15).to_list(15)
+    for c in cobros:
+        try:
+            subject_kw = re.sub(r"^\s*((re|fwd?|rv):\s*)+", "", c.get("subject", ""), flags=re.I).strip()
+            if not subject_kw:
+                continue
+            msgs = await asyncio.to_thread(mail.buscar_hilo_por_asunto, subject_kw, 6)
+            procesados = c.get("pago_msgids") or []
+            pagado = False
+            for m in msgs:
+                if m["msgid"] in procesados:
+                    continue
+                if c.get("from_email") and m.get("from_email") != c["from_email"]:
+                    continue
+                if (m.get("date") or "") < (c.get("respondido_at") or ""):
+                    continue
+                procesados.append(m["msgid"])
+                adj = " ".join(m.get("attachments") or [])
+                if await _pago_ai_confirmar(m.get("body", ""), adj):
+                    pagado = True
+                    break
+            upd = {"pago_msgids": procesados}
+            if pagado:
+                upd.update({"pagado": True, "pagado_at": now_iso(), "pagado_origen": "auto"})
+                await db.alertas.insert_one({
+                    "id": str(uuid.uuid4()), "tipo": "tasacion_pagada",
+                    "cliente": c.get("cliente") or c.get("from_email", ""),
+                    "mensaje": f"💰 Voucher de pago de tasación detectado — {c.get('cliente') or c.get('from_email','')} marcada como PAGADA automáticamente.",
+                    "fecha": now_iso(), "leida": False})
+            await db.tasacion_cobros.update_one({"id": c["id"]}, {"$set": upd})
+        except Exception as e:
+            logging.warning(f"detectar pago tasacion: {e}")
+            continue
+
+
 async def _cobro_tasacion_loop():
     """Cada 30 min: detecta solicitudes de tasación de vivienda usada y envía el cobro."""
     while True:
         await asyncio.sleep(1800)
         try:
             await _procesar_cobros_tasacion()
+            await _detectar_pagos_tasacion()
         except Exception as e:
             logging.warning(f"cobro tasacion loop: {e}")
 
@@ -3279,13 +3343,68 @@ async def _cobro_tasacion_loop():
 async def cobros_tasacion_list():
     docs = await db.tasacion_cobros.find({"ignorado": {"$ne": True}}).sort("detectado_en", -1).limit(30).to_list(30)
     uf = await get_valor_uf()
+    mes = datetime.now(timezone.utc).strftime("%Y-%m")
+    base_q = {"es_solicitud": True, "ignorado": {"$ne": True}, "detectado_en": {"$regex": f"^{mes}"}}
+    enviadas = await db.tasacion_cobros.count_documents(base_q)
+    pagadas = await db.tasacion_cobros.count_documents({**base_q, "pagado": True})
+    pendientes = enviadas - pagadas
     return {"cobros": [clean(d) for d in docs], "monto_uf": TASACION_COBRO_UF,
-            "valor_uf": uf, "monto_clp": _fmt_clp(TASACION_COBRO_UF * uf)}
+            "valor_uf": uf, "monto_clp": _fmt_clp(TASACION_COBRO_UF * uf),
+            "resumen": {"mes": mes, "enviadas": enviadas, "pagadas": pagadas,
+                        "pendientes": pendientes,
+                        "monto_pagado_clp": _fmt_clp(pagadas * TASACION_COBRO_UF * uf),
+                        "monto_pendiente_clp": _fmt_clp(pendientes * TASACION_COBRO_UF * uf)}}
+
+
+async def _faltantes_recordatorio_loop():
+    """Cada hora: si a los 3 días de pedir documentos faltantes siguen faltando,
+    envía UN recordatorio al mismo destinatario."""
+    while True:
+        await asyncio.sleep(3600)
+        docs = await db.folders.find({"faltantes_pedidos_at": {"$exists": True, "$ne": None},
+                                      "faltantes_recordatorio_at": {"$exists": False},
+                                      "source_email": {"$exists": True, "$nin": [None, ""]}}
+                                     ).limit(20).to_list(20)
+        for d in docs:
+            try:
+                if _dias_desde(d["faltantes_pedidos_at"]) < 3:
+                    continue
+                faltan = [c["nombre"] for c in _criterios_folder(d)
+                          if not c["ok"] and c["nombre"] not in ("Enviada a mesa", "Datos financieros completos")]
+                if not faltan:
+                    await db.folders.update_one({"id": d["id"]}, {"$set": {"faltantes_recordatorio_at": now_iso()}})
+                    continue
+                nombre = d.get("nombre", "")
+                lis = "".join(f'<li style="margin:4px 0">{f}</li>' for f in faltan)
+                cuerpo = _marca_wrap(f"""
+                  <p>Estimados, junto con saludar:</p>
+                  <p>Le recordamos que para continuar con la evaluación de la solicitud de crédito de
+                  <b>{nombre}</b>{f" (RUT {d.get('rut')})" if d.get('rut') else ""} aún nos faltan los
+                  siguientes documentos:</p>
+                  <ol style="margin:6px 0 0;padding-left:22px;color:#111">{lis}</ol>
+                  <p style="margin-top:14px">Agradeceremos hacérnoslos llegar a la brevedad para no
+                  retrasar el proceso. Quedamos atentos. Muchas gracias.</p>
+                  <p style="margin-top:16px;color:#555">Saludos cordiales,</p>""",
+                  "Recordatorio — Documentos Faltantes")
+                res = await asyncio.to_thread(mail.send_mail, d["source_email"],
+                                              f"Recordatorio: Documentos faltantes — {nombre}",
+                                              cuerpo, [], "secundaria")
+                if res.get("success"):
+                    await db.folders.update_one({"id": d["id"]}, {"$set": {"faltantes_recordatorio_at": now_iso()}})
+                    await db.alertas.insert_one({
+                        "id": str(uuid.uuid4()), "tipo": "faltantes_recordatorio",
+                        "cliente": nombre, "folder_id": d["id"],
+                        "mensaje": f"⏰ Recordatorio de documentos faltantes enviado (3 días) — {nombre}: {', '.join(faltan)}",
+                        "fecha": now_iso(), "leida": False})
+            except Exception as e:
+                logging.warning(f"recordatorio faltantes {d.get('nombre','')}: {e}")
+                continue
 
 
 @api.post("/gastos-operacionales/cobros-tasacion/scan")
 async def cobros_tasacion_scan():
     nuevos = await _procesar_cobros_tasacion()
+    await _detectar_pagos_tasacion()
     return {"ok": True, "nuevos": len(nuevos)}
 
 
