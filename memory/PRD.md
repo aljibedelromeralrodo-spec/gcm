@@ -586,3 +586,8 @@ requieren re-deploy para llegar a producción.
   panel dashboard, cobros gastos, uploads voucher, previews con marca, regla sin-CC).
 - Reporte: /app/test_reports/iteration_6.json · Tests: /app/tests/test_reparos_cobros_marca.py
 - NOTA testing: NO poner tests en /app/backend/tests (reload loop); usar /app/tests.
+
+## Marca en correo de gastos operacionales (Jun 2026)
+- REGLA: el correo de costo de gasto operacional va SOLO con "Central Mutuos"
+  (sin "Con Creces" en header ni firma). El resto de los correos mantiene la marca
+  completa Central Mutuos + Con Creces. VERIFICADO por curl (preview sin 'Con Creces').

@@ -3674,7 +3674,6 @@ def _gastos_html(payload):
       <div style="max-width:640px;margin:0 auto;background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 4px 18px rgba(16,24,40,0.10)">
         <div style="background:#1a1f2e;padding:26px 32px;border-bottom:3px solid #d4af37">
           <div style="color:#d4af37;font-size:22px;font-weight:700;letter-spacing:1px">Central Mutuos</div>
-          <div style="color:#9aa3b5;font-size:11px;letter-spacing:3px;margin-top:2px">CON CRECES ASESORÍAS</div>
         </div>
         <div style="padding:30px 32px 12px">
           <p style="margin:0 0 4px;color:#1a1f2e;font-size:16px"><b>Estimada(o) {nombre}</b></p>
@@ -3700,7 +3699,7 @@ def _gastos_html(payload):
         <div style="padding:20px 32px 28px">
           <p style="margin:0;color:#6b7280;font-size:13px;line-height:1.6">Ante cualquier consulta sobre el detalle de estos valores o el proceso de pago, no dude en responder este correo. Estamos a su disposición.</p>
           <p style="margin:14px 0 0;color:#1a1f2e;font-size:14px"><b>Central Mutuos</b><br>
-          <span style="color:#6b7280;font-size:12px">Con Creces · Créditos Hipotecarios</span></p>
+          <span style="color:#6b7280;font-size:12px">Créditos Hipotecarios</span></p>
         </div>
         <div style="background:#1a1f2e;padding:12px 32px;text-align:center">
           <span style="color:#9aa3b5;font-size:11px">Este correo contiene información confidencial dirigida exclusivamente a su destinatario.</span>
