@@ -628,15 +628,59 @@ async def central_conversations():
 
 @api.post("/central/chat")
 async def central_chat(payload: dict):
-    msg = payload.get("message", "")
+    msg = (payload.get("message") or "").strip()
     session = payload.get("session_id") or str(uuid.uuid4())
-    resp = "Soy Central, tu asistente. El chat IA no esta habilitado en esta instancia, pero puedes usar los modulos de Simulador y Predictor."
+    key = os.environ.get("EMERGENT_LLM_KEY", "")
+    resp = "No puedo responder ahora, intenta de nuevo."
+    try:
+        # Contexto: carpetas con sus estados
+        folders = await db.folders.find({}).sort("created_at", -1).limit(60).to_list(60)
+        stats = await _stats_mesa()
+        lineas = []
+        for f in folders:
+            pub = _folder_public(f)
+            prob = _prob_aprobacion_folder(f, stats)
+            estados = []
+            if f.get("tasacion_solicitada_at"):
+                estados.append("tasación solicitada" + (f" (fecha: {f.get('tasacion_fecha')})" if f.get("tasacion_fecha") else ""))
+            if f.get("estudio_titulo_solicitado_at"):
+                estados.append("estudio de títulos solicitado")
+            if f.get("escritura_confirmada_at"):
+                estados.append("firma escritura CONFIRMADA")
+            elif f.get("escritura_solicitada_at"):
+                estados.append("aviso firma escritura enviado")
+            if f.get("emails_sent_count"):
+                estados.append(f"enviada a mesa x{f['emails_sent_count']}")
+            cats = (pub.get("credit_request") or {}).get("doc_categories") or []
+            tipo_cli = (f.get("credit_request") or {}).get("client_type") or "dependiente"
+            reqs = ["cedula", "imp_renta", "boletas"] if tipo_cli == "independiente" else ["cedula", "liquidacion", "afp", "cmf"]
+            faltan = [c for c in reqs if c not in cats]
+            lineas.append(f"- {f.get('nombre')} (RUT {f.get('rut') or '?'}): {pub.get('total_archivos', 0)} docs [{', '.join(cats)}], "
+                          f"aprobación {prob['porcentaje']}%, {'lista para mesa' if pub.get('is_ready_to_send') else 'incompleta'}"
+                          + (f", FALTAN: {', '.join(faltan)}" if faltan else "")
+                          + (f", codeudor {f.get('codeudor_nombre')}" if f.get("codeudor_nombre") else "")
+                          + (f". Estados: {'; '.join(estados)}" if estados else ""))
+        contexto = "\n".join(lineas[:60])
+        historial = await db.conversaciones.find({"session_id": session}).sort("timestamp", -1).limit(6).to_list(6)
+        hist_txt = "\n".join(f"Usuario: {h.get('user_msg','')}\nMartin: {h.get('response','')}"
+                             for h in reversed(historial))
+        system = ("Eres Martin, el asistente de Central Mutuos (mutuaria hipotecaria chilena). "
+                  "Respondes SIEMPRE en español, con respuestas CORTAS y simples (máximo 3 frases). "
+                  "Conoces las carpetas de clientes y sus estados (tasación, estudio de títulos, firma de escritura, mesa). "
+                  "Si te preguntan por un cliente, busca en el listado. Si no está, dilo brevemente.\n\n"
+                  f"CARPETAS ACTUALES:\n{contexto}\n\n"
+                  + (f"CONVERSACIÓN PREVIA:\n{hist_txt}" if hist_txt else ""))
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        chat = LlmChat(api_key=key, session_id=session, system_message=system).with_model("openai", "gpt-5.4-mini")
+        resp = await chat.send_message(UserMessage(text=msg))
+    except Exception as e:
+        resp = f"Tuve un problema para responder ({str(e)[:80]}). Intenta de nuevo."
     await db.conversaciones.insert_one({
         "id": str(uuid.uuid4()), "session_id": session,
         "user_name": payload.get("user_name", ""), "user_msg": msg,
         "response": resp, "timestamp": now_iso(),
     })
-    return {"response": resp, "session_id": session, "enabled": False}
+    return {"response": resp, "session_id": session, "enabled": True}
 
 
 @api.post("/central/chat-files")
@@ -3106,21 +3150,26 @@ def _tasacion_html(p):
     else:
         fila("Vendedor", p.get("vendedor", ""))
     contacto = " · ".join(x for x in [(p.get("contacto_nombre") or "").strip(),
-                                      (p.get("contacto_telefono") or "").strip()] if x)
+                                      (p.get("contacto_telefono") or "").strip(),
+                                      (p.get("contacto_email") or "").strip()] if x)
     fila("Contacto para coordinar la visita", contacto)
     obs = (p.get("observaciones") or "").strip()
     copias = []
     if modalidad == "inmobiliaria" and (p.get("inmobiliaria") or "").strip():
         copias.append(f"la inmobiliaria {p.get('inmobiliaria').strip()}")
     copias.append("Victoria Vilches")
-    saludo = (f"Estimados, se envía solicitud de tasación para {p.get('nombre', '')}, "
-              f"con copia a {' y a '.join(copias)}.")
+    saludo = (p.get("intro") or "").strip() or (
+        f"Estimados, se envía solicitud de tasación para {p.get('nombre', '')}, "
+        f"con copia a {' y a '.join(copias)}.")
+    voucher = ('<p style="margin-top:12px"><b>Adjunto voucher de pago tasación.</b></p>'
+               if p.get("voucher") else "")
     return f"""
     <div style="font-family:Arial,sans-serif;font-size:14px;color:#222;max-width:640px">
       <p>{saludo}</p>
       <p>A continuación, detallo los antecedentes de la propiedad para la coordinación de la tasación:</p>
       <table style="border-collapse:collapse;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;width:100%">{''.join(filas)}</table>
       {f'<p style="margin-top:12px"><b>Observaciones:</b> {obs}</p>' if obs else ''}
+      {voucher}
       <p style="margin-top:14px">Quedo atento a sus comentarios y a cualquier antecedente adicional que requieran.</p>
       <p style="margin-top:16px;color:#555">Saludos cordiales,<br/><b>Central Mutuos — Con Creces</b></p>
     </div>
@@ -3135,10 +3184,6 @@ async def tasacion_enviar(payload: dict):
     if not nombre:
         raise HTTPException(status_code=400, detail="Falta el nombre del cliente")
     destinos = _parse_destinatarios(payload, TASACION_DEST_DEFAULT)
-    inmo_email = (payload.get("inmo_contacto_email") or "").strip()
-    if payload.get("modalidad") == "inmobiliaria" and inmo_email and "@" in inmo_email:
-        if inmo_email.lower() not in [d.lower() for d in destinos]:
-            destinos.append(inmo_email)
     subject = f"SOLICITUD TASACION // {nombre}" + (f" Rut: {rut}" if rut else "")
     cuerpo = _tasacion_html(payload)
     attach_names, attach_paths = [], []
@@ -3167,7 +3212,7 @@ async def tasacion_enviar(payload: dict):
             {"inmobiliaria_key": inmo.lower()},
             {"$set": {"inmobiliaria_key": inmo.lower(), "inmobiliaria": inmo,
                       "contacto_nombre": (payload.get("inmo_contacto_nombre") or "").strip(),
-                      "contacto_email": inmo_email, "actualizado_en": now_iso()}},
+                      "contacto_email": (payload.get("inmo_contacto_email") or "").strip(), "actualizado_en": now_iso()}},
             upsert=True)
     await db.tasacion_log.insert_one({
         "id": str(uuid.uuid4()), "nombre": nombre, "rut": rut,
@@ -3194,10 +3239,70 @@ async def tasacion_log():
     return {"log": [clean(d) for d in docs]}
 
 
+@api.patch("/tasacion/fecha/{fid}")
+async def tasacion_fecha_manual(fid: str, payload: dict):
+    fecha = ((payload or {}).get("fecha") or "").strip()
+    await db.folders.update_one({"id": fid}, {"$set": {"tasacion_fecha": fecha,
+                                                       "tasacion_fecha_origen": "manual"}})
+    return {"ok": True, "fecha": fecha}
+
+
+def _buscar_fecha_tasacion_imap(nombre):
+    """Busca en el correo la respuesta de Value Property con la fecha coordinada."""
+    toks = [t for t in nombre.split() if len(t) > 2][:2]
+    if not toks:
+        return None
+    query = f'"from:valueproperty.cl {" ".join(toks)}"'
+    pat = re.compile(r"coordin[oó][^.]{0,40}?para el\s+([^.,\n]{3,60})", re.I)
+    pat2 = re.compile(r"(?:tasaci[oó]n|visita|evaluaci[oó]n)[^.]{0,60}?(?:el d[ií]a|para el)\s+([^.,\n]{3,60})", re.I)
+    for acc in mail.ACCOUNTS:
+        try:
+            m = mail._connect(acc)
+            m.select("INBOX", readonly=True)
+            typ, data = m.search(None, "X-GM-RAW", query)
+            ids = data[0].split() if data and data[0] else []
+            import email as _em
+            for num in reversed(ids[-5:]):
+                typ, d = m.fetch(num, "(BODY.PEEK[])")
+                if not d or not isinstance(d[0], tuple):
+                    continue
+                msg = _em.message_from_bytes(d[0][1])
+                body = ""
+                for part in msg.walk():
+                    if part.get_content_type() == "text/plain":
+                        try:
+                            body = part.get_payload(decode=True).decode(part.get_content_charset() or "utf-8", errors="ignore")
+                            break
+                        except Exception:
+                            pass
+                mm = pat.search(body) or pat2.search(body)
+                if mm:
+                    m.logout()
+                    return mm.group(1).strip().strip("*").strip()
+            m.logout()
+        except Exception:
+            continue
+    return None
+
+
+@api.post("/tasacion/detectar-fecha/{fid}")
+async def tasacion_detectar_fecha(fid: str):
+    doc = await db.folders.find_one({"id": fid})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Carpeta no encontrada")
+    fecha = await asyncio.to_thread(_buscar_fecha_tasacion_imap, doc.get("nombre", ""))
+    if not fecha:
+        return {"ok": False, "detail": "No se encontró respuesta de Value Property con fecha para este cliente"}
+    await db.folders.update_one({"id": fid}, {"$set": {"tasacion_fecha": fecha,
+                                                       "tasacion_fecha_origen": "auto",
+                                                       "tasacion_fecha_detectada_en": now_iso()}})
+    return {"ok": True, "fecha": fecha}
+
+
 # ---------------------------------------------------------------------------
 # Solicitud de Estudio de Título (Hipotecario Gestión, siempre CC Victoria)
 # ---------------------------------------------------------------------------
-ESTUDIO_DEST_DEFAULT = ["contacto@hipotecariogestion.cl", VICTORIA_EMAIL]
+ESTUDIO_DEST_DEFAULT = [VICTORIA_EMAIL]
 DOCS_ESTUDIO_USADA = [
     "Copia de escritura de compraventa anterior (título del vendedor), incluyendo personería si el vendedor es una sociedad",
     "Copia de inscripción de dominio con vigencia en el Conservador de Bienes Raíces",
@@ -3226,6 +3331,14 @@ def _estudio_html(p):
     fila("Tipo de vivienda", "Vivienda usada" if tipo == "usada" else "Vivienda nueva (inmobiliaria)")
     if tipo == "nueva":
         fila("Inmobiliaria / Proyecto", p.get("inmobiliaria", ""))
+        contacto_inmo = " · ".join(x for x in [(p.get("inmo_contacto_nombre") or "").strip(),
+                                               (p.get("inmo_contacto_email") or "").strip()] if x)
+        fila("Contacto inmobiliaria", contacto_inmo)
+    else:
+        vend = " · ".join(x for x in [(p.get("vendedor_nombre") or "").strip(),
+                                      (p.get("vendedor_email") or "").strip(),
+                                      (p.get("vendedor_telefono") or "").strip()] if x)
+        fila("Vendedor (contacto)", vend)
     fila("Dirección de la propiedad", p.get("direccion", ""))
     docs = [d for d in (p.get("docs_lista") or []) if str(d).strip()]
     docs_html = ""
@@ -3236,11 +3349,12 @@ def _estudio_html(p):
             'necesitamos los siguientes documentos:</b></p>'
             f'<ol style="margin:6px 0 0;padding-left:22px;color:#111">{lis}</ol>')
     obs = (p.get("observaciones") or "").strip()
+    intro = (p.get("intro") or "").strip() or ("Solicitamos dar inicio al <b>estudio de títulos</b> del cliente en referencia, "
+                                               "con copia a Victoria Vilches. Se detallan los antecedentes:")
     return f"""
     <div style="font-family:Arial,sans-serif;font-size:14px;color:#222;max-width:640px">
       <p>Estimados, junto con saludar:</p>
-      <p>Solicitamos dar inicio al <b>estudio de títulos</b> del cliente en referencia,
-      con copia a Victoria Vilches. Se detallan los antecedentes:</p>
+      <p>{intro}</p>
       <table style="border-collapse:collapse;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;width:100%">{''.join(filas)}</table>
       {docs_html}
       {f'<p style="margin-top:12px"><b>Observaciones:</b> {obs}</p>' if obs else ''}
@@ -3282,6 +3396,16 @@ async def estudio_enviar(payload: dict):
     res = await asyncio.to_thread(mail.send_mail, destinos, subject, cuerpo, adjuntos, "secundaria")
     if not res.get("success"):
         raise HTTPException(status_code=502, detail=res.get("error", "Error de envío"))
+    # Guardar plantilla de contacto de la inmobiliaria (compartida con tasación)
+    inmo = (payload.get("inmobiliaria") or "").strip()
+    if payload.get("tipo_vivienda") == "nueva" and inmo and (payload.get("inmo_contacto_nombre") or payload.get("inmo_contacto_email")):
+        await db.tasacion_contactos.update_one(
+            {"inmobiliaria_key": inmo.lower()},
+            {"$set": {"inmobiliaria_key": inmo.lower(), "inmobiliaria": inmo,
+                      "contacto_nombre": (payload.get("inmo_contacto_nombre") or "").strip(),
+                      "contacto_email": (payload.get("inmo_contacto_email") or "").strip(),
+                      "actualizado_en": now_iso()}},
+            upsert=True)
     await db.estudio_titulo_log.insert_one({
         "id": str(uuid.uuid4()), "nombre": nombre, "rut": rut,
         "tipo_vivienda": payload.get("tipo_vivienda", ""),
@@ -3342,6 +3466,27 @@ async def brokers_add(payload: dict):
            "emails": emails, "creado_en": now_iso()}
     await db.brokers.insert_one(dict(doc))
     return {"ok": True, "broker": clean(doc)}
+
+
+@api.put("/brokers/{bid}")
+async def brokers_edit(bid: str, payload: dict):
+    payload = payload or {}
+    upd = {}
+    if (payload.get("nombre") or "").strip():
+        upd["nombre"] = payload["nombre"].strip()
+    if "contactos" in payload:
+        upd["contactos"] = (payload.get("contactos") or "").strip()
+    emails = payload.get("emails")
+    if emails is not None:
+        if isinstance(emails, str):
+            emails = [e.strip() for e in re.split(r"[,;\n]+", emails) if e.strip()]
+        emails = [e for e in emails if "@" in e]
+        if emails:
+            upd["emails"] = emails
+    if upd:
+        await db.brokers.update_one({"id": bid}, {"$set": upd})
+    doc = await db.brokers.find_one({"id": bid})
+    return {"ok": True, "broker": clean(doc) if doc else None}
 
 
 @api.delete("/brokers/{bid}")

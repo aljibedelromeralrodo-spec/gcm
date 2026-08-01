@@ -25,6 +25,28 @@ Idioma del usuario: **Español** (responder siempre en español).
 - IMAP/SMTP: en `/app/backend/.env` (MAIL_USER, MAIL2_USER + app passwords)
 
 ## Implementado
+- 2026-08-01 (parte 6) — **Tasación v3 + Estudio v2 + Chat Martín REAL**:
+  - Tasación: destinatarios SIEMPRE fijos (Value Property + Victoria; el mail de la
+    inmobiliaria YA NO se agrega a destinatarios). Canal: inmobiliaria (plantilla) / broker
+    (select que prellena contacto desde db.brokers) / vivienda usada (vendedor libre).
+    Contacto para el tasador (nombre, teléfono, mail opcional) SIEMPRE va en el cuerpo.
+    Voucher de pago: upload (usa folders/{fid}/upload-file → 99_otros), se adjunta y agrega
+    "Adjunto voucher de pago tasación" al final. Intro editable + preview antes de enviar.
+    Fecha de tasación de Value Property: POST /api/tasacion/detectar-fecha/{fid} (busca IMAP
+    respuesta "coordinó para el X"), PATCH /api/tasacion/fecha/{fid} manual; se muestra 📅
+    en el botón de la tarjeta.
+  - Estudio de Título: destinatario = BROKER elegido (Gestión Hipotecaria es un broker más,
+    ya no default) + Victoria SIEMPRE (default solo Victoria). Inmobiliaria con plantilla
+    compartida (autofill + se guarda al enviar). Vivienda usada: vendedor libre nombre +
+    mail + teléfono (opcional) en el cuerpo. Intro editable.
+  - Brokers: PUT /api/brokers/{id} (editar nombre/contactos/emails); BrokersPanel con
+    lápiz de edición + agregar/quitar; modo soloAdmin dentro del canal broker de tasación.
+  - **Chat Martín ACTIVADO** (antes mocked): /api/central/chat usa emergentintegrations
+    (gpt-5.4-mini, EMERGENT_LLM_KEY), respuestas cortas en español (máx 3 frases), contexto
+    = todas las carpetas (docs, faltantes, % aprobación, estados tasación/estudio/escritura/
+    mesa, codeudor) + memoria por session_id (últimos 6 turnos desde db.conversaciones).
+    Probado: responde estado de Paula, recuerda contexto ("ella"), dice qué documento falta.
+
 - 2026-08-01 (parte 5) — **Brokers + Vendedor libre + Firma de Escritura**:
   - **Brokers administrables** (`db.brokers`, GET/POST/DELETE /api/brokers), seed con emails
     reales encontrados en el correo: World Consultores (jgarrido@ y fdelacuadra@

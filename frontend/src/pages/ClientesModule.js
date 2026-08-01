@@ -4,18 +4,28 @@ import axios from "axios";
 const API = process.env.REACT_APP_BACKEND_URL;
 const CAT_LABELS = { cedula: "Cédula", liquidacion: "Liquidaciones", afp: "AFP", cmf: "CMF", imp_renta: "Imp. Renta", boletas: "Boletas" };
 
-const BrokersPanel = ({ brokers, dest, setDest, reloadBrokers }) => {
-  const [nuevo, setNuevo] = useState({ nombre: "", emails: "" });
+const BrokersPanel = ({ brokers, dest, setDest, reloadBrokers, soloAdmin }) => {
+  const [nuevo, setNuevo] = useState({ nombre: "", contactos: "", emails: "" });
   const [showAdd, setShowAdd] = useState(false);
+  const [editId, setEditId] = useState(null);
   const destList = dest.split(",").map(s => s.trim()).filter(Boolean);
   const isOn = (b) => (b.emails || []).length > 0 && b.emails.every(e => destList.some(d => d.toLowerCase() === e.toLowerCase()));
   const toggle = (b) => {
     if (isOn(b)) setDest(destList.filter(d => !b.emails.some(e => e.toLowerCase() === d.toLowerCase())).join(", "));
     else setDest([...destList, ...b.emails.filter(e => !destList.some(d => d.toLowerCase() === e.toLowerCase()))].join(", "));
   };
-  const agregar = async () => {
+  const guardar = async () => {
     if (!nuevo.nombre.trim() || !nuevo.emails.trim()) return;
-    try { await axios.post(`${API}/api/brokers`, nuevo); setNuevo({ nombre: "", emails: "" }); setShowAdd(false); reloadBrokers(); } catch (_e) { /* noop */ }
+    try {
+      if (editId) await axios.put(`${API}/api/brokers/${editId}`, nuevo);
+      else await axios.post(`${API}/api/brokers`, nuevo);
+      setNuevo({ nombre: "", contactos: "", emails: "" }); setShowAdd(false); setEditId(null);
+      reloadBrokers();
+    } catch (_e) { /* noop */ }
+  };
+  const editar = (b) => {
+    setEditId(b.id); setShowAdd(true);
+    setNuevo({ nombre: b.nombre, contactos: b.contactos || "", emails: (b.emails || []).join(", ") });
   };
   const quitar = async (b) => {
     if (!window.confirm(`¿Quitar el broker "${b.nombre}"?`)) return;
@@ -24,14 +34,22 @@ const BrokersPanel = ({ brokers, dest, setDest, reloadBrokers }) => {
   const inpS = { padding: "0.4rem 0.6rem", borderRadius: 6, border: "1px solid rgba(148,163,184,0.3)", background: "#1e293b", color: "#e2e8f0", fontSize: 12 };
   return (
     <div data-testid="brokers-panel" style={{ background: "rgba(59,130,246,0.06)", border: "1px solid rgba(59,130,246,0.25)", borderRadius: 8, padding: "0.7rem 0.9rem" }}>
-      <div style={{ opacity: 0.8, fontSize: 11, textTransform: "uppercase", marginBottom: 6, fontWeight: 700 }}>Brokers — marca para agregarlos al envío</div>
+      <div style={{ opacity: 0.8, fontSize: 11, textTransform: "uppercase", marginBottom: 6, fontWeight: 700 }}>
+        {soloAdmin ? "Plantillas de brokers (editar / agregar / quitar)" : "Brokers — marca para agregarlos al envío"}
+      </div>
       <div style={{ display: "grid", gap: 4 }}>
         {brokers.map(b => (
           <div key={b.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5 }}>
-            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", flex: 1 }}>
-              <input type="checkbox" checked={isOn(b)} onChange={() => toggle(b)} data-testid={`broker-check-${b.id}`} />
-              <span><b>{b.nombre}</b>{b.contactos ? ` — ${b.contactos}` : ""} <span style={{ opacity: 0.55 }}>({(b.emails || []).join(", ")})</span></span>
-            </label>
+            {soloAdmin ? (
+              <span style={{ flex: 1 }}><b>{b.nombre}</b>{b.contactos ? ` — ${b.contactos}` : ""} <span style={{ opacity: 0.55 }}>({(b.emails || []).join(", ")})</span></span>
+            ) : (
+              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", flex: 1 }}>
+                <input type="checkbox" checked={isOn(b)} onChange={() => toggle(b)} data-testid={`broker-check-${b.id}`} />
+                <span><b>{b.nombre}</b>{b.contactos ? ` — ${b.contactos}` : ""} <span style={{ opacity: 0.55 }}>({(b.emails || []).join(", ")})</span></span>
+              </label>
+            )}
+            <button onClick={() => editar(b)} title="Editar broker" data-testid={`broker-edit-${b.id}`}
+              style={{ background: "transparent", border: "none", color: "#93c5fd", cursor: "pointer" }}><i className="fa fa-pencil" /></button>
             <button onClick={() => quitar(b)} title="Quitar broker" data-testid={`broker-del-${b.id}`}
               style={{ background: "transparent", border: "none", color: "#f87171", cursor: "pointer" }}><i className="fa fa-trash" /></button>
           </div>
@@ -39,9 +57,11 @@ const BrokersPanel = ({ brokers, dest, setDest, reloadBrokers }) => {
       </div>
       {showAdd ? (
         <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
-          <input value={nuevo.nombre} onChange={e => setNuevo({ ...nuevo, nombre: e.target.value })} placeholder="Nombre broker" data-testid="broker-new-nombre" style={{ ...inpS, flex: 1, minWidth: 120 }} />
-          <input value={nuevo.emails} onChange={e => setNuevo({ ...nuevo, emails: e.target.value })} placeholder="correos separados por coma" data-testid="broker-new-emails" style={{ ...inpS, flex: 2, minWidth: 180 }} />
-          <button onClick={agregar} data-testid="broker-new-save" style={{ ...inpS, background: "#2563eb", border: "none", fontWeight: 700, cursor: "pointer" }}>Guardar</button>
+          <input value={nuevo.nombre} onChange={e => setNuevo({ ...nuevo, nombre: e.target.value })} placeholder="Nombre broker" data-testid="broker-new-nombre" style={{ ...inpS, flex: 1, minWidth: 110 }} />
+          <input value={nuevo.contactos} onChange={e => setNuevo({ ...nuevo, contactos: e.target.value })} placeholder="Personas de contacto" data-testid="broker-new-contactos" style={{ ...inpS, flex: 1, minWidth: 130 }} />
+          <input value={nuevo.emails} onChange={e => setNuevo({ ...nuevo, emails: e.target.value })} placeholder="correos separados por coma" data-testid="broker-new-emails" style={{ ...inpS, flex: 2, minWidth: 170 }} />
+          <button onClick={guardar} data-testid="broker-new-save" style={{ ...inpS, background: "#2563eb", border: "none", fontWeight: 700, cursor: "pointer" }}>{editId ? "Actualizar" : "Guardar"}</button>
+          <button onClick={() => { setShowAdd(false); setEditId(null); setNuevo({ nombre: "", contactos: "", emails: "" }); }} style={{ ...inpS, background: "transparent", cursor: "pointer" }}>Cancelar</button>
         </div>
       ) : (
         <button onClick={() => setShowAdd(true)} data-testid="broker-add-btn" style={{ marginTop: 8, background: "transparent", border: "1px dashed rgba(59,130,246,0.5)", color: "#93c5fd", borderRadius: 6, padding: "0.3rem 0.7rem", fontSize: 11.5, cursor: "pointer" }}>
@@ -200,14 +220,59 @@ export default function ClientesModule({ onNavigate }) {
     setTasacionModal({
       folder: f, archivos, tipo: "Individual",
       destinatarios: "contacto@valueproperty.cl, victoriavilches@centralmutuos.cl",
-      modalidad: "inmobiliaria",
+      modalidad: "inmobiliaria", broker_id: "",
       inmobiliaria: f.datos_financieros?.inmobiliaria || "",
       inmo_contacto_nombre: "", inmo_contacto_email: "",
-      vl_nombre: "", vl_email: "",
+      intro: "", voucher_nombre: "", fecha_tasacion: f.tasacion_fecha || "",
       direccion: "", rol_avaluo: "",
       valor_uf: "", vendedor: "", vendedor_email: "", contacto_nombre: "", contacto_telefono: "",
+      contacto_email: "",
       observaciones: "", preview: null, loading: false, msg: "",
     });
+  };
+
+  const subirVoucher = async (file) => {
+    if (!file) return;
+    const m = tasacionModal;
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("subfolder", "99_otros");
+      const r = await axios.post(`${API}/api/clientes/folders/${m.folder.id}/upload-file`, fd);
+      const ruta = r.data.saved || `99_otros/${file.name}`;
+      setTasacionModal(prev => ({
+        ...prev, preview: null, voucher_nombre: file.name,
+        archivos: [{ nombre: file.name, ruta, subfolder: "99_otros", sel: true },
+                   ...prev.archivos.filter(a => a.ruta !== ruta)],
+      }));
+    } catch (e) {
+      setTasacionModal(prev => ({ ...prev, msg: "Error subiendo voucher: " + (e.response?.data?.detail || e.message) }));
+    }
+  };
+
+  const detectarFechaTasacion = async () => {
+    setTasacionModal(prev => ({ ...prev, loading: true }));
+    try {
+      const r = await axios.post(`${API}/api/tasacion/detectar-fecha/${tasacionModal.folder.id}`);
+      if (r.data.ok) {
+        setTasacionModal(prev => ({ ...prev, loading: false, fecha_tasacion: r.data.fecha, msg: `✅ Fecha detectada del correo: ${r.data.fecha}` }));
+        loadFolders();
+      } else {
+        setTasacionModal(prev => ({ ...prev, loading: false, msg: r.data.detail || "No se encontró la fecha" }));
+      }
+    } catch (e) {
+      setTasacionModal(prev => ({ ...prev, loading: false, msg: "Error: " + (e.response?.data?.detail || e.message) }));
+    }
+  };
+
+  const guardarFechaTasacion = async () => {
+    try {
+      await axios.patch(`${API}/api/tasacion/fecha/${tasacionModal.folder.id}`, { fecha: tasacionModal.fecha_tasacion });
+      setTasacionModal(prev => ({ ...prev, msg: "✅ Fecha de tasación guardada" }));
+      loadFolders();
+    } catch (e) {
+      setTasacionModal(prev => ({ ...prev, msg: "Error: " + (e.response?.data?.detail || e.message) }));
+    }
   };
 
   const pickInmoPlantilla = (nombre) => {
@@ -226,17 +291,16 @@ export default function ClientesModule({ onNavigate }) {
     } catch (_e) { /* noop */ }
   };
 
-  const _destConVendedorLibre = (m) =>
-    m.destinatarios + (m.vl_email && m.vl_email.includes("@") ? `, ${m.vl_email}` : "");
-
   const tasacionPayload = (m, confirm) => ({
     folder_id: m.folder.id, nombre: m.folder.nombre, rut: m.folder.rut || "",
-    destinatarios: _destConVendedorLibre(m), modalidad: m.modalidad,
+    destinatarios: m.destinatarios, modalidad: m.modalidad,
     inmobiliaria: m.inmobiliaria, inmo_contacto_nombre: m.inmo_contacto_nombre,
     inmo_contacto_email: m.inmo_contacto_email,
+    intro: m.intro, voucher: !!m.voucher_nombre,
     tipo: m.tipo, direccion: m.direccion, rol_avaluo: m.rol_avaluo,
     valor_uf: m.valor_uf, vendedor: m.vendedor, vendedor_email: m.vendedor_email,
     contacto_nombre: m.contacto_nombre, contacto_telefono: m.contacto_telefono,
+    contacto_email: m.contacto_email,
     observaciones: m.observaciones,
     attach_files: m.archivos.filter(a => a.sel).map(a => a.ruta),
     confirm,
@@ -277,12 +341,18 @@ export default function ClientesModule({ onNavigate }) {
       defaults = d.data;
     } catch (_e) { /* defaults */ }
     reloadBrokers();
+    try {
+      const c = await axios.get(`${API}/api/tasacion/contactos`);
+      setTasacionContactos(c.data.contactos || []);
+    } catch (_e) { /* noop */ }
     setEstudioModal({
       folder: f, archivos,
       destinatarios: defaults.destinatarios.join(", "),
       tipo_vivienda: "nueva",
       inmobiliaria: f.datos_financieros?.inmobiliaria || "",
-      vl_nombre: "", vl_email: "",
+      inmo_contacto_nombre: "", inmo_contacto_email: "",
+      vendedor_nombre: "", vendedor_email: "", vendedor_telefono: "",
+      intro: "",
       direccion: "", observaciones: "",
       docs_texto: (defaults.docs_usada || []).join("\n"),
       preview: null, loading: false, msg: "",
@@ -291,8 +361,12 @@ export default function ClientesModule({ onNavigate }) {
 
   const estudioPayload = (m, confirm) => ({
     folder_id: m.folder.id, nombre: m.folder.nombre, rut: m.folder.rut || "",
-    destinatarios: _destConVendedorLibre(m), tipo_vivienda: m.tipo_vivienda,
-    inmobiliaria: m.inmobiliaria, direccion: m.direccion,
+    destinatarios: m.destinatarios, tipo_vivienda: m.tipo_vivienda,
+    inmobiliaria: m.inmobiliaria,
+    inmo_contacto_nombre: m.inmo_contacto_nombre, inmo_contacto_email: m.inmo_contacto_email,
+    vendedor_nombre: m.vendedor_nombre, vendedor_email: m.vendedor_email,
+    vendedor_telefono: m.vendedor_telefono, intro: m.intro,
+    direccion: m.direccion,
     observaciones: m.observaciones,
     docs_lista: m.tipo_vivienda === "usada" ? m.docs_texto.split("\n").map(s => s.trim()).filter(Boolean) : [],
     attach_files: m.archivos.filter(a => a.sel).map(a => a.ruta),
@@ -310,7 +384,7 @@ export default function ClientesModule({ onNavigate }) {
   };
 
   const estudioEnviar = async () => {
-    if (!window.confirm(`¿Enviar la solicitud de estudio de títulos de ${estudioModal.folder.nombre} a: ${_destConVendedorLibre(estudioModal)}?`)) return;
+    if (!window.confirm(`¿Enviar la solicitud de estudio de títulos de ${estudioModal.folder.nombre} a: ${estudioModal.destinatarios}?`)) return;
     setEstudioModal(m => ({ ...m, loading: true, msg: "" }));
     try {
       const r = await axios.post(`${API}/api/estudio-titulo/enviar`, estudioPayload(estudioModal, true));
@@ -1237,7 +1311,7 @@ export default function ClientesModule({ onNavigate }) {
                     <button data-testid={`btn-tasacion-${f.id}`} onClick={() => openTasacion(f)}
                       title={`Solicitar tasación de la propiedad de ${f.nombre} (Value Property + Victoria Vilches)`}
                       style={modBtn("rgba(234,88,12,0.12)", "#ea580c", enviadoManual ? "#fff" : "#ea580c")}>
-                      <i className="fa fa-home"></i> Solicitud de Tasación{f.tasacion_solicitada_at ? " ✓" : ""}
+                      <i className="fa fa-home"></i> Solicitud de Tasación{f.tasacion_fecha ? ` 📅 ${f.tasacion_fecha}` : (f.tasacion_solicitada_at ? " ✓" : "")}
                     </button>
                     <button data-testid={`btn-estudio-titulo-${f.id}`} onClick={() => openEstudio(f)}
                       title={`Solicitar estudio de títulos de ${f.nombre} (siempre con copia a Victoria Vilches)`}
@@ -1996,26 +2070,21 @@ export default function ClientesModule({ onNavigate }) {
                 {m.msg && (
                   <div data-testid="tasacion-msg" style={{ padding: "0.6rem 0.9rem", borderRadius: 8, background: m.msg.startsWith("✅") ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)", color: m.msg.startsWith("✅") ? "#4ade80" : "#f87171", fontWeight: 600, fontSize: 13 }}>{m.msg}</div>
                 )}
-                <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Destinatarios (editable, separados por coma) <span style={{ color: "#4ade80" }}>· Victoria Vilches siempre va incluida</span></b>
+                <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Destinatarios <span style={{ color: "#4ade80" }}>· la tasación SIEMPRE va a Value Property y Victoria Vilches</span></b>
                   <input value={m.destinatarios} onChange={e => set("destinatarios", e.target.value)} data-testid="tasacion-destinatarios" style={inpS} />
                 </label>
-                <BrokersPanel brokers={brokers} dest={m.destinatarios} setDest={(v) => set("destinatarios", v)} reloadBrokers={reloadBrokers} />
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: "0.6rem" }}>
-                  <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Vendedor libre (nombre)</b>
-                    <input value={m.vl_nombre} onChange={e => set("vl_nombre", e.target.value)} placeholder="Vende una sola vez" data-testid="tasacion-vl-nombre" style={inpS} />
-                  </label>
-                  <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Mail vendedor libre <span style={{ opacity: 0.6 }}>(se agrega al envío, no aparece en el texto)</span></b>
-                    <input value={m.vl_email} onChange={e => set("vl_email", e.target.value)} placeholder="vendedor@correo.cl" data-testid="tasacion-vl-email" style={inpS} />
-                  </label>
-                </div>
                 <div style={{ background: "rgba(30,41,59,0.7)", borderRadius: 8, padding: "0.5rem 0.9rem", fontSize: 12, opacity: 0.85 }}>
                   Asunto: SOLICITUD TASACION // {m.folder.nombre}{m.folder.rut ? ` Rut: ${m.folder.rut}` : ""}
                 </div>
+                <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Texto inicial del correo (editable)</b>
+                  <textarea value={m.intro} onChange={e => set("intro", e.target.value)} rows={2} placeholder={`Estimados, se envía solicitud de tasación para ${m.folder.nombre}...`} data-testid="tasacion-intro" style={{ ...inpS, resize: "vertical" }} />
+                </label>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
-                  <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Tipo de vivienda</b>
+                  <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Canal / Tipo</b>
                     <select value={m.modalidad} onChange={e => set("modalidad", e.target.value)} data-testid="tasacion-modalidad" style={inpS}>
                       <option value="inmobiliaria">Vivienda nueva (inmobiliaria)</option>
-                      <option value="usada">Vivienda usada</option>
+                      <option value="broker">Broker</option>
+                      <option value="usada">Vivienda usada (vendedor libre)</option>
                     </select>
                   </label>
                   <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Tipo de tasación</b>
@@ -2042,7 +2111,24 @@ export default function ClientesModule({ onNavigate }) {
                         <input value={m.inmo_contacto_email} onChange={e => set("inmo_contacto_email", e.target.value)} placeholder="contacto@inmobiliaria.cl" data-testid="tasacion-inmo-email" style={inpS} />
                       </label>
                     </div>
-                    <div style={{ fontSize: 11, opacity: 0.7 }}>💾 Al enviar, el contacto queda guardado como plantilla para esta inmobiliaria.</div>
+                    <div style={{ fontSize: 11, opacity: 0.7 }}>💾 Al enviar, el contacto queda guardado como plantilla para esta inmobiliaria (no se agrega a los destinatarios, va como contacto en el correo).</div>
+                  </div>
+                )}
+                {m.modalidad === "broker" && (
+                  <div style={{ background: "rgba(59,130,246,0.06)", border: "1px solid rgba(59,130,246,0.3)", borderRadius: 8, padding: "0.7rem 0.9rem", display: "grid", gap: "0.6rem" }}>
+                    <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Broker <span style={{ opacity: 0.6 }}>(su contacto va en el correo, se puede editar abajo)</span></b>
+                      <select value={m.broker_id} data-testid="tasacion-broker" style={inpS}
+                        onChange={e => {
+                          const b = brokers.find(x => x.id === e.target.value);
+                          setTasacionModal(prev => ({ ...prev, preview: null, broker_id: e.target.value,
+                            contacto_nombre: b ? (b.contactos || b.nombre) : prev.contacto_nombre,
+                            contacto_email: b ? (b.emails || [])[0] || "" : prev.contacto_email }));
+                        }}>
+                        <option value="">— Seleccionar broker —</option>
+                        {brokers.map(b => <option key={b.id} value={b.id}>{b.nombre}{b.contactos ? ` — ${b.contactos}` : ""}</option>)}
+                      </select>
+                    </label>
+                    <BrokersPanel brokers={brokers} dest={""} setDest={() => {}} reloadBrokers={reloadBrokers} soloAdmin />
                   </div>
                 )}
                 <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Dirección de la propiedad <span style={{ color: "#f87171" }}>*</span></b>
@@ -2056,23 +2142,38 @@ export default function ClientesModule({ onNavigate }) {
                     <input value={m.valor_uf} onChange={e => set("valor_uf", e.target.value)} placeholder="Ej: 3.200" data-testid="tasacion-valor" style={inpS} />
                   </label>
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: m.modalidad === "usada" ? "1fr 1fr" : "1fr", gap: "0.75rem" }}>
-                  <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Vendedor {m.modalidad === "usada" ? "(nombre)" : ""}</b>
-                    <input value={m.vendedor} onChange={e => set("vendedor", e.target.value)} placeholder="Nombre del vendedor" data-testid="tasacion-vendedor" style={inpS} />
-                  </label>
-                  {m.modalidad === "usada" && (
-                    <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Mail de contacto del vendedor</b>
-                      <input value={m.vendedor_email} onChange={e => set("vendedor_email", e.target.value)} placeholder="vendedor@correo.cl" data-testid="tasacion-vendedor-email" style={inpS} />
+                <div style={{ background: "rgba(30,41,59,0.7)", borderRadius: 8, padding: "0.7rem 0.9rem", display: "grid", gap: "0.6rem" }}>
+                  <div style={{ opacity: 0.8, fontSize: 11, textTransform: "uppercase", fontWeight: 700 }}>
+                    {m.modalidad === "usada" ? "Contacto del vendedor (para que el tasador coordine)" : "Contacto para coordinar la visita del tasador"}
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.6rem" }}>
+                    <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Nombre</b>
+                      <input value={m.contacto_nombre} onChange={e => set("contacto_nombre", e.target.value)} placeholder={m.modalidad === "usada" ? "Nombre del vendedor" : "Quién recibe al tasador"} data-testid="tasacion-contacto-nombre" style={inpS} />
                     </label>
-                  )}
+                    <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Teléfono</b>
+                      <input value={m.contacto_telefono} onChange={e => set("contacto_telefono", e.target.value)} placeholder="+56 9 …" data-testid="tasacion-contacto-fono" style={inpS} />
+                    </label>
+                    <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Mail <span style={{ opacity: 0.6 }}>(opcional)</span></b>
+                      <input value={m.contacto_email} onChange={e => set("contacto_email", e.target.value)} placeholder="contacto@correo.cl" data-testid="tasacion-contacto-email" style={inpS} />
+                    </label>
+                  </div>
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
-                  <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Contacto para coordinar (nombre)</b>
-                    <input value={m.contacto_nombre} onChange={e => set("contacto_nombre", e.target.value)} placeholder="Quién recibe al tasador" data-testid="tasacion-contacto-nombre" style={inpS} />
+                <div style={{ background: "rgba(212,175,55,0.08)", border: "1px solid rgba(212,175,55,0.35)", borderRadius: 8, padding: "0.7rem 0.9rem", display: "grid", gap: "0.4rem" }}>
+                  <div style={{ opacity: 0.85, fontSize: 11, textTransform: "uppercase", fontWeight: 700, color: "#d4af37" }}>Voucher de pago de la tasación</div>
+                  <input type="file" accept=".pdf,.jpg,.jpeg,.png" data-testid="tasacion-voucher-input"
+                    onChange={e => subirVoucher(e.target.files[0])} style={{ fontSize: 12 }} />
+                  {m.voucher_nombre && <div style={{ fontSize: 12, color: "#4ade80" }}>✅ {m.voucher_nombre} — se adjunta y el correo dirá "Adjunto voucher de pago tasación"</div>}
+                </div>
+                <div style={{ background: "rgba(234,88,12,0.08)", border: "1px solid rgba(234,88,12,0.3)", borderRadius: 8, padding: "0.7rem 0.9rem", display: "flex", gap: 8, alignItems: "end", flexWrap: "wrap" }}>
+                  <label style={{ ...lblS, flex: 1, minWidth: 200 }}><b style={{ display: "block", marginBottom: 4 }}>📅 Fecha de tasación informada por Value Property</b>
+                    <input value={m.fecha_tasacion} onChange={e => setTasacionModal(prev => ({ ...prev, fecha_tasacion: e.target.value }))} placeholder="Aún sin fecha" data-testid="tasacion-fecha-vp" style={inpS} />
                   </label>
-                  <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Teléfono del contacto</b>
-                    <input value={m.contacto_telefono} onChange={e => set("contacto_telefono", e.target.value)} placeholder="+56 9 …" data-testid="tasacion-contacto-fono" style={inpS} />
-                  </label>
+                  <button onClick={detectarFechaTasacion} disabled={m.loading} data-testid="btn-detectar-fecha" style={{ ...inpS, width: "auto", background: "#ea580c", border: "none", fontWeight: 700, cursor: "pointer" }}>
+                    <i className="fa fa-magic" /> Detectar del correo
+                  </button>
+                  <button onClick={guardarFechaTasacion} disabled={m.loading} data-testid="btn-guardar-fecha" style={{ ...inpS, width: "auto", background: "#334155", border: "none", fontWeight: 700, cursor: "pointer" }}>
+                    Guardar
+                  </button>
                 </div>
                 <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Observaciones / antecedentes adicionales</b>
                   <textarea value={m.observaciones} onChange={e => set("observaciones", e.target.value)} rows={2} placeholder="Ej: Se adjunta carta oferta. Ya contamos con tasaciones de este proyecto." data-testid="tasacion-observaciones" style={{ ...inpS, resize: "vertical" }} />
@@ -2133,21 +2234,16 @@ export default function ClientesModule({ onNavigate }) {
                 {m.msg && (
                   <div data-testid="estudio-msg" style={{ padding: "0.6rem 0.9rem", borderRadius: 8, background: m.msg.startsWith("✅") ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)", color: m.msg.startsWith("✅") ? "#4ade80" : "#f87171", fontWeight: 600, fontSize: 13 }}>{m.msg}</div>
                 )}
-                <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Destinatarios (editable, separados por coma) <span style={{ color: "#4ade80" }}>· Victoria Vilches siempre va incluida</span></b>
+                <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Destinatarios <span style={{ color: "#4ade80" }}>· broker seleccionado + Victoria Vilches siempre en copia</span></b>
                   <input value={m.destinatarios} onChange={e => set("destinatarios", e.target.value)} data-testid="estudio-destinatarios" style={inpS} />
                 </label>
                 <BrokersPanel brokers={brokers} dest={m.destinatarios} setDest={(v) => set("destinatarios", v)} reloadBrokers={reloadBrokers} />
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: "0.6rem" }}>
-                  <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Vendedor libre (nombre)</b>
-                    <input value={m.vl_nombre} onChange={e => set("vl_nombre", e.target.value)} placeholder="Vende una sola vez" data-testid="estudio-vl-nombre" style={inpS} />
-                  </label>
-                  <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Mail vendedor libre <span style={{ opacity: 0.6 }}>(se agrega al envío, no aparece en el texto)</span></b>
-                    <input value={m.vl_email} onChange={e => set("vl_email", e.target.value)} placeholder="vendedor@correo.cl" data-testid="estudio-vl-email" style={inpS} />
-                  </label>
-                </div>
                 <div style={{ background: "rgba(30,41,59,0.7)", borderRadius: 8, padding: "0.5rem 0.9rem", fontSize: 12, opacity: 0.85 }}>
                   Asunto: SOLICITUD ESTUDIO DE TITULOS // {m.folder.nombre}{m.folder.rut ? ` ${m.folder.rut}` : ""}
                 </div>
+                <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Texto inicial del correo (editable)</b>
+                  <textarea value={m.intro} onChange={e => set("intro", e.target.value)} rows={2} placeholder="Solicitamos dar inicio al estudio de títulos del cliente en referencia..." data-testid="estudio-intro" style={{ ...inpS, resize: "vertical" }} />
+                </label>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
                   <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Tipo de vivienda</b>
                     <select value={m.tipo_vivienda} onChange={e => set("tipo_vivienda", e.target.value)} data-testid="estudio-tipo" style={inpS}>
@@ -2156,11 +2252,44 @@ export default function ClientesModule({ onNavigate }) {
                     </select>
                   </label>
                   {m.tipo_vivienda === "nueva" ? (
-                    <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Inmobiliaria / Proyecto</b>
-                      <input value={m.inmobiliaria} onChange={e => set("inmobiliaria", e.target.value)} placeholder="Ej: Ecomac" data-testid="estudio-inmobiliaria" style={inpS} />
+                    <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Inmobiliaria / Proyecto <span style={{ opacity: 0.6 }}>(plantilla)</span></b>
+                      <input value={m.inmobiliaria} list="inmo-plantillas-estudio" placeholder="Ej: Ecomac" data-testid="estudio-inmobiliaria" style={inpS}
+                        onChange={e => {
+                          const v = e.target.value;
+                          const p = tasacionContactos.find(c => (c.inmobiliaria || "").toLowerCase() === v.toLowerCase());
+                          setEstudioModal(prev => ({ ...prev, preview: null, inmobiliaria: v,
+                            inmo_contacto_nombre: p ? (p.contacto_nombre || prev.inmo_contacto_nombre) : prev.inmo_contacto_nombre,
+                            inmo_contacto_email: p ? (p.contacto_email || prev.inmo_contacto_email) : prev.inmo_contacto_email }));
+                        }} />
+                      <datalist id="inmo-plantillas-estudio">
+                        {tasacionContactos.map(c => <option key={c.inmobiliaria_key} value={c.inmobiliaria} />)}
+                      </datalist>
                     </label>
                   ) : <div />}
                 </div>
+                {m.tipo_vivienda === "nueva" && (
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.6rem" }}>
+                    <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Contacto inmobiliaria (nombre)</b>
+                      <input value={m.inmo_contacto_nombre} onChange={e => set("inmo_contacto_nombre", e.target.value)} placeholder="A quién se le solicita" data-testid="estudio-inmo-nombre" style={inpS} />
+                    </label>
+                    <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Mail contacto inmobiliaria <span style={{ opacity: 0.6 }}>(💾 se guarda como plantilla al enviar)</span></b>
+                      <input value={m.inmo_contacto_email} onChange={e => set("inmo_contacto_email", e.target.value)} placeholder="contacto@inmobiliaria.cl" data-testid="estudio-inmo-email" style={inpS} />
+                    </label>
+                  </div>
+                )}
+                {m.tipo_vivienda === "usada" && (
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.6rem" }}>
+                    <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Vendedor (nombre)</b>
+                      <input value={m.vendedor_nombre} onChange={e => set("vendedor_nombre", e.target.value)} placeholder="Vendedor libre" data-testid="estudio-vendedor-nombre" style={inpS} />
+                    </label>
+                    <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Mail del vendedor</b>
+                      <input value={m.vendedor_email} onChange={e => set("vendedor_email", e.target.value)} placeholder="vendedor@correo.cl" data-testid="estudio-vendedor-email" style={inpS} />
+                    </label>
+                    <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Teléfono <span style={{ opacity: 0.6 }}>(opcional)</span></b>
+                      <input value={m.vendedor_telefono} onChange={e => set("vendedor_telefono", e.target.value)} placeholder="+56 9 …" data-testid="estudio-vendedor-fono" style={inpS} />
+                    </label>
+                  </div>
+                )}
                 <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Dirección de la propiedad</b>
                   <input value={m.direccion} onChange={e => set("direccion", e.target.value)} placeholder="Dirección completa" data-testid="estudio-direccion" style={inpS} />
                 </label>
