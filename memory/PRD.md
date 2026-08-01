@@ -591,3 +591,14 @@ requieren re-deploy para llegar a producción.
 - REGLA: el correo de costo de gasto operacional va SOLO con "Central Mutuos"
   (sin "Con Creces" en header ni firma). El resto de los correos mantiene la marca
   completa Central Mutuos + Con Creces. VERIFICADO por curl (preview sin 'Con Creces').
+
+## CC en Estudio de Título (Jun 2026)
+- Modal Solicitud de Estudio de Título: campo "Con copia (CC)" (testid estudio-cc) con
+  chips rápidos: + Cliente/Solicitante (source_email) y + cada correo de brokers
+  (Gestión Hipotecaria, Kiara Fernández, World Consultores...).
+- Backend estudio_enviar: acepta payload.cc (string o lista), dedupe y excluye correos
+  ya en destinatarios; se envía con Cc y se persiste en folder.estudio_titulo_cc.
+- _reparos_cc(doc, excluir): Victoria + estudio_titulo_cc → aplicado a los 3 correos del
+  hilo de reparos (reenvío al vendedor, recordatorio al abogado, resolución) para que
+  todos (vendedor, nosotros, oficina abogado, cliente) sigan informados del proceso.
+- VERIFICADO: preview curl (cc parseado, Victoria excluida) + screenshot del modal.

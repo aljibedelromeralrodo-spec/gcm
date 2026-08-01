@@ -428,6 +428,7 @@ export default function ClientesModule({ onNavigate }) {
     setEstudioModal({
       folder: f, archivos,
       destinatarios: defaults.destinatarios.join(", "),
+      cc: (f.estudio_titulo_cc || []).join(", "),
       tipo_vivienda: "nueva",
       inmobiliaria: f.datos_financieros?.inmobiliaria || "",
       inmo_contacto_nombre: "", inmo_contacto_email: "",
@@ -441,7 +442,7 @@ export default function ClientesModule({ onNavigate }) {
 
   const estudioPayload = (m, confirm) => ({
     folder_id: m.folder.id, nombre: m.folder.nombre, rut: m.folder.rut || "",
-    destinatarios: m.destinatarios, tipo_vivienda: m.tipo_vivienda,
+    destinatarios: m.destinatarios, cc: m.cc || "", tipo_vivienda: m.tipo_vivienda,
     inmobiliaria: m.inmobiliaria,
     inmo_contacto_nombre: m.inmo_contacto_nombre, inmo_contacto_email: m.inmo_contacto_email,
     vendedor_nombre: m.vendedor_nombre, vendedor_email: m.vendedor_email,
@@ -2379,6 +2380,27 @@ export default function ClientesModule({ onNavigate }) {
                   <input value={m.destinatarios} onChange={e => set("destinatarios", e.target.value)} data-testid="estudio-destinatarios" style={inpS} />
                 </label>
                 <BrokersPanel brokers={brokers} dest={m.destinatarios} setDest={(v) => set("destinatarios", v)} reloadBrokers={reloadBrokers} />
+                <div style={{ background: "rgba(30,41,59,0.5)", border: "1px solid rgba(148,163,184,0.2)", borderRadius: 8, padding: "0.6rem 0.9rem" }}>
+                  <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Con copia (CC) <span style={{ color: "#60a5fa" }}>· opcional — se mantienen informados en TODO el hilo del estudio (reparos, recordatorios y resolución)</span></b>
+                    <input value={m.cc || ""} onChange={e => set("cc", e.target.value)} data-testid="estudio-cc" placeholder="correo1@ejemplo.cl, correo2@ejemplo.cl" style={inpS} />
+                  </label>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
+                    {m.folder.source_email && !String(m.cc || "").toLowerCase().includes(String(m.folder.source_email).toLowerCase()) && (
+                      <button data-testid="cc-add-cliente" onClick={() => set("cc", [m.cc, m.folder.source_email].filter(Boolean).join(", "))}
+                        style={{ background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.4)", color: "#4ade80", borderRadius: 12, padding: "3px 10px", fontSize: 11.5, cursor: "pointer" }}>
+                        + Cliente/Solicitante ({m.folder.source_email})
+                      </button>
+                    )}
+                    {brokers.flatMap(b => (b.emails || []).map(em => ({ nombre: b.nombre, em })))
+                      .filter(x => !String(m.cc || "").toLowerCase().includes(x.em.toLowerCase()))
+                      .map((x, i) => (
+                        <button key={i} data-testid={`cc-add-broker-${i}`} onClick={() => set("cc", [m.cc, x.em].filter(Boolean).join(", "))}
+                          style={{ background: "rgba(59,130,246,0.12)", border: "1px solid rgba(59,130,246,0.4)", color: "#60a5fa", borderRadius: 12, padding: "3px 10px", fontSize: 11.5, cursor: "pointer" }}>
+                          + {x.nombre} ({x.em})
+                        </button>
+                      ))}
+                  </div>
+                </div>
                 <div style={{ background: "rgba(30,41,59,0.7)", borderRadius: 8, padding: "0.5rem 0.9rem", fontSize: 12, opacity: 0.85 }}>
                   Asunto: SOLICITUD ESTUDIO DE TITULOS // {m.folder.nombre}{m.folder.rut ? ` ${m.folder.rut}` : ""}
                 </div>

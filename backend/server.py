@@ -4033,6 +4033,13 @@ async def estudio_enviar(payload: dict):
     if not nombre:
         raise HTTPException(status_code=400, detail="Falta el nombre del cliente")
     destinos = _parse_destinatarios(payload, ESTUDIO_DEST_DEFAULT)
+    cc_raw = payload.get("cc")
+    if isinstance(cc_raw, str):
+        cc_raw = [c.strip() for c in re.split(r"[,;\n]+", cc_raw) if c.strip()]
+    cc = []
+    for c in (cc_raw or []):
+        if "@" in c and c.lower() not in [d.lower() for d in destinos] and c.lower() not in [x.lower() for x in cc]:
+            cc.append(c)
     subject = f"SOLICITUD ESTUDIO DE TITULOS // {nombre}" + (f" {rut}" if rut else "")
     cuerpo = _estudio_html(payload)
     attach_names, attach_paths = [], []
@@ -4046,10 +4053,10 @@ async def estudio_enviar(payload: dict):
             continue
     sender = _sender_por_rol("secundaria")
     if not payload.get("confirm"):
-        return {"to": destinos, "subject": subject, "body": cuerpo,
+        return {"to": destinos, "cc": cc, "subject": subject, "body": cuerpo,
                 "attachments": attach_names, "sender": sender}
     adjuntos = [{"filename": pth.name, "content_b64": _b64(pth.read_bytes())} for pth in attach_paths]
-    res = await asyncio.to_thread(mail.send_mail, destinos, subject, cuerpo, adjuntos, "secundaria")
+    res = await asyncio.to_thread(mail.send_mail, destinos, subject, cuerpo, adjuntos, "secundaria", cc or None)
     if not res.get("success"):
         raise HTTPException(status_code=502, detail=res.get("error", "Error de envío"))
     # Guardar plantilla de contacto de la inmobiliaria (compartida con tasación)
@@ -4073,6 +4080,7 @@ async def estudio_enviar(payload: dict):
             "estudio_titulo_solicitado_at": now_iso(),
             "estudio_titulo_subject": subject,
             "estudio_titulo_tipo_vivienda": payload.get("tipo_vivienda", ""),
+            "estudio_titulo_cc": cc,
             "estudio_titulo_vendedor": {
                 "nombre": (payload.get("vendedor_nombre") or "").strip(),
                 "email": (payload.get("vendedor_email") or "").strip(),
@@ -4122,6 +4130,16 @@ def _reparos_vendedor_de(doc):
     return v.get("nombre", ""), v.get("email", ""), v.get("telefono", "")
 
 
+def _reparos_cc(doc, excluir=None):
+    """CC del hilo de estudio de título: Victoria + copias guardadas (todos informados)."""
+    exc = {(e or "").lower() for e in (excluir or [])}
+    cc = []
+    for e in [VICTORIA_EMAIL] + list(doc.get("estudio_titulo_cc") or []):
+        if e and "@" in e and e.lower() not in exc and e.lower() not in [x.lower() for x in cc]:
+            cc.append(e)
+    return cc
+
+
 async def _reparos_enviar_vendedor(doc, rep, nuevos):
     v_nombre, v_email, _tel = _reparos_vendedor_de(doc)
     lis = "".join(f'<li style="margin:6px 0">{t}</li>' for t in nuevos)
@@ -4140,7 +4158,7 @@ async def _reparos_enviar_vendedor(doc, rep, nuevos):
         return
     res = await asyncio.to_thread(mail.send_mail, v_email,
                                   f"Reparos Estudio de Título — {doc.get('nombre','')}",
-                                  cuerpo, [], "secundaria", VICTORIA_EMAIL)
+                                  cuerpo, [], "secundaria", _reparos_cc(doc, [v_email]))
     if res.get("success"):
         rep["reenviado_vendedor_at"] = now_iso()
         rep.pop("reenvio_vendedor_error", None)
@@ -4165,7 +4183,7 @@ async def _reparos_enviar_resuelto(doc, rep):
         destinos.append(v_email)
     res = await asyncio.to_thread(mail.send_mail, destinos,
                                   f"Reparos resueltos — Estudio de Título {doc.get('nombre','')}",
-                                  cuerpo, [], "secundaria", VICTORIA_EMAIL)
+                                  cuerpo, [], "secundaria", _reparos_cc(doc, destinos))
     rep["aviso_resuelto_at"] = now_iso() if res.get("success") else rep.get("aviso_resuelto_at")
     if not res.get("success"):
         rep["aviso_resuelto_error"] = res.get("error", "Error de envío")
@@ -4195,7 +4213,7 @@ async def _reparos_recordatorio(doc, rep):
     if rep.get("thread_msgid"):
         headers = {"In-Reply-To": rep["thread_msgid"], "References": rep["thread_msgid"]}
     res = await asyncio.to_thread(mail.send_mail, abogado, subject, cuerpo, [],
-                                  "secundaria", VICTORIA_EMAIL, headers)
+                                  "secundaria", _reparos_cc(doc, [abogado]), headers)
     if res.get("success"):
         rep["recordatorio_enviado_at"] = now_iso()
         return True
