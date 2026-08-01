@@ -1,0 +1,49 @@
+{
+  "summary": "Iteration 6 full backend + frontend testing for Central Mutuos additions: Reparos de Estudio de Título, Cobros de Tasación (4,5 UF), previews de correos con marca 'CON CRECES', Resumen Semanal de Martín, upload/delete de vouchers, Dashboard panel de cobros y módulo Gastos Operacionales. 14/14 pytest passed + Playwright E2E OK. Sin envío real de correos (todos previews).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/tests/test_reparos_cobros_marca.py",
+    "/app/test_reports/pytest/iter6.xml"
+  ],
+  "backend_tests_detail": {
+    "TestReparos::test_get_reparos": "PASSED — 2 reparos, vendedor 'Vendedor Prueba', item1 satisfecho=True, item2=False.",
+    "TestReparos::test_toggle_item2_and_restore": "PASSED — PATCH satisfecho:true → verificado GET → PATCH satisfecho:false → estado restaurado (item1=true, item2=false).",
+    "TestReparos::test_scan_no_error": "PASSED — POST /scan retornó ok sin error.",
+    "TestCobrosTasacion::test_listado": "PASSED — monto_uf=4.5, valor_uf=40844.79, monto_clp=$183.802, resumen con enviadas/pagadas/pendientes.",
+    "TestCobrosTasacion::test_historial": "PASSED — {historial:[], valor_uf:...}.",
+    "TestCobrosTasacion::test_manual_preview": "PASSED — body contiene 'Cuenta Recaudadora', 'Mercado Pago', '1030937838', '4,5 UF' y marca 'CON CRECES'. NO envió correo (confirm ausente).",
+    "TestMarcaCorreos::test_gastos_operacionales_enviar_no_cc": "PASSED — preview sin campo cc (regla inviolable) + marca CON CRECES.",
+    "TestMarcaCorreos::test_tasacion_enviar_marca": "PASSED — marca CON CRECES en preview.",
+    "TestMarcaCorreos::test_estudio_titulo_enviar_marca": "PASSED — marca CON CRECES en preview.",
+    "TestMarcaCorreos::test_escritura_enviar_marca": "PASSED — marca CON CRECES en preview.",
+    "TestMarcaCorreos::test_pedir_faltantes_marca": "PASSED — marca CON CRECES en preview.",
+    "TestResumenSemanal::test_resumen_preview": "PASSED — body contiene 'Resumen Semanal de Martín', 'Cobros de Tasación' y 'Carpetas que necesitan acción'.",
+    "TestVoucherUpload::test_voucher_tasacion": "PASSED — archivo guardado en 99_otros/VOUCHER_TASACION_* y borrado OK.",
+    "TestVoucherUpload::test_voucher_gasto_op": "PASSED — archivo guardado en 99_otros/VOUCHER_GASTO_OP_* y borrado OK."
+  },
+  "frontend_tests_detail": {
+    "login": "OK con codigo=administrador / password=141617575. Tour bienvenida cerrado con 'Saltar'.",
+    "dashboard_panel_cobros_tasacion": "OK — data-testid panel-cobros-tasacion visible tras carga; muestra '4.5 UF = $183.802 c/u', 0 enviados / 0 pagadas / 0 pendientes.",
+    "gastos_operacionales_module": "OK — cobro-tasacion-card visible; inputs cobro-email y cobro-cliente presentes; cobro-enviar-manual disabled sin email y habilitado con email válido; cobro-scan clicable. Sección 'Cuenta Recaudadora (editable)' muestra Banco 'Mercado Pago' y N° 1030937838 (en inputs).",
+    "cobro_scan_button": "OK — click no produjo error; UI actualizó estado tras ~5s ('Aún no hay cobros de tasación registrados').",
+    "reparos_modal": "OK — btn-reparos-a996aa5d... abre reparos-modal con 2 reparos, reparo-check-1/2 presentes, btn-reparos-scan y btn-reparos-declarar presentes. Con item2 pendiente → declarar disabled=true. Marcando item2 → disabled=false. Desmarcando item2 → disabled=true (estado original restaurado: item1 checked, item2 unchecked). NO se clickó btn-reparos-declarar (evitó envío real)."
+  },
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Uvicorn corre con --reload watching /app/backend, por lo que colocar los tests en /app/backend/tests/ genera reloads y timeouts durante ejecución. Se movieron a /app/tests/ para aislarlos. Recomendación: excluir 'tests/' en el reload-dir o usar --reload-exclude 'tests/*' en el comando de supervisor.",
+    "Endpoint POST /api/gastos-operacionales/cobros-tasacion/manual espera 'email' (no 'correos'); el docstring del review request lo llama 'correos' — es solo terminología, no bug.",
+    "Backend responde 404 para /api/health (endpoint no existe). Menor; no bloqueante."
+  ],
+  "updated_files": [
+    "/app/tests/test_reparos_cobros_marca.py (nuevo)",
+    "/app/test_reports/pytest/iter6.xml"
+  ],
+  "success_rate": {"backend": "100% (14/14)", "frontend": "100%"},
+  "test_credentials": "administrador / 141617575 (login interno app). Sin uso de credenciales SMTP/IMAP (solo previews).",
+  "seed_data_creation": "Ninguna persistente. En upload-file se subieron 2 PDFs mínimos de prueba y fueron borrados con delete-file dentro del mismo test.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "El backend está bajo --reload y observa TODO /app/backend/. NO poner test files en /app/backend/tests/ (causa reload loops y timeouts). Usar /app/tests/. La carpeta de reparos a996aa5d-1543-491f-a247-41d8da449138 se dejó exactamente como estaba (item1=satisfecho, item2=pendiente). NO ejecutar previews con confirm:true bajo ninguna circunstancia. Tests IMAP (scan) responden rápido en este entorno (~1s).",
+  "rca of the issue": "N/A — no bugs detectados."
+}
