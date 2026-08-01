@@ -612,3 +612,16 @@ requieren re-deploy para llegar a producción.
   que causó SyntaxError reportado por el usuario — FIXED).
 - Detección de solicitudes de tasación ACTIVA desde 2026-08-01T19:52 (config
   cobro_tasacion.since). Usuario hará redeploy.
+
+## REGLA INVIOLABLE armado de carpetas (Jun 2026) — caso LILIAN NAVARRO
+- Solo se arma carpeta NUEVA desde un correo si: (1) el texto dice "solicitud de
+  financiamiento" o "solicitud de crédito" (debe traer monto, con/sin subsidio, fecha
+  entrega) y (2) adjunta MÍNIMO 3 documentos básicos (dependiente: liquidaciones/AFP/
+  CMF/cédula/cotización inmobiliaria; independiente: cédula/boletas/imp.renta/CMF).
+- Si no cumple → NO se arma carpeta y NO se piden faltantes. Item queda status
+  "descartado" en proc_queue (con motivo) + alerta "solicitud_descartada" en Dashboard.
+- Implementado en _regla_solicitud_ok() + gate HTTP 412 en proc_upload_drive (solo
+  aplica a carpetas NUEVAS: correos de codeudor o que enriquecen carpetas existentes
+  pasan igual, para no romper el flujo de docs faltantes).
+- VERIFICADO: el correo real de Navarro ahora sería descartado (sin frase, docs 'otro');
+  casos simulados OK.

@@ -2597,6 +2597,31 @@ def _regen_carpeta_cliente(cliente, orden_manual=None):
     return out.name
 
 
+_SOLICITUD_RE = re.compile(r"solicitud\s+de\s+(financiamiento|cr[eé]dito)", re.I)
+_DOCS_BASICOS = ("cedula", "liquidacion", "cotizacion_afp", "certificado_afp",
+                 "certificado_smf", "impuesto_renta", "boleta_honorarios")
+
+
+def _regla_solicitud_ok(item):
+    """REGLA INVIOLABLE: solo se arma carpeta nueva si el correo dice 'solicitud de
+    financiamiento' o 'solicitud de crédito' Y adjunta al menos 3 documentos básicos
+    (dependiente: liquidaciones/AFP/CMF/cédula/cotización inmobiliaria;
+    independiente: cédula/boletas/impuesto renta/CMF)."""
+    texto = f"{item.get('subject') or ''} {item.get('body_full') or item.get('body_preview') or ''}"
+    if not _SOLICITUD_RE.search(texto):
+        return False, "el texto no menciona 'solicitud de financiamiento' ni 'solicitud de crédito'"
+    tipos = set()
+    for d in (item.get("classification") or {}).get("documentos") or []:
+        t = d.get("tipo", "")
+        if t in _DOCS_BASICOS:
+            tipos.add("afp" if t in ("cotizacion_afp", "certificado_afp") else t)
+        elif re.search(r"cotizaci[oó]n", d.get("filename", ""), re.I):
+            tipos.add("cotizacion_inmobiliaria")
+    if len(tipos) < 3:
+        return False, f"solo {len(tipos)} documento(s) básico(s) adjunto(s) — mínimo 3"
+    return True, ""
+
+
 @api.post("/procesamiento/queue/{qid}/upload-drive")
 async def proc_upload_drive(qid: str):
     item = await db.proc_queue.find_one({"id": qid})
@@ -2640,6 +2665,11 @@ async def proc_upload_drive(qid: str):
             existente = titular_doc
     if existente and existente.get("nombre"):
         cliente = existente["nombre"]
+    if not existente and not es_correo_codeudor:
+        ok_regla, motivo = _regla_solicitud_ok(item)
+        if not ok_regla:
+            raise HTTPException(status_code=412,
+                                detail=f"REGLA: no se arma carpeta — {motivo}")
     dest = CLIENTES_DIR / _safe_name(cliente)
     dest.mkdir(parents=True, exist_ok=True)
     uploaded = []
@@ -2859,7 +2889,8 @@ async def _crear_alerta_carpeta(folder_doc):
 
 
 async def _run_proc_auto():
-    resumen = {"enqueued": 0, "processed": 0, "carpetas": 0, "alertas": 0, "errors": []}
+    resumen = {"enqueued": 0, "processed": 0, "carpetas": 0, "alertas": 0,
+               "descartados": 0, "errors": []}
     await db.config.update_one({"_key": "proc_auto"},
                                {"$set": {"running": True, "last_run_started": now_iso()}}, upsert=True)
     try:
@@ -2879,6 +2910,20 @@ async def _run_proc_auto():
             try:
                 await proc_upload_drive(it["id"])
                 resumen["carpetas"] += 1
+            except HTTPException as he:
+                if he.status_code == 412:
+                    await db.proc_queue.update_one({"id": it["id"]}, {"$set": {
+                        "status": "descartado", "descartado_motivo": he.detail,
+                        "descartado_en": now_iso()}})
+                    await db.alertas.insert_one({
+                        "id": str(uuid.uuid4()), "tipo": "solicitud_descartada",
+                        "cliente": (it.get("classification") or {}).get("cliente", "") or (it.get("subject") or "")[:60],
+                        "mensaje": (f"🚫 Correo descartado (no se armó carpeta ni se pidieron faltantes): "
+                                    f"\"{(it.get('subject') or '')[:70]}\" de {it.get('sender','')} — {he.detail}"),
+                        "fecha": now_iso(), "leida": False})
+                    resumen["descartados"] += 1
+                else:
+                    resumen["errors"].append(f"carpeta '{(it.get('subject') or '')[:30]}': {str(he.detail)[:80]}")
             except Exception as e:
                 resumen["errors"].append(f"carpeta '{(it.get('subject') or '')[:30]}': {str(e)[:80]}")
         folders = await db.folders.find({}).limit(300).to_list(300)
