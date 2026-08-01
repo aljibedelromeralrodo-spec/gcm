@@ -25,6 +25,16 @@ export default function GastosOperacionalesModule({ onNavigate }) {
   const [cobroEmail, setCobroEmail] = useState("");
   const [cobroCliente, setCobroCliente] = useState("");
   const [cobroLoading, setCobroLoading] = useState(false);
+  const [historial, setHistorial] = useState([]);
+
+  const loadHistorial = useCallback(async () => {
+    try {
+      const r = await axios.get(`${API}/api/gastos-operacionales/cobros-tasacion/historial`);
+      setHistorial(r.data.historial || []);
+    } catch (_e) { /* noop */ }
+  }, []);
+
+  useEffect(() => { loadHistorial(); }, [loadHistorial]);
 
   const loadCobros = useCallback(async () => {
     try {
@@ -61,6 +71,7 @@ export default function GastosOperacionalesModule({ onNavigate }) {
     try {
       await axios.post(`${API}/api/gastos-operacionales/cobros-tasacion/${c.id}/pagado`, { pagado: !c.pagado });
       loadCobros();
+      loadHistorial();
     } catch (e) { setMsg("Error: " + (e.response?.data?.detail || e.message)); }
   };
 
@@ -283,6 +294,34 @@ export default function GastosOperacionalesModule({ onNavigate }) {
           </div>
         )}
       </div>
+
+      {/* HISTORIAL MENSUAL DE TASACIONES PAGADAS */}
+      {historial.length > 0 && (
+        <div style={card} data-testid="historial-pagos-card">
+          <h3 style={{ margin: "0 0 0.8rem", color: "var(--gold)", fontSize: "1.05rem" }}>
+            <i className="fa fa-calendar-check-o" style={{ marginRight: "0.5rem" }} />Historial Mensual — Tasaciones Pagadas
+          </h3>
+          {historial.map((h) => (
+            <div key={h.mes} data-testid={`historial-mes-${h.mes}`} style={{ marginBottom: "0.9rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0.5rem 0.9rem", background: "rgba(212,175,55,0.08)", border: "1px solid rgba(212,175,55,0.25)", borderRadius: 8, fontSize: "0.9rem" }}>
+                <b style={{ color: "var(--gold)" }}>{h.mes}</b>
+                <span style={{ opacity: 0.8 }}>{h.cantidad} tasación(es) pagada(s)</span>
+                <span style={{ marginLeft: "auto", fontWeight: 700, color: "#4ade80" }}>{h.total_uf.toLocaleString("es-CL")} UF · {h.total_clp}</span>
+              </div>
+              <div style={{ padding: "0.3rem 0.5rem" }}>
+                {h.detalle.map((d, i) => (
+                  <div key={i} style={{ display: "flex", gap: 8, fontSize: "0.8rem", opacity: 0.85, padding: "0.25rem 0.4rem", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                    <span style={{ flex: 1 }}><b>{d.cliente}</b> <span style={{ opacity: 0.6 }}>· {d.from_email}</span></span>
+                    <span style={{ opacity: 0.7 }}>{String(d.pagado_at || "").slice(0, 10)}</span>
+                    <span style={{ color: "#4ade80", fontWeight: 600 }}>{d.monto_clp}</span>
+                    <span style={{ opacity: 0.5, fontSize: "0.72rem" }}>{d.origen_pago === "auto" ? "🤖 auto" : "manual"}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* HISTORIAL */}
       {log.length > 0 && (

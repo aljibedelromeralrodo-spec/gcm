@@ -562,3 +562,20 @@ requieren re-deploy para llegar a producción.
   correo de aviso al administrador ("requiere gestión directa") y se detienen.
 - Contador faltantes_recordatorio_count se resetea al volver a pedir faltantes
   (manual y automático). Alertas muestran "Recordatorio n/2".
+
+## Resumen Semanal Martín + Historial Mensual de Pagos (Jun 2026)
+- `_resumen_semanal_loop`: cada lunes ≥08:00 (hora Chile), envía por correo al admin
+  (cuenta principal) el "Resumen Semanal de Martín" con: cobros de tasación del mes
+  (enviados/pagados/pendientes + montos CLP) y carpetas que necesitan acción
+  (faltantes, mesa, tasación sin fecha, firma sin confirmar, reparos pendientes).
+  Dedupe por semana ISO (db.config resumen_semanal.last_sent_week).
+  Endpoint manual: POST /central/resumen-semanal/enviar (confirm:false = preview).
+- `_acciones_pendientes()`: helper compartido con resumen-diario; ahora incluye
+  reparos de estudio de título pendientes.
+- GET /gastos-operacionales/cobros-tasacion/historial: tasaciones PAGADAS agrupadas
+  por mes (cantidad, total UF/CLP, detalle con cliente/fecha/origen auto-manual).
+- UI Gastos Operacionales: tarjeta "Historial Mensual — Tasaciones Pagadas"
+  (testid historial-pagos-card). Se refresca al marcar/desmarcar pagado.
+- DECISIONES USUARIO: WhatsApp NO — todo por correo oficial. Prueba eCert en la semana.
+- VERIFICADO: preview resumen semanal (marca+cobros+acciones), historial endpoint,
+  screenshot UI con registro demo (luego eliminado).

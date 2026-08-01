@@ -109,6 +109,7 @@ async def startup():
     asyncio.create_task(_task_blindada(_estudio_reparos_loop, "reparos_estudio"))
     asyncio.create_task(_task_blindada(_cobro_tasacion_loop, "cobro_tasacion"))
     asyncio.create_task(_task_blindada(_faltantes_recordatorio_loop, "recordatorio_faltantes"))
+    asyncio.create_task(_task_blindada(_resumen_semanal_loop, "resumen_semanal"))
 
 
 # ---------------------------------------------------------------------------
@@ -718,8 +719,7 @@ async def central_tts(payload: dict):
         raise HTTPException(status_code=503, detail=f"TTS no disponible: {str(e)[:100]}")
 
 
-@api.get("/central/resumen-diario")
-async def central_resumen_diario():
+async def _acciones_pendientes():
     folders = await db.folders.find({}).sort("created_at", -1).limit(100).to_list(100)
     acciones = []
     for f in folders:
@@ -734,6 +734,16 @@ async def central_resumen_diario():
             acciones.append(f"📐 {nombre}: tasación solicitada, aún sin fecha de Value Property")
         if f.get("escritura_solicitada_at") and not f.get("escritura_confirmada_at"):
             acciones.append(f"🖊 {nombre}: aviso de firma enviado, el cliente aún no confirma")
+        rep = f.get("estudio_reparos") or {}
+        pend = [i for i in (rep.get("items") or []) if not i.get("satisfecho")]
+        if pend and rep.get("estado") != "satisfecho":
+            acciones.append(f"⚖ {nombre}: {len(pend)} reparo(s) de estudio de título pendiente(s)")
+    return acciones
+
+
+@api.get("/central/resumen-diario")
+async def central_resumen_diario():
+    acciones = await _acciones_pendientes()
     hoy = datetime.now(_tz_chile()).strftime("%d-%m-%Y")
     if acciones:
         texto = (f"¡Buenos días! Soy Martín ☀️ Resumen de hoy {hoy}:\n\n" + "\n".join(acciones[:12])
@@ -741,6 +751,74 @@ async def central_resumen_diario():
     else:
         texto = f"¡Buenos días! Soy Martín ☀️ Hoy {hoy} no hay carpetas que necesiten acción. Todo al día 💪"
     return {"resumen": texto, "acciones": len(acciones)}
+
+
+async def _resumen_semanal_html():
+    uf = await get_valor_uf()
+    mes = datetime.now(timezone.utc).strftime("%Y-%m")
+    base_q = {"es_solicitud": True, "ignorado": {"$ne": True}, "detectado_en": {"$regex": f"^{mes}"}}
+    enviadas = await db.tasacion_cobros.count_documents(base_q)
+    pagadas = await db.tasacion_cobros.count_documents({**base_q, "pagado": True})
+    pendientes = enviadas - pagadas
+    acciones = await _acciones_pendientes()
+    acc_html = ("".join(f'<li style="margin:5px 0">{a}</li>' for a in acciones[:20])
+                if acciones else '<li style="margin:5px 0">Sin acciones pendientes. Todo al día 💪</li>')
+    semana = datetime.now(_tz_chile()).strftime("%d-%m-%Y")
+    inner = f"""
+      <p>¡Buenos días! Soy <b>Martín</b> ☀️ Este es el resumen semanal al <b>{semana}</b>:</p>
+      <div style="color:#1a1f2e;font-size:15px;font-weight:700;border-left:4px solid #d4af37;padding-left:10px;margin:14px 0 8px">Cobros de Tasación — Vivienda Usada (mes {mes})</div>
+      <div style="background:#f8f9fc;border:1px solid #eceef3;border-radius:8px;padding:12px 20px">
+        <table style="border-collapse:collapse">
+          <tr><td style="padding:4px 14px 4px 0;color:#6b7280;font-size:13px">Cobros enviados</td><td style="font-weight:700;color:#1a1f2e">{enviadas}</td></tr>
+          <tr><td style="padding:4px 14px 4px 0;color:#6b7280;font-size:13px">Pagadas</td><td style="font-weight:700;color:#15803d">{pagadas} · {_fmt_clp(pagadas * TASACION_COBRO_UF * uf)}</td></tr>
+          <tr><td style="padding:4px 14px 4px 0;color:#6b7280;font-size:13px">Pendientes de pago</td><td style="font-weight:700;color:#b91c1c">{pendientes} · {_fmt_clp(pendientes * TASACION_COBRO_UF * uf)}</td></tr>
+        </table>
+      </div>
+      <div style="color:#1a1f2e;font-size:15px;font-weight:700;border-left:4px solid #d4af37;padding-left:10px;margin:18px 0 8px">Carpetas que necesitan acción ({len(acciones)})</div>
+      <ul style="margin:6px 0 0;padding-left:22px;color:#111;list-style:none">{acc_html}</ul>
+      {"<p style='margin-top:10px;color:#6b7280;font-size:12px'>…y más carpetas en la lista.</p>" if len(acciones) > 20 else ""}
+      <p style="margin-top:16px;color:#555">¡Que tengas una excelente semana!</p>"""
+    return _marca_wrap(inner, "Resumen Semanal de Martín")
+
+
+async def _enviar_resumen_semanal():
+    cuerpo = await _resumen_semanal_html()
+    semana = datetime.now(_tz_chile()).strftime("%d-%m-%Y")
+    res = await asyncio.to_thread(mail.send_mail, _sender_por_rol("principal"),
+                                  f"📊 Resumen Semanal de Martín — {semana}", cuerpo, [], "secundaria")
+    return res
+
+
+async def _resumen_semanal_loop():
+    """Cada lunes ~08:00 (hora Chile): envía el resumen semanal por correo al administrador."""
+    while True:
+        await asyncio.sleep(1800)
+        try:
+            ahora = datetime.now(_tz_chile())
+            if ahora.weekday() != 0 or ahora.hour < 8:
+                continue
+            semana_key = ahora.strftime("%G-W%V")
+            cfg = await db.config.find_one({"_key": "resumen_semanal"}) or {}
+            if cfg.get("last_sent_week") == semana_key:
+                continue
+            res = await _enviar_resumen_semanal()
+            if res.get("success"):
+                await db.config.update_one({"_key": "resumen_semanal"},
+                                           {"$set": {"_key": "resumen_semanal",
+                                                     "last_sent_week": semana_key,
+                                                     "last_sent_at": now_iso()}}, upsert=True)
+        except Exception as e:
+            logging.warning(f"resumen semanal: {e}")
+
+
+@api.post("/central/resumen-semanal/enviar")
+async def resumen_semanal_manual(payload: dict = None):
+    if not (payload or {}).get("confirm"):
+        return {"body": await _resumen_semanal_html(), "to": _sender_por_rol("principal")}
+    res = await _enviar_resumen_semanal()
+    if not res.get("success"):
+        raise HTTPException(status_code=502, detail=res.get("error", "Error de envío"))
+    return {"ok": True, "to": _sender_por_rol("principal")}
 
 
 # ---------------------------------------------------------------------------
@@ -3429,6 +3507,32 @@ async def _faltantes_recordatorio_loop():
             except Exception as e:
                 logging.warning(f"recordatorio faltantes {d.get('nombre','')}: {e}")
                 continue
+
+
+@api.get("/gastos-operacionales/cobros-tasacion/historial")
+async def cobros_tasacion_historial():
+    docs = await db.tasacion_cobros.find({"pagado": True, "ignorado": {"$ne": True}}
+                                         ).sort("pagado_at", -1).limit(300).to_list(300)
+    uf = await get_valor_uf()
+    meses = {}
+    for d in docs:
+        mes = str(d.get("pagado_at") or "")[:7]
+        if not mes:
+            continue
+        m = meses.setdefault(mes, {"mes": mes, "cantidad": 0, "total_uf": 0.0, "detalle": []})
+        monto_uf = float(d.get("monto_uf") or TASACION_COBRO_UF)
+        m["cantidad"] += 1
+        m["total_uf"] += monto_uf
+        m["detalle"].append({"cliente": d.get("cliente") or d.get("from_email", ""),
+                             "from_email": d.get("from_email", ""),
+                             "pagado_at": d.get("pagado_at", ""),
+                             "monto_uf": monto_uf,
+                             "monto_clp": d.get("monto_clp") or _fmt_clp(monto_uf * uf),
+                             "origen_pago": d.get("pagado_origen", "manual")})
+    out = sorted(meses.values(), key=lambda x: x["mes"], reverse=True)
+    for m in out:
+        m["total_clp"] = _fmt_clp(m["total_uf"] * uf)
+    return {"historial": out, "valor_uf": uf}
 
 
 @api.post("/gastos-operacionales/cobros-tasacion/scan")
