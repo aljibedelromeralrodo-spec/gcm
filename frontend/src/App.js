@@ -208,7 +208,7 @@ function MainApp() {
         {activeModule === 'historial' && <HistorialModule valorUF={valorUF} onLoadSimulation={handleLoadSimulation} />}
         {activeModule === 'calculadora' && <CalculadoraModule valorUF={valorUF} />}
         {activeModule === 'formato' && <FormatoModule />}
-        {activeModule === 'clientes' && <ClientesModule />}
+        {activeModule === 'clientes' && <ClientesModule onNavigate={setActiveModule} />}
         {activeModule === 'seguimiento' && <SeguimientoModule />}
         {activeModule === 'usuarios' && <UsuariosModule />}
         {activeModule === 'criterios' && <CriteriosModule />}

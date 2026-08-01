@@ -85,7 +85,7 @@ function UFAmountInput({ value, onChange, uf, testid, dataTestid }) {
   );
 }
 
-export default function ClientesModule() {
+export default function ClientesModule({ onNavigate }) {
   const [view, setView] = useState("list"); // list, detail, emails, ajustes
   const [folders, setFolders] = useState([]);
   const [currentFolder, setCurrentFolder] = useState(null);
@@ -865,8 +865,17 @@ export default function ClientesModule() {
               const hasFin = f.datos_financieros && f.datos_financieros.valor_propiedad;
               const enviadoManual = f.envio_manual === true;
               const cardStyle = enviadoManual
-                ? { position: "relative", background: "#dc2626", borderLeft: "5px solid #7f1d1d", color: "#fff" }
-                : { position: "relative", borderLeft: (f.emails_sent_count > 0) ? "5px solid #3b82f6" : (f.is_ready_to_send ? "5px solid #22c55e" : (f.codeudor_nombre ? "5px solid #8b5cf6" : "")), background: (f.emails_sent_count > 0) ? "rgba(59,130,246,0.06)" : (f.is_ready_to_send ? "rgba(34,197,94,0.06)" : undefined) };
+                ? { position: "relative", background: "#dc2626", borderLeft: "5px solid #7f1d1d", color: "#fff", flexWrap: "wrap" }
+                : { position: "relative", flexWrap: "wrap", borderLeft: (f.emails_sent_count > 0) ? "5px solid #3b82f6" : (f.is_ready_to_send ? "5px solid #22c55e" : (f.codeudor_nombre ? "5px solid #8b5cf6" : "")), background: (f.emails_sent_count > 0) ? "rgba(59,130,246,0.06)" : (f.is_ready_to_send ? "rgba(34,197,94,0.06)" : undefined) };
+              const irAModulo = (mod) => {
+                sessionStorage.setItem("cm_prefill_cliente", JSON.stringify({ nombre: f.nombre, rut: f.rut || "" }));
+                onNavigate && onNavigate(mod);
+              };
+              const modBtn = (bg, border, color, big) => ({
+                display: "flex", alignItems: "center", gap: 6, padding: big ? "0.55rem 1rem" : "0.45rem 0.8rem",
+                borderRadius: 8, border: `1.5px solid ${border}`, background: bg, color,
+                fontWeight: 800, fontSize: big ? 13 : 11.5, cursor: "pointer", whiteSpace: "nowrap",
+              });
               return (
                 <div key={f.id} className="clientes-card" data-testid={`folder-${f.id}`} style={cardStyle}>
                   {enviadoManual && (
@@ -944,6 +953,31 @@ export default function ClientesModule() {
                     </button>
                     <button className="clientes-delete-btn" onClick={() => deleteFolder(f.id)}>
                       <i className="fa fa-trash"></i>
+                    </button>
+                  </div>
+                  <div data-testid={`modulos-carpeta-${f.id}`} style={{ width: "100%", display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10, paddingTop: 10, borderTop: enviadoManual ? "1px solid rgba(255,255,255,0.3)" : "1px solid rgba(139,92,246,0.25)" }}>
+                    <button data-testid={`btn-aprobacion-${f.id}`} onClick={() => irAModulo("aprobacion")}
+                      title={`Enviar aprobación al cliente ${f.nombre}`}
+                      style={modBtn("rgba(34,197,94,0.12)", "#22c55e", enviadoManual ? "#fff" : "#16a34a")}>
+                      <i className="fa fa-trophy"></i> Enviar Aprobación Cliente
+                    </button>
+                    <button data-testid={`btn-gastos-${f.id}`} onClick={() => irAModulo("gastos")}
+                      title={`Gasto operacional para ${f.nombre}`}
+                      style={modBtn("var(--gold, #d4af37)", "var(--gold, #d4af37)", "#0a0e17", true)}>
+                      <i className="fa fa-money"></i> GASTO OPERACIONAL
+                    </button>
+                    <button data-testid={`btn-setcredito-${f.id}`} onClick={() => irAModulo("setcredito")}
+                      title={`Firma set de crédito de ${f.nombre}`}
+                      style={modBtn("rgba(59,130,246,0.12)", "#3b82f6", enviadoManual ? "#fff" : "#2563eb")}>
+                      <i className="fa fa-pencil-square-o"></i> Firma Set de Crédito
+                    </button>
+                    <button data-testid={`btn-tasacion-${f.id}`} title="Solicitud de tasación (próximamente)"
+                      style={{ ...modBtn("rgba(255,255,255,0.05)", "rgba(148,163,184,0.5)", enviadoManual ? "#fff" : "#94a3b8"), opacity: 0.7 }}>
+                      <i className="fa fa-home"></i> Solicitud de Tasación
+                    </button>
+                    <button data-testid={`btn-estudio-titulo-${f.id}`} title="Solicitud de estudio de título (próximamente)"
+                      style={{ ...modBtn("rgba(255,255,255,0.05)", "rgba(148,163,184,0.5)", enviadoManual ? "#fff" : "#94a3b8"), opacity: 0.7 }}>
+                      <i className="fa fa-balance-scale"></i> Solicitud de Estudio de Título
                     </button>
                   </div>
                 </div>

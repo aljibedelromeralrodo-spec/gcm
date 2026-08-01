@@ -25,6 +25,19 @@ Idioma del usuario: **Español** (responder siempre en español).
 - IMAP/SMTP: en `/app/backend/.env` (MAIL_USER, MAIL2_USER + app passwords)
 
 ## Implementado
+- 2026-08-01 (esta sesión, parte 2) — **Botones de módulos en la tarjeta del cliente**:
+  - Cada tarjeta de Carpeta Clientes ahora tiene una fila de botones (sin abrir la carpeta),
+    en orden: Enviar Aprobación Cliente → GASTO OPERACIONAL (grande, dorado) →
+    Firma Set de Crédito → Solicitud de Tasación (placeholder en blanco) →
+    Solicitud de Estudio de Título (placeholder en blanco).
+  - Mecanismo: `sessionStorage.cm_prefill_cliente` + `onNavigate` (App.js pasa
+    `setActiveModule` a ClientesModule). Cada módulo (Gastos, Aprobación, SetCredito) lee el
+    prefill al montar: Gastos/Aprobación resuelven email vía su `buscar-cliente` y
+    autocompletan; SetCredito abre el set existente del cliente o precarga el formulario
+    "Nuevo Set". Verificado con screenshots (los 3 módulos precargan a PAULA correctamente).
+  - testids: `btn-aprobacion-{id}`, `btn-gastos-{id}`, `btn-setcredito-{id}`,
+    `btn-tasacion-{id}`, `btn-estudio-titulo-{id}`, `modulos-carpeta-{id}`.
+
 - 2026-08-01 (esta sesión) — **Codeudor + porcentaje visible en tarjeta**:
   - FIX P0: `GET /api/clientes/folders` daba 500 (`_prob_aprobacion_folder` no existía,
     quedó a medias en sesión anterior) → función creada (score por docs faltantes, CMF,

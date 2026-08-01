@@ -39,6 +39,28 @@ export default function SetCreditoModule() {
 
   useEffect(() => { loadSets(); loadMigrup(); }, [loadSets, loadMigrup]);
 
+  useEffect(() => {
+    const raw = sessionStorage.getItem("cm_prefill_cliente");
+    if (!raw) return;
+    sessionStorage.removeItem("cm_prefill_cliente");
+    try {
+      const p = JSON.parse(raw);
+      (async () => {
+        const r = await axios.get(`${API}/api/set-credito/sets`);
+        const lista = r.data.sets || [];
+        const norm = (s) => (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+        const ex = lista.find(s => norm(s.nombre) === norm(p.nombre));
+        if (ex) {
+          const d = await axios.get(`${API}/api/set-credito/sets/${ex.id}`);
+          setCurrent(d.data);
+        } else {
+          setNuevo({ nombre: p.nombre, rut: p.rut || "", email: "" });
+          setMsg(`✅ Cliente "${p.nombre}" precargado desde su carpeta — crea su set de crédito`);
+        }
+      })();
+    } catch (_e) { /* prefill inválido */ }
+  }, []);
+
   const crearSet = async () => {
     if (!nuevo.nombre.trim()) return setMsg("Falta el nombre del cliente");
     setLoading(true);

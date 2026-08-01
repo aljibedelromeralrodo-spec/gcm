@@ -51,6 +51,22 @@ export default function GastosOperacionalesModule() {
     setResultados([]); setQ("");
   };
 
+  useEffect(() => {
+    const raw = sessionStorage.getItem("cm_prefill_cliente");
+    if (!raw) return;
+    sessionStorage.removeItem("cm_prefill_cliente");
+    try {
+      const p = JSON.parse(raw);
+      axios.get(`${API}/api/gastos-operacionales/buscar-cliente`, { params: { q: p.nombre } })
+        .then(r => {
+          const res = (r.data.resultados || [])[0];
+          const el = res || { nombre: p.nombre, rut: p.rut || "", email: "" };
+          setNombre(el.nombre); setRut(el.rut || ""); if (el.email) setEmailCliente(el.email);
+        })
+        .catch(() => { setNombre(p.nombre); setRut(p.rut || ""); });
+    } catch (_e) { /* prefill inválido */ }
+  }, []);
+
   const total = items.reduce((s, it) => {
     const v = parseFloat(it.valor);
     return s + (isNaN(v) ? 0 : v);

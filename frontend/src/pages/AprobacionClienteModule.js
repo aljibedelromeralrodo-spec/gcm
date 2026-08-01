@@ -67,6 +67,22 @@ export default function AprobacionClienteModule() {
     setLoading(false);
   };
 
+  useEffect(() => {
+    const raw = sessionStorage.getItem("cm_prefill_cliente");
+    if (!raw) return;
+    sessionStorage.removeItem("cm_prefill_cliente");
+    try {
+      const p = JSON.parse(raw);
+      axios.get(`${API}/api/aprobacion-cliente/buscar-cliente`, { params: { q: p.nombre } })
+        .then(r => {
+          const res = (r.data.resultados || [])[0];
+          elegir(res || { nombre: p.nombre, rut: p.rut || "", email: "" });
+        })
+        .catch(() => elegir({ nombre: p.nombre, rut: p.rut || "", email: "" }));
+    } catch (_e) { /* prefill inválido */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const toggleArchivo = (i) => setArchivos(prev => prev.map((a, j) => j === i ? { ...a, seleccionado: !a.seleccionado } : a));
 
   const payload = () => ({
