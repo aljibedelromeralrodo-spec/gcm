@@ -478,3 +478,20 @@ requieren re-deploy para llegar a producción.
   Si es un correo antiguo → solo completa campos vacíos, nunca pisa lo más nuevo.
 - VERIFICADO con los 2 correos reales de Ernesto (14:13 y 14:17): procesando
   nuevo→viejo, la fecha vigente quedó en 14:17 y los datos no fueron pisados.
+
+## Correos formales + Vouchers en mini-programa de compartir (Jun 2026)
+- `_marca_wrap(inner, subtitulo)` en server.py: wrapper HTML formal (header navy #1a1f2e,
+  dorado #d4af37, "Central Mutuos / CON CRECES ASESORÍAS", footer confidencialidad).
+  Aplicado a: _tasacion_html, _estudio_html, _escritura_html y pedir-faltantes.
+  (Gastos Operacionales y Aprobación ya tenían su propio diseño formal, sin cambios.)
+- ShareTargetPage (/share-target): selector "¿Qué estás enviando?" con 3 destinos:
+  1. Documentos crédito (flujo existente: carpeta nueva o existente, titular/codeudor)
+  2. Voucher Tasación → 99_otros/VOUCHER_TASACION_*
+  3. Voucher Gasto Op. → 99_otros/VOUCHER_GASTO_OP_*
+  Los vouchers exigen carpeta existente, NO regeneran COMBINADO y se registran en
+  db.folders.vouchers [{tipo, archivo, subido_en}].
+- Backend: upload-file acepta Form "categoria" (voucher_tasacion|voucher_gasto_operacional).
+- VERIFICADO: curl (ambas categorías + previews de los 4 correos con marca) y screenshot
+  del selector con destino Voucher Tasación activo.
+- NOTA: hot-reload del backend puede colgarse en shutdown (loops de polling); usar
+  `sudo supervisorctl restart backend` tras editar server.py.

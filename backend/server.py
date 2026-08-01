@@ -941,16 +941,14 @@ async def folder_pedir_faltantes(fid: str, payload: dict):
     subject = f"Documentos faltantes — Solicitud de crédito {nombre}"
     lis = "".join(f'<li style="margin:4px 0">{f}</li>' for f in faltantes)
     extra = (payload.get("mensaje") or "").strip()
-    cuerpo = f"""
-    <div style="font-family:Arial,sans-serif;font-size:14px;color:#222;max-width:620px">
+    cuerpo = _marca_wrap(f"""
       <p>Estimados, junto con saludar:</p>
       <p>En relación a la solicitud de crédito de <b>{nombre}</b>{f" (RUT {doc.get('rut')})" if doc.get('rut') else ""},
       para continuar con la evaluación necesitamos que nos hagan llegar los siguientes documentos faltantes:</p>
       <ol style="margin:6px 0 0;padding-left:22px;color:#111">{lis}</ol>
       {f'<p style="margin-top:12px">{extra}</p>' if extra else ''}
       <p style="margin-top:14px">Quedamos atentos. Muchas gracias.</p>
-      <p style="margin-top:16px;color:#555">Saludos cordiales,<br/><b>Central Mutuos — Con Creces</b></p>
-    </div>"""
+      <p style="margin-top:16px;color:#555">Saludos cordiales,</p>""", "Documentos Faltantes — Solicitud de Crédito")
     if not payload.get("confirm"):
         return {"to": destinatario, "subject": subject, "body": cuerpo, "faltantes": faltantes,
                 "sender": _sender_por_rol("secundaria")}
@@ -1018,7 +1016,7 @@ async def _regen_combinado_bg(doc):
 
 @api.post("/clientes/folders/{fid}/upload-file")
 async def folder_upload_file(fid: str, file: UploadFile = File(...), subfolder: str = Form(""),
-                             route_to_codeudor: str = Form("")):
+                             route_to_codeudor: str = Form(""), categoria: str = Form("")):
     doc = await _get_folder_doc(fid)
     raw = await file.read()
     if not raw:
@@ -1029,14 +1027,24 @@ async def folder_upload_file(fid: str, file: UploadFile = File(...), subfolder: 
     except ValueError:
         pass  # formato no convertible: se guarda tal cual
     es_codeudor = str(route_to_codeudor).lower() in ("true", "1", "si", "sí")
+    categoria = (categoria or "").strip().lower()
     if es_codeudor:
         subfolder = "05_codeudor"
         if not nombre_archivo.upper().startswith("CODEUDOR_"):
             nombre_archivo = f"CODEUDOR_{nombre_archivo}"
+    elif categoria in ("voucher_tasacion", "voucher_gasto_operacional"):
+        subfolder = "99_otros"
+        prefijo = "VOUCHER_TASACION_" if categoria == "voucher_tasacion" else "VOUCHER_GASTO_OP_"
+        if not nombre_archivo.upper().startswith(prefijo):
+            nombre_archivo = f"{prefijo}{nombre_archivo}"
     rel = await asyncio.to_thread(fsvc.guardar_archivo, doc.get("nombre", ""),
                                   nombre_archivo, raw, subfolder)
-    asyncio.create_task(_regen_combinado_bg(doc))
-    return {"ok": True, "saved": rel, "codeudor": es_codeudor}
+    if categoria in ("voucher_tasacion", "voucher_gasto_operacional"):
+        await db.folders.update_one({"id": fid}, {"$push": {"vouchers": {
+            "tipo": categoria, "archivo": rel, "subido_en": now_iso()}}})
+    else:
+        asyncio.create_task(_regen_combinado_bg(doc))
+    return {"ok": True, "saved": rel, "codeudor": es_codeudor, "categoria": categoria}
 
 
 @api.post("/clientes/folders/{fid}/delete-file")
@@ -3175,6 +3183,31 @@ def _num_uf(v):
         return str(v)
 
 
+def _marca_wrap(inner, subtitulo=""):
+    sub_html = (f'<div style="color:#e2e8f0;font-size:13px;margin-top:8px;font-weight:600">{subtitulo}</div>'
+                if subtitulo else "")
+    return f"""
+    <div style="background:#f2f4f8;padding:28px 12px;font-family:Georgia,'Times New Roman',serif">
+      <div style="max-width:640px;margin:0 auto;background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 4px 18px rgba(16,24,40,0.10)">
+        <div style="background:#1a1f2e;padding:26px 32px;border-bottom:3px solid #d4af37">
+          <div style="color:#d4af37;font-size:22px;font-weight:700;letter-spacing:1px">Central Mutuos</div>
+          <div style="color:#9aa3b5;font-size:11px;letter-spacing:3px;margin-top:2px">CON CRECES ASESOR&Iacute;AS</div>
+          {sub_html}
+        </div>
+        <div style="padding:28px 32px 10px;color:#2b3245;font-size:14px;line-height:1.65">
+          {inner}
+        </div>
+        <div style="padding:0 32px 26px">
+          <p style="margin:14px 0 0;color:#1a1f2e;font-size:14px"><b>Central Mutuos</b><br>
+          <span style="color:#6b7280;font-size:12px">Con Creces &middot; Cr&eacute;ditos Hipotecarios</span></p>
+        </div>
+        <div style="background:#1a1f2e;padding:12px 32px;text-align:center">
+          <span style="color:#9aa3b5;font-size:11px">Este correo contiene informaci&oacute;n confidencial dirigida exclusivamente a su destinatario.</span>
+        </div>
+      </div>
+    </div>"""
+
+
 def _gastos_html(payload):
     nombre = payload.get("nombre", "")
     rut = payload.get("rut", "")
@@ -3340,17 +3373,15 @@ def _tasacion_html(p):
         f"con copia a {' y a '.join(copias)}.")
     voucher = ('<p style="margin-top:12px"><b>Adjunto voucher de pago tasación.</b></p>'
                if p.get("voucher") else "")
-    return f"""
-    <div style="font-family:Arial,sans-serif;font-size:14px;color:#222;max-width:640px">
+    inner = f"""
       <p>{saludo}</p>
       <p>A continuación, detallo los antecedentes de la propiedad para la coordinación de la tasación:</p>
       <table style="border-collapse:collapse;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;width:100%">{''.join(filas)}</table>
       {f'<p style="margin-top:12px"><b>Observaciones:</b> {obs}</p>' if obs else ''}
       {voucher}
       <p style="margin-top:14px">Quedo atento a sus comentarios y a cualquier antecedente adicional que requieran.</p>
-      <p style="margin-top:16px;color:#555">Saludos cordiales,<br/><b>Central Mutuos — Con Creces</b></p>
-    </div>
-    """
+      <p style="margin-top:16px;color:#555">Saludos cordiales,</p>"""
+    return _marca_wrap(inner, "Solicitud de Tasación")
 
 
 @api.post("/tasacion/enviar")
@@ -3546,17 +3577,15 @@ def _estudio_html(p):
     obs = (p.get("observaciones") or "").strip()
     intro = (p.get("intro") or "").strip() or ("Solicitamos dar inicio al <b>estudio de títulos</b> del cliente en referencia, "
                                                "con copia a Victoria Vilches. Se detallan los antecedentes:")
-    return f"""
-    <div style="font-family:Arial,sans-serif;font-size:14px;color:#222;max-width:640px">
+    inner = f"""
       <p>Estimados, junto con saludar:</p>
       <p>{intro}</p>
       <table style="border-collapse:collapse;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;width:100%">{''.join(filas)}</table>
       {docs_html}
       {f'<p style="margin-top:12px"><b>Observaciones:</b> {obs}</p>' if obs else ''}
       <p style="margin-top:14px">Quedamos atentos a sus comentarios y a cualquier antecedente adicional que sea necesario.</p>
-      <p style="margin-top:16px;color:#555">Saludos cordiales,<br/><b>Central Mutuos — Con Creces</b></p>
-    </div>
-    """
+      <p style="margin-top:16px;color:#555">Saludos cordiales,</p>"""
+    return _marca_wrap(inner, "Estudio de Títulos")
 
 
 @api.get("/estudio-titulo/defaults")
@@ -3759,13 +3788,7 @@ def _fecha_larga(fecha):
 def _escritura_html(p, notaria, confirm_url):
     fecha = _fecha_larga(p.get("fecha", ""))
     hora = p.get("hora") or "10:00"
-    return f"""
-    <div style="font-family:Arial,sans-serif;font-size:15px;color:#222;max-width:620px;margin:0 auto">
-      <div style="background:#0a0e17;color:#d4af37;padding:18px 24px;border-radius:10px 10px 0 0;text-align:center">
-        <h2 style="margin:0">Central Mutuos — Con Creces</h2>
-        <div style="color:#e2e8f0;font-size:13px;margin-top:4px">Firma de Escritura</div>
-      </div>
-      <div style="border:1px solid #e2e8f0;border-top:none;border-radius:0 0 10px 10px;padding:22px 26px">
+    inner = f"""
         <p>Estimado(a) <b>{p.get('nombre','')}</b>:</p>
         <p>¡Con mucho entusiasmo le informamos que llegó el momento de la <b>firma de su escritura</b>!</p>
         <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px 18px;margin:14px 0">
@@ -3785,10 +3808,8 @@ def _escritura_html(p, notaria, confirm_url):
         </div>
         <p style="font-size:12px;color:#777">Al confirmar podrá indicarnos con quién asistirá
         (solo, con mandatario y/o con codeudor).</p>
-        <p style="margin-top:16px;color:#555">Saludos cordiales,<br/><b>Central Mutuos — Con Creces</b></p>
-      </div>
-    </div>
-    """
+        <p style="margin-top:16px;color:#555">Saludos cordiales,</p>"""
+    return _marca_wrap(inner, "Firma de Escritura")
 
 
 @api.post("/escritura/enviar")

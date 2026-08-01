@@ -61,6 +61,13 @@ export default function ShareTargetPage() {
   const [mode, setMode] = useState("existing"); // existing | new
   const [status, setStatus] = useState("");
   const [routeToCodeudor, setRouteToCodeudor] = useState(false);
+  const [destino, setDestino] = useState("credito"); // credito | voucher_tasacion | voucher_gasto_operacional
+
+  const DESTINOS = [
+    { key: "credito", label: "Documentos crédito", icon: "fa-folder-open", color: "#0ea5e9", desc: "Carpeta del cliente (gestión de crédito)" },
+    { key: "voucher_tasacion", label: "Voucher Tasación", icon: "fa-home", color: "#d4af37", desc: "Voucher de pago de la tasación" },
+    { key: "voucher_gasto_operacional", label: "Voucher Gasto Op.", icon: "fa-money", color: "#22c55e", desc: "Vouchers de pago del gasto operacional" },
+  ];
 
   useEffect(() => {
     (async () => {
@@ -121,7 +128,8 @@ export default function ShareTargetPage() {
         const fd = new FormData();
         const blob = f.blob instanceof Blob ? f.blob : new Blob([f.blob], { type: f.type });
         fd.append("file", blob, f.name || "archivo");
-        if (routeToCodeudor) fd.append("route_to_codeudor", "true");
+        if (destino !== "credito") fd.append("categoria", destino);
+        else if (routeToCodeudor) fd.append("route_to_codeudor", "true");
         await axios.post(`${API}/api/clientes/folders/${folderId}/upload-file`, fd, {
           headers: { "Content-Type": "multipart/form-data" },
           timeout: 180000,
@@ -134,9 +142,14 @@ export default function ShareTargetPage() {
     // Consumir sesión: limpiar IDB para no repetir en próximo share
     await clearSharedPayload();
     setUploading(false);
+    const okMsg = destino === "voucher_tasacion"
+      ? `✅ ${ok} voucher(s) de Tasación guardado(s) en la carpeta de ${folderNameForToast}.`
+      : destino === "voucher_gasto_operacional"
+        ? `✅ ${ok} voucher(s) de Gasto Operacional guardado(s) en la carpeta de ${folderNameForToast}.`
+        : `✅ ${ok} archivo(s) subido(s) a ${folderNameForToast}. El COMBINADO_PROTOCOLO se está regenerando.`;
     setStatus(errors.length
       ? `✅ ${ok}/${payload.files.length} subidos. Errores:\n${errors.join("\n")}`
-      : `✅ ${ok} archivo(s) subido(s) a ${folderNameForToast}. El COMBINADO_PROTOCOLO se está regenerando.`);
+      : okMsg);
     setTimeout(() => {
       window.location.href = `/?open_folder=${folderId}`;
     }, 2000);
@@ -206,16 +219,38 @@ export default function ShareTargetPage() {
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: 6, marginBottom: "1rem" }}>
-          <button onClick={() => setMode("existing")} data-testid="mode-existing" style={{ flex: 1, padding: "0.6rem", background: mode === "existing" ? "#0ea5e9" : "rgba(255,255,255,0.08)", color: "#fff", border: "none", borderRadius: 6, fontWeight: 700, cursor: "pointer" }}>
-            📁 Cliente existente
-          </button>
-          <button onClick={() => setMode("new")} data-testid="mode-new" style={{ flex: 1, padding: "0.6rem", background: mode === "new" ? "#22c55e" : "rgba(255,255,255,0.08)", color: "#fff", border: "none", borderRadius: 6, fontWeight: 700, cursor: "pointer" }}>
-            ➕ Cliente nuevo
-          </button>
+        <div style={{ marginBottom: "0.9rem" }}>
+          <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 6, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>¿Qué estás enviando?</div>
+          <div style={{ display: "flex", gap: 6 }}>
+            {DESTINOS.map((d) => (
+              <button key={d.key} onClick={() => { setDestino(d.key); if (d.key !== "credito") setMode("existing"); }}
+                data-testid={`destino-${d.key}`}
+                style={{ flex: 1, padding: "0.55rem 0.3rem", background: destino === d.key ? d.color : "rgba(255,255,255,0.06)",
+                  color: destino === d.key ? "#0a0f1c" : "#cbd5e1", border: `1px solid ${destino === d.key ? d.color : "rgba(148,163,184,0.25)"}`,
+                  borderRadius: 6, fontWeight: 700, fontSize: 11.5, cursor: "pointer", lineHeight: 1.25 }}>
+                <i className={`fa ${d.icon}`} style={{ display: "block", fontSize: 15, marginBottom: 3 }} />
+                {d.label}
+              </button>
+            ))}
+          </div>
+          <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 5 }}>
+            {DESTINOS.find((d) => d.key === destino)?.desc}
+            {destino !== "credito" && " — se guarda en la carpeta del cliente como VOUCHER (no entra al COMBINADO)."}
+          </div>
         </div>
 
-        {mode === "existing" ? (
+        {destino === "credito" && (
+          <div style={{ display: "flex", gap: 6, marginBottom: "1rem" }}>
+            <button onClick={() => setMode("existing")} data-testid="mode-existing" style={{ flex: 1, padding: "0.6rem", background: mode === "existing" ? "#0ea5e9" : "rgba(255,255,255,0.08)", color: "#fff", border: "none", borderRadius: 6, fontWeight: 700, cursor: "pointer" }}>
+              📁 Cliente existente
+            </button>
+            <button onClick={() => setMode("new")} data-testid="mode-new" style={{ flex: 1, padding: "0.6rem", background: mode === "new" ? "#22c55e" : "rgba(255,255,255,0.08)", color: "#fff", border: "none", borderRadius: 6, fontWeight: 700, cursor: "pointer" }}>
+              ➕ Cliente nuevo
+            </button>
+          </div>
+        )}
+
+        {(mode === "existing" || destino !== "credito") ? (
           <div>
             <label style={{ display: "block", fontSize: 12, marginBottom: 4, color: "#94a3b8" }}>🔍 Buscar carpeta cliente</label>
             <input
@@ -252,9 +287,12 @@ export default function ShareTargetPage() {
             </div>
             <button onClick={handleUploadExisting} disabled={!selectedFolder || uploading} data-testid="btn-upload-existing"
               style={{ width: "100%", padding: "0.75rem", background: (!selectedFolder || uploading) ? "#475569" : "#0ea5e9", color: "#fff", border: "none", borderRadius: 6, fontWeight: 700, fontSize: 14, cursor: uploading ? "wait" : "pointer" }}>
-              <i className={`fa ${uploading ? "fa-spinner fa-spin" : "fa-upload"}`} /> {uploading ? "Subiendo…" : `Subir ${payload.files.length} archivo(s)${routeToCodeudor ? ' (Codeudor)' : ' (Titular)'}`}
+              <i className={`fa ${uploading ? "fa-spinner fa-spin" : "fa-upload"}`} /> {uploading ? "Subiendo…"
+                : destino === "voucher_tasacion" ? `Guardar ${payload.files.length} voucher(s) de Tasación`
+                : destino === "voucher_gasto_operacional" ? `Guardar ${payload.files.length} voucher(s) de Gasto Op.`
+                : `Subir ${payload.files.length} archivo(s)${routeToCodeudor ? ' (Codeudor)' : ' (Titular)'}`}
             </button>
-            {selectedFolder && (() => {
+            {destino === "credito" && selectedFolder && (() => {
               const folder = folders.find((x) => x.id === selectedFolder);
               const hasCodeudor = folder && (folder.codeudor_nombre || "").trim().length > 0;
               if (!hasCodeudor) return null;
