@@ -579,3 +579,10 @@ requieren re-deploy para llegar a producción.
 - DECISIONES USUARIO: WhatsApp NO — todo por correo oficial. Prueba eCert en la semana.
 - VERIFICADO: preview resumen semanal (marca+cobros+acciones), historial endpoint,
   screenshot UI con registro demo (luego eliminado).
+
+## Blindaje + Testing completo (Jun 2026)
+- 10 loops de fondo blindados con _task_blindada (auto-reinicio + registro en db.system_log).
+- Testing agent iteración 6: 14/14 backend PASSED + frontend E2E 100% (reparos modal,
+  panel dashboard, cobros gastos, uploads voucher, previews con marca, regla sin-CC).
+- Reporte: /app/test_reports/iteration_6.json · Tests: /app/tests/test_reparos_cobros_marca.py
+- NOTA testing: NO poner tests en /app/backend/tests (reload loop); usar /app/tests.
