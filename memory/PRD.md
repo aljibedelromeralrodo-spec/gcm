@@ -316,3 +316,12 @@ requieren re-deploy para llegar a producción.
 - db.folders "archivos" acumula (union) en vez de sobrescribir.
 - VERIFICADO con datos reales de hoy: 2 correos de Ernesto Díaz → 1 sola carpeta,
   Carpeta combinada 12 págs en orden cédula→liquidaciones→AFP→CMF→otros, sin duplicados.
+
+## Datos financieros por orden de tiempo (Ago 2026)
+- REGLA: el correo MÁS RECIENTE manda en datos financieros de la carpeta.
+- db.folders ahora guarda `datos_financieros_fecha` (date_iso del correo vigente).
+- En proc_upload_drive: si date_iso del correo >= fecha vigente → sobrescribe
+  datos_financieros (y credit_request salvo manual_override) y actualiza la fecha.
+  Si es un correo antiguo → solo completa campos vacíos, nunca pisa lo más nuevo.
+- VERIFICADO con los 2 correos reales de Ernesto (14:13 y 14:17): procesando
+  nuevo→viejo, la fecha vigente quedó en 14:17 y los datos no fueron pisados.

@@ -2343,18 +2343,27 @@ async def proc_upload_drive(qid: str):
                                      "source_email": item.get("sender", ""),
                                      "credit_request": credit_request,
                                      "datos_financieros": fin_nuevos,
+                                     "datos_financieros_fecha": item.get("date_iso", ""),
                                      "created_at": now_iso(), "origen": "procesamiento"})
     else:
         vistos_arch = set(folder_doc.get("archivos") or [])
         upd = {"archivos": (folder_doc.get("archivos") or []) + [a for a in uploaded if a not in vistos_arch],
                "rut": cl.get("rut", "") or folder_doc.get("rut", ""),
                "source_email": folder_doc.get("source_email") or item.get("sender", "")}
-        if not (folder_doc.get("credit_request") or {}).get("manual_override"):
-            upd["credit_request"] = credit_request
         fin_actual = folder_doc.get("datos_financieros") or {}
-        for k, v in fin_nuevos.items():
-            if fin_actual.get(k) in (None, ""):
-                fin_actual[k] = v
+        fecha_vigente = folder_doc.get("datos_financieros_fecha") or ""
+        fecha_item = item.get("date_iso") or ""
+        if fecha_item >= fecha_vigente:
+            # El correo MÁS NUEVO manda: sus datos financieros sobrescriben los antiguos
+            fin_actual.update(fin_nuevos)
+            upd["datos_financieros_fecha"] = fecha_item
+            if not (folder_doc.get("credit_request") or {}).get("manual_override"):
+                upd["credit_request"] = credit_request
+        else:
+            # Correo ANTIGUO: solo completa campos vacíos, nunca pisa datos más recientes
+            for k, v in fin_nuevos.items():
+                if fin_actual.get(k) in (None, ""):
+                    fin_actual[k] = v
         upd["datos_financieros"] = fin_actual
         await db.folders.update_one({"nombre": cliente}, {"$set": upd})
     # Checklist de faltantes
