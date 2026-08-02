@@ -35,7 +35,7 @@ CAT_KEYWORDS = [
     ("cedula", r"c[eé]?dula|carnet|identidad|registro civil"),
     ("liquidacion", r"liquidaci[oó]?n|sueldo|remuneraci|haberes|\bliq[\d_ ]|^liq"),
     ("afp", r"afp|cotizaci|previred|afiliaci|habitat|provida|planvital|cuprum|capital"),
-    ("cmf", r"cmf|smf|sbif|infnomat|informe[_ ]de[_ ]deuda|informe_deudas|deuda"),
+    ("cmf", r"\bcmf\b|\bsmf\b|\bsbif\b|informe[_ ]de[_ ]deuda|informe_deudas|certificado[_ ]de[_ ]deuda|deuda consolidada"),
     ("imp_renta", r"impuesto|renta|formulario 22|f22|declaraci[oó]n"),
     ("boletas", r"boleta|honorario"),
 ]
@@ -82,6 +82,8 @@ def cat_de_archivo(nombre, subfolder=""):
 
 def cat_de_texto(texto):
     low = (texto or "").lower()
+    if re.search(r"infnomat|no[_ ]matrimonio|matrimonio|uni[oó]n civil", low):
+        return "extras"
     for cat, pat in CAT_KEYWORDS:
         if re.search(pat, low):
             return cat

@@ -24,12 +24,14 @@ def _email_regex(texto):
 
 def _fallback_clasificar(texto, filename=""):
     t = (texto + " " + filename).lower()
+    if re.search(r"informe de no matrimonio|infnomat|acuerdo de uni[oó]n civil", t):
+        return "otro"
     reglas = [
         ("cedula", r"c[eé]dula de identidad|rep[uú]blica de chile|servicio de registro civil"),
         ("liquidacion", r"liquidaci[oó]n de (remuneraci|sueldo)|haberes|l[ií]quido a pagar"),
         ("cotizacion_afp", r"cotizaci|afp|capital|provida|habitat|planvital|cuprum|modelo|uno"),
         ("certificado_afp", r"certificado.*afp|certificado de afiliaci"),
-        ("certificado_smf", r"informe de deudas|cmf|sbif|deuda consolidada"),
+        ("certificado_smf", r"informe de deudas|comisi[oó]n para el mercado financiero|\bcmf\b|\bsbif\b|deuda consolidada|certificado de deuda"),
         ("boleta_honorarios", r"boleta de honorarios|honorarios electr"),
         ("impuesto_renta", r"impuesto a la renta|declaraci[oó]n de renta|formulario 22|sii"),
         ("simulacion", r"simulaci[oó]n|dividendo|gastos operacionales"),
@@ -82,7 +84,10 @@ async def clasificar_y_extraer(texto, filename=""):
             "pie_uf (numero o null), ahorro_uf (numero o null), "
             "monto_credito_solicitar_uf (numero o null), "
             "con_subsidio (true/false/null), "
-            "confianza (0 a 1). Si un dato no aparece, usa '' o null."
+            "confianza (0 a 1). Si un dato no aparece, usa '' o null. "
+            "REGLA CRITICA: 'certificado_smf' es SOLO el Informe de Deudas de la CMF "
+            "(Comision para el Mercado Financiero). Un 'Informe de No Matrimonio' u otros "
+            "certificados del Registro Civil que NO sean la cedula de identidad son tipo 'otro'."
         )
         chat = LlmChat(api_key=key, session_id=f"extract-{uuid.uuid4()}",
                        system_message=system).with_model("openai", "gpt-5.4-mini")

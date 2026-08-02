@@ -1102,6 +1102,8 @@ export default function ClientesModule({ onNavigate }) {
     if (em.attach_selected) {
       p.attach_files = Array.from(selectedFiles[em.folder.id] || []);
     }
+    if (em.editBody != null) p.body_html = em.editBody;
+    if (em.force_incompleto) p.force_incompleto = true;
     return p;
   };
 
@@ -1127,6 +1129,12 @@ export default function ClientesModule({ onNavigate }) {
   const confirmSendClientEmail = async () => {
     if (!emailModal || !emailModal.preview) return;
     const em = emailModal;
+    // HARD GUARD: documentación incompleta requiere asunción manual
+    const md = em.preview?.missing_docs || [];
+    if (md.length > 0 && !em.force_incompleto) {
+      alert(`🚫 ENVÍO BLOQUEADO — Documentación incompleta\n\nFaltan: ${md.join(", ")}\n\nPara enviar igual, marcá "Asumo el envío manual con documentación incompleta" en el preview.`);
+      return;
+    }
     // HARD GUARD: SIN subsidio → crédito no puede superar el 80% del valor propiedad
     const df = em.folder.datos_financieros || {};
     const conSub = df.con_subsidio ?? (em.folder.credit_request?.subsidy?.tipo === "con_subsidio");
@@ -1364,7 +1372,7 @@ export default function ClientesModule({ onNavigate }) {
                         <span style={{ fontSize: 10, background: "rgba(34,197,94,0.25)", color: "#15803d", padding: "2px 6px", borderRadius: 4, fontWeight: 700 }}>🎯 Lista para enviar</span>
                       )}
                       {f.emails_sent_count > 0 && (
-                        <span title={`Último envío: ${(f.last_email_sent_at || "").slice(0,19).replace('T',' ')}`} style={{ fontSize: 10, background: "rgba(59,130,246,0.2)", color: "#1d4ed8", padding: "2px 6px", borderRadius: 4, fontWeight: 700 }}>📧 Autocorreo enviado × {f.emails_sent_count}</span>
+                        <span title={`Último envío: ${(f.last_email_sent_at || "").slice(0,19).replace('T',' ')}`} style={{ fontSize: 10, background: "rgba(59,130,246,0.2)", color: "#1d4ed8", padding: "2px 6px", borderRadius: 4, fontWeight: 700 }}>📧 Enviado a mesa × {f.emails_sent_count}</span>
                       )}
                       {hasFin ? (
                         <span style={{ fontSize: 10, background: "rgba(34,197,94,0.15)", color: "#16a34a", padding: "2px 6px", borderRadius: 4 }}>💰 Datos OK</span>
@@ -1545,7 +1553,7 @@ export default function ClientesModule({ onNavigate }) {
               </button>
               <button className="docs-btn secondary" onClick={() => openEmailModal(currentFolder)} data-testid="btn-send-autocorreo-detail"
                 style={{ background: "#16a34a", border: "1px solid #15803d", color: "#fff", fontWeight: 600 }}>
-                <i className="fa fa-paper-plane"></i> Enviar Autocorreo
+                <i className="fa fa-paper-plane"></i> Enviar a Mesa
               </button>
               <button className="docs-btn secondary" onClick={() => openMissingDocsModal(currentFolder)} data-testid="btn-missing-docs-detail"
                 style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.5)", color: "#f87171" }}>
@@ -2754,7 +2762,7 @@ export default function ClientesModule({ onNavigate }) {
                     style={{ width: "100%", padding: "0.5rem", borderRadius: 6, border: "1px solid rgba(148,163,184,0.3)", background: "#1e293b", color: "#e2e8f0", fontSize: 13, cursor: "not-allowed", opacity: 0.85 }}
                   />
                   <div style={{ marginTop: 6, padding: "6px 10px", borderRadius: 6, background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.4)", color: "#fca5a5", fontSize: 11, fontWeight: 500 }}>
-                    🔒 <b>Regla inviolable</b>: todos los autocorreos se envían solo a la cuenta Central Mutuos. No se puede modificar el destinatario.
+                    🔒 <b>Regla inviolable</b>: todos los correos a mesa se envían solo a la cuenta Central Mutuos. No se puede modificar el destinatario.
                   </div>
                 </label>
 
@@ -2823,13 +2831,45 @@ export default function ClientesModule({ onNavigate }) {
                 <div style={{ padding: "0.8rem 1.1rem", borderTop: "1px solid rgba(148,163,184,0.2)" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
                     <i className="fa fa-eye" style={{ color: "#facc15" }} />
-                    <b style={{ fontSize: 13 }}>Preview del correo (autorizá con "Enviar Autocorreo")</b>
+                    <b style={{ fontSize: 13 }}>Preview del correo (autorizá con "Enviar a Mesa")</b>
                     <span style={{ marginLeft: "auto", fontSize: 11, opacity: 0.7 }}>
                       UF día: <b>{Number(emailModal.preview.uf_valor || ufValue).toLocaleString('es-CL')}</b>
                     </span>
                   </div>
-                  <div style={{ background: "#fff", color: "#111", borderRadius: 8, padding: "0.6rem 0.8rem", maxHeight: 320, overflow: "auto", border: "1px solid rgba(148,163,184,0.3)" }}
-                       dangerouslySetInnerHTML={{ __html: emailModal.preview.body_html }} />
+                  {(emailModal.preview.missing_docs || []).length > 0 && (
+                    <div data-testid="email-missing-docs-warning" style={{ marginBottom: 8, padding: "8px 12px", borderRadius: 8, background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.5)", color: "#fca5a5", fontSize: 12 }}>
+                      <b>🚫 Documentación incompleta — faltan:</b> {emailModal.preview.missing_docs.join(" · ")}
+                      <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, cursor: "pointer", color: "#fecaca", fontWeight: 600 }}>
+                        <input type="checkbox" checked={!!emailModal.force_incompleto}
+                          onChange={(e) => setEmailModal({ ...emailModal, force_incompleto: e.target.checked })}
+                          data-testid="email-force-incompleto" style={{ accentColor: "#ef4444" }} />
+                        Asumo el envío manual con documentación incompleta
+                      </label>
+                    </div>
+                  )}
+                  {emailModal.editBody != null ? (
+                    <div>
+                      <textarea value={emailModal.editBody} data-testid="email-body-editor"
+                        onChange={(e) => setEmailModal({ ...emailModal, editBody: e.target.value })}
+                        rows={12}
+                        style={{ width: "100%", padding: "0.6rem 0.8rem", borderRadius: 8, border: "1px solid rgba(250,204,21,0.5)", background: "#1e293b", color: "#e2e8f0", fontSize: 12, fontFamily: "monospace", resize: "vertical" }} />
+                      <div style={{ marginTop: 6, background: "#fff", color: "#111", borderRadius: 8, padding: "0.6rem 0.8rem", maxHeight: 200, overflow: "auto", border: "1px solid rgba(148,163,184,0.3)" }}
+                           dangerouslySetInnerHTML={{ __html: emailModal.editBody }} />
+                      <button onClick={() => setEmailModal({ ...emailModal, editBody: null })} data-testid="email-body-reset"
+                        style={{ marginTop: 6, background: "transparent", border: "1px solid rgba(148,163,184,0.3)", color: "#94a3b8", borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontSize: 12 }}>
+                        <i className="fa fa-undo" /> Volver al cuerpo automático
+                      </button>
+                    </div>
+                  ) : (
+                    <div>
+                      <div style={{ background: "#fff", color: "#111", borderRadius: 8, padding: "0.6rem 0.8rem", maxHeight: 320, overflow: "auto", border: "1px solid rgba(148,163,184,0.3)" }}
+                           dangerouslySetInnerHTML={{ __html: emailModal.preview.body_html || emailModal.preview.body }} />
+                      <button onClick={() => setEmailModal({ ...emailModal, editBody: emailModal.preview.body_html || emailModal.preview.body || "" })} data-testid="email-body-edit-btn"
+                        style={{ marginTop: 6, background: "rgba(250,204,21,0.15)", border: "1px solid rgba(250,204,21,0.5)", color: "#facc15", borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
+                        <i className="fa fa-pencil" /> Editar cuerpo manualmente
+                      </button>
+                    </div>
+                  )}
                   {emailModal.preview.attachments?.length > 0 && (
                     <div style={{ marginTop: 8, fontSize: 12, color: "#93c5fd" }}>
                       <b>Adjuntos:</b> {emailModal.preview.attachments.map(a => `📎 ${a}`).join("  ·  ")}
@@ -2859,53 +2899,39 @@ export default function ClientesModule({ onNavigate }) {
                       style={{ background: "#ec4899", border: "1px solid #be185d", color: "#fff", borderRadius: 6, padding: "6px 14px", cursor: "pointer", fontSize: 13, fontWeight: 700 }}>
                       <i className="fa fa-check" /> Marcar como enviado
                     </button>
-                    <button onClick={confirmSendClientEmail} disabled={emailModal.sending || (() => {
+                    {(() => {
                       const df = emailModal.folder.datos_financieros || {};
                       const conSub = df.con_subsidio ?? (emailModal.folder.credit_request?.subsidy?.tipo === "con_subsidio");
                       const vp = Number(df.valor_propiedad || 0);
                       const mc = Number(df.monto_credito || 0);
-                      return !conSub && vp > 0 && mc > 0 && mc > vp * 0.8 + 0.01;
-                    })()} data-testid="btn-email-send"
-                      title={(() => {
-                        const df = emailModal.folder.datos_financieros || {};
-                        const conSub = df.con_subsidio ?? (emailModal.folder.credit_request?.subsidy?.tipo === "con_subsidio");
-                        const vp = Number(df.valor_propiedad || 0);
-                        const mc = Number(df.monto_credito || 0);
-                        if (!conSub && vp > 0 && mc > vp * 0.8 + 0.01) {
-                          return `🚫 BLOQUEADO: crédito ${mc.toFixed(2)} UF supera el 80% (${(vp * 0.8).toFixed(2)} UF) — SIN subsidio no permite más del 80%`;
-                        }
-                        return "Enviar autocorreo";
-                      })()}
-                      style={(() => {
-                        const df = emailModal.folder.datos_financieros || {};
-                        const conSub = df.con_subsidio ?? (emailModal.folder.credit_request?.subsidy?.tipo === "con_subsidio");
-                        const vp = Number(df.valor_propiedad || 0);
-                        const mc = Number(df.monto_credito || 0);
-                        const bloqueado = !conSub && vp > 0 && mc > 0 && mc > vp * 0.8 + 0.01;
-                        return {
-                          background: bloqueado ? "#7f1d1d" : "#16a34a",
-                          border: `1px solid ${bloqueado ? "#450a0a" : "#15803d"}`,
-                          color: "#fff",
-                          borderRadius: 6,
-                          padding: "6px 18px",
-                          cursor: (emailModal.sending || bloqueado) ? "not-allowed" : "pointer",
-                          fontSize: 13,
-                          fontWeight: 700,
-                          boxShadow: bloqueado ? "none" : "0 2px 8px rgba(22,163,74,0.4)",
-                          opacity: bloqueado ? 0.6 : 1,
-                        };
-                      })()}>
-                      <i className={`fa ${emailModal.sending ? "fa-spinner fa-spin" : "fa-paper-plane"}`} /> {(() => {
-                        const df = emailModal.folder.datos_financieros || {};
-                        const conSub = df.con_subsidio ?? (emailModal.folder.credit_request?.subsidy?.tipo === "con_subsidio");
-                        const vp = Number(df.valor_propiedad || 0);
-                        const mc = Number(df.monto_credito || 0);
-                        const bloqueado = !conSub && vp > 0 && mc > 0 && mc > vp * 0.8 + 0.01;
-                        if (emailModal.sending) return "Enviando…";
-                        if (bloqueado) return "🚫 Bloqueado por regla 80%";
-                        return "Enviar Autocorreo";
-                      })()}
-                    </button>
+                      const bloq80 = !conSub && vp > 0 && mc > 0 && mc > vp * 0.8 + 0.01;
+                      const md = emailModal.preview?.missing_docs || [];
+                      const bloqDocs = md.length > 0 && !emailModal.force_incompleto;
+                      const bloqueado = bloq80 || bloqDocs;
+                      const label = emailModal.sending ? "Enviando…"
+                        : bloq80 ? "🚫 Bloqueado por regla 80%"
+                        : bloqDocs ? "🚫 Faltan documentos"
+                        : "Enviar a Mesa";
+                      const title = bloq80
+                        ? `🚫 BLOQUEADO: crédito ${mc.toFixed(2)} UF supera el 80% (${(vp * 0.8).toFixed(2)} UF) — SIN subsidio no permite más del 80%`
+                        : bloqDocs
+                        ? `🚫 BLOQUEADO: faltan ${md.join(", ")}. Marcá "Asumo el envío manual" para enviar igual.`
+                        : "Enviar correo revisado directo a mesa";
+                      return (
+                        <button onClick={confirmSendClientEmail} disabled={emailModal.sending || bloqueado} data-testid="btn-email-send" title={title}
+                          style={{
+                            background: bloqueado ? "#7f1d1d" : "#16a34a",
+                            border: `1px solid ${bloqueado ? "#450a0a" : "#15803d"}`,
+                            color: "#fff", borderRadius: 6, padding: "6px 18px",
+                            cursor: (emailModal.sending || bloqueado) ? "not-allowed" : "pointer",
+                            fontSize: 13, fontWeight: 700,
+                            boxShadow: bloqueado ? "none" : "0 2px 8px rgba(22,163,74,0.4)",
+                            opacity: bloqueado ? 0.6 : 1,
+                          }}>
+                          <i className={`fa ${emailModal.sending ? "fa-spinner fa-spin" : "fa-paper-plane"}`} /> {label}
+                        </button>
+                      );
+                    })()}
                   </>
                 )}
               </div>
@@ -2955,7 +2981,7 @@ export default function ClientesModule({ onNavigate }) {
                 <button onClick={closeMissingDocsModal} disabled={missingDocsModal.sending} style={{ background: "transparent", border: "1px solid rgba(148,163,184,0.3)", color: "#94a3b8", borderRadius: 6, padding: "6px 14px", cursor: "pointer", fontSize: 13 }}>Cancelar</button>
                 <button onClick={confirmSendMissingDocs} disabled={missingDocsModal.sending || !p} data-testid="btn-missing-send"
                   style={{ background: "#16a34a", border: "1px solid #15803d", color: "#fff", borderRadius: 6, padding: "6px 18px", cursor: "pointer", fontSize: 13, fontWeight: 700, boxShadow: "0 2px 8px rgba(22,163,74,0.4)" }}>
-                  <i className={`fa ${missingDocsModal.sending ? "fa-spinner fa-spin" : "fa-paper-plane"}`} /> {missingDocsModal.sending ? "Procesando…" : "Enviar Autocorreo"}
+                  <i className={`fa ${missingDocsModal.sending ? "fa-spinner fa-spin" : "fa-paper-plane"}`} /> {missingDocsModal.sending ? "Procesando…" : "Enviar correo"}
                 </button>
               </div>
             </div>

@@ -1,0 +1,43 @@
+{
+  "summary": "Iteration 7 — Bug 'CMF fantasma' de Ernesto Díaz + refuerzos de envío a Mesa. Backend: 4/4 pytest OK (folder sin cmf, preview 200 con missing_docs, 412 al confirmar sin force, clasificador correcto). Frontend: E2E completo del modal 'Correo a Mesa' con preview automático, warning de docs incompletos, botón bloqueado, checkbox de override, editor de cuerpo y reset. Sin envíos reales.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/tests/test_ernesto_cmf_bug.py",
+    "/app/test_reports/pytest/iter7.xml"
+  ],
+  "backend_tests_detail": {
+    "test_ernesto_folder_no_cmf": "PASSED — GET /api/clientes/folders?q=ernesto: is_ready_to_send=False, 'cmf' NO está en doc_categories, prob_aprobacion.factores contiene mención a CMF.",
+    "test_send_email_preview_incompleto": "PASSED — POST /send-email confirm:false → 200 con docs_completos=false, missing_docs=['Informe de deudas CMF'], body_html no vacío.",
+    "test_send_email_confirm_without_force_returns_412": "PASSED — POST /send-email confirm:true (sin force_incompleto) → 412 con mensaje 'Documentación incompleta'.",
+    "test_classifier_functions": "PASSED — folders_service.cat_de_texto('INFNOMAT-19492155.pdf')=='extras', cat_de_texto('informe_de_deudas_cmf.pdf')=='cmf', ai_extract._fallback_clasificar('INFORME DE NO MATRIMONIO ...','INFNOMAT-x.pdf')=='otro'."
+  },
+  "frontend_tests_detail": {
+    "login_and_tour": "OK — administrador/141617575, tour cerrado con Saltar.",
+    "sidebar_rename": "OK — 'Correo a Mesa' visible en sidebar (Autocorreo ya no aparece).",
+    "folder_card_estado": "OK — Card de ERNESTO LEONARDO DÍAZ SILVA muestra 'FALTA: CMF', 'x Informe CMF', 'No enviado', y 92% con 'Sin respuesta / criterios 3/6'.",
+    "email_modal_open": "OK — btn-send-autocorreo-detail abre email-modal.",
+    "email_preview_auto": "OK — Preview del cuerpo aparece automáticamente al abrir (Preview del correo (autorizá con 'Enviar a Mesa')), body_html renderizado con datos del cliente. Editor value length=915 chars.",
+    "missing_docs_warning": "OK — email-missing-docs-warning muestra '🚫 Documentación incompleta — faltan: Informe de deudas CMF'.",
+    "btn_email_send_blocked": "OK — Inicialmente disabled=True con texto '🚫 Faltan documentos'.",
+    "force_incompleto_toggles": "OK — Al marcar email-force-incompleto: disabled=False con texto 'Enviar a Mesa'. Al desmarcar vuelve a disabled=True '🚫 Faltan documentos'. NO se hizo click en enviar (evita envío real).",
+    "email_body_editor": "OK — email-body-edit-btn muestra email-body-editor (textarea, 915 chars con HTML) y email-body-reset presente."
+  },
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Backend responde muy rápido (~0.05s) para folder scan de Ernesto: los archivos ya estaban cacheados o el escaneo es incremental — OK.",
+    "El destinatario es 'fijo' a gerardo.ext@centralmutuos.cl aunque el request enviaba to_addr='test@centralmutuos.cl'. Comportamiento esperado por la 'regla inviolable' documentada en UI, pero el backend debería validar/normalizar to_addr o al menos devolverlo en la respuesta para evitar confusión. Sugerencia menor.",
+    "El endpoint /api/health sigue sin existir (heredado de iter 6)."
+  ],
+  "updated_files": [
+    "/app/tests/test_ernesto_cmf_bug.py (nuevo)",
+    "/app/test_reports/pytest/iter7.xml"
+  ],
+  "success_rate": {"backend": "100% (4/4)", "frontend": "100%"},
+  "test_credentials": "administrador / 141617575",
+  "seed_data_creation": "Ninguna. Solo lecturas + previews sin confirm.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Bug de clasificación CMF de Ernesto Díaz resuelto y verificado. Nunca enviar send-email con confirm:true Y force_incompleto:true. La carpeta Ernesto (7a510501-b702-4707-bc10-b1b3d4e8868a) queda sin CMF real hasta que el usuario suba el informe correspondiente. El destinatario del correo a mesa siempre se fuerza a gerardo.ext@centralmutuos.cl (regla inviolable).",
+  "rca of the issue": "El clasificador previo asignaba archivos INFNOMAT-*.pdf (Informe de No Matrimonio del Registro Civil) a la categoría 'cmf' porque el filtro sólo buscaba la sustring 'informe' + 'deuda|cmf'. La regla se corrigió en folders_service.CAT_KEYWORDS/cat_de_texto para excluir 'infnomat' y 'no matrimonio' y mapearlos a 'extras', y ai_extract._fallback_clasificar mapea el texto extraído del PDF a 'otro'. Además el endpoint POST /api/clientes/folders/{id}/send-email ahora exige force_incompleto=true cuando docs_completos=false y confirm=true (412 en caso contrario), y siempre devuelve body_html+missing_docs para el preview del modal. El frontend (ClientesModule.js) muestra el preview auto, warning, checkbox de override, botón bloqueado y editor manual del cuerpo. Sidebar renombrado a 'Correo a Mesa'."
+}

@@ -197,7 +197,7 @@ export default function AutocorreoModule() {
           <i className="fa fa-cogs" style={{ marginRight: "0.5rem" }} />Controles
         </h3>
 
-        <Row label="Sistema Autocorreo" right={<StatusPill active={data.enabled} />}>
+        <Row label="Sistema Correo a Mesa" right={<StatusPill active={data.enabled} />}>
           <button onClick={toggleEnabled} disabled={loading} className="autocorreo-btn"
             data-testid="btn-toggle-enabled"
             style={{ background: data.enabled ? "#ef4444" : "#22c55e", color: "#fff" }}>
@@ -326,7 +326,7 @@ export default function AutocorreoModule() {
           </span>
         </h3>
         <p style={{ fontSize: "0.82rem", opacity: 0.7, marginBottom: "1rem" }}>
-          Cuando la cuenta <b>principal</b> queda bloqueada por Gmail (OVERQUOTA), Autocorreo lee y envía desde la de <b>respaldo</b>.
+          Cuando la cuenta <b>principal</b> queda bloqueada por Gmail (OVERQUOTA), Correo a Mesa lee y envía desde la de <b>respaldo</b>.
           Ambas envían al mismo destino: <code>{data.destination}</code>.
         </p>
         <div style={{ display: "grid", gap: "0.6rem" }}>
@@ -425,7 +425,7 @@ export default function AutocorreoModule() {
         </h3>
         {archive.length === 0 ? (
           <div style={{ padding: "1rem", opacity: 0.6, fontSize: "0.9rem" }}>
-            Todavia no hay archivos. Cada vez que Autocorreo procese un correo, guardara los PDFs ajustados aca en la carpeta del cliente.
+            Todavia no hay archivos. Cada vez que Correo a Mesa procese un correo, guardara los PDFs ajustados aca en la carpeta del cliente.
           </div>
         ) : (
           <div style={{ display: "grid", gap: "0.6rem" }}>

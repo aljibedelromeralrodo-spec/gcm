@@ -1495,6 +1495,13 @@ async def folder_send_email(fid: str, payload: dict):
     rut = doc.get("rut", "")
     base = fsvc.folder_dir(nombre)
     cr = doc.get("credit_request") or {}
+    _cats = {fsvc.cat_de_archivo(a["nombre"], a["subfolder"]) for a in fsvc.scan_archivos(nombre)} - {"combinado", "codeudor"}
+    _ct = cr.get("client_type") or "dependiente"
+    missing_labels = [fsvc.MISSING_LABELS.get(c, c) for c in fsvc.required_cats(_ct) if c not in _cats]
+    if payload.get("confirm") and missing_labels and not payload.get("force_incompleto"):
+        raise HTTPException(status_code=412, detail="Documentación incompleta — faltan: "
+                            + ", ".join(missing_labels)
+                            + ". Para enviar igual, asumí el envío manual incompleto.")
     attach_names = []
     attach_paths = []
     if payload.get("include_merged", True):
@@ -1520,7 +1527,8 @@ async def folder_send_email(fid: str, payload: dict):
             continue
     subject = payload.get("subject") or f"Antecedentes crédito hipotecario — {nombre}" + (f" ({rut})" if rut else "")
     fin_html = _fin_resumen_html(doc)
-    cuerpo = f"""
+    body_override = (payload.get("body_html") or "").strip()
+    cuerpo = body_override or f"""
     <div style="font-family:Arial,sans-serif;font-size:14px;color:#222">
       <h2 style="color:#6c5ce7;margin:0 0 8px">Carpeta cliente — {nombre}</h2>
       <p><b>Cliente:</b> {nombre}{f' · <b>RUT:</b> {rut}' if rut else ''}</p>
@@ -1532,7 +1540,8 @@ async def folder_send_email(fid: str, payload: dict):
     """
     sender = _sender_por_rol("secundaria")
     if not payload.get("confirm"):
-        return {"to": to, "subject": subject, "body": cuerpo,
+        return {"to": to, "subject": subject, "body": cuerpo, "body_html": cuerpo,
+                "missing_docs": missing_labels, "docs_completos": not missing_labels,
                 "attachments": attach_names, "sender": sender}
     adjuntos = [{"filename": p.name, "content_b64": _b64(p.read_bytes())} for p in attach_paths]
     res = await asyncio.to_thread(mail.send_mail, to, subject, cuerpo, adjuntos, "secundaria")

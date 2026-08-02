@@ -38,7 +38,7 @@ const MODULE_TITLES = {
   usuarios: 'Gestion de Usuarios',
   criterios: 'Criterios de Evaluacion',
   'whatsapp': 'WhatsApp - Conexion y Aprobaciones',
-  'autocorreo': 'Autocorreo - Reenvio Automatico de Aprobaciones',
+  'autocorreo': 'Correo a Mesa - Envío revisado directo a mesa',
   'procesamiento': 'Procesamiento de Correo',
   gastos: 'Gastos Operacionales',
   aprobacion: 'Envío Aprobación Cliente',
@@ -132,7 +132,7 @@ function MainApp() {
     ...(user.rol === 'admin' ? [{ key: 'usuarios', icon: 'fa-user-plus', label: 'Usuarios' }] : []),
     ...(user.rol === 'admin' ? [{ key: 'criterios', icon: 'fa-shield', label: 'Criterios' }] : []),
     ...(user.rol === 'admin' ? [{ key: 'whatsapp', icon: 'fa-whatsapp', label: 'WhatsApp' }] : []),
-    ...(user.rol === 'admin' ? [{ key: 'autocorreo', icon: 'fa-envelope-o', label: 'Autocorreo' }] : []),
+    ...(user.rol === 'admin' ? [{ key: 'autocorreo', icon: 'fa-envelope-o', label: 'Correo a Mesa' }] : []),
     ...(user.rol === 'admin' ? [{ key: 'procesamiento', icon: 'fa-inbox', label: 'Procesamiento Correo' }] : []),
   ];
 
