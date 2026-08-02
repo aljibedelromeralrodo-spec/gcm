@@ -110,6 +110,7 @@ async def startup():
     asyncio.create_task(_task_blindada(_cobro_tasacion_loop, "cobro_tasacion"))
     asyncio.create_task(_task_blindada(_faltantes_recordatorio_loop, "recordatorio_faltantes"))
     asyncio.create_task(_task_blindada(_resumen_semanal_loop, "resumen_semanal"))
+    asyncio.create_task(_task_blindada(_reporte_correos_loop, "reporte_correos"))
 
 
 # ---------------------------------------------------------------------------
@@ -816,6 +817,93 @@ async def resumen_semanal_manual(payload: dict = None):
     if not (payload or {}).get("confirm"):
         return {"body": await _resumen_semanal_html(), "to": _sender_por_rol("principal")}
     res = await _enviar_resumen_semanal()
+    if not res.get("success"):
+        raise HTTPException(status_code=502, detail=res.get("error", "Error de envío"))
+    return {"ok": True, "to": _sender_por_rol("principal")}
+
+
+# ---------------------------------------------------------------------------
+# Reporte Diario de Correos (todos los días 10:00 hora Chile)
+# ---------------------------------------------------------------------------
+async def _reporte_correos_html():
+    desde = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+    recibidos = await db.proc_queue.find({"date_iso": {"$gte": desde}}
+                                         ).sort("date_iso", -1).limit(50).to_list(50)
+    enviados = await db.folders.find({"last_email_sent_at": {"$gte": desde}}).limit(50).to_list(50)
+    descartados = await db.proc_queue.find({"status": "descartado",
+                                            "descartado_en": {"$gte": desde}}).limit(30).to_list(30)
+    pendientes = await db.proc_queue.find({"status": {"$in": ["pendiente", "revisar"]}}
+                                          ).sort("date_iso", -1).limit(30).to_list(30)
+    folders = await db.folders.find({"emails_sent_count": {"$in": [None, 0]}}).limit(150).to_list(150)
+    con_faltantes = []
+    for f in folders:
+        faltan = [c["nombre"] for c in _criterios_folder(f)
+                  if not c["ok"] and c["nombre"] not in ("Enviada a mesa", "Datos financieros completos")]
+        if faltan:
+            con_faltantes.append((f.get("nombre", ""), faltan))
+
+    def _sec(titulo, items_html, vacio):
+        cuerpo_sec = items_html or f'<li style="margin:5px 0;color:#6b7280">{vacio}</li>'
+        return (f'<div style="color:#1a1f2e;font-size:15px;font-weight:700;border-left:4px solid #d4af37;'
+                f'padding-left:10px;margin:16px 0 8px">{titulo}</div>'
+                f'<ul style="margin:0;padding-left:22px;color:#111;list-style:none">{cuerpo_sec}</ul>')
+
+    li = lambda t: f'<li style="margin:5px 0">{t}</li>'
+    rec_html = "".join(li(f"📥 \"{(r.get('subject') or '')[:70]}\" — {r.get('sender','')}") for r in recibidos)
+    env_html = "".join(li(f"✅ <b>{f.get('nombre','')}</b> — enviada a mesa "
+                          f"({str(f.get('last_email_sent_at',''))[:16].replace('T',' ')})") for f in enviados)
+    falt_html = "".join(li(f"📄 <b>{n}</b> — NO enviada: faltan {', '.join(fl)}") for n, fl in con_faltantes[:25])
+    desc_html = "".join(li(f"🚫 \"{(d.get('subject') or '')[:60]}\" de {d.get('sender','')} — "
+                           f"{d.get('descartado_motivo','')}") for d in descartados)
+    pend_html = "".join(li(f"⏳ \"{(p.get('subject') or '')[:60]}\" de {p.get('sender','')} — "
+                           f"{'sin leer/procesar' if p.get('status') == 'pendiente' else 'requiere revisión manual'}")
+                        for p in pendientes)
+    hoy = datetime.now(_tz_chile()).strftime("%d-%m-%Y")
+    inner = f"""
+      <p>¡Buenos días! Este es el <b>reporte diario de correos</b> al <b>{hoy}</b> (últimas 24 horas):</p>
+      {_sec(f"Correos de gestión recibidos ({len(recibidos)})", rec_html, "No se recibieron correos de gestión.")}
+      {_sec(f"Enviadas a mesa ({len(enviados)})", env_html, "Ninguna carpeta fue enviada a mesa.")}
+      {_sec(f"NO enviadas — faltan documentos ({len(con_faltantes)})", falt_html, "No hay carpetas detenidas por documentos.")}
+      {_sec(f"Correos descartados por regla ({len(descartados)})", desc_html, "Ningún correo fue descartado.")}
+      {_sec(f"Sin leer / pendientes de revisión ({len(pendientes)})", pend_html, "No hay correos pendientes.")}"""
+    return _marca_wrap(inner, "Reporte Diario de Correos")
+
+
+async def _enviar_reporte_correos():
+    cuerpo = await _reporte_correos_html()
+    hoy = datetime.now(_tz_chile()).strftime("%d-%m-%Y")
+    return await asyncio.to_thread(mail.send_mail, _sender_por_rol("principal"),
+                                   f"📬 Reporte Diario de Correos — {hoy}", cuerpo, [], "secundaria")
+
+
+async def _reporte_correos_loop():
+    """Todos los días a las 10:00 (hora Chile): reporte de correos recibidos,
+    enviados a mesa y no enviados con su razón."""
+    while True:
+        await asyncio.sleep(900)
+        try:
+            ahora = datetime.now(_tz_chile())
+            if ahora.hour < 10:
+                continue
+            dia_key = ahora.strftime("%Y-%m-%d")
+            cfg = await db.config.find_one({"_key": "reporte_correos"}) or {}
+            if cfg.get("last_sent_day") == dia_key:
+                continue
+            res = await _enviar_reporte_correos()
+            if res.get("success"):
+                await db.config.update_one({"_key": "reporte_correos"},
+                                           {"$set": {"_key": "reporte_correos",
+                                                     "last_sent_day": dia_key,
+                                                     "last_sent_at": now_iso()}}, upsert=True)
+        except Exception as e:
+            logging.warning(f"reporte correos: {e}")
+
+
+@api.post("/central/reporte-correos/enviar")
+async def reporte_correos_manual(payload: dict = None):
+    if not (payload or {}).get("confirm"):
+        return {"body": await _reporte_correos_html(), "to": _sender_por_rol("principal")}
+    res = await _enviar_reporte_correos()
     if not res.get("success"):
         raise HTTPException(status_code=502, detail=res.get("error", "Error de envío"))
     return {"ok": True, "to": _sender_por_rol("principal")}

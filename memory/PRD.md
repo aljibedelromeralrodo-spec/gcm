@@ -625,3 +625,14 @@ requieren re-deploy para llegar a producción.
   pasan igual, para no romper el flujo de docs faltantes).
 - VERIFICADO: el correo real de Navarro ahora sería descartado (sin frase, docs 'otro');
   casos simulados OK.
+
+## Reporte Diario de Correos 10:00 (Jun 2026)
+- _reporte_correos_loop: todos los días a las 10:00 (hora Chile), correo al admin con
+  (últimas 24h): correos de gestión recibidos, carpetas enviadas a mesa
+  (last_email_sent_at), NO enviadas por documentos faltantes (detalle), correos
+  descartados por la regla inviolable (motivo) y correos sin leer/pendientes de revisión.
+  Dedupe por día (db.config reporte_correos.last_sent_day).
+- Endpoint manual: POST /central/reporte-correos/enviar (sin confirm = preview).
+- VERIFICADO: preview curl con las 5 secciones y marca formal.
+- NOTA: app ya desplegada en producción (https://risk-assess-17.emergent.host);
+  cambios nuevos requieren redeploy del usuario.
