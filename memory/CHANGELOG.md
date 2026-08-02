@@ -1,5 +1,30 @@
 # CHANGELOG — Central Mutuos (continuación de PRD.md "Implementado")
 
+## 2026-08-02 (parte 4) — Carpetas escrituración, mini programa, alertas, resumen semanal
+- **15 carpetas de escrituración creadas** (script `crear_carpetas_escrituracion.py`,
+  idempotente): clientes con "solicitud confección borrador escritura" del último mes
+  (Boetsch, Ecomac, etc.). Cada carpeta con rut, escritura_op, proyecto e inmobiliaria
+  en datos_financieros; sync de docs de aprobación incluido. Total: 21+ carpetas.
+- **FIX mini programa /share-target**: quedaba pegado en "Cargando..." porque esperaba
+  GET /clientes/folders (>60s → 502 del proxy). Nuevo endpoint liviano
+  `GET /api/clientes/folders-light` (id/nombre/rut, ~0.2s); la página carga al instante
+  y las carpetas se cargan en segundo plano. Estado vacío mejorado: botón
+  "Elegir archivos del teléfono" (share-pick-files), instrucciones WhatsApp e
+  instalación PWA. Link: {dominio}/share-target (público, sin contraseña).
+  ⚠️ Requiere REDEPLOY para que funcione en producción.
+- **Prefill Estudio de Título**: openEstudio usa tasacion-prefill (inmobiliaria,
+  vendedor nombre/email/teléfono, dirección).
+- **Alerta tasación sin respuesta**: en _actividades_terminadas_loop, tasaciones
+  solicitadas hace >5 días sin terminar generan alerta única (flag
+  tasacion_alerta_sin_respuesta).
+- **Resumen semanal (lunes ~08:00)**: FUSIONADO con el "Resumen Semanal de Martín"
+  preexistente — ahora incluye cobros de tasación del mes + acciones pendientes +
+  tabla de estado de TODAS las carpetas (mesa/tasación/estudio/escritura/pendientes).
+  Se eliminó el bloque duplicado que detectó el testing (iter 11) y el doble registro
+  del loop en startup.
+- Testing: iteración 11 → 100% backend (6/6) y frontend; limpieza de duplicados
+  verificada por curl (1 sola definición, preview con 24 filas).
+
 ## 2026-08-02 (parte 3) — Prefill IA de tasación + fix crash estudioPlantillas
 - **FIX CRASH**: `estudioPlantillas is not defined` en ClientesModule (el estado
   `useState` nunca se declaró aunque el setter se usaba) → agregado el hook.

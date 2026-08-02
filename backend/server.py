@@ -112,7 +112,6 @@ async def startup():
     # asyncio.create_task(_task_blindada(_faltantes_recordatorio_loop, "recordatorio_faltantes"))
     asyncio.create_task(_task_blindada(_actividades_terminadas_loop, "actividades_terminadas"))
     asyncio.create_task(_task_blindada(_resumen_semanal_loop, "resumen_semanal"))
-    asyncio.create_task(_task_blindada(_resumen_semanal_loop, "resumen_semanal"))
     asyncio.create_task(_task_blindada(_reporte_correos_loop, "reporte_correos"))
 
 
@@ -767,6 +766,35 @@ async def _resumen_semanal_html():
     acciones = await _acciones_pendientes()
     acc_html = ("".join(f'<li style="margin:5px 0">{a}</li>' for a in acciones[:20])
                 if acciones else '<li style="margin:5px 0">Sin acciones pendientes. Todo al día 💪</li>')
+    # Tabla de estado de TODAS las carpetas y sus pendientes
+    docs = await db.folders.find().sort("created_at", -1).to_list(300)
+    filas_carp = ""
+    td = "padding:5px 8px;border-bottom:1px solid #eceef3;vertical-align:top;font-size:12px;color:#1a1f2e"
+    for d in docs:
+        nombre_f = d.get("nombre", "")
+        ct = (d.get("credit_request") or {}).get("client_type") or "dependiente"
+        try:
+            cats = {fsvc.cat_de_archivo(a["nombre"], a["subfolder"]) for a in fsvc.scan_archivos(nombre_f)} - {"combinado", "codeudor"}
+            faltan = [fsvc.MISSING_LABELS.get(c, c) for c in fsvc.required_cats(ct) if c not in cats]
+        except Exception:
+            faltan = []
+        if not ((d.get("datos_financieros") or {}).get("fecha_entrega") or "").strip():
+            faltan.append("Fecha de entrega")
+        est = lambda sol, term: "✅" if term else ("⏳" if sol else "—")
+        mesa_e = f"📧×{d.get('emails_sent_count')}" if d.get("emails_sent_count") else "—"
+        escr_e = "✅" if d.get("escritura_confirmada_at") else ("⏳" if d.get("escritura_solicitada_at") else "—")
+        filas_carp += (f"<tr><td style='{td}'><b>{nombre_f}</b></td><td style='{td}'>{mesa_e}</td>"
+                       f"<td style='{td}'>{est(d.get('tasacion_solicitada_at'), d.get('tasacion_terminado_at'))}</td>"
+                       f"<td style='{td}'>{est(d.get('estudio_titulo_solicitado_at'), d.get('estudio_titulo_terminado_at'))}</td>"
+                       f"<td style='{td}'>{escr_e}</td>"
+                       f"<td style='{td};color:{'#b91c1c' if faltan else '#15803d'}'>{', '.join(faltan) or '✔ completa'}</td></tr>")
+    th = "padding:5px 8px;text-align:left;font-size:12px;color:#6b7280"
+    tabla_carpetas = f"""
+      <div style="color:#1a1f2e;font-size:15px;font-weight:700;border-left:4px solid #d4af37;padding-left:10px;margin:18px 0 8px">Estado de todas las carpetas ({len(docs)})</div>
+      <table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #eceef3;border-radius:8px">
+        <tr><th style="{th}">Cliente</th><th style="{th}">Mesa</th><th style="{th}">Tasación</th><th style="{th}">E. Título</th><th style="{th}">Escritura</th><th style="{th}">Pendientes</th></tr>
+        {filas_carp}
+      </table>"""
     semana = datetime.now(_tz_chile()).strftime("%d-%m-%Y")
     inner = f"""
       <p>¡Buenos días! Soy <b>Martín</b> ☀️ Este es el resumen semanal al <b>{semana}</b>:</p>
@@ -781,6 +809,7 @@ async def _resumen_semanal_html():
       <div style="color:#1a1f2e;font-size:15px;font-weight:700;border-left:4px solid #d4af37;padding-left:10px;margin:18px 0 8px">Carpetas que necesitan acción ({len(acciones)})</div>
       <ul style="margin:6px 0 0;padding-left:22px;color:#111;list-style:none">{acc_html}</ul>
       {"<p style='margin-top:10px;color:#6b7280;font-size:12px'>…y más carpetas en la lista.</p>" if len(acciones) > 20 else ""}
+      {tabla_carpetas}
       <p style="margin-top:16px;color:#555">¡Que tengas una excelente semana!</p>"""
     return _marca_wrap(inner, "Resumen Semanal de Martín")
 
@@ -907,81 +936,6 @@ async def reporte_correos_manual(payload: dict = None):
     if not (payload or {}).get("confirm"):
         return {"body": await _reporte_correos_html(), "to": _sender_por_rol("principal")}
     res = await _enviar_reporte_correos()
-    if not res.get("success"):
-        raise HTTPException(status_code=502, detail=res.get("error", "Error de envío"))
-    return {"ok": True, "to": _sender_por_rol("principal")}
-
-
-async def _resumen_semanal_html():
-    docs = await db.folders.find().sort("created_at", -1).to_list(300)
-    filas = ""
-    td = "padding:6px 10px;border-bottom:1px solid #2a3142;vertical-align:top"
-    for d in docs:
-        nombre = d.get("nombre", "")
-        ct = (d.get("credit_request") or {}).get("client_type") or "dependiente"
-        try:
-            cats = {fsvc.cat_de_archivo(a["nombre"], a["subfolder"]) for a in fsvc.scan_archivos(nombre)} - {"combinado", "codeudor"}
-            faltan = [fsvc.MISSING_LABELS.get(c, c) for c in fsvc.required_cats(ct) if c not in cats]
-        except Exception:
-            faltan = []
-        if not ((d.get("datos_financieros") or {}).get("fecha_entrega") or "").strip():
-            faltan.append("Fecha de entrega")
-
-        def est(sol, term):
-            return "✅ Terminada" if term else ("⏳ Solicitada" if sol else "—")
-
-        mesa = f"📧 ×{d.get('emails_sent_count')}" if d.get("emails_sent_count") else "—"
-        escr = "✅ Confirmada" if d.get("escritura_confirmada_at") else ("⏳ Solicitada" if d.get("escritura_solicitada_at") else "—")
-        filas += (f"<tr><td style='{td}'><b>{nombre}</b><br><span style='font-size:11px;color:#9aa3b5'>{d.get('rut', '')}</span></td>"
-                  f"<td style='{td}'>{mesa}</td>"
-                  f"<td style='{td}'>{est(d.get('tasacion_solicitada_at'), d.get('tasacion_terminado_at'))}</td>"
-                  f"<td style='{td}'>{est(d.get('estudio_titulo_solicitado_at'), d.get('estudio_titulo_terminado_at'))}</td>"
-                  f"<td style='{td}'>{escr}</td>"
-                  f"<td style='{td};font-size:11px;color:{'#f87171' if faltan else '#22c55e'}'>{', '.join(faltan) or '✔ completa'}</td></tr>")
-    hoy = datetime.now(_tz_chile()).strftime("%d-%m-%Y")
-    return f"""<div style="font-family:Arial;background:#0f1420;color:#e8eaf0;padding:24px;border-radius:12px">
-      <h2 style="color:#d4af37;margin:0 0 4px">📊 Resumen Semanal de Carpetas — {hoy}</h2>
-      <div style="color:#9aa3b5;font-size:12px;margin-bottom:14px">Estado de todas las carpetas y sus pendientes · Central Mutuos · Con Creces</div>
-      <table style="width:100%;border-collapse:collapse;font-size:13px">
-        <tr style="color:#d4af37;text-align:left"><th style="padding:6px 10px">Cliente</th><th>Mesa</th><th>Tasación</th><th>E. Título</th><th>Escritura</th><th>Pendientes</th></tr>
-        {filas}
-      </table></div>"""
-
-
-async def _enviar_resumen_semanal():
-    cuerpo = await _resumen_semanal_html()
-    hoy = datetime.now(_tz_chile()).strftime("%d-%m-%Y")
-    return await asyncio.to_thread(mail.send_mail, _sender_por_rol("principal"),
-                                   f"📊 Resumen Semanal de Carpetas — {hoy}", cuerpo, [], "secundaria")
-
-
-async def _resumen_semanal_loop():
-    """Todos los lunes a las 09:00 (hora Chile): resumen del estado de todas las carpetas."""
-    while True:
-        await asyncio.sleep(1800)
-        try:
-            ahora = datetime.now(_tz_chile())
-            if ahora.weekday() != 0 or ahora.hour < 9:
-                continue
-            semana_key = ahora.strftime("%G-W%V")
-            cfg = await db.config.find_one({"_key": "resumen_semanal"}) or {}
-            if cfg.get("last_sent_week") == semana_key:
-                continue
-            res = await _enviar_resumen_semanal()
-            if res.get("success"):
-                await db.config.update_one({"_key": "resumen_semanal"},
-                                           {"$set": {"_key": "resumen_semanal",
-                                                     "last_sent_week": semana_key,
-                                                     "last_sent_at": now_iso()}}, upsert=True)
-        except Exception as e:
-            logging.warning(f"resumen semanal: {e}")
-
-
-@api.post("/central/resumen-semanal/enviar")
-async def resumen_semanal_manual(payload: dict = None):
-    if not (payload or {}).get("confirm"):
-        return {"body": await _resumen_semanal_html(), "to": _sender_por_rol("principal")}
-    res = await _enviar_resumen_semanal()
     if not res.get("success"):
         raise HTTPException(status_code=502, detail=res.get("error", "Error de envío"))
     return {"ok": True, "to": _sender_por_rol("principal")}
@@ -4616,7 +4570,8 @@ async def _actividades_terminadas_loop():
         # Alerta: tasaciones solicitadas hace más de 5 días sin respuesta
         limite = (datetime.now(timezone.utc) - timedelta(days=5)).isoformat()
         docs = await db.folders.find({"tasacion_solicitada_at": {"$lt": limite, "$gt": ""},
-                                      "tasacion_terminado_at": {"$in": [None]},
+                                      "$or": [{"tasacion_terminado_at": {"$exists": False}},
+                                              {"tasacion_terminado_at": None}],
                                       "tasacion_alerta_sin_respuesta": {"$ne": True}}).limit(20).to_list(20)
         for d in docs:
             try:
