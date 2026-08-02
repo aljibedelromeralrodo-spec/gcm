@@ -268,7 +268,7 @@ export default function GastosOperacionalesModule({ onNavigate }) {
       <div style={card}>
         <h3 style={{ margin: "0 0 1rem", color: "var(--gold)", fontSize: "1.1rem" }}><i className="fa fa-university" style={{ marginRight: "0.5rem" }} />Cuenta Recaudadora (editable)</h3>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "1rem" }}>
-          {[["nombre", "Nombre"], ["rut", "RUT"], ["banco", "Banco"], ["tipo_cuenta", "Tipo de cuenta"], ["numero_cuenta", "N° de cuenta"]].map(([k, label]) => (
+          {[["nombre", "Nombre"], ["rut", "RUT"], ["banco", "Banco"], ["tipo_cuenta", "Tipo de cuenta"], ["numero_cuenta", "N° de cuenta"], ["email", "Correo"]].map(([k, label]) => (
             <div key={k}><label style={lbl}>{label}</label>
               <input data-testid={`gastos-pago-${k}`} style={inp} value={datosPago[k] || ""} onChange={e => setDatosPago(prev => ({ ...prev, [k]: e.target.value }))} />
             </div>

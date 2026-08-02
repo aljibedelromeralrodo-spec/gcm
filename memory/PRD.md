@@ -682,3 +682,13 @@ requieren re-deploy para llegar a producción.
   archivos descargados + estado de cumplimiento de la regla.
 - La regla inviolable sigue activa para correos NUEVOS (frase evaluación/solicitud +
   montos + 3 docs básicos; forzar solo con clave 0586).
+
+## Cuentas separadas (Jun 2026)
+- GASTOS OPERACIONALES → Gerardo Nicolás Barrera Pérez · RUT 14.161.757-5 ·
+  Mercado Pago · Cuenta Vista · 1014622077 · ethangerardobarr@gmail.com
+  (defaults código + DB + campo Correo agregado al editor y al correo HTML).
+- COBRO DE TASACIÓN (4,5 UF) → constante TASACION_CUENTA: MUTUARIAS Y LEASING
+  LIMITADA · RUT 77.771.552-6 · Mercado Pago · Cuenta Vista · 1030937838
+  (ya NO usa los defaults de gastos).
+- VERIFICADO por curl: gastos muestra cuenta Gerardo+correo, tasación muestra
+  MUTUARIAS; sin cruces entre cuentas.

@@ -3380,11 +3380,12 @@ GASTOS_OP_DEFAULTS = {
         {"concepto": "Tasación", "valor": None, "texto": "Pagada"},
     ],
     "datos_pago": {
-        "nombre": "MUTUARIAS Y LEASING LIMITADA",
-        "rut": "77.771.552-6",
+        "nombre": "Gerardo Nicolás Barrera Pérez",
+        "rut": "14.161.757-5",
         "banco": "Mercado Pago",
         "tipo_cuenta": "Cuenta Vista",
-        "numero_cuenta": "1030937838",
+        "numero_cuenta": "1014622077",
+        "email": "ethangerardobarr@gmail.com",
     },
 }
 
@@ -3446,10 +3447,19 @@ async def _cobro_ai_clasificar(texto, subject=""):
     return {"es_solicitud_usada": False, "cliente": ""}
 
 
+TASACION_CUENTA = {
+    "nombre": "MUTUARIAS Y LEASING LIMITADA",
+    "rut": "77.771.552-6",
+    "banco": "Mercado Pago",
+    "tipo_cuenta": "Cuenta Vista",
+    "numero_cuenta": "1030937838",
+}
+
+
 async def _cobro_tasacion_html(cliente=""):
     uf = await get_valor_uf()
     monto_clp = _fmt_clp(TASACION_COBRO_UF * uf)
-    dp = (await _gastos_defaults()).get("datos_pago") or {}
+    dp = TASACION_CUENTA
     pago_filas = "".join(
         f"<tr><td style='padding:5px 14px 5px 0;color:#6b7280;font-size:13px;white-space:nowrap'>{lbl}</td>"
         f"<td style='padding:5px 0;color:#1a1f2e;font-size:13px;font-weight:600'>{val}</td></tr>"
@@ -3854,7 +3864,8 @@ def _gastos_html(payload):
         f"<td style='padding:5px 0;color:#1a1f2e;font-size:13px;font-weight:600'>{val}</td></tr>"
         for lbl, val in [("Nombre", dp.get("nombre", "")), ("RUT", dp.get("rut", "")),
                          ("Banco", dp.get("banco", "")), ("Tipo de cuenta", dp.get("tipo_cuenta", "")),
-                         ("N° de cuenta", dp.get("numero_cuenta", ""))] if val)
+                         ("N° de cuenta", dp.get("numero_cuenta", "")),
+                         ("Correo", dp.get("email", ""))] if val)
     return f"""
     <div style="background:#f2f4f8;padding:28px 12px;font-family:Georgia,'Times New Roman',serif">
       <div style="max-width:640px;margin:0 auto;background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 4px 18px rgba(16,24,40,0.10)">
