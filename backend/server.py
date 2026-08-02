@@ -112,6 +112,7 @@ async def startup():
     # asyncio.create_task(_task_blindada(_faltantes_recordatorio_loop, "recordatorio_faltantes"))
     asyncio.create_task(_task_blindada(_actividades_terminadas_loop, "actividades_terminadas"))
     asyncio.create_task(_task_blindada(_resumen_semanal_loop, "resumen_semanal"))
+    asyncio.create_task(_task_blindada(_resumen_semanal_loop, "resumen_semanal"))
     asyncio.create_task(_task_blindada(_reporte_correos_loop, "reporte_correos"))
 
 
@@ -911,6 +912,81 @@ async def reporte_correos_manual(payload: dict = None):
     return {"ok": True, "to": _sender_por_rol("principal")}
 
 
+async def _resumen_semanal_html():
+    docs = await db.folders.find().sort("created_at", -1).to_list(300)
+    filas = ""
+    td = "padding:6px 10px;border-bottom:1px solid #2a3142;vertical-align:top"
+    for d in docs:
+        nombre = d.get("nombre", "")
+        ct = (d.get("credit_request") or {}).get("client_type") or "dependiente"
+        try:
+            cats = {fsvc.cat_de_archivo(a["nombre"], a["subfolder"]) for a in fsvc.scan_archivos(nombre)} - {"combinado", "codeudor"}
+            faltan = [fsvc.MISSING_LABELS.get(c, c) for c in fsvc.required_cats(ct) if c not in cats]
+        except Exception:
+            faltan = []
+        if not ((d.get("datos_financieros") or {}).get("fecha_entrega") or "").strip():
+            faltan.append("Fecha de entrega")
+
+        def est(sol, term):
+            return "✅ Terminada" if term else ("⏳ Solicitada" if sol else "—")
+
+        mesa = f"📧 ×{d.get('emails_sent_count')}" if d.get("emails_sent_count") else "—"
+        escr = "✅ Confirmada" if d.get("escritura_confirmada_at") else ("⏳ Solicitada" if d.get("escritura_solicitada_at") else "—")
+        filas += (f"<tr><td style='{td}'><b>{nombre}</b><br><span style='font-size:11px;color:#9aa3b5'>{d.get('rut', '')}</span></td>"
+                  f"<td style='{td}'>{mesa}</td>"
+                  f"<td style='{td}'>{est(d.get('tasacion_solicitada_at'), d.get('tasacion_terminado_at'))}</td>"
+                  f"<td style='{td}'>{est(d.get('estudio_titulo_solicitado_at'), d.get('estudio_titulo_terminado_at'))}</td>"
+                  f"<td style='{td}'>{escr}</td>"
+                  f"<td style='{td};font-size:11px;color:{'#f87171' if faltan else '#22c55e'}'>{', '.join(faltan) or '✔ completa'}</td></tr>")
+    hoy = datetime.now(_tz_chile()).strftime("%d-%m-%Y")
+    return f"""<div style="font-family:Arial;background:#0f1420;color:#e8eaf0;padding:24px;border-radius:12px">
+      <h2 style="color:#d4af37;margin:0 0 4px">📊 Resumen Semanal de Carpetas — {hoy}</h2>
+      <div style="color:#9aa3b5;font-size:12px;margin-bottom:14px">Estado de todas las carpetas y sus pendientes · Central Mutuos · Con Creces</div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <tr style="color:#d4af37;text-align:left"><th style="padding:6px 10px">Cliente</th><th>Mesa</th><th>Tasación</th><th>E. Título</th><th>Escritura</th><th>Pendientes</th></tr>
+        {filas}
+      </table></div>"""
+
+
+async def _enviar_resumen_semanal():
+    cuerpo = await _resumen_semanal_html()
+    hoy = datetime.now(_tz_chile()).strftime("%d-%m-%Y")
+    return await asyncio.to_thread(mail.send_mail, _sender_por_rol("principal"),
+                                   f"📊 Resumen Semanal de Carpetas — {hoy}", cuerpo, [], "secundaria")
+
+
+async def _resumen_semanal_loop():
+    """Todos los lunes a las 09:00 (hora Chile): resumen del estado de todas las carpetas."""
+    while True:
+        await asyncio.sleep(1800)
+        try:
+            ahora = datetime.now(_tz_chile())
+            if ahora.weekday() != 0 or ahora.hour < 9:
+                continue
+            semana_key = ahora.strftime("%G-W%V")
+            cfg = await db.config.find_one({"_key": "resumen_semanal"}) or {}
+            if cfg.get("last_sent_week") == semana_key:
+                continue
+            res = await _enviar_resumen_semanal()
+            if res.get("success"):
+                await db.config.update_one({"_key": "resumen_semanal"},
+                                           {"$set": {"_key": "resumen_semanal",
+                                                     "last_sent_week": semana_key,
+                                                     "last_sent_at": now_iso()}}, upsert=True)
+        except Exception as e:
+            logging.warning(f"resumen semanal: {e}")
+
+
+@api.post("/central/resumen-semanal/enviar")
+async def resumen_semanal_manual(payload: dict = None):
+    if not (payload or {}).get("confirm"):
+        return {"body": await _resumen_semanal_html(), "to": _sender_por_rol("principal")}
+    res = await _enviar_resumen_semanal()
+    if not res.get("success"):
+        raise HTTPException(status_code=502, detail=res.get("error", "Error de envío"))
+    return {"ok": True, "to": _sender_por_rol("principal")}
+
+
 # ---------------------------------------------------------------------------
 # Admin: users, alertas, learning
 # ---------------------------------------------------------------------------
@@ -1053,6 +1129,14 @@ def _criterios_folder(d):
                       "ok": bool(df.get("valor_propiedad") and df.get("monto_credito"))})
     criterios.append({"nombre": "Enviada a mesa", "ok": bool(d.get("emails_sent_count"))})
     return criterios
+
+
+@api.get("/clientes/folders-light")
+async def list_folders_light(q: str = ""):
+    """Lista liviana de carpetas (solo id/nombre/rut) — rápida, para el mini programa."""
+    query = {"nombre": {"$regex": re.escape(q), "$options": "i"}} if q else {}
+    docs = await db.folders.find(query, {"_id": 0, "id": 1, "nombre": 1, "rut": 1}).sort("created_at", -1).to_list(800)
+    return {"folders": docs}
 
 
 @api.get("/clientes/folders")
@@ -4526,6 +4610,26 @@ async def _actividades_terminadas_loop():
                     "id": str(uuid.uuid4()), "tipo": "estudio_terminado",
                     "cliente": d.get("nombre", ""), "folder_id": d["id"],
                     "mensaje": f"✅ Estudio de título de {d.get('nombre', '')} marcado como TERMINADO (reparos satisfechos)",
+                    "fecha": now_iso(), "leida": False})
+            except Exception:
+                continue
+        # Alerta: tasaciones solicitadas hace más de 5 días sin respuesta
+        limite = (datetime.now(timezone.utc) - timedelta(days=5)).isoformat()
+        docs = await db.folders.find({"tasacion_solicitada_at": {"$lt": limite, "$gt": ""},
+                                      "tasacion_terminado_at": {"$in": [None]},
+                                      "tasacion_alerta_sin_respuesta": {"$ne": True}}).limit(20).to_list(20)
+        for d in docs:
+            try:
+                dias = 5
+                try:
+                    dias = (datetime.now(timezone.utc) - datetime.fromisoformat(d["tasacion_solicitada_at"])).days
+                except Exception:
+                    pass
+                await db.folders.update_one({"id": d["id"]}, {"$set": {"tasacion_alerta_sin_respuesta": True}})
+                await db.alertas.insert_one({
+                    "id": str(uuid.uuid4()), "tipo": "tasacion_sin_respuesta",
+                    "cliente": d.get("nombre", ""), "folder_id": d["id"],
+                    "mensaje": f"⏰ La tasación de {d.get('nombre', '')} lleva {dias} días SIN RESPUESTA — revisá con Value Property",
                     "fecha": now_iso(), "leida": False})
             except Exception:
                 continue

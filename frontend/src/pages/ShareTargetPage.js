@@ -74,10 +74,11 @@ export default function ShareTargetPage() {
       // NO consumir — el usuario puede seguir compartiendo más archivos
       const p = await readSharedPayload(false);
       setPayload(p);
-      try {
-        const r = await axios.get(`${API}/api/clientes/folders`);
-        setFolders(r.data.folders || []);
-      } catch (e) { /* noop */ }
+      // Mostrar la página al tiro; las carpetas se cargan en segundo plano
+      setLoading(false);
+      const cargarCarpetas = (timeout) => axios.get(`${API}/api/clientes/folders-light`, { timeout })
+        .then(r => setFolders(r.data.folders || []));
+      cargarCarpetas(20000).catch(() => { cargarCarpetas(40000).catch(() => {}); });
       // Auto-detect: si el primer archivo es PDF/imagen, OCR para extraer RUT
       if (p && p.files && p.files.length > 0) {
         const first = p.files[0];
@@ -187,9 +188,37 @@ export default function ShareTargetPage() {
   if (!payload || !payload.files || payload.files.length === 0) {
     return (
       <div style={{ minHeight: "100vh", background: "#0a0f1c", color: "#e2e8f0", padding: "1.5rem" }}>
-        <h2>🤷 No llegaron archivos</h2>
-        <p>Volvé a WhatsApp, mantené presionado un archivo, seleccioná los que querés compartir, y elegí <b>Central Mutuos</b> en el menú de compartir.</p>
-        <a href="/" style={{ color: "#facc15" }}>← Volver a la app</a>
+        <div style={{ maxWidth: 560, margin: "0 auto" }}>
+          <h2 style={{ marginTop: 0 }}>📲 Central Mutuos — Compartir archivos</h2>
+          <p style={{ fontSize: 14, color: "#94a3b8" }}>Subí documentos de clientes directo al sistema, sin contraseña.</p>
+
+          <label data-testid="share-pick-files" style={{ display: "block", textAlign: "center", background: "#0ea5e9", color: "#fff", borderRadius: 8, padding: "0.9rem", fontWeight: 700, fontSize: 15, cursor: "pointer", marginBottom: "1rem" }}>
+            <i className="fa fa-folder-open" /> Elegir archivos del teléfono
+            <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.heic,.webp,.doc,.docx,application/pdf,image/*"
+              style={{ display: "none" }}
+              onChange={(e) => {
+                const fs = Array.from(e.target.files || []);
+                if (fs.length === 0) return;
+                setPayload({ files: fs.map(f => ({ name: f.name, type: f.type, size: f.size, blob: f })) });
+              }} />
+          </label>
+
+          <div style={{ background: "rgba(59,130,246,0.1)", border: "1px solid rgba(59,130,246,0.4)", borderRadius: 8, padding: "0.8rem", fontSize: 13, marginBottom: "0.8rem" }}>
+            <b>📥 O compartí desde WhatsApp:</b>
+            <div style={{ marginTop: 4, color: "#cbd5e1" }}>Mantené presionado un archivo → <b>Compartir</b> → elegí <b>Central Mutuos</b>.</div>
+          </div>
+
+          <div style={{ background: "rgba(212,175,55,0.1)", border: "1px solid rgba(212,175,55,0.4)", borderRadius: 8, padding: "0.8rem", fontSize: 13 }}>
+            <b style={{ color: "#facc15" }}>⬇️ Instalá el mini programa (una sola vez):</b>
+            <ol style={{ margin: "0.4rem 0 0 1.1rem", padding: 0, color: "#cbd5e1" }}>
+              <li>Abrí este link en <b>Chrome</b> del teléfono</li>
+              <li>Menú (⋮) → <b>"Agregar a pantalla de inicio"</b> o <b>"Instalar aplicación"</b></li>
+              <li>Queda el ícono <b>Central Mutuos</b> como una app</li>
+            </ol>
+          </div>
+
+          <a href="/" style={{ color: "#facc15", display: "inline-block", marginTop: "1rem" }}>← Volver a la app</a>
+        </div>
       </div>
     );
   }

@@ -460,6 +460,11 @@ export default function ClientesModule({ onNavigate }) {
   const openEstudio = async (f) => {
     let archivos = [];
     let defaults = { destinatarios: ["contacto@hipotecariogestion.cl", "victoriavilches@centralmutuos.cl"], docs_usada: [] };
+    let prefill = {};
+    try {
+      const pf = await axios.get(`${API}/api/clientes/folders/${f.id}/tasacion-prefill`, { timeout: 90000 });
+      prefill = pf.data.prefill || {};
+    } catch (_e) { /* best effort */ }
     try {
       const [r, d] = await Promise.all([
         axios.get(`${API}/api/clientes/folders/${f.id}`),
@@ -483,11 +488,11 @@ export default function ClientesModule({ onNavigate }) {
       destinatarios: defaults.destinatarios.join(", "),
       cc: (f.estudio_titulo_cc || []).join(", "),
       tipo_vivienda: "nueva",
-      inmobiliaria: f.datos_financieros?.inmobiliaria || "",
+      inmobiliaria: f.datos_financieros?.inmobiliaria || prefill.inmobiliaria || "",
       inmo_contacto_nombre: "", inmo_contacto_email: "",
-      vendedor_nombre: "", vendedor_email: "", vendedor_telefono: "",
+      vendedor_nombre: prefill.vendedor_nombre || "", vendedor_email: prefill.vendedor_email || "", vendedor_telefono: prefill.vendedor_telefono || "",
       intro: "",
-      direccion: "", observaciones: "",
+      direccion: f.datos_financieros?.direccion || prefill.direccion || "", observaciones: "",
       docs_texto: (defaults.docs_usada || []).join("\n"),
       preview: null, loading: false, msg: "",
     });

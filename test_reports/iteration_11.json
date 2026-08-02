@@ -1,0 +1,39 @@
+{
+  "summary": "Iteration 11 — Verificación del lote nuevo (5 features): (1) GET /api/clientes/folders-light responde en 0.17s con 23 carpetas (solo {id,nombre,rut}) incluyendo ALEIDYS NOEMI APONTE BANDRES, JOHNSON VARGAS PEÑA y JAVIERA PAZ HERNANDEZ LYNCH. (2) Carpeta JAVIERA PAZ tiene escritura_op='01-01-02484-1', rut '19.862.353-2' y datos_financieros.proyecto no vacío. (3) POST /api/central/resumen-semanal/enviar sin confirm devuelve HTML preview con 'Resumen Semanal', columnas Tasación/E.Título/Escritura/Pendientes y 22 filas de clientes (>=18). NO se enviaron correos reales. (4) Bloque 'Alerta: tasaciones solicitadas hace más de 5 días sin respuesta' presente en _actividades_terminadas_loop; test sintético en Mongo confirma que el query selecciona correctamente (carpeta con tasacion_solicitada_at hace 6 días → matcheada); estado revertido al finalizar. (5) /share-target carga instantáneo (NO se queda en 'Cargando…'), muestra título, botón share-pick-files 'Elegir archivos del teléfono', instrucciones de WhatsApp y de instalación PWA; subir un PDF de prueba abre la vista 'Archivos recibidos' con selector de carpeta y búsqueda 'JAVIERA' encuentra 'JAVIERA PAZ HERNANDEZ LYNCH'. Extra: módulo Clientes muestra 23 tarjetas (>21) incluyendo las 15 de escrituración; modal 'Solicitud de Estudio de Título' de VANESA OCAMPO abre en 5s con estudio-inmobiliaria pre-llenado='ecomac'. Backend pytest iter11: 6/6 PASSED.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "server.py startup", "issue": "Línea 114 y 115 registran _resumen_semanal_loop DUPLICADO (asyncio.create_task se llama 2 veces). También hay definiciones duplicadas de _resumen_semanal_html/_enviar_resumen_semanal/_resumen_semanal_loop/resumen_semanal_manual en líneas ~760-820 y ~915-987 (Python usa la 2ª, la 1ª es código muerto). Esto no rompe funcionalidad pero corre el loop dos veces en paralelo (puede provocar doble envío del correo semanal si por race las 2 tareas pasan el check de last_sent_week casi simultáneamente)."},
+      {"endpoint": "_actividades_terminadas_loop (server.py:4619)", "issue": "El query usa {'tasacion_terminado_at': {'$in': [None]}} — sólo matchea si el campo existe con valor null; carpetas donde el campo no existe NO son seleccionadas. Mejor usar $or con $exists:false o $eq:null. En el test sintético funciona porque forcé el campo a None."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/tests/test_iter11_features.py",
+    "/app/test_reports/pytest/iter11.xml"
+  ],
+  "action_items": [
+    "Eliminar la línea duplicada 115 en server.py (asyncio.create_task(_resumen_semanal_loop) aparece 2 veces).",
+    "Eliminar el bloque duplicado de funciones _resumen_semanal_* en server.py líneas ~760-820 (la 2ª definición en ~915-987 es la que queda activa, la 1ª es código muerto que puede confundir).",
+    "(Opcional) Ampliar el query de alerta de tasación sin respuesta para también matchear docs donde 'tasacion_terminado_at' no existe."
+  ],
+  "critical_code_review_comments": [
+    "server.py duplica funciones _resumen_semanal_html/_enviar_resumen_semanal/_resumen_semanal_loop/endpoint /api/central/resumen-semanal/enviar. Python sobreescribe la primera. Riesgo: la primera versión también estaba activa como asyncio.create_task duplicado.",
+    "server.py sigue creciendo (>6466 líneas). Refactor a módulos pendiente (ya reportado en iter10)."
+  ],
+  "updated_files": [
+    "/app/tests/test_iter11_features.py (nuevo)",
+    "/app/test_reports/pytest/iter11.xml"
+  ],
+  "success_rate": {"backend": "100% (6/6 pytest)", "frontend": "100% (share-target + upload + búsqueda + estudio prefill + clientes 23 tarjetas)"},
+  "test_credentials": "administrador / 141617575",
+  "seed_data_creation": "Test sintético en Mongo: seteé tasacion_solicitada_at=hace-6-días y tasacion_terminado_at=null en 1 carpeta (la más reciente devuelta por find_one), verifiqué el query del loop y REVERTÍ los 3 campos a su valor original en el bloque finally del test. Sin residuos. No se creó ni tocó ningún archivo en storage.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iter 11 features 100% OK. IMPORTANTE: hay duplicación de funciones _resumen_semanal_* y de asyncio.create_task en server.py líneas 114-115 y 760-820 vs 915-987 — no rompe UX pero E1 debería limpiar. /share-target valida perfectamente sin login (público). El botón data-testid=share-pick-files existe. GET /api/clientes/folders-light responde en <200ms — usar este en lugar de /clientes/folders cuando solo se necesiten nombres. NO enviar correos reales: el endpoint /api/central/resumen-semanal/enviar SIN confirm devuelve preview; NUNCA pasar confirm:true en tests.",
+  "rca of the issue": "N/A — todas las features implementadas correctamente. Duplicación de _resumen_semanal_* es code smell (no bug funcional) probablemente de un merge/copy-paste; recomiendo limpieza."
+}
