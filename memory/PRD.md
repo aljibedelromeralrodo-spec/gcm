@@ -636,3 +636,18 @@ requieren re-deploy para llegar a producción.
 - VERIFICADO: preview curl con las 5 secciones y marca formal.
 - NOTA: app ya desplegada en producción (https://risk-assess-17.emergent.host);
   cambios nuevos requieren redeploy del usuario.
+
+## Clave 0586 + PDF simulación sin "ajustado" (Jun 2026)
+- Forzar armado de carpeta (saltando regla inviolable): SOLO con clave 0586.
+  Backend: proc_upload_drive(force, clave) → 403 si clave incorrecta, 412 si regla
+  no se cumple sin force. Frontend: prompt de clave al recibir 412 + botón
+  "Armar carpeta manualmente" en detalle de items descartados (con motivo visible).
+- PDF de simulación procesado por autocorreo ahora se llama {nombre}_CM.pdf
+  (antes _ajustada.pdf — el usuario prohibió la palabra "ajustado" en el nombre).
+  _tipo_pdf_aprobacion detecta _cm.pdf y mantiene compatibilidad con archivos legados.
+- ACLARADO al usuario: carpetas Franco Bahamondes / Claudia Zurita se armaron en
+  PRODUCCIÓN (sin la regla aún) — requiere redeploy. En preview el correo de
+  Bahamondes es descartado (412 verificado). Carpeta de prueba creada por error
+  durante testing fue eliminada y el item devuelto a "clasificado".
+- INCIDENTE: server.py quedó con bloque duplicado al final (SyntaxError) — corregido
+  con sed. Verificar SIEMPRE ast.parse tras ediciones múltiples.

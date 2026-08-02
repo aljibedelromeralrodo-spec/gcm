@@ -141,10 +141,10 @@ export default function EmailProcessingModule() {
     setSelected(r.data);
   };
 
-  const uploadToDrive = async (id) => {
+  const uploadToDrive = async (id, force = false, clave = "") => {
     setBusy(true);
     try {
-      const r = await axios.post(`${API}/api/procesamiento/queue/${id}/upload-drive`);
+      const r = await axios.post(`${API}/api/procesamiento/queue/${id}/upload-drive${force ? `?force=true&clave=${encodeURIComponent(clave)}` : ""}`);
       const upl = r.data.uploaded || [];
       const dupes = r.data.skipped_duplicates || [];
       const dropped = r.data.dropped_originals || [];
@@ -155,7 +155,15 @@ export default function EmailProcessingModule() {
       alert(msg);
       load(); if (selected?.id === id) openDetail(id);
     } catch (e) {
-      alert("Error: " + (e.response?.data?.detail || e.message));
+      if (e.response?.status === 412 && !force) {
+        const clave = window.prompt(`${e.response.data.detail}\n\nPara armar la carpeta MANUALMENTE (saltando la regla inviolable) ingresa la CLAVE de administrador:`);
+        if (clave) {
+          setBusy(false);
+          return uploadToDrive(id, true, clave);
+        }
+      } else {
+        alert("Error: " + (e.response?.data?.detail || e.message));
+      }
     } finally { setBusy(false); }
   };
 
@@ -458,6 +466,13 @@ function DetailModal({ item, onClose, onReprocess, onSave, onUploadDrive, onExtr
         <div style={{ color:"#64748b", fontSize:12, marginBottom:12 }}>
           {item.sender} · {(item.date_iso || "").slice(0,16).replace("T"," ")} · Status: <b>{item.status}</b>
         </div>
+        {item.status === "descartado" && item.descartado_motivo && (
+          <div data-testid="descartado-motivo" style={{ background:"#fef2f2", border:"1px solid #fecaca", color:"#b91c1c", padding:"10px 14px", borderRadius:8, marginBottom:12, fontSize:13 }}>
+            🚫 <b>Descartado por regla:</b> {item.descartado_motivo}
+            {item.descartado_en ? ` · ${String(item.descartado_en).slice(0,16).replace("T"," ")}` : ""}
+            <div style={{ color:"#7f1d1d", fontSize:12, marginTop:4 }}>Si corresponde armar la carpeta igual, usa el botón "📂 Armar carpeta manualmente" más abajo.</div>
+          </div>
+        )}
         <div style={{ background:"#f8fafc", padding:12, borderRadius:8, marginBottom:16,
                       maxHeight:180, overflow:"auto", whiteSpace:"pre-wrap", fontSize:13 }}>
           {item.body_preview || "(sin cuerpo)"}
@@ -583,6 +598,10 @@ function DetailModal({ item, onClose, onReprocess, onSave, onUploadDrive, onExtr
             {item.status === "clasificado" && (
               <button data-testid="btn-upload-drive" onClick={() => onUploadDrive(item.id)} disabled={busy}
                       style={btnStyle("#22c55e")}>📂 Guardar en Carpeta Cliente</button>
+            )}
+            {item.status === "descartado" && (
+              <button data-testid="btn-armar-manual" onClick={() => onUploadDrive(item.id)} disabled={busy}
+                      style={btnStyle("#f59e0b")}>📂 Armar carpeta manualmente</button>
             )}
             {item.status === "clasificado" && (
               <button data-testid="btn-enviar-autocorreo" onClick={() => onEnviarAutocorreo(item.id)} disabled={busy}

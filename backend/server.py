@@ -1915,7 +1915,7 @@ def _procesar_mesa(destino, cutoff_iso, ejecutivos=None, ya_enviados=None):
             saved = []
             if tipo_doc == "simulacion" and not es_carta:
                 nuevo, orig, removidas = pdfs.dejar_primera_pagina(raw)
-                nombre_aj = nombre_pdf.replace(".pdf", "") + "_ajustada.pdf"
+                nombre_aj = nombre_pdf.replace(".pdf", "") + "_CM.pdf"
                 _save_pdf(cliente, nombre_aj, nuevo)
                 saved.append({"name": _safe_name(nombre_aj), "type": "simulacion_ajustada",
                               "pages_original": orig, "pages_removed": removidas})
@@ -2101,7 +2101,7 @@ async def ac_manual(cliente: str = Form(...), files: list[UploadFile] = File(...
             tipo_doc = pdfs.clasificar_documento(raw, f.filename)
             if tipo_doc == "simulacion":
                 nuevo, orig, removidas = pdfs.dejar_primera_pagina(raw)
-                nombre_aj = f.filename.replace(".pdf", "") + "_ajustada.pdf"
+                nombre_aj = f.filename.replace(".pdf", "") + "_CM.pdf"
                 _save_pdf(cliente, nombre_aj, nuevo)
                 saved.append({"name": _safe_name(nombre_aj), "type": "simulacion_ajustada",
                               "pages_original": orig, "pages_removed": removidas})
@@ -2710,8 +2710,14 @@ def _regla_solicitud_ok(item):
     return True, ""
 
 
+CLAVE_FORZAR_CARPETA = "0586"
+
+
 @api.post("/procesamiento/queue/{qid}/upload-drive")
-async def proc_upload_drive(qid: str):
+async def proc_upload_drive(qid: str, force: bool = False, clave: str = ""):
+    if force and clave != CLAVE_FORZAR_CARPETA:
+        raise HTTPException(status_code=403,
+                            detail="Clave incorrecta: solo el administrador puede forzar el armado de carpeta.")
     item = await db.proc_queue.find_one({"id": qid})
     if not item:
         raise HTTPException(status_code=404, detail="No encontrado")
@@ -2753,7 +2759,7 @@ async def proc_upload_drive(qid: str):
             existente = titular_doc
     if existente and existente.get("nombre"):
         cliente = existente["nombre"]
-    if not existente and not es_correo_codeudor:
+    if not existente and not es_correo_codeudor and not force:
         ok_regla, motivo = _regla_solicitud_ok(item)
         if not ok_regla:
             raise HTTPException(status_code=412,
@@ -4808,8 +4814,8 @@ def _tipo_pdf_aprobacion(nombre):
     low = (nombre or "").lower()
     if re.search(r"carta|aprobaci[oó]n|aprobacion", low):
         return "carta_aprobacion"
-    # Solo la simulación AJUSTADA (la que genera el autocorreo) — no la simulación normal
-    if re.search(r"ajustad", low):
+    # Solo la simulación procesada por el autocorreo (sufijo _CM; legado: 'ajustad')
+    if re.search(r"_cm\.pdf$|ajustad", low):
         return "simulacion_ajustada"
     return "otro"
 
