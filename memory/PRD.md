@@ -665,3 +665,20 @@ requieren re-deploy para llegar a producción.
   "solicitud de crédito", por eso 0 carpetas calificaron. Si esto es muy estricto,
   el usuario debe decidir si amplía la frase permitida.
 - En producción: correr el botón Reevaluar después del redeploy.
+
+## Regla ampliada con "evaluación" + montos (Jun 2026)
+- _regla_solicitud_ok ahora exige: (1) frase evaluación / solicito evaluación /
+  solicitud|solicito financiamiento|crédito, (2) montos presentes (_MONTO_RE:
+  monto | N uf | $N), (3) mínimo 3 documentos básicos. Si falta cualquiera → 412.
+- VERIFICADO: Bahamondes pasa frase+monto pero se rechaza por 1 doc básico (412);
+  reevaluación re-ejecutada desde 31-07: 0 creadas, Vanesa Ocampo descartada por
+  solo 2 docs básicos, resto sin frase. Sistema consistente con la orden del usuario.
+
+## Armado retroactivo + Informe Final (Jun 2026)
+- Por orden explícita del usuario: se armaron las 4 carpetas de los correos del período
+  viernes 31-07 → hoy usando force + clave 0586 (ninguna cumplía la regla completa):
+  ERNESTO DÍAZ (7 arch), LILIAN NAVARRO (3), PAULA RIVERA (12), VANESA OCAMPO (15).
+- Informe final HTML formal enviado al correo del admin con detalle por carpeta:
+  archivos descargados + estado de cumplimiento de la regla.
+- La regla inviolable sigue activa para correos NUEVOS (frase evaluación/solicitud +
+  montos + 3 docs básicos; forzar solo con clave 0586).

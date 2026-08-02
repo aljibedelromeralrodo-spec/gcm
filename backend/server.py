@@ -2685,19 +2685,24 @@ def _regen_carpeta_cliente(cliente, orden_manual=None):
     return out.name
 
 
-_SOLICITUD_RE = re.compile(r"solicitud\s+de\s+(financiamiento|cr[eé]dito)", re.I)
+_SOLICITUD_RE = re.compile(
+    r"solicitud\s+de\s+(financiamiento|cr[eé]dito)|solicito\s+(evaluaci[oó]n|financiamiento|cr[eé]dito)|evaluaci[oó]n",
+    re.I)
+_MONTO_RE = re.compile(r"monto|[\d.,]+\s*uf\b|\buf\s*[\d.,]+|\$\s*[\d.,]{4,}", re.I)
 _DOCS_BASICOS = ("cedula", "liquidacion", "cotizacion_afp", "certificado_afp",
                  "certificado_smf", "impuesto_renta", "boleta_honorarios")
 
 
 def _regla_solicitud_ok(item):
-    """REGLA INVIOLABLE: solo se arma carpeta nueva si el correo dice 'solicitud de
-    financiamiento' o 'solicitud de crédito' Y adjunta al menos 3 documentos básicos
+    """REGLA INVIOLABLE: solo se arma carpeta nueva si el correo trae frase de
+    evaluación/solicitud de financiamiento + montos Y al menos 3 documentos básicos
     (dependiente: liquidaciones/AFP/CMF/cédula/cotización inmobiliaria;
     independiente: cédula/boletas/impuesto renta/CMF)."""
     texto = f"{item.get('subject') or ''} {item.get('body_full') or item.get('body_preview') or ''}"
     if not _SOLICITUD_RE.search(texto):
-        return False, "el texto no menciona 'solicitud de financiamiento' ni 'solicitud de crédito'"
+        return False, "el texto no menciona evaluación ni solicitud de financiamiento/crédito"
+    if not _MONTO_RE.search(texto):
+        return False, "el texto no indica el monto del crédito"
     tipos = set()
     for d in (item.get("classification") or {}).get("documentos") or []:
         t = d.get("tipo", "")
