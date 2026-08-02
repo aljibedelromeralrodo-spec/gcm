@@ -102,6 +102,25 @@ export default function EmailProcessingModule() {
 
   useEffect(() => { load(); }, [filter]);
 
+  const reevaluar = async () => {
+    const clave = window.prompt("REEVALUAR con la regla inviolable:\nArma las carpetas que cumplen y BORRA las que no (desde el viernes).\n\nIngresa la CLAVE de administrador:");
+    if (!clave) return;
+    const dias = new Date();
+    dias.setDate(dias.getDate() - ((dias.getDay() + 2) % 7 || 7));
+    dias.setHours(0, 0, 0, 0);
+    setBusy(true);
+    try {
+      const r = await axios.post(`${API}/api/procesamiento/reevaluar`, { clave, desde: dias.toISOString() });
+      alert(`✅ Reevaluación completada (${r.data.revisados} correos revisados)\n\n` +
+        `Carpetas creadas (${r.data.creadas.length}):\n${r.data.creadas.join("\n") || "—"}\n\n` +
+        `Carpetas BORRADAS (${r.data.borradas.length}):\n${r.data.borradas.join("\n") || "—"}\n\n` +
+        `Descartados (${r.data.descartadas.length}):\n${r.data.descartadas.join("\n") || "—"}`);
+      load();
+    } catch (e) {
+      alert("Error: " + (e.response?.data?.detail || e.message));
+    } finally { setBusy(false); }
+  };
+
   const ingest = async () => {
     setBusy(true);
     try {
@@ -249,6 +268,8 @@ export default function EmailProcessingModule() {
                   style={btnStyle("#3b82f6")}>📨 Ingestar Inbox</button>
           <button data-testid="btn-process" onClick={processPending} disabled={busy}
                   style={btnStyle("#22c55e")}>⚡ Procesar pendientes</button>
+          <button data-testid="btn-reevaluar" onClick={reevaluar} disabled={busy}
+                  style={btnStyle("#f59e0b")}>🧹 Reevaluar (regla)</button>
           <button data-testid="btn-rules" onClick={() => setShowRules(!showRules)}
                   style={btnStyle("#8b5cf6")}>⚙️ Reglas ({rules.length})</button>
           {driveConfigured ? (

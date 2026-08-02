@@ -651,3 +651,17 @@ requieren re-deploy para llegar a producción.
   durante testing fue eliminada y el item devuelto a "clasificado".
 - INCIDENTE: server.py quedó con bloque duplicado al final (SyntaxError) — corregido
   con sed. Verificar SIEMPRE ast.parse tras ediciones múltiples.
+
+## Reevaluación retroactiva de carpetas (Jun 2026)
+- POST /procesamiento/reevaluar {clave: 0586, desde: iso}: revisa proc_queue desde la
+  fecha, arma carpetas que cumplen la regla inviolable y BORRA (doc + disco) las que no
+  (solo carpetas creadas dentro de la ventana). Items no conformes → status descartado.
+- Botón "🧹 Reevaluar (regla)" en Procesamiento (pide clave; desde = viernes anterior).
+- EJECUTADO en preview (desde 2026-07-31): 6 correos revisados, 0 creadas,
+  4 BORRADAS (Lilian Navarro, Paula Rivera, Ernesto Díaz, Vanesa Ocampo — sin frase
+  "solicitud de crédito/financiamiento"). NOTA: la carpeta de Ernesto tenía los datos
+  de prueba de reparos (eliminados con ella).
+- HALLAZGO para el usuario: los brokers escriben "EVALUACION ..." en vez de
+  "solicitud de crédito", por eso 0 carpetas calificaron. Si esto es muy estricto,
+  el usuario debe decidir si amplía la frase permitida.
+- En producción: correr el botón Reevaluar después del redeploy.

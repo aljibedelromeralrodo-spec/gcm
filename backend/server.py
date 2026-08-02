@@ -2713,6 +2713,48 @@ def _regla_solicitud_ok(item):
 CLAVE_FORZAR_CARPETA = "0586"
 
 
+@api.post("/procesamiento/reevaluar")
+async def proc_reevaluar(payload: dict):
+    """Reevalúa los correos desde una fecha con la REGLA INVIOLABLE:
+    arma carpetas que cumplen y BORRA las que no (requiere clave admin)."""
+    payload = payload or {}
+    if payload.get("clave") != CLAVE_FORZAR_CARPETA:
+        raise HTTPException(status_code=403, detail="Clave incorrecta")
+    desde = payload.get("desde") or (datetime.now(timezone.utc) - timedelta(days=3)).isoformat()
+    items = await db.proc_queue.find({"date_iso": {"$gte": desde}}).sort("date_iso", 1).to_list(200)
+    creadas, borradas, descartadas, sin_cambio = [], [], [], []
+    for it in items:
+        nombre_cli = ((it.get("classification") or {}).get("cliente") or "").strip()
+        ok_regla, motivo = _regla_solicitud_ok(it)
+        folder = None
+        if nombre_cli:
+            folder = await db.folders.find_one(
+                {"nombre": {"$regex": f"^{re.escape(nombre_cli)}$", "$options": "i"},
+                 "created_at": {"$gte": desde}})
+        if ok_regla:
+            if folder or it.get("drive_folder_id"):
+                sin_cambio.append(nombre_cli or it.get("subject", ""))
+                continue
+            try:
+                await proc_upload_drive(it["id"])
+                creadas.append(nombre_cli or it.get("subject", ""))
+            except HTTPException as he:
+                descartadas.append(f"{nombre_cli or it.get('subject','')}: {he.detail}")
+        else:
+            if folder:
+                import shutil
+                shutil.rmtree(fsvc.folder_dir(folder.get("nombre", "")), ignore_errors=True)
+                await db.folders.delete_one({"id": folder["id"]})
+                borradas.append(f"{folder.get('nombre','')} — {motivo}")
+            await db.proc_queue.update_one({"id": it["id"]}, {"$set": {
+                "status": "descartado", "drive_folder_id": None,
+                "descartado_motivo": f"REGLA: {motivo}", "descartado_en": now_iso()}})
+            if not folder:
+                descartadas.append(f"{nombre_cli or it.get('subject','')}: {motivo}")
+    return {"ok": True, "desde": desde, "revisados": len(items), "creadas": creadas,
+            "borradas": borradas, "descartadas": descartadas, "sin_cambio": sin_cambio}
+
+
 @api.post("/procesamiento/queue/{qid}/upload-drive")
 async def proc_upload_drive(qid: str, force: bool = False, clave: str = ""):
     if force and clave != CLAVE_FORZAR_CARPETA:
