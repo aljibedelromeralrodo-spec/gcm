@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="8" time="0.789" timestamp="2026-08-02T21:09:01.069988+00:00" hostname="agent-env-e547768a-060a-462b-9c2f-75e3bb68ccd9"><testcase classname="tests.test_iter9_features.TestHistorial" name="test_historial_ernesto" time="0.176" /><testcase classname="tests.test_iter9_features.TestGastosCLP" name="test_preview_incluye_total_clp" time="0.156" /><testcase classname="tests.test_iter9_features.TestActividadTerminadaOrigen" name="test_tasacion_terminada_manual_origen" time="0.366" /><testcase classname="tests.test_iter9_features.TestCodeStatic" name="test_actividades_terminadas_loop_registered" time="0.002" /><testcase classname="tests.test_iter9_features.TestCodeStatic" name="test_faltantes_recordatorio_loop_commented" time="0.003" /><testcase classname="tests.test_iter9_features.TestCodeStatic" name="test_auto_faltantes_disabled_in_proc_upload_drive" time="0.002"><failure message="AssertionError: BUG: proc_upload_drive todavía llama a _enviar_faltantes_auto — el auto-envío NO está desactivado&#10;assert '_enviar_faltantes_auto' not in '    if forc...cliente}\n\n'&#10;  &#10;  '_enviar_faltantes_auto' is contained here:&#10;        if force and clave != CLAVE_FORZAR_CARPETA:&#10;            raise HTTPException(status_code=403,&#10;                                detail=&quot;Clave incorrecta: solo el administrador puede forzar el armado de carpeta.&quot;)&#10;        item = await db.proc_queue.find_one({&quot;id&quot;: qid})&#10;        if not item:...&#10;  &#10;  ...Full output truncated (175 lines hidden), use '-vv' to show">tests/test_iter9_features.py:112: in test_auto_faltantes_disabled_in_proc_upload_drive
+    assert "_enviar_faltantes_auto" not in body, \
+E   AssertionError: BUG: proc_upload_drive todavía llama a _enviar_faltantes_auto — el auto-envío NO está desactivado
+E   assert '_enviar_faltantes_auto' not in '    if forc...cliente}\n\n'
+E     
+E     '_enviar_faltantes_auto' is contained here:
+E           if force and clave != CLAVE_FORZAR_CARPETA:
+E               raise HTTPException(status_code=403,
+E                                   detail="Clave incorrecta: solo el administrador puede forzar el armado de carpeta.")
+E           item = await db.proc_queue.find_one({"id": qid})
+E           if not item:...
+E     
+E     ...Full output truncated (175 lines hidden), use '-vv' to show</failure></testcase><testcase classname="tests.test_iter9_features.TestCodeStatic" name="test_buscar_tasacion_terminada_imap_exists" time="0.001" /><testcase classname="tests.test_iter9_features.TestCodeStatic" name="test_procesar_reparos_sets_estudio_terminado" time="0.001" /></testsuite></testsuites>

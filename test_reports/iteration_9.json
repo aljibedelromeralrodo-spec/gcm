@@ -1,0 +1,52 @@
+{
+  "summary": "Iteration 9 — Verificación de: (1) Historial cronológico por carpeta, (2) Gastos Operacionales con total en CLP, (3) desactivación del auto-envío de faltantes + loop recordatorio comentado, (4) loop automático _actividades_terminadas_loop con marcado auto de tasación (IMAP) y estudio de título (satisfecho), (5) PATCH actividad-terminada con origen 'manual'. Backend pytest 7/8 (1 REGRESIÓN CRÍTICA: proc_upload_drive TODAVÍA llama a _enviar_faltantes_auto). Historial API OK (3 eventos para Ernesto ordenados desc). Preview de Gastos OK (TOTAL EN PESOS + $1.637.876 CLP). Frontend E2E OK: modal Historial se abre con eventos (icono/título/fecha dd-mm-aaaa hh:mm) y botón cerrar funcional; preview de Gastos muestra la fila CLP correctamente. NO se enviaron correos reales (siempre confirm:false).",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "procesamiento/drive/upload (proc_upload_drive)", "issue": "REGRESIÓN respecto a la regla del usuario: server.py línea 3043 todavía tiene `asyncio.create_task(_enviar_faltantes_auto(cliente))`. El auto-envío de 'documentos faltantes' NO está desactivado. El request pedía que quedara solo el comentario 'Los documentos faltantes se piden SOLO en forma manual'.", "priority": "CRITICAL"}
+    ],
+    "minor": []
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/tests/test_iter9_features.py",
+    "/app/test_reports/pytest/iter9.xml"
+  ],
+  "backend_tests_detail": {
+    "TestHistorial::test_historial_ernesto": "PASSED — GET /api/clientes/folders/{ernesto}/historial → 200; 3 eventos ordenados desc; incluye 'Carpeta creada', 'Datos financieros recibidos del correo' y 'Documentos faltantes pedidos al remitente'.",
+    "TestGastosCLP::test_preview_incluye_total_clp": "PASSED — POST /api/gastos-operacionales/enviar {confirm:false, items:[Conservador 21, Estudio 3]} → body contiene 'TOTAL EN PESOS (UF del día $40.845)' y '$980.275 CLP' (24 UF * 40845). NO enviado.",
+    "TestActividadTerminadaOrigen::test_tasacion_terminada_manual_origen": "PASSED — PATCH terminado:true guarda tasacion_terminado_origen='manual' (visible en historial detalle); terminado:false restaura null. Estado final restaurado.",
+    "TestCodeStatic::test_actividades_terminadas_loop_registered": "PASSED — startup registra _actividades_terminadas_loop.",
+    "TestCodeStatic::test_faltantes_recordatorio_loop_commented": "PASSED — _faltantes_recordatorio_loop NO está registrado en startup (está comentado).",
+    "TestCodeStatic::test_auto_faltantes_disabled_in_proc_upload_drive": "FAILED — proc_upload_drive todavía llama a _enviar_faltantes_auto (línea 3043).",
+    "TestCodeStatic::test_buscar_tasacion_terminada_imap_exists": "PASSED — función IMAP presente y setea tasacion_terminado_origen='auto'.",
+    "TestCodeStatic::test_procesar_reparos_sets_estudio_terminado": "PASSED — _procesar_reparos_folder setea estudio_titulo_terminado_at cuando el estado es 'satisfecho'."
+  },
+  "frontend_tests_detail": {
+    "login_and_tour": "OK — administrador/141617575, tour cerrado con Saltar.",
+    "historial_button_en_tarjeta_ernesto": "OK — data-testid=btn-historial-7a510501-b702-4707-bc10-b1b3d4e8868a presente en la tarjeta de ERNESTO.",
+    "historial_modal_open": "OK — click al botón abre data-testid=historial-modal; título 'Historial — ERNESTO LEONARDO DÍAZ SILVA' visible.",
+    "historial_eventos": "OK — 3 eventos con data-testid=historial-evento-0/1/2, cada uno con icono (📩/📁/💰), título ('Documentos faltantes pedidos al remitente', 'Carpeta creada', 'Datos financieros recibidos del correo') y fecha con formato '02-08-2026, 20:36' (dd-mm-aaaa hh:mm, es-CL 24h).",
+    "historial_close": "OK — btn-historial-close cierra el modal (historial-modal deja de existir).",
+    "gastos_preview_clp": "OK — Vista previa de Gastos Operacionales muestra la fila 'TOTAL EN PESOS (UF del día $40.845)' con el monto '$1.637.876 CLP' bajo la línea del TOTAL 40,1 UF. NO se hizo click en 'Enviar' (evitar correo real)."
+  },
+  "action_items": [
+    "CRÍTICO: Eliminar la línea 3043 de /app/backend/server.py — quitar `asyncio.create_task(_enviar_faltantes_auto(cliente))` (y opcionalmente el bloque `if not completo:` correspondiente) y dejar únicamente el comentario 'Los documentos faltantes se piden SOLO en forma manual'. Esto es una regresión: el usuario pidió explícitamente NO auto-enviar. Actualmente cualquier `POST /api/procesamiento/drive/upload-all` que arme una carpeta con faltantes disparará un correo real al remitente. Considerar además eliminar (o dejar solo como helper manual) la función `_enviar_faltantes_auto`."
+  ],
+  "critical_code_review_comments": [
+    "server.py línea 3043: `asyncio.create_task(_enviar_faltantes_auto(cliente))` sigue activo, contradice la regla nueva del usuario y el comentario en `startup()`.",
+    "PATCH /actividad-terminada: cuando `terminado:false`, guarda `{tipo}_terminado_origen: None`; correcto para dejar el evento del historial oculto. OK.",
+    "_actividades_terminadas_loop tiene sleep(3600) al inicio del while → nunca corre durante el primer intervalo. Aceptable, pero considerar hacerlo al final o dejar un run inicial opcional.",
+    "_buscar_tasacion_terminada_imap: pat regex robusta; sin embargo depende de conexión IMAP viva por cada folder — puede ser lento con muchas carpetas."
+  ],
+  "updated_files": [
+    "/app/tests/test_iter9_features.py (nuevo)",
+    "/app/test_reports/pytest/iter9.xml"
+  ],
+  "success_rate": {"backend": "87% (7/8)", "frontend": "100%"},
+  "test_credentials": "administrador / 141617575",
+  "seed_data_creation": "Ninguno. Se llamó PATCH actividad-terminada tasacion true/false sobre Ernesto y se restauró a null al final (verificado).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Solo queda pendiente el fix de la línea 3043 (auto-envío de faltantes). Una vez removido, correr `pytest /app/tests/test_iter9_features.py -v` para confirmar 8/8. El resto de features (historial modal, preview CLP, loop actividades terminadas, PATCH origen) ya está verificado en backend + frontend.",
+  "rca of the issue": "El main agent afirmó que en `proc_upload_drive` ya no se llamaba `_enviar_faltantes_auto`, pero la línea 3043 sigue activa (`asyncio.create_task(_enviar_faltantes_auto(cliente))`). Reproducción: `grep -n '_enviar_faltantes_auto' /app/backend/server.py` muestra la llamada en 3043 dentro del cuerpo de proc_upload_drive. Mitigación: eliminar la línea (y opcionalmente el bloque `if not completo:` que la contiene), dejando el comentario que aclara la regla."
+}

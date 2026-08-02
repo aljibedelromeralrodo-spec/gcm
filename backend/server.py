@@ -108,7 +108,9 @@ async def startup():
     asyncio.create_task(_task_blindada(_tasacion_fecha_loop, "fecha_tasacion"))
     asyncio.create_task(_task_blindada(_estudio_reparos_loop, "reparos_estudio"))
     asyncio.create_task(_task_blindada(_cobro_tasacion_loop, "cobro_tasacion"))
-    asyncio.create_task(_task_blindada(_faltantes_recordatorio_loop, "recordatorio_faltantes"))
+    # DESACTIVADO (regla del usuario): los faltantes se piden solo manualmente
+    # asyncio.create_task(_task_blindada(_faltantes_recordatorio_loop, "recordatorio_faltantes"))
+    asyncio.create_task(_task_blindada(_actividades_terminadas_loop, "actividades_terminadas"))
     asyncio.create_task(_task_blindada(_resumen_semanal_loop, "resumen_semanal"))
     asyncio.create_task(_task_blindada(_reporte_correos_loop, "reporte_correos"))
 
@@ -1469,8 +1471,50 @@ async def folder_actividad_terminada(fid: str, payload: dict):
         raise HTTPException(status_code=400, detail="Tipo de actividad inválido")
     campo = f"{tipo}_terminado_at"
     val = now_iso() if (payload or {}).get("terminado", True) else None
-    await db.folders.update_one({"id": fid}, {"$set": {campo: val}})
+    await db.folders.update_one({"id": fid}, {"$set": {campo: val, f"{tipo}_terminado_origen": "manual" if val else None}})
     return {"ok": True, "campo": campo, "valor": val}
+
+
+@api.get("/clientes/folders/{fid}/historial")
+async def folder_historial(fid: str):
+    """Línea de tiempo permanente de todo lo hecho en la carpeta."""
+    doc = await _get_folder_doc(fid)
+    eventos = []
+
+    def ev(fecha, icono, titulo, detalle=""):
+        if fecha:
+            eventos.append({"fecha": str(fecha), "icono": icono, "titulo": titulo, "detalle": detalle})
+
+    ev(doc.get("created_at"), "📁", "Carpeta creada",
+       f"Origen: {doc.get('origen', 'manual')}" + (f" · Solicitud de {doc.get('source_email', '')}" if doc.get("source_email") else ""))
+    ev(doc.get("datos_financieros_fecha"), "💰", "Datos financieros recibidos del correo")
+    ev(doc.get("faltantes_pedidos_at"), "📩", "Documentos faltantes pedidos al remitente")
+    if doc.get("last_email_sent_at"):
+        ev(doc.get("last_email_sent_at"), "📧", f"Enviado a mesa (envío N° {doc.get('emails_sent_count', 1)})")
+    ev(doc.get("tasacion_solicitada_at"), "🏠", "Solicitud de tasación enviada")
+    if doc.get("tasacion_fecha"):
+        ev(doc.get("tasacion_fecha_detectada_en") or doc.get("tasacion_solicitada_at"), "📅",
+           f"Fecha de tasación: {doc['tasacion_fecha']}", f"Origen: {doc.get('tasacion_fecha_origen', '')}")
+    ev(doc.get("tasacion_terminado_at"), "✅", "Tasación terminada",
+       f"Origen: {doc.get('tasacion_terminado_origen') or 'manual'}")
+    ev(doc.get("estudio_titulo_solicitado_at"), "⚖️", "Solicitud de estudio de título enviada")
+    rep = doc.get("estudio_reparos") or {}
+    if rep.get("detectado_en"):
+        ev(rep.get("detectado_en"), "🔨", f"Reparos del estudio detectados ({len(rep.get('items') or [])})")
+    ev(rep.get("reenviado_vendedor_at"), "📨", "Reparos reenviados al vendedor")
+    ev(rep.get("recordatorio_enviado_at"), "⏰", "Recordatorio de reparos enviado al abogado")
+    ev(rep.get("declarado_satisfecho_at"), "✅", "Reparos declarados satisfechos",
+       f"Por: {rep.get('declarado_por', '')}")
+    ev(doc.get("estudio_titulo_terminado_at"), "✅", "Estudio de título terminado",
+       f"Origen: {doc.get('estudio_titulo_terminado_origen') or 'manual'}")
+    ev(doc.get("escritura_solicitada_at"), "✍️", "Aviso de firma de escritura enviado al cliente")
+    ev(doc.get("escritura_confirmada_at"), "✅", "Asistencia a firma de escritura confirmada")
+    ev(doc.get("escritura_terminado_at"), "✅", "Escritura terminada")
+    alertas = await db.alertas.find({"folder_id": fid}).limit(60).to_list(60)
+    for a in alertas:
+        ev(a.get("fecha"), "🔔", (a.get("mensaje") or "Alerta")[:140])
+    eventos.sort(key=lambda e: e["fecha"], reverse=True)
+    return {"nombre": doc.get("nombre", ""), "eventos": eventos}
 
 
 def _sender_por_rol(rol="secundaria"):
@@ -3898,6 +3942,13 @@ def _marca_wrap(inner, subtitulo=""):
     </div>"""
 
 
+def _fmt_num_clp(n):
+    try:
+        return f"{float(n):,.0f}".replace(",", ".")
+    except (TypeError, ValueError):
+        return str(n)
+
+
 def _gastos_html(payload):
     nombre = payload.get("nombre", "")
     rut = payload.get("rut", "")
@@ -3920,6 +3971,11 @@ def _gastos_html(payload):
     filas += (f"<tr style='background:#1a1f2e'>"
               f"<td style='padding:13px 18px;color:#d4af37;font-weight:700;letter-spacing:0.5px'>TOTAL</td>"
               f"<td style='padding:13px 18px;text-align:right;color:#d4af37;font-weight:700;font-size:16px;white-space:nowrap'>{_num_uf(total)} UF</td></tr>")
+    valor_uf = payload.get("valor_uf")
+    if valor_uf:
+        filas += (f"<tr style='background:#1a1f2e'>"
+                  f"<td style='padding:9px 18px 13px;color:#9aa3b5;font-size:12px'>TOTAL EN PESOS (UF del día ${_fmt_num_clp(valor_uf)})</td>"
+                  f"<td style='padding:9px 18px 13px;text-align:right;color:#ffffff;font-weight:700;font-size:14px;white-space:nowrap'>${_fmt_num_clp(round(total * float(valor_uf)))} CLP</td></tr>")
     pago_filas = "".join(
         f"<tr><td style='padding:5px 14px 5px 0;color:#6b7280;font-size:13px;white-space:nowrap'>{lbl}</td>"
         f"<td style='padding:5px 0;color:#1a1f2e;font-size:13px;font-weight:600'>{val}</td></tr>"
@@ -3973,6 +4029,10 @@ async def gastos_enviar(payload: dict):
     to = (payload.get("email_cliente") or "").strip()
     nombre = (payload.get("nombre") or "").strip()
     total = _gastos_total(payload.get("items"))
+    try:
+        payload["valor_uf"] = await get_valor_uf()
+    except Exception:
+        payload["valor_uf"] = None
     subject = payload.get("subject") or f"Gastos Operacionales — {nombre}"
     cuerpo = _gastos_html(payload)
     if not payload.get("confirm"):
@@ -4218,6 +4278,84 @@ async def _tasacion_fecha_loop():
                     await db.folders.update_one({"id": d["id"]}, {"$set": {
                         "tasacion_fecha": fecha, "tasacion_fecha_origen": "auto",
                         "tasacion_fecha_detectada_en": now_iso()}})
+            except Exception:
+                continue
+
+
+def _buscar_tasacion_terminada_imap(nombre):
+    """Busca en el correo la respuesta de Value Property con el informe de tasación listo."""
+    toks = [t for t in nombre.split() if len(t) > 2][:2]
+    if not toks:
+        return False
+    query = f'"from:valueproperty.cl {" ".join(toks)}"'
+    pat = re.compile(r"adjunt\w+[^.\n]{0,80}informe de tasaci|informe de tasaci[oó]n[^.\n]{0,60}adjunt"
+                     r"|tasaci[oó]n\s+(finalizada|realizada|lista|terminada)"
+                     r"|valor de (la )?tasaci[oó]n|resultado de (la )?tasaci[oó]n", re.I)
+    for acc in mail.ACCOUNTS:
+        try:
+            m = mail._connect(acc)
+            m.select("INBOX", readonly=True)
+            typ, data = m.search(None, "X-GM-RAW", query)
+            ids = data[0].split() if data and data[0] else []
+            import email as _em
+            for num in reversed(ids[-5:]):
+                typ, d = m.fetch(num, "(BODY.PEEK[])")
+                if not d or not isinstance(d[0], tuple):
+                    continue
+                msg = _em.message_from_bytes(d[0][1])
+                body = ""
+                for part in msg.walk():
+                    if part.get_content_type() == "text/plain":
+                        try:
+                            body = part.get_payload(decode=True).decode(part.get_content_charset() or "utf-8", errors="ignore")
+                            break
+                        except Exception:
+                            pass
+                adjunto_pdf = any((part.get_filename() or "").lower().endswith(".pdf") for part in msg.walk())
+                if pat.search(body) or (adjunto_pdf and re.search(r"tasaci[oó]n", body, re.I)):
+                    m.logout()
+                    return True
+            m.logout()
+        except Exception:
+            continue
+    return False
+
+
+async def _actividades_terminadas_loop():
+    """Cada 60 min: marca automáticamente (con fecha) tasaciones y estudios de título terminados."""
+    while True:
+        await asyncio.sleep(3600)
+        # Tasaciones: respuesta de Value Property con el informe
+        docs = await db.folders.find({"tasacion_solicitada_at": {"$exists": True, "$ne": None},
+                                      "$or": [{"tasacion_terminado_at": {"$exists": False}},
+                                              {"tasacion_terminado_at": None}]}).limit(10).to_list(10)
+        for d in docs:
+            try:
+                if await asyncio.to_thread(_buscar_tasacion_terminada_imap, d.get("nombre", "")):
+                    await db.folders.update_one({"id": d["id"]}, {"$set": {
+                        "tasacion_terminado_at": now_iso(), "tasacion_terminado_origen": "auto"}})
+                    await db.alertas.insert_one({
+                        "id": str(uuid.uuid4()), "tipo": "tasacion_terminada",
+                        "cliente": d.get("nombre", ""), "folder_id": d["id"],
+                        "mensaje": f"✅ Tasación de {d.get('nombre', '')} detectada como TERMINADA (informe recibido)",
+                        "fecha": now_iso(), "leida": False})
+            except Exception:
+                continue
+        # Estudios de título: reparos declarados satisfechos
+        docs = await db.folders.find({"estudio_reparos.estado": "satisfecho",
+                                      "$or": [{"estudio_titulo_terminado_at": {"$exists": False}},
+                                              {"estudio_titulo_terminado_at": None}]}).limit(10).to_list(10)
+        for d in docs:
+            try:
+                rep = d.get("estudio_reparos") or {}
+                await db.folders.update_one({"id": d["id"]}, {"$set": {
+                    "estudio_titulo_terminado_at": rep.get("declarado_satisfecho_at") or now_iso(),
+                    "estudio_titulo_terminado_origen": "auto"}})
+                await db.alertas.insert_one({
+                    "id": str(uuid.uuid4()), "tipo": "estudio_terminado",
+                    "cliente": d.get("nombre", ""), "folder_id": d["id"],
+                    "mensaje": f"✅ Estudio de título de {d.get('nombre', '')} marcado como TERMINADO (reparos satisfechos)",
+                    "fecha": now_iso(), "leida": False})
             except Exception:
                 continue
 
@@ -4556,7 +4694,11 @@ async def _procesar_reparos_folder(doc):
             rep["declarado_por"] = "abogado"
             await _reparos_enviar_resuelto(doc, rep)
     if cambios:
-        await db.folders.update_one({"id": doc["id"]}, {"$set": {"estudio_reparos": rep}})
+        upd = {"estudio_reparos": rep}
+        if rep.get("estado") == "satisfecho" and not doc.get("estudio_titulo_terminado_at"):
+            upd["estudio_titulo_terminado_at"] = rep.get("declarado_satisfecho_at") or now_iso()
+            upd["estudio_titulo_terminado_origen"] = "auto"
+        await db.folders.update_one({"id": doc["id"]}, {"$set": upd})
     return rep
 
 

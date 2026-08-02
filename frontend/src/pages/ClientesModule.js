@@ -190,6 +190,7 @@ export default function ClientesModule({ onNavigate }) {
   const [notarias, setNotarias] = useState([]);
   const [pedirModal, setPedirModal] = useState(null); // pedir documentos faltantes
   const [missingDocsModal, setMissingDocsModal] = useState(null); // { folder, to, extra, preview, sending }
+  const [historialModal, setHistorialModal] = useState(null); // { folder, eventos, loading }
   const [ufValue, setUfValue] = useState(40842);
   const fileInputRef = useRef(null);
   const uploadCtxRef = useRef(null); // { folder_id, subfolder }
@@ -208,6 +209,24 @@ export default function ClientesModule({ onNavigate }) {
     try {
       return new Date(iso).toLocaleString("es-CL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
     } catch { return (iso || "").slice(0, 16).replace("T", " "); }
+  };
+
+  const fmtActFull = (iso) => {
+    if (!iso) return "";
+    try {
+      return new Date(iso).toLocaleString("es-CL", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
+    } catch { return (iso || "").slice(0, 16).replace("T", " "); }
+  };
+
+  const openHistorial = async (f) => {
+    setHistorialModal({ folder: f, eventos: [], loading: true });
+    try {
+      const r = await axios.get(`${API}/api/clientes/folders/${f.id}/historial`);
+      setHistorialModal({ folder: f, eventos: r.data.eventos || [], loading: false });
+    } catch (e) {
+      alert("Error cargando historial: " + (e.response?.data?.detail || e.message));
+      setHistorialModal(null);
+    }
   };
 
   const marcarTerminado = async (f, tipo, terminado) => {
@@ -1550,6 +1569,11 @@ export default function ClientesModule({ onNavigate }) {
                       title={`Avisar a ${f.nombre} la fecha de firma de su escritura (con confirmación de asistencia)`}
                       style={modBtn("rgba(236,72,153,0.12)", "#ec4899", enviadoManual ? "#fff" : "#db2777")}>
                       <i className="fa fa-pencil"></i> Firma de Escritura{f.escritura_confirmada_at ? ` ✅ Confirmada ${fmtAct(f.escritura_confirmada_at)}` : (f.escritura_solicitada_at ? ` ✓ Solicitada ${fmtAct(f.escritura_solicitada_at)}` : "")}
+                    </button>
+                    <button data-testid={`btn-historial-${f.id}`} onClick={() => openHistorial(f)}
+                      title={`Historial completo de actividades de ${f.nombre}`}
+                      style={modBtn("rgba(212,175,55,0.10)", "#d4af37", enviadoManual ? "#fff" : "#b8912e")}>
+                      <i className="fa fa-history"></i> Historial
                     </button>
                   </div>
                 </div>
@@ -3007,6 +3031,38 @@ export default function ClientesModule({ onNavigate }) {
           </div>
         );
       })()}
+      {/* HISTORIAL MODAL */}
+      {historialModal && (
+        <div data-testid="historial-modal" onClick={() => setHistorialModal(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9998, padding: "3vh 3vw" }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: "#0f172a", color: "#e2e8f0", borderRadius: 12, width: "min(640px, 96vw)", maxHeight: "90vh", overflow: "auto", border: "1px solid rgba(212,175,55,0.4)", boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}>
+            <div style={{ padding: "0.9rem 1.1rem", borderBottom: "1px solid rgba(148,163,184,0.2)", display: "flex", alignItems: "center", gap: 10, position: "sticky", top: 0, background: "#0f172a" }}>
+              <i className="fa fa-history" style={{ color: "#d4af37" }} />
+              <h4 style={{ margin: 0, flex: 1 }}>Historial — {historialModal.folder.nombre}</h4>
+              <button onClick={() => setHistorialModal(null)} data-testid="btn-historial-close" style={{ background: "transparent", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 18 }}><i className="fa fa-times" /></button>
+            </div>
+            <div style={{ padding: "1rem 1.1rem" }}>
+              {historialModal.loading ? (
+                <div style={{ opacity: 0.7 }}><i className="fa fa-spinner fa-spin" /> Cargando historial…</div>
+              ) : historialModal.eventos.length === 0 ? (
+                <div style={{ opacity: 0.7 }} data-testid="historial-vacio">Sin actividades registradas todavía.</div>
+              ) : (
+                <div>
+                  {historialModal.eventos.map((ev, i) => (
+                    <div key={i} data-testid={`historial-evento-${i}`} style={{ display: "flex", gap: 12, padding: "0.55rem 0", borderBottom: i < historialModal.eventos.length - 1 ? "1px solid rgba(148,163,184,0.12)" : "none" }}>
+                      <div style={{ fontSize: 17, width: 26, textAlign: "center" }}>{ev.icono}</div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 700, fontSize: 13 }}>{ev.titulo}</div>
+                        {ev.detalle && <div style={{ fontSize: 11.5, opacity: 0.7 }}>{ev.detalle}</div>}
+                      </div>
+                      <div style={{ fontSize: 11.5, color: "#d4af37", fontWeight: 700, whiteSpace: "nowrap" }}>{fmtActFull(ev.fecha)}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       {/* MISSING DOCS MODAL */}
       {missingDocsModal && (() => {
         const p = missingDocsModal.preview;
