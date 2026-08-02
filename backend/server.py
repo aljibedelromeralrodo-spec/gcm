@@ -1103,8 +1103,15 @@ async def forzar_folder(payload: dict):
                   "created_at": now_iso(), "origen": "forzada_manual"}
         await db.folders.insert_one(dict(folder))
         fsvc.folder_dir(folder["nombre"]).mkdir(parents=True, exist_ok=True)
+    # Buscar TODO lo que exista del cliente: carta de aprobación, PDF ajustado, etc.
+    sync_copiados = []
+    try:
+        sync_copiados = await _sync_docs_aprobacion(folder.get("nombre", ""))
+    except Exception:
+        pass
     return {"ok": True, "carpeta": folder.get("nombre", ""),
             "correos_encontrados": len(items), "procesados": procesados,
+            "docs_aprobacion_descargados": sync_copiados,
             "errores": errores}
 
 
@@ -1517,6 +1524,118 @@ async def folder_historial(fid: str):
     return {"nombre": doc.get("nombre", ""), "eventos": eventos}
 
 
+def _imap_descargar_adjuntos_cliente(nombre, patrones=r"aprobaci|simulad|ajustad|_cm\.pdf"):
+    """Busca en las casillas los correos del cliente y devuelve [(filename, bytes)] de los PDFs que calcen."""
+    partes = [t for t in re.split(r"\s+", nombre or "") if len(t) > 2]
+    if not partes:
+        return []
+    combos, vistos = [], set()
+    for c in ([partes[0], partes[2]] if len(partes) >= 3 else None,
+              [partes[0], partes[1]] if len(partes) >= 2 else None,
+              [partes[-2], partes[-1]] if len(partes) >= 2 else None,
+              [partes[0]]):
+        if c and tuple(c) not in vistos:
+            vistos.add(tuple(c))
+            combos.append(c)
+    pat = re.compile(patrones, re.I)
+    encontrados = {}
+    import email as _em
+    from email.header import decode_header, make_header
+    for acc in mail.ACCOUNTS:
+        try:
+            m = mail._connect(acc)
+            m.select("INBOX", readonly=True)
+            ids = []
+            for c in combos:
+                typ, data = m.search(None, "X-GM-RAW", f'"{" ".join(c)} has:attachment"')
+                ids = data[0].split() if data and data[0] else []
+                if ids:
+                    break
+            for num in reversed(ids[-25:]):
+                typ, d = m.fetch(num, "(BODY.PEEK[])")
+                if not d or not isinstance(d[0], tuple):
+                    continue
+                msg = _em.message_from_bytes(d[0][1])
+                for part in msg.walk():
+                    fn = part.get_filename()
+                    if not fn:
+                        continue
+                    try:
+                        fn = str(make_header(decode_header(fn)))
+                    except Exception:
+                        pass
+                    if not fn.lower().endswith(".pdf") or not pat.search(fn):
+                        continue
+                    if fn in encontrados:
+                        continue
+                    raw = part.get_payload(decode=True)
+                    if raw:
+                        encontrados[fn] = raw
+            m.logout()
+        except Exception:
+            continue
+    return list(encontrados.items())
+
+
+async def _sync_docs_aprobacion(nombre):
+    """REGLA: la carta de aprobación y el PDF ajustado del cliente deben estar SIEMPRE
+    descargados en su carpeta. Los busca en el archivo del autocorreo y en el correo."""
+    nombre = (nombre or "").strip()
+    if not nombre:
+        return []
+    base = fsvc.folder_dir(nombre)
+    base.mkdir(parents=True, exist_ok=True)
+    existentes = {a["nombre"].lower() for a in fsvc.scan_archivos(nombre)}
+    copiados = []
+
+    def _guardar(fn, raw):
+        safe = _safe_name(fn)
+        if safe.lower() in existentes or fn.lower() in existentes:
+            return
+        destino = base / "99_otros"
+        destino.mkdir(exist_ok=True)
+        (destino / safe).write_bytes(raw)
+        existentes.add(safe.lower())
+        copiados.append(safe)
+
+    # 1) Archivo local del autocorreo (carpeta exacta + match por nombre)
+    toks = [t for t in _norm_texto(nombre).split() if len(t) > 2]
+    minimo = min(2, len(toks)) or 1
+    if STORAGE_DIR.exists() and toks:
+        candidatos = []
+        dir_ac = STORAGE_DIR / _safe_name(nombre)
+        if dir_ac.exists():
+            candidatos += sorted(dir_ac.glob("*.pdf"))
+        for p in STORAGE_DIR.rglob("*.pdf"):
+            palabras = _norm_texto(p.name).split()
+            if sum(1 for t in toks if t in palabras) >= minimo:
+                candidatos.append(p)
+        for p in candidatos:
+            if _tipo_pdf_aprobacion(p.name) != "otro":
+                _guardar(p.name, p.read_bytes())
+    # 2) Directo del correo (carta aprobación / simulador / ajustado)
+    try:
+        adjuntos = await asyncio.to_thread(_imap_descargar_adjuntos_cliente, nombre)
+    except Exception:
+        adjuntos = []
+    for fn, raw in adjuntos:
+        _guardar(fn, raw)
+    if copiados:
+        doc = await db.folders.find_one({"nombre": nombre})
+        if doc:
+            arch = doc.get("archivos") or []
+            arch += [f"99_otros/{c}" for c in copiados if f"99_otros/{c}" not in arch]
+            await db.folders.update_one({"id": doc["id"]}, {"$set": {"archivos": arch}})
+    return copiados
+
+
+@api.post("/clientes/folders/{fid}/sync-aprobacion")
+async def folder_sync_aprobacion(fid: str):
+    doc = await _get_folder_doc(fid)
+    copiados = await _sync_docs_aprobacion(doc.get("nombre", ""))
+    return {"ok": True, "copiados": copiados}
+
+
 def _sender_por_rol(rol="secundaria"):
     acc = next((a for a in mail.ACCOUNTS if a["rol"] == rol), None)
     if not acc and mail.ACCOUNTS:
@@ -1530,6 +1649,7 @@ def _fin_resumen_html(doc):
         return ""
     filas = [("Proyecto", df.get("proyecto")), ("Inmobiliaria", df.get("inmobiliaria")),
              ("Tipo propiedad", df.get("tipo_propiedad")),
+             ("Fecha de entrega", (df.get("fecha_entrega") or "").capitalize()),
              ("Operación", "Con subsidio" if df.get("con_subsidio") else "Sin subsidio"),
              ("Valor propiedad", _fmt_uf(df.get("valor_propiedad"))),
              ("Monto subsidio", _fmt_uf(df.get("monto_subsidio"))),
@@ -1555,6 +1675,10 @@ async def folder_send_email(fid: str, payload: dict):
     _cats = {fsvc.cat_de_archivo(a["nombre"], a["subfolder"]) for a in fsvc.scan_archivos(nombre)} - {"combinado", "codeudor"}
     _ct = cr.get("client_type") or "dependiente"
     missing_labels = [fsvc.MISSING_LABELS.get(c, c) for c in fsvc.required_cats(_ct) if c not in _cats]
+    _df = doc.get("datos_financieros") or {}
+    fecha_entrega = (_df.get("fecha_entrega") or "").strip()
+    if not fecha_entrega:
+        missing_labels.append("Fecha de entrega (inmediata/futura)")
     if payload.get("confirm") and missing_labels and not payload.get("force_incompleto"):
         raise HTTPException(status_code=412, detail="Documentación incompleta — faltan: "
                             + ", ".join(missing_labels)
@@ -1582,13 +1706,16 @@ async def folder_send_email(fid: str, payload: dict):
                 attach_names.append(p.name)
         except ValueError:
             continue
-    subject = payload.get("subject") or f"Antecedentes crédito hipotecario — {nombre}" + (f" ({rut})" if rut else "")
+    subject = payload.get("subject") or (
+        f"Antecedentes crédito hipotecario — {nombre}" + (f" ({rut})" if rut else "")
+        + (f" — Entrega: {fecha_entrega.capitalize()}" if fecha_entrega else ""))
     fin_html = _fin_resumen_html(doc)
     body_override = (payload.get("body_html") or "").strip()
     cuerpo = body_override or f"""
     <div style="font-family:Arial,sans-serif;font-size:14px;color:#222">
       <h2 style="color:#6c5ce7;margin:0 0 8px">Carpeta cliente — {nombre}</h2>
       <p><b>Cliente:</b> {nombre}{f' · <b>RUT:</b> {rut}' if rut else ''}</p>
+      {f'<p style="margin:4px 0"><b>Fecha de entrega:</b> {fecha_entrega.capitalize()}</p>' if fecha_entrega else ''}
       {fin_html}
       {f'<p style="margin-top:10px">{(payload.get("body_extra") or "").strip()}</p>' if (payload.get("body_extra") or "").strip() else ''}
       <p style="margin-top:12px">Se adjunta la carpeta con los antecedentes del cliente.</p>
@@ -3038,9 +3165,7 @@ async def proc_upload_drive(qid: str, force: bool = False, clave: str = ""):
     await db.proc_queue.update_one({"id": qid}, {"$set": {
         "drive_folder_id": _safe_name(cliente), "status": "clasificado",
         "checklist_completo": completo, "faltantes": faltantes}})
-    # AL TIRO: si faltan documentos, se piden automáticamente al remitente de la solicitud
-    if not completo:
-        asyncio.create_task(_enviar_faltantes_auto(cliente))
+    # Los documentos faltantes se piden SOLO en forma manual (regla del usuario 2026-08-02)
     return {"folder_name": _safe_name(cliente), "uploaded": uploaded,
             "skipped_duplicates": [], "dropped_originals": [],
             "checklist_completo": completo, "faltantes": faltantes, "tipo_cliente": tipo_cliente}
@@ -5082,8 +5207,8 @@ def _tipo_pdf_aprobacion(nombre):
     low = (nombre or "").lower()
     if re.search(r"carta|aprobaci[oó]n|aprobacion", low):
         return "carta_aprobacion"
-    # Solo la simulación procesada por el autocorreo (sufijo _CM; legado: 'ajustad')
-    if re.search(r"_cm\.pdf$|ajustad", low):
+    # Simulación procesada por el autocorreo (sufijo _CM; legado 'ajustad') o simulador crediticio
+    if re.search(r"_cm\.pdf$|ajustad|simulad", low):
         return "simulacion_ajustada"
     return "otro"
 

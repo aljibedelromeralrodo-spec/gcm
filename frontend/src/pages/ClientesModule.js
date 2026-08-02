@@ -238,6 +238,8 @@ export default function ClientesModule({ onNavigate }) {
 
   const openTasacion = async (f) => {
     let archivos = [];
+    // REGLA: la carta de aprobación debe estar SIEMPRE descargada en la carpeta antes de tasar
+    try { await axios.post(`${API}/api/clientes/folders/${f.id}/sync-aprobacion`, {}, { timeout: 90000 }); } catch (_e) { /* best effort */ }
     try {
       const r = await axios.get(`${API}/api/clientes/folders/${f.id}`);
       // Solo la carta de aprobación va preseleccionada — nada más de la carpeta
@@ -259,8 +261,10 @@ export default function ClientesModule({ onNavigate }) {
       inmobiliaria: f.datos_financieros?.inmobiliaria || "",
       inmo_contacto_nombre: "", inmo_contacto_email: "",
       intro: "", voucher_nombre: "", fecha_tasacion: f.tasacion_fecha || "",
-      direccion: "", comuna: "", ciudad: "", unidad: "", rol_avaluo: "",
-      valor_uf: "", valor_esperado_uf: "", vendedor: "", vendedor_email: "", contacto_nombre: "", contacto_telefono: "",
+      direccion: f.datos_financieros?.direccion || "", comuna: f.datos_financieros?.comuna || "", ciudad: f.datos_financieros?.ciudad || "", unidad: "", rol_avaluo: "",
+      valor_uf: f.datos_financieros?.valor_propiedad ? String(f.datos_financieros.valor_propiedad) : "",
+      valor_esperado_uf: f.datos_financieros?.valor_propiedad ? String(f.datos_financieros.valor_propiedad) : "",
+      vendedor: "", vendedor_email: "", contacto_nombre: "", contacto_telefono: "",
       contacto_email: "",
       observaciones: "", preview: null, loading: false, msg: "",
     });
@@ -2819,7 +2823,7 @@ export default function ClientesModule({ onNavigate }) {
           const uf = v < 20000 ? v : v / (Number(ufValue) || 40842);
           return `UF ${uf.toLocaleString('es-CL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
         };
-        const previewSubject = emailModal.subject || `Solicitud crédito hipotecario — ${f.nombre} (RUT ${f.rut || '—'})${df.inmobiliaria ? ` · ${df.inmobiliaria}` : ''}`;
+        const previewSubject = emailModal.subject || `Antecedentes crédito hipotecario — ${f.nombre}${f.rut ? ` (${f.rut})` : ""}${df.fecha_entrega ? ` — Entrega: ${df.fecha_entrega.charAt(0).toUpperCase() + df.fecha_entrega.slice(1)}` : ""}`;
         return (
           <div data-testid="email-modal" onClick={closeEmailModal} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9998, padding: "3vh 3vw" }}>
             <div onClick={(e) => e.stopPropagation()} style={{ background: "#0f172a", color: "#e2e8f0", borderRadius: 12, width: "min(760px, 96vw)", maxHeight: "94vh", overflow: "auto", border: "1px solid rgba(148,163,184,0.25)", boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}>

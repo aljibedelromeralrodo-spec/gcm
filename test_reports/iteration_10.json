@@ -1,0 +1,54 @@
+{
+  "summary": "Iteration 10 — Retesteo de la regresión iter9 (auto-envío de faltantes) + verificación de las 4 features nuevas del usuario: (1) sync-aprobacion de Zurita baja carta+simulacion a 99_otros, (2) Aprobación Cliente los lista pre-seleccionados, (3) MESA send-email incluye fecha_entrega en subject y body con bloqueo si falta, (4) Solicitud de Tasación pre-llena valor y valor_esperado desde datos_financieros. Backend pytest iter9 8/8 y iter10 7/7. Frontend E2E OK: modal MESA de Ernesto muestra '— Entrega: Inmediata' en el asunto y 'Fecha de entrega: Inmediata' en el preview; modal Tasación de Vanesa Ocampo trae UF 2800 en ambos campos; módulo Aprobación Cliente detecta la carta y el simulador de Zurita ya pre-marcados. NO se enviaron correos reales (siempre confirm:false y NO click en Enviar/Enviar al cliente).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "backend_tests_detail": {
+    "iter9_TestCodeStatic::test_auto_faltantes_disabled_in_proc_upload_drive": "PASSED — grep en server.py: única ocurrencia de '_enviar_faltantes_auto' es la definición (async def). Regresión resuelta.",
+    "iter9 total": "8/8 PASSED (0.79s) — historial, gastos CLP, patch actividad-terminada, loops registrados, procesar_reparos_folder, buscar_tasacion_terminada_imap y proc_upload_drive sin auto-faltantes.",
+    "iter10_TestRegresionAutoFaltantes::test_no_call_to_enviar_faltantes_auto": "PASSED — solo la definición.",
+    "iter10_TestSyncAprobacionZurita::test_sync_endpoint_ok": "PASSED — POST /api/clientes/folders/{Zurita}/sync-aprobacion 200 (idempotente).",
+    "iter10_TestSyncAprobacionZurita::test_pdfs_exist_in_99_otros": "PASSED — /app/backend/storage/clientes/CLAUDIA ANDREA ZURITA SOTO/99_otros/ contiene 'Aprobacion CentralMutuos - 2026-07-01T174919.714.pdf' y 'simulador_crediticio_2026-07-01 _12_.pdf'.",
+    "iter10_TestSyncAprobacionZurita::test_aprobacion_cliente_archivos_lista_tipos": "PASSED — GET /api/aprobacion-cliente/archivos?cliente=CLAUDIA ANDREA ZURITA SOTO devuelve carta_aprobacion (seleccionado:true) y simulacion_ajustada (seleccionado:true).",
+    "iter10_TestMesaFechaEntrega::test_ernesto_subject_body_incluye_entrega": "PASSED — subject termina con '— Entrega: Inmediata'; body contiene 'Fecha de entrega'.",
+    "iter10_TestMesaFechaEntrega::test_missing_docs_no_incluye_fecha_entrega_cuando_esta_seteada": "PASSED — missing_docs=['Informe de deudas CMF'], sin 'Fecha de entrega'.",
+    "iter10_TestCodeStaticFechaEntrega::test_missing_labels_incluye_fecha_entrega_si_falta": "PASSED — server.py contiene la lógica que agrega 'Fecha de entrega' a missing_labels cuando fecha_entrega está vacía."
+  },
+  "frontend_tests_detail": {
+    "login": "OK — administrador/141617575, tour cerrado con Saltar.",
+    "mesa_modal_ernesto": "OK — click en Abrir → 'Enviar a Mesa' (data-testid=btn-send-autocorreo-detail) abre modal 'Enviar correo con antecedentes'. Asunto: 'Antecedentes crédito hipotecario — ERNESTO LEONARDO DÍAZ SILVA (19.492.155-1) — Entrega: Inmediata'. Preview del cuerpo muestra 'Fecha de entrega: Inmediata'. 'Documentación incompleta — faltan: Informe de deudas CMF' (correctamente NO incluye 'Fecha de entrega' porque ya está seteada). No se hizo click en Enviar.",
+    "tasacion_modal_vanesa": "OK — click en Solicitud de Tasación en la tarjeta de Vanesa Ocampo abre el modal tras el sync-aprobacion previo (<10s). Campos data-testid=tasacion-valor=2800 y tasacion-valor-esperado=2800, ambos pre-llenados desde datos_financieros.valor_propiedad. Modal cerrado con ESC sin enviar.",
+    "aprobacion_cliente_zurita": "OK — módulo Aprobación Cliente → búsqueda 'Claudia' → seleccionar CLAUDIA ANDREA ZURITA SOTO. Sección 'PDFs del cliente (2 seleccionados)' lista 'Aprobacion CentralMutuos - 2026-07-01T174919.714.pdf' con badge 'Carta de aprobación' + origen 'Carpeta Cliente' y 'simulador_crediticio_2026-07-01 _12_.pdf' con badge 'Simulación ajustada' + origen 'Carpeta Cliente'. Ambos checkboxes marcados. NO se hizo click en Enviar al cliente.",
+    "envio_manual_state_side_effect": "IMPORTANTE (no bug pero riesgo): el botón data-testid=btn-envio-manual-{id} es un TOGGLE de estado (pinta la carpeta roja como 'ENVIADO manual') — NO abre modal ni envía correo real. Sin embargo, al primer click cambió estado a 'Enviado'; se restauró a 'No enviado' con un segundo click. Estado final de Ernesto: 'No enviado' (como al inicio)."
+  },
+  "test_report_links": [
+    "/app/tests/test_iter9_features.py",
+    "/app/tests/test_iter10_features.py",
+    "/app/test_reports/pytest/iter10.xml",
+    "/app/test_reports/pytest/iter10_features.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py sigue creciendo (>6300 líneas). Considerar dividir en módulos (auth, clientes, aprobacion, mesa, imap, storage).",
+    "sync-aprobacion e IMAP se disparan sincrónicamente cuando openTasacion o aprobacion-cliente/archivos se llaman — puede tardar 30-120s con IMAP lento. El frontend maneja el timeout a 90s en openTasacion, OK. Considerar background task + polling para mejor UX.",
+    "btn-envio-manual toggle no confirma acción (marca ENVIADO al primer click sin dialog). Aceptable porque no envía correo, pero podría añadirse confirm si se considera crítico para no ensuciar métricas."
+  ],
+  "updated_files": [
+    "/app/tests/test_iter10_features.py (nuevo)",
+    "/app/test_reports/pytest/iter10.xml",
+    "/app/test_reports/pytest/iter10_features.xml"
+  ],
+  "success_rate": {"backend": "100% (iter9 8/8 + iter10 7/7 = 15/15)", "frontend": "100% (mesa modal + tasacion prefill + aprobacion cliente)"},
+  "test_credentials": "administrador / 141617575",
+  "seed_data_creation": "Ninguna. Toggle de btn-envio-manual en Ernesto se restauró al estado inicial ('No enviado'). Los PDFs de Zurita en 99_otros no fueron alterados.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Todas las features de iteración 10 verificadas OK. La regresión de iter9 (auto-faltantes) quedó resuelta: única ocurrencia de _enviar_faltantes_auto en server.py es su definición. Endpoints con sync IMAP (sync-aprobacion, aprobacion-cliente/archivos, openTasacion→sync) responden en <15s para Zurita/Vanesa/Ernesto. Login correcto: POST /api/auth/login {codigo, password} → token. NO enviar correos reales: en modales de MESA/Aprobación/Tasación evitar 'Enviar', 'Enviar a Mesa', 'Enviar al cliente'. Los PDFs de Zurita en 99_otros están idempotentes; conservarlos.",
+  "rca of the issue": "N/A — sin issues. Regresión iter9 (llamada a _enviar_faltantes_auto en proc_upload_drive) fue removida por E1; grep muestra sólo la definición. Todas las nuevas features del usuario están implementadas y verificadas end-to-end."
+}
