@@ -25,6 +25,8 @@ Idioma del usuario: **Español** (responder siempre en español).
 - IMAP/SMTP: en `/app/backend/.env` (MAIL_USER, MAIL2_USER + app passwords)
 
 ## Implementado
+> ⚠️ Desde 2026-08-02 las entradas nuevas van en `/app/memory/CHANGELOG.md`.
+
 - 2026-08-01 (parte 8) — **Automatización 24/7 blindada + Resumen diario + Logo**:
   - **Ingesta de carpetas 24/7**: `_proc_auto_state` fuerza enabled=True siempre + resetea
     flag "running" colgado (>30 min). Todos los loops de fondo van dentro de
