@@ -1636,6 +1636,52 @@ async def folder_sync_aprobacion(fid: str):
     return {"ok": True, "copiados": copiados}
 
 
+@api.get("/clientes/folders/{fid}/tasacion-prefill")
+async def folder_tasacion_prefill(fid: str):
+    """Lee correos y documentos del cliente para pre-llenar la solicitud de tasación
+    (rol de avalúo, proyecto, montos, dirección, comuna, contacto del vendedor)."""
+    doc = await _get_folder_doc(fid)
+    nombre = doc.get("nombre", "")
+    textos = []
+    # 1) Cuerpos de correos del cliente en la cola de procesamiento
+    toks = [t for t in _norm_texto(nombre).split() if len(t) > 2]
+    if toks:
+        rx = ".*".join(re.escape(t) for t in toks[:2])
+        async for it in db.proc_queue.find({"$or": [
+                {"cliente": {"$regex": rx, "$options": "i"}},
+                {"subject": {"$regex": toks[-1] if len(toks) < 3 else toks[2], "$options": "i"}}]}).limit(6):
+            cuerpo = (it.get("body_text") or it.get("body") or "")[:3000]
+            if cuerpo:
+                textos.append(f"[CORREO] Asunto: {it.get('subject', '')}\n{cuerpo}")
+    # 2) Documentos relevantes de la carpeta (promesa, carta, cotización, reserva)
+    pat_docs = re.compile(r"promesa|oferta|carta|aprobaci|cotiz|reserva|compra|simulad", re.I)
+    for a in fsvc.scan_archivos(nombre):
+        if len(textos) >= 10:
+            break
+        if not pat_docs.search(a["nombre"]):
+            continue
+        try:
+            raw = (fsvc.folder_dir(nombre) / a["ruta"]).read_bytes()
+            texto, _met = await asyncio.to_thread(ocr_service.extraer_texto, raw, a["nombre"])
+            if texto:
+                textos.append(f"[DOC {a['nombre']}]\n{texto[:2500]}")
+        except Exception:
+            continue
+    datos = await ai_extract.extraer_datos_tasacion("\n\n".join(textos))
+    # Datos financieros ya guardados tienen prioridad
+    df = doc.get("datos_financieros") or {}
+    if df.get("valor_propiedad"):
+        datos["valor_propiedad_uf"] = df["valor_propiedad"]
+    if df.get("proyecto"):
+        datos["proyecto"] = df["proyecto"]
+    if df.get("inmobiliaria"):
+        datos["inmobiliaria"] = df["inmobiliaria"]
+    for k in ("direccion", "comuna", "ciudad"):
+        if df.get(k):
+            datos[k] = df[k]
+    return {"ok": True, "prefill": datos, "fuentes": len(textos)}
+
+
 def _sender_por_rol(rol="secundaria"):
     acc = next((a for a in mail.ACCOUNTS if a["rol"] == rol), None)
     if not acc and mail.ACCOUNTS:

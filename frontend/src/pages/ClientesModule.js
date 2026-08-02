@@ -183,6 +183,7 @@ export default function ClientesModule({ onNavigate }) {
   const [emailModal, setEmailModal] = useState(null);
   const [tasacionModal, setTasacionModal] = useState(null); // { folder, archivos, campos... }
   const [tasacionContactos, setTasacionContactos] = useState([]); // plantillas inmobiliaria
+  const [estudioPlantillas, setEstudioPlantillas] = useState([]); // plantillas estudio de título
   const [brokers, setBrokers] = useState([]);
   const [estudioModal, setEstudioModal] = useState(null); // estudio de título
   const [reparosModal, setReparosModal] = useState(null); // reparos estudio de título
@@ -246,6 +247,11 @@ export default function ClientesModule({ onNavigate }) {
       archivos = (r.data.archivos || []).map(a => ({ ...a, sel: /carta|oferta|aprobaci/i.test(a.nombre) }))
         .sort((a, b) => (b.sel ? 1 : 0) - (a.sel ? 1 : 0));
     } catch (_e) { /* sin archivos */ }
+    let prefill = {};
+    try {
+      const pf = await axios.get(`${API}/api/clientes/folders/${f.id}/tasacion-prefill`, { timeout: 90000 });
+      prefill = pf.data.prefill || {};
+    } catch (_e) { /* best effort */ }
     try {
       const [c, b] = await Promise.all([
         axios.get(`${API}/api/tasacion/contactos`),
@@ -254,18 +260,22 @@ export default function ClientesModule({ onNavigate }) {
       setTasacionContactos(c.data.contactos || []);
       setBrokers(b.data.brokers || []);
     } catch (_e) { setTasacionContactos([]); }
+    const df = f.datos_financieros || {};
+    const valorUF = df.valor_propiedad || prefill.valor_propiedad_uf || "";
     setTasacionModal({
       folder: f, archivos, tipo: "Individual",
       destinatarios: "contacto@valueproperty.cl, victoriavilches@centralmutuos.cl",
       modalidad: "inmobiliaria", broker_id: "",
-      inmobiliaria: f.datos_financieros?.inmobiliaria || "",
+      inmobiliaria: df.inmobiliaria || prefill.inmobiliaria || "",
       inmo_contacto_nombre: "", inmo_contacto_email: "",
       intro: "", voucher_nombre: "", fecha_tasacion: f.tasacion_fecha || "",
-      direccion: f.datos_financieros?.direccion || "", comuna: f.datos_financieros?.comuna || "", ciudad: f.datos_financieros?.ciudad || "", unidad: "", rol_avaluo: "",
-      valor_uf: f.datos_financieros?.valor_propiedad ? String(f.datos_financieros.valor_propiedad) : "",
-      valor_esperado_uf: f.datos_financieros?.valor_propiedad ? String(f.datos_financieros.valor_propiedad) : "",
-      vendedor: "", vendedor_email: "", contacto_nombre: "", contacto_telefono: "",
-      contacto_email: "",
+      direccion: df.direccion || prefill.direccion || "", comuna: df.comuna || prefill.comuna || "", ciudad: df.ciudad || prefill.ciudad || "",
+      unidad: prefill.unidad || "", rol_avaluo: prefill.rol_avaluo || "",
+      valor_uf: valorUF ? String(valorUF) : "",
+      valor_esperado_uf: valorUF ? String(valorUF) : "",
+      vendedor: prefill.vendedor_nombre || "", vendedor_email: prefill.vendedor_email || "",
+      contacto_nombre: prefill.vendedor_nombre || "", contacto_telefono: prefill.vendedor_telefono || "",
+      contacto_email: prefill.vendedor_email || "",
       observaciones: "", preview: null, loading: false, msg: "",
     });
   };

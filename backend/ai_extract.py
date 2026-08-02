@@ -43,6 +43,49 @@ def _fallback_clasificar(texto, filename=""):
     return "otro"
 
 
+async def extraer_datos_tasacion(texto):
+    """Extrae datos para la solicitud de tasación desde correos/documentos del cliente."""
+    texto = (texto or "")[:14000]
+    base = {"direccion": "", "unidad": "", "comuna": "", "ciudad": "", "rol_avaluo": "",
+            "proyecto": "", "inmobiliaria": "", "valor_propiedad_uf": None,
+            "vendedor_nombre": "", "vendedor_email": "", "vendedor_telefono": "", "metodo": "reglas"}
+    m = re.search(r"rol(?:\s+de\s+aval[uú]o(?:\s+fiscal)?)?\s*(?:n[°º.:]*)?\s*[:\s]\s*([\d]{1,6}\s*-\s*[\dkK]{1,6})", texto, re.I)
+    if m:
+        base["rol_avaluo"] = m.group(1).replace(" ", "")
+    key = os.environ.get("EMERGENT_LLM_KEY", "")
+    if not key or len(texto) < 30:
+        return base
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        system = (
+            "Eres experto en créditos hipotecarios chilenos. Recibes texto de correos y "
+            "documentos (promesas, cartas de aprobación, cotizaciones) de UN cliente. "
+            "Responde SOLO un JSON válido con: "
+            "direccion (dirección de la propiedad a tasar, string), "
+            "unidad (n° de depto/casa/unidad, string), comuna (string), ciudad (string), "
+            "rol_avaluo (rol de avalúo fiscal formato 'NNNNN-NN' o ''), "
+            "proyecto (nombre del proyecto inmobiliario, string), "
+            "inmobiliaria (string), valor_propiedad_uf (número o null), "
+            "vendedor_nombre (vendedor o contacto de la inmobiliaria, string), "
+            "vendedor_email (string), vendedor_telefono (string). "
+            "Si un dato no aparece usa '' o null. NO inventes datos."
+        )
+        chat = LlmChat(api_key=key, session_id=f"tas-{uuid.uuid4()}",
+                       system_message=system).with_model("openai", "gpt-5.4-mini")
+        resp = await chat.send_message(UserMessage(text=texto))
+        raw = resp if isinstance(resp, str) else str(resp)
+        mj = re.search(r"\{.*\}", raw, re.S)
+        if mj:
+            data = json.loads(mj.group(0))
+            for k in base:
+                if k in data and data[k] not in (None, ""):
+                    base[k] = data[k]
+            base["metodo"] = "ia"
+    except Exception as e:
+        base["error"] = str(e)[:200]
+    return base
+
+
 async def clasificar_y_extraer(texto, filename=""):
     """Devuelve dict con tipo_documento, nombre_cliente, rut y campos de gestion."""
     texto = (texto or "")[:6000]
