@@ -1068,6 +1068,44 @@ async def list_folders(q: str = ""):
     return {"folders": out}
 
 
+@api.post("/clientes/folders/forzar")
+async def forzar_folder(payload: dict):
+    """Fuerza la creación manual de una carpeta: busca en los correos ingresados
+    todos los datos y archivos del cliente y llena los campos (requiere clave admin)."""
+    payload = payload or {}
+    if payload.get("clave") != CLAVE_FORZAR_CARPETA:
+        raise HTTPException(status_code=403, detail="Clave incorrecta")
+    nombre = (payload.get("nombre") or "").strip()
+    if len(nombre) < 3:
+        raise HTTPException(status_code=400, detail="Indica el nombre del cliente")
+    palabras = [p for p in re.split(r"\s+", nombre) if len(p) >= 3]
+    conds = [{"$or": [{"subject": {"$regex": re.escape(p), "$options": "i"}},
+                      {"classification.cliente": {"$regex": re.escape(p), "$options": "i"}},
+                      {"body_full": {"$regex": re.escape(p), "$options": "i"}}]}
+             for p in palabras]
+    items = await db.proc_queue.find({"$and": conds}).sort("date_iso", 1).to_list(20) if conds else []
+    procesados, errores = [], []
+    for it in items:
+        try:
+            r = await proc_upload_drive(it["id"], force=True, clave=payload["clave"])
+            procesados.append({"subject": it.get("subject", ""),
+                               "carpeta": r.get("folder_name", ""),
+                               "archivos": len(r.get("uploaded") or [])})
+        except Exception as e:
+            errores.append(f"{(it.get('subject') or '')[:50]}: {str(e)[:80]}")
+    folder = await db.folders.find_one(
+        {"nombre": {"$regex": re.escape(palabras[0]), "$options": "i"}})
+    if not folder:
+        folder = {"id": str(uuid.uuid4()), "nombre": nombre.upper(),
+                  "rut": (payload.get("rut") or "").strip(), "archivos": [],
+                  "created_at": now_iso(), "origen": "forzada_manual"}
+        await db.folders.insert_one(dict(folder))
+        fsvc.folder_dir(folder["nombre"]).mkdir(parents=True, exist_ok=True)
+    return {"ok": True, "carpeta": folder.get("nombre", ""),
+            "correos_encontrados": len(items), "procesados": procesados,
+            "errores": errores}
+
+
 @api.post("/clientes/folders")
 async def create_folder(payload: dict):
     doc = {

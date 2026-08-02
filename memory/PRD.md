@@ -692,3 +692,11 @@ requieren re-deploy para llegar a producción.
   (ya NO usa los defaults de gastos).
 - VERIFICADO por curl: gastos muestra cuenta Gerardo+correo, tasación muestra
   MUTUARIAS; sin cruces entre cuentas.
+
+## Forzar Carpeta Manual (Jun 2026)
+- POST /clientes/folders/forzar {nombre, clave 0586}: busca en proc_queue todos los
+  correos del cliente (subject/classification/body), procesa cada uno con force
+  (archivos + datos financieros + campos) y si no hay correos crea carpeta vacía.
+- Botón "⚡ Forzar Carpeta" (btn-forzar-folder) junto a "Nueva Carpeta" en
+  Carpeta Clientes: pide nombre + clave, muestra resumen de correos/archivos.
+- VERIFICADO: clave mala 403; con clave armó Franco Bahamondes (1 correo, 8 archivos).

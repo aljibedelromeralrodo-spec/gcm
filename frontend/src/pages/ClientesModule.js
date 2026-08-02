@@ -1256,6 +1256,20 @@ export default function ClientesModule({ onNavigate }) {
               <button className="docs-btn primary" onClick={() => setShowCreate(true)} data-testid="btn-new-folder">
                 <i className="fa fa-plus"></i> Nueva Carpeta
               </button>
+              <button className="docs-btn secondary" data-testid="btn-forzar-folder" onClick={async () => {
+                const nombre = window.prompt("FORZAR CARPETA MANUAL\n\nNombre del cliente (el sistema buscará todos sus correos, datos y archivos):");
+                if (!nombre) return;
+                const clave = window.prompt("Ingresa la CLAVE de administrador:");
+                if (!clave) return;
+                try {
+                  const r = await axios.post(`${API}/api/clientes/folders/forzar`, { nombre, clave });
+                  const det = (r.data.procesados || []).map(p => `• ${p.subject?.slice(0, 50)} → ${p.archivos} archivo(s)`).join("\n");
+                  alert(`✅ Carpeta: ${r.data.carpeta}\nCorreos encontrados del cliente: ${r.data.correos_encontrados}\n${det || "(sin correos: carpeta creada vacía para carga manual)"}${r.data.errores?.length ? "\n\nErrores:\n" + r.data.errores.join("\n") : ""}`);
+                  loadFolders();
+                } catch (e) { alert("Error: " + (e.response?.data?.detail || e.message)); }
+              }} style={{ borderColor: "#f59e0b", color: "#f59e0b" }}>
+                <i className="fa fa-bolt"></i> Forzar Carpeta
+              </button>
             </div>
           </div>
 
