@@ -257,7 +257,11 @@ export default function GastosOperacionalesModule({ onNavigate }) {
             <tr style={{ background: "rgba(212,175,55,0.08)" }}>
               <td style={{ padding: "0.7rem", fontWeight: 700, color: "var(--gold)" }}>TOTAL (autosuma)</td>
               <td data-testid="gastos-total" style={{ padding: "0.7rem", textAlign: "right", fontWeight: 700, color: "var(--gold)", fontSize: "1.05rem" }}>{total.toLocaleString("es-CL", { maximumFractionDigits: 2 })} UF</td>
-              <td colSpan={2} />
+              <td colSpan={2} style={{ padding: "0.7rem", fontSize: "0.85rem", color: "#4ade80", fontWeight: 700, whiteSpace: "nowrap" }} data-testid="gastos-total-clp">
+                {Number(cobros.valor_uf || 0) > 0
+                  ? `≈ $${Math.round(total * Number(cobros.valor_uf)).toLocaleString("es-CL")} CLP (UF hoy $${Number(cobros.valor_uf).toLocaleString("es-CL")})`
+                  : ""}
+              </td>
             </tr>
           </tbody>
         </table>

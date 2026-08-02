@@ -1460,6 +1460,19 @@ async def folder_envio_manual(fid: str, payload: dict):
     return {"ok": True, "envio_manual": enviado}
 
 
+@api.patch("/clientes/folders/{fid}/actividad-terminada")
+async def folder_actividad_terminada(fid: str, payload: dict):
+    """Marca/desmarca una actividad de la carpeta como TERMINADA (permanente)."""
+    await _get_folder_doc(fid)
+    tipo = (payload or {}).get("tipo")
+    if tipo not in ("tasacion", "estudio_titulo", "escritura"):
+        raise HTTPException(status_code=400, detail="Tipo de actividad inválido")
+    campo = f"{tipo}_terminado_at"
+    val = now_iso() if (payload or {}).get("terminado", True) else None
+    await db.folders.update_one({"id": fid}, {"$set": {campo: val}})
+    return {"ok": True, "campo": campo, "valor": val}
+
+
 def _sender_por_rol(rol="secundaria"):
     acc = next((a for a in mail.ACCOUNTS if a["rol"] == rol), None)
     if not acc and mail.ACCOUNTS:
@@ -2919,6 +2932,7 @@ async def proc_upload_drive(qid: str, force: bool = False, clave: str = ""):
         "monto_subsidio": campos.get("monto_subsidio_uf"),
         "ahorro": campos.get("ahorro_uf"),
         "monto_pie": campos.get("pie_uf"),
+        "fecha_entrega": campos.get("fecha_entrega") or "",
         "monto_credito": campos.get("monto_credito_uf") or campos.get("monto_credito_solicitar_uf"),
     }.items() if v not in (None, "")}
     if not folder_doc:
@@ -3427,12 +3441,12 @@ GASTOS_OP_DEFAULTS = {
         {"concepto": "Tasación", "valor": None, "texto": "Pagada"},
     ],
     "datos_pago": {
-        "nombre": "Gerardo Nicolás Barrera Pérez",
-        "rut": "14.161.757-5",
+        "nombre": "MUTUARIAS Y LEASING LIMITADA",
+        "rut": "77.771.552-6",
         "banco": "Mercado Pago",
         "tipo_cuenta": "Cuenta Vista",
-        "numero_cuenta": "1014622077",
-        "email": "ethangerardobarr@gmail.com",
+        "numero_cuenta": "1030937838",
+        "email": "",
     },
 }
 
@@ -3867,7 +3881,7 @@ def _marca_wrap(inner, subtitulo=""):
       <div style="max-width:640px;margin:0 auto;background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 4px 18px rgba(16,24,40,0.10)">
         <div style="background:#1a1f2e;padding:26px 32px;border-bottom:3px solid #d4af37">
           <div style="color:#d4af37;font-size:22px;font-weight:700;letter-spacing:1px">Central Mutuos</div>
-          <div style="color:#9aa3b5;font-size:11px;letter-spacing:3px;margin-top:2px">CON CRECES ASESOR&Iacute;AS</div>
+          <div style="color:#9aa3b5;font-size:11px;letter-spacing:3px;margin-top:2px">CON CRECES</div>
           {sub_html}
         </div>
         <div style="padding:28px 32px 10px;color:#2b3245;font-size:14px;line-height:1.65">
@@ -4027,8 +4041,12 @@ def _tasacion_html(p):
                                                (p.get("inmo_contacto_email") or "").strip()] if x)
         fila("Contacto inmobiliaria", contacto_inmo)
     fila("Dirección de la propiedad", p.get("direccion", ""))
-    fila("Rol de Avalúo", p.get("rol_avaluo", ""))
+    fila("N° de unidad / depto", p.get("unidad", ""))
+    fila("Comuna", p.get("comuna", ""))
+    fila("Ciudad", p.get("ciudad", ""))
+    fila("Rol de Avalúo Fiscal", p.get("rol_avaluo", ""))
     fila("Valor aproximado (UF)", p.get("valor_uf", ""))
+    fila("Valor esperado de tasación (UF)", p.get("valor_esperado_uf", ""))
     if modalidad == "usada":
         vend = " · ".join(x for x in [(p.get("vendedor") or "").strip(),
                                       (p.get("vendedor_email") or "").strip()] if x)
@@ -4049,12 +4067,15 @@ def _tasacion_html(p):
         f"con copia a {' y a '.join(copias)}.")
     voucher = ('<p style="margin-top:12px"><b>Adjunto voucher de pago tasación.</b></p>'
                if p.get("voucher") else "")
+    carta = ('<p style="margin-top:6px"><b>Se adjunta carta de aprobación del cliente.</b></p>'
+             if p.get("carta_adjunta") else "")
     inner = f"""
       <p>{saludo}</p>
       <p>A continuación, detallo los antecedentes de la propiedad para la coordinación de la tasación:</p>
       <table style="border-collapse:collapse;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;width:100%">{''.join(filas)}</table>
       {f'<p style="margin-top:12px"><b>Observaciones:</b> {obs}</p>' if obs else ''}
       {voucher}
+      {carta}
       <p style="margin-top:14px">Quedo atento a sus comentarios y a cualquier antecedente adicional que requieran.</p>
       <p style="margin-top:16px;color:#555">Saludos cordiales,</p>"""
     return _marca_wrap(inner, "Solicitud de Tasación")
@@ -5074,7 +5095,7 @@ def _aprobacion_html(payload):
     <div style="background:#eef0f5;padding:30px 12px;font-family:Georgia,'Times New Roman',serif">
       <div style="max-width:640px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 6px 24px rgba(16,24,40,0.12)">
         <div style="background:#1a1f2e;padding:40px 32px;text-align:center;border-bottom:4px solid #d4af37">
-          <div style="color:#9aa3b5;font-size:12px;letter-spacing:4px;margin-bottom:10px">CENTRAL MUTUOS · CON CRECES ASESORÍAS</div>
+          <div style="color:#9aa3b5;font-size:12px;letter-spacing:4px;margin-bottom:10px">CENTRAL MUTUOS · CON CRECES</div>
           <div style="color:#d4af37;font-size:34px;font-weight:700;letter-spacing:1px;line-height:1.2">¡FELICITACIONES!</div>
           <div style="color:#ffffff;font-size:17px;margin-top:10px">Su crédito hipotecario ha sido <b style="color:#d4af37">APROBADO</b></div>
         </div>

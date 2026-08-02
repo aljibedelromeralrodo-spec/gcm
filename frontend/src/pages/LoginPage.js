@@ -44,7 +44,7 @@ export default function LoginPage({ onLogin }) {
             {loading ? "Verificando..." : "Ingresar"}
           </button>
         </form>
-        <p className="login-footer">Con Creces Asesorías</p>
+        <p className="login-footer">Con Creces</p>
       </div>
     </div>
   );

@@ -203,6 +203,20 @@ export default function ClientesModule({ onNavigate }) {
     } catch { /* keep default */ }
   };
 
+  const fmtAct = (iso) => {
+    if (!iso) return "";
+    try {
+      return new Date(iso).toLocaleString("es-CL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+    } catch { return (iso || "").slice(0, 16).replace("T", " "); }
+  };
+
+  const marcarTerminado = async (f, tipo, terminado) => {
+    try {
+      await axios.patch(`${API}/api/clientes/folders/${f.id}/actividad-terminada`, { tipo, terminado });
+      loadFolders();
+    } catch (e) { alert("Error: " + (e.response?.data?.detail || e.message)); }
+  };
+
   const openTasacion = async (f) => {
     let archivos = [];
     try {
@@ -226,8 +240,8 @@ export default function ClientesModule({ onNavigate }) {
       inmobiliaria: f.datos_financieros?.inmobiliaria || "",
       inmo_contacto_nombre: "", inmo_contacto_email: "",
       intro: "", voucher_nombre: "", fecha_tasacion: f.tasacion_fecha || "",
-      direccion: "", rol_avaluo: "",
-      valor_uf: "", vendedor: "", vendedor_email: "", contacto_nombre: "", contacto_telefono: "",
+      direccion: "", comuna: "", ciudad: "", unidad: "", rol_avaluo: "",
+      valor_uf: "", valor_esperado_uf: "", vendedor: "", vendedor_email: "", contacto_nombre: "", contacto_telefono: "",
       contacto_email: "",
       observaciones: "", preview: null, loading: false, msg: "",
     });
@@ -332,8 +346,10 @@ export default function ClientesModule({ onNavigate }) {
     inmobiliaria: m.inmobiliaria, inmo_contacto_nombre: m.inmo_contacto_nombre,
     inmo_contacto_email: m.inmo_contacto_email,
     intro: m.intro, voucher: !!m.voucher_nombre,
-    tipo: m.tipo, direccion: m.direccion, rol_avaluo: m.rol_avaluo,
-    valor_uf: m.valor_uf, vendedor: m.vendedor, vendedor_email: m.vendedor_email,
+    tipo: m.tipo, direccion: m.direccion, comuna: m.comuna, ciudad: m.ciudad, unidad: m.unidad, rol_avaluo: m.rol_avaluo,
+    valor_uf: m.valor_uf, valor_esperado_uf: m.valor_esperado_uf,
+    carta_adjunta: m.archivos.some(a => a.sel && /carta|oferta|aprobaci/i.test(a.nombre)),
+    vendedor: m.vendedor, vendedor_email: m.vendedor_email,
     contacto_nombre: m.contacto_nombre, contacto_telefono: m.contacto_telefono,
     contacto_email: m.contacto_email,
     observaciones: m.observaciones,
@@ -673,6 +689,7 @@ export default function ClientesModule({ onNavigate }) {
       monto_reserva: df.monto_reserva ?? "",
       monto_pie: df.monto_pie ?? "",
       monto_credito: df.monto_credito ?? "",
+      fecha_entrega: df.fecha_entrega || "",
       notas: df.notas || "",
     });
     setFinOpenId(folder.id);
@@ -1372,12 +1389,15 @@ export default function ClientesModule({ onNavigate }) {
                         <span style={{ fontSize: 10, background: "rgba(34,197,94,0.25)", color: "#15803d", padding: "2px 6px", borderRadius: 4, fontWeight: 700 }}>🎯 Lista para enviar</span>
                       )}
                       {f.emails_sent_count > 0 && (
-                        <span title={`Último envío: ${(f.last_email_sent_at || "").slice(0,19).replace('T',' ')}`} style={{ fontSize: 10, background: "rgba(59,130,246,0.2)", color: "#1d4ed8", padding: "2px 6px", borderRadius: 4, fontWeight: 700 }}>📧 Enviado a mesa × {f.emails_sent_count}</span>
+                        <span title={`Último envío: ${(f.last_email_sent_at || "").slice(0,19).replace('T',' ')}`} style={{ fontSize: 10, background: "rgba(59,130,246,0.2)", color: "#1d4ed8", padding: "2px 6px", borderRadius: 4, fontWeight: 700 }}>📧 Enviado a mesa × {f.emails_sent_count}{f.last_email_sent_at ? ` · ${fmtAct(f.last_email_sent_at)}` : ""}</span>
                       )}
                       {hasFin ? (
                         <span style={{ fontSize: 10, background: "rgba(34,197,94,0.15)", color: "#16a34a", padding: "2px 6px", borderRadius: 4 }}>💰 Datos OK</span>
                       ) : (
                         <span style={{ fontSize: 10, background: "rgba(250,204,21,0.15)", color: "#a16207", padding: "2px 6px", borderRadius: 4 }}>💰 Sin datos financieros</span>
+                      )}
+                      {f.datos_financieros?.fecha_entrega && (
+                        <span data-testid={`badge-entrega-${f.id}`} style={{ fontSize: 10, background: "rgba(139,92,246,0.15)", color: "#7c3aed", padding: "2px 6px", borderRadius: 4, fontWeight: 700 }}>🏠 Entrega {f.datos_financieros.fecha_entrega}</span>
                       )}
                     </div>
                     {missing.length > 0 && (
@@ -1412,7 +1432,7 @@ export default function ClientesModule({ onNavigate }) {
                         <button data-testid={`btn-pedir-faltantes-${f.id}`} onClick={() => openPedirFaltantes(f)}
                           style={{ fontSize: 10.5, fontWeight: 800, padding: "3px 10px", borderRadius: 10, cursor: "pointer",
                             background: "rgba(220,38,38,0.12)", color: enviadoManual ? "#fff" : "#dc2626", border: "1.5px solid rgba(220,38,38,0.5)" }}>
-                          📩 Pedir faltantes al remitente{f.faltantes_pedidos_at ? " ✓" : ""}
+                          📩 Pedir faltantes al remitente{f.faltantes_pedidos_at ? ` ✓ Solicitado ${fmtAct(f.faltantes_pedidos_at)}` : ""}
                         </button>
                       )}
                     </div>
@@ -1490,13 +1510,27 @@ export default function ClientesModule({ onNavigate }) {
                     <button data-testid={`btn-tasacion-${f.id}`} onClick={() => openTasacion(f)}
                       title={`Solicitar tasación de la propiedad de ${f.nombre} (Value Property + Victoria Vilches)`}
                       style={modBtn("rgba(234,88,12,0.12)", "#ea580c", enviadoManual ? "#fff" : "#ea580c")}>
-                      <i className="fa fa-home"></i> Solicitud de Tasación{f.tasacion_fecha ? ` 📅 ${f.tasacion_fecha}` : (f.tasacion_solicitada_at ? " ✓" : "")}
+                      <i className="fa fa-home"></i> Solicitud de Tasación{f.tasacion_terminado_at ? ` ✅ Terminada ${fmtAct(f.tasacion_terminado_at)}` : (f.tasacion_solicitada_at ? ` ✓ Solicitada ${fmtAct(f.tasacion_solicitada_at)}` : "")}{f.tasacion_fecha ? ` · 📅 ${f.tasacion_fecha}` : ""}
                     </button>
+                    {f.tasacion_solicitada_at && (
+                      <button data-testid={`btn-tasacion-terminada-${f.id}`} onClick={() => marcarTerminado(f, "tasacion", !f.tasacion_terminado_at)}
+                        title={f.tasacion_terminado_at ? "Desmarcar: la tasación vuelve a estado solicitada" : "Marcar la tasación como TERMINADA (queda registrado con fecha y hora)"}
+                        style={modBtn(f.tasacion_terminado_at ? "rgba(34,197,94,0.15)" : "rgba(148,163,184,0.1)", f.tasacion_terminado_at ? "#22c55e" : "#94a3b8", f.tasacion_terminado_at ? "#4ade80" : (enviadoManual ? "#fff" : "#94a3b8"))}>
+                        <i className="fa fa-check-circle"></i> {f.tasacion_terminado_at ? "Tasación terminada" : "¿Tasación terminada?"}
+                      </button>
+                    )}
                     <button data-testid={`btn-estudio-titulo-${f.id}`} onClick={() => openEstudio(f)}
                       title={`Solicitar estudio de títulos de ${f.nombre} (siempre con copia a Victoria Vilches)`}
                       style={modBtn("rgba(20,184,166,0.12)", "#14b8a6", enviadoManual ? "#fff" : "#0d9488")}>
-                      <i className="fa fa-balance-scale"></i> Solicitud de Estudio de Título{f.estudio_titulo_solicitado_at ? " ✓" : ""}
+                      <i className="fa fa-balance-scale"></i> Solicitud de Estudio de Título{f.estudio_titulo_terminado_at ? ` ✅ Terminado ${fmtAct(f.estudio_titulo_terminado_at)}` : (f.estudio_titulo_solicitado_at ? ` ✓ Solicitado ${fmtAct(f.estudio_titulo_solicitado_at)}` : "")}
                     </button>
+                    {f.estudio_titulo_solicitado_at && (
+                      <button data-testid={`btn-estudio-terminado-${f.id}`} onClick={() => marcarTerminado(f, "estudio_titulo", !f.estudio_titulo_terminado_at)}
+                        title={f.estudio_titulo_terminado_at ? "Desmarcar: el estudio vuelve a estado solicitado" : "Marcar el estudio de título como TERMINADO (queda registrado con fecha y hora)"}
+                        style={modBtn(f.estudio_titulo_terminado_at ? "rgba(34,197,94,0.15)" : "rgba(148,163,184,0.1)", f.estudio_titulo_terminado_at ? "#22c55e" : "#94a3b8", f.estudio_titulo_terminado_at ? "#4ade80" : (enviadoManual ? "#fff" : "#94a3b8"))}>
+                        <i className="fa fa-check-circle"></i> {f.estudio_titulo_terminado_at ? "E. Título terminado" : "¿E. Título terminado?"}
+                      </button>
+                    )}
                     {f.estudio_titulo_solicitado_at && (() => {
                       const rep = f.estudio_reparos || {};
                       const items = rep.items || [];
@@ -1515,7 +1549,7 @@ export default function ClientesModule({ onNavigate }) {
                     <button data-testid={`btn-escritura-${f.id}`} onClick={() => openEscritura(f)}
                       title={`Avisar a ${f.nombre} la fecha de firma de su escritura (con confirmación de asistencia)`}
                       style={modBtn("rgba(236,72,153,0.12)", "#ec4899", enviadoManual ? "#fff" : "#db2777")}>
-                      <i className="fa fa-pencil"></i> Firma de Escritura{f.escritura_confirmada_at ? " ✅ confirmada" : (f.escritura_solicitada_at ? " ✓" : "")}
+                      <i className="fa fa-pencil"></i> Firma de Escritura{f.escritura_confirmada_at ? ` ✅ Confirmada ${fmtAct(f.escritura_confirmada_at)}` : (f.escritura_solicitada_at ? ` ✓ Solicitada ${fmtAct(f.escritura_solicitada_at)}` : "")}
                     </button>
                   </div>
                 </div>
@@ -1616,6 +1650,13 @@ export default function ClientesModule({ onNavigate }) {
                     <option value="Oficina">Oficina</option>
                     <option value="Estacionamiento">Estacionamiento</option>
                     <option value="Bodega">Bodega</option>
+                  </select>
+                </label>
+                <label style={{ fontSize: 12, color: "#dc2626", fontWeight: 700 }}><b style={{ display: "block", color: "#dc2626", fontWeight: 800 }}>Fecha de entrega</b>
+                  <select value={finDraft.fecha_entrega || ""} onChange={(e) => setFinDraft({ ...finDraft, fecha_entrega: e.target.value })} data-testid="fin-fecha-entrega-detail" style={{ width: "100%", padding: "0.4rem 0.5rem", borderRadius: 6, border: "1px solid #94a3b8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }}>
+                    <option value="">— seleccionar —</option>
+                    <option value="inmediata">Inmediata</option>
+                    <option value="futura">Futura</option>
                   </select>
                 </label>
                 <label style={{ fontSize: 12, color: "#dc2626", fontWeight: 700 }}><b style={{ display: "block", color: "#dc2626", fontWeight: 800 }}>Valor propiedad (UF)</b>
@@ -2021,6 +2062,14 @@ export default function ClientesModule({ onNavigate }) {
                             </select>
                           </label>
                           <label style={{ fontSize: 12, color: "#dc2626", fontWeight: 700 }}>
+                            <b style={{ display: "block", color: "#dc2626", fontWeight: 800 }}>Fecha de entrega</b>
+                            <select value={finDraft.fecha_entrega || ""} onChange={(e) => setFinDraft({ ...finDraft, fecha_entrega: e.target.value })} data-testid={`fin-fecha-entrega-${f.id}`} style={{ width: "100%", padding: "0.4rem 0.5rem", borderRadius: 6, border: "1px solid #94a3b8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }}>
+                              <option value="">— seleccioná —</option>
+                              <option value="inmediata">Inmediata</option>
+                              <option value="futura">Futura</option>
+                            </select>
+                          </label>
+                          <label style={{ fontSize: 12, color: "#dc2626", fontWeight: 700 }}>
                             <b style={{ display: "block", color: "#dc2626", fontWeight: 800 }}>Valor propiedad (UF)</b>
                             <UFAmountInput value={finDraft.valor_propiedad} onChange={(v) => setFinDraft({ ...finDraft, valor_propiedad: v })} uf={ufValue} dataTestid={`fin-valor-${f.id}`} />
                           </label>
@@ -2328,14 +2377,33 @@ export default function ClientesModule({ onNavigate }) {
                 <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Dirección de la propiedad <span style={{ color: "#f87171" }}>*</span></b>
                   <input value={m.direccion} onChange={e => set("direccion", e.target.value)} placeholder="Ej: ELISA CORREA 527, LOS SAUCES, LA FLORIDA" data-testid="tasacion-direccion" style={inpS} />
                 </label>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
-                  <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Rol de Avalúo</b>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.75rem" }}>
+                  <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>N° unidad / depto</b>
+                    <input value={m.unidad} onChange={e => set("unidad", e.target.value)} placeholder="Ej: Depto 1204" data-testid="tasacion-unidad" style={inpS} />
+                  </label>
+                  <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Comuna</b>
+                    <input value={m.comuna} onChange={e => set("comuna", e.target.value)} placeholder="Ej: La Florida" data-testid="tasacion-comuna" style={inpS} />
+                  </label>
+                  <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Ciudad</b>
+                    <input value={m.ciudad} onChange={e => set("ciudad", e.target.value)} placeholder="Ej: Santiago" data-testid="tasacion-ciudad" style={inpS} />
+                  </label>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.75rem" }}>
+                  <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Rol de Avalúo Fiscal</b>
                     <input value={m.rol_avaluo} onChange={e => set("rol_avaluo", e.target.value)} placeholder="Ej: 12324-00005" data-testid="tasacion-rol" style={inpS} />
                   </label>
                   <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Valor aproximado (UF)</b>
                     <input value={m.valor_uf} onChange={e => set("valor_uf", e.target.value)} placeholder="Ej: 3.200" data-testid="tasacion-valor" style={inpS} />
                   </label>
+                  <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Valor esperado tasación (UF)</b>
+                    <input value={m.valor_esperado_uf} onChange={e => set("valor_esperado_uf", e.target.value)} placeholder="Ej: 3.200" data-testid="tasacion-valor-esperado" style={inpS} />
+                  </label>
                 </div>
+                {!m.archivos.some(a => a.sel && /carta|oferta|aprobaci/i.test(a.nombre)) && (
+                  <div data-testid="tasacion-sin-carta" style={{ fontSize: 12, color: "#facc15", background: "rgba(250,204,21,0.08)", border: "1px solid rgba(250,204,21,0.35)", borderRadius: 8, padding: "6px 10px" }}>
+                    ⚠️ No hay <b>carta de aprobación</b> seleccionada en los adjuntos — la solicitud debe incluirla.
+                  </div>
+                )}
                 <div style={{ background: "rgba(30,41,59,0.7)", borderRadius: 8, padding: "0.7rem 0.9rem", display: "grid", gap: "0.6rem" }}>
                   <div style={{ opacity: 0.8, fontSize: 11, textTransform: "uppercase", fontWeight: 700 }}>
                     {m.modalidad === "usada" ? "Contacto del vendedor (para que el tasador coordine)" : "Contacto para coordinar la visita del tasador"}
