@@ -4900,7 +4900,21 @@ DOCS_ESTUDIO_USADA = [
     "Certificado de contribuciones al día (Tesorería General de la República)",
     "Certificado del administrador del condominio que acredite que no hay deudas de gastos comunes (si aplica)",
     "Copia de Junta Extraordinaria de Accionistas / autorización de enajenación (si el vendedor es sociedad)",
-    "Tasación de la propiedad",
+]
+
+
+DOCS_ESTUDIO_NUEVA = [
+    "Copia de inscripción de dominio con vigencia en el Conservador de Bienes Raíces (a nombre de la inmobiliaria)",
+    "Certificado de hipotecas, gravámenes y prohibiciones (CBR)",
+    "Copia de escritura de compraventa anterior (título de la inmobiliaria) y personería vigente de sus representantes",
+    "Permiso de edificación municipal",
+    "Certificado de recepción final municipal (o recepción parcial si aplica)",
+    "Certificado de número municipal",
+    "Certificado de no expropiación municipal y SERVIU",
+    "Plano de loteo / copropiedad y certificado de acogida a la Ley de Copropiedad Inmobiliaria (si aplica)",
+    "Reglamento de copropiedad inscrito (si aplica)",
+    "Certificado de contribuciones al día (Tesorería General de la República)",
+    "Promesa de compraventa o borrador de escritura (si existe)",
 ]
 
 
@@ -4931,12 +4945,17 @@ def _estudio_html(p):
     fila("Dirección de la propiedad", p.get("direccion", ""))
     docs = [d for d in (p.get("docs_lista") or []) if str(d).strip()]
     docs_html = ""
-    if tipo == "usada" and docs:
+    if docs:
         lis = "".join(f'<li style="margin:4px 0">{str(d).strip()}</li>' for d in docs)
+        titulo_docs = ("Para el estudio de títulos de vivienda usada necesitamos los siguientes documentos:"
+                       if tipo == "usada"
+                       else "Para el estudio de títulos solicitamos a la inmobiliaria los siguientes documentos:")
         docs_html = (
-            '<p style="margin-top:14px"><b>Para el estudio de títulos de vivienda usada '
-            'necesitamos los siguientes documentos:</b></p>'
-            f'<ol style="margin:6px 0 0;padding-left:22px;color:#111">{lis}</ol>')
+            f'<p style="margin-top:14px"><b>{titulo_docs}</b></p>'
+            f'<ol style="margin:6px 0 0;padding-left:22px;color:#111">{lis}</ol>'
+            '<p style="margin-top:10px;color:#334155;font-size:13px"><i>En caso de ser necesario, '
+            'nos reservamos la posibilidad de seguir solicitando antecedentes que permitan la '
+            'conclusión en tiempo y forma de este estudio de títulos.</i></p>')
     obs = (p.get("observaciones") or "").strip()
     intro = (p.get("intro") or "").strip() or ("Solicitamos dar inicio al <b>estudio de títulos</b> del cliente en referencia, "
                                                "con copia a Victoria Vilches. Se detallan los antecedentes:")
@@ -4953,7 +4972,8 @@ def _estudio_html(p):
 
 @api.get("/estudio-titulo/defaults")
 async def estudio_defaults():
-    return {"destinatarios": ESTUDIO_DEST_DEFAULT, "docs_usada": DOCS_ESTUDIO_USADA}
+    return {"destinatarios": ESTUDIO_DEST_DEFAULT, "docs_usada": DOCS_ESTUDIO_USADA,
+            "docs_nueva": DOCS_ESTUDIO_NUEVA}
 
 
 @api.post("/estudio-titulo/enviar")
@@ -4963,6 +4983,9 @@ async def estudio_enviar(payload: dict):
     rut = (payload.get("rut") or "").strip()
     if not nombre:
         raise HTTPException(status_code=400, detail="Falta el nombre del cliente")
+    if not rut:
+        fdoc = await db.folders.find_one({"nombre": {"$regex": f"^{re.escape(nombre)}$", "$options": "i"}})
+        rut = ((fdoc or {}).get("rut") or "").strip()
     destinos = _parse_destinatarios(payload, ESTUDIO_DEST_DEFAULT)
     # ETAPA 1 vivienda usada: el listado de documentos debe llegarle al VENDEDOR
     vend_email = (payload.get("vendedor_email") or "").strip()

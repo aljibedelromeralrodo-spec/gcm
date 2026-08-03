@@ -562,7 +562,7 @@ export default function ClientesModule({ onNavigate }) {
     vendedor_telefono: m.vendedor_telefono, intro: m.intro,
     direccion: m.direccion,
     observaciones: m.observaciones,
-    docs_lista: m.tipo_vivienda === "usada" ? m.docs_texto.split("\n").map(s => s.trim()).filter(Boolean) : [],
+    docs_lista: m.docs_texto.split("\n").map(s => s.trim()).filter(Boolean),
     attach_files: m.archivos.filter(a => a.sel).map(a => a.ruta),
     confirm,
   });
@@ -2727,7 +2727,12 @@ export default function ClientesModule({ onNavigate }) {
                 </label>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
                   <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Tipo de vivienda</b>
-                    <select value={m.tipo_vivienda} onChange={e => set("tipo_vivienda", e.target.value)} data-testid="estudio-tipo" style={inpS}>
+                    <select value={m.tipo_vivienda} data-testid="estudio-tipo" style={inpS}
+                      onChange={e => {
+                        const t = e.target.value;
+                        setEstudioModal(prev => ({ ...prev, preview: null, tipo_vivienda: t,
+                          docs_texto: ((t === "usada" ? prev.docs_usada : prev.docs_nueva) || []).join("\n") }));
+                      }}>
                       <option value="nueva">Vivienda nueva (inmobiliaria)</option>
                       <option value="usada">Vivienda usada</option>
                     </select>
@@ -2774,16 +2779,9 @@ export default function ClientesModule({ onNavigate }) {
                 <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Dirección de la propiedad</b>
                   <input value={m.direccion} onChange={e => set("direccion", e.target.value)} placeholder="Dirección completa" data-testid="estudio-direccion" style={inpS} />
                 </label>
-                {m.tipo_vivienda === "usada" && (
-                  <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Documentos solicitados para vivienda usada <span style={{ opacity: 0.6 }}>(uno por línea — se listan en el correo)</span></b>
-                    <textarea value={m.docs_texto} onChange={e => set("docs_texto", e.target.value)} rows={8} data-testid="estudio-docs" style={{ ...inpS, resize: "vertical", fontSize: 12 }} />
-                  </label>
-                )}
-                {m.tipo_vivienda === "nueva" && (
-                  <div style={{ fontSize: 11.5, opacity: 0.7, background: "rgba(20,184,166,0.08)", border: "1px solid rgba(20,184,166,0.25)", borderRadius: 8, padding: "0.5rem 0.8rem" }}>
-                    Vivienda nueva con inmobiliaria: no se agrega listado de documentos, solo la solicitud formal con los adjuntos.
-                  </div>
-                )}
+                <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>{m.tipo_vivienda === "usada" ? "Documentos solicitados para vivienda usada" : "Documentos obligatorios solicitados a la inmobiliaria (vivienda nueva)"} <span style={{ opacity: 0.6 }}>(uno por línea — se listan en el correo junto a la frase de reserva de antecedentes)</span></b>
+                  <textarea value={m.docs_texto} onChange={e => set("docs_texto", e.target.value)} rows={8} data-testid="estudio-docs" style={{ ...inpS, resize: "vertical", fontSize: 12 }} />
+                </label>
                 <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Observaciones</b>
                   <textarea value={m.observaciones} onChange={e => set("observaciones", e.target.value)} rows={2} data-testid="estudio-observaciones" style={{ ...inpS, resize: "vertical" }} />
                 </label>
