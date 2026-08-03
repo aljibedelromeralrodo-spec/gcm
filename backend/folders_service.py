@@ -23,12 +23,13 @@ CAT_A_SUBFOLDER = {
     "cedula": "01_cedula", "liquidacion": "02_liquidaciones",
     "imp_renta": "02_impuesto_renta", "afp": "03_afp",
     "boletas": "03_boletas", "cmf": "04_cmf", "extras": "99_otros",
+    "estudio_titulo": "07_estudio_titulo",
 }
 SUBFOLDER_A_CAT = {
     "01_cedula": "cedula", "02_liquidaciones": "liquidacion",
     "02_impuesto_renta": "imp_renta", "03_afp": "afp",
     "03_boletas": "boletas", "04_cmf": "cmf", "99_otros": "extras",
-    "05_codeudor": "codeudor",
+    "05_codeudor": "codeudor", "07_estudio_titulo": "estudio_titulo",
 }
 
 CAT_KEYWORDS = [
@@ -126,15 +127,15 @@ def guardar_archivo(nombre_carpeta, filename, raw, subfolder=""):
     return f"{sub}/{fn}" if sub else fn
 
 
-def merge_protocol(nombre, client_type="dependiente", include_extras=True):
+def merge_protocol(nombre, client_type="dependiente", include_extras=True, order=None):
     base = folder_dir(nombre)
-    order = required_cats(client_type) + (["extras"] if include_extras else [])
+    order = list(order) if order else (required_cats(client_type) + (["extras"] if include_extras else []))
     usable = []
     for a in scan_archivos(nombre):
         if not a["nombre"].lower().endswith(".pdf"):
             continue
         cat = cat_de_archivo(a["nombre"], a["subfolder"])
-        if cat in ("combinado", "codeudor"):
+        if cat in ("combinado", "codeudor", "estudio_titulo"):
             continue
         if cat not in order:
             if not include_extras:

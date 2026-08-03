@@ -192,6 +192,30 @@ export default function ClientesModule({ onNavigate }) {
   const [pedirModal, setPedirModal] = useState(null); // pedir documentos faltantes
   const [missingDocsModal, setMissingDocsModal] = useState(null); // { folder, to, extra, preview, sending }
   const [historialModal, setHistorialModal] = useState(null); // { folder, eventos, loading }
+  const [respaldoModal, setRespaldoModal] = useState(null); // { subiendo, progreso, resultado }
+
+  const importarRespaldo = async (file) => {
+    if (!file) return;
+    const sessionId = `imp-${Date.now()}`;
+    const CHUNK = 4 * 1024 * 1024;
+    const total = Math.ceil(file.size / CHUNK);
+    setRespaldoModal({ subiendo: true, progreso: 0, resultado: null });
+    try {
+      for (let i = 0; i < total; i++) {
+        const fd = new FormData();
+        fd.append("session_id", sessionId);
+        fd.append("index", String(i));
+        fd.append("chunk", file.slice(i * CHUNK, (i + 1) * CHUNK), "chunk.bin");
+        await axios.post(`${API}/api/admin/respaldo/import-chunk`, fd, { timeout: 120000 });
+        setRespaldoModal((m) => ({ ...m, subiendo: true, progreso: Math.round(((i + 1) / total) * 100) }));
+      }
+      const r = await axios.post(`${API}/api/admin/respaldo/import-finish`, { session_id: sessionId }, { timeout: 300000 });
+      setRespaldoModal({ subiendo: false, progreso: 100, resultado: r.data });
+      loadFolders();
+    } catch (e) {
+      setRespaldoModal({ subiendo: false, progreso: 0, resultado: { error: e.response?.data?.detail || e.message } });
+    }
+  };
   const [ufValue, setUfValue] = useState(40842);
   const fileInputRef = useRef(null);
   const uploadCtxRef = useRef(null); // { folder_id, subfolder }

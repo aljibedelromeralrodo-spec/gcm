@@ -1,5 +1,5 @@
 from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Form, Request, Query
-from fastapi.responses import StreamingResponse, JSONResponse, HTMLResponse
+from fastapi.responses import StreamingResponse, JSONResponse, HTMLResponse, FileResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -7,6 +7,7 @@ import os
 import io
 import re
 import uuid
+import json
 import asyncio
 import logging
 from pathlib import Path
@@ -774,7 +775,7 @@ async def _resumen_semanal_html():
         nombre_f = d.get("nombre", "")
         ct = (d.get("credit_request") or {}).get("client_type") or "dependiente"
         try:
-            cats = {fsvc.cat_de_archivo(a["nombre"], a["subfolder"]) for a in fsvc.scan_archivos(nombre_f)} - {"combinado", "codeudor"}
+            cats = {fsvc.cat_de_archivo(a["nombre"], a["subfolder"]) for a in fsvc.scan_archivos(nombre_f)} - {"combinado", "codeudor", "estudio_titulo"}
             faltan = [fsvc.MISSING_LABELS.get(c, c) for c in fsvc.required_cats(ct) if c not in cats]
         except Exception:
             faltan = []
@@ -1032,7 +1033,7 @@ async def search(q: str = "", limit: int = 15):
 def _folder_public(doc, con_archivos=False):
     d = clean(dict(doc))
     archivos = fsvc.scan_archivos(d.get("nombre", ""))
-    cats = sorted({fsvc.cat_de_archivo(a["nombre"], a["subfolder"]) for a in archivos} - {"combinado", "codeudor"})
+    cats = sorted({fsvc.cat_de_archivo(a["nombre"], a["subfolder"]) for a in archivos} - {"combinado", "codeudor", "estudio_titulo"})
     cr = d.get("credit_request") or {}
     cr["doc_categories"] = cats
     d["credit_request"] = cr
@@ -1068,7 +1069,7 @@ async def _mesa_respuesta_folder(d):
 
 def _criterios_folder(d):
     archivos = fsvc.scan_archivos(d.get("nombre", ""))
-    cats = {fsvc.cat_de_archivo(a["nombre"], a["subfolder"]) for a in archivos} - {"combinado", "codeudor"}
+    cats = {fsvc.cat_de_archivo(a["nombre"], a["subfolder"]) for a in archivos} - {"combinado", "codeudor", "estudio_titulo"}
     cr = d.get("credit_request") or {}
     tipo_cliente = cr.get("client_type") or "dependiente"
     df = d.get("datos_financieros") or {}
@@ -1151,6 +1152,91 @@ async def forzar_folder(payload: dict):
             "correos_encontrados": len(items), "procesados": procesados,
             "docs_aprobacion_descargados": sync_copiados,
             "errores": errores}
+
+
+import zipfile as _zipfile
+
+RESPALDO_EXCLUIR = {"save_jobs"}
+
+
+@api.get("/admin/respaldo/export")
+async def respaldo_export():
+    """Descarga un ZIP con la base de datos (carpetas, config, usuarios…) y todos los archivos."""
+    dump = {}
+    for c in await db.list_collection_names():
+        if c in RESPALDO_EXCLUIR or c.startswith("system."):
+            continue
+        docs = await db[c].find().to_list(8000)
+        for d in docs:
+            d.pop("_id", None)
+        dump[c] = docs
+    tmp = Path("/tmp") / f"respaldo_cm_{datetime.now(_tz_chile()).strftime('%Y%m%d_%H%M')}.zip"
+
+    def _build():
+        with _zipfile.ZipFile(tmp, "w", _zipfile.ZIP_DEFLATED) as z:
+            z.writestr("db.json", json.dumps(dump, ensure_ascii=False, default=str))
+            base = fsvc.CLIENTES_DIR
+            if base.exists():
+                for p in base.rglob("*"):
+                    if p.is_file():
+                        z.write(p, arcname=f"clientes/{p.relative_to(base).as_posix()}")
+    await asyncio.to_thread(_build)
+    return FileResponse(str(tmp), media_type="application/zip", filename=tmp.name)
+
+
+@api.post("/admin/respaldo/import-chunk")
+async def respaldo_import_chunk(session_id: str = Form(...), index: int = Form(...), chunk: UploadFile = File(...)):
+    d = Path("/tmp/respaldo_import") / _safe_name(session_id)
+    d.mkdir(parents=True, exist_ok=True)
+    (d / f"{int(index):05d}.part").write_bytes(await chunk.read())
+    return {"ok": True, "index": index}
+
+
+@api.post("/admin/respaldo/import-finish")
+async def respaldo_import_finish(payload: dict):
+    session_id = _safe_name((payload or {}).get("session_id") or "")
+    d = Path("/tmp/respaldo_import") / session_id
+    if not d.exists():
+        raise HTTPException(status_code=404, detail="No hay partes subidas para esta sesión")
+    zpath = d / "respaldo.zip"
+    with open(zpath, "wb") as out:
+        for part in sorted(d.glob("*.part")):
+            out.write(part.read_bytes())
+    restaurados, archivos = {}, 0
+    try:
+        with _zipfile.ZipFile(zpath) as z:
+            data = json.loads(z.read("db.json").decode("utf-8"))
+            for c, docs in data.items():
+                if c in RESPALDO_EXCLUIR or c.startswith("system."):
+                    continue
+                n = 0
+                for doc in docs:
+                    doc.pop("_id", None)
+                    if doc.get("id"):
+                        await db[c].update_one({"id": doc["id"]}, {"$set": doc}, upsert=True)
+                    elif doc.get("_key"):
+                        await db[c].update_one({"_key": doc["_key"]}, {"$set": doc}, upsert=True)
+                    else:
+                        await db[c].update_one(doc, {"$set": doc}, upsert=True)
+                    n += 1
+                restaurados[c] = n
+            base = fsvc.CLIENTES_DIR
+            for info in z.infolist():
+                if info.is_dir() or not info.filename.startswith("clientes/"):
+                    continue
+                rel = info.filename[len("clientes/"):]
+                if not rel or ".." in rel:
+                    continue
+                destino = base / rel
+                destino.parent.mkdir(parents=True, exist_ok=True)
+                destino.write_bytes(z.read(info))
+                archivos += 1
+    except _zipfile.BadZipFile:
+        raise HTTPException(status_code=400, detail="El archivo subido no es un ZIP válido")
+    finally:
+        import shutil as _sh
+        _sh.rmtree(d, ignore_errors=True)
+    return {"ok": True, "colecciones": restaurados, "archivos_restaurados": archivos}
 
 
 @api.post("/clientes/folders")
@@ -1729,20 +1815,25 @@ def _sender_por_rol(rol="secundaria"):
 
 def _fin_resumen_html(doc):
     df = doc.get("datos_financieros") or {}
-    if not df:
-        return ""
-    filas = [("Proyecto", df.get("proyecto")), ("Inmobiliaria", df.get("inmobiliaria")),
+    origen = (doc.get("source_email") or "").strip()
+    m = re.match(r'^"?([^"<]*)"?\s*<([^>]+)>$', origen)
+    origen_nombre, origen_mail = (m.group(1).strip(), m.group(2).strip()) if m else ("", origen)
+    falta = "<span style='color:#dc2626;font-weight:bold'>— FALTA</span>"
+    filas = [("Solicitud recibida de", f"{origen_nombre} · {origen_mail}".strip(" ·") or None),
+             ("Ejecutivo interno", doc.get("ejecutivo_interno")),
+             ("Proyecto", df.get("proyecto")), ("Inmobiliaria", df.get("inmobiliaria")),
              ("Tipo propiedad", df.get("tipo_propiedad")),
-             ("Fecha de entrega", (df.get("fecha_entrega") or "").capitalize()),
+             ("Fecha de entrega", (df.get("fecha_entrega") or "").capitalize() or None),
              ("Operación", "Con subsidio" if df.get("con_subsidio") else "Sin subsidio"),
              ("Valor propiedad", _fmt_uf(df.get("valor_propiedad"))),
              ("Monto subsidio", _fmt_uf(df.get("monto_subsidio"))),
              ("Ahorro", _fmt_uf(df.get("ahorro"))), ("Pie", _fmt_uf(df.get("monto_pie"))),
              ("Reserva", _fmt_uf(df.get("monto_reserva"))),
              ("Monto crédito", _fmt_uf(df.get("monto_credito")))]
-    rows = "".join(f"<tr><td style='padding:3px 12px 3px 0'><b>{k}</b></td><td>{v}</td></tr>"
-                   for k, v in filas if v not in (None, "", "—"))
-    return f"<table style='border-collapse:collapse'>{rows}</table>" if rows else ""
+    rows = "".join(f"<tr><td style='padding:3px 12px 3px 0'><b>{k}</b></td>"
+                   f"<td>{v if v not in (None, '', '—') else falta}</td></tr>"
+                   for k, v in filas)
+    return f"<table style='border-collapse:collapse'>{rows}</table>"
 
 
 @api.post("/clientes/folders/{fid}/send-email")
@@ -1756,13 +1847,19 @@ async def folder_send_email(fid: str, payload: dict):
     rut = doc.get("rut", "")
     base = fsvc.folder_dir(nombre)
     cr = doc.get("credit_request") or {}
-    _cats = {fsvc.cat_de_archivo(a["nombre"], a["subfolder"]) for a in fsvc.scan_archivos(nombre)} - {"combinado", "codeudor"}
+    _cats = {fsvc.cat_de_archivo(a["nombre"], a["subfolder"]) for a in fsvc.scan_archivos(nombre)} - {"combinado", "codeudor", "estudio_titulo"}
     _ct = cr.get("client_type") or "dependiente"
     missing_labels = [fsvc.MISSING_LABELS.get(c, c) for c in fsvc.required_cats(_ct) if c not in _cats]
     _df = doc.get("datos_financieros") or {}
     fecha_entrega = (_df.get("fecha_entrega") or "").strip()
     if not fecha_entrega:
         missing_labels.append("Fecha de entrega (inmediata/futura)")
+    ejecutivo = (payload.get("ejecutivo_interno") or doc.get("ejecutivo_interno") or "").strip()
+    if payload.get("ejecutivo_interno") and payload["ejecutivo_interno"] != doc.get("ejecutivo_interno"):
+        await db.folders.update_one({"id": fid}, {"$set": {"ejecutivo_interno": ejecutivo}})
+        doc["ejecutivo_interno"] = ejecutivo
+    if not ejecutivo:
+        missing_labels.append("Ejecutivo interno (Deisy/Diego/Gerardo)")
     if payload.get("confirm") and missing_labels and not payload.get("force_incompleto"):
         raise HTTPException(status_code=412, detail="Documentación incompleta — faltan: "
                             + ", ".join(missing_labels)
@@ -2591,7 +2688,7 @@ def _prob_aprobacion_folder(doc, stats):
     prob = stats["base"] * 100.0
     factores = [f"Base mesa: {round(stats['base']*100)}% ({stats['aprobadas']} aprobadas / {stats['rechazadas']} rechazadas)"]
     archivos = fsvc.scan_archivos(doc.get("nombre", ""))
-    cats = {fsvc.cat_de_archivo(a["nombre"], a["subfolder"]) for a in archivos} - {"combinado", "codeudor"}
+    cats = {fsvc.cat_de_archivo(a["nombre"], a["subfolder"]) for a in archivos} - {"combinado", "codeudor", "estudio_titulo"}
     cr = doc.get("credit_request") or {}
     tipo_cliente = cr.get("client_type") or "dependiente"
     requeridos = (["cedula", "imp_renta", "boletas"] if tipo_cliente == "independiente"
@@ -2627,6 +2724,12 @@ def _prob_aprobacion_folder(doc, stats):
     if not df.get("valor_propiedad"):
         prob -= 3
         factores.append("-3%: sin datos financieros completos")
+    # REGLA REALISTA: sin los documentos mínimos de mesa, el % es 0
+    faltan_mesa = [c for c in fsvc.required_cats(tipo_cliente) if c not in cats]
+    if not cats or faltan_mesa:
+        etiquetas = [fsvc.MISSING_LABELS.get(c, c) for c in faltan_mesa] or ["sin documentos"]
+        factores.append(f"⛔ 0%: no cumple criterios de envío a mesa (faltan: {', '.join(etiquetas)})")
+        return {"porcentaje": 0, "factores": factores}
     prob = max(5, min(98, round(prob)))
     return {"porcentaje": prob, "factores": factores}
 
