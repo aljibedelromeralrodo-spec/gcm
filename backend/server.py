@@ -2381,8 +2381,8 @@ async def clientes_ajustes():
 
 @api.get("/clientes/autocorreo-dest")
 async def autocorreo_dest():
-    st = await _ac_state()
-    dest = st.get("destination") or os.environ.get("MAIL2_USER", "")
+    """Destinatario del 'Enviar a Mesa': SIEMPRE la casilla de Mesa (MESA_EMAIL)."""
+    dest = os.environ.get("MESA_EMAIL", "")
     return {"destination": dest, "destinatarios": [dest] if dest else []}
 
 
@@ -4708,11 +4708,12 @@ async def gastos_buscar_cliente(q: str = ""):
     docs = await db.folders.find({"$or": [{"nombre": rx}, {"rut": rx}]}).limit(6).to_list(6)
     resultados = []
     for d in docs:
-        email_cliente = ""
-        item = await db.proc_queue.find_one({"classification.cliente": d.get("nombre", ""),
-                                             "campos.email_cliente": {"$nin": ["", None]}})
-        if item:
-            email_cliente = (item.get("campos") or {}).get("email_cliente", "")
+        email_cliente = d.get("email") or d.get("email_cliente") or ""
+        if not email_cliente:
+            item = await db.proc_queue.find_one({"classification.cliente": d.get("nombre", ""),
+                                                 "campos.email_cliente": {"$nin": ["", None]}})
+            if item:
+                email_cliente = (item.get("campos") or {}).get("email_cliente", "")
         resultados.append({"nombre": d.get("nombre", ""), "rut": d.get("rut", ""),
                            "email": email_cliente, "folder_id": d.get("id", "")})
     return {"resultados": resultados}
@@ -4749,6 +4750,15 @@ async def gastos_prefill(nombre: str = ""):
         except Exception:
             continue
     datos = await ai_extract.extraer_datos_gastos("\n\n".join(textos))
+    # Sincronización: si la carpeta ya tiene correo/RUT guardados (ej: desde Aprobación
+    # Cliente), se usan sin pedirlos de nuevo.
+    if toks:
+        f_s = await db.folders.find_one({"nombre": {"$regex": ".*".join(re.escape(t) for t in toks[:2]), "$options": "i"}})
+        if f_s:
+            if not datos.get("email_cliente") and (f_s.get("email") or f_s.get("email_cliente")):
+                datos["email_cliente"] = f_s.get("email") or f_s.get("email_cliente")
+            if not datos.get("rut") and f_s.get("rut"):
+                datos["rut"] = f_s.get("rut")
     return {"ok": True, "prefill": datos, "fuentes": len(textos)}
 
 
@@ -5197,7 +5207,8 @@ def _gastos_html(payload):
         if it.get("valor") is None or str(it.get("valor")) == "":
             valor_html = f"<span style='color:#8a6d1a;font-style:italic'>{it.get('texto') or '—'}</span>"
         else:
-            valor_html = f"<b>{_num_uf(it['valor'])} UF</b>"
+            nota = f" <span style='color:#8a6d1a;font-style:italic;font-weight:400;font-size:12px'>({it['texto']})</span>" if (it.get("texto") or "").strip() else ""
+            valor_html = f"<b>{_num_uf(it['valor'])} UF</b>{nota}"
         filas += (f"<tr style='background:{bg}'>"
                   f"<td style='padding:11px 18px;border-bottom:1px solid #eceef3;color:#2b3245'>{it.get('concepto','')}</td>"
                   f"<td style='padding:11px 18px;border-bottom:1px solid #eceef3;text-align:right;color:#1a1f2e;white-space:nowrap'>{valor_html}</td></tr>")
@@ -5229,7 +5240,7 @@ def _gastos_html(payload):
         </div>
         <div style="padding:6px 32px 4px">
           <div style="color:#1a1f2e;font-size:15px;font-weight:700;border-left:4px solid #d4af37;padding-left:10px;margin-bottom:12px">Detalle de Gastos Operacionales</div>
-          <table style="width:100%;border-collapse:collapse;font-size:14px;border:1px solid #eceef3;border-radius:8px;overflow:hidden">
+          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="width:100%;border-collapse:collapse;font-size:14px;border:1px solid #eceef3">
             <tr style="background:#eef1f7">
               <th style="padding:10px 18px;text-align:left;color:#4b5563;font-size:12px;letter-spacing:1px;text-transform:uppercase">Concepto</th>
               <th style="padding:10px 18px;text-align:right;color:#4b5563;font-size:12px;letter-spacing:1px;text-transform:uppercase">Valor</th>
@@ -5240,7 +5251,7 @@ def _gastos_html(payload):
         <div style="padding:22px 32px 8px">
           <div style="color:#1a1f2e;font-size:15px;font-weight:700;border-left:4px solid #d4af37;padding-left:10px;margin-bottom:12px">Cuenta Recaudadora</div>
           <div style="background:#f8f9fc;border:1px solid #eceef3;border-radius:8px;padding:16px 20px">
-            <table style="border-collapse:collapse">{pago_filas}</table>
+            <table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse">{pago_filas}</table>
           </div>
         </div>
         <div style="padding:20px 32px 28px">
@@ -6484,7 +6495,8 @@ async def aprobacion_datos_cliente(nombre: str = ""):
     nombre = (nombre or "").strip()
     if len(nombre) < 3:
         raise HTTPException(status_code=400, detail="Indica el nombre del cliente")
-    out = {"email": "", "telefono": "", "rut": "", "fuente": ""}
+    out = {"email": "", "telefono": "", "rut": "", "fuente": "",
+           "ejecutivo_nombre": "", "ejecutivo_email": "", "ejecutivo_interno": ""}
     toks = [t for t in _norm_texto(nombre).split() if len(t) > 2]
     rx = ".*".join(re.escape(t) for t in toks[:2]) if toks else ""
     _excluir = re.compile(
@@ -6524,6 +6536,9 @@ async def aprobacion_datos_cliente(nombre: str = ""):
             out["email"] = out["email"] or campos.get("email_cliente") or cl.get("email_cliente") or ""
             out["rut"] = out["rut"] or cl.get("rut") or campos.get("rut") or ""
             out["telefono"] = out["telefono"] or campos.get("telefono") or ""
+            out["ejecutivo_nombre"] = out["ejecutivo_nombre"] or campos.get("nombre_ejecutivo") or ""
+            out["ejecutivo_email"] = out["ejecutivo_email"] or campos.get("email_ejecutivo") or ""
+            out["ejecutivo_interno"] = out["ejecutivo_interno"] or campos.get("ejecutivo_interno") or ""
             _tomar(*_extraer(it.get("body_text") or it.get("body") or ""))
         if out["email"]:
             out["fuente"] = "correos procesados"
@@ -6532,6 +6547,9 @@ async def aprobacion_datos_cliente(nombre: str = ""):
         if f:
             out["email"] = f.get("email") or f.get("email_cliente") or ""
             out["rut"] = out["rut"] or f.get("rut") or ""
+            out["ejecutivo_interno"] = out["ejecutivo_interno"] or f.get("ejecutivo_interno") or ""
+            out["ejecutivo_nombre"] = out["ejecutivo_nombre"] or f.get("ejecutivo_externo") or ""
+            out["ejecutivo_email"] = out["ejecutivo_email"] or f.get("ejecutivo_externo_email") or ""
         s = await db.set_credito.find_one({"nombre": {"$regex": rx, "$options": "i"}})
         if s:
             out["email"] = out["email"] or s.get("email") or ""
@@ -6546,6 +6564,13 @@ async def aprobacion_datos_cliente(nombre: str = ""):
                 msgs = await asyncio.to_thread(mail.fetch_attachments_by_message_ids, mids)
                 for m_ in msgs:
                     _tomar(*_extraer((m_.get("body") or "") + " " + (m_.get("subject") or "")))
+                    # El remitente del correo de solicitud = ejecutivo que la envió
+                    if not out["ejecutivo_email"]:
+                        remit = m_.get("from") or ""
+                        em_r = re.search(r"[\w.+-]+@[\w-]+\.[\w.]{2,}", remit)
+                        if em_r and not re.search(r"centralmutuos|evaluacionesmutuos|gerardo", em_r.group(0), re.I):
+                            out["ejecutivo_email"] = em_r.group(0)
+                            out["ejecutivo_nombre"] = re.sub(r"<.*?>", "", remit).strip().strip('"') or ""
                 if out["email"]:
                     out["fuente"] = "buzón de correo (solicitud de crédito)"
         except Exception:
@@ -6752,7 +6777,23 @@ async def aprobacion_enviar(payload: dict):
     await db.aprobacion_log.insert_one({
         "id": str(uuid.uuid4()), "nombre": nombre, "rut": payload.get("rut", ""),
         "to": to, "adjuntos": [_nombre_cliente_pdf(p.name) for p in rutas],
+        "ejecutivo_nombre": payload.get("ejecutivo_nombre", ""),
+        "ejecutivo_email": payload.get("ejecutivo_email", ""),
+        "ejecutivo_interno": payload.get("ejecutivo_interno", ""),
         "enviado_en": now_iso(), "desde": res.get("desde", "")})
+    # Sincronizar con la carpeta del cliente: correo, RUT y ejecutivos quedan guardados
+    upd_ej = {k: v for k, v in {
+        "email": to,
+        "rut": (payload.get("rut") or "").strip(),
+        "ejecutivo_externo": payload.get("ejecutivo_nombre", "").strip(),
+        "ejecutivo_externo_email": payload.get("ejecutivo_email", "").strip(),
+        "ejecutivo_interno": payload.get("ejecutivo_interno", "").strip()}.items() if v}
+    if upd_ej and nombre:
+        toks_n = [t for t in re.split(r"\s+", nombre) if len(t) >= 3]
+        if toks_n:
+            await db.folders.update_one(
+                {"$and": [{"nombre": {"$regex": re.escape(t), "$options": "i"}} for t in toks_n[:2]]},
+                {"$set": upd_ej})
     return {"ok": True, "to": to, "subject": subject,
             "attachments": [_nombre_cliente_pdf(p.name) for p in rutas], "sender": res.get("desde", "")}
 
@@ -7503,8 +7544,8 @@ async def proc_enviar_autocorreo(qid: str, payload: dict = None):
     cl = item.get("classification", {})
     campos = item.get("campos", {})
     cliente = cl.get("cliente") or mail._extraer_nombre(item.get("subject", ""), item.get("sender", ""))
-    st = await _ac_state()
-    destino = (payload or {}).get("destino") or st.get("destination") or os.environ.get("MAIL2_USER", "")
+    # El envío de la GESTIÓN (solicitud de crédito) va SIEMPRE a la casilla de Mesa
+    destino = (payload or {}).get("destino") or os.environ.get("MESA_EMAIL", "")
     if not destino:
         raise HTTPException(status_code=400, detail="No hay correo destino configurado")
 

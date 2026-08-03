@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import ImportarCorreo from "../components/ImportarCorreo";
+import ConversorUF from "../components/ConversorUF";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 const CAT_LABELS = { cedula: "Cédula", liquidacion: "Liquidaciones", afp: "AFP", cmf: "CMF", imp_renta: "Imp. Renta", boletas: "Boletas" };
@@ -1902,6 +1903,9 @@ export default function ClientesModule({ onNavigate }) {
                   <input type="number" step="0.01" value={finDraft.monto_reserva || ""} onChange={(e) => setFinDraft({ ...finDraft, monto_reserva: e.target.value })} style={{ width: "100%", padding: "0.35rem", borderRadius: 6, border: "1px solid #d4d4d8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }} />
                 </label>
               </div>
+              <div style={{ marginTop: 10 }}>
+                <ConversorUF style={{ background: "#fefce8", border: "1px solid #d4af37", color: "#1a1f2e" }} />
+              </div>
               {(() => {
                 const vp = Number(finDraft.valor_propiedad || 0);
                 const ms = Number(finDraft.monto_subsidio || 0);
@@ -1919,13 +1923,13 @@ export default function ClientesModule({ onNavigate }) {
                 const pctCredito = vp > 0 ? (mc / vp) * 100 : 0;
                 return (
                   <div style={{ marginTop: 8, display: "grid", gap: 6 }}>
-                    <div style={{ padding: "0.5rem 0.7rem", borderRadius: 8, background: ok ? "#dcfce7" : "#fee2e2", color: ok ? "#166534" : "#991b1b", fontSize: 13, fontWeight: 600 }}>
+                    <div style={{ padding: "0.7rem 0.9rem", borderRadius: 8, background: ok ? "#dcfce7" : "#fee2e2", color: ok ? "#166534" : "#991b1b", fontSize: 14.5, fontWeight: 700, lineHeight: 1.45 }}>
                       {ok
                         ? `✅ Suma cuadra: ${suma.toFixed(2)} UF = ${vp.toFixed(2)} UF`
                         : `⚠️ Diferencia: ${diff.toFixed(2)} UF (suma actual: ${suma.toFixed(2)} vs valor propiedad: ${vp.toFixed(2)}). ${finDraft.con_subsidio ? 'Subsidio + Ahorro + Reserva + Crédito' : 'Pie + Reserva + Crédito'} debe = Valor propiedad.`}
                     </div>
                     {!finDraft.con_subsidio && mc > 0 && (
-                      <div style={{ padding: "0.5rem 0.7rem", borderRadius: 8, background: excedeMax ? "#fee2e2" : "#e0f2fe", color: excedeMax ? "#991b1b" : "#075985", fontSize: 12, fontWeight: 600 }}>
+                      <div style={{ padding: "0.6rem 0.8rem", borderRadius: 8, background: excedeMax ? "#fee2e2" : "#e0f2fe", color: excedeMax ? "#991b1b" : "#075985", fontSize: 13.5, fontWeight: 600, lineHeight: 1.45 }}>
                         {excedeMax
                           ? `🚫 Crédito ${mc.toFixed(2)} UF supera el 80% máximo (${max80.toFixed(2)} UF) — SIN subsidio no permite más del 80% del valor propiedad. Actual: ${pctCredito.toFixed(1)}%.`
                           : `📊 Crédito representa ${pctCredito.toFixed(1)}% del valor propiedad (máximo permitido SIN subsidio: 80% = ${max80.toFixed(2)} UF).`}
@@ -2332,6 +2336,9 @@ export default function ClientesModule({ onNavigate }) {
                             <UFAmountInput value={finDraft.monto_reserva} onChange={(v) => setFinDraft({ ...finDraft, monto_reserva: v })} uf={ufValue} dataTestid={`fin-reserva-${f.id}`} />
                           </label>
                         </div>
+                        <div style={{ marginTop: 10 }}>
+                          <ConversorUF style={{ background: "#fefce8", border: "1px solid #d4af37", color: "#1a1f2e" }} />
+                        </div>
                         {(() => {
                           const vp = Number(finDraft.valor_propiedad || 0);
                           const ms = Number(finDraft.monto_subsidio || 0);
@@ -2348,13 +2355,13 @@ export default function ClientesModule({ onNavigate }) {
                           const pctCredito = vp > 0 ? (mc / vp) * 100 : 0;
                           return (
                             <div style={{ marginTop: 8, display: "grid", gap: 6 }}>
-                              <div data-testid={`fin-sum-${f.id}`} style={{ padding: "0.5rem 0.7rem", borderRadius: 8, background: ok ? "#dcfce7" : "#fee2e2", color: ok ? "#166534" : "#991b1b", fontSize: 13, fontWeight: 600 }}>
+                              <div data-testid={`fin-sum-${f.id}`} style={{ padding: "0.7rem 0.9rem", borderRadius: 8, background: ok ? "#dcfce7" : "#fee2e2", color: ok ? "#166534" : "#991b1b", fontSize: 14.5, fontWeight: 700, lineHeight: 1.45 }}>
                                 {ok
                                   ? `✅ Suma cuadra: ${suma.toFixed(2)} UF = ${vp.toFixed(2)} UF`
                                   : `⚠️ Diferencia: ${diff.toFixed(2)} UF (suma actual: ${suma.toFixed(2)} vs valor propiedad: ${vp.toFixed(2)}). ${finDraft.con_subsidio ? 'Subsidio + Ahorro + Reserva + Crédito' : 'Pie + Reserva + Crédito'} debe = Valor propiedad.`}
                               </div>
                               {!finDraft.con_subsidio && mc > 0 && (
-                                <div data-testid={`fin-80pct-${f.id}`} style={{ padding: "0.5rem 0.7rem", borderRadius: 8, background: excedeMax ? "#fee2e2" : "#e0f2fe", color: excedeMax ? "#991b1b" : "#075985", fontSize: 12, fontWeight: 600 }}>
+                                <div data-testid={`fin-80pct-${f.id}`} style={{ padding: "0.6rem 0.8rem", borderRadius: 8, background: excedeMax ? "#fee2e2" : "#e0f2fe", color: excedeMax ? "#991b1b" : "#075985", fontSize: 13.5, fontWeight: 600, lineHeight: 1.45 }}>
                                   {excedeMax
                                     ? `🚫 Crédito ${mc.toFixed(2)} UF supera el 80% máximo (${max80.toFixed(2)} UF) — SIN subsidio no permite más del 80% del valor propiedad. Actual: ${pctCredito.toFixed(1)}%.`
                                     : `📊 Crédito representa ${pctCredito.toFixed(1)}% del valor propiedad (máximo permitido SIN subsidio: 80% = ${max80.toFixed(2)} UF).`}

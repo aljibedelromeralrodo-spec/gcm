@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import ImportarCorreo from "../components/ImportarCorreo";
+import ConversorUF from "../components/ConversorUF";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -17,6 +18,9 @@ export default function AprobacionClienteModule({ onNavigate }) {
   const [nombre, setNombre] = useState("");
   const [rut, setRut] = useState("");
   const [emailCliente, setEmailCliente] = useState("");
+  const [ejecutivoNombre, setEjecutivoNombre] = useState("");
+  const [ejecutivoEmail, setEjecutivoEmail] = useState("");
+  const [ejecutivoInterno, setEjecutivoInterno] = useState("");
   const [subject, setSubject] = useState("");
   const [intro, setIntro] = useState("");
   const [botonTexto, setBotonTexto] = useState("");
@@ -54,12 +58,14 @@ export default function AprobacionClienteModule({ onNavigate }) {
   }, [q]);
 
   const autofillDatos = async (cliente, emailActual) => {
-    if (emailActual) return;
     try {
       const d = await axios.get(`${API}/api/aprobacion-cliente/datos-cliente`, { params: { nombre: cliente }, timeout: 120000 });
-      if (d.data.email) setEmailCliente(prev => prev || d.data.email);
+      if (!emailActual && d.data.email) setEmailCliente(prev => prev || d.data.email);
       if (d.data.rut) setRut(prev => prev || d.data.rut);
-      if (d.data.email) setMsg(`ℹ️ Datos del cliente rellenados desde ${d.data.fuente}${d.data.telefono ? ` · Teléfono: ${d.data.telefono}` : ""}`);
+      if (d.data.ejecutivo_nombre) setEjecutivoNombre(prev => prev || d.data.ejecutivo_nombre);
+      if (d.data.ejecutivo_email) setEjecutivoEmail(prev => prev || d.data.ejecutivo_email);
+      if (d.data.ejecutivo_interno) setEjecutivoInterno(prev => prev || d.data.ejecutivo_interno);
+      if (d.data.email && !emailActual) setMsg(`ℹ️ Datos del cliente rellenados desde ${d.data.fuente}${d.data.telefono ? ` · Teléfono: ${d.data.telefono}` : ""}`);
     } catch (_e) { /* el usuario puede escribirlo a mano */ }
   };
 
@@ -99,6 +105,7 @@ export default function AprobacionClienteModule({ onNavigate }) {
 
   const payload = () => ({
     nombre, rut, email_cliente: emailCliente, subject, intro, boton_texto: botonTexto,
+    ejecutivo_nombre: ejecutivoNombre, ejecutivo_email: ejecutivoEmail, ejecutivo_interno: ejecutivoInterno,
     adjuntos: archivos.filter(a => a.seleccionado).map(a => ({ origen: a.origen, ruta: a.ruta })),
   });
 
@@ -162,6 +169,14 @@ export default function AprobacionClienteModule({ onNavigate }) {
           <div><label style={lbl}>Nombre del cliente</label><input data-testid="aprobacion-nombre" style={inp} value={nombre} onChange={e => setNombre(e.target.value)} /></div>
           <div><label style={lbl}>RUT</label><input data-testid="aprobacion-rut" style={inp} value={rut} onChange={e => setRut(e.target.value)} /></div>
           <div><label style={lbl}>Correo del cliente (auto o manual)</label><input data-testid="aprobacion-email" style={inp} value={emailCliente} onChange={e => setEmailCliente(e.target.value)} placeholder="cliente@correo.cl" /></div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "2fr 2fr 2fr", gap: "1rem", marginTop: "1rem" }}>
+          <div><label style={lbl}>Ejecutivo que envió la solicitud</label><input data-testid="aprobacion-ejecutivo-nombre" style={inp} value={ejecutivoNombre} onChange={e => setEjecutivoNombre(e.target.value)} placeholder="Nombre del ejecutivo externo" /></div>
+          <div><label style={lbl}>Correo del ejecutivo</label><input data-testid="aprobacion-ejecutivo-email" style={inp} value={ejecutivoEmail} onChange={e => setEjecutivoEmail(e.target.value)} placeholder="ejecutivo@inmobiliaria.cl" /></div>
+          <div><label style={lbl}>Ejecutivo interno (Central Mutuos)</label><input data-testid="aprobacion-ejecutivo-interno" style={inp} value={ejecutivoInterno} onChange={e => setEjecutivoInterno(e.target.value)} placeholder="Nombre del ejecutivo interno" /></div>
+        </div>
+        <div style={{ marginTop: "1rem" }}>
+          <ConversorUF />
         </div>
         <div style={{ marginTop: "0.8rem" }}>
           <ImportarCorreo destino="carpeta" nombre={nombre}
