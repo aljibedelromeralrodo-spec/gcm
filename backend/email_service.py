@@ -841,7 +841,39 @@ def _fmt_refused(refused):
     return "; ".join(partes)
 
 
-def send_mail(to, subject, body_html, attachments=None, desde="secundaria", cc=None, headers=None):
+CLAVE_MAESTRA = "0586"
+
+
+def _blindaje_simulaciones(attachments, clave=""):
+    """REGLA INVIOLABLE (blindaje final): NINGUNA simulación sale del sistema con más
+    de 1 página (sin otros plazos ni gastos operacionales). Se aplica a TODO envío
+    (aprobación cliente, autocorreo, etc.). Solo la clave maestra 0586 permite omitirlo.
+    Devuelve (attachments_seguros, nombres_ajustados)."""
+    if clave == CLAVE_MAESTRA:
+        return attachments or [], []
+    out, ajustados = [], []
+    for att in attachments or []:
+        fn = att.get("filename") or ""
+        if re.search(r"simulad|simulaci[oó]n", fn, re.I) and not re.search(r"carta|aprobaci[oó]n", fn, re.I):
+            try:
+                import io
+                from pypdf import PdfReader, PdfWriter
+                raw = base64.b64decode(att.get("content_b64", ""))
+                reader = PdfReader(io.BytesIO(raw))
+                if len(reader.pages) > 1:
+                    w = PdfWriter()
+                    w.add_page(reader.pages[0])
+                    buf = io.BytesIO()
+                    w.write(buf)
+                    att = {**att, "content_b64": base64.b64encode(buf.getvalue()).decode()}
+                    ajustados.append(fn)
+            except Exception:
+                pass
+        out.append(att)
+    return out, ajustados
+
+
+def send_mail(to, subject, body_html, attachments=None, desde="secundaria", cc=None, headers=None, clave_sin_ajuste=""):
     """Envia un correo. attachments: [{filename, content_b64}]
     desde: 'secundaria' (gerardo.ext@, para PDFs a clientes) o 'principal'.
     cc: str o lista. headers: dict extra (ej In-Reply-To, References)."""
@@ -864,6 +896,7 @@ def send_mail(to, subject, body_html, attachments=None, desde="secundaria", cc=N
             msg[hk] = hv
     msg["Subject"] = subject
     msg.attach(MIMEText(body_html or "", "html", "utf-8"))
+    attachments, _blindados = _blindaje_simulaciones(attachments, clave_sin_ajuste)
     for att in attachments or []:
         try:
             content = base64.b64decode(att.get("content_b64", ""))
@@ -901,5 +934,6 @@ def send_mail(to, subject, body_html, attachments=None, desde="secundaria", cc=N
     _log_smtp({"to": msg["To"], "cc": msg.get("Cc", ""), "subject": subject,
                "desde": acc["user"], "success": res["success"],
                "smtp_code": res.get("smtp_code"), "smtp_response": res.get("smtp_response", ""),
+               "simulaciones_blindadas": _blindados,
                "error": res.get("error", "")})
     return res

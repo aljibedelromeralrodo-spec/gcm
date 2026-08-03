@@ -711,3 +711,19 @@ requieren re-deploy para llegar a producción.
   (testids: importar-correo-btn-{destino}, -q, -item-{i}, -ejecutar, -msg).
 - Integrado en: SetCreditoModule, ClientesModule (detalle: 2 botones), GastosOperacionalesModule, AprobacionClienteModule.
 - Testing iteración 15: backend 7/7, frontend 5/5 PASS. Listado de correos con letra grande (pedido del usuario).
+
+## Sesión 2026-08-03 (iteración 16 — 100% PASS, ver CHANGELOG.md para detalle)
+- Regla de carpetas flexible (sin monto obligatorio, docs por nombre de archivo) + fix extracción de nombre (Melisa Rivera OK).
+- Seguimiento del último mes (31 días) con ejecutivo externo real + export Excel.
+- Pagos en Gastos Operacionales (pagado/saldo/estado + detección de transferencias).
+- Log SMTP completo en db.correos_smtp_log.
+- Autocorreos de aprobación SOLO TEXTO ahora procesados; carpetas asegurada con carta+simulación.
+- BLINDAJE INVIOLABLE en send_mail: ninguna simulación sale con >1 página (bypass solo con clave 0586).
+- Reportes internos auto-enviados desde Gmail principal (fin de bloqueos "Se bloqueó tu mensaje").
+
+## Backlog priorizado
+- P1: Panel de "Correos Descartados" con rescate a 1 clic (crear carpeta desde correo descartado).
+- P1: Vista/alerta de errores SMTP en la UI (ya existe GET /api/correos/smtp-log?solo_errores=true).
+- P2: Afinar detección automática de transferencias cuando el usuario comparta un comprobante bancario real.
+- P2: Modularizar server.py (>7900 líneas).
+- Pendiente usuario: prueba en vivo de Auto-correo con saldo eCert.
