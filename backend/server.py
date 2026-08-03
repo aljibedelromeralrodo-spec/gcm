@@ -6430,10 +6430,11 @@ def _tipo_pdf_aprobacion(nombre):
 
 
 def _nombre_cliente_pdf(nombre_archivo):
-    """Nombre que ve el CLIENTE: sin 'ajustada' ni sufijos internos (_CM)."""
+    """Nombre que ve el CLIENTE: sin 'ajustada/o' ni sufijos internos (_CM)."""
     base, ext = os.path.splitext(nombre_archivo or "")
-    base = re.sub(r"ajustada?", "", base, flags=re.I)
-    base = re.sub(r"_cm$", "", base, flags=re.I)
+    base = re.sub(r"[_\s-]*ajustad[oa]?", "", base, flags=re.I)
+    base = re.sub(r"[_\s-]*cm$", "", base, flags=re.I)
+    base = re.sub(r"_{2,}", "_", base)
     base = re.sub(r"[_\s-]+$", "", base).strip()
     return (base or "documento") + (ext or ".pdf")
 
