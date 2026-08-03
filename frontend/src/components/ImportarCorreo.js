@@ -53,7 +53,7 @@ export default function ImportarCorreo({ destino, destinoId, nombre, onDone, lab
       {open && (
         <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.72)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: "3vh 3vw" }}>
           <div data-testid="importar-correo-modal" onClick={e => e.stopPropagation()}
-            style={{ background: "#0f172a", border: "1px solid rgba(148,163,184,0.25)", borderRadius: 14, padding: "1.4rem", width: "min(640px, 96vw)", maxHeight: "90vh", overflow: "auto", display: "grid", gap: 10, color: "#e2e8f0" }}>
+            style={{ background: "#0f172a", border: "1px solid rgba(148,163,184,0.25)", borderRadius: 14, padding: "1.4rem", width: "min(820px, 96vw)", maxHeight: "90vh", overflow: "auto", display: "grid", gap: 10, color: "#e2e8f0" }}>
             <h4 style={{ margin: 0, color: "var(--gold, #d4af37)" }}>
               <i className="fa fa-cloud-download" style={{ marginRight: "0.5rem" }} />{label || "Importar desde correo"}
             </h4>
@@ -68,11 +68,12 @@ export default function ImportarCorreo({ destino, destinoId, nombre, onDone, lab
               <div data-testid="importar-correo-lista" style={{ display: "grid", gap: 6 }}>
                 {correos.map((c, i) => (
                   <label key={i} data-testid={`importar-correo-item-${i}`}
-                    style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "0.5rem 0.7rem", background: sel[i] ? "rgba(20,184,166,0.12)" : "rgba(255,255,255,0.04)", border: `1px solid ${sel[i] ? "#14b8a6" : "rgba(255,255,255,0.1)"}`, borderRadius: 8, cursor: c.message_id ? "pointer" : "default", fontSize: "0.83rem" }}>
-                    {c.message_id && <input type="checkbox" checked={!!sel[i]} onChange={() => setSel(s => ({ ...s, [i]: !s[i] }))} style={{ marginTop: 3 }} />}
+                    style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "0.8rem 1rem", background: sel[i] ? "rgba(20,184,166,0.12)" : "rgba(255,255,255,0.04)", border: `1px solid ${sel[i] ? "#14b8a6" : "rgba(255,255,255,0.1)"}`, borderRadius: 10, cursor: c.message_id ? "pointer" : "default", fontSize: "1rem" }}>
+                    {c.message_id && <input type="checkbox" checked={!!sel[i]} onChange={() => setSel(s => ({ ...s, [i]: !s[i] }))} style={{ marginTop: 4, width: 18, height: 18, accentColor: "#14b8a6" }} />}
                     <span style={{ flex: 1 }}>
-                      <b>{c.subject || "(sin asunto)"}</b>
-                      <span style={{ display: "block", opacity: 0.65, fontSize: "0.75rem" }}>{c.from} · {c.date} · casilla {c.cuenta}</span>
+                      <b style={{ fontSize: "1.02rem", lineHeight: 1.35 }}>{c.subject || "(sin asunto)"}</b>
+                      <span style={{ display: "block", opacity: 0.8, fontSize: "0.9rem", marginTop: 3 }}>{c.from}</span>
+                      <span style={{ display: "block", opacity: 0.6, fontSize: "0.82rem", marginTop: 2 }}>{c.date} · casilla {c.cuenta}</span>
                     </span>
                   </label>
                 ))}
