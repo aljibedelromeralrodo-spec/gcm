@@ -5299,7 +5299,9 @@ async def gastos_enviar(payload: dict):
         raise HTTPException(status_code=502, detail=res.get("error", "Error de envío"))
     await db.gastos_op_log.insert_one({
         "id": str(uuid.uuid4()), "nombre": nombre, "rut": payload.get("rut", ""),
-        "to": to, "total": total, "enviado_en": now_iso(), "desde": res.get("desde", "")})
+        "to": to, "total": total, "items": payload.get("items") or [],
+        "intro": payload.get("intro", ""), "datos_pago": payload.get("datos_pago") or {},
+        "enviado_en": now_iso(), "desde": res.get("desde", "")})
     return {"ok": True, "to": to, "subject": subject, "total": total, "sender": res.get("desde", "")}
 
 
