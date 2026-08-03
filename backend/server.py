@@ -5207,19 +5207,19 @@ def _gastos_html(payload):
         if it.get("valor") is None or str(it.get("valor")) == "":
             valor_html = f"<span style='color:#8a6d1a;font-style:italic'>{it.get('texto') or '—'}</span>"
         else:
-            nota = f" <span style='color:#8a6d1a;font-style:italic;font-weight:400;font-size:12px'>({it['texto']})</span>" if (it.get("texto") or "").strip() else ""
+            nota = f" <span style='color:#8a6d1a;font-style:italic;font-weight:400;font-size:10.5px'>({it['texto']})</span>" if (it.get("texto") or "").strip() else ""
             valor_html = f"<b>{_num_uf(it['valor'])} UF</b>{nota}"
         filas += (f"<tr style='background:{bg}'>"
-                  f"<td style='padding:11px 18px;border-bottom:1px solid #eceef3;color:#2b3245'>{it.get('concepto','')}</td>"
-                  f"<td style='padding:11px 18px;border-bottom:1px solid #eceef3;text-align:right;color:#1a1f2e;white-space:nowrap'>{valor_html}</td></tr>")
+                  f"<td style='padding:8px 18px;border-bottom:1px solid #eceef3;color:#2b3245;font-size:12px'>{it.get('concepto','')}</td>"
+                  f"<td style='padding:8px 18px;border-bottom:1px solid #eceef3;text-align:right;color:#1a1f2e;white-space:nowrap;font-size:12px'>{valor_html}</td></tr>")
     filas += (f"<tr style='background:#1a1f2e'>"
-              f"<td style='padding:13px 18px;color:#d4af37;font-weight:700;letter-spacing:0.5px'>TOTAL</td>"
-              f"<td style='padding:13px 18px;text-align:right;color:#d4af37;font-weight:700;font-size:16px;white-space:nowrap'>{_num_uf(total)} UF</td></tr>")
+              f"<td style='padding:11px 18px;color:#d4af37;font-weight:700;letter-spacing:0.5px;font-size:13px'>TOTAL</td>"
+              f"<td style='padding:11px 18px;text-align:right;color:#d4af37;font-weight:700;font-size:14px;white-space:nowrap'>{_num_uf(total)} UF</td></tr>")
     valor_uf = payload.get("valor_uf")
     if valor_uf:
         filas += (f"<tr style='background:#1a1f2e'>"
-                  f"<td style='padding:9px 18px 13px;color:#9aa3b5;font-size:12px'>TOTAL EN PESOS (UF del día ${_fmt_num_clp(valor_uf)})</td>"
-                  f"<td style='padding:9px 18px 13px;text-align:right;color:#ffffff;font-weight:700;font-size:14px;white-space:nowrap'>${_fmt_num_clp(round(total * float(valor_uf)))} CLP</td></tr>")
+                  f"<td style='padding:7px 18px 11px;color:#9aa3b5;font-size:11px'>TOTAL EN PESOS (UF del día ${_fmt_num_clp(valor_uf)})</td>"
+                  f"<td style='padding:7px 18px 11px;text-align:right;color:#ffffff;font-weight:700;font-size:12.5px;white-space:nowrap'>${_fmt_num_clp(round(total * float(valor_uf)))} CLP</td></tr>")
     pago_filas = "".join(
         f"<tr><td style='padding:5px 14px 5px 0;color:#6b7280;font-size:13px;white-space:nowrap'>{lbl}</td>"
         f"<td style='padding:5px 0;color:#1a1f2e;font-size:13px;font-weight:600'>{val}</td></tr>"
@@ -5240,10 +5240,10 @@ def _gastos_html(payload):
         </div>
         <div style="padding:6px 32px 4px">
           <div style="color:#1a1f2e;font-size:15px;font-weight:700;border-left:4px solid #d4af37;padding-left:10px;margin-bottom:12px">Detalle de Gastos Operacionales</div>
-          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="width:100%;border-collapse:collapse;font-size:14px;border:1px solid #eceef3">
+          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="width:100%;border-collapse:collapse;font-size:12px;border:1px solid #eceef3">
             <tr style="background:#eef1f7">
-              <th style="padding:10px 18px;text-align:left;color:#4b5563;font-size:12px;letter-spacing:1px;text-transform:uppercase">Concepto</th>
-              <th style="padding:10px 18px;text-align:right;color:#4b5563;font-size:12px;letter-spacing:1px;text-transform:uppercase">Valor</th>
+              <th style="padding:8px 18px;text-align:left;color:#4b5563;font-size:10.5px;letter-spacing:1px;text-transform:uppercase">Concepto</th>
+              <th style="padding:8px 18px;text-align:right;color:#4b5563;font-size:10.5px;letter-spacing:1px;text-transform:uppercase">Valor</th>
             </tr>
             {filas}
           </table>
