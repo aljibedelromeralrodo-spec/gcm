@@ -1,6 +1,9 @@
 """Helpers de carpetas de clientes: archivos en disco, categorias, merges y split."""
 import io
+import os
 import re
+import uuid
+import base64
 import zipfile
 from pathlib import Path
 from pypdf import PdfReader, PdfWriter
@@ -215,6 +218,32 @@ def merge_pdfs(nombre, rel_files):
     return {"merged_file": f"00_combinados/{merged_name}", "files_used": used, "errors": errors}
 
 
+def _ocr_ia_pagina(pdf_bytes, idx):
+    """Respaldo OCR con IA (visión): renderiza la página con PyMuPDF y transcribe
+    con el modelo de visión. Se usa cuando tesseract/poppler no están disponibles."""
+    key = os.environ.get("EMERGENT_LLM_KEY", "")
+    if not key:
+        return ""
+    import fitz
+    import asyncio as _aio
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    pix = doc[idx].get_pixmap(dpi=120)
+    b64 = base64.b64encode(pix.tobytes("png")).decode()
+    doc.close()
+    from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
+
+    async def _run():
+        chat = LlmChat(api_key=key, session_id=f"ocr-{uuid.uuid4()}",
+                       system_message=("Transcribe TODO el texto visible de la imagen de un "
+                                       "documento chileno. Responde SOLO el texto plano, sin "
+                                       "comentarios ni formato.")).with_model("openai", "gpt-5.4-mini")
+        return await chat.send_message(UserMessage(
+            text="Transcribe el texto de esta página:",
+            file_contents=[ImageContent(image_base64=b64)]))
+    resp = _aio.run(_run())
+    return resp if isinstance(resp, str) else str(resp)
+
+
 def _texto_pagina(reader, idx, pdf_bytes, permitir_ocr=True):
     try:
         texto = reader.pages[idx].extract_text() or ""
@@ -228,9 +257,17 @@ def _texto_pagina(reader, idx, pdf_bytes, permitir_ocr=True):
         imgs = convert_from_bytes(pdf_bytes, dpi=150, first_page=idx + 1, last_page=idx + 1)
         if imgs:
             try:
-                return pytesseract.image_to_string(imgs[0], lang="spa")
+                t = pytesseract.image_to_string(imgs[0], lang="spa")
             except Exception:
-                return pytesseract.image_to_string(imgs[0])
+                t = pytesseract.image_to_string(imgs[0])
+            if (t or "").strip():
+                return t
+    except Exception:
+        pass
+    try:
+        t = _ocr_ia_pagina(pdf_bytes, idx)
+        if (t or "").strip():
+            return t
     except Exception:
         pass
     return texto

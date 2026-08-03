@@ -1679,8 +1679,45 @@ async def folder_download(fid: str, file_path: str, inline: bool = False):
                         headers={"Content-Disposition": f'{disp}; filename="{target.name}"'})
 
 
+_PAT_EMPAQUETADO = re.compile(
+    r"documentos?\s*_?\s*solicitados|set\s+(de\s+)?documentos|antecedentes\s+completos|"
+    r"carpeta\s+completa|docs?\s+asesor[ií]a|asesor[ií]a", re.I)
+
+
+def _auto_split_empaquetados(nombre):
+    """Detecta PDFs que traen TODOS los documentos en un solo archivo (ej:
+    'DOCUMENTOS SOLICITADOS ASESORIA.pdf'), los separa por documento y elimina el
+    original para que el protocolo los vuelva a juntar en el orden correcto."""
+    resultados = []
+    for a in fsvc.scan_archivos(nombre):
+        fn = a["nombre"]
+        if a.get("subfolder") not in ("", "99_otros") or not fn.lower().endswith(".pdf") or fsvc.es_combinado(fn):
+            continue
+        if not _PAT_EMPAQUETADO.search(fn):
+            continue
+        try:
+            res = fsvc.split_bundled(nombre, a["ruta"], delete_original=True)
+            if res.get("n_groups", 0) >= 2:
+                resultados.append({"archivo": fn, "grupos": res["n_groups"],
+                                   "paginas": res["n_pages"],
+                                   "escritos": [w["rel"] for w in res.get("written", [])]})
+        except Exception:
+            continue
+    return resultados
+
+
 async def _regen_combinado_bg(doc):
     try:
+        nombre = doc.get("nombre", "")
+        splits = await asyncio.to_thread(_auto_split_empaquetados, nombre)
+        for s in splits:
+            await db.alertas.insert_one({
+                "id": str(uuid.uuid4()), "tipo": "split_automatico",
+                "cliente": nombre, "folder_id": doc.get("id", ""),
+                "mensaje": (f"📄 {nombre}: '{s['archivo']}' venía con todo en un solo PDF "
+                            f"({s['paginas']} páginas). Se separó en {s['grupos']} documentos "
+                            "y se rearmó la carpeta según protocolo."),
+                "fecha": now_iso(), "leida": False})
         cr = doc.get("credit_request") or {}
         await asyncio.to_thread(fsvc.merge_protocol, doc.get("nombre", ""),
                                 cr.get("client_type") or "dependiente", True)
@@ -1760,7 +1797,16 @@ async def folder_merge_protocol(fid: str, payload: dict = None):
 
 @api.post("/clientes/folders/{fid}/split-bundled")
 async def folder_split_bundled(fid: str, payload: dict):
+    """Separa un PDF empaquetado en SEGUNDO PLANO (el OCR puede tardar >60s)."""
     doc = await _get_folder_doc(fid)
+    job_id = str(uuid.uuid4())
+    await db.bg_jobs.insert_one({"id": job_id, "tipo": "split_bundled",
+                                 "estado": "en_proceso", "inicio": now_iso()})
+    asyncio.create_task(_job_run(job_id, _split_bundled_run(doc, payload or {})))
+    return {"ok": True, "job_id": job_id, "estado": "en_proceso"}
+
+
+async def _split_bundled_run(doc, payload):
     try:
         res = await asyncio.to_thread(
             fsvc.split_bundled, doc.get("nombre", ""), payload.get("file_path", ""),
@@ -2638,6 +2684,38 @@ async def ac_reset_backoff(account: str = ""):
     return {"ok": True}
 
 
+from pymongo import MongoClient as _SyncMongoClient
+_sync_guard_db = None
+
+
+def _guard_db():
+    """Cliente Mongo síncrono para el BLINDAJE de mesa (usable dentro de hilos)."""
+    global _sync_guard_db
+    if _sync_guard_db is None:
+        _sync_guard_db = _SyncMongoClient(os.environ["MONGO_URL"])[os.environ["DB_NAME"]]
+    return _sync_guard_db
+
+
+def _mesa_guard_reservar(subject, cliente):
+    """BLINDAJE ANTIDUPLICADOS: reserva atómica del envío a mesa por asunto.
+    True = primera vez (se puede enviar). False = ya se envió antes → JAMÁS duplicar."""
+    key = _norm_texto(subject) or _norm_texto(cliente)
+    if not key:
+        return True
+    prev = _guard_db().mesa_enviados.find_one_and_update(
+        {"key": key},
+        {"$setOnInsert": {"key": key, "cliente": cliente, "subject": subject,
+                          "enviado_at": now_iso()}},
+        upsert=True)
+    return prev is None
+
+
+def _mesa_guard_liberar(subject, cliente):
+    key = _norm_texto(subject) or _norm_texto(cliente)
+    if key:
+        _guard_db().mesa_enviados.delete_one({"key": key})
+
+
 def _procesar_mesa(destino, cutoff_iso, ejecutivos=None, ya_enviados=None):
     """Lee correos de mesa, deja pag 1 en simulaciones, archiva y envia. (sync)
 
@@ -2721,12 +2799,17 @@ def _procesar_mesa(destino, cutoff_iso, ejecutivos=None, ya_enviados=None):
             "Estimado/a,<br><br>Adjuntamos el documento correspondiente a su operacion.<br><br>"
             "Saludos cordiales,<br>Central Mutuos")
         cuerpo_html = cuerpo.replace("\n", "<br>") if "<br>" not in cuerpo else cuerpo
+        # BLINDAJE: reserva atómica en BD — si este asunto ya se envió a mesa ALGUNA vez,
+        # se salta sin excepción (el flujo automático jamás reenvía).
+        if not _mesa_guard_reservar(r["subject"], r["cliente"]):
+            continue
         res = mail.send_mail(destino, r["subject"], encabezado + cuerpo_html,
                              r["adjuntos"], desde="principal")
         estado = "sent" if res.get("success") else "failed"
         if res.get("success"):
             enviados += 1
         else:
+            _mesa_guard_liberar(r["subject"], r["cliente"])
             errores.append(f"{r['cliente']}: {res.get('error')}")
         logs.append({
             "id": str(uuid.uuid4()),
@@ -7362,9 +7445,21 @@ async def proc_enviar_autocorreo(qid: str, payload: dict = None):
     </div>
     """
     asunto = f"[Gestion] {cliente} - {campos.get('proyecto_inmobiliario') or 'Credito Hipotecario'}"
+    # BLINDAJE: reenviar la misma gestión a mesa exige la clave de administrador
+    clave = (payload or {}).get("clave") or ""
+    key_guard = _norm_texto(asunto)
+    prev = await db.mesa_enviados.find_one({"key": key_guard})
+    if (prev or item.get("autocorreo_enviado")) and clave != CLAVE_FORZAR_CARPETA:
+        fecha_prev = str((prev or {}).get("enviado_at") or item.get("autocorreo_en") or "")[:16].replace("T", " ")
+        raise HTTPException(status_code=403, detail=(
+            f"La gestión de {cliente} ya se envió a Mesa{f' el {fecha_prev}' if fecha_prev else ''}. "
+            "Para reenviarla debes ingresar la clave de administrador."))
     res = await asyncio.to_thread(mail.send_mail, destino, asunto, cuerpo, adjuntos, "principal")
     if not res.get("success"):
         raise HTTPException(status_code=502, detail=res.get("error", "Error de envio"))
+    await db.mesa_enviados.update_one({"key": key_guard}, {"$set": {
+        "key": key_guard, "cliente": cliente, "subject": asunto,
+        "enviado_at": now_iso()}}, upsert=True)
     await db.proc_queue.update_one({"id": qid}, {"$set": {"autocorreo_enviado": True,
                                                           "autocorreo_a": destino, "autocorreo_en": now_iso()}})
     return {"success": True, "destino": destino, "adjunto": bool(adjuntos)}

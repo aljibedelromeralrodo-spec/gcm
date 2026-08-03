@@ -220,7 +220,19 @@ export default function EmailProcessingModule() {
       }
       load(); if (selected?.id === id) openDetail(id);
     } catch (e) {
-      alert("Error: " + (e.response?.data?.detail || e.message));
+      const det = e.response?.data?.detail || e.message;
+      if (e.response?.status === 403 && String(det).toLowerCase().includes("clave")) {
+        const clave = window.prompt(det + "\n\nIngresa la CLAVE de administrador para autorizar el REENVÍO:");
+        if (clave) {
+          try {
+            const r2 = await axios.post(`${API}/api/procesamiento/queue/${id}/enviar-autocorreo`, { clave });
+            alert(`✅ Autocorreo REENVIADO a ${r2.data.destino} (autorizado con clave)`);
+            load(); if (selected?.id === id) openDetail(id);
+          } catch (e2) { alert("Error: " + (e2.response?.data?.detail || e2.message)); }
+        }
+      } else {
+        alert("Error: " + det);
+      }
     } finally { setBusy(false); }
   };
 
