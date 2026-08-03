@@ -6412,7 +6412,7 @@ APROBACION_DEFAULTS = {
     "boton_texto": "DESEO CONTINUAR CON EL PROCESO DE ESCRITURACIÓN",
     "intro": ("Nos complace enormemente informarle que su crédito hipotecario ha sido APROBADO. "
               "Este es un gran paso hacia la casa propia y queremos acompañarlo en cada etapa del camino.\n\n"
-              "Adjunto encontrará su simulación ajustada y la carta de aprobación oficial con todos los "
+              "Adjunto encontrará su simulación y la carta de aprobación oficial con todos los "
               "detalles de su operación. Nuestro equipo ya está preparando los siguientes pasos para que "
               "el proceso de escrituración sea rápido, simple y sin complicaciones.\n\n"
               "Para avanzar, solo debe presionar el botón a continuación y un ejecutivo lo contactará de inmediato."),
@@ -6427,6 +6427,15 @@ def _tipo_pdf_aprobacion(nombre):
     if re.search(r"_cm\.pdf$|ajustad|simulad", low):
         return "simulacion_ajustada"
     return "otro"
+
+
+def _nombre_cliente_pdf(nombre_archivo):
+    """Nombre que ve el CLIENTE: sin 'ajustada' ni sufijos internos (_CM)."""
+    base, ext = os.path.splitext(nombre_archivo or "")
+    base = re.sub(r"ajustada?", "", base, flags=re.I)
+    base = re.sub(r"_cm$", "", base, flags=re.I)
+    base = re.sub(r"[_\s-]+$", "", base).strip()
+    return (base or "documento") + (ext or ".pdf")
 
 
 def _norm_texto(s):
@@ -6482,7 +6491,8 @@ async def aprobacion_archivos(cliente: str = ""):
             tipo = _tipo_pdf_aprobacion(p.name)
             archivos.append({"nombre": p.name, "origen": origen, "ruta": ruta,
                              "tipo": tipo, "seleccionado": tipo != "otro",
-                             "tamano": p.stat().st_size})
+                             "tamano": p.stat().st_size, "mtime": p.stat().st_mtime,
+                             "nombre_cliente": _nombre_cliente_pdf(p.name)})
 
         # 1) Carpeta exacta del archivo autocorreo
         dir_ac = STORAGE_DIR / _safe_name(cliente)
@@ -6521,9 +6531,24 @@ async def aprobacion_archivos(cliente: str = ""):
                 tipo = _tipo_pdf_aprobacion(a["nombre"])
                 if tipo == "otro":
                     continue
+                try:
+                    mt = fsvc.resolver_ruta(cliente, a["ruta"]).stat().st_mtime
+                except Exception:
+                    mt = 0
                 archivos.append({"nombre": a["nombre"], "origen": "clientes", "ruta": a["ruta"],
-                                 "tipo": tipo, "seleccionado": True, "tamano": a["tamano"]})
-    return {"archivos": archivos}
+                                 "tipo": tipo, "seleccionado": True, "tamano": a["tamano"],
+                                 "mtime": mt, "nombre_cliente": _nombre_cliente_pdf(a["nombre"])})
+    # REGLA: al cliente se le envían SOLO 2 archivos — la carta de aprobación y la
+    # simulación (los mismos del autocorreo). Se toma el MÁS RECIENTE de cada tipo.
+    finales = []
+    for tipo in ("carta_aprobacion", "simulacion_ajustada"):
+        cand = [a for a in archivos if a["tipo"] == tipo]
+        if cand:
+            cand.sort(key=lambda a: a.get("mtime", 0), reverse=True)
+            elegido = dict(cand[0])
+            elegido["seleccionado"] = True
+            finales.append(elegido)
+    return {"archivos": finales}
 
 
 @api.get("/aprobacion-cliente/plantilla")
@@ -6627,16 +6652,17 @@ async def aprobacion_enviar(payload: dict):
                 rutas.append(p)
         except (ValueError, OSError):
             continue
-    payload["_adjuntos_nombres"] = [p.name for p in rutas]
+    payload["_adjuntos_nombres"] = [_nombre_cliente_pdf(p.name) for p in rutas]
     cuerpo = _aprobacion_html(payload)
     if not payload.get("confirm"):
         return {"to": to, "subject": subject, "body": cuerpo,
-                "attachments": [p.name for p in rutas], "sender": _sender_por_rol("secundaria")}
+                "attachments": [_nombre_cliente_pdf(p.name) for p in rutas],
+                "sender": _sender_por_rol("secundaria")}
     if not to or "@" not in to:
         raise HTTPException(status_code=400, detail="Correo del cliente inválido")
     if not rutas:
         raise HTTPException(status_code=400, detail="Debe adjuntar al menos la simulación ajustada o la carta de aprobación")
-    adjuntos = [{"filename": p.name, "content_b64": _b64(p.read_bytes())} for p in rutas]
+    adjuntos = [{"filename": _nombre_cliente_pdf(p.name), "content_b64": _b64(p.read_bytes())} for p in rutas]
     res = await asyncio.to_thread(mail.send_mail, to, subject, cuerpo, adjuntos, "secundaria")
     if not res.get("success"):
         raise HTTPException(status_code=502, detail=res.get("error", "Error de envío"))
@@ -6648,10 +6674,28 @@ async def aprobacion_enviar(payload: dict):
                   "updated_at": now_iso()}}, upsert=True)
     await db.aprobacion_log.insert_one({
         "id": str(uuid.uuid4()), "nombre": nombre, "rut": payload.get("rut", ""),
-        "to": to, "adjuntos": [p.name for p in rutas],
+        "to": to, "adjuntos": [_nombre_cliente_pdf(p.name) for p in rutas],
         "enviado_en": now_iso(), "desde": res.get("desde", "")})
     return {"ok": True, "to": to, "subject": subject,
-            "attachments": [p.name for p in rutas], "sender": res.get("desde", "")}
+            "attachments": [_nombre_cliente_pdf(p.name) for p in rutas], "sender": res.get("desde", "")}
+
+
+@api.get("/aprobacion-cliente/preview-pdf")
+async def aprobacion_preview_pdf(ruta: str = "", origen: str = "autocorreo", cliente: str = ""):
+    """Previsualiza uno de los PDFs a enviar al cliente (para confirmar antes de enviar)."""
+    try:
+        if origen == "clientes":
+            p = fsvc.resolver_ruta(cliente, ruta)
+        else:
+            p = (STORAGE_DIR / ruta).resolve()
+            if not str(p).startswith(str(STORAGE_DIR.resolve())):
+                raise HTTPException(status_code=400, detail="Ruta inválida")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Ruta inválida")
+    if not p.exists() or p.suffix.lower() != ".pdf":
+        raise HTTPException(status_code=404, detail="Archivo no encontrado")
+    return FileResponse(str(p), media_type="application/pdf",
+                        filename=_nombre_cliente_pdf(p.name))
 
 
 @api.get("/aprobacion-cliente/log")

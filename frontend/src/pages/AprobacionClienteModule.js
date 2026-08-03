@@ -180,14 +180,24 @@ export default function AprobacionClienteModule({ onNavigate }) {
       {/* ADJUNTOS DETECTADOS */}
       <div style={card}>
         <h3 style={{ margin: "0 0 0.4rem", color: "var(--gold)", fontSize: "1.1rem" }}><i className="fa fa-paperclip" style={{ marginRight: "0.5rem" }} />PDFs del cliente ({seleccionados} seleccionados)</h3>
-        <p style={{ fontSize: "0.8rem", opacity: 0.6, margin: "0 0 0.8rem" }}>Detectados automáticamente desde el archivo del Autocorreo y la Carpeta del Cliente. La simulación ajustada y la carta de aprobación vienen pre-seleccionadas.</p>
+        <p style={{ fontSize: "0.8rem", opacity: 0.6, margin: "0 0 0.8rem" }}>Al cliente se envían <b>SOLO 2 archivos</b>: la carta de aprobación y la simulación (los mismos del autocorreo). El cliente no verá la palabra "ajustada". Usa "Ver PDF" para confirmar cada archivo antes de enviar.</p>
         {archivos.length === 0 ? (
-          <div style={{ opacity: 0.5, fontSize: "0.9rem", padding: "0.5rem 0" }} data-testid="aprobacion-sin-archivos">Seleccioná un cliente para ver sus PDFs ajustados y cartas.</div>
+          <div style={{ opacity: 0.5, fontSize: "0.9rem", padding: "0.5rem 0" }} data-testid="aprobacion-sin-archivos">Seleccioná un cliente para ver su carta de aprobación y simulación.</div>
         ) : archivos.map((a, i) => (
           <label key={i} data-testid={`aprobacion-archivo-${i}`} style={{ display: "flex", alignItems: "center", gap: "0.7rem", padding: "0.45rem 0.4rem", borderBottom: "1px solid rgba(255,255,255,0.05)", cursor: "pointer" }}>
             <input type="checkbox" checked={!!a.seleccionado} onChange={() => toggleArchivo(i)} />
-            <span style={{ flex: 1, fontSize: "0.88rem" }}>{a.nombre}</span>
-            <span style={{ fontSize: "0.72rem", padding: "0.12rem 0.5rem", borderRadius: "999px", background: a.tipo === "carta_aprobacion" ? "rgba(34,197,94,0.15)" : a.tipo === "simulacion_ajustada" ? "rgba(212,175,55,0.15)" : "rgba(255,255,255,0.08)", color: a.tipo === "carta_aprobacion" ? "#22c55e" : a.tipo === "simulacion_ajustada" ? "var(--gold)" : "#9aa3b5" }}>{TIPO_LABEL[a.tipo]}</span>
+            <span style={{ flex: 1, fontSize: "0.88rem" }}>
+              {a.nombre_cliente || a.nombre}
+              {a.nombre_cliente && a.nombre_cliente !== a.nombre && (
+                <span style={{ display: "block", fontSize: "0.7rem", opacity: 0.45 }}>archivo interno: {a.nombre}</span>
+              )}
+            </span>
+            <a data-testid={`aprobacion-ver-pdf-${i}`} href={`${API}/api/aprobacion-cliente/preview-pdf?ruta=${encodeURIComponent(a.ruta)}&origen=${a.origen}&cliente=${encodeURIComponent(nombre)}`}
+              target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
+              style={{ fontSize: "0.75rem", color: "#3b82f6", fontWeight: 700, textDecoration: "none", border: "1px solid #3b82f6", borderRadius: 6, padding: "0.15rem 0.55rem" }}>
+              <i className="fa fa-eye" style={{ marginRight: "0.3rem" }} />Ver PDF
+            </a>
+            <span style={{ fontSize: "0.72rem", padding: "0.12rem 0.5rem", borderRadius: "999px", background: a.tipo === "carta_aprobacion" ? "rgba(34,197,94,0.15)" : a.tipo === "simulacion_ajustada" ? "rgba(212,175,55,0.15)" : "rgba(255,255,255,0.08)", color: a.tipo === "carta_aprobacion" ? "#22c55e" : a.tipo === "simulacion_ajustada" ? "var(--gold)" : "#9aa3b5" }}>{a.tipo === "simulacion_ajustada" ? "Simulación" : TIPO_LABEL[a.tipo]}</span>
             <span style={{ fontSize: "0.72rem", opacity: 0.45 }}>{a.origen === "autocorreo" ? "Archivo Autocorreo" : "Carpeta Cliente"}</span>
           </label>
         ))}
