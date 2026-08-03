@@ -146,3 +146,10 @@
 - Nuevo search_email_headers_by_person() en email_service.py (rápido, tolerante a acentos).
 - Regex de Mongo insensible a tildes (_rx_acentos) para que "gonzalez" encuentre "González" en carpetas y cola.
 - Verificado con screenshot: carpeta Pedro González + 8 correos + 3 en cola sugeridos al escribir.
+
+## 2026-06 (sesión fork)
+- VERIFICADO visualmente el fix de Set Crédito para Claudia Zurita:
+  - Los 8 PDFs (SOLICITUD CREDITO, DPS, PEP, COBRANZA, CESANTÍA, DESIGNACIÓN MANDATARIO, DECL. ORIGEN FONDOS, DECL. JURADA ESTADO CIVIL) se listan correctamente (archivos leídos desde disco en /app/backend/storage/set_credito/).
+  - El modal "Nuevo contacto eCert" se autocompleta: Nombres=CLAUDIA ANDREA, Ap. Paterno=ZURITA, Ap. Materno=SOTO, RUN=16.005.374-7, correo=czurita.uchile@gmail.com (ambos campos).
+  - eCert/migrup conectado (Gerardo Nicolas Barrera).
+- Recordatorio entregado al usuario: usar "Deploy" para llevar cambios de Preview a Producción (bases de datos separadas).

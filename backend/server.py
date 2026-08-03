@@ -115,6 +115,8 @@ async def startup():
     asyncio.create_task(_task_blindada(_resumen_semanal_loop, "resumen_semanal"))
     asyncio.create_task(_task_blindada(_reporte_correos_loop, "reporte_correos"))
     asyncio.create_task(_task_blindada(_aprendizaje_loop, "aprendizaje_ia"))
+    asyncio.create_task(_task_blindada(_resumen_cierres_loop, "resumen_cierres"))
+    asyncio.create_task(_task_blindada(_setcred_auto_loop, "setcred_auto"))
 
 
 # ---------------------------------------------------------------------------
@@ -1216,12 +1218,16 @@ async def forzar_folder(payload: dict):
     # Buscar adjuntos directamente en el correo (IMAP) por nombre y por RUT
     imap_bajados = []
     try:
-        resultados = await asyncio.to_thread(mail.search_attachments_by_person, nombre or rut)
-        if rut and nombre:
-            try:
-                resultados += await asyncio.to_thread(mail.search_attachments_by_person, rut)
-            except Exception:
-                pass
+        mids = [m_ for m_ in (payload.get("message_ids") or []) if m_]
+        if mids:
+            resultados = await asyncio.to_thread(mail.fetch_attachments_by_message_ids, mids)
+        else:
+            resultados = await asyncio.to_thread(mail.search_attachments_by_person, nombre or rut)
+            if rut and nombre:
+                try:
+                    resultados += await asyncio.to_thread(mail.search_attachments_by_person, rut)
+                except Exception:
+                    pass
         if resultados and not (folder.get("source_email") or "").strip():
             remit = (resultados[-1].get("from") or resultados[0].get("from") or "").strip()
             if "@" in remit:
@@ -1318,12 +1324,16 @@ async def folder_enriquecer(fid: str, payload: dict = None):
     modo = ((payload or {}).get("modo") or "credito").lower()
     nombre = doc.get("nombre", "")
     rut = (doc.get("rut") or "").strip()
-    resultados = await asyncio.to_thread(mail.search_attachments_by_person, nombre)
-    if rut:
-        try:
-            resultados += await asyncio.to_thread(mail.search_attachments_by_person, rut)
-        except Exception:
-            pass
+    mids = [m_ for m_ in ((payload or {}).get("message_ids") or []) if m_]
+    if mids:
+        resultados = await asyncio.to_thread(mail.fetch_attachments_by_message_ids, mids)
+    else:
+        resultados = await asyncio.to_thread(mail.search_attachments_by_person, nombre)
+        if rut:
+            try:
+                resultados += await asyncio.to_thread(mail.search_attachments_by_person, rut)
+            except Exception:
+                pass
     if resultados and not (doc.get("source_email") or "").strip():
         remit = (resultados[-1].get("from") or resultados[0].get("from") or "").strip()
         if "@" in remit:
@@ -1337,7 +1347,7 @@ async def folder_enriquecer(fid: str, payload: dict = None):
                 continue
             cat = fsvc.cat_de_texto(fn)
             if modo == "estudio":
-                if cat not in ("estudio_titulo", "extras"):
+                if not mids and cat not in ("estudio_titulo", "extras"):
                     continue
                 rel = fsvc.guardar_archivo(nombre, fn, p["content_bytes"],
                                            subfolder="07_estudio_titulo")
@@ -4536,9 +4546,70 @@ async def cierres_list(solo_entrega_inmediata: bool = False, todos: bool = False
             "respuesta_final": c.get("respuesta_final", ""),
         })
     filas.sort(key=lambda x: ((x["ejecutivo_nombre"] or "zzz").lower(), x["nombre"]))
+    recientes = await db.cierres_log.find({}).sort("fecha", -1).limit(5).to_list(5)
     return {"cierres": filas,
+            "respuestas_recientes": [clean(r) for r in recientes],
             "ventana": {"desde": ventana_inicio.isoformat(),
                         "hasta_domingo": ultimo_domingo.isoformat()}}
+
+
+@api.get("/cierres/avisos")
+async def cierres_avisos():
+    """Respuestas de ejecutivos sin ver (para la campanita del panel)."""
+    docs = await db.cierres_log.find({"visto": {"$ne": True}}).sort("fecha", -1).limit(20).to_list(20)
+    return {"avisos": [clean(d) for d in docs], "total": len(docs)}
+
+
+@api.post("/cierres/avisos/marcar")
+async def cierres_avisos_marcar():
+    await db.cierres_log.update_many({"visto": {"$ne": True}}, {"$set": {"visto": True}})
+    return {"ok": True}
+
+
+async def _resumen_cierres_loop():
+    """Resumen semanal (domingo): clientes de Cierres que siguen sin responder."""
+    while True:
+        await asyncio.sleep(3600)
+        try:
+            hoy = datetime.now(timezone.utc)
+            if hoy.weekday() != 6:
+                continue
+            semana = hoy.strftime("%Y-%W")
+            cfg = await db.config.find_one({"_key": "resumen_cierres"})
+            if cfg and cfg.get("semana") == semana:
+                continue
+            data = await cierres_list(False, False)
+            pendientes = [c for c in data["cierres"]
+                          if c["toca_preguntar"] or (c["consultas"] and not c["respuesta_final"])]
+            if pendientes:
+                def estado_txt(c):
+                    base_t = f"{c['consultas']} consulta(s)"
+                    if c["dias_desde_consulta"] is None:
+                        return base_t + " · nunca consultado"
+                    return base_t + f" · última hace {c['dias_desde_consulta']} día(s)"
+                filas = "".join(
+                    f"<tr><td style='padding:6px 10px;border-bottom:1px solid #eee'><b>{c['nombre']}</b></td>"
+                    f"<td style='padding:6px 10px;border-bottom:1px solid #eee'>{c['ejecutivo_nombre'] or '—'} · {c['ejecutivo_email'] or 'sin correo'}</td>"
+                    f"<td style='padding:6px 10px;border-bottom:1px solid #eee'>{estado_txt(c)}</td></tr>"
+                    for c in pendientes)
+                inner = (f"<p>Resumen semanal del módulo <b>Cierres</b>: {len(pendientes)} cliente(s) "
+                         "con aprobación enviada siguen sin confirmación del ejecutivo.</p>"
+                         "<table style='border-collapse:collapse;font-size:13px'>"
+                         "<tr><th style='padding:6px 10px;text-align:left'>Cliente</th>"
+                         "<th style='padding:6px 10px;text-align:left'>Ejecutivo</th>"
+                         "<th style='padding:6px 10px;text-align:left'>Estado</th></tr>"
+                         f"{filas}</table>"
+                         "<p style='margin-top:14px'>Entrá al módulo Cierres para preguntar con un clic.</p>")
+                cuerpo = _marca_wrap(inner, "Cierres — Resumen semanal")
+                destino = _sender_por_rol("principal")
+                await asyncio.to_thread(mail.send_mail, destino,
+                                        f"Resumen semanal Cierres — {len(pendientes)} cliente(s) sin respuesta",
+                                        cuerpo, [], "principal")
+            await db.config.update_one({"_key": "resumen_cierres"},
+                                       {"$set": {"semana": semana, "enviado_en": now_iso()}}, upsert=True)
+        except Exception as e:
+            await db.system_log.insert_one({"id": str(uuid.uuid4()), "loop": "resumen_cierres",
+                                            "error": str(e)[:300], "fecha": now_iso()})
 
 
 @api.patch("/cierres/{fid}")
@@ -4580,7 +4651,7 @@ async def cierres_respuesta(token: str, r: str = ""):
         shutil.rmtree(fsvc.folder_dir(nombre), ignore_errors=True)
         await db.cierres_log.insert_one({"id": str(uuid.uuid4()), "nombre": nombre,
                                          "rut": doc.get("rut", ""), "respuesta": "no_continua",
-                                         "carpeta_borrada": True, "fecha": now_iso()})
+                                         "carpeta_borrada": True, "visto": False, "fecha": now_iso()})
         await db.folders.delete_one({"id": doc["id"]})
         return pagina("Respuesta registrada: el cliente NO continúa",
                       f"Gracias por informarnos. El registro de <b>{nombre}</b> fue retirado automáticamente de nuestro archivo.",
@@ -4591,7 +4662,7 @@ async def cierres_respuesta(token: str, r: str = ""):
         "cierre.token": None}})
     await db.cierres_log.insert_one({"id": str(uuid.uuid4()), "nombre": nombre,
                                      "rut": doc.get("rut", ""), "respuesta": "continua",
-                                     "carpeta_borrada": False, "fecha": now_iso()})
+                                     "carpeta_borrada": False, "visto": False, "fecha": now_iso()})
     return pagina("¡Excelente! El cliente continúa con nosotros",
                   f"Gracias por confirmar. Nos pondremos en contacto para formalizar el crédito de <b>{nombre}</b> y proseguir con la escrituración.",
                   "#0d9488")
@@ -6349,7 +6420,7 @@ def _detectar_datos_email(info):
     # "Fwd: Set Javier Perez" / "Set Aleidys Aponte y de su codeudor ok"
     limpio = re.sub(r"^\s*((re|fwd?|rv|fw)\s*:\s*)+", "", subject, flags=re.I)
     nombre = ""
-    m = re.search(r"\bset\s+(?:de\s+)?([A-Za-zÁÉÍÓÚÑáéíóúñ ]+?)(?:\s+y\s+(?:de\s+)?su\s+codeudor|\s+ok\b|\s*[\(\-]|$)",
+    m = re.search(r"\bset\s+(?:de\s+)?([A-Za-zÁÉÍÓÚÑáéíóúñ ]+?)(?:\s+y\s+(?:de\s+)?su\s+codeudor|\s+ok\b|\s+(?:sin|con)\s+subsidio\b|\s*[\(\-]|$)",
                   limpio, re.I)
     if m:
         nombre = m.group(1).strip().title()
@@ -6477,31 +6548,29 @@ async def setcred_emails_status(job_id: str):
     return clean(job)
 
 
-@api.post("/set-credito/import-from-email")
-async def setcred_import_from_email(payload: dict):
-    """Crea/actualiza un set desde un correo de Evaluaciones y baja sus adjuntos."""
-    email_id = payload.get("email_id", "")
-    nombre = (payload.get("nombre") or "").strip()
-    rut = (payload.get("rut") or "").strip()
-    es_codeudor = bool(payload.get("codeudor"))
-    filenames = payload.get("filenames")  # opcional: subconjunto
-    if not email_id or not nombre:
-        raise HTTPException(status_code=400, detail="Falta correo o nombre del cliente")
+async def _setcred_importar(email_id, nombre, rut="", email_cli="", filenames=None, es_codeudor=False):
+    """Crea/actualiza un set de crédito desde un correo de Evaluaciones y baja sus adjuntos."""
     atts = await asyncio.to_thread(mail.fetch_attachments_by_id, email_id, None)
     if filenames:
         atts = [a for a in atts if a["filename"] in filenames]
     atts = [a for a in atts if (a["filename"] or "").lower().endswith((".pdf", ".jpg", ".jpeg", ".png"))]
     if not atts:
         raise HTTPException(status_code=404, detail="El correo no tiene adjuntos válidos")
-    doc = await db.set_credito.find_one({"nombre": nombre})
+    toks = [t for t in _norm_texto(nombre).split() if len(t) > 2]
+    rx = ".*".join(_rx_acentos(t) for t in toks[:2]) if toks else re.escape(nombre)
+    doc = await db.set_credito.find_one({"nombre": {"$regex": rx, "$options": "i"}})
     if not doc:
+        fdoc = await db.folders.find_one({"nombre": {"$regex": rx, "$options": "i"}})
+        df = (fdoc or {}).get("datos_financieros") or {}
+        rut = rut or (fdoc or {}).get("rut", "")
+        email_cli = email_cli or df.get("email") or df.get("email_cliente") or ""
         doc = {"id": str(uuid.uuid4()), "nombre": nombre, "rut": rut,
-               "email": payload.get("email", ""), "created_at": now_iso(),
+               "email": email_cli, "created_at": now_iso(),
                "origen": "evaluaciones", "firmas": []}
         await db.set_credito.insert_one(dict(doc))
     elif rut and not doc.get("rut"):
         await db.set_credito.update_one({"id": doc["id"]}, {"$set": {"rut": rut}})
-    base_dir = _set_dir(nombre)
+    base_dir = _set_dir(doc["nombre"])
     guardados = []
     for a in atts:
         raw, fn = a["content_bytes"], a["filename"]
@@ -6513,9 +6582,54 @@ async def setcred_import_from_email(payload: dict):
         dest = base_dir / ("codeudor" if cod else "")
         dest.mkdir(parents=True, exist_ok=True)
         (dest / fsvc.safe_name(fn)).write_bytes(raw)
-        guardados.append((f"codeudor/" if cod else "") + fsvc.safe_name(fn))
-    return {"ok": True, "set_id": doc["id"], "nombre": nombre,
-            "guardados": guardados}
+        guardados.append(("codeudor/" if cod else "") + fsvc.safe_name(fn))
+    return {"ok": True, "set_id": doc["id"], "nombre": doc["nombre"], "guardados": guardados}
+
+
+async def _setcred_auto_loop():
+    """Descarga AUTOMÁTICA de sets de crédito: revisa cada 10 min los correos de
+    evaluacionesmutuos@gmail.com y baja los adjuntos al set del cliente al tiro."""
+    await asyncio.sleep(90)
+    while True:
+        try:
+            correos = await asyncio.to_thread(mail.fetch_emails_from_sender,
+                                              SETCRED_SENDER_DEFAULT, 10)
+            for c in correos:
+                if await db.setcred_procesados.find_one({"email_id": c["id"]}):
+                    continue
+                datos = _detectar_datos_email(c)
+                nombre = (datos.get("nombre") or "").strip()
+                atts = [a for a in c.get("attachments", [])
+                        if (a.get("filename") or "").lower().endswith((".pdf", ".jpg", ".jpeg", ".png"))]
+                reg = {"email_id": c["id"], "subject": (c.get("subject") or "")[:100],
+                       "fecha": now_iso()}
+                if not nombre or not atts:
+                    reg["motivo"] = "sin nombre detectado" if not nombre else "sin adjuntos"
+                    await db.setcred_procesados.insert_one(reg)
+                    continue
+                try:
+                    r = await _setcred_importar(c["id"], nombre, datos.get("rut", ""),
+                                                datos.get("email", ""))
+                    reg.update({"nombre": nombre, "guardados": r["guardados"], "auto": True})
+                except Exception as e:
+                    reg["error"] = str(e)[:200]
+                await db.setcred_procesados.insert_one(reg)
+        except Exception as e:
+            await db.system_log.insert_one({"id": str(uuid.uuid4()), "loop": "setcred_auto",
+                                            "error": str(e)[:300], "fecha": now_iso()})
+        await asyncio.sleep(600)
+
+
+@api.post("/set-credito/import-from-email")
+async def setcred_import_from_email(payload: dict):
+    """Crea/actualiza un set desde un correo de Evaluaciones y baja sus adjuntos."""
+    email_id = payload.get("email_id", "")
+    nombre = (payload.get("nombre") or "").strip()
+    if not email_id or not nombre:
+        raise HTTPException(status_code=400, detail="Falta correo o nombre del cliente")
+    return await _setcred_importar(email_id, nombre, (payload.get("rut") or "").strip(),
+                                   payload.get("email", ""), payload.get("filenames"),
+                                   bool(payload.get("codeudor")))
 
 
 @api.post("/set-credito/sets/{sid}/save-from-email")

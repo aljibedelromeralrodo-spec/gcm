@@ -64,6 +64,7 @@ function MainApp() {
   const [whatsappStatus, setWhatsappStatus] = useState(null);
   const [emailNotif, setEmailNotif] = useState(0);
   const [carpetaAlerts, setCarpetaAlerts] = useState(0);
+  const [cierresAvisos, setCierresAvisos] = useState(0);
   const [showSearch, setShowSearch] = useState(false);
   const [showTour, setShowTour] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -100,10 +101,14 @@ function MainApp() {
     axios.get(`${API_URL}/api/valor-uf`).then(r => setValorUF(r.data.valor_uf)).catch(() => {});
     axios.get(`${API_URL}/api/whatsapp/status`).then(r => setWhatsappStatus(r.data)).catch(() => {});
     axios.get(`${API_URL}/api/central/email-summary`).then(r => setEmailNotif(r.data?.total || 0)).catch(() => {});
-    const fetchAlerts = () =>
+    const fetchAlerts = () => {
       axios.get(`${API_URL}/api/admin/alertas`)
         .then(r => setCarpetaAlerts((r.data?.alertas || []).filter(a => !a.leida).length))
         .catch(() => {});
+      axios.get(`${API_URL}/api/cierres/avisos`)
+        .then(r => setCierresAvisos(r.data?.total || 0))
+        .catch(() => {});
+    };
     fetchAlerts();
     const t = setInterval(fetchAlerts, 60000);
     return () => clearInterval(t);
@@ -196,6 +201,14 @@ function MainApp() {
               <button className="topbar-notif-btn" onClick={() => setActiveModule('clientes')} data-testid="topbar-carpeta-alert" title="Carpetas listas para enviar a mesa" style={{ color: "#22c55e" }}>
                 <i className="fa fa-folder-open"></i>
                 <span className="topbar-notif-badge" style={{ background: "#22c55e" }}>{carpetaAlerts}</span>
+              </button>
+            )}
+            {cierresAvisos > 0 && (
+              <button className="topbar-notif-btn" data-testid="topbar-cierres-aviso" title="Respuestas de ejecutivos en Cierres"
+                onClick={() => { setActiveModule('cierres'); axios.post(`${API_URL}/api/cierres/avisos/marcar`).then(() => setCierresAvisos(0)).catch(() => {}); }}
+                style={{ color: "#0d9488" }}>
+                <i className="fa fa-handshake-o"></i>
+                <span className="topbar-notif-badge" style={{ background: "#0d9488" }}>{cierresAvisos}</span>
               </button>
             )}
             {emailNotif > 0 && (

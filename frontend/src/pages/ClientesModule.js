@@ -612,6 +612,16 @@ export default function ClientesModule({ onNavigate }) {
     }
   };
 
+  const buscarCorreosEstudio = async (m) => {
+    setEstudioModal(prev => ({ ...prev, buscandoCorreos: true }));
+    try {
+      const r = await axios.get(`${API}/api/clientes/forzar/sugerencias`, { params: { q: m.folder.nombre }, timeout: 60000 });
+      setEstudioModal(prev => ({ ...prev, buscandoCorreos: false, correosSug: (r.data.correos || []).map(c => ({ ...c, sel: false })) }));
+    } catch (e) {
+      setEstudioModal(prev => ({ ...prev, buscandoCorreos: false, msg: "Error buscando correos: " + (e.response?.data?.detail || e.message) }));
+    }
+  };
+
   const openEscritura = async (f) => {
     try {
       const n = await axios.get(`${API}/api/escritura/notarias`);
@@ -1345,10 +1355,10 @@ export default function ClientesModule({ onNavigate }) {
     } catch (e) { alert("Error: " + (e.response?.data?.detail || e.message)); }
   };
 
-  const enriquecerCarpeta = async (f, modo) => {
+  const enriquecerCarpeta = async (f, modo, messageIds) => {
     setEnriching(f.id + modo);
     try {
-      const r = await axios.post(`${API}/api/clientes/folders/${f.id}/enriquecer`, { modo }, { timeout: 180000 });
+      const r = await axios.post(`${API}/api/clientes/folders/${f.id}/enriquecer`, { modo, message_ids: messageIds || [] }, { timeout: 180000 });
       const nuevos = r.data.archivos_nuevos || [];
       const lista = nuevos.map(a => `• ${a.archivo}`).join("\n");
       alert(`🔎 Enriquecer archivos — ${modo === "estudio" ? "Estudio de Título" : "Solicitud de Crédito"}\n\nCorreos revisados: ${r.data.correos_revisados}\nArchivos nuevos: ${nuevos.length}${lista ? "\n\n" + lista : "\n\n(No se encontraron documentos nuevos en el correo)"}`);
@@ -1379,8 +1389,9 @@ export default function ClientesModule({ onNavigate }) {
     const clave = window.prompt("Ingresa la CLAVE de administrador:");
     if (!clave) return;
     setForzarModal(prev => ({ ...prev, forzando: true, msg: "" }));
+    const mids = ((m.sug || {}).correos || []).filter(c => c.sel && c.message_id).map(c => c.message_id);
     try {
-      const r = await axios.post(`${API}/api/clientes/folders/forzar`, { nombre: m.nombre.trim(), rut: m.rut.trim(), clave }, { timeout: 300000 });
+      const r = await axios.post(`${API}/api/clientes/folders/forzar`, { nombre: m.nombre.trim(), rut: m.rut.trim(), clave, message_ids: mids }, { timeout: 300000 });
       const imap = r.data.archivos_imap || [];
       const ver = r.data.verificacion_cedula;
       setForzarModal(prev => ({ ...prev, forzando: false,
@@ -3372,8 +3383,14 @@ export default function ClientesModule({ onNavigate }) {
                   )}
                   {(m.sug.correos || []).length > 0 && (
                     <div style={{ background: "rgba(6,182,212,0.06)", border: "1px dashed rgba(6,182,212,0.4)", borderRadius: 8, padding: "0.6rem 0.8rem" }}>
-                      <div style={{ fontSize: 11, fontWeight: 800, color: "#22d3ee", marginBottom: 4 }}>📧 CORREOS EN EL BUZÓN ({m.sug.correos.length})</div>
-                      {m.sug.correos.map((c, i) => <div key={i} style={{ fontSize: 12, marginBottom: 3 }}>• <b>{(c.subject || "").slice(0, 60)}</b><br /><span style={{ opacity: 0.6, fontSize: 11 }}>{(c.from || "").slice(0, 50)} · {(c.date || "").slice(0, 22)}</span></div>)}
+                      <div style={{ fontSize: 11, fontWeight: 800, color: "#22d3ee", marginBottom: 4 }}>📧 CORREOS EN EL BUZÓN ({m.sug.correos.length}) — marcá uno o varios para descargar exactamente esos</div>
+                      {m.sug.correos.map((c, i) => (
+                        <label key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 12, marginBottom: 4, cursor: c.message_id ? "pointer" : "default" }}>
+                          {c.message_id && <input type="checkbox" data-testid={`forzar-correo-sel-${i}`} checked={!!c.sel}
+                            onChange={() => setForzarModal(prev => ({ ...prev, sug: { ...prev.sug, correos: prev.sug.correos.map((x, j) => j === i ? { ...x, sel: !x.sel } : x) } }))} />}
+                          <span>• <b>{(c.subject || "").slice(0, 60)}</b><br /><span style={{ opacity: 0.6, fontSize: 11 }}>{(c.from || "").slice(0, 50)} · {(c.date || "").slice(0, 22)}</span></span>
+                        </label>
+                      ))}
                     </div>
                   )}
                   {(m.sug.cola || []).length > 0 && (

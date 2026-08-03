@@ -456,7 +456,7 @@ def search_email_headers_by_person(person_name, limit=10):
             m.select("INBOX", readonly=True)
             ids = _buscar_ids_persona(m, tokens, person_name)[-40:]
             for num in reversed(ids):
-                typ, hd = m.fetch(num, "(BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE)])")
+                typ, hd = m.fetch(num, "(BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE MESSAGE-ID)])")
                 if not hd or not isinstance(hd[0], tuple):
                     continue
                 hmsg = email.message_from_bytes(hd[0][1])
@@ -465,7 +465,8 @@ def search_email_headers_by_person(person_name, limit=10):
                     continue
                 out.append({"subject": _dec(hmsg.get("Subject")),
                             "from": _dec(hmsg.get("From")),
-                            "date": hmsg.get("Date", ""), "cuenta": acc["user"]})
+                            "date": hmsg.get("Date", ""), "cuenta": acc["user"],
+                            "message_id": (hmsg.get("Message-ID") or "").strip()})
                 if len(out) >= limit:
                     break
             m.logout()
@@ -530,6 +531,43 @@ def search_attachments_by_person(person_name, limit=40):
         except Exception:
             continue
     return exactos if exactos else parciales
+
+
+def fetch_attachments_by_message_ids(message_ids):
+    """Baja los correos exactos (por Message-ID) con sus adjuntos."""
+    CAPTURA_EXT = (".pdf", ".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp")
+    pendientes = {m.strip() for m in (message_ids or []) if m and m.strip()}
+    out = []
+    for acc in ACCOUNTS:
+        if not pendientes:
+            break
+        try:
+            m = _connect(acc)
+            m.select("INBOX", readonly=True)
+            encontrados = set()
+            for mid in list(pendientes):
+                try:
+                    typ, data = m.search(None, "HEADER", "Message-ID", mid)
+                except Exception:
+                    continue
+                nums = data[0].split() if typ == "OK" and data and data[0] else []
+                if not nums:
+                    continue
+                typ, msgdata = m.fetch(nums[-1], "(BODY.PEEK[])")
+                if not msgdata or not isinstance(msgdata[0], tuple):
+                    continue
+                info = _parse_full_message(email.message_from_bytes(msgdata[0][1]), with_bytes=True)
+                pdfs = [{"filename": a["filename"], "content_bytes": a["content_bytes"]}
+                        for a in info["attachments"]
+                        if (a["filename"] or "").lower().endswith(CAPTURA_EXT) and a.get("content_bytes")]
+                out.append({"from": info["from"], "subject": info["subject"],
+                            "date": info["date"], "body": info["body"], "pdfs": pdfs})
+                encontrados.add(mid)
+            pendientes -= encontrados
+            m.logout()
+        except Exception:
+            continue
+    return out
 
 
 def _sent_folder(m):
