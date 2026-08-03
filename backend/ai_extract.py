@@ -129,6 +129,56 @@ async def extraer_datos_gastos(texto):
     return base
 
 
+async def analizar_flujo_comercial(stats, aprendizajes_previos, notas_usuario):
+    """Analiza el flujo comercial real de Central Mutuos y aprende de él.
+    PROHIBIDO inventar métricas: solo usa los datos entregados."""
+    base = {"resumen": "", "aprendizajes": [], "cuellos_botella": [], "mejoras": [], "metodo": "sin_ia"}
+    key = os.environ.get("EMERGENT_LLM_KEY", "")
+    if not key:
+        return base
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        system = (
+            "Eres el cerebro de aprendizaje continuo de Central Mutuos, una mutuaria chilena de "
+            "créditos hipotecarios. Su círculo comercial es: ingreso de solicitud por correo → "
+            "carpeta del cliente con documentos → envío a mesa → aprobación → tasación → "
+            "estudio de título (etapa 1 solicitud de documentos, etapa 2 envío al abogado, reparos) → "
+            "gastos operacionales → escrituración → cierre con el ejecutivo/inmobiliaria. "
+            "Recibes métricas REALES del sistema, tus aprendizajes anteriores y notas del dueño. "
+            "Aprende al máximo: detecta patrones, cuellos de botella y mejoras concretas del flujo "
+            "de información comercial. REGLA INVIOLABLE: prohibido inventar datos o métricas que no "
+            "estén en lo entregado. Responde SOLO un JSON válido con: "
+            "resumen (2-3 frases del estado del flujo), "
+            "aprendizajes (lista de strings, patrones aprendidos de los datos), "
+            "cuellos_botella (lista de strings), "
+            "mejoras (lista de objetos {titulo, detalle, prioridad} con prioridad alta|media|baja, "
+            "solo mejoras del flujo comercial existente, nada de WhatsApp ni integraciones nuevas)."
+        )
+        contexto = json.dumps({
+            "metricas_actuales": stats,
+            "aprendizajes_anteriores": aprendizajes_previos[:3],
+            "notas_del_dueno": notas_usuario[:10],
+        }, ensure_ascii=False)
+        chat = LlmChat(api_key=key, session_id=f"aprendizaje-{uuid.uuid4()}",
+                       system_message=system).with_model("openai", "gpt-5.4-mini")
+        resp = await chat.send_message(UserMessage(text=contexto[:14000]))
+        raw = resp if isinstance(resp, str) else str(resp)
+        mj = re.search(r"\{.*\}", raw, re.S)
+        if mj:
+            data = json.loads(mj.group(0))
+            base["resumen"] = str(data.get("resumen", ""))[:600]
+            base["aprendizajes"] = [str(x)[:300] for x in (data.get("aprendizajes") or [])][:8]
+            base["cuellos_botella"] = [str(x)[:300] for x in (data.get("cuellos_botella") or [])][:6]
+            base["mejoras"] = [{"titulo": str(m.get("titulo", ""))[:120],
+                                "detalle": str(m.get("detalle", ""))[:400],
+                                "prioridad": str(m.get("prioridad", "media"))[:10]}
+                               for m in (data.get("mejoras") or []) if isinstance(m, dict)][:8]
+            base["metodo"] = "ia"
+    except Exception as e:
+        base["error"] = str(e)[:200]
+    return base
+
+
 async def clasificar_y_extraer(texto, filename=""):
     """Devuelve dict con tipo_documento, nombre_cliente, rut y campos de gestion."""
     texto = (texto or "")[:6000]

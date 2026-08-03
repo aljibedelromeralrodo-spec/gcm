@@ -514,12 +514,14 @@ export default function ClientesModule({ onNavigate }) {
       destinatarios: defaults.destinatarios.join(", "),
       cc: (f.estudio_titulo_cc || []).join(", "),
       tipo_vivienda: "nueva",
+      docs_usada: defaults.docs_usada || [],
+      docs_nueva: defaults.docs_nueva || [],
       inmobiliaria: f.datos_financieros?.inmobiliaria || prefill.inmobiliaria || "",
       inmo_contacto_nombre: "", inmo_contacto_email: "",
       vendedor_nombre: prefill.vendedor_nombre || "", vendedor_email: prefill.vendedor_email || "", vendedor_telefono: prefill.vendedor_telefono || "",
       intro: "",
       direccion: f.datos_financieros?.direccion || prefill.direccion || "", observaciones: "",
-      docs_texto: (defaults.docs_usada || []).join("\n"),
+      docs_texto: (defaults.docs_nueva || []).join("\n"),
       preview: null, loading: false, msg: "",
     });
   };
@@ -1394,9 +1396,9 @@ export default function ClientesModule({ onNavigate }) {
                 <i className="fa fa-plus"></i> Nueva Carpeta
               </button>
               <button className="docs-btn secondary" data-testid="btn-forzar-folder" onClick={async () => {
-                const nombre = window.prompt("FORZAR CARPETA MANUAL\n\nNombre del cliente (el sistema buscará todos sus correos, datos y archivos adjuntos):");
+                const nombre = window.prompt("FORZAR CARPETA MANUAL\n\nPodés buscar por NOMBRE, por RUT o por ambos.\n\n1️⃣ Nombre del cliente (dejalo vacío si vas a buscar solo por RUT):");
                 if (nombre === null) return;
-                const rut = window.prompt("RUT del cliente (opcional — también se buscará por RUT en asuntos y cuerpos de correo):") || "";
+                const rut = window.prompt("2️⃣ RUT del cliente (ej: 12.345.678-9)\n\nSe buscará el RUT en asuntos, cuerpos de correo y datos extraídos, con o sin puntos. Dejalo vacío si buscás solo por nombre:") || "";
                 if (!nombre && !rut.trim()) return;
                 const clave = window.prompt("Ingresa la CLAVE de administrador:");
                 if (!clave) return;

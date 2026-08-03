@@ -114,6 +114,7 @@ async def startup():
     asyncio.create_task(_task_blindada(_actividades_terminadas_loop, "actividades_terminadas"))
     asyncio.create_task(_task_blindada(_resumen_semanal_loop, "resumen_semanal"))
     asyncio.create_task(_task_blindada(_reporte_correos_loop, "reporte_correos"))
+    asyncio.create_task(_task_blindada(_aprendizaje_loop, "aprendizaje_ia"))
 
 
 # ---------------------------------------------------------------------------
@@ -4401,6 +4402,281 @@ async def gastos_prefill(nombre: str = ""):
             continue
     datos = await ai_extract.extraer_datos_gastos("\n\n".join(textos))
     return {"ok": True, "prefill": datos, "fuentes": len(textos)}
+
+
+# ==================== MÓDULO CIERRES ====================
+
+@api.get("/cierres")
+async def cierres_list(solo_entrega_inmediata: bool = False, todos: bool = False):
+    """Listado de aprobaciones enviadas para consultar al ejecutivo si el cliente
+    continúa el crédito. Ventana inicial: desde el último domingo, un mes hacia atrás
+    (barrido mensual por única vez); luego la cadencia es cada 3 días por cliente."""
+    hoy = datetime.now(timezone.utc)
+    ultimo_domingo = (hoy - timedelta(days=(hoy.weekday() + 1) % 7)).replace(
+        hour=23, minute=59, second=59, microsecond=0)
+    ventana_inicio = ultimo_domingo - timedelta(days=31)
+    docs = await db.folders.find({}).to_list(500)
+    filas = []
+    for d in docs:
+        resp = await _mesa_respuesta_folder(d)
+        if resp != "aprobada":
+            continue
+        c = d.get("cierre") or {}
+        if solo_entrega_inmediata and not c.get("entrega_inmediata", True):
+            continue
+        fecha_apro = d.get("aprobacion_enviada_at") or d.get("created_at")
+        if not todos and not int(c.get("consultas") or 0):
+            try:
+                if datetime.fromisoformat(str(fecha_apro)) < ventana_inicio:
+                    continue
+            except Exception:
+                pass
+        ultima = c.get("ultima_consulta_at")
+        dias = None
+        if ultima:
+            try:
+                dias = (datetime.now(timezone.utc) - datetime.fromisoformat(ultima)).days
+            except Exception:
+                dias = None
+        filas.append({
+            "id": d["id"], "nombre": d.get("nombre", ""), "rut": d.get("rut", ""),
+            "ejecutivo_nombre": c.get("ejecutivo_nombre", ""),
+            "ejecutivo_email": c.get("ejecutivo_email", ""),
+            "inmobiliaria": c.get("inmobiliaria") or (d.get("datos_financieros") or {}).get("inmobiliaria", ""),
+            "proyecto": c.get("proyecto", ""),
+            "entrega_inmediata": c.get("entrega_inmediata", True),
+            "fecha_aprobacion": fecha_apro,
+            "ultima_consulta_at": ultima,
+            "dias_desde_consulta": dias,
+            "toca_preguntar": (ultima is None) or (dias is not None and dias >= 3),
+            "consultas": int(c.get("consultas") or 0),
+            "respuesta_final": c.get("respuesta_final", ""),
+        })
+    filas.sort(key=lambda x: ((x["ejecutivo_nombre"] or "zzz").lower(), x["nombre"]))
+    return {"cierres": filas,
+            "ventana": {"desde": ventana_inicio.isoformat(),
+                        "hasta_domingo": ultimo_domingo.isoformat()}}
+
+
+@api.patch("/cierres/{fid}")
+async def cierres_update(fid: str, payload: dict):
+    await _get_folder_doc(fid)
+    permitidos = {"ejecutivo_nombre", "ejecutivo_email", "proyecto", "inmobiliaria",
+                  "entrega_inmediata", "respuesta_final"}
+    sets = {f"cierre.{k}": v for k, v in (payload or {}).items() if k in permitidos}
+    if not sets:
+        raise HTTPException(status_code=400, detail="Nada que actualizar")
+    await db.folders.update_one({"id": fid}, {"$set": sets})
+    return {"ok": True}
+
+
+@api.get("/cierres/respuesta/{token}")
+async def cierres_respuesta(token: str, r: str = ""):
+    """Enlace público que pulsa el ejecutivo desde el correo de Cierres.
+    r=si → marca que el cliente continúa. r=no → marca que NO continúa y
+    BORRA automáticamente la carpeta del archivo."""
+    from fastapi.responses import HTMLResponse
+    doc = await db.folders.find_one({"cierre.token": token})
+
+    def pagina(titulo, detalle, color):
+        return HTMLResponse(f"""<!doctype html><html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Central Mutuos</title></head>
+<body style="margin:0;font-family:Arial,sans-serif;background:#0f172a;color:#e2e8f0;display:flex;align-items:center;justify-content:center;min-height:100vh">
+<div style="max-width:520px;padding:40px;text-align:center">
+<div style="font-size:22px;font-weight:bold;color:#d4af37;margin-bottom:18px">CENTRAL MUTUOS</div>
+<div style="font-size:44px;margin-bottom:14px">{'✅' if color=='#0d9488' else ('❌' if color=='#b91c1c' else 'ℹ️')}</div>
+<h2 style="color:{color};margin:0 0 12px">{titulo}</h2>
+<p style="color:#94a3b8;font-size:15px;line-height:1.6">{detalle}</p>
+</div></body></html>""")
+
+    if not doc:
+        return pagina("Enlace no válido o ya utilizado", "Esta consulta ya fue respondida o el enlace expiró. Gracias.", "#64748b")
+    nombre = doc.get("nombre", "")
+    if r == "no":
+        import shutil
+        shutil.rmtree(fsvc.folder_dir(nombre), ignore_errors=True)
+        await db.cierres_log.insert_one({"id": str(uuid.uuid4()), "nombre": nombre,
+                                         "rut": doc.get("rut", ""), "respuesta": "no_continua",
+                                         "carpeta_borrada": True, "fecha": now_iso()})
+        await db.folders.delete_one({"id": doc["id"]})
+        return pagina("Respuesta registrada: el cliente NO continúa",
+                      f"Gracias por informarnos. El registro de <b>{nombre}</b> fue retirado automáticamente de nuestro archivo.",
+                      "#b91c1c")
+    await db.folders.update_one({"id": doc["id"]}, {"$set": {
+        "cierre.respuesta_final": "continua",
+        "cierre.respuesta_at": now_iso(),
+        "cierre.token": None}})
+    await db.cierres_log.insert_one({"id": str(uuid.uuid4()), "nombre": nombre,
+                                     "rut": doc.get("rut", ""), "respuesta": "continua",
+                                     "carpeta_borrada": False, "fecha": now_iso()})
+    return pagina("¡Excelente! El cliente continúa con nosotros",
+                  f"Gracias por confirmar. Nos pondremos en contacto para formalizar el crédito de <b>{nombre}</b> y proseguir con la escrituración.",
+                  "#0d9488")
+
+
+@api.post("/cierres/{fid}/consultar")
+async def cierres_consultar(fid: str, payload: dict = None, request: Request = None):
+    """Correo cordial (envío manual, botón por cliente) preguntando al ejecutivo
+    si el cliente continúa el crédito con nosotros."""
+    payload = payload or {}
+    doc = await _get_folder_doc(fid)
+    c = doc.get("cierre") or {}
+    ejecutivo = (payload.get("ejecutivo_nombre") or c.get("ejecutivo_nombre") or "").strip()
+    correo = (payload.get("ejecutivo_email") or c.get("ejecutivo_email") or "").strip()
+    proyecto = (payload.get("proyecto") or c.get("proyecto") or "").strip()
+    if "@" not in correo:
+        raise HTTPException(status_code=400,
+                            detail="Falta el correo del ejecutivo — complétalo en la fila antes de enviar")
+    nombre = doc.get("nombre", "")
+    sender = _sender_por_rol("secundaria")
+    subject = f"Consulta estado de cliente // {nombre}" + (f" // {proyecto}" if proyecto else "")
+    entrega = c.get("entrega_inmediata", True)
+    token = str(uuid.uuid4())
+    base = ""
+    try:
+        base = (request.headers.get("origin")
+                or f"https://{request.headers.get('x-forwarded-host') or request.headers.get('host')}")
+    except Exception:
+        base = ""
+    url_si = f"{base}/api/cierres/respuesta/{token}?r=si"
+    url_no = f"{base}/api/cierres/respuesta/{token}?r=no"
+    inner = f"""
+      <p>Estimado/a {ejecutivo or 'ejecutivo/a'},</p>
+      <p>Junto con saludar, quisiera saber si el cliente <b>{nombre}</b>{f", del proyecto <b>{proyecto}</b>" if proyecto else ""}{", con entrega inmediata" if entrega else ""},
+      finalmente va a continuar el proceso de crédito con nosotros.</p>
+      <p>Favor informarnos para proseguir con el proceso de escrituración. Puede responder con un solo clic:</p>
+      <p style="margin:22px 0 10px">
+        <a href="{url_si}"
+           style="background:#0d9488;color:#ffffff;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:bold;display:inline-block">
+           ✅ Sí, el cliente continúa con ustedes — contáctenme para formalizar el crédito
+        </a>
+      </p>
+      <p style="margin:0 0 22px">
+        <a href="{url_no}"
+           style="background:#b91c1c;color:#ffffff;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:bold;display:inline-block">
+           ❌ No, el cliente no continuará el crédito con ustedes
+        </a>
+      </p>
+      <p style="color:#777;font-size:12px">Si marca que el cliente no continúa, su registro se retirará automáticamente de nuestro archivo.</p>
+      <p style="margin-top:16px;color:#555">Saludos cordiales,</p>"""
+    cuerpo = _marca_wrap(inner, "Cierres — Consulta de continuidad de crédito")
+    if not payload.get("confirm"):
+        return {"to": correo, "subject": subject, "body": cuerpo, "sender": sender}
+    res = await asyncio.to_thread(mail.send_mail, correo, subject, cuerpo, [], "secundaria")
+    if not res.get("success"):
+        raise HTTPException(status_code=502, detail=res.get("error", "Error de envío"))
+    await db.folders.update_one({"id": fid}, {
+        "$set": {"cierre.ultima_consulta_at": now_iso(),
+                 "cierre.ejecutivo_nombre": ejecutivo,
+                 "cierre.ejecutivo_email": correo,
+                 "cierre.proyecto": proyecto,
+                 "cierre.token": token,
+                 "cierre.respuesta_final": ""},
+        "$inc": {"cierre.consultas": 1}})
+    return {"ok": True, "to": correo, "subject": subject}
+
+
+# ==================== APRENDIZAJE IA (flujo comercial) ====================
+
+async def _stats_flujo_comercial():
+    """Métricas REALES del círculo comercial para que la IA aprenda (sin inventar)."""
+    folders = await db.folders.find({}).to_list(500)
+    stats_mesa = await _stats_mesa()
+    s = {"total_carpetas": len(folders), "aprobadas_mesa": 0, "en_escrituracion": 0,
+         "tasaciones_solicitadas": 0, "estudios_solicitados": 0,
+         "estudios_etapa2_enviados": 0, "reparos_pendientes": 0, "reparos_aceptados": 0,
+         "cierres_consultados": 0, "cierres_confirmados_continua": 0,
+         "carpetas_sin_rut": 0, "carpetas_prob_0": 0, "gastos_enviados": 0,
+         "docs_faltantes_frecuentes": {}}
+    for d in folders:
+        try:
+            if await _mesa_respuesta_folder(d) == "aprobada":
+                s["aprobadas_mesa"] += 1
+        except Exception:
+            pass
+        if d.get("is_escrituracion"):
+            s["en_escrituracion"] += 1
+        if d.get("tasacion_solicitada_at"):
+            s["tasaciones_solicitadas"] += 1
+        if d.get("estudio_titulo_solicitado_at"):
+            s["estudios_solicitados"] += 1
+        if d.get("estudio_docs_enviados_abogado_at"):
+            s["estudios_etapa2_enviados"] += 1
+        if d.get("gastos_enviados_at"):
+            s["gastos_enviados"] += 1
+        for it in ((d.get("estudio_reparos") or {}).get("items") or []):
+            s["reparos_aceptados" if it.get("satisfecho") else "reparos_pendientes"] += 1
+        c = d.get("cierre") or {}
+        if c.get("ultima_consulta_at"):
+            s["cierres_consultados"] += 1
+        if c.get("respuesta_final") == "continua":
+            s["cierres_confirmados_continua"] += 1
+        if not (d.get("rut") or "").strip():
+            s["carpetas_sin_rut"] += 1
+        try:
+            prob = _prob_aprobacion_folder(d, stats_mesa)
+            if prob and prob.get("porcentaje", 0) == 0:
+                s["carpetas_prob_0"] += 1
+            for f_ in (prob or {}).get("factores", []):
+                if isinstance(f_, str) and ("falta" in f_.lower() or "sin " in f_.lower()):
+                    s["docs_faltantes_frecuentes"][f_[:60]] = s["docs_faltantes_frecuentes"].get(f_[:60], 0) + 1
+        except Exception:
+            pass
+    s["docs_faltantes_frecuentes"] = dict(sorted(
+        s["docs_faltantes_frecuentes"].items(), key=lambda x: -x[1])[:6])
+    borrados = await db.cierres_log.count_documents({"respuesta": "no_continua"})
+    s["clientes_no_continuaron"] = borrados
+    return s
+
+
+@api.get("/aprendizaje")
+async def aprendizaje_get():
+    docs = await db.aprendizaje_ia.find({}).sort("fecha", -1).limit(10).to_list(10)
+    notas = await db.aprendizaje_notas.find({}).sort("fecha", -1).limit(20).to_list(20)
+    return {"analisis": [clean(d) for d in docs], "notas": [clean(n) for n in notas]}
+
+
+@api.post("/aprendizaje/nota")
+async def aprendizaje_nota(payload: dict):
+    texto = ((payload or {}).get("texto") or "").strip()
+    if len(texto) < 5:
+        raise HTTPException(status_code=400, detail="La nota es muy corta")
+    await db.aprendizaje_notas.insert_one({"id": str(uuid.uuid4()),
+                                           "texto": texto[:1000], "fecha": now_iso()})
+    return {"ok": True}
+
+
+async def _aprendizaje_ejecutar():
+    stats = await _stats_flujo_comercial()
+    previos = await db.aprendizaje_ia.find({}).sort("fecha", -1).limit(3).to_list(3)
+    notas = await db.aprendizaje_notas.find({}).sort("fecha", -1).limit(10).to_list(10)
+    resultado = await ai_extract.analizar_flujo_comercial(
+        stats, [p.get("resumen", "") for p in previos], [n.get("texto", "") for n in notas])
+    doc = {"id": str(uuid.uuid4()), "fecha": now_iso(), "stats": stats, **resultado}
+    await db.aprendizaje_ia.insert_one(dict(doc))
+    return doc
+
+
+@api.post("/aprendizaje/analizar")
+async def aprendizaje_analizar():
+    """Ejecuta un ciclo de aprendizaje de la IA sobre el flujo comercial real."""
+    return clean(await _aprendizaje_ejecutar())
+
+
+async def _aprendizaje_loop():
+    """Aprendizaje continuo automático: un ciclo diario."""
+    while True:
+        await asyncio.sleep(6 * 3600)
+        try:
+            ultimo = await db.aprendizaje_ia.find_one(sort=[("fecha", -1)])
+            if ultimo:
+                ult = datetime.fromisoformat(str(ultimo.get("fecha")))
+                if (datetime.now(timezone.utc) - ult).total_seconds() < 23 * 3600:
+                    continue
+            await _aprendizaje_ejecutar()
+        except Exception as e:
+            await db.system_log.insert_one({"id": str(uuid.uuid4()), "loop": "aprendizaje_ia",
+                                            "error": str(e)[:300], "fecha": now_iso()})
 
 
 def _gastos_total(items):

@@ -24,6 +24,8 @@ const GastosOperacionalesModule = lazy(() => import("./pages/GastosOperacionales
 const AprobacionClienteModule = lazy(() => import("./pages/AprobacionClienteModule"));
 const SetCreditoModule = lazy(() => import("./pages/SetCreditoModule"));
 const EmailProcessingModule = lazy(() => import("./pages/EmailProcessingModule"));
+const CierresModule = lazy(() => import("./pages/CierresModule"));
+const AprendizajeModule = lazy(() => import("./pages/AprendizajeModule"));
 const GlobalSearch = lazy(() => import("./components/GlobalSearch"));
 const WelcomeTour = lazy(() => import("./components/WelcomeTour"));
 
@@ -42,6 +44,8 @@ const MODULE_TITLES = {
   'procesamiento': 'Procesamiento de Correo',
   gastos: 'Gastos Operacionales',
   aprobacion: 'Envío Aprobación Cliente',
+  cierres: 'Cierres — Seguimiento de Aprobaciones',
+  aprendizaje: 'Aprendizaje IA — Flujo Comercial',
 };
 
 function App() {
@@ -128,6 +132,8 @@ function MainApp() {
     { key: 'formato', icon: 'fa-file-pdf-o', label: 'Formato' },
     { key: 'gastos', icon: 'fa-money', label: 'Gastos Operacionales' },
     { key: 'aprobacion', icon: 'fa-trophy', label: 'Aprobación Cliente' },
+    { key: 'cierres', icon: 'fa-handshake-o', label: 'Cierres' },
+    ...(user.rol === 'admin' ? [{ key: 'aprendizaje', icon: 'fa-graduation-cap', label: 'Aprendizaje IA' }] : []),
     { key: 'setcredito', icon: 'fa-pencil-square-o', label: 'Set de Crédito' },
     ...(user.rol === 'admin' ? [{ key: 'usuarios', icon: 'fa-user-plus', label: 'Usuarios' }] : []),
     ...(user.rol === 'admin' ? [{ key: 'criterios', icon: 'fa-shield', label: 'Criterios' }] : []),
@@ -218,6 +224,8 @@ function MainApp() {
         {activeModule === 'gastos' && <GastosOperacionalesModule onNavigate={setActiveModule} />}
         {activeModule === 'aprobacion' && <AprobacionClienteModule onNavigate={setActiveModule} />}
         {activeModule === 'setcredito' && <SetCreditoModule onNavigate={setActiveModule} />}
+        {activeModule === 'cierres' && <CierresModule />}
+        {activeModule === 'aprendizaje' && <AprendizajeModule />}
         </Suspense>
       </main>
     </div>

@@ -1,0 +1,33 @@
+{
+  "summary": "Iter 14 (tercer lote): Backend 12/12 PASSED (pytest, /app/tests/test_iter14_features.py) — Cierres (list con ventana, filtro entrega_inmediata, ?todos=true, PATCH+GET, consultar preview con ambos botones y URL /api/cierres/respuesta/{token}, 400 sin correo, respuesta con token inexistente devuelve HTML 200 con 'Enlace no válido o ya utilizado'), Aprendizaje IA (GET con analisis+notas, POST /nota, POST /analizar devuelve resumen/aprendizajes/cuellos_botella/mejoras basados en datos reales), Estudio de Título defaults (docs_usada=7, docs_nueva=11, sin tasación en ninguno) y preview envío 'nueva' con frase de reserva. Frontend: sidebar muestra 'Cierres' y 'Aprendizaje IA' (admin); módulo Cierres carga con 2 grupos por ejecutivo, filtros y badge visibles, PATCH via modal edit funciona (guardó carla.test@test.cl), 'Preguntar al ejecutivo' y 'No continúa' con window.confirm cancelado (NO se envió correo, NO se borró carpeta); módulo Aprendizaje IA muestra aprendizaje-ultimo + secciones + agregó nota UI test iter14; regresión login/tabs OK. Se detectó y corrigió BUG frontend en openEstudio (ClientesModule.js:512-524): no guardaba docs_usada/docs_nueva en el state y docs_texto se inicializaba con docs_usada aunque tipo_vivienda por defecto era 'nueva' — resultado: al cambiar el select de tipo, docs_texto quedaba vacío. Fix aplicado. Tras el fix: tipo=nueva → 11 líneas (sin tasación), tipo=usada → 7 líneas (sin tasación). No se enviaron correos reales; no se llamaron endpoints /api/cierres/respuesta/{token} con tokens reales.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Modal Estudio de Título (openEstudio)", "issue": "El state del modal NO guardaba docs_usada/docs_nueva (solo joinaba docs_usada) y arrancaba con tipo_vivienda='nueva' pero docs_texto con lista de usada — al cambiar el select los docs quedaban vacíos porque prev.docs_usada/docs_nueva eran undefined. FIXED en /app/frontend/src/pages/ClientesModule.js (agregado docs_usada/docs_nueva al setEstudioModal y docs_texto ahora arranca con docs_nueva).", "selector": "[data-testid=\"estudio-tipo\"]+[data-testid=\"estudio-docs\"]", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/tests/test_iter14_features.py", "/app/test_reports/pytest/iter14.xml"],
+  "action_items": [
+    "Revisar el fix aplicado en ClientesModule.js:512-524 (openEstudio) — bug real que impedía cambiar el listado nueva/usada tras abrir el modal."
+  ],
+  "critical_code_review_comments": [
+    "server.py sigue con 7082 líneas — pendiente splitting desde iter10.",
+    "openEstudio (ClientesModule.js:486) no ordenaba defaults docs_nueva en state — arreglado.",
+    "cierres_consultar depende de request.headers.origin/host — si falta el header devuelve URLs sin dominio; considerar fallback a PUBLIC_URL env.",
+    "_aprendizaje_loop hace sleep(6h) antes del primer intento — la primera ejecución tras deploy tarda 6h; considerar ejecutar inmediatamente y luego dormir."
+  ],
+  "updated_files": [
+    "/app/tests/test_iter14_features.py (nuevo)",
+    "/app/test_reports/pytest/iter14.xml",
+    "/app/frontend/src/pages/ClientesModule.js (fix openEstudio: docs_usada/docs_nueva en state + docs_texto=docs_nueva al abrir)"
+  ],
+  "success_rate": {"backend": "100% (12/12)", "frontend": "100% (10/10 escenarios: sidebar, módulo cierres, filtros, edit-guardar, consultar-dialog, no-continua-dialog, aprendizaje-ultimo, aprendizaje-nota, tabs, estudio nueva/usada)"},
+  "test_credentials": "administrador / 141617575",
+  "seed_data_creation": "PATCH a la 1ra carpeta aprobada (grupo actual) con ejecutivo_email='carla.test@test.cl' y otros campos vía UI y API. Nota agregada al log de aprendizaje: 'nota de prueba del flujo' (API) y 'nota UI test iter14' (frontend). NO se borraron carpetas ni se enviaron correos. Se disparó 1 ciclo POST /api/aprendizaje/analizar (metodo probablemente 'ia').",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend URL: https://risk-assess-17.preview.emergentagent.com. Pytest debe correr con -c /dev/null porque backend/pytest.ini fuerza -n 2 --dist loadscope y los tests iter14 comparten estado. IMPORTANTE: colocar tests EN /app/tests/ (no /app/backend/tests/) para que watchfiles no reinicie backend en cada edición del test. Carpetas aprobadas visibles vía /api/cierres?todos=true — usar todos=true si vacío. Fix aplicado en ClientesModule.js:512-524 (openEstudio) puede requerir ajuste si main agent renombra estructura. RCA: el bug era que docs_usada/docs_nueva no se persistían en el state del modal.",
+  "rca of the issue": "Bug frontend estudio: en openEstudio (ClientesModule.js) el setEstudioModal no incluía docs_usada/docs_nueva en el objeto de estado. Cuando el usuario cambiaba el select de tipo_vivienda (line 2733), el handler leía prev.docs_usada / prev.docs_nueva que eran undefined → `undefined || []` → `[].join('\\n') = ''` → textarea vacío. Además el estado inicial tenía tipo_vivienda='nueva' pero docs_texto con la lista de usada. Fix: agregar docs_usada/docs_nueva al state y usar docs_nueva como docs_texto inicial (consistente con tipo_vivienda='nueva'). Reproducido antes del fix (lines=0 al cambiar), verificado después (11 y 7)."
+}
