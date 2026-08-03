@@ -195,6 +195,7 @@ export default function ClientesModule({ onNavigate }) {
   const [respaldoModal, setRespaldoModal] = useState(null); // { subiendo, progreso, resultado }
   const [folderTab, setFolderTab] = useState("clientes"); // clientes | escrituracion
   const [enriching, setEnriching] = useState(null); // `${folderId}${modo}` en progreso
+  const [forzarModal, setForzarModal] = useState(null); // {nombre, rut, sug, buscando, forzando, msg}
 
   const importarRespaldo = async (file) => {
     if (!file) return;
@@ -1356,6 +1357,40 @@ export default function ClientesModule({ onNavigate }) {
     setEnriching(null);
   };
 
+  // Sugerencias en vivo al escribir el nombre en Forzar Carpeta
+  useEffect(() => {
+    if (!forzarModal || (forzarModal.nombre || "").trim().length < 3) return;
+    const q = forzarModal.nombre.trim();
+    const t = setTimeout(async () => {
+      setForzarModal(prev => prev ? { ...prev, buscando: true } : prev);
+      try {
+        const r = await axios.get(`${API}/api/clientes/forzar/sugerencias`, { params: { q }, timeout: 60000 });
+        setForzarModal(prev => (prev && prev.nombre.trim() === q) ? { ...prev, sug: r.data, buscando: false } : prev);
+      } catch {
+        setForzarModal(prev => prev ? { ...prev, buscando: false } : prev);
+      }
+    }, 700);
+    return () => clearTimeout(t);
+  }, [forzarModal?.nombre]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const ejecutarForzar = async () => {
+    const m = forzarModal;
+    if (!m || (!m.nombre.trim() && !m.rut.trim())) return;
+    const clave = window.prompt("Ingresa la CLAVE de administrador:");
+    if (!clave) return;
+    setForzarModal(prev => ({ ...prev, forzando: true, msg: "" }));
+    try {
+      const r = await axios.post(`${API}/api/clientes/folders/forzar`, { nombre: m.nombre.trim(), rut: m.rut.trim(), clave }, { timeout: 300000 });
+      const imap = r.data.archivos_imap || [];
+      const ver = r.data.verificacion_cedula;
+      setForzarModal(prev => ({ ...prev, forzando: false,
+        msg: `✅ Carpeta: ${r.data.carpeta} · Correos: ${r.data.correos_encontrados} · Adjuntos descargados: ${imap.length}${ver && Object.keys(ver.cambios || {}).length ? ` · 🪪 Corregido con cédula: ${Object.entries(ver.cambios).map(([k, v]) => `${k}→${v}`).join(", ")}` : ""}` }));
+      loadFolders();
+    } catch (e) {
+      setForzarModal(prev => ({ ...prev, forzando: false, msg: "Error: " + (e.response?.data?.detail || e.message) }));
+    }
+  };
+
   const downloadAll = (folderId) => {
     window.open(`${API}/api/clientes/folders/${folderId}/download-all`, "_blank");
   };
@@ -1395,23 +1430,9 @@ export default function ClientesModule({ onNavigate }) {
               <button className="docs-btn primary" onClick={() => setShowCreate(true)} data-testid="btn-new-folder">
                 <i className="fa fa-plus"></i> Nueva Carpeta
               </button>
-              <button className="docs-btn secondary" data-testid="btn-forzar-folder" onClick={async () => {
-                const nombre = window.prompt("FORZAR CARPETA MANUAL\n\nPodés buscar por NOMBRE, por RUT o por ambos.\n\n1️⃣ Nombre del cliente (dejalo vacío si vas a buscar solo por RUT):");
-                if (nombre === null) return;
-                const rut = window.prompt("2️⃣ RUT del cliente (ej: 12.345.678-9)\n\nSe buscará el RUT en asuntos, cuerpos de correo y datos extraídos, con o sin puntos. Dejalo vacío si buscás solo por nombre:") || "";
-                if (!nombre && !rut.trim()) return;
-                const clave = window.prompt("Ingresa la CLAVE de administrador:");
-                if (!clave) return;
-                try {
-                  const r = await axios.post(`${API}/api/clientes/folders/forzar`, { nombre, rut: rut.trim(), clave }, { timeout: 300000 });
-                  const det = (r.data.procesados || []).map(p => `• ${p.subject?.slice(0, 50)} → ${p.archivos} archivo(s)`).join("\n");
-                  const imap = r.data.archivos_imap || [];
-                  const ver = r.data.verificacion_cedula;
-                  const verTxt = ver ? `\n\n🪪 Verificación con cédula (${ver.cedula}):\n  Nombre leído: ${ver.nombre_cedula || "—"} · RUT leído: ${ver.rut_cedula || "—"}${Object.keys(ver.cambios || {}).length ? "\n  ✏️ Corregido: " + Object.entries(ver.cambios).map(([k, v]) => `${k} → ${v}`).join(", ") : "\n  ✓ Sin correcciones necesarias"}` : "";
-                  alert(`✅ Carpeta: ${r.data.carpeta}\nCorreos encontrados del cliente: ${r.data.correos_encontrados}\nAdjuntos descargados del correo: ${imap.length}${imap.length ? "\n" + imap.map(a => `  📎 ${a}`).join("\n") : ""}\n${det || "(sin correos en la cola)"}${verTxt}${r.data.errores?.length ? "\n\nErrores:\n" + r.data.errores.join("\n") : ""}`);
-                  loadFolders();
-                } catch (e) { alert("Error: " + (e.response?.data?.detail || e.message)); }
-              }} style={{ borderColor: "#f59e0b", color: "#f59e0b" }}>
+              <button className="docs-btn secondary" data-testid="btn-forzar-folder"
+                onClick={() => setForzarModal({ nombre: "", rut: "", sug: null, buscando: false, forzando: false, msg: "" })}
+                style={{ borderColor: "#f59e0b", color: "#f59e0b" }}>
                 <i className="fa fa-bolt"></i> Forzar Carpeta
               </button>
             </div>
@@ -3318,6 +3339,60 @@ export default function ClientesModule({ onNavigate }) {
                 <button onClick={confirmSendMissingDocs} disabled={missingDocsModal.sending || !p} data-testid="btn-missing-send"
                   style={{ background: "#16a34a", border: "1px solid #15803d", color: "#fff", borderRadius: 6, padding: "6px 18px", cursor: "pointer", fontSize: 13, fontWeight: 700, boxShadow: "0 2px 8px rgba(22,163,74,0.4)" }}>
                   <i className={`fa ${missingDocsModal.sending ? "fa-spinner fa-spin" : "fa-paper-plane"}`} /> {missingDocsModal.sending ? "Procesando…" : "Enviar correo"}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {forzarModal && (() => {
+        const m = forzarModal;
+        const inpF = { width: "100%", padding: "0.55rem", borderRadius: 8, border: "1px solid rgba(148,163,184,0.3)", background: "#1e293b", color: "#e2e8f0", fontSize: 13 };
+        return (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 9998, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={() => !m.forzando && setForzarModal(null)}>
+            <div data-testid="forzar-modal" onClick={e => e.stopPropagation()} style={{ background: "#0f172a", border: "1px solid rgba(148,163,184,0.25)", borderRadius: 14, padding: "1.4rem", width: "min(640px, 96vw)", maxHeight: "90vh", overflow: "auto", display: "grid", gap: 10 }}>
+              <h3 style={{ margin: 0, fontSize: 15, color: "#f59e0b" }}><i className="fa fa-bolt" /> Forzar Carpeta — buscá por nombre y/o RUT</h3>
+              <label style={{ fontSize: 12 }}>Nombre del cliente <span style={{ opacity: 0.6 }}>(al escribir aparecen sugerencias de correos, archivos y carpetas)</span>
+                <input data-testid="forzar-nombre" autoFocus style={inpF} value={m.nombre}
+                  onChange={e => setForzarModal({ ...m, nombre: e.target.value, msg: "" })} placeholder="Ej: Pedro González" />
+              </label>
+              <label style={{ fontSize: 12 }}>RUT <span style={{ opacity: 0.6 }}>(opcional — con o sin puntos)</span>
+                <input data-testid="forzar-rut" style={inpF} value={m.rut}
+                  onChange={e => setForzarModal({ ...m, rut: e.target.value })} placeholder="Ej: 12.345.678-9" />
+              </label>
+              {m.buscando && <div style={{ fontSize: 12, color: "#94a3b8" }}><i className="fa fa-spinner fa-spin" /> Buscando coincidencias en carpetas, cola y buzón…</div>}
+              {m.sug && !m.buscando && (
+                <div data-testid="forzar-sugerencias" style={{ display: "grid", gap: 8 }}>
+                  {(m.sug.carpetas || []).length > 0 && (
+                    <div style={{ background: "rgba(212,175,55,0.06)", border: "1px dashed rgba(212,175,55,0.4)", borderRadius: 8, padding: "0.6rem 0.8rem" }}>
+                      <div style={{ fontSize: 11, fontWeight: 800, color: "#d4af37", marginBottom: 4 }}>📁 CARPETAS EXISTENTES ({m.sug.carpetas.length})</div>
+                      {m.sug.carpetas.map(c => <div key={c.id} style={{ fontSize: 12.5 }}>• {c.nombre} {c.rut && <span style={{ opacity: 0.6 }}>· {c.rut}</span>} — {c.archivos} archivo(s)</div>)}
+                    </div>
+                  )}
+                  {(m.sug.correos || []).length > 0 && (
+                    <div style={{ background: "rgba(6,182,212,0.06)", border: "1px dashed rgba(6,182,212,0.4)", borderRadius: 8, padding: "0.6rem 0.8rem" }}>
+                      <div style={{ fontSize: 11, fontWeight: 800, color: "#22d3ee", marginBottom: 4 }}>📧 CORREOS EN EL BUZÓN ({m.sug.correos.length})</div>
+                      {m.sug.correos.map((c, i) => <div key={i} style={{ fontSize: 12, marginBottom: 3 }}>• <b>{(c.subject || "").slice(0, 60)}</b><br /><span style={{ opacity: 0.6, fontSize: 11 }}>{(c.from || "").slice(0, 50)} · {(c.date || "").slice(0, 22)}</span></div>)}
+                    </div>
+                  )}
+                  {(m.sug.cola || []).length > 0 && (
+                    <div style={{ background: "rgba(139,92,246,0.06)", border: "1px dashed rgba(139,92,246,0.4)", borderRadius: 8, padding: "0.6rem 0.8rem" }}>
+                      <div style={{ fontSize: 11, fontWeight: 800, color: "#a78bfa", marginBottom: 4 }}>📥 EN LA COLA DE PROCESAMIENTO ({m.sug.cola.length})</div>
+                      {m.sug.cola.map((c, i) => <div key={i} style={{ fontSize: 12 }}>• {(c.subject || "").slice(0, 55)} — {c.adjuntos} adjunto(s)</div>)}
+                    </div>
+                  )}
+                  {!(m.sug.carpetas || []).length && !(m.sug.correos || []).length && !(m.sug.cola || []).length && (
+                    <div style={{ fontSize: 12, color: "#f87171" }}>Sin coincidencias por ahora — podés forzar igual y el sistema hará la búsqueda profunda (cuerpo de correos incluido).</div>
+                  )}
+                </div>
+              )}
+              {m.msg && <div data-testid="forzar-msg" style={{ fontSize: 12.5, fontWeight: 700, color: m.msg.startsWith("✅") ? "#4ade80" : "#f87171" }}>{m.msg}</div>}
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                <button onClick={() => setForzarModal(null)} disabled={m.forzando} style={{ background: "transparent", border: "1px solid rgba(148,163,184,0.3)", color: "#94a3b8", borderRadius: 8, padding: "0.55rem 1rem", fontSize: 12.5, cursor: "pointer" }}>Cerrar</button>
+                <button data-testid="forzar-ejecutar" onClick={ejecutarForzar} disabled={m.forzando || (!m.nombre.trim() && !m.rut.trim())}
+                  style={{ background: "#f59e0b", border: "none", color: "#0f172a", borderRadius: 8, padding: "0.55rem 1.3rem", fontSize: 12.5, fontWeight: 800, cursor: "pointer" }}>
+                  <i className={`fa ${m.forzando ? "fa-spinner fa-spin" : "fa-bolt"}`} /> {m.forzando ? "Forzando (busca y descarga adjuntos)…" : "Forzar Carpeta"}
                 </button>
               </div>
             </div>

@@ -442,6 +442,40 @@ def _buscar_ids_persona(m, tokens, original):
     return sorted(ids, key=lambda x: int(x))
 
 
+def search_email_headers_by_person(person_name, limit=10):
+    """Búsqueda RÁPIDA (solo cabeceras) de correos que mencionen a la persona.
+    Para sugerencias en vivo antes de forzar una carpeta."""
+    name = _sin_acentos(person_name).strip()
+    if not name:
+        return []
+    tokens = [t for t in name.split() if len(t) > 2] or [name]
+    out = []
+    for acc in ACCOUNTS:
+        try:
+            m = _connect(acc)
+            m.select("INBOX", readonly=True)
+            ids = _buscar_ids_persona(m, tokens, person_name)[-40:]
+            for num in reversed(ids):
+                typ, hd = m.fetch(num, "(BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE)])")
+                if not hd or not isinstance(hd[0], tuple):
+                    continue
+                hmsg = email.message_from_bytes(hd[0][1])
+                blob = _sin_acentos(f"{_dec(hmsg.get('Subject'))} {_dec(hmsg.get('From'))}")
+                if not any(t in blob for t in tokens):
+                    continue
+                out.append({"subject": _dec(hmsg.get("Subject")),
+                            "from": _dec(hmsg.get("From")),
+                            "date": hmsg.get("Date", ""), "cuenta": acc["user"]})
+                if len(out) >= limit:
+                    break
+            m.logout()
+        except Exception:
+            continue
+        if len(out) >= limit:
+            break
+    return out
+
+
 def search_attachments_by_person(person_name, limit=40):
     """Busca correos que mencionen a la persona (SEARCH en servidor) y trae sus adjuntos.
     Tolerante a acentos: 'González' y 'Gonzalez' se tratan igual."""

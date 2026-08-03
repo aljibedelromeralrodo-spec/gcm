@@ -1127,6 +1127,44 @@ def _rut_regex_flexible(rut):
     return r"\.?".join(re.escape(c) for c in nucleo[:-1]) + r"[\-.]?\s?" + re.escape(nucleo[-1])
 
 
+_MAPA_ACENTOS = {"a": "[aáà]", "e": "[eéè]", "i": "[iíì]", "o": "[oóò]", "u": "[uúüù]", "n": "[nñ]"}
+
+
+def _rx_acentos(texto):
+    """Regex insensible a tildes: 'gonzalez' matchea 'González'."""
+    out = []
+    for ch in _norm_texto(texto):
+        out.append(_MAPA_ACENTOS.get(ch, re.escape(ch)))
+    return "".join(out)
+
+
+@api.get("/clientes/forzar/sugerencias")
+async def forzar_sugerencias(q: str = ""):
+    """Sugerencias en vivo antes de forzar una carpeta: carpetas existentes,
+    correos en la cola y correos en el buzón (solo cabeceras, rápido)."""
+    q = (q or "").strip()
+    if len(q) < 3:
+        raise HTTPException(status_code=400, detail="Escribe al menos 3 letras")
+    toks = [t for t in _norm_texto(q).split() if len(t) > 2]
+    rx = ".*".join(_rx_acentos(t) for t in toks[:2]) if toks else _rx_acentos(q)
+    carpetas = []
+    async for d in db.folders.find({"nombre": {"$regex": rx, "$options": "i"}}).limit(5):
+        carpetas.append({"id": d["id"], "nombre": d.get("nombre", ""),
+                         "rut": d.get("rut", ""),
+                         "archivos": len(fsvc.scan_archivos(d.get("nombre", "")))})
+    cola = []
+    async for it in db.proc_queue.find({"$or": [
+            {"subject": {"$regex": rx, "$options": "i"}},
+            {"cliente": {"$regex": rx, "$options": "i"}},
+            {"classification.cliente": {"$regex": rx, "$options": "i"}},
+            {"body_full": {"$regex": rx, "$options": "i"}}]}).sort("date_iso", -1).limit(6):
+        cola.append({"subject": it.get("subject", ""), "from": it.get("from", ""),
+                     "date": (it.get("date_iso") or "")[:16],
+                     "adjuntos": len(it.get("attachments") or [])})
+    correos = await asyncio.to_thread(mail.search_email_headers_by_person, q, 8)
+    return {"carpetas": carpetas, "cola": cola, "correos": correos}
+
+
 @api.post("/clientes/folders/forzar")
 async def forzar_folder(payload: dict):
     """Fuerza la creación manual de una carpeta: busca por NOMBRE y/o RUT en los correos
