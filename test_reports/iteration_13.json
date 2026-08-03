@@ -1,0 +1,40 @@
+{
+  "summary": "Iter 13 (segundo lote sesión) — Backend: 15/15 PASSED (pytest, incluye slow test verificacion_cedula 37.5s). Frontend E2E OK. Features validadas: (1) POST /clientes/folders/{fid}/send-email con confirm:false + ejecutivo_interno='TEST NO PERSIST' NO persiste en DB (verificado con GET antes/después: 'Deisy Salazar' → 'Deisy Salazar'); (2) POST /tasacion/enviar con {nombre:'SEBASTIAN SEPULVEDA',direccion:'test',confirm:false} → subject 'SOLICITUD TASACION // SEBASTIAN SEPULVEDA' (carpeta tiene rut vacío en DB, por eso no aparece 'Rut:'); (3) GET /clientes/folders → mesa_respuesta='aprobada' confirmado para LUIS GUERRERO, JAVIERA SALGADO, CATALINA CASTILLO, FRANCISCA DIAZ, CLAUDIA ANDREA ZURITA SOTO (varias con prob_aprobacion.porcentaje=0); (4) POST /estudio-titulo/etapa2/{SEBASTIAN} confirm:false → to='contacto@hipotecariogestion.cl', cc incluye victoriavilches@centralmutuos.cl, subject 'SOLICITUD ESTUDIO DE TITULOS // SEBASTIAN SEPULVEDA', attachments con archivo(s) de 07_estudio_titulo; carpeta sin docs devuelve 400; (5) POST /estudio-titulo/enviar con vendedor_email='vendedor.test@correo.cl' + tipo_vivienda='usada' → to[0] es el vendedor y el body incluye 'Copia de escritura' y 'Certificado de dominio vigente'; (6) POST /clientes/folders/forzar SEBASTIAN + clave 0586 → 200 con verificacion_cedula presente en la respuesta (en la corrida devolvió null porque la cédula no fue legible por OCR — comportamiento válido). Frontend: tab-escrituracion (SEBASTIAN vive ahí, no en Solicitudes de Crédito), estudio-subfolder visible con textos 'Carpeta Estudio de Título (separada)' y 'Regla inviolable'; modal Estudio: estudio-docs-recibidos, btn-estudio-etapa2, estudio-doc-ver-0, estudio-adj-ver-0 → todos abren preview-modal correctamente; window.prompt del btn-estudio-etapa2 dismisseado (sin envío real). NO se enviaron correos reales.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/tasacion/enviar", "issue": "El subject NO incluye 'Rut:' cuando el payload no lo trae, aunque la carpeta esté vinculada. Motivo: la función tasacion_enviar (server.py:4652) toma rut sólo del payload y no hace fallback a doc.rut vía folder_id. Impacto: menor — en SEBASTIAN la carpeta tiene rut='' así que no habría RUT que mostrar; se detectaría sólo si la carpeta sí tiene RUT registrado y el frontend olvida enviarlo. Sugerencia: si payload.folder_id, cargar doc y usar doc.rut como fallback."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Modal Tasación de SEBASTIAN SEPULVEDA", "issue": "tasacion-adj-ver-0 no aparece porque la carpeta no tiene archivos que se muestren como adjuntos en el modal de tasación (los archivos están en 07_estudio_titulo y se filtran del set de adjuntos de tasación). No es bug — el testid sí existe y funcionaría con carpetas con adjuntos elegibles.", "affected_selectors": ["tasacion-adj-ver-{i}"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/tests/test_iter13_features.py",
+    "/app/test_reports/pytest/iter13.xml"
+  ],
+  "action_items": [
+    "(minor) tasacion_enviar: fallback rut desde folder_id cuando el payload no lo trae (server.py:4652-4659) — no bloqueante"
+  ],
+  "critical_code_review_comments": [
+    "server.py sigue con 6782 líneas — arrastrado desde iter10/11/12. Splitting pendiente.",
+    "Duplicación _resumen_semanal_* (iter11) y asyncio.create_task doble en startup — sigue sin limpiarse.",
+    "tasacion_enviar no consulta folder para RUT fallback (documentado en minor).",
+    "En estudio_etapa2 el nombre 'Guillermo Marluf' se usa en el cuerpo pero el email default es contacto@hipotecariogestion.cl — asegurarse de que ese saludo sea correcto para ese destino."
+  ],
+  "updated_files": [
+    "/app/tests/test_iter13_features.py (nuevo)",
+    "/app/test_reports/pytest/iter13.xml"
+  ],
+  "success_rate": {"backend": "100% (15/15)", "frontend": "100% de los testids del alcance (estudio-subfolder, estudio-docs-recibidos, btn-estudio-etapa2, estudio-doc-ver-0, estudio-adj-ver-0, preview-modal)"},
+  "test_credentials": "administrador / 141617575 · clave forzar 0586",
+  "seed_data_creation": "Ninguna. SEBASTIAN nombre='SEBASTIAN SEPULVEDA' y rut='' quedaron intactos tras forzar-carpeta (verificacion_cedula devolvió null en esta corrida — no hubo corrección de identidad). ejecutivo_interno='Deisy Salazar' preservado. NO se enviaron correos reales (todo confirm:false; el prompt de btn-estudio-etapa2 fue dismisseado).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "SEBASTIAN SEPULVEDA (id=0d1047b1-3891-4994-9078-e4af502fdd45) vive en la pestaña data-testid=tab-escrituracion (NO en tab-clientes). Requiere navegar sidebar 'Carpeta Clientes' → click tab-escrituracion antes de buscar btn-open/btn-tasacion/btn-estudio-titulo-{SEB}. La carpeta tiene 1 archivo en 07_estudio_titulo y rut='' en DB. verificacion_cedula puede devolver null si la cédula no está legible — es contrato correcto (nombre_cedula/rut_cedula/cambios sólo si legible). El endpoint forzar demora ~35-40s en esta muestra (mucho menos que los 2-4 min esperados porque los correos ya están procesados). Frontend btn-estudio-etapa2 sí dispara window.prompt — necesario page.on('dialog', d.dismiss()).",
+  "rca of the issue": "N/A — sin bugs bloqueantes. Solo un minor sobre RUT fallback en tasacion_enviar."
+}

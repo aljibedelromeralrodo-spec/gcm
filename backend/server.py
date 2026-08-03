@@ -1050,7 +1050,9 @@ def _folder_public(doc, con_archivos=False):
 
 
 async def _mesa_respuesta_folder(d):
-    """Busca la respuesta de mesa (aprobación/rechazo) para esta carpeta en seguimiento."""
+    """Busca la respuesta de mesa (aprobación/rechazo) para esta carpeta en seguimiento.
+    REGLA: si la carpeta ya tiene descargada la carta de aprobación o la simulación
+    ajustada, se considera APROBADA por mesa de inmediato."""
     toks = [t for t in _norm_texto(d.get("nombre", "")).split() if len(t) > 2]
     if not toks:
         return None
@@ -1064,6 +1066,10 @@ async def _mesa_respuesta_folder(d):
                 return "aprobada"
             if est.startswith("rech"):
                 return "rechazada"
+    for a in fsvc.scan_archivos(d.get("nombre", "")):
+        low = a["nombre"].lower()
+        if re.search(r"carta.*aprobaci|aprobaci[oó]n", low) or re.search(r"_cm\.pdf$|ajustad", low):
+            return "aprobada"
     return None
 
 
@@ -1196,11 +1202,56 @@ async def forzar_folder(payload: dict):
         sync_copiados = await _sync_docs_aprobacion(folder.get("nombre", ""))
     except Exception:
         pass
+    # Confirmar nombre y RUT leyendo la cédula de identidad (OCR + IA, sin inventar)
+    verificacion = None
+    try:
+        verificacion = await _verificar_identidad_por_cedula(folder)
+    except Exception:
+        pass
     return {"ok": True, "carpeta": folder.get("nombre", ""),
             "correos_encontrados": len(items), "procesados": procesados,
             "archivos_imap": imap_bajados,
             "docs_aprobacion_descargados": sync_copiados,
+            "verificacion_cedula": verificacion,
             "errores": errores}
+
+
+async def _verificar_identidad_por_cedula(folder):
+    """Lee la cédula de identidad de la carpeta (OCR + IA) para confirmar y corregir
+    el nombre y el RUT. Nunca inventa: solo usa lo leído en la cédula."""
+    nombre_actual = folder.get("nombre", "")
+    archivos = fsvc.scan_archivos(nombre_actual)
+    ced = next((a for a in archivos
+                if fsvc.cat_de_archivo(a["nombre"], a["subfolder"]) == "cedula"), None)
+    if not ced:
+        return None
+    raw = (fsvc.folder_dir(nombre_actual) / ced["ruta"]).read_bytes()
+    texto, _met = await asyncio.to_thread(ocr_service.extraer_texto, raw, ced["nombre"])
+    if not texto or len(texto.strip()) < 20:
+        return None
+    datos = await ai_extract.clasificar_y_extraer(texto, ced["nombre"])
+    nombre_ced = (datos.get("nombre_cliente") or "").strip()
+    rut_ced = (datos.get("rut") or "").strip()
+    cambios = {}
+    if rut_ced and rut_ced != (folder.get("rut") or ""):
+        cambios["rut"] = rut_ced
+    toks_act = set(_norm_texto(nombre_actual).split())
+    toks_ced = set(_norm_texto(nombre_ced).split())
+    if (nombre_ced and len(toks_ced) >= 2 and toks_act & toks_ced
+            and _norm_texto(nombre_ced) != _norm_texto(nombre_actual)):
+        nuevo = nombre_ced.upper()
+        vieja_dir = fsvc.folder_dir(nombre_actual)
+        nueva_dir = fsvc.folder_dir(nuevo)
+        if vieja_dir.exists() and not nueva_dir.exists():
+            vieja_dir.rename(nueva_dir)
+            cambios["nombre"] = nuevo
+        elif not vieja_dir.exists():
+            cambios["nombre"] = nuevo
+    if cambios:
+        await db.folders.update_one({"id": folder["id"]}, {"$set": cambios})
+        folder.update(cambios)
+    return {"cedula": ced["nombre"], "nombre_cedula": nombre_ced,
+            "rut_cedula": rut_ced, "cambios": cambios}
 
 
 @api.post("/clientes/folders/{fid}/escrituracion")
@@ -1727,6 +1778,9 @@ async def folder_historial(fid: str):
     ev(doc.get("tasacion_terminado_at"), "✅", "Tasación terminada",
        f"Origen: {doc.get('tasacion_terminado_origen') or 'manual'}")
     ev(doc.get("estudio_titulo_solicitado_at"), "⚖️", "Solicitud de estudio de título enviada")
+    ev(doc.get("estudio_docs_enviados_abogado_at"), "📤",
+       "Etapa 2: documentos del estudio enviados al abogado",
+       f"A: {doc.get('estudio_abogado_email') or 'abogado'} · {len(doc.get('estudio_docs_enviados_abogado') or [])} documento(s), CC Victoria Vilches")
     rep = doc.get("estudio_reparos") or {}
     if rep.get("detectado_en"):
         ev(rep.get("detectado_en"), "🔨", f"Reparos del estudio detectados ({len(rep.get('items') or [])})")
@@ -1865,23 +1919,32 @@ async def folder_tasacion_prefill(fid: str):
     doc = await _get_folder_doc(fid)
     nombre = doc.get("nombre", "")
     textos = []
-    # 1) Cuerpos de correos del cliente en la cola de procesamiento
+    # 1) Cuerpos de correos del cliente en la cola de procesamiento (asunto + cuerpo)
     toks = [t for t in _norm_texto(nombre).split() if len(t) > 2]
     if toks:
         rx = ".*".join(re.escape(t) for t in toks[:2])
-        async for it in db.proc_queue.find({"$or": [
-                {"cliente": {"$regex": rx, "$options": "i"}},
-                {"subject": {"$regex": toks[-1] if len(toks) < 3 else toks[2], "$options": "i"}}]}).limit(6):
+        ors = [{"cliente": {"$regex": rx, "$options": "i"}},
+               {"classification.cliente": {"$regex": rx, "$options": "i"}},
+               {"subject": {"$regex": rx, "$options": "i"}},
+               {"body_full": {"$regex": rx, "$options": "i"}}]
+        rut_rx = _rut_regex_flexible(doc.get("rut") or "")
+        if rut_rx:
+            ors += [{"subject": {"$regex": rut_rx, "$options": "i"}},
+                    {"body_full": {"$regex": rut_rx, "$options": "i"}}]
+        async for it in db.proc_queue.find({"$or": ors}).sort("date_iso", -1).limit(8):
             cuerpo = (it.get("body_text") or it.get("body") or it.get("body_full") or "")[:3000]
-            if cuerpo:
-                textos.append(f"[CORREO] Asunto: {it.get('subject', '')}\n{cuerpo}")
-    # 2) Documentos relevantes de la carpeta (promesa, carta, cotización, reserva)
-    pat_docs = re.compile(r"promesa|oferta|carta|aprobaci|cotiz|reserva|compra|simulad", re.I)
-    for a in fsvc.scan_archivos(nombre):
-        if len(textos) >= 10:
+            if cuerpo or it.get("subject"):
+                textos.append(f"[CORREO] De: {it.get('from', '')} · Asunto: {it.get('subject', '')}\n{cuerpo}")
+    # 2) Documentos de la carpeta: primero los relevantes, luego el resto (extras)
+    pat_docs = re.compile(r"promesa|oferta|carta|aprobaci|cotiz|reserva|compra|simulad|tasaci|solicitud", re.I)
+    archivos_all = [a for a in fsvc.scan_archivos(nombre)
+                    if a["nombre"].lower().endswith((".pdf", ".jpg", ".jpeg", ".png"))]
+    priorizados = [a for a in archivos_all if pat_docs.search(a["nombre"])]
+    resto = [a for a in archivos_all if a not in priorizados
+             and fsvc.cat_de_archivo(a["nombre"], a["subfolder"]) == "extras"]
+    for a in priorizados + resto:
+        if len(textos) >= 12:
             break
-        if not pat_docs.search(a["nombre"]):
-            continue
         try:
             raw = (fsvc.folder_dir(nombre) / a["ruta"]).read_bytes()
             texto, _met = await asyncio.to_thread(ocr_service.extraer_texto, raw, a["nombre"])
@@ -1953,7 +2016,7 @@ async def folder_send_email(fid: str, payload: dict):
     if not fecha_entrega:
         missing_labels.append("Fecha de entrega (inmediata/futura)")
     ejecutivo = (payload.get("ejecutivo_interno") or doc.get("ejecutivo_interno") or "").strip()
-    if payload.get("ejecutivo_interno") and payload["ejecutivo_interno"] != doc.get("ejecutivo_interno"):
+    if payload.get("confirm") and payload.get("ejecutivo_interno") and payload["ejecutivo_interno"] != doc.get("ejecutivo_interno"):
         await db.folders.update_one({"id": fid}, {"$set": {"ejecutivo_interno": ejecutivo}})
         doc["ejecutivo_interno"] = ejecutivo
     if not ejecutivo:
@@ -4901,6 +4964,11 @@ async def estudio_enviar(payload: dict):
     if not nombre:
         raise HTTPException(status_code=400, detail="Falta el nombre del cliente")
     destinos = _parse_destinatarios(payload, ESTUDIO_DEST_DEFAULT)
+    # ETAPA 1 vivienda usada: el listado de documentos debe llegarle al VENDEDOR
+    vend_email = (payload.get("vendedor_email") or "").strip()
+    if payload.get("tipo_vivienda") == "usada" and "@" in vend_email \
+            and vend_email.lower() not in [d.lower() for d in destinos]:
+        destinos.insert(0, vend_email)
     cc_raw = payload.get("cc")
     if isinstance(cc_raw, str):
         cc_raw = [c.strip() for c in re.split(r"[,;\n]+", cc_raw) if c.strip()]
@@ -4961,6 +5029,65 @@ async def estudio_enviar(payload: dict):
 async def estudio_log():
     docs = await db.estudio_titulo_log.find({}).sort("enviado_en", -1).limit(20).to_list(20)
     return {"log": [clean(d) for d in docs]}
+
+
+GUILLERMO_EMAIL_DEFAULT = "contacto@hipotecariogestion.cl"
+
+
+@api.post("/estudio-titulo/etapa2/{fid}")
+async def estudio_etapa2(fid: str, payload: dict = None):
+    """ETAPA 2 del estudio de título: cuando llegan los documentos del vendedor,
+    se envían al abogado (Guillermo Marluf) con copia a Victoria Vilches,
+    manteniendo el mismo hilo de correo (mismo asunto de la solicitud)."""
+    payload = payload or {}
+    doc = await _get_folder_doc(fid)
+    nombre = doc.get("nombre", "")
+    rep = doc.get("estudio_reparos") or {}
+    abogado = (payload.get("to_addr") or rep.get("abogado_email") or GUILLERMO_EMAIL_DEFAULT).strip()
+    if "@" not in abogado:
+        raise HTTPException(status_code=400, detail="Correo del abogado inválido")
+    docs_estudio = [a for a in fsvc.scan_archivos(nombre)
+                    if (a["subfolder"] or "").startswith("07_estudio_titulo")]
+    seleccion = payload.get("attach_files") or []
+    if seleccion:
+        docs_estudio = [a for a in docs_estudio if a["ruta"] in seleccion]
+    if not docs_estudio:
+        raise HTTPException(status_code=400,
+                            detail="No hay documentos del estudio de título recibidos para enviar (carpeta 07_estudio_titulo vacía)")
+    subject = doc.get("estudio_titulo_subject") or (
+        f"SOLICITUD ESTUDIO DE TITULOS // {nombre}" + (f" {doc.get('rut')}" if doc.get("rut") else ""))
+    extra = (payload.get("body_extra") or "").strip()
+    lista = "".join(f"<li>{a['nombre']}</li>" for a in docs_estudio)
+    inner = f"""
+      <p>Estimado Guillermo,</p>
+      <p>Junto con saludar, adjuntamos los documentos recibidos para el <b>estudio de títulos</b>
+      del cliente <b>{nombre}</b>{f" (RUT {doc.get('rut')})" if doc.get('rut') else ""}:</p>
+      <ul>{lista}</ul>
+      {f'<p>{extra}</p>' if extra else ''}
+      <p>Quedamos atentos a sus comentarios y posibles reparos para continuar con el estudio.</p>
+      <p style="margin-top:16px;color:#555">Saludos cordiales,</p>"""
+    cuerpo = _marca_wrap(inner, "Estudio de Títulos — Etapa 2: envío de documentos")
+    cc, vistos = [], set()
+    for c in [VICTORIA_EMAIL] + (doc.get("estudio_titulo_cc") or []):
+        if "@" in c and c.lower() not in vistos and c.lower() != abogado.lower():
+            vistos.add(c.lower())
+            cc.append(c)
+    sender = _sender_por_rol("secundaria")
+    if not payload.get("confirm"):
+        return {"to": abogado, "cc": cc, "subject": subject, "body": cuerpo,
+                "attachments": [a["nombre"] for a in docs_estudio], "sender": sender}
+    base = fsvc.folder_dir(nombre)
+    adjuntos = [{"filename": a["nombre"], "content_b64": _b64((base / a["ruta"]).read_bytes())}
+                for a in docs_estudio]
+    res = await asyncio.to_thread(mail.send_mail, abogado, subject, cuerpo, adjuntos, "secundaria", cc)
+    if not res.get("success"):
+        raise HTTPException(status_code=502, detail=res.get("error", "Error de envío"))
+    await db.folders.update_one({"id": fid}, {"$set": {
+        "estudio_docs_enviados_abogado_at": now_iso(),
+        "estudio_docs_enviados_abogado": [a["nombre"] for a in docs_estudio],
+        "estudio_abogado_email": abogado}})
+    return {"ok": True, "to": abogado, "cc": cc, "subject": subject,
+            "attachments": [a["nombre"] for a in docs_estudio], "sender": res.get("desde", sender)}
 
 
 # ---------------------------------------------------------------------------

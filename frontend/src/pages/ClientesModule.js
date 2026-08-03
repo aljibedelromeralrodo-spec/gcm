@@ -472,7 +472,7 @@ export default function ClientesModule({ onNavigate }) {
 
   const declararReparos = async () => {
     const m = reparosModal;
-    if (!window.confirm("¿Declarás que han quedado satisfechos TODOS los reparos de la solicitud de estudio de título?\n\nSe enviará un correo de aviso a ti, al vendedor y a Victoria Vilches.")) return;
+    if (!window.confirm("¿Declarás que TODOS los reparos han sido recibidos satisfactoriamente y podemos continuar con el estudio de título?\n\nSe enviará un correo de aviso (en el mismo hilo) a ti, al vendedor y a Victoria Vilches.")) return;
     setReparosModal(prev => ({ ...prev, declarando: true, msg: "" }));
     try {
       const r = await axios.post(`${API}/api/estudio-titulo/reparos/${m.folder.id}/declarar`);
@@ -586,6 +586,26 @@ export default function ClientesModule({ onNavigate }) {
       loadFolders();
     } catch (e) {
       setEstudioModal(m => ({ ...m, loading: false, msg: "Error: " + (e.response?.data?.detail || e.message) }));
+    }
+  };
+
+  const enviarEtapa2 = async (m) => {
+    setEstudioModal(prev => ({ ...prev, loading: true, msg: "" }));
+    try {
+      const pre = await axios.post(`${API}/api/estudio-titulo/etapa2/${m.folder.id}`, { confirm: false });
+      const p = pre.data;
+      setEstudioModal(prev => ({ ...prev, loading: false }));
+      const to = window.prompt(
+        `ETAPA 2 — Enviar los documentos recibidos al abogado (CC: ${(p.cc || []).join(", ")})\n\n` +
+        `Asunto (mismo hilo): ${p.subject}\n\nAdjuntos (${p.attachments.length}):\n${p.attachments.map(a => `• ${a}`).join("\n")}\n\n` +
+        `Confirmá o corregí el correo del abogado:`, p.to);
+      if (!to) return;
+      setEstudioModal(prev => ({ ...prev, loading: true }));
+      const r = await axios.post(`${API}/api/estudio-titulo/etapa2/${m.folder.id}`, { confirm: true, to_addr: to.trim() });
+      setEstudioModal(prev => ({ ...prev, loading: false, msg: `✅ Etapa 2: ${r.data.attachments.length} documento(s) del estudio enviados a ${r.data.to} (CC ${(r.data.cc || []).join(", ")}) — mismo hilo` }));
+      loadFolders();
+    } catch (e) {
+      setEstudioModal(prev => ({ ...prev, loading: false, msg: "Error: " + (e.response?.data?.detail || e.message) }));
     }
   };
 
@@ -1384,7 +1404,9 @@ export default function ClientesModule({ onNavigate }) {
                   const r = await axios.post(`${API}/api/clientes/folders/forzar`, { nombre, rut: rut.trim(), clave }, { timeout: 300000 });
                   const det = (r.data.procesados || []).map(p => `• ${p.subject?.slice(0, 50)} → ${p.archivos} archivo(s)`).join("\n");
                   const imap = r.data.archivos_imap || [];
-                  alert(`✅ Carpeta: ${r.data.carpeta}\nCorreos encontrados del cliente: ${r.data.correos_encontrados}\nAdjuntos descargados del correo: ${imap.length}${imap.length ? "\n" + imap.map(a => `  📎 ${a}`).join("\n") : ""}\n${det || "(sin correos en la cola)"}${r.data.errores?.length ? "\n\nErrores:\n" + r.data.errores.join("\n") : ""}`);
+                  const ver = r.data.verificacion_cedula;
+                  const verTxt = ver ? `\n\n🪪 Verificación con cédula (${ver.cedula}):\n  Nombre leído: ${ver.nombre_cedula || "—"} · RUT leído: ${ver.rut_cedula || "—"}${Object.keys(ver.cambios || {}).length ? "\n  ✏️ Corregido: " + Object.entries(ver.cambios).map(([k, v]) => `${k} → ${v}`).join(", ") : "\n  ✓ Sin correcciones necesarias"}` : "";
+                  alert(`✅ Carpeta: ${r.data.carpeta}\nCorreos encontrados del cliente: ${r.data.correos_encontrados}\nAdjuntos descargados del correo: ${imap.length}${imap.length ? "\n" + imap.map(a => `  📎 ${a}`).join("\n") : ""}\n${det || "(sin correos en la cola)"}${verTxt}${r.data.errores?.length ? "\n\nErrores:\n" + r.data.errores.join("\n") : ""}`);
                   loadFolders();
                 } catch (e) { alert("Error: " + (e.response?.data?.detail || e.message)); }
               }} style={{ borderColor: "#f59e0b", color: "#f59e0b" }}>
@@ -1865,8 +1887,10 @@ export default function ClientesModule({ onNavigate }) {
             )}
             {(() => {
               const esCod = (a) => a.subfolder === "05_codeudor" || /^CODEUDOR_/i.test(a.nombre || "");
-              const titularFiles = (currentFolder.archivos || []).filter(a => !esCod(a));
+              const esEstudio = (a) => (a.subfolder || "").startsWith("07_estudio_titulo");
+              const titularFiles = (currentFolder.archivos || []).filter(a => !esCod(a) && !esEstudio(a));
               const codFiles = (currentFolder.archivos || []).filter(esCod);
+              const estudioFiles = (currentFolder.archivos || []).filter(a => esEstudio(a) && !esCod(a));
               const renderFile = (file, i) => (
               <div key={file.ruta || i} className="clientes-file-item" data-testid={`file-${i}`}>
                 <i className={`fa ${file.nombre.endsWith('.pdf') ? 'fa-file-pdf-o' : file.nombre.match(/\.(jpg|png|jpeg)$/i) ? 'fa-file-image-o' : file.nombre.match(/\.(doc|docx)$/i) ? 'fa-file-word-o' : 'fa-file-o'}`}></i>
@@ -1912,6 +1936,18 @@ export default function ClientesModule({ onNavigate }) {
                         <span style={{ fontWeight: 600, opacity: 0.7 }}>({codFiles.length} archivo{codFiles.length !== 1 ? "s" : ""})</span>
                       </div>
                       {codFiles.map((f2, j) => renderFile(f2, titularFiles.length + j))}
+                    </div>
+                  )}
+                  {estudioFiles.length > 0 && (
+                    <div data-testid="estudio-subfolder" style={{ marginTop: 14, border: "1.5px dashed #14b8a6", borderRadius: 10, padding: "10px 12px", background: "rgba(20,184,166,0.06)" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, color: "#0d9488", fontWeight: 800, fontSize: 13 }}>
+                        <i className="fa fa-balance-scale"></i> Carpeta Estudio de Título (separada)
+                        <span style={{ fontWeight: 600, opacity: 0.7 }}>({estudioFiles.length} archivo{estudioFiles.length !== 1 ? "s" : ""})</span>
+                      </div>
+                      <div style={{ fontSize: 11, color: "#5eead4", marginBottom: 8 }}>
+                        🔒 Regla inviolable: estos documentos pertenecen al Estudio de Título de la propiedad y NUNCA se combinan ni se envían con la solicitud de crédito.
+                      </div>
+                      {estudioFiles.map((f2, j) => renderFile(f2, titularFiles.length + codFiles.length + j))}
                     </div>
                   )}
                 </>
@@ -2578,7 +2614,13 @@ export default function ClientesModule({ onNavigate }) {
                         <label key={a.ruta} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, cursor: permitido ? "pointer" : "not-allowed", opacity: permitido ? 1 : 0.45 }}>
                           <input type="checkbox" checked={!!a.sel} disabled={!permitido} data-testid={`tasacion-adj-${i}`}
                             onChange={() => permitido && setTasacionModal(prev => ({ ...prev, preview: null, archivos: prev.archivos.map(x => x.ruta === a.ruta ? { ...x, sel: !x.sel } : x) }))} />
-                          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.nombre} <span style={{ opacity: 0.5 }}>{a.subfolder ? `(${a.subfolder})` : ""}</span>{!permitido && <span style={{ fontSize: 10, color: "#94a3b8" }}> 🔒</span>}</span>
+                          <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.nombre} <span style={{ opacity: 0.5 }}>{a.subfolder ? `(${a.subfolder})` : ""}</span>{!permitido && <span style={{ fontSize: 10, color: "#94a3b8" }}> 🔒</span>}</span>
+                          <button type="button" data-testid={`tasacion-adj-ver-${i}`}
+                            title={`Ver ${a.nombre}`}
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); openPreview(m.folder.id, a.ruta, a.nombre); }}
+                            style={{ background: "rgba(59,130,246,0.15)", border: "1px solid #3b82f6", color: "#60a5fa", borderRadius: 6, padding: "2px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0, opacity: 1 }}>
+                            <i className="fa fa-eye" /> Ver
+                          </button>
                         </label>
                         );
                       })}
@@ -2745,20 +2787,66 @@ export default function ClientesModule({ onNavigate }) {
                 <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Observaciones</b>
                   <textarea value={m.observaciones} onChange={e => set("observaciones", e.target.value)} rows={2} data-testid="estudio-observaciones" style={{ ...inpS, resize: "vertical" }} />
                 </label>
-                {m.archivos.length > 0 && (
+                {m.archivos.length > 0 && (() => {
+                  const esEst = (a) => (a.subfolder || "").startsWith("07_estudio_titulo");
+                  const adjCredito = m.archivos.filter(a => !esEst(a));
+                  const docsEstudio = m.archivos.filter(esEst);
+                  return (
+                  <>
+                  {docsEstudio.length > 0 && (
+                    <div data-testid="estudio-docs-recibidos" style={{ background: "rgba(20,184,166,0.08)", border: "1.5px dashed #14b8a6", borderRadius: 8, padding: "0.7rem 0.9rem" }}>
+                      <div style={{ color: "#2dd4bf", fontSize: 11, textTransform: "uppercase", fontWeight: 800, marginBottom: 4 }}>
+                        ⚖ Documentos del Estudio de Título recibidos ({docsEstudio.length})
+                      </div>
+                      <div style={{ fontSize: 11, color: "#5eead4", marginBottom: 6 }}>
+                        Carpeta separada de la propiedad — NUNCA se mezclan con la solicitud de crédito. Usá "Enriquecer archivos" para seguir sumando los que lleguen por correo.
+                      </div>
+                      <button data-testid="btn-estudio-etapa2" onClick={() => enviarEtapa2(m)} disabled={m.loading}
+                        title="Etapa 2: enviar al abogado los documentos del estudio recibidos, con copia a Victoria Vilches, en el mismo hilo del correo"
+                        style={{ background: "#0d9488", border: "none", color: "#fff", borderRadius: 8, padding: "0.5rem 1rem", fontSize: 12.5, fontWeight: 800, cursor: "pointer", marginBottom: 8 }}>
+                        <i className={`fa ${m.loading ? "fa-spinner fa-spin" : "fa-paper-plane"}`} /> 📤 Etapa 2: Enviar documentos recibidos a Guillermo Marluf (CC Victoria Vilches)
+                      </button>
+                      {m.folder.estudio_docs_enviados_abogado_at && (
+                        <div data-testid="estudio-etapa2-badge" style={{ fontSize: 11, color: "#4ade80", fontWeight: 700, marginBottom: 6 }}>
+                          ✅ Etapa 2 realizada: {(m.folder.estudio_docs_enviados_abogado || []).length} documento(s) enviados el {new Date(m.folder.estudio_docs_enviados_abogado_at).toLocaleString("es-CL")}
+                        </div>
+                      )}
+                      <div style={{ display: "grid", gap: 4, maxHeight: 130, overflow: "auto" }}>
+                        {docsEstudio.map((a, i) => (
+                          <div key={a.ruta} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5 }}>
+                            <i className="fa fa-file-pdf-o" style={{ color: "#2dd4bf" }} />
+                            <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.nombre}</span>
+                            <button type="button" data-testid={`estudio-doc-ver-${i}`}
+                              onClick={() => openPreview(m.folder.id, a.ruta, a.nombre)}
+                              style={{ background: "rgba(59,130,246,0.15)", border: "1px solid #3b82f6", color: "#60a5fa", borderRadius: 6, padding: "2px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
+                              <i className="fa fa-eye" /> Ver
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <div style={{ background: "rgba(30,41,59,0.7)", borderRadius: 8, padding: "0.7rem 0.9rem" }}>
-                    <div style={{ opacity: 0.7, fontSize: 11, textTransform: "uppercase", marginBottom: 6 }}>Adjuntos — la carta de aprobación va preseleccionada</div>
+                    <div style={{ opacity: 0.7, fontSize: 11, textTransform: "uppercase", marginBottom: 6 }}>Adjuntos de la solicitud — la carta de aprobación va preseleccionada</div>
                     <div style={{ display: "grid", gap: 4, maxHeight: 140, overflow: "auto" }}>
-                      {m.archivos.map((a, i) => (
+                      {adjCredito.map((a, i) => (
                         <label key={a.ruta} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, cursor: "pointer" }}>
                           <input type="checkbox" checked={!!a.sel} data-testid={`estudio-adj-${i}`}
                             onChange={() => setEstudioModal(prev => ({ ...prev, preview: null, archivos: prev.archivos.map(x => x.ruta === a.ruta ? { ...x, sel: !x.sel } : x) }))} />
-                          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.nombre} <span style={{ opacity: 0.5 }}>{a.subfolder ? `(${a.subfolder})` : ""}</span></span>
+                          <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.nombre} <span style={{ opacity: 0.5 }}>{a.subfolder ? `(${a.subfolder})` : ""}</span></span>
+                          <button type="button" data-testid={`estudio-adj-ver-${i}`}
+                            title={`Ver ${a.nombre} antes de enviarlo`}
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); openPreview(m.folder.id, a.ruta, a.nombre); }}
+                            style={{ background: "rgba(59,130,246,0.15)", border: "1px solid #3b82f6", color: "#60a5fa", borderRadius: 6, padding: "2px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
+                            <i className="fa fa-eye" /> Ver
+                          </button>
                         </label>
                       ))}
                     </div>
                   </div>
-                )}
+                  </>
+                  );
+                })()}
                 {m.preview && (
                   <div style={{ background: "#fff", borderRadius: 8, padding: "0.9rem", maxHeight: 260, overflow: "auto" }}>
                     <div dangerouslySetInnerHTML={{ __html: m.preview.body }} />
@@ -3287,7 +3375,7 @@ export default function ClientesModule({ onNavigate }) {
                             <div style={{ flex: 1 }}>
                               <div style={{ fontSize: 13, color: it.satisfecho ? "#86efac" : "#e2e8f0", textDecoration: it.satisfecho ? "line-through" : "none" }}>{it.n}. {it.texto}</div>
                               <div style={{ fontSize: 11, color: it.satisfecho ? "#4ade80" : "#f87171", fontWeight: 700, marginTop: 2 }}>
-                                {it.satisfecho ? `✅ Reparo satisfecho${it.satisfecho_en ? ` · ${fmtF(it.satisfecho_en)}` : ""}` : "Pendiente — marcar cuando quede satisfecho"}
+                                {it.satisfecho ? `✅ Reparo aceptado${it.satisfecho_en ? ` · ${fmtF(it.satisfecho_en)}` : ""}` : "Pendiente — marcar la casilla \"Reparo aceptado\" cuando quede resuelto"}
                               </div>
                             </div>
                           </label>
@@ -3308,7 +3396,7 @@ export default function ClientesModule({ onNavigate }) {
                         <button onClick={declararReparos} disabled={m.declarando || items.length === 0 || pendientes > 0} data-testid="btn-reparos-declarar"
                           title={pendientes > 0 ? `Faltan ${pendientes} reparo(s) por marcar como satisfechos` : ""}
                           style={{ background: (m.declarando || items.length === 0 || pendientes > 0) ? "#475569" : "#16a34a", border: "none", color: "#fff", borderRadius: 6, padding: "8px 16px", cursor: (items.length === 0 || pendientes > 0) ? "not-allowed" : "pointer", fontSize: 13, fontWeight: 700 }}>
-                          <i className={`fa ${m.declarando ? "fa-spinner fa-spin" : "fa-check-circle"}`} /> {m.declarando ? "Enviando aviso…" : "Declaro que han quedado satisfechos todos los reparos"}
+                          <i className={`fa ${m.declarando ? "fa-spinner fa-spin" : "fa-check-circle"}`} /> {m.declarando ? "Enviando aviso…" : "Declaro que todos los reparos han sido recibidos satisfactoriamente y podemos continuar con el estudio de título"}
                         </button>
                       )}
                     </div>
