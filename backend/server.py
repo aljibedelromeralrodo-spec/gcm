@@ -5210,61 +5210,71 @@ def _gastos_html(payload):
             nota = f" <span style='color:#8a6d1a;font-style:italic;font-weight:400;font-size:10.5px'>({it['texto']})</span>" if (it.get("texto") or "").strip() else ""
             valor_html = f"<b>{_num_uf(it['valor'])} UF</b>{nota}"
         filas += (f"<tr style='background:{bg}'>"
-                  f"<td style='padding:8px 18px;border-bottom:1px solid #eceef3;color:#2b3245;font-size:12px'>{it.get('concepto','')}</td>"
-                  f"<td style='padding:8px 18px;border-bottom:1px solid #eceef3;text-align:right;color:#1a1f2e;white-space:nowrap;font-size:12px'>{valor_html}</td></tr>")
+                  f"<td style='padding:7px 10px;border-bottom:1px solid #eceef3;color:#2b3245;font-size:12px'>{it.get('concepto','')}</td>"
+                  f"<td style='padding:7px 10px;border-bottom:1px solid #eceef3;text-align:right;color:#1a1f2e;white-space:nowrap;font-size:12px'>{valor_html}</td></tr>")
     filas += (f"<tr style='background:#1a1f2e'>"
-              f"<td style='padding:11px 18px;color:#d4af37;font-weight:700;letter-spacing:0.5px;font-size:13px'>TOTAL</td>"
-              f"<td style='padding:11px 18px;text-align:right;color:#d4af37;font-weight:700;font-size:14px;white-space:nowrap'>{_num_uf(total)} UF</td></tr>")
+              f"<td style='padding:9px 10px;color:#d4af37;font-weight:700;letter-spacing:0.5px;font-size:12.5px'>TOTAL</td>"
+              f"<td style='padding:9px 10px;text-align:right;color:#d4af37;font-weight:700;font-size:13px;white-space:nowrap'>{_num_uf(total)} UF</td></tr>")
     valor_uf = payload.get("valor_uf")
     if valor_uf:
         filas += (f"<tr style='background:#1a1f2e'>"
-                  f"<td style='padding:7px 18px 11px;color:#9aa3b5;font-size:11px'>TOTAL EN PESOS (UF del día ${_fmt_num_clp(valor_uf)})</td>"
-                  f"<td style='padding:7px 18px 11px;text-align:right;color:#ffffff;font-weight:700;font-size:12.5px;white-space:nowrap'>${_fmt_num_clp(round(total * float(valor_uf)))} CLP</td></tr>")
+                  f"<td style='padding:5px 10px 9px;color:#9aa3b5;font-size:10.5px'>TOTAL EN PESOS (UF del día ${_fmt_num_clp(valor_uf)})</td>"
+                  f"<td style='padding:5px 10px 9px;text-align:right;color:#ffffff;font-weight:700;font-size:12px;white-space:nowrap'>${_fmt_num_clp(round(total * float(valor_uf)))} CLP</td></tr>")
     pago_filas = "".join(
-        f"<tr><td style='padding:5px 14px 5px 0;color:#6b7280;font-size:13px;white-space:nowrap'>{lbl}</td>"
-        f"<td style='padding:5px 0;color:#1a1f2e;font-size:13px;font-weight:600'>{val}</td></tr>"
+        f"<tr><td style='padding:4px 10px 4px 0;color:#6b7280;font-size:12px;white-space:nowrap;vertical-align:top'>{lbl}</td>"
+        f"<td style='padding:4px 0;color:#1a1f2e;font-size:12px;font-weight:600;word-break:break-word'>{val}</td></tr>"
         for lbl, val in [("Nombre", dp.get("nombre", "")), ("RUT", dp.get("rut", "")),
                          ("Banco", dp.get("banco", "")), ("Tipo de cuenta", dp.get("tipo_cuenta", "")),
                          ("N° de cuenta", dp.get("numero_cuenta", "")),
                          ("Correo", dp.get("email", ""))] if val)
-    return f"""
-    <div style="background:#f2f4f8;padding:28px 12px;font-family:Georgia,'Times New Roman',serif">
-      <div style="max-width:640px;margin:0 auto;background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 4px 18px rgba(16,24,40,0.10)">
-        <div style="background:#1a1f2e;padding:26px 32px;border-bottom:3px solid #d4af37">
-          <div style="color:#d4af37;font-size:22px;font-weight:700;letter-spacing:1px">Central Mutuos</div>
-        </div>
-        <div style="padding:30px 32px 12px">
-          <p style="margin:0 0 4px;color:#1a1f2e;font-size:16px"><b>Estimada(o) {nombre}</b></p>
-          <p style="margin:0 0 18px;color:#6b7280;font-size:13px">RUT: {rut}</p>
-          <div style="color:#2b3245;font-size:14px">{intro_html}</div>
-        </div>
-        <div style="padding:6px 32px 4px">
-          <div style="color:#1a1f2e;font-size:15px;font-weight:700;border-left:4px solid #d4af37;padding-left:10px;margin-bottom:12px">Detalle de Gastos Operacionales</div>
+    return f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="x-apple-disable-message-reformatting">
+</head>
+<body style="margin:0;padding:0;background:#f2f4f8">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f2f4f8">
+    <tr><td align="center" style="padding:14px 6px">
+      <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;background:#ffffff;font-family:Arial,Helvetica,sans-serif;border-collapse:collapse">
+        <tr><td style="background:#1a1f2e;padding:16px 20px;border-bottom:3px solid #d4af37">
+          <span style="color:#d4af37;font-size:18px;font-weight:700;letter-spacing:1px">Central Mutuos</span>
+        </td></tr>
+        <tr><td style="padding:20px 20px 6px">
+          <p style="margin:0 0 3px;color:#1a1f2e;font-size:15px;font-weight:700">Estimada(o) {nombre}</p>
+          <p style="margin:0 0 12px;color:#6b7280;font-size:12px">RUT: {rut}</p>
+          <div style="color:#2b3245;font-size:13px;line-height:1.55">{intro_html}</div>
+        </td></tr>
+        <tr><td style="padding:8px 20px 2px">
+          <div style="color:#1a1f2e;font-size:13.5px;font-weight:700;border-left:4px solid #d4af37;padding-left:9px;margin-bottom:10px">Detalle de Gastos Operacionales</div>
           <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="width:100%;border-collapse:collapse;font-size:12px;border:1px solid #eceef3">
             <tr style="background:#eef1f7">
-              <th style="padding:8px 18px;text-align:left;color:#4b5563;font-size:10.5px;letter-spacing:1px;text-transform:uppercase">Concepto</th>
-              <th style="padding:8px 18px;text-align:right;color:#4b5563;font-size:10.5px;letter-spacing:1px;text-transform:uppercase">Valor</th>
+              <th style="padding:7px 10px;text-align:left;color:#4b5563;font-size:10px;letter-spacing:1px;text-transform:uppercase">Concepto</th>
+              <th style="padding:7px 10px;text-align:right;color:#4b5563;font-size:10px;letter-spacing:1px;text-transform:uppercase">Valor</th>
             </tr>
             {filas}
           </table>
-        </div>
-        <div style="padding:22px 32px 8px">
-          <div style="color:#1a1f2e;font-size:15px;font-weight:700;border-left:4px solid #d4af37;padding-left:10px;margin-bottom:12px">Cuenta Recaudadora</div>
-          <div style="background:#f8f9fc;border:1px solid #eceef3;border-radius:8px;padding:16px 20px">
-            <table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse">{pago_filas}</table>
+        </td></tr>
+        <tr><td style="padding:16px 20px 4px">
+          <div style="color:#1a1f2e;font-size:13.5px;font-weight:700;border-left:4px solid #d4af37;padding-left:9px;margin-bottom:10px">Cuenta Recaudadora</div>
+          <div style="background:#f8f9fc;border:1px solid #eceef3;padding:10px 14px">
+            <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse">{pago_filas}</table>
           </div>
-        </div>
-        <div style="padding:20px 32px 28px">
-          <p style="margin:0;color:#6b7280;font-size:13px;line-height:1.6">Ante cualquier consulta sobre el detalle de estos valores o el proceso de pago, no dude en responder este correo. Estamos a su disposición.</p>
-          <p style="margin:14px 0 0;color:#1a1f2e;font-size:14px"><b>Central Mutuos</b><br>
-          <span style="color:#6b7280;font-size:12px">Créditos Hipotecarios</span></p>
-        </div>
-        <div style="background:#1a1f2e;padding:12px 32px;text-align:center">
-          <span style="color:#9aa3b5;font-size:11px">Este correo contiene información confidencial dirigida exclusivamente a su destinatario.</span>
-        </div>
-      </div>
-    </div>
-    """
+        </td></tr>
+        <tr><td style="padding:14px 20px 20px">
+          <p style="margin:0;color:#6b7280;font-size:12px;line-height:1.55">Ante cualquier consulta sobre el detalle de estos valores o el proceso de pago, no dude en responder este correo. Estamos a su disposición.</p>
+          <p style="margin:12px 0 0;color:#1a1f2e;font-size:13px"><b>Central Mutuos</b><br>
+          <span style="color:#6b7280;font-size:11px">Créditos Hipotecarios</span></p>
+        </td></tr>
+        <tr><td style="background:#1a1f2e;padding:9px 14px;text-align:center">
+          <span style="color:#9aa3b5;font-size:10px">Este correo contiene información confidencial dirigida exclusivamente a su destinatario.</span>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
 
 
 @api.post("/gastos-operacionales/enviar")
