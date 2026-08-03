@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import axios from "axios";
+import ImportarCorreo from "../components/ImportarCorreo";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -273,6 +274,8 @@ export default function SetCreditoModule({ onNavigate }) {
             </select>
             <input ref={fileRef} data-testid="setcred-upload-input" type="file" accept="application/pdf,image/*" onChange={subir} style={{ display: "none" }} />
             <button data-testid="setcred-upload-btn" onClick={() => fileRef.current?.click()} disabled={loading} style={btn("#3b82f6", true)}><i className="fa fa-upload" style={{ marginRight: "0.4rem" }} />Subir documento</button>
+            <ImportarCorreo destino="set_credito" destinoId={current.id} nombre={current.nombre}
+              label="Importar desde correo" onDone={() => abrir(current.id)} />
           </div>
 
           {/* Documentos */}

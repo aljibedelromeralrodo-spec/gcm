@@ -1,0 +1,20 @@
+{
+  "summary": "Iter 15: Nueva feature 'Importar desde correo' presente en TODOS los módulos verificada exitosamente. Backend 7/7 PASSED (/app/tests/test_iter15_importar_correo.py): GET /api/correos/buscar valida <3 letras (400), devuelve lista con subject/from/date/cuenta/message_id; POST /api/correos/importar valida mids vacío (400), importa a set_credito con dedupe correcto (2do POST devuelve guardados=[]), importa a carpeta por nombre, importa a estudio_titulo guardando SIEMPRE en subfolder 07_estudio_titulo (verificado en la respuesta). Regresión: /api/clientes/folders/forzar sigue rechazando clave incorrecta con 403. Frontend E2E: (1) Set de Crédito CLAUDIA ZURITA — botón data-testid=importar-correo-btn-set_credito visible, modal se abre con q precargado 'CLAUDIA ANDREA ZURITA SOTO', 10 sugerencias reales del IMAP en <20s, tras marcar checkbox y ejecutar importar el backend respondió con '⚠️ sin adjuntos nuevos' (dedupe OK — los 8 PDFs ya existentes no se duplicaron), sin error 500. (2) Carpeta Clientes detalle de PEDRO GONZALEZ — ambos botones visibles (importar-correo-btn-carpeta e importar-correo-btn-estudio_titulo), ambos modales abren correctamente con q precargado. (3) Gastos Operacionales — botón importar-correo-btn-carpeta visible y funcional. (4) Aprobación Cliente — botón importar-correo-btn-carpeta visible y funcional. (5) Regresión Forzar Carpeta sigue presente y clickeable. Búsquedas IMAP reales tomaron ~10s. NO se enviaron correos reales.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/tests/test_iter15_importar_correo.py", "/app/test_reports/pytest/iter15.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py sigue con 7366 líneas (creció 284 desde iter14) — pendiente splitting.",
+    "ImportarCorreo.js: el timeout del axios de búsqueda es 90000ms; si el IMAP tarda más, el usuario no ve feedback (spinner queda infinito). Considerar mostrar mensaje tras 20s.",
+    "correos_importar (server.py:1180): no aplica autenticación / clave admin como sí lo hace forzar_folder. Si el resto de endpoints /api/* son públicos (sin JWT), es consistente, pero convendría documentarlo.",
+    "correos_importar cuando destino='carpeta' y no encuentra folder crea uno nuevo con origen='importado_correo' — esto es intencional pero puede generar carpetas huérfanas si el usuario escribe un nombre mal (sin match en la BD). Considerar warning al frontend en ese caso."
+  ],
+  "updated_files": ["/app/tests/test_iter15_importar_correo.py (nuevo)", "/app/test_reports/pytest/iter15.xml"],
+  "success_rate": {"backend": "100% (7/7)", "frontend": "100% (5/5 escenarios: set_credito con import real+dedupe, clientes 2 botones, gastos, aprobacion, forzar-folder regresion)"},
+  "test_credentials": "administrador / 141617575",
+  "seed_data_creation": "Ninguna nueva carpeta creada. Los tests backend importaron un correo real del buzón 'zurita' hacia el set 364f70bf-25dc-4101-b6e8-764739ee8c71 (CLAUDIA ANDREA ZURITA SOTO) y a la carpeta CLAUDIA ANDREA ZURITA SOTO — si algún adjunto era nuevo quedó guardado en disco (dedupe evita duplicados en reintentos).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend URL: https://risk-assess-17.preview.emergentagent.com. Tests iter15 en /app/tests/test_iter15_importar_correo.py — correr con 'pytest -c /dev/null'. Endpoints nuevos GET /api/correos/buscar (q>=3 letras) y POST /api/correos/importar (destino: carpeta|estudio_titulo|set_credito) funcionan correctamente con dedupe. Set Claudia ID: 364f70bf-25dc-4101-b6e8-764739ee8c71. Componente ImportarCorreo.js usado en 4 módulos (SetCredito, Clientes, Gastos, Aprobacion). Búsquedas IMAP reales tardan 5-15s."
+}

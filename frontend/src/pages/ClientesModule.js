@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
+import ImportarCorreo from "../components/ImportarCorreo";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 const CAT_LABELS = { cedula: "Cédula", liquidacion: "Liquidaciones", afp: "AFP", cmf: "CMF", imp_renta: "Imp. Renta", boletas: "Boletas" };
@@ -1761,6 +1762,12 @@ export default function ClientesModule({ onNavigate }) {
               </button>
               <input id="manual-upload-input" type="file" multiple style={{ display: "none" }} onChange={handleManualUpload}
                 accept=".pdf,.jpg,.jpeg,.png,.heic,.heif,.docx,.doc,.xlsx" data-testid="manual-upload-input" />
+              <ImportarCorreo destino="carpeta" destinoId={currentFolder.id} nombre={currentFolder.nombre}
+                label="Importar desde correo"
+                onDone={async () => { const r = await axios.get(`${API}/api/clientes/folders/${currentFolder.id}`); setCurrentFolder(r.data); }} />
+              <ImportarCorreo destino="estudio_titulo" destinoId={currentFolder.id} nombre={currentFolder.nombre}
+                label="Importar a Estudio de Título" style={{ background: "rgba(13,148,136,0.25)" }}
+                onDone={async () => { const r = await axios.get(`${API}/api/clientes/folders/${currentFolder.id}`); setCurrentFolder(r.data); }} />
               <button className="docs-btn secondary" onClick={regenerateCombined} disabled={mergingProto === currentFolder.id} data-testid="btn-regen-combined"
                 style={{ background: "rgba(234,88,12,0.15)", border: "1px solid #ea580c", color: "#fb923c" }}>
                 <i className={`fa ${mergingProto === currentFolder.id ? "fa-spinner fa-spin" : "fa-file-pdf-o"}`}></i> {mergingProto === currentFolder.id ? "Combinando…" : "Regenerar Combinado"}

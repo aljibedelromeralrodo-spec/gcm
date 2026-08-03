@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
+import ImportarCorreo from "../components/ImportarCorreo";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -248,12 +249,17 @@ export default function GastosOperacionalesModule({ onNavigate }) {
           <div><label style={lbl}>RUT</label><input data-testid="gastos-rut" style={inp} value={rut} onChange={e => setRut(e.target.value)} /></div>
           <div><label style={lbl}>Correo del cliente</label><input data-testid="gastos-email" style={inp} value={emailCliente} onChange={e => setEmailCliente(e.target.value)} placeholder="cliente@correo.cl" /></div>
         </div>
-        <button data-testid="gastos-leer-ia" onClick={leerConIA} disabled={iaLoading || !nombre}
-          title="Lee con IA los correos (asunto y cuerpo) y documentos del cliente para completar correo, RUT y gastos. Prohibido inventar: solo llena lo que aparece."
-          style={{ ...btn("#8b5cf6", true), marginTop: "0.8rem" }}>
-          <i className={`fa ${iaLoading ? "fa-spinner fa-spin" : "fa-magic"}`} style={{ marginRight: "0.4rem" }} />
-          {iaLoading ? "Leyendo correos y documentos…" : "🤖 Leer datos con IA (correos + documentos)"}
-        </button>
+        <div style={{ display: "flex", gap: "0.7rem", flexWrap: "wrap", marginTop: "0.8rem", alignItems: "center" }}>
+          <button data-testid="gastos-leer-ia" onClick={leerConIA} disabled={iaLoading || !nombre}
+            title="Lee con IA los correos (asunto y cuerpo) y documentos del cliente para completar correo, RUT y gastos. Prohibido inventar: solo llena lo que aparece."
+            style={btn("#8b5cf6", true)}>
+            <i className={`fa ${iaLoading ? "fa-spinner fa-spin" : "fa-magic"}`} style={{ marginRight: "0.4rem" }} />
+            {iaLoading ? "Leyendo correos y documentos…" : "🤖 Leer datos con IA (correos + documentos)"}
+          </button>
+          <ImportarCorreo destino="carpeta" nombre={nombre}
+            label="Importar tasación / docs desde correo"
+            onDone={() => setMsg("✅ Archivos importados a la carpeta del cliente — usá 🤖 Leer datos con IA para releerlos")} />
+        </div>
       </div>
 
       {/* TEXTO + CUADRO */}

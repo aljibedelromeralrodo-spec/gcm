@@ -1167,6 +1167,88 @@ async def forzar_sugerencias(q: str = ""):
     return {"carpetas": carpetas, "cola": cola, "correos": correos}
 
 
+@api.get("/correos/buscar")
+async def correos_buscar_generico(q: str = ""):
+    """Búsqueda en vivo de correos (cabeceras) para importar adjuntos desde cualquier módulo."""
+    q = (q or "").strip()
+    if len(q) < 3:
+        raise HTTPException(status_code=400, detail="Escribe al menos 3 letras")
+    correos = await asyncio.to_thread(mail.search_email_headers_by_person, q, 10)
+    return {"correos": correos}
+
+
+@api.post("/correos/importar")
+async def correos_importar(payload: dict):
+    """Importa los adjuntos de los correos elegidos hacia el módulo indicado:
+    carpeta del cliente, estudio de título (separado) o set de crédito."""
+    payload = payload or {}
+    destino = (payload.get("destino") or "carpeta").strip()
+    destino_id = (payload.get("destino_id") or "").strip()
+    nombre = (payload.get("nombre") or "").strip()
+    mids = [str(m).strip() for m in (payload.get("message_ids") or []) if m and str(m).strip()]
+    if not mids:
+        raise HTTPException(status_code=400, detail="Selecciona al menos un correo")
+    resultados = await asyncio.to_thread(mail.fetch_attachments_by_message_ids, mids)
+    if not resultados:
+        raise HTTPException(status_code=404, detail="No se pudieron descargar los correos seleccionados")
+    guardados = []
+    if destino == "set_credito":
+        doc = await db.set_credito.find_one({"id": destino_id}) if destino_id else None
+        if not doc and nombre:
+            doc = await db.set_credito.find_one({"nombre": {"$regex": re.escape(nombre), "$options": "i"}})
+        if not doc:
+            raise HTTPException(status_code=404, detail="Set de crédito no encontrado")
+        base_dir = _set_dir(doc.get("nombre", ""))
+        existentes = {a["nombre"].lower() for a in _set_archivos(doc.get("nombre", ""))}
+        for r in resultados:
+            for p in r.get("pdfs") or []:
+                raw, fn = p.get("content_bytes"), p.get("filename") or ""
+                if not raw or _PAT_FIRMA_CORREO.match(fn):
+                    continue
+                try:
+                    raw, fn, _ = pdfs.convertir_a_pdf(raw, fn)
+                except ValueError:
+                    pass
+                fn = fsvc.safe_name(fn)
+                if fn.lower() in existentes:
+                    continue
+                cod = bool(re.search(r"codeudor", fn, re.I))
+                dest = base_dir / ("codeudor" if cod else "")
+                dest.mkdir(parents=True, exist_ok=True)
+                (dest / fn).write_bytes(raw)
+                existentes.add(fn.lower())
+                guardados.append(("codeudor/" if cod else "") + fn)
+    else:
+        folder = await db.folders.find_one({"id": destino_id}) if destino_id else None
+        if not folder and nombre:
+            palabras = [p_ for p_ in re.split(r"\s+", nombre) if len(p_) >= 3]
+            if palabras:
+                folder = await db.folders.find_one(
+                    {"$and": [{"nombre": {"$regex": re.escape(p_), "$options": "i"}} for p_ in palabras[:2]]})
+        if not folder:
+            if not nombre:
+                raise HTTPException(status_code=404, detail="Carpeta no encontrada — indica el nombre del cliente")
+            folder = {"id": str(uuid.uuid4()), "nombre": nombre.upper(), "rut": "",
+                      "archivos": [], "created_at": now_iso(), "origen": "importado_correo"}
+            await db.folders.insert_one(dict(folder))
+            fsvc.folder_dir(folder["nombre"]).mkdir(parents=True, exist_ok=True)
+        existentes = {a["nombre"].lower() for a in fsvc.scan_archivos(folder["nombre"])}
+        for r in resultados:
+            for p in r.get("pdfs") or []:
+                fn = fsvc.safe_name(p.get("filename") or "")
+                if not p.get("content_bytes") or fn.lower() in existentes or _PAT_FIRMA_CORREO.match(fn):
+                    continue
+                if destino == "estudio_titulo":
+                    sub = "07_estudio_titulo"
+                else:
+                    cat = fsvc.cat_de_texto(fn)
+                    sub = "07_estudio_titulo" if cat == "estudio_titulo" else ""
+                rel = fsvc.guardar_archivo(folder["nombre"], fn, p["content_bytes"], subfolder=sub)
+                existentes.add(fn.lower())
+                guardados.append(rel)
+    return {"ok": True, "guardados": guardados, "correos": len(resultados)}
+
+
 @api.post("/clientes/folders/forzar")
 async def forzar_folder(payload: dict):
     """Fuerza la creación manual de una carpeta: busca por NOMBRE y/o RUT en los correos

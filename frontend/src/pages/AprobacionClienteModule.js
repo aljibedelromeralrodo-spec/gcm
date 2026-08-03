@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
+import ImportarCorreo from "../components/ImportarCorreo";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -150,6 +151,17 @@ export default function AprobacionClienteModule({ onNavigate }) {
           <div><label style={lbl}>Nombre del cliente</label><input data-testid="aprobacion-nombre" style={inp} value={nombre} onChange={e => setNombre(e.target.value)} /></div>
           <div><label style={lbl}>RUT</label><input data-testid="aprobacion-rut" style={inp} value={rut} onChange={e => setRut(e.target.value)} /></div>
           <div><label style={lbl}>Correo del cliente (auto o manual)</label><input data-testid="aprobacion-email" style={inp} value={emailCliente} onChange={e => setEmailCliente(e.target.value)} placeholder="cliente@correo.cl" /></div>
+        </div>
+        <div style={{ marginTop: "0.8rem" }}>
+          <ImportarCorreo destino="carpeta" nombre={nombre}
+            label="Importar documentos desde correo"
+            onDone={async () => {
+              if (!nombre) return;
+              try {
+                const a = await axios.get(`${API}/api/aprobacion-cliente/archivos`, { params: { cliente: nombre } });
+                setArchivos(a.data.archivos || []);
+              } catch (_e) { /* noop */ }
+            }} />
         </div>
         {plantillaPropia && <div style={{ marginTop: "0.6rem", fontSize: "0.8rem", color: "#22c55e" }}><i className="fa fa-bookmark" style={{ marginRight: "0.35rem" }} />Este cliente tiene plantilla propia guardada</div>}
       </div>
