@@ -2210,6 +2210,13 @@ async def folder_send_email(fid: str, payload: dict):
         raise HTTPException(status_code=412, detail="Documentación incompleta — faltan: "
                             + ", ".join(missing_labels)
                             + ". Para enviar igual, asumí el envío manual incompleto.")
+    # REGLA: a Mesa solo se envía UNA vez en forma directa. Para reenviar se exige la clave.
+    if payload.get("confirm") and doc.get("mesa_enviado_at"):
+        if (payload.get("clave") or "") != CLAVE_FORZAR_CARPETA:
+            raise HTTPException(status_code=403, detail=(
+                f"Esta carpeta ya se envió a Mesa el "
+                f"{str(doc['mesa_enviado_at'])[:16].replace('T', ' ')}. "
+                "Para reenviarla debes ingresar la clave de administrador."))
     attach_names = []
     attach_paths = []
     if payload.get("include_merged", True):
@@ -2259,7 +2266,8 @@ async def folder_send_email(fid: str, payload: dict):
     if not res.get("success"):
         raise HTTPException(status_code=502, detail=res.get("error", "Error de envío"))
     await db.folders.update_one({"id": fid}, {"$inc": {"emails_sent_count": 1},
-                                              "$set": {"last_email_sent_at": now_iso()}})
+                                              "$set": {"last_email_sent_at": now_iso(),
+                                                       "mesa_enviado_at": now_iso()}})
     return {"to": to, "subject": subject, "attachments": attach_names,
             "sender": res.get("desde", sender)}
 
@@ -2645,8 +2653,11 @@ def _procesar_mesa(destino, cutoff_iso, ejecutivos=None, ya_enviados=None):
     for c in correos:
         if cutoff_iso and c.get("date") and c["date"] < cutoff_iso:
             continue
-        if (c.get("subject") or "").strip() in ya_enviados:
-            continue  # ya fue enviado antes, no duplicar
+        subj = (c.get("subject") or "").strip()
+        if subj and subj in ya_enviados:
+            continue  # ya fue enviado antes o ya se procesó en ESTE ciclo (correo duplicado en ambas casillas)
+        if subj:
+            ya_enviados.add(subj)
         cliente = mail._extraer_nombre(c["subject"], c["from"])
         es_aprobacion = c["tipo"] == "aprobacion"
         es_rechazo = c["tipo"] == "rechazo"
@@ -2658,6 +2669,9 @@ def _procesar_mesa(destino, cutoff_iso, ejecutivos=None, ya_enviados=None):
                                    "adjuntos": [], "es_aprobacion": False,
                                    "es_rechazo": True, "body": c.get("body", "")})
             continue
+        # REGLA: UN SOLO correo a mesa por gestión — todos los PDFs van juntos como adjuntos
+        adjuntos = []
+        saved = []
         for pdf in c["pdfs"]:
             raw = pdf["content_bytes"]
             nombre_pdf = pdf["filename"]
@@ -2669,8 +2683,6 @@ def _procesar_mesa(destino, cutoff_iso, ejecutivos=None, ya_enviados=None):
             # REGLA INVIOLABLE: cartas de aprobacion SIEMPRE intactas, formato sin modificar.
             es_carta = tipo_doc == "carta_aprobacion" or re.search(
                 r"carta|aprobaci[oó]n|aprobacion", (nombre_pdf or "").lower())
-            adjuntos = []
-            saved = []
             if tipo_doc == "simulacion" and not es_carta:
                 nuevo, orig, removidas = pdfs.dejar_primera_pagina(raw)
                 nombre_aj = nombre_pdf.replace(".pdf", "") + "_CM.pdf"
@@ -2683,6 +2695,7 @@ def _procesar_mesa(destino, cutoff_iso, ejecutivos=None, ya_enviados=None):
                 _save_pdf(cliente, nombre_pdf, raw)
                 saved.append({"name": _safe_name(nombre_pdf), "type": tipo_doc})
                 adjuntos.append({"filename": nombre_pdf, "content_b64": _b64(raw)})
+        if adjuntos:
             resultados.append({"cliente": cliente, "subject": c["subject"],
                                "saved": saved, "adjuntos": adjuntos,
                                "es_aprobacion": es_aprobacion,

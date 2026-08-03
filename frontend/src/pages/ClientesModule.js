@@ -1298,7 +1298,24 @@ export default function ClientesModule({ onNavigate }) {
       alert(`✅ Correo enviado a ${r.data.to}\nAdjuntos: ${r.data.attachments.length}\nDesde: ${r.data.sender}${suffix}`);
       closeEmailModal();
     } catch (err) {
-      alert("Error enviando correo: " + (err.response?.data?.detail || err.message));
+      const det = err.response?.data?.detail || err.message;
+      if (err.response?.status === 403 && String(det).toLowerCase().includes("clave")) {
+        const clave = window.prompt(det + "\n\nIngresa la CLAVE de administrador para autorizar el REENVÍO:");
+        if (clave) {
+          try {
+            const r2 = await axios.post(`${API}/api/clientes/folders/${em.folder.id}/send-email`,
+              { ...buildEmailPayload(em), confirm: true, clave });
+            alert(`✅ Correo REENVIADO a ${r2.data.to} (autorizado con clave)\nAdjuntos: ${r2.data.attachments.length}`);
+            closeEmailModal();
+            return;
+          } catch (e2) {
+            alert("Error: " + (e2.response?.data?.detail || e2.message));
+          }
+        }
+        setEmailModal({ ...em, sending: false });
+        return;
+      }
+      alert("Error enviando correo: " + det);
       setEmailModal({ ...em, sending: false });
     }
   };
