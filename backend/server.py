@@ -1184,6 +1184,11 @@ async def forzar_folder(payload: dict):
                 resultados += await asyncio.to_thread(mail.search_attachments_by_person, rut)
             except Exception:
                 pass
+        if resultados and not (folder.get("source_email") or "").strip():
+            remit = (resultados[-1].get("from") or resultados[0].get("from") or "").strip()
+            if "@" in remit:
+                await db.folders.update_one({"id": folder["id"]}, {"$set": {"source_email": remit}})
+                folder["source_email"] = remit
         existentes = {a["nombre"].lower() for a in fsvc.scan_archivos(folder["nombre"])}
         for r in resultados:
             for p in r.get("pdfs") or []:
@@ -1281,6 +1286,10 @@ async def folder_enriquecer(fid: str, payload: dict = None):
             resultados += await asyncio.to_thread(mail.search_attachments_by_person, rut)
         except Exception:
             pass
+    if resultados and not (doc.get("source_email") or "").strip():
+        remit = (resultados[-1].get("from") or resultados[0].get("from") or "").strip()
+        if "@" in remit:
+            await db.folders.update_one({"id": fid}, {"$set": {"source_email": remit}})
     existentes = {a["nombre"].lower() for a in fsvc.scan_archivos(nombre)}
     nuevos = []
     for r in resultados:
@@ -4406,6 +4415,32 @@ async def gastos_prefill(nombre: str = ""):
 
 # ==================== MÓDULO CIERRES ====================
 
+async def _ejecutivo_desde_origen(d):
+    """Deriva el ejecutivo desde el origen de la solicitud de crédito original:
+    el remitente que envió la documentación del cliente (ej: Javiera Garrido de
+    Work Consultores). Fuente: source_email de la carpeta o el correo en la cola."""
+    origen = (d.get("source_email") or "").strip()
+    m = re.match(r'^"?([^"<]*)"?\s*<([^>]+)>$', origen)
+    if m and "@" in m.group(2):
+        return m.group(1).strip(), m.group(2).strip()
+    if "@" in origen:
+        return "", origen
+    toks = [t for t in _norm_texto(d.get("nombre", "")).split() if len(t) > 2]
+    if toks:
+        rx = ".*".join(re.escape(t) for t in toks[:2])
+        it = await db.proc_queue.find_one({"$or": [
+            {"cliente": {"$regex": rx, "$options": "i"}},
+            {"classification.cliente": {"$regex": rx, "$options": "i"}},
+            {"subject": {"$regex": rx, "$options": "i"}}]})
+        remit = ((it or {}).get("from") or "").strip()
+        m2 = re.match(r'^"?([^"<]*)"?\s*<([^>]+)>$', remit)
+        if m2 and "@" in m2.group(2):
+            return m2.group(1).strip(), m2.group(2).strip()
+        if "@" in remit:
+            return "", remit
+    return "", ""
+
+
 @api.get("/cierres")
 async def cierres_list(solo_entrega_inmediata: bool = False, todos: bool = False):
     """Listado de aprobaciones enviadas para consultar al ejecutivo si el cliente
@@ -4432,6 +4467,15 @@ async def cierres_list(solo_entrega_inmediata: bool = False, todos: bool = False
             except Exception:
                 pass
         ultima = c.get("ultima_consulta_at")
+        ej_nombre = (c.get("ejecutivo_nombre") or "").strip()
+        ej_email = (c.get("ejecutivo_email") or "").strip()
+        ej_desde_origen = False
+        if not ej_email:
+            on, oe = await _ejecutivo_desde_origen(d)
+            if oe:
+                ej_nombre = ej_nombre or on
+                ej_email = oe
+                ej_desde_origen = True
         dias = None
         if ultima:
             try:
@@ -4440,8 +4484,9 @@ async def cierres_list(solo_entrega_inmediata: bool = False, todos: bool = False
                 dias = None
         filas.append({
             "id": d["id"], "nombre": d.get("nombre", ""), "rut": d.get("rut", ""),
-            "ejecutivo_nombre": c.get("ejecutivo_nombre", ""),
-            "ejecutivo_email": c.get("ejecutivo_email", ""),
+            "ejecutivo_nombre": ej_nombre,
+            "ejecutivo_email": ej_email,
+            "ejecutivo_desde_origen": ej_desde_origen,
             "inmobiliaria": c.get("inmobiliaria") or (d.get("datos_financieros") or {}).get("inmobiliaria", ""),
             "proyecto": c.get("proyecto", ""),
             "entrega_inmediata": c.get("entrega_inmediata", True),
@@ -4524,6 +4569,11 @@ async def cierres_consultar(fid: str, payload: dict = None, request: Request = N
     ejecutivo = (payload.get("ejecutivo_nombre") or c.get("ejecutivo_nombre") or "").strip()
     correo = (payload.get("ejecutivo_email") or c.get("ejecutivo_email") or "").strip()
     proyecto = (payload.get("proyecto") or c.get("proyecto") or "").strip()
+    if "@" not in correo:
+        on, oe = await _ejecutivo_desde_origen(doc)
+        if oe:
+            ejecutivo = ejecutivo or on
+            correo = oe
     if "@" not in correo:
         raise HTTPException(status_code=400,
                             detail="Falta el correo del ejecutivo — complétalo en la fila antes de enviar")

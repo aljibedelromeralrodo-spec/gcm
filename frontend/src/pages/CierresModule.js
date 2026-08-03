@@ -138,8 +138,12 @@ export default function CierresModule() {
                       : "⏰ Nunca consultado — toca preguntar"}
                   </div>
                 </div>
-                <div style={{ fontSize: 12, color: "#94a3b8", flex: "0 1 220px" }}>
-                  {r.ejecutivo_email ? <><i className="fa fa-envelope-o" /> {r.ejecutivo_email}</> : <span style={{ color: "#f87171" }}>Sin correo del ejecutivo</span>}
+                <div style={{ fontSize: 12, color: "#94a3b8", flex: "0 1 240px" }}>
+                  {r.ejecutivo_email
+                    ? <><i className="fa fa-envelope-o" /> {r.ejecutivo_email}
+                        {r.ejecutivo_desde_origen && <div style={{ fontSize: 10.5, color: "#60a5fa", fontWeight: 700 }}>↩ tomado de la solicitud de crédito original</div>}
+                      </>
+                    : <span style={{ color: "#f87171" }}>Sin correo del ejecutivo</span>}
                 </div>
                 <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
                   <button data-testid={`cierre-edit-${r.id}`} onClick={() => setEdit({ ...r })}
