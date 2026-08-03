@@ -702,3 +702,12 @@ requieren re-deploy para llegar a producción.
 - Botón "⚡ Forzar Carpeta" (btn-forzar-folder) junto a "Nueva Carpeta" en
   Carpeta Clientes: pide nombre + clave, muestra resumen de correos/archivos.
 - VERIFICADO: clave mala 403; con clave armó Franco Bahamondes (1 correo, 8 archivos).
+
+## Importar desde Correo — motor transversal (2026-06)
+- GET /api/correos/buscar?q= (sugerencias IMAP en vivo, cabeceras con message_id).
+- POST /api/correos/importar {destino: carpeta|estudio_titulo|set_credito, destino_id, nombre, message_ids}
+  con dedupe por nombre de archivo; estudio_titulo va SIEMPRE a 07_estudio_titulo.
+- Componente reutilizable: /app/frontend/src/components/ImportarCorreo.js
+  (testids: importar-correo-btn-{destino}, -q, -item-{i}, -ejecutar, -msg).
+- Integrado en: SetCreditoModule, ClientesModule (detalle: 2 botones), GastosOperacionalesModule, AprobacionClienteModule.
+- Testing iteración 15: backend 7/7, frontend 5/5 PASS. Listado de correos con letra grande (pedido del usuario).
