@@ -398,30 +398,65 @@ def fetch_attachments_by_id(email_id, filename=None):
     return atts
 
 
+def _sin_acentos(s):
+    import unicodedata
+    s = unicodedata.normalize("NFD", (s or "").lower())
+    return "".join(c for c in s if unicodedata.category(c) != "Mn")
+
+
+def _buscar_ids_persona(m, tokens, original):
+    """Une varias estrategias de SEARCH para tolerar acentos del servidor."""
+    ids = set()
+    for t in tokens[:3]:
+        try:
+            typ, data = m.search(None, "X-GM-RAW", f'"{t}"')
+            if typ == "OK" and data and data[0]:
+                ids |= set(data[0].split())
+        except Exception:
+            pass
+    # Variante con acentos originales (literal UTF-8)
+    orig_toks = [t for t in (original or "").lower().split() if len(t) > 2]
+    for t in orig_toks[:3]:
+        if t.encode("ascii", "ignore").decode() != t:
+            try:
+                m.literal = f'"{t}"'.encode("utf-8")
+                typ, data = m.search("UTF-8", "X-GM-RAW")
+                if typ == "OK" and data and data[0]:
+                    ids |= set(data[0].split())
+            except Exception:
+                pass
+    if not ids:
+        try:
+            typ, data = m.search(None, "TEXT", f'"{max(tokens, key=len)}"')
+            if typ == "OK" and data and data[0]:
+                ids |= set(data[0].split())
+        except Exception:
+            pass
+    # Siempre revisar además los correos más recientes (caso: correo recién enviado)
+    try:
+        typ, data = m.search(None, "ALL")
+        if typ == "OK" and data and data[0]:
+            ids |= set(data[0].split()[-30:])
+    except Exception:
+        pass
+    return sorted(ids, key=lambda x: int(x))
+
+
 def search_attachments_by_person(person_name, limit=40):
-    """Busca correos que mencionen a la persona (SEARCH en servidor) y trae sus adjuntos."""
-    name = (person_name or "").lower().strip()
+    """Busca correos que mencionen a la persona (SEARCH en servidor) y trae sus adjuntos.
+    Tolerante a acentos: 'González' y 'Gonzalez' se tratan igual."""
+    name = _sin_acentos(person_name).strip()
     if not name:
         return []
     tokens = [t for t in name.split() if len(t) > 2] or [name]
-    clave = max(tokens, key=len).encode("ascii", "ignore").decode() or tokens[0]
     CAPTURA_EXT = (".pdf", ".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp")
     exactos, parciales = [], []
     for acc in ACCOUNTS:
         try:
             m = _connect(acc)
             m.select("INBOX", readonly=True)
-            try:
-                typ, data = m.search(None, "X-GM-RAW", f'"{clave}"')
-                if typ != "OK":
-                    raise Exception("gm-raw no soportado")
-            except Exception:
-                try:
-                    typ, data = m.search(None, "TEXT", f'"{clave}"')
-                except Exception:
-                    typ, data = m.search(None, "ALL")
-            ids = data[0].split() if data and data[0] else []
-            ids = ids[-25:]
+            ids = _buscar_ids_persona(m, tokens, person_name)
+            ids = ids[-60:]
             # Pre-filtrar por cabeceras (rapido) antes de bajar el correo completo
             candidatos = []
             for num in reversed(ids):
@@ -429,17 +464,25 @@ def search_attachments_by_person(person_name, limit=40):
                 if not hd or not isinstance(hd[0], tuple):
                     continue
                 hmsg = email.message_from_bytes(hd[0][1])
-                blob_h = f"{_dec(hmsg.get('Subject'))} {_dec(hmsg.get('From'))}".lower()
+                blob_h = _sin_acentos(f"{_dec(hmsg.get('Subject'))} {_dec(hmsg.get('From'))}")
                 if any(t in blob_h for t in tokens):
                     candidatos.append(num)
                 if len(candidatos) >= 8:
                     break
+            # El SEARCH del servidor ya buscó en el cuerpo: incluir también los que
+            # mencionan a la persona solo en el cuerpo (correos reenviados, etc.)
+            if len(candidatos) < 8:
+                for num in reversed(ids):
+                    if num not in candidatos:
+                        candidatos.append(num)
+                    if len(candidatos) >= 8:
+                        break
             for num in candidatos:
                 typ, msgdata = m.fetch(num, "(BODY.PEEK[])")
                 if not msgdata or not isinstance(msgdata[0], tuple):
                     continue
                 info = _parse_full_message(email.message_from_bytes(msgdata[0][1]), with_bytes=True)
-                blob = f"{info['subject']} {info['from']} {info['body']}".lower()
+                blob = _sin_acentos(f"{info['subject']} {info['from']} {info['body']}")
                 hits = sum(1 for t in tokens if t in blob)
                 if hits == 0:
                     continue
