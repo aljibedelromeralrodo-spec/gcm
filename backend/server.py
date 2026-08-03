@@ -1179,9 +1179,22 @@ async def correos_buscar_generico(q: str = ""):
 
 @api.post("/correos/importar")
 async def correos_importar(payload: dict):
+    """Lanza la importación de adjuntos en SEGUNDO PLANO (la descarga IMAP puede tardar
+    >60s y el proxy corta la conexión). El frontend consulta /api/jobs/{id}."""
+    payload = payload or {}
+    mids_v = [str(m).strip() for m in (payload.get("message_ids") or []) if m and str(m).strip()]
+    if not mids_v:
+        raise HTTPException(status_code=400, detail="Selecciona al menos un correo")
+    job_id = str(uuid.uuid4())
+    await db.bg_jobs.insert_one({"id": job_id, "tipo": "importar_correo",
+                                 "estado": "en_proceso", "inicio": now_iso()})
+    asyncio.create_task(_job_run(job_id, _correos_importar_run(payload)))
+    return {"ok": True, "job_id": job_id, "estado": "en_proceso"}
+
+
+async def _correos_importar_run(payload):
     """Importa los adjuntos de los correos elegidos hacia el módulo indicado:
     carpeta del cliente, estudio de título (separado) o set de crédito."""
-    payload = payload or {}
     destino = (payload.get("destino") or "carpeta").strip()
     destino_id = (payload.get("destino_id") or "").strip()
     nombre = (payload.get("nombre") or "").strip()
@@ -1249,17 +1262,49 @@ async def correos_importar(payload: dict):
     return {"ok": True, "guardados": guardados, "correos": len(resultados)}
 
 
+async def _job_run(job_id, coro):
+    """Ejecuta un trabajo largo en segundo plano y guarda el resultado en bg_jobs."""
+    try:
+        resultado = await coro
+        await db.bg_jobs.update_one({"id": job_id}, {"$set": {
+            "estado": "listo", "resultado": resultado, "fin": now_iso()}})
+    except HTTPException as e:
+        await db.bg_jobs.update_one({"id": job_id}, {"$set": {
+            "estado": "error", "error": str(e.detail), "fin": now_iso()}})
+    except Exception as e:
+        await db.bg_jobs.update_one({"id": job_id}, {"$set": {
+            "estado": "error", "error": str(e)[:300], "fin": now_iso()}})
+
+
+@api.get("/jobs/{job_id}")
+async def job_estado(job_id: str):
+    doc = await db.bg_jobs.find_one({"id": job_id})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Trabajo no encontrado")
+    return clean(doc)
+
+
 @api.post("/clientes/folders/forzar")
 async def forzar_folder(payload: dict):
-    """Fuerza la creación manual de una carpeta: busca por NOMBRE y/o RUT en los correos
-    ingresados los datos y descarga los archivos adjuntos (requiere clave admin)."""
+    """Valida y lanza el forzado de carpeta en SEGUNDO PLANO: la búsqueda IMAP puede
+    tardar >60s y el proxy corta la conexión (502). El frontend consulta /api/jobs/{id}."""
     payload = payload or {}
     if payload.get("clave") != CLAVE_FORZAR_CARPETA:
         raise HTTPException(status_code=403, detail="Clave incorrecta")
+    if len((payload.get("nombre") or "").strip()) < 3 and not (payload.get("rut") or "").strip():
+        raise HTTPException(status_code=400, detail="Indica el nombre o el RUT del cliente")
+    job_id = str(uuid.uuid4())
+    await db.bg_jobs.insert_one({"id": job_id, "tipo": "forzar_carpeta",
+                                 "estado": "en_proceso", "inicio": now_iso()})
+    asyncio.create_task(_job_run(job_id, _forzar_folder_run(payload)))
+    return {"ok": True, "job_id": job_id, "estado": "en_proceso"}
+
+
+async def _forzar_folder_run(payload):
+    """Fuerza la creación manual de una carpeta: busca por NOMBRE y/o RUT en los correos
+    ingresados los datos y descarga los archivos adjuntos."""
     nombre = (payload.get("nombre") or "").strip()
     rut = (payload.get("rut") or "").strip()
-    if len(nombre) < 3 and not rut:
-        raise HTTPException(status_code=400, detail="Indica el nombre o el RUT del cliente")
     palabras = [p for p in re.split(r"\s+", nombre) if len(p) >= 3]
     conds = [{"$or": [{"subject": {"$regex": re.escape(p), "$options": "i"}},
                       {"classification.cliente": {"$regex": re.escape(p), "$options": "i"}},

@@ -32,12 +32,21 @@ export default function ImportarCorreo({ destino, destinoId, nombre, onDone, lab
   const importar = async () => {
     const mids = correos.filter((c, i) => sel[i] && c.message_id).map(c => c.message_id);
     if (!mids.length) { setMsg("Selecciona al menos un correo de la lista"); return; }
-    setImportando(true); setMsg("");
+    setImportando(true); setMsg("⏳ Descargando adjuntos desde el correo… (puede tardar 1-2 minutos, no cierres esta ventana)");
     try {
       const r = await axios.post(`${API}/api/correos/importar`,
-        { destino, destino_id: destinoId || "", nombre: q.trim(), message_ids: mids }, { timeout: 300000 });
-      const n = (r.data.guardados || []).length;
-      setMsg(n ? `✅ ${n} archivo(s) importado(s): ${r.data.guardados.join(" · ")}`
+        { destino, destino_id: destinoId || "", nombre: q.trim(), message_ids: mids }, { timeout: 55000 });
+      const jobId = r.data.job_id;
+      let res = null;
+      for (let i = 0; i < 120; i++) {
+        await new Promise(s => setTimeout(s, 3000));
+        const j = await axios.get(`${API}/api/jobs/${jobId}`, { timeout: 30000 });
+        if (j.data.estado === "listo") { res = j.data.resultado; break; }
+        if (j.data.estado === "error") throw new Error(j.data.error || "Error importando");
+      }
+      if (!res) throw new Error("La importación sigue en curso — revisá los archivos en unos minutos");
+      const n = (res.guardados || []).length;
+      setMsg(n ? `✅ ${n} archivo(s) importado(s): ${res.guardados.join(" · ")}`
                : "⚠️ Los correos elegidos no traían adjuntos nuevos (quizá ya estaban guardados)");
       if (n && onDone) onDone();
     } catch (e) { setMsg("Error: " + (e.response?.data?.detail || e.message)); }

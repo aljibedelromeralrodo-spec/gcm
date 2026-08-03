@@ -1392,11 +1392,21 @@ export default function ClientesModule({ onNavigate }) {
     setForzarModal(prev => ({ ...prev, forzando: true, msg: "" }));
     const mids = ((m.sug || {}).correos || []).filter(c => c.sel && c.message_id).map(c => c.message_id);
     try {
-      const r = await axios.post(`${API}/api/clientes/folders/forzar`, { nombre: m.nombre.trim(), rut: m.rut.trim(), clave, message_ids: mids }, { timeout: 300000 });
-      const imap = r.data.archivos_imap || [];
-      const ver = r.data.verificacion_cedula;
+      const r = await axios.post(`${API}/api/clientes/folders/forzar`, { nombre: m.nombre.trim(), rut: m.rut.trim(), clave, message_ids: mids }, { timeout: 55000 });
+      const jobId = r.data.job_id;
+      setForzarModal(prev => ({ ...prev, msg: "⏳ Buscando en el correo y descargando adjuntos… (puede tardar 1-2 minutos, no cierres esta ventana)" }));
+      let res = null;
+      for (let i = 0; i < 120; i++) {
+        await new Promise(s => setTimeout(s, 3000));
+        const j = await axios.get(`${API}/api/jobs/${jobId}`, { timeout: 30000 });
+        if (j.data.estado === "listo") { res = j.data.resultado; break; }
+        if (j.data.estado === "error") throw new Error(j.data.error || "Error en la búsqueda");
+      }
+      if (!res) throw new Error("La búsqueda sigue en curso — revisá la carpeta en unos minutos");
+      const imap = res.archivos_imap || [];
+      const ver = res.verificacion_cedula;
       setForzarModal(prev => ({ ...prev, forzando: false,
-        msg: `✅ Carpeta: ${r.data.carpeta} · Correos: ${r.data.correos_encontrados} · Adjuntos descargados: ${imap.length}${ver && Object.keys(ver.cambios || {}).length ? ` · 🪪 Corregido con cédula: ${Object.entries(ver.cambios).map(([k, v]) => `${k}→${v}`).join(", ")}` : ""}` }));
+        msg: `✅ Carpeta: ${res.carpeta} · Correos: ${res.correos_encontrados} · Adjuntos descargados: ${imap.length}${ver && Object.keys(ver.cambios || {}).length ? ` · 🪪 Corregido con cédula: ${Object.entries(ver.cambios).map(([k, v]) => `${k}→${v}`).join(", ")}` : ""}` }));
       loadFolders();
     } catch (e) {
       setForzarModal(prev => ({ ...prev, forzando: false, msg: "Error: " + (e.response?.data?.detail || e.message) }));
