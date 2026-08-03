@@ -1,0 +1,35 @@
+{
+  "summary": "Iter 12 — Verificación completa del lote (Escrituración/Forzar Carpeta/Enriquecer/Gastos prefill/Correo a Mesa ejecutivo interno/merge-protocol orden). Backend pytest: 14/14 PASSED (91.16s con endpoints IMAP reales). Frontend E2E OK: (a) login administrador/141617575 y tour cerrado; (b) tabs data-testid=tab-clientes (Solicitudes 16) y tab-escrituracion (0) visibles; (c) botones data-testid^=btn-escrituracion-toggle-{id} presentes; toggle backend POST /api/clientes/folders/{fid}/escrituracion 200 con activar:true→is_escrituracion:true, revertido con activar:false; (d) POST /api/clientes/folders/forzar: clave incorrecta 403, sin nombre ni rut 400, con nombre 'SEBASTIAN SEPULVEDA' + clave 0586 → 200 con ok:true, correos_encontrados, procesados, archivos_imap presentes (IMAP real ~2 min); (e) POST /api/clientes/folders/{sebastian}/enriquecer modo=credito 200 con archivos_nuevos[] y sin firmas imageNNN.jpg; modo=estudio 200 y todos los archivos_nuevos en subfolder 07_estudio_titulo; (f) GET /api/clientes/folders-light responde <5s con shape {id,nombre,rut} solo; (g) GET /api/clientes/folders devuelve prob_aprobacion.porcentaje para cada carpeta (rango 0..100); (h) GET /api/gastos-operacionales/prefill?nombre=AB → 400; ?nombre=SEBASTIAN → 200 con prefill={email_cliente,rut,items,total_gastos_uf,metodo} y fuentes; (i) frontend modal Correo a Mesa (data-testid=btn-send-autocorreo-detail) abre selector data-testid=email-ejecutivo-select con opciones ['— Seleccionar ejecutivo —','Deisy Salazar','Yerile Barrera','Gerardo Barrera']; preview del body incluye 'Ejecutivo interno' y 'Solicitud recibida de' (visible en screenshot); backend POST /api/clientes/folders/{fid}/send-email confirm:false devuelve 200 con missing_docs incluyendo 'Ejecutivo interno (Deisy/Yerile/Gerardo)' cuando falta el ejecutivo; (j) botón data-testid=gastos-leer-ia presente y deshabilitado sin nombre; (k) POST /api/clientes/folders/{RUBEM}/merge-protocol con orden ['cmf','cedula','liquidacion','afp','extras'] respeta protocol_order en respuesta. NO se enviaron correos reales (siempre confirm:false).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/clientes/folders/{fid}/send-email", "issue": "Cuando se hace preview con ejecutivo_interno en el payload, el backend hace persist en Mongo (folders.ejecutivo_interno). Es intencional pero significa que un simple 'preview' modifica estado de la carpeta si el ejecutivo enviado difiere del persistido. Considerar persistir solo cuando confirm:true."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/tests/test_iter12_features.py",
+    "/app/test_reports/pytest/iter12.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py 6656 líneas — refactorización pendiente (arrastrado desde iter10/iter11).",
+    "Duplicación en iter11 de _resumen_semanal_* (líneas ~760-820 vs ~915-987) y asyncio.create_task duplicado en startup (línea 114-115) sigue sin limpiarse — no rompe UX pero corre el loop 2 veces.",
+    "El endpoint /clientes/folders/{fid}/send-email persiste ejecutivo_interno en Mongo incluso cuando confirm:false (preview). Preview no debería alterar el estado."
+  ],
+  "updated_files": [
+    "/app/tests/test_iter12_features.py (nuevo)",
+    "/app/test_reports/pytest/iter12.xml"
+  ],
+  "success_rate": {"backend": "100% (14/14)", "frontend": "100% (tabs + toggle + email modal + selector ejecutivo + gastos-leer-ia + estudio-titulo btn)"},
+  "test_credentials": "administrador / 141617575 · clave forzar carpeta 0586",
+  "seed_data_creation": "Toggle escrituracion aplicado y revertido al estado original en el mismo test (fixture try/finally). No queda basura. Forzar/enriquecer usaron SEBASTIAN SEPULVEDA (carpeta existente). NO se enviaron correos reales.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Todas las features iter12 verificadas OK. Los endpoints IMAP (/forzar, /enriquecer, /gastos-prefill) tardan 1-3 min por correo real — usar timeouts >=240s. La regla de 0% de prob_aprobacion se validó por rango (0..100) porque las carpetas reales ya tienen docs mínimos; no forcé caso 0 sintético. IMPORTANTE: preview de send-email persiste ejecutivo_interno en DB — restaurar en fixture. Todas las funciones data-testid del frontend están correctas: tab-clientes, tab-escrituracion, btn-escrituracion-toggle-{id}, btn-open-{id}, btn-send-autocorreo-detail, email-ejecutivo-select, btn-estudio-titulo-{id} (aparece en cards de list, no en detalle), estudio-enriquecer, gastos-leer-ia.",
+  "rca of the issue": "N/A — sin bugs. Solo un minor code smell: preview de send-email modifica estado si ejecutivo_interno difiere del persistido (línea 1956-1958 server.py)."
+}

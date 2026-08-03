@@ -33,6 +33,7 @@ SUBFOLDER_A_CAT = {
 }
 
 CAT_KEYWORDS = [
+    ("estudio_titulo", r"estudio de t[ií]tulo|dominio vigente|hipotecas? y grav|grav[aá]men|prohibici[oó]n|expropiaci|conservador de bienes|\bcbr\b|escritura de compraventa|copia de escritura|inscripci[oó]n de dominio"),
     ("cedula", r"c[eé]?dula|carnet|identidad|registro civil"),
     ("liquidacion", r"liquidaci[oó]?n|sueldo|remuneraci|haberes|\bliq[\d_ ]|^liq"),
     ("afp", r"afp|cotizaci|previred|afiliaci|habitat|provida|planvital|cuprum|capital"),

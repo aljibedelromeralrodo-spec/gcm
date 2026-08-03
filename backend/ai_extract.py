@@ -86,6 +86,49 @@ async def extraer_datos_tasacion(texto):
     return base
 
 
+async def extraer_datos_gastos(texto):
+    """Extrae datos para gastos operacionales. PROHIBIDO inventar: vacío si no aparece."""
+    texto = (texto or "")[:14000]
+    base = {"email_cliente": _email_regex(texto), "rut": _rut_regex(texto),
+            "items": [], "total_gastos_uf": None, "metodo": "reglas"}
+    key = os.environ.get("EMERGENT_LLM_KEY", "")
+    if not key or len(texto) < 30:
+        return base
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        system = (
+            "Eres experto en créditos hipotecarios chilenos. Recibes texto de correos y "
+            "documentos (simulaciones, cotizaciones, cartas de aprobación) de UN cliente. "
+            "Responde SOLO un JSON válido con: "
+            "email_cliente (correo personal del cliente si aparece, o ''), "
+            "rut (RUT del cliente en formato chileno o ''), "
+            "items (lista de objetos {concepto, valor} SOLO si el texto detalla "
+            "explícitamente gastos operacionales con sus valores en UF; si no, []), "
+            "total_gastos_uf (número o null). "
+            "REGLA INVIOLABLE: PROHIBIDO inventar o estimar datos. Si un dato no aparece "
+            "textualmente en el texto, usa '', null o []."
+        )
+        chat = LlmChat(api_key=key, session_id=f"gastos-{uuid.uuid4()}",
+                       system_message=system).with_model("openai", "gpt-5.4-mini")
+        resp = await chat.send_message(UserMessage(text=texto))
+        raw = resp if isinstance(resp, str) else str(resp)
+        mj = re.search(r"\{.*\}", raw, re.S)
+        if mj:
+            data = json.loads(mj.group(0))
+            for k in ("email_cliente", "rut", "total_gastos_uf"):
+                if data.get(k) not in (None, ""):
+                    base[k] = data[k]
+            if isinstance(data.get("items"), list):
+                base["items"] = [{"concepto": str(i.get("concepto", ""))[:80],
+                                  "valor": i.get("valor")}
+                                 for i in data["items"]
+                                 if isinstance(i, dict) and i.get("concepto")]
+            base["metodo"] = "ia"
+    except Exception as e:
+        base["error"] = str(e)[:200]
+    return base
+
+
 async def clasificar_y_extraer(texto, filename=""):
     """Devuelve dict con tipo_documento, nombre_cliente, rut y campos de gestion."""
     texto = (texto or "")[:6000]

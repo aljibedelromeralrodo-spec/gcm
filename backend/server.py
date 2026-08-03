@@ -1109,22 +1109,42 @@ async def list_folders(q: str = ""):
     return {"folders": out}
 
 
+_PAT_FIRMA_CORREO = re.compile(r"^image\d{1,4}\.(jpe?g|png|gif|bmp)$", re.I)
+
+
+def _rut_regex_flexible(rut):
+    """'12.345.678-9' -> regex que matchea con o sin puntos/guion."""
+    nucleo = re.sub(r"[.\-\s]", "", rut or "")
+    if len(nucleo) < 7:
+        return ""
+    return r"\.?".join(re.escape(c) for c in nucleo[:-1]) + r"[\-.]?\s?" + re.escape(nucleo[-1])
+
+
 @api.post("/clientes/folders/forzar")
 async def forzar_folder(payload: dict):
-    """Fuerza la creación manual de una carpeta: busca en los correos ingresados
-    todos los datos y archivos del cliente y llena los campos (requiere clave admin)."""
+    """Fuerza la creación manual de una carpeta: busca por NOMBRE y/o RUT en los correos
+    ingresados los datos y descarga los archivos adjuntos (requiere clave admin)."""
     payload = payload or {}
     if payload.get("clave") != CLAVE_FORZAR_CARPETA:
         raise HTTPException(status_code=403, detail="Clave incorrecta")
     nombre = (payload.get("nombre") or "").strip()
-    if len(nombre) < 3:
-        raise HTTPException(status_code=400, detail="Indica el nombre del cliente")
+    rut = (payload.get("rut") or "").strip()
+    if len(nombre) < 3 and not rut:
+        raise HTTPException(status_code=400, detail="Indica el nombre o el RUT del cliente")
     palabras = [p for p in re.split(r"\s+", nombre) if len(p) >= 3]
     conds = [{"$or": [{"subject": {"$regex": re.escape(p), "$options": "i"}},
                       {"classification.cliente": {"$regex": re.escape(p), "$options": "i"}},
                       {"body_full": {"$regex": re.escape(p), "$options": "i"}}]}
              for p in palabras]
-    items = await db.proc_queue.find({"$and": conds}).sort("date_iso", 1).to_list(20) if conds else []
+    query = {"$and": conds} if conds else None
+    rut_rx = _rut_regex_flexible(rut)
+    if rut_rx:
+        cond_rut = {"$or": [{"subject": {"$regex": rut_rx, "$options": "i"}},
+                            {"body_full": {"$regex": rut_rx, "$options": "i"}},
+                            {"campos.rut": {"$regex": rut_rx, "$options": "i"}},
+                            {"classification.rut": {"$regex": rut_rx, "$options": "i"}}]}
+        query = {"$or": [query, cond_rut]} if query else cond_rut
+    items = await db.proc_queue.find(query).sort("date_iso", 1).to_list(20) if query else []
     procesados, errores = [], []
     for it in items:
         try:
@@ -1134,14 +1154,42 @@ async def forzar_folder(payload: dict):
                                "archivos": len(r.get("uploaded") or [])})
         except Exception as e:
             errores.append(f"{(it.get('subject') or '')[:50]}: {str(e)[:80]}")
-    folder = await db.folders.find_one(
-        {"nombre": {"$regex": re.escape(palabras[0]), "$options": "i"}})
+    folder = None
+    if palabras:
+        folder = await db.folders.find_one(
+            {"nombre": {"$regex": re.escape(palabras[0]), "$options": "i"}})
+    if not folder and rut_rx:
+        folder = await db.folders.find_one({"rut": {"$regex": rut_rx, "$options": "i"}})
     if not folder:
-        folder = {"id": str(uuid.uuid4()), "nombre": nombre.upper(),
-                  "rut": (payload.get("rut") or "").strip(), "archivos": [],
+        folder = {"id": str(uuid.uuid4()), "nombre": (nombre or rut).upper(),
+                  "rut": rut, "archivos": [],
                   "created_at": now_iso(), "origen": "forzada_manual"}
         await db.folders.insert_one(dict(folder))
         fsvc.folder_dir(folder["nombre"]).mkdir(parents=True, exist_ok=True)
+    elif rut and not folder.get("rut"):
+        await db.folders.update_one({"id": folder["id"]}, {"$set": {"rut": rut}})
+    # Buscar adjuntos directamente en el correo (IMAP) por nombre y por RUT
+    imap_bajados = []
+    try:
+        resultados = await asyncio.to_thread(mail.search_attachments_by_person, nombre or rut)
+        if rut and nombre:
+            try:
+                resultados += await asyncio.to_thread(mail.search_attachments_by_person, rut)
+            except Exception:
+                pass
+        existentes = {a["nombre"].lower() for a in fsvc.scan_archivos(folder["nombre"])}
+        for r in resultados:
+            for p in r.get("pdfs") or []:
+                fn = fsvc.safe_name(p["filename"])
+                if fn.lower() in existentes or not p.get("content_bytes") or _PAT_FIRMA_CORREO.match(fn):
+                    continue
+                cat = fsvc.cat_de_texto(fn)
+                sub = "07_estudio_titulo" if cat == "estudio_titulo" else ""
+                rel = fsvc.guardar_archivo(folder["nombre"], fn, p["content_bytes"], subfolder=sub)
+                existentes.add(fn.lower())
+                imap_bajados.append(rel)
+    except Exception:
+        pass
     # Buscar TODO lo que exista del cliente: carta de aprobación, PDF ajustado, etc.
     sync_copiados = []
     try:
@@ -1150,8 +1198,57 @@ async def forzar_folder(payload: dict):
         pass
     return {"ok": True, "carpeta": folder.get("nombre", ""),
             "correos_encontrados": len(items), "procesados": procesados,
+            "archivos_imap": imap_bajados,
             "docs_aprobacion_descargados": sync_copiados,
             "errores": errores}
+
+
+@api.post("/clientes/folders/{fid}/escrituracion")
+async def folder_toggle_escrituracion(fid: str, payload: dict = None):
+    """Mueve la carpeta al módulo Escrituración o la devuelve a Solicitudes de Crédito."""
+    await _get_folder_doc(fid)
+    activar = bool((payload or {}).get("activar", True))
+    await db.folders.update_one({"id": fid}, {"$set": {
+        "is_escrituracion": activar,
+        "escrituracion_movida_at": now_iso() if activar else None}})
+    return {"ok": True, "is_escrituracion": activar}
+
+
+@api.post("/clientes/folders/{fid}/enriquecer")
+async def folder_enriquecer(fid: str, payload: dict = None):
+    """Busca de nuevo en el correo (asunto, cuerpo y adjuntos) documentos del cliente.
+    modo='credito' guarda por categoría de crédito; modo='estudio' guarda en
+    07_estudio_titulo (NUNCA se mezclan con la solicitud de crédito)."""
+    doc = await _get_folder_doc(fid)
+    modo = ((payload or {}).get("modo") or "credito").lower()
+    nombre = doc.get("nombre", "")
+    rut = (doc.get("rut") or "").strip()
+    resultados = await asyncio.to_thread(mail.search_attachments_by_person, nombre)
+    if rut:
+        try:
+            resultados += await asyncio.to_thread(mail.search_attachments_by_person, rut)
+        except Exception:
+            pass
+    existentes = {a["nombre"].lower() for a in fsvc.scan_archivos(nombre)}
+    nuevos = []
+    for r in resultados:
+        for p in r.get("pdfs") or []:
+            fn = fsvc.safe_name(p["filename"])
+            if fn.lower() in existentes or not p.get("content_bytes") or _PAT_FIRMA_CORREO.match(fn):
+                continue
+            cat = fsvc.cat_de_texto(fn)
+            if modo == "estudio":
+                if cat not in ("estudio_titulo", "extras"):
+                    continue
+                rel = fsvc.guardar_archivo(nombre, fn, p["content_bytes"],
+                                           subfolder="07_estudio_titulo")
+            else:
+                sub = "07_estudio_titulo" if cat == "estudio_titulo" else ""
+                rel = fsvc.guardar_archivo(nombre, fn, p["content_bytes"], subfolder=sub)
+            existentes.add(fn.lower())
+            nuevos.append({"archivo": rel, "asunto": (r.get("subject") or "")[:80]})
+    return {"ok": True, "modo": modo, "correos_revisados": len(resultados),
+            "archivos_nuevos": nuevos}
 
 
 import zipfile as _zipfile
@@ -1417,8 +1514,9 @@ async def folder_merge_protocol(fid: str, payload: dict = None):
     doc = await _get_folder_doc(fid)
     cr = doc.get("credit_request") or {}
     include_extras = bool((payload or {}).get("include_extras", True))
+    orden = (payload or {}).get("orden") or None
     res = await asyncio.to_thread(fsvc.merge_protocol, doc.get("nombre", ""),
-                                  cr.get("client_type") or "dependiente", include_extras)
+                                  cr.get("client_type") or "dependiente", include_extras, orden)
     if not res["merged_file"]:
         raise HTTPException(status_code=400, detail="No hay PDFs para combinar en esta carpeta")
     return res
@@ -1774,7 +1872,7 @@ async def folder_tasacion_prefill(fid: str):
         async for it in db.proc_queue.find({"$or": [
                 {"cliente": {"$regex": rx, "$options": "i"}},
                 {"subject": {"$regex": toks[-1] if len(toks) < 3 else toks[2], "$options": "i"}}]}).limit(6):
-            cuerpo = (it.get("body_text") or it.get("body") or "")[:3000]
+            cuerpo = (it.get("body_text") or it.get("body") or it.get("body_full") or "")[:3000]
             if cuerpo:
                 textos.append(f"[CORREO] Asunto: {it.get('subject', '')}\n{cuerpo}")
     # 2) Documentos relevantes de la carpeta (promesa, carta, cotización, reserva)
@@ -1859,7 +1957,7 @@ async def folder_send_email(fid: str, payload: dict):
         await db.folders.update_one({"id": fid}, {"$set": {"ejecutivo_interno": ejecutivo}})
         doc["ejecutivo_interno"] = ejecutivo
     if not ejecutivo:
-        missing_labels.append("Ejecutivo interno (Deisy/Diego/Gerardo)")
+        missing_labels.append("Ejecutivo interno (Deisy/Yerile/Gerardo)")
     if payload.get("confirm") and missing_labels and not payload.get("force_incompleto"):
         raise HTTPException(status_code=412, detail="Documentación incompleta — faltan: "
                             + ", ".join(missing_labels)
@@ -4206,6 +4304,40 @@ async def gastos_buscar_cliente(q: str = ""):
         resultados.append({"nombre": d.get("nombre", ""), "rut": d.get("rut", ""),
                            "email": email_cliente, "folder_id": d.get("id", "")})
     return {"resultados": resultados}
+
+
+@api.get("/gastos-operacionales/prefill")
+async def gastos_prefill(nombre: str = ""):
+    """Lee con IA los correos (asunto + cuerpo) y documentos del cliente para pre-llenar
+    gastos operacionales. PROHIBIDO inventar datos: lo que no aparece queda vacío."""
+    nombre = (nombre or "").strip()
+    if len(nombre) < 3:
+        raise HTTPException(status_code=400, detail="Indica el nombre del cliente")
+    textos = []
+    toks = [t for t in _norm_texto(nombre).split() if len(t) > 2]
+    if toks:
+        rx = ".*".join(re.escape(t) for t in toks[:2])
+        async for it in db.proc_queue.find({"$or": [
+                {"cliente": {"$regex": rx, "$options": "i"}},
+                {"classification.cliente": {"$regex": rx, "$options": "i"}},
+                {"subject": {"$regex": rx, "$options": "i"}}]}).limit(6):
+            cuerpo = (it.get("body_text") or it.get("body") or it.get("body_full") or "")[:3000]
+            textos.append(f"[CORREO] De: {it.get('from','')} · Asunto: {it.get('subject','')}\n{cuerpo}")
+    pat = re.compile(r"simulaci|gasto|cotiz|carta|aprobaci|oferta|promesa", re.I)
+    for a in fsvc.scan_archivos(nombre):
+        if len(textos) >= 10:
+            break
+        if not pat.search(a["nombre"]):
+            continue
+        try:
+            raw = (fsvc.folder_dir(nombre) / a["ruta"]).read_bytes()
+            texto, _m = await asyncio.to_thread(ocr_service.extraer_texto, raw, a["nombre"])
+            if texto:
+                textos.append(f"[DOC {a['nombre']}]\n{texto[:2500]}")
+        except Exception:
+            continue
+    datos = await ai_extract.extraer_datos_gastos("\n\n".join(textos))
+    return {"ok": True, "prefill": datos, "fuentes": len(textos)}
 
 
 def _gastos_total(items):

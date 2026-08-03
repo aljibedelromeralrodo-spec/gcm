@@ -193,6 +193,8 @@ export default function ClientesModule({ onNavigate }) {
   const [missingDocsModal, setMissingDocsModal] = useState(null); // { folder, to, extra, preview, sending }
   const [historialModal, setHistorialModal] = useState(null); // { folder, eventos, loading }
   const [respaldoModal, setRespaldoModal] = useState(null); // { subiendo, progreso, resultado }
+  const [folderTab, setFolderTab] = useState("clientes"); // clientes | escrituracion
+  const [enriching, setEnriching] = useState(null); // `${folderId}${modo}` en progreso
 
   const importarRespaldo = async (file) => {
     if (!file) return;
@@ -1147,6 +1149,7 @@ export default function ClientesModule({ onNavigate }) {
       to: defaultTo,
       subject: "",
       extra: "",
+      ejecutivo: folder.ejecutivo_interno || "",
       sending: false,
       include_merged: true,
       include_codeudor_merged: !!folder.codeudor_nombre,
@@ -1182,6 +1185,7 @@ export default function ClientesModule({ onNavigate }) {
       p.attach_files = Array.from(selectedFiles[em.folder.id] || []);
     }
     if (em.editBody != null) p.body_html = em.editBody;
+    if (em.ejecutivo) p.ejecutivo_interno = em.ejecutivo;
     if (em.force_incompleto) p.force_incompleto = true;
     return p;
   };
@@ -1307,6 +1311,29 @@ export default function ClientesModule({ onNavigate }) {
     }
   };
 
+  const toggleEscrituracion = async (f) => {
+    const activar = !f.is_escrituracion;
+    if (!window.confirm(activar
+      ? `¿Mover la carpeta de ${f.nombre} al módulo ESCRITURACIÓN?\n\nSaldrá de Solicitudes de Crédito (se puede devolver cuando quieras).`
+      : `¿Devolver la carpeta de ${f.nombre} a Solicitudes de Crédito?`)) return;
+    try {
+      await axios.post(`${API}/api/clientes/folders/${f.id}/escrituracion`, { activar });
+      loadFolders();
+    } catch (e) { alert("Error: " + (e.response?.data?.detail || e.message)); }
+  };
+
+  const enriquecerCarpeta = async (f, modo) => {
+    setEnriching(f.id + modo);
+    try {
+      const r = await axios.post(`${API}/api/clientes/folders/${f.id}/enriquecer`, { modo }, { timeout: 180000 });
+      const nuevos = r.data.archivos_nuevos || [];
+      const lista = nuevos.map(a => `• ${a.archivo}`).join("\n");
+      alert(`🔎 Enriquecer archivos — ${modo === "estudio" ? "Estudio de Título" : "Solicitud de Crédito"}\n\nCorreos revisados: ${r.data.correos_revisados}\nArchivos nuevos: ${nuevos.length}${lista ? "\n\n" + lista : "\n\n(No se encontraron documentos nuevos en el correo)"}`);
+      loadFolders();
+    } catch (e) { alert("Error: " + (e.response?.data?.detail || e.message)); }
+    setEnriching(null);
+  };
+
   const downloadAll = (folderId) => {
     window.open(`${API}/api/clientes/folders/${folderId}/download-all`, "_blank");
   };
@@ -1318,8 +1345,11 @@ export default function ClientesModule({ onNavigate }) {
   };
 
   const filtered = folders.filter(f =>
-    !searchQuery || f.nombre.toLowerCase().includes(searchQuery.toLowerCase())
+    (!searchQuery || f.nombre.toLowerCase().includes(searchQuery.toLowerCase())) &&
+    (folderTab === "escrituracion" ? !!f.is_escrituracion : !f.is_escrituracion)
   );
+  const countEscrituracion = folders.filter(f => !!f.is_escrituracion).length;
+  const countClientes = folders.length - countEscrituracion;
 
   return (
     <div className="clientes-module" data-testid="clientes-module">
@@ -1344,20 +1374,40 @@ export default function ClientesModule({ onNavigate }) {
                 <i className="fa fa-plus"></i> Nueva Carpeta
               </button>
               <button className="docs-btn secondary" data-testid="btn-forzar-folder" onClick={async () => {
-                const nombre = window.prompt("FORZAR CARPETA MANUAL\n\nNombre del cliente (el sistema buscará todos sus correos, datos y archivos):");
-                if (!nombre) return;
+                const nombre = window.prompt("FORZAR CARPETA MANUAL\n\nNombre del cliente (el sistema buscará todos sus correos, datos y archivos adjuntos):");
+                if (nombre === null) return;
+                const rut = window.prompt("RUT del cliente (opcional — también se buscará por RUT en asuntos y cuerpos de correo):") || "";
+                if (!nombre && !rut.trim()) return;
                 const clave = window.prompt("Ingresa la CLAVE de administrador:");
                 if (!clave) return;
                 try {
-                  const r = await axios.post(`${API}/api/clientes/folders/forzar`, { nombre, clave });
+                  const r = await axios.post(`${API}/api/clientes/folders/forzar`, { nombre, rut: rut.trim(), clave }, { timeout: 300000 });
                   const det = (r.data.procesados || []).map(p => `• ${p.subject?.slice(0, 50)} → ${p.archivos} archivo(s)`).join("\n");
-                  alert(`✅ Carpeta: ${r.data.carpeta}\nCorreos encontrados del cliente: ${r.data.correos_encontrados}\n${det || "(sin correos: carpeta creada vacía para carga manual)"}${r.data.errores?.length ? "\n\nErrores:\n" + r.data.errores.join("\n") : ""}`);
+                  const imap = r.data.archivos_imap || [];
+                  alert(`✅ Carpeta: ${r.data.carpeta}\nCorreos encontrados del cliente: ${r.data.correos_encontrados}\nAdjuntos descargados del correo: ${imap.length}${imap.length ? "\n" + imap.map(a => `  📎 ${a}`).join("\n") : ""}\n${det || "(sin correos en la cola)"}${r.data.errores?.length ? "\n\nErrores:\n" + r.data.errores.join("\n") : ""}`);
                   loadFolders();
                 } catch (e) { alert("Error: " + (e.response?.data?.detail || e.message)); }
               }} style={{ borderColor: "#f59e0b", color: "#f59e0b" }}>
                 <i className="fa fa-bolt"></i> Forzar Carpeta
               </button>
             </div>
+          </div>
+
+          <div data-testid="folder-tabs" style={{ display: "flex", gap: 8, margin: "0.9rem 0" }}>
+            <button data-testid="tab-clientes" onClick={() => setFolderTab("clientes")}
+              style={{ padding: "0.55rem 1.2rem", borderRadius: 10, fontWeight: 800, fontSize: 13, cursor: "pointer",
+                background: folderTab === "clientes" ? "rgba(212,175,55,0.18)" : "rgba(148,163,184,0.08)",
+                border: folderTab === "clientes" ? "2px solid var(--gold, #d4af37)" : "1.5px solid rgba(148,163,184,0.3)",
+                color: folderTab === "clientes" ? "var(--gold, #d4af37)" : "#94a3b8" }}>
+              <i className="fa fa-folder"></i> Solicitudes de Crédito ({countClientes})
+            </button>
+            <button data-testid="tab-escrituracion" onClick={() => setFolderTab("escrituracion")}
+              style={{ padding: "0.55rem 1.2rem", borderRadius: 10, fontWeight: 800, fontSize: 13, cursor: "pointer",
+                background: folderTab === "escrituracion" ? "rgba(168,85,247,0.18)" : "rgba(148,163,184,0.08)",
+                border: folderTab === "escrituracion" ? "2px solid #a855f7" : "1.5px solid rgba(148,163,184,0.3)",
+                color: folderTab === "escrituracion" ? "#a855f7" : "#94a3b8" }}>
+              <i className="fa fa-pencil-square"></i> Escrituración ({countEscrituracion})
+            </button>
           </div>
 
           {showCreate && (
@@ -1612,6 +1662,17 @@ export default function ClientesModule({ onNavigate }) {
                       title={`Avisar a ${f.nombre} la fecha de firma de su escritura (con confirmación de asistencia)`}
                       style={modBtn("rgba(236,72,153,0.12)", "#ec4899", enviadoManual ? "#fff" : "#db2777")}>
                       <i className="fa fa-pencil"></i> Firma de Escritura{f.escritura_confirmada_at ? ` ✅ Confirmada ${fmtAct(f.escritura_confirmada_at)}` : (f.escritura_solicitada_at ? ` ✓ Solicitada ${fmtAct(f.escritura_solicitada_at)}` : "")}
+                    </button>
+                    <button data-testid={`btn-enriquecer-${f.id}`} onClick={() => enriquecerCarpeta(f, "credito")}
+                      disabled={enriching === f.id + "credito"}
+                      title={`Buscar de nuevo en el correo (asunto, cuerpo y adjuntos) los documentos faltantes de ${f.nombre}`}
+                      style={modBtn("rgba(6,182,212,0.12)", "#06b6d4", enviadoManual ? "#fff" : "#0891b2")}>
+                      <i className={`fa ${enriching === f.id + "credito" ? "fa-spinner fa-spin" : "fa-magic"}`}></i> Enriquecer archivos
+                    </button>
+                    <button data-testid={`btn-escrituracion-toggle-${f.id}`} onClick={() => toggleEscrituracion(f)}
+                      title={f.is_escrituracion ? "Devolver esta carpeta a Solicitudes de Crédito" : "Mover esta carpeta a la pestaña Escrituración"}
+                      style={modBtn(f.is_escrituracion ? "rgba(148,163,184,0.12)" : "rgba(168,85,247,0.12)", f.is_escrituracion ? "#94a3b8" : "#a855f7", enviadoManual ? "#fff" : (f.is_escrituracion ? "#94a3b8" : "#9333ea"))}>
+                      <i className="fa fa-exchange"></i> {f.is_escrituracion ? "Devolver a Clientes" : "Mover a Escrituración"}
                     </button>
                     <button data-testid={`btn-historial-${f.id}`} onClick={() => openHistorial(f)}
                       title={`Historial completo de actividades de ${f.nombre}`}
@@ -2585,6 +2646,12 @@ export default function ClientesModule({ onNavigate }) {
                     </select>
                   )}
                 </div>
+                <button data-testid="estudio-enriquecer" onClick={() => enriquecerCarpeta(m.folder, "estudio")}
+                  disabled={enriching === m.folder.id + "estudio"}
+                  title="Busca en el correo (asunto, cuerpo y adjuntos) documentos del estudio de título y los guarda en 07_estudio_titulo. NUNCA se mezclan con los documentos de la solicitud de crédito."
+                  style={{ background: "rgba(6,182,212,0.12)", border: "1.5px solid #06b6d4", color: "#22d3ee", borderRadius: 8, padding: "0.55rem 1rem", fontSize: 12.5, fontWeight: 800, cursor: "pointer", textAlign: "left" }}>
+                  <i className={`fa ${enriching === m.folder.id + "estudio" ? "fa-spinner fa-spin" : "fa-magic"}`}></i> 🔎 Enriquecer archivos del Estudio de Título (busca en el correo · se guardan separados de la solicitud de crédito)
+                </button>
                 <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Destinatarios <span style={{ color: "#4ade80" }}>· broker seleccionado + Victoria Vilches siempre en copia</span></b>
                   <input value={m.destinatarios} onChange={e => set("destinatarios", e.target.value)} data-testid="estudio-destinatarios" style={inpS} />
                 </label>
@@ -2899,6 +2966,20 @@ export default function ClientesModule({ onNavigate }) {
                   <div style={{ marginTop: 6, padding: "6px 10px", borderRadius: 6, background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.4)", color: "#fca5a5", fontSize: 11, fontWeight: 500 }}>
                     🔒 <b>Regla inviolable</b>: todos los correos a mesa se envían solo a la cuenta Central Mutuos. No se puede modificar el destinatario.
                   </div>
+                </label>
+
+                <label style={{ fontSize: 12 }}>
+                  <b style={{ display: "block", marginBottom: 4 }}>Ejecutivo interno * <span style={{ color: "#facc15" }}>se incluye en el correo a mesa junto al correo de origen</span></b>
+                  <select
+                    value={emailModal.ejecutivo || ""}
+                    onChange={(e) => setEmailModal({ ...emailModal, ejecutivo: e.target.value })}
+                    data-testid="email-ejecutivo-select"
+                    style={{ width: "100%", padding: "0.5rem", borderRadius: 6, border: "1px solid rgba(148,163,184,0.3)", background: "#1e293b", color: "#e2e8f0", fontSize: 13 }}>
+                    <option value="">— Seleccionar ejecutivo —</option>
+                    <option value="Deisy Salazar">Deisy Salazar</option>
+                    <option value="Yerile Barrera">Yerile Barrera</option>
+                    <option value="Gerardo Barrera">Gerardo Barrera</option>
+                  </select>
                 </label>
 
                 <label style={{ fontSize: 12 }}>
