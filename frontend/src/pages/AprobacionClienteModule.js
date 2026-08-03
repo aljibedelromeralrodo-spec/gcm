@@ -53,6 +53,16 @@ export default function AprobacionClienteModule({ onNavigate }) {
     return () => clearTimeout(t);
   }, [q]);
 
+  const autofillDatos = async (cliente, emailActual) => {
+    if (emailActual) return;
+    try {
+      const d = await axios.get(`${API}/api/aprobacion-cliente/datos-cliente`, { params: { nombre: cliente }, timeout: 120000 });
+      if (d.data.email) setEmailCliente(prev => prev || d.data.email);
+      if (d.data.rut) setRut(prev => prev || d.data.rut);
+      if (d.data.email) setMsg(`ℹ️ Datos del cliente rellenados desde ${d.data.fuente}${d.data.telefono ? ` · Teléfono: ${d.data.telefono}` : ""}`);
+    } catch (_e) { /* el usuario puede escribirlo a mano */ }
+  };
+
   const elegir = async (r) => {
     setNombre(r.nombre); setRut(r.rut || "");
     setEmailCliente(r.email || "");
@@ -66,6 +76,7 @@ export default function AprobacionClienteModule({ onNavigate }) {
       setArchivos(a.data.archivos || []);
     } catch (_e) { setArchivos([]); }
     setLoading(false);
+    autofillDatos(r.nombre, r.email || "");
   };
 
   useEffect(() => {

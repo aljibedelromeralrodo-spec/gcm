@@ -6477,6 +6477,82 @@ async def aprobacion_buscar(q: str = ""):
     return {"resultados": resultados[:8]}
 
 
+@api.get("/aprobacion-cliente/datos-cliente")
+async def aprobacion_datos_cliente(nombre: str = ""):
+    """Rellena email/teléfono/RUT del cliente leyendo la base y los correos de la
+    solicitud de crédito. PROHIBIDO inventar: lo que no aparece queda vacío."""
+    nombre = (nombre or "").strip()
+    if len(nombre) < 3:
+        raise HTTPException(status_code=400, detail="Indica el nombre del cliente")
+    out = {"email": "", "telefono": "", "rut": "", "fuente": ""}
+    toks = [t for t in _norm_texto(nombre).split() if len(t) > 2]
+    rx = ".*".join(re.escape(t) for t in toks[:2]) if toks else ""
+    _excluir = re.compile(
+        r"centralmutuos|evaluacionesmutuos|aprobaciones@|gerardo|noreply|no-?reply|mailer|"
+        r"maestra|ecomac|boetsch|inmobiliaria", re.I)
+    _freemail = re.compile(r"@(gmail|hotmail|outlook|yahoo|live|icloud)\.", re.I)
+
+    def _extraer(texto):
+        t = texto or ""
+        etiquetados = re.findall(
+            r"(?:correo|e-?mail|mail)\s*(?:del?\s*cliente)?\s*[:=\s]\s*([\w.+-]+@[\w-]+\.[\w.]{2,})",
+            t, re.I)
+        todos = re.findall(r"[\w.+-]+@[\w-]+\.[\w.]{2,}", t)
+        emails = []
+        for e in etiquetados + todos:
+            e = e.strip("-._+")
+            if e and not _excluir.search(e) and e not in emails:
+                emails.append(e)
+        # Prioridad: correo etiquetado como "del cliente" > correo personal (gmail/hotmail/...)
+        emails.sort(key=lambda e: (e not in etiquetados, not _freemail.search(e)))
+        fonos = re.findall(r"(?:\+?56)?[\s.]?9[\s.]?\d{4}[\s.]?\d{4}", t)
+        ruts = re.findall(r"\b\d{1,2}\.?\d{3}\.?\d{3}\s?-\s?[\dkK]\b", t)
+        return emails, fonos, ruts
+
+    def _tomar(emails, fonos, ruts):
+        out["email"] = out["email"] or (emails[0].strip() if emails else "")
+        out["telefono"] = out["telefono"] or (fonos[0].strip() if fonos else "")
+        out["rut"] = out["rut"] or (ruts[0].strip() if ruts else "")
+
+    if rx:
+        async for it in db.proc_queue.find({"$or": [
+                {"cliente": {"$regex": rx, "$options": "i"}},
+                {"classification.cliente": {"$regex": rx, "$options": "i"}},
+                {"subject": {"$regex": rx, "$options": "i"}}]}).limit(6):
+            campos = it.get("campos") or {}
+            cl = it.get("classification") or {}
+            out["email"] = out["email"] or campos.get("email_cliente") or cl.get("email_cliente") or ""
+            out["rut"] = out["rut"] or cl.get("rut") or campos.get("rut") or ""
+            out["telefono"] = out["telefono"] or campos.get("telefono") or ""
+            _tomar(*_extraer(it.get("body_text") or it.get("body") or ""))
+        if out["email"]:
+            out["fuente"] = "correos procesados"
+    if not out["email"] and rx:
+        f = await db.folders.find_one({"nombre": {"$regex": rx, "$options": "i"}})
+        if f:
+            out["email"] = f.get("email") or f.get("email_cliente") or ""
+            out["rut"] = out["rut"] or f.get("rut") or ""
+        s = await db.set_credito.find_one({"nombre": {"$regex": rx, "$options": "i"}})
+        if s:
+            out["email"] = out["email"] or s.get("email") or ""
+            out["rut"] = out["rut"] or s.get("rut") or ""
+        if out["email"]:
+            out["fuente"] = "base de datos"
+    if not out["email"]:
+        try:
+            headers = await asyncio.to_thread(mail.search_email_headers_by_person, nombre, 5)
+            mids = [h.get("message_id") for h in headers if h.get("message_id")][:3]
+            if mids:
+                msgs = await asyncio.to_thread(mail.fetch_attachments_by_message_ids, mids)
+                for m_ in msgs:
+                    _tomar(*_extraer((m_.get("body") or "") + " " + (m_.get("subject") or "")))
+                if out["email"]:
+                    out["fuente"] = "buzón de correo (solicitud de crédito)"
+        except Exception:
+            pass
+    return out
+
+
 @api.get("/aprobacion-cliente/archivos")
 async def aprobacion_archivos(cliente: str = ""):
     archivos = []
