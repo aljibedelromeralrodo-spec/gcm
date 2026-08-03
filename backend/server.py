@@ -2724,7 +2724,15 @@ def _procesar_mesa(destino, cutoff_iso, ejecutivos=None, ya_enviados=None):
             "error": res.get("error") if estado == "failed" else None,
             "attachments_info": ", ".join(s["name"] for s in r["saved"]),
         })
-    return {"processed": len(resultados), "sent": enviados, "errors": errores, "logs": logs}
+    def _res_es_aprobacion(r):
+        if r.get("es_aprobacion"):
+            return True
+        return any(((s.get("type") == "carta_aprobacion")
+                    or re.search(r"aprobaci[oó]n", s.get("name") or "", re.I))
+                   for s in r.get("saved") or [])
+
+    return {"processed": len(resultados), "sent": enviados, "errors": errores, "logs": logs,
+            "aprobados": sorted({r["cliente"] for r in resultados if r["cliente"] and _res_es_aprobacion(r)})}
 
 
 import base64 as _b64mod
@@ -2761,6 +2769,28 @@ async def _subjects_enviados():
     return set((l.get("subject_original") or l.get("subject") or "").strip() for l in logs)
 
 
+async def _asegurar_carpeta_aprobacion(nombre):
+    """NORMA: cuando llega una APROBACIÓN de mesa, la carpeta del cliente debe existir
+    (se crea si no estuviera, aunque no debería pasar) y debe contener la carta de
+    aprobación y la simulación ajustada. Aquí NO aplica la regla de documentos mínimos."""
+    nombre = (nombre or "").strip()
+    if len(nombre) < 3:
+        return None
+    folder = await _buscar_carpeta_existente(nombre, "")
+    if not folder:
+        folder = {"id": str(uuid.uuid4()), "nombre": nombre.upper(), "rut": "",
+                  "archivos": [], "created_at": now_iso(), "origen": "aprobacion_mesa"}
+        await db.folders.insert_one(dict(folder))
+        fsvc.folder_dir(folder["nombre"]).mkdir(parents=True, exist_ok=True)
+        await db.alertas.insert_one({
+            "id": str(uuid.uuid4()), "tipo": "carpeta_aprobacion",
+            "cliente": folder["nombre"], "folder_id": folder["id"],
+            "mensaje": f"📁 Carpeta creada automáticamente por APROBACIÓN de mesa: {folder['nombre']}",
+            "fecha": now_iso(), "leida": False})
+    copiados = await _sync_docs_aprobacion(folder.get("nombre", ""))
+    return {"carpeta": folder.get("nombre", ""), "copiados": copiados}
+
+
 async def _run_mesa_background(destino, cutoff_iso, ejecutivos, ya_enviados=None):
     try:
         await db.config.update_one({"_key": "autocorreo_state"},
@@ -2768,6 +2798,12 @@ async def _run_mesa_background(destino, cutoff_iso, ejecutivos, ya_enviados=None
         result = await asyncio.to_thread(_procesar_mesa, destino, cutoff_iso, ejecutivos, ya_enviados)
         for lg in result.pop("logs", []):
             await db.autocorreo_log.insert_one(lg)
+        # NORMA: toda aprobación de mesa asegura carpeta con carta + simulación ajustada
+        for cliente_ap in result.pop("aprobados", []):
+            try:
+                await _asegurar_carpeta_aprobacion(cliente_ap)
+            except Exception as e:
+                logging.warning(f"carpeta aprobación {cliente_ap}: {e}")
         await db.config.update_one({"_key": "autocorreo_state"}, {"$set": {
             "running": False, "last_run": now_iso(),
             "last_run_result": {"processed": result.get("processed", 0),
@@ -2939,16 +2975,47 @@ def _validar_item_dict(item):
 
 
 
-def _es_gestion(remitente, subject, tiene_pdf):
-    r = (remitente or "").lower()
-    s = (subject or "").lower()
-    if any(d in r for d in GESTION_DOMINIOS):
+def _es_gestion(remitente, subject, tiene_pdf, reglas=None):
+    reglas = reglas or REGLAS_AUTO_DEFAULT
+    r = _norm_texto(remitente or "")
+    s = _norm_texto(subject or "")
+    if any(_norm_texto(d) in r for d in reglas.get("dominios") or []):
         return True
-    if re.search(r"solicitud (de )?(cr[eé]dito|financiamiento|pre.?aprobaci)", s):
+    if re.search(r"solicitud (de )?(credito|financiamiento|pre.?aprobaci)", s):
         return True
-    if tiene_pdf and re.search(r"evaluaci|liquidaci|antecedentes|carpeta|documento|preaprob", s):
+    if tiene_pdf and any(_norm_texto(k) in s for k in reglas.get("keywords") or []):
         return True
     return False
+
+
+REGLAS_AUTO_DEFAULT = {
+    "dominios": GESTION_DOMINIOS,
+    "keywords": ["evaluaci", "liquidaci", "antecedentes", "carpeta", "document",
+                 "preaprob", "credito", "financiamiento", "hipotecari"],
+}
+
+
+async def _reglas_auto_state():
+    st = await db.config.find_one({"_key": "reglas_auto"}) or {}
+    return {"dominios": [d.lower() for d in (st.get("dominios") or REGLAS_AUTO_DEFAULT["dominios"])],
+            "keywords": [k.lower() for k in (st.get("keywords") or REGLAS_AUTO_DEFAULT["keywords"])]}
+
+
+@api.get("/procesamiento/reglas-auto")
+async def reglas_auto_get():
+    return await _reglas_auto_state()
+
+
+@api.patch("/procesamiento/reglas-auto")
+async def reglas_auto_patch(payload: dict):
+    payload = payload or {}
+    upd = {}
+    for campo in ("dominios", "keywords"):
+        if campo in payload:
+            upd[campo] = [str(x).strip().lower() for x in (payload[campo] or []) if str(x).strip()]
+    if upd:
+        await db.config.update_one({"_key": "reglas_auto"}, {"$set": upd}, upsert=True)
+    return await _reglas_auto_state()
 
 
 def _proc_public(d):
@@ -3125,11 +3192,11 @@ async def proc_del_rule(rid: str):
     return {"ok": True}
 
 
-def _ingest_sync(max_emails):
+def _ingest_sync(max_emails, reglas=None):
     correos = mail.fetch_pdf_attachments(sender_filter=None, limit=max_emails)
     items = []
     for c in correos:
-        if not _es_gestion(c["from"], c["subject"], bool(c["pdfs"])):
+        if not _es_gestion(c["from"], c["subject"], bool(c["pdfs"]), reglas):
             continue
         items.append(c)
     return items
@@ -3138,7 +3205,8 @@ def _ingest_sync(max_emails):
 @api.post("/procesamiento/ingest-from-inbox")
 async def proc_ingest(max_emails: int = 20, dias: int = 0):
     """Ingesta gestiones desde las bandejas. dias>0 = solo correos de los ultimos N dias."""
-    correos = await asyncio.to_thread(_ingest_sync, max_emails)
+    reglas = await _reglas_auto_state()
+    correos = await asyncio.to_thread(_ingest_sync, max_emails, reglas)
     desde_dt = (datetime.now(timezone.utc) - timedelta(days=dias)) if dias > 0 else None
     enqueued = 0
     for c in correos:

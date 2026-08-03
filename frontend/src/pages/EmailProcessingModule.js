@@ -25,6 +25,26 @@ export default function EmailProcessingModule() {
   const [driveConfigured, setDriveConfigured] = useState(false);
   const [auto, setAuto] = useState(null);
   const [alertas, setAlertas] = useState([]);
+  const [reglasAuto, setReglasAuto] = useState(null);
+  const [reglasMsg, setReglasMsg] = useState("");
+
+  const loadReglasAuto = async () => {
+    try {
+      const r = await axios.get(`${API}/api/procesamiento/reglas-auto`);
+      setReglasAuto({ dominios: (r.data.dominios || []).join(", "), keywords: (r.data.keywords || []).join(", ") });
+    } catch (_e) { /* noop */ }
+  };
+
+  const guardarReglasAuto = async () => {
+    try {
+      const r = await axios.patch(`${API}/api/procesamiento/reglas-auto`, {
+        dominios: reglasAuto.dominios.split(",").map(s => s.trim()).filter(Boolean),
+        keywords: reglasAuto.keywords.split(",").map(s => s.trim()).filter(Boolean),
+      });
+      setReglasAuto({ dominios: (r.data.dominios || []).join(", "), keywords: (r.data.keywords || []).join(", ") });
+      setReglasMsg("✅ Reglas guardadas — aplican desde el próximo ciclo automático");
+    } catch (e) { setReglasMsg("Error: " + (e.response?.data?.detail || e.message)); }
+  };
 
   const loadAuto = async () => {
     try {
@@ -39,6 +59,7 @@ export default function EmailProcessingModule() {
 
   useEffect(() => {
     loadAuto();
+    loadReglasAuto();
     const t = setInterval(loadAuto, 30000);
     return () => clearInterval(t);
   }, []);
@@ -315,6 +336,30 @@ export default function EmailProcessingModule() {
           </>
         )}
       </div>
+
+      {/* REGLAS DE CREACIÓN AUTOMÁTICA (editables) */}
+      {reglasAuto && (
+        <div data-testid="reglas-auto-panel" style={{ padding: "10px 14px", borderRadius: 10, marginBottom: 16, background: "#eff6ff", border: "1px solid #93c5fd" }}>
+          <div style={{ fontWeight: 700, color: "#1e40af", marginBottom: 8 }}>📋 Reglas de creación automática de carpetas (editables)</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 10, alignItems: "end" }}>
+            <label style={{ fontSize: 12, color: "#1e3a8a" }}>Dominios de remitente que SIEMPRE crean carpeta (separados por coma)
+              <input data-testid="reglas-dominios" value={reglasAuto.dominios}
+                onChange={e => setReglasAuto(prev => ({ ...prev, dominios: e.target.value }))}
+                style={{ width: "100%", padding: "6px 10px", borderRadius: 8, border: "1px solid #93c5fd", marginTop: 4, fontSize: 13 }} />
+            </label>
+            <label style={{ fontSize: 12, color: "#1e3a8a" }}>Palabras clave del asunto (con PDF adjunto, separadas por coma)
+              <input data-testid="reglas-keywords" value={reglasAuto.keywords}
+                onChange={e => setReglasAuto(prev => ({ ...prev, keywords: e.target.value }))}
+                style={{ width: "100%", padding: "6px 10px", borderRadius: 8, border: "1px solid #93c5fd", marginTop: 4, fontSize: 13 }} />
+            </label>
+            <button data-testid="reglas-guardar" onClick={guardarReglasAuto} style={btnStyle("#2563eb", true)}>💾 Guardar reglas</button>
+          </div>
+          <div style={{ fontSize: 11, color: "#3730a3", marginTop: 6 }}>
+            También crea carpeta siempre que el asunto diga "solicitud de crédito/financiamiento/preaprobación". Si el correo no trae los documentos mínimos, se descarta con una alerta.
+          </div>
+          {reglasMsg && <div data-testid="reglas-msg" style={{ fontSize: 12.5, fontWeight: 700, marginTop: 6, color: reglasMsg.startsWith("✅") ? "#15803d" : "#b91c1c" }}>{reglasMsg}</div>}
+        </div>
+      )}
 
       {alertas.length > 0 && (
         <div data-testid="alertas-panel" style={{ padding: "10px 14px", borderRadius: 10, marginBottom: 16, background: "#fefce8", border: "1px solid #facc15" }}>
