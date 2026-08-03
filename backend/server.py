@@ -822,7 +822,7 @@ async def _enviar_resumen_semanal():
     cuerpo = await _resumen_semanal_html()
     semana = datetime.now(_tz_chile()).strftime("%d-%m-%Y")
     res = await asyncio.to_thread(mail.send_mail, _sender_por_rol("principal"),
-                                  f"📊 Resumen Semanal de Martín — {semana}", cuerpo, [], "secundaria")
+                                  f"📊 Resumen Semanal de Martín — {semana}", cuerpo, [], "principal")
     return res
 
 
@@ -909,7 +909,7 @@ async def _enviar_reporte_correos():
     cuerpo = await _reporte_correos_html()
     hoy = datetime.now(_tz_chile()).strftime("%d-%m-%Y")
     return await asyncio.to_thread(mail.send_mail, _sender_por_rol("principal"),
-                                   f"📬 Reporte Diario de Correos — {hoy}", cuerpo, [], "secundaria")
+                                   f"📬 Reporte Diario de Correos — {hoy}", cuerpo, [], "principal")
 
 
 async def _reporte_correos_loop():
@@ -2099,6 +2099,12 @@ async def _sync_docs_aprobacion(nombre):
         safe = _safe_name(fn)
         if safe.lower() in existentes or fn.lower() in existentes:
             return
+        # REGLA: las simulaciones se guardan AJUSTADAS (solo primera hoja); cartas intactas
+        if not re.search(r"carta|aprobaci[oó]n", fn, re.I) and re.search(r"simulad|simulaci[oó]n", fn, re.I):
+            try:
+                raw, _o, _r = pdfs.dejar_primera_pagina(raw)
+            except Exception:
+                pass
         destino = base / "99_otros"
         destino.mkdir(exist_ok=True)
         (destino / safe).write_bytes(raw)
@@ -2394,23 +2400,89 @@ async def detect_client(payload: dict):
 # ---------------------------------------------------------------------------
 # Seguimiento (operaciones detectadas desde el correo)
 # ---------------------------------------------------------------------------
+async def _info_operacion_cliente(nombre):
+    """Busca quién ENVIÓ la solicitud original del cliente (ejecutivo externo real)
+    y datos de gestión (rut, proyecto, monto) desde la cola de procesamiento."""
+    out = {"rut": "", "proyecto": "", "ejecutivo_externo": "", "ejecutivo_email": "",
+           "ejecutivo_cm": "", "monto_credito": ""}
+    if not nombre or nombre.lower() in ("desconocido", ""):
+        return out
+    partes = [p for p in re.split(r"\s+", nombre.strip()) if len(p) > 2][:2]
+    if not partes:
+        return out
+    rx = ".*".join(re.escape(p) for p in partes)
+    items = await db.proc_queue.find(
+        {"classification.cliente": {"$regex": rx, "$options": "i"}},
+        {"sender": 1, "date_iso": 1, "campos": 1, "classification": 1}
+    ).sort("date_iso", 1).limit(10).to_list(10)
+    for it in items:
+        campos = it.get("campos") or {}
+        cl = it.get("classification") or {}
+        if not out["rut"] and cl.get("rut"):
+            out["rut"] = cl["rut"]
+        if not out["proyecto"] and campos.get("proyecto_inmobiliario"):
+            out["proyecto"] = campos["proyecto_inmobiliario"]
+        if not out["monto_credito"] and campos.get("monto_credito_uf"):
+            out["monto_credito"] = f"{campos['monto_credito_uf']} UF"
+        if not out["ejecutivo_externo"]:
+            out["ejecutivo_externo"] = (campos.get("nombre_ejecutivo")
+                                        or campos.get("ejecutivo_externo") or "")
+            out["ejecutivo_email"] = campos.get("email_ejecutivo", "")
+        if not out["ejecutivo_externo"] and it.get("sender"):
+            sender = it["sender"]
+            em = re.search(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+", sender)
+            out["ejecutivo_externo"] = re.sub(r"<.*?>", "", sender).strip().strip('"')
+            out["ejecutivo_email"] = em.group(0) if em else ""
+        if not out["ejecutivo_cm"] and campos.get("ejecutivo_interno"):
+            out["ejecutivo_cm"] = campos["ejecutivo_interno"]
+    folder = await db.folders.find_one(
+        {"nombre": {"$regex": rx, "$options": "i"}},
+        {"rut": 1, "ejecutivo_interno": 1, "ejecutivo_externo": 1})
+    if folder:
+        out["rut"] = out["rut"] or folder.get("rut", "")
+        out["ejecutivo_cm"] = out["ejecutivo_cm"] or folder.get("ejecutivo_interno", "")
+        out["ejecutivo_externo"] = out["ejecutivo_externo"] or folder.get("ejecutivo_externo", "")
+    return out
+
+
+@api.get("/correos/smtp-log")
+async def correos_smtp_log(limit: int = 50, solo_errores: bool = False):
+    """Registro SMTP completo de cada envío (código y respuesta exacta de Gmail)."""
+    q = {"success": False} if solo_errores else {}
+    docs = await db.correos_smtp_log.find(q).sort("fecha", -1).limit(min(limit, 200)).to_list(min(limit, 200))
+    return {"log": [clean(d) for d in docs]}
+
+
 @api.get("/seguimiento/clientes")
 async def seg_clientes(q: str = ""):
     query = {"cliente": {"$regex": q, "$options": "i"}} if q else {}
-    docs = await db.seguimiento.find(query).sort("fecha", -1).limit(200).to_list(200)
+    docs = await db.seguimiento.find(query).sort("fecha", -1).limit(500).to_list(500)
     # agrupar por cliente
     por_cliente = {}
     for d in docs:
         c = d.get("cliente", "Desconocido")
-        if c not in por_cliente:
-            por_cliente[c] = {
+        key = c.lower()
+        if key not in por_cliente:
+            por_cliente[key] = {
                 "id": d.get("cliente_id") or c,
-                "cliente": c,
+                "cliente": c, "cliente_display": c,
                 "estado": d.get("estado"),
+                "rut": d.get("rut", ""), "proyecto": d.get("proyecto", ""),
+                "ejecutivo_cm": d.get("ejecutivo_cm", ""),
+                "ejecutivo_externo": d.get("ejecutivo_externo", ""),
+                "ejecutivo_email": d.get("ejecutivo_email", ""),
+                "correo_remitente": d.get("correo_remitente") or d.get("remitente", ""),
+                "monto_credito": d.get("monto_credito", ""),
                 "ultima_actividad": d.get("fecha"),
-                "operaciones": 0,
+                "total_correos": 0, "operaciones": 0,
             }
-        por_cliente[c]["operaciones"] += 1
+        e = por_cliente[key]
+        e["total_correos"] += 1
+        e["operaciones"] += 1
+        for k in ("rut", "proyecto", "ejecutivo_cm", "ejecutivo_externo",
+                  "ejecutivo_email", "monto_credito"):
+            if not e[k] and d.get(k):
+                e[k] = d[k]
     return {"clientes": list(por_cliente.values())}
 
 
@@ -2433,22 +2505,46 @@ async def seg_timeline(cid: str):
 
 
 @api.post("/seguimiento/process-emails")
-async def seg_process(max_emails: int = 30):
-    ops = await asyncio.to_thread(mail.procesar_seguimiento, max_emails)
+async def seg_process(max_emails: int = 30, dias: int = 31):
+    ops = await asyncio.to_thread(mail.procesar_seguimiento, max_emails, dias)
     nuevos = 0
     for op in ops:
         exists = await db.seguimiento.find_one(
             {"asunto": op["asunto"], "fecha": op["fecha"]})
         if exists:
             continue
+        extra = await _info_operacion_cliente(op["cliente"])
         await db.seguimiento.insert_one({
             "id": str(uuid.uuid4()),
             "cliente_id": op["cliente"].lower().replace(" ", "-"),
             **op,
+            **extra,
+            "correo_remitente": op.get("remitente", ""),
             "procesado_en": now_iso(),
         })
         nuevos += 1
-    return {"ok": True, "procesados": len(ops), "nuevos": nuevos}
+    return {"ok": True, "procesados": len(ops), "nuevos": nuevos, "dias": dias}
+
+
+@api.get("/reportes/seguimiento/excel")
+async def seg_excel():
+    docs = await db.seguimiento.find({}).sort("fecha", -1).limit(500).to_list(500)
+    filas = "".join(
+        f"<tr><td>{(d.get('fecha') or '')[:10]}</td><td>{d.get('cliente','')}</td>"
+        f"<td>{d.get('rut','')}</td><td>{d.get('estado','')}</td>"
+        f"<td>{d.get('proyecto','')}</td><td>{d.get('ejecutivo_externo','')}</td>"
+        f"<td>{d.get('ejecutivo_email','')}</td><td>{d.get('ejecutivo_cm','')}</td>"
+        f"<td>{d.get('monto_credito','')}</td><td>{d.get('asunto','')}</td>"
+        f"<td>{(d.get('correo_remitente') or d.get('remitente') or '')}</td></tr>"
+        for d in docs)
+    html = ("<html><head><meta charset='utf-8'></head><body><table border='1'>"
+            "<tr><th>Fecha</th><th>Cliente</th><th>RUT</th><th>Estado</th><th>Proyecto</th>"
+            "<th>Ejecutivo Externo</th><th>Correo Ejecutivo</th><th>Ejecutivo CM</th>"
+            "<th>Monto</th><th>Asunto</th><th>Remitente</th></tr>"
+            f"{filas}</table></body></html>")
+    return HTMLResponse(content=html, headers={
+        "Content-Disposition": "attachment; filename=seguimiento_central_mutuos.xls",
+        "Content-Type": "application/vnd.ms-excel; charset=utf-8"})
 
 
 @api.get("/reportes/ficha-cliente/{cid}")
@@ -2725,7 +2821,7 @@ def _procesar_mesa(destino, cutoff_iso, ejecutivos=None, ya_enviados=None):
     """
     ejecutivos = ejecutivos or {}
     ya_enviados = ya_enviados or set()
-    correos = mail.fetch_pdf_attachments(sender_filter=MESA_SENDER, limit=8,
+    correos = mail.fetch_pdf_attachments(sender_filter=MESA_SENDER, limit=15,
                                          incluir_sin_adjuntos=True)
     resultados = []
     for c in correos:
@@ -2740,12 +2836,14 @@ def _procesar_mesa(destino, cutoff_iso, ejecutivos=None, ya_enviados=None):
         es_aprobacion = c["tipo"] == "aprobacion"
         es_rechazo = c["tipo"] == "rechazo"
         if not c["pdfs"]:
-            # Sin adjuntos: solo se reenvia si es un RECHAZO (viene solo el texto)
-            if es_rechazo:
+            # Sin adjuntos: se reenvia si es RECHAZO o APROBACION (vienen solo texto).
+            # La aprobación de texto además asegura la carpeta con carta + simulación ajustada.
+            if es_rechazo or es_aprobacion:
                 resultados.append({"cliente": cliente, "subject": c["subject"],
-                                   "saved": [{"name": "(sin PDF - solo texto)", "type": "rechazo"}],
-                                   "adjuntos": [], "es_aprobacion": False,
-                                   "es_rechazo": True, "body": c.get("body", "")})
+                                   "saved": [{"name": "(sin PDF - solo texto)",
+                                              "type": "rechazo" if es_rechazo else "aprobacion_texto"}],
+                                   "adjuntos": [], "es_aprobacion": es_aprobacion,
+                                   "es_rechazo": es_rechazo, "body": c.get("body", "")})
             continue
         # REGLA: UN SOLO correo a mesa por gestión — todos los PDFs van juntos como adjuntos
         adjuntos = []
@@ -2871,6 +2969,10 @@ async def _asegurar_carpeta_aprobacion(nombre):
     aprobación y la simulación ajustada. Aquí NO aplica la regla de documentos mínimos."""
     nombre = (nombre or "").strip()
     if len(nombre) < 3:
+        return None
+    # Nunca crear carpetas con nombres de cuentas propias/mesa (correos sin cliente claro)
+    if ("@" in nombre or re.search(r"aprobacion|central\s*mutuos|mesa|simulaci[oó]n",
+                                   nombre, re.I) or len(nombre.split()) < 2):
         return None
     folder = await _buscar_carpeta_existente(nombre, "")
     if not folder:
@@ -3386,6 +3488,11 @@ async def _clasificar_item(item):
         _merge(info)
     if not cliente:
         cliente = mail._extraer_nombre(item.get("subject", ""), item.get("sender", ""))
+    elif len(cliente.split()) < 2:
+        # La IA tomó un saludo ("Gerardo") en vez del cliente: preferir el asunto
+        desde_asunto = mail._extraer_nombre(item.get("subject", ""), "")
+        if desde_asunto not in ("", "Desconocido") and len(desde_asunto.split()) >= 2:
+            cliente = desde_asunto
     # Datos del ejecutivo externo desde el remitente del correo
     sender = item.get("sender", "")
     em = re.search(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+", sender)
@@ -3622,24 +3729,29 @@ _DOCS_BASICOS = ("cedula", "liquidacion", "cotizacion_afp", "certificado_afp",
 
 
 def _regla_solicitud_ok(item):
-    """REGLA INVIOLABLE: solo se arma carpeta nueva si el correo trae frase de
-    evaluación/solicitud de financiamiento + montos Y al menos 3 documentos básicos
-    (dependiente: liquidaciones/AFP/CMF/cédula/cotización inmobiliaria;
-    independiente: cédula/boletas/impuesto renta/CMF)."""
+    """REGLA: se arma carpeta si el correo trae frase de evaluación/solicitud de
+    financiamiento y al menos 3 documentos básicos (2 si además indica el monto).
+    El tipo del documento se complementa con el nombre del archivo para no
+    descartar liquidaciones/cédulas mal clasificadas como 'otro'."""
     texto = f"{item.get('subject') or ''} {item.get('body_full') or item.get('body_preview') or ''}"
     if not _SOLICITUD_RE.search(texto):
         return False, "el texto no menciona evaluación ni solicitud de financiamiento/crédito"
-    if not _MONTO_RE.search(texto):
-        return False, "el texto no indica el monto del crédito"
+    _cat_basica = {"cedula": "cedula", "liquidacion": "liquidacion", "afp": "afp",
+                   "cmf": "cmf", "imp_renta": "imp_renta", "boletas": "boletas"}
     tipos = set()
     for d in (item.get("classification") or {}).get("documentos") or []:
         t = d.get("tipo", "")
+        fn = d.get("filename", "")
         if t in _DOCS_BASICOS:
-            tipos.add("afp" if t in ("cotizacion_afp", "certificado_afp") else t)
-        elif re.search(r"cotizaci[oó]n", d.get("filename", ""), re.I):
+            tipos.add("afp" if t in ("cotizacion_afp", "certificado_afp")
+                      else ("cmf" if t == "certificado_smf" else t))
+        elif fsvc.cat_de_texto(fn) in _cat_basica:
+            tipos.add(_cat_basica[fsvc.cat_de_texto(fn)])
+        elif re.search(r"cotizaci[oó]n", fn, re.I):
             tipos.add("cotizacion_inmobiliaria")
-    if len(tipos) < 3:
-        return False, f"solo {len(tipos)} documento(s) básico(s) adjunto(s) — mínimo 3"
+    minimo = 2 if _MONTO_RE.search(texto) else 3
+    if len(tipos) < minimo:
+        return False, f"solo {len(tipos)} documento(s) básico(s) adjunto(s) — mínimo {minimo}"
     return True, ""
 
 
@@ -3698,6 +3810,10 @@ async def proc_upload_drive(qid: str, force: bool = False, clave: str = ""):
         raise HTTPException(status_code=404, detail="No encontrado")
     cl = item.get("classification", {})
     cliente = cl.get("cliente") or mail._extraer_nombre(item.get("subject", ""), item.get("sender", ""))
+    if len(cliente.split()) < 2:
+        desde_asunto = mail._extraer_nombre(item.get("subject", ""), "")
+        if desde_asunto not in ("", "Desconocido") and len(desde_asunto.split()) >= 2:
+            cliente = desde_asunto
     tipo_cliente = cl.get("tipo_cliente", "dependiente")
     orden = ORDEN_DEPENDIENTE if tipo_cliente == "dependiente" else ORDEN_INDEPENDIENTE
     docs = []
@@ -4536,7 +4652,7 @@ async def _detectar_pagos_tasacion():
                   <p>El cobro quedó marcado automáticamente como <b>TASACIÓN PAGADA</b> en el sistema.</p>""",
                   "Pago de Tasación Recibido")
                 await asyncio.to_thread(mail.send_mail, _sender_por_rol("principal"),
-                                        f"💰 Tasación pagada — {quien}", aviso, [], "secundaria")
+                                        f"💰 Tasación pagada — {quien}", aviso, [], "principal")
             await db.tasacion_cobros.update_one({"id": c["id"]}, {"$set": upd})
         except Exception as e:
             logging.warning(f"detectar pago tasacion: {e}")
@@ -4626,7 +4742,7 @@ async def _faltantes_recordatorio_loop():
                           "Tope de Recordatorios — Requiere Gestión Directa")
                         await asyncio.to_thread(mail.send_mail, _sender_por_rol("principal"),
                                                 f"⚠️ Sin respuesta tras 2 recordatorios — {nombre}",
-                                                aviso, [], "secundaria")
+                                                aviso, [], "principal")
             except Exception as e:
                 logging.warning(f"recordatorio faltantes {d.get('nombre','')}: {e}")
                 continue
@@ -5308,7 +5424,111 @@ async def gastos_enviar(payload: dict):
 @api.get("/gastos-operacionales/log")
 async def gastos_log():
     docs = await db.gastos_op_log.find({}).sort("enviado_en", -1).limit(20).to_list(20)
-    return {"log": [clean(d) for d in docs]}
+    out = []
+    for d in docs:
+        total = float(d.get("total") or 0)
+        pagado = float(d.get("pagado") or 0)
+        d["pagado"] = round(pagado, 2)
+        d["saldo"] = round(d.get("saldo") if d.get("saldo") is not None else total - pagado, 2)
+        d["estado_pago"] = d.get("estado_pago") or ("pagado" if total > 0 and d["saldo"] <= 0.01
+                                                    else ("parcial" if pagado > 0 else "pendiente"))
+        out.append(clean(d))
+    return {"log": out}
+
+
+@api.post("/gastos-operacionales/log/{lid}/pago")
+async def gastos_registrar_pago(lid: str, payload: dict):
+    """Registra un pago (manual o auto) sobre un envío de gastos operacionales."""
+    payload = payload or {}
+    try:
+        monto = round(float(payload.get("monto")), 2)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Monto de pago inválido")
+    if monto <= 0:
+        raise HTTPException(status_code=400, detail="El monto debe ser mayor a 0")
+    doc = await db.gastos_op_log.find_one({"id": lid})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Envío no encontrado")
+    pago = {"monto": monto, "fecha": (payload.get("fecha") or now_iso()[:10])[:10],
+            "origen": payload.get("origen", "manual"),
+            "detalle": payload.get("detalle", ""), "registrado_en": now_iso()}
+    pagos = (doc.get("pagos") or []) + [pago]
+    pagado = round(sum(float(p.get("monto") or 0) for p in pagos), 2)
+    total = float(doc.get("total") or 0)
+    saldo = round(total - pagado, 2)
+    estado = "pagado" if saldo <= 0.01 else "parcial"
+    await db.gastos_op_log.update_one({"id": lid}, {"$set": {
+        "pagos": pagos, "pagado": pagado, "saldo": saldo, "estado_pago": estado}})
+    return {"ok": True, "pagado": pagado, "saldo": saldo, "estado_pago": estado}
+
+
+@api.delete("/gastos-operacionales/log/{lid}/pago/{idx}")
+async def gastos_eliminar_pago(lid: str, idx: int):
+    doc = await db.gastos_op_log.find_one({"id": lid})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Envío no encontrado")
+    pagos = doc.get("pagos") or []
+    if not (0 <= idx < len(pagos)):
+        raise HTTPException(status_code=404, detail="Pago no encontrado")
+    pagos.pop(idx)
+    pagado = round(sum(float(p.get("monto") or 0) for p in pagos), 2)
+    total = float(doc.get("total") or 0)
+    saldo = round(total - pagado, 2)
+    estado = "pagado" if total > 0 and saldo <= 0.01 else ("parcial" if pagado > 0 else "pendiente")
+    await db.gastos_op_log.update_one({"id": lid}, {"$set": {
+        "pagos": pagos, "pagado": pagado, "saldo": saldo, "estado_pago": estado}})
+    return {"ok": True, "pagado": pagado, "saldo": saldo, "estado_pago": estado}
+
+
+def _sin_acentos(s):
+    import unicodedata
+    return "".join(c for c in unicodedata.normalize("NFD", s or "") if unicodedata.category(c) != "Mn").lower()
+
+
+@api.post("/gastos-operacionales/pagos/scan")
+async def gastos_pagos_scan():
+    """Revisa correos recientes buscando comprobantes de transferencia que
+    coincidan con clientes con saldo pendiente y registra el pago automático."""
+    pendientes = await db.gastos_op_log.find(
+        {"$or": [{"saldo": {"$gt": 0}}, {"pagos": {"$exists": False}}]}
+    ).sort("enviado_en", -1).limit(30).to_list(30)
+    pendientes = [p for p in pendientes
+                  if float(p.get("total") or 0) - float(p.get("pagado") or 0) > 0.01]
+    if not pendientes:
+        return {"ok": True, "detectados": 0, "detalle": [],
+                "mensaje": "No hay envíos con saldo pendiente."}
+    correos = await asyncio.to_thread(mail.fetch_pdf_attachments, None, 25, True)
+    kw_transfer = re.compile(r"transferencia|comprobante|abono|dep[oó]sito|pago\s+(recibid|realizad|efectuad)", re.I)
+    try:
+        uf_hoy = await get_valor_uf()
+    except Exception:
+        uf_hoy = None
+    detectados = []
+    for c in correos:
+        texto = _sin_acentos(f"{c.get('subject','')} {c.get('body','')}")
+        if not kw_transfer.search(texto):
+            continue
+        for p in pendientes:
+            partes = [x for x in re.split(r"\s+", _sin_acentos(p.get("nombre", ""))) if len(x) > 2][:2]
+            if len(partes) < 2 or not all(x in texto for x in partes):
+                continue
+            ref = f"{c.get('subject','')}|{c.get('date','')}"
+            if ref in (p.get("auto_refs") or []):
+                continue
+            m = re.search(r"\$\s*([\d.]{4,})", f"{c.get('subject','')} {c.get('body','')}")
+            monto_clp = int(m.group(1).replace(".", "")) if m else None
+            monto_uf = round(monto_clp / uf_hoy, 2) if (monto_clp and uf_hoy) else None
+            saldo_actual = round(float(p.get("total") or 0) - float(p.get("pagado") or 0), 2)
+            monto_final = monto_uf if monto_uf else saldo_actual
+            await gastos_registrar_pago(p["id"], {
+                "monto": monto_final, "fecha": (c.get("date") or now_iso())[:10],
+                "origen": "auto",
+                "detalle": f"Transferencia detectada: \"{(c.get('subject') or '')[:80]}\" de {c.get('from','')}"
+                           + (f" — ${monto_clp:,} CLP".replace(",", ".") if monto_clp else " (sin monto en el correo: se asumió el saldo)")})
+            await db.gastos_op_log.update_one({"id": p["id"]}, {"$push": {"auto_refs": ref}})
+            detectados.append({"cliente": p.get("nombre"), "monto_uf": monto_final,
+                               "monto_clp": monto_clp, "asunto": c.get("subject", "")})
+    return {"ok": True, "detectados": len(detectados), "detalle": detectados}
 
 
 # ---------------------------------------------------------------------------
@@ -5981,7 +6201,7 @@ async def _reparos_enviar_resuelto(doc, rep):
         destinos.append(v_email)
     res = await asyncio.to_thread(mail.send_mail, destinos,
                                   f"Reparos resueltos — Estudio de Título {doc.get('nombre','')}",
-                                  cuerpo, [], "secundaria", _reparos_cc(doc, destinos))
+                                  cuerpo, [], "principal", _reparos_cc(doc, destinos))
     rep["aviso_resuelto_at"] = now_iso() if res.get("success") else rep.get("aviso_resuelto_at")
     if not res.get("success"):
         rep["aviso_resuelto_error"] = res.get("error", "Error de envío")
@@ -6658,7 +6878,9 @@ async def aprobacion_archivos(cliente: str = ""):
     for tipo in ("carta_aprobacion", "simulacion_ajustada"):
         cand = [a for a in archivos if a["tipo"] == tipo]
         if cand:
-            cand.sort(key=lambda a: a.get("mtime", 0), reverse=True)
+            # Preferir SIEMPRE la versión ajustada (_CM/ajustada) sobre la cruda; luego la más reciente
+            cand.sort(key=lambda a: (bool(re.search(r"_cm\.pdf$|ajustad", a["nombre"], re.I)),
+                                     a.get("mtime", 0)), reverse=True)
             elegido = dict(cand[0])
             elegido["seleccionado"] = True
             finales.append(elegido)
@@ -6776,7 +6998,18 @@ async def aprobacion_enviar(payload: dict):
         raise HTTPException(status_code=400, detail="Correo del cliente inválido")
     if not rutas:
         raise HTTPException(status_code=400, detail="Debe adjuntar al menos la simulación ajustada o la carta de aprobación")
-    adjuntos = [{"filename": _nombre_cliente_pdf(p.name), "content_b64": _b64(p.read_bytes())} for p in rutas]
+    adjuntos = []
+    for p in rutas:
+        raw = p.read_bytes()
+        # REGLA INVIOLABLE: la simulación al cliente va SOLO con la primera hoja
+        # (sin otros plazos ni gastos operacionales). Las cartas van SIEMPRE intactas.
+        es_carta_adj = bool(re.search(r"carta|aprobaci[oó]n", p.name, re.I))
+        if not es_carta_adj and re.search(r"simulad|simulaci[oó]n", p.name, re.I):
+            try:
+                raw, _orig, _rem = pdfs.dejar_primera_pagina(raw)
+            except Exception:
+                pass
+        adjuntos.append({"filename": _nombre_cliente_pdf(p.name), "content_b64": _b64(raw)})
     res = await asyncio.to_thread(mail.send_mail, to, subject, cuerpo, adjuntos, "secundaria")
     if not res.get("success"):
         raise HTTPException(status_code=502, detail=res.get("error", "Error de envío"))

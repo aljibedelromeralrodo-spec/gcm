@@ -207,18 +207,77 @@ def _extraer_nombre(subject, remitente):
         return mm.group(1).strip().title()
     # Formato mesa: "Re: Kevin Macaya (DS19 - INMEDIATA - XIMENA)" -> Kevin Macaya
     limpio = re.sub(r"^\s*((re|fwd?|rv|fw)\s*:\s*)+", "", s, flags=re.I)
-    mm = re.search(r"^([A-Za-zÁÉÍÓÚÑáéíóúñ ]{4,45}?)\s*(?:\(|//|-\s|RUT)", limpio)
+    # Quitar palabras de estado al inicio: "EVALUACION MELISA RIVERA", "APROBADO · Kevin ..."
+    limpio = re.sub(r"^\s*(?:(?:pre[- ]?)?aprobado[a]?|aprobaci[oó]n|rechazado[a]?|rechazo|evaluaci[oó]n|"
+                    r"solicitud(?:\s+de\s+\w+)?|documentos?|antecedentes|carpeta|cr[eé]dito)"
+                    r"[\s:·|\-—]*", "", limpio, flags=re.I)
+    mm = re.search(r"^([A-Za-zÁÉÍÓÚÑáéíóúñ ]{4,45}?)\s*(?:\(|//|-\s|RUT|·)", limpio)
     if mm and len(mm.group(1).split()) >= 2:
         return mm.group(1).strip().title()
+    mm = re.search(r"^([A-Za-zÁÉÍÓÚÑáéíóúñ]+(?:\s+[A-Za-zÁÉÍÓÚÑáéíóúñ]+){1,3})\s*$", limpio.strip())
+    if mm and len(mm.group(1).split()) >= 2:
+        _stop = {"para", "credito", "crédito", "hipotecario", "subsidio", "vivienda", "usada",
+                 "documentos", "evaluacion", "evaluación", "solicitud", "financiamiento",
+                 "cliente", "carpeta", "antecedentes", "urgente", "nueva", "nuevo"}
+        palabras = mm.group(1).split()
+        if not any(p.lower() in _stop for p in palabras):
+            return mm.group(1).strip().title()
     mm = re.search(r'"?([A-Za-zÁÉÍÓÚÑáéíóúñ ]{4,40})"?\s*<', remitente or "")
     if mm:
         return mm.group(1).strip().title()
     return (remitente or "Desconocido").split("<")[0].strip() or "Desconocido"
 
 
-def procesar_seguimiento(max_emails=30):
-    """Lee los ultimos correos de todas las casillas y detecta operaciones de mesa."""
-    emails = fetch_recent(max_emails)
+def fetch_headers_since(dias=31):
+    """Trae encabezados (FROM/SUBJECT/DATE) de todos los correos de los ultimos N dias."""
+    if not configured():
+        return []
+    from datetime import datetime, timedelta
+    fecha = (datetime.now() - timedelta(days=dias)).strftime("%d-%b-%Y")
+    todos = []
+    for acc in ACCOUNTS:
+        try:
+            m = _connect(acc)
+            m.select("INBOX", readonly=True)
+            typ, data = m.search(None, "SINCE", fecha)
+            ids = data[0].split() if data and data[0] else []
+            ids = ids[-500:]
+            if not ids:
+                m.logout()
+                continue
+            idlist = [i.decode() for i in ids]
+            partes = []
+            for k in range(0, len(idlist), 100):
+                idset = ",".join(idlist[k:k + 100])
+                typ, msgs = m.fetch(idset, "(BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE)])")
+                partes.extend(msgs or [])
+            m.logout()
+            for part in partes:
+                if not isinstance(part, tuple):
+                    continue
+                msg = email.message_from_bytes(part[1])
+                subject = _dec(msg.get("Subject"))
+                remitente = _dec(msg.get("From"))
+                fecha_raw = msg.get("Date")
+                try:
+                    dt = parsedate_to_datetime(fecha_raw) if fecha_raw else None
+                    fecha_iso = dt.isoformat() if dt else ""
+                except Exception:
+                    dt, fecha_iso = None, fecha_raw or ""
+                todos.append({"from": remitente, "subject": subject, "date": fecha_iso,
+                              "snippet": subject, "tipo": _clasificar(subject),
+                              "cuenta": acc["user"], "_ts": dt.timestamp() if dt else 0})
+        except Exception:
+            continue
+    todos.sort(key=lambda e: e.get("_ts", 0), reverse=True)
+    for e in todos:
+        e.pop("_ts", None)
+    return todos
+
+
+def procesar_seguimiento(max_emails=30, dias=None):
+    """Lee los correos (ultimos N o ultimos `dias` dias) y detecta operaciones de mesa."""
+    emails = fetch_headers_since(dias) if dias else fetch_recent(max_emails)
     ops = []
     for e in emails:
         tipo = e["tipo"]
@@ -759,6 +818,29 @@ def buscar_hilo_por_asunto(subject_kw, limit=8):
     return out
 
 
+def _log_smtp(entry):
+    """Guarda el resultado SMTP completo de cada envío en la base de datos."""
+    try:
+        from pymongo import MongoClient
+        global _smtp_log_col
+        if "_smtp_log_col" not in globals() or _smtp_log_col is None:
+            _smtp_log_col = MongoClient(os.environ["MONGO_URL"],
+                                        serverSelectionTimeoutMS=3000)[os.environ["DB_NAME"]]["correos_smtp_log"]
+        from datetime import datetime, timezone
+        entry["fecha"] = datetime.now(timezone.utc).isoformat()
+        _smtp_log_col.insert_one(entry)
+    except Exception:
+        pass
+
+
+def _fmt_refused(refused):
+    partes = []
+    for rcpt, (code, resp) in refused.items():
+        r = resp.decode(errors="ignore") if isinstance(resp, bytes) else str(resp)
+        partes.append(f"{rcpt}: {code} {r}")
+    return "; ".join(partes)
+
+
 def send_mail(to, subject, body_html, attachments=None, desde="secundaria", cc=None, headers=None):
     """Envia un correo. attachments: [{filename, content_b64}]
     desde: 'secundaria' (gerardo.ext@, para PDFs a clientes) o 'principal'.
@@ -795,7 +877,29 @@ def send_mail(to, subject, body_html, attachments=None, desde="secundaria", cc=N
         ctx = ssl.create_default_context()
         with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=25, context=ctx) as s:
             s.login(acc["user"], acc["pwd"])
-            s.send_message(msg)
-        return {"success": True, "desde": acc["user"]}
+            refused = s.send_message(msg)
+        if refused:
+            det = _fmt_refused(refused)
+            code = list(refused.values())[0][0]
+            res = {"success": False, "error": f"Destinatario rechazado por SMTP: {det}",
+                   "smtp_code": code, "smtp_response": det, "desde": acc["user"]}
+        else:
+            res = {"success": True, "desde": acc["user"], "smtp_code": 250,
+                   "smtp_response": "250 OK — aceptado por el servidor SMTP de Gmail"}
+    except smtplib.SMTPRecipientsRefused as e:
+        det = _fmt_refused(e.recipients)
+        code = list(e.recipients.values())[0][0] if e.recipients else None
+        res = {"success": False, "error": f"Todos los destinatarios rechazados: {det}",
+               "smtp_code": code, "smtp_response": det, "desde": acc["user"]}
+    except smtplib.SMTPResponseException as e:
+        resp = e.smtp_error.decode(errors="ignore") if isinstance(e.smtp_error, bytes) else str(e.smtp_error)
+        res = {"success": False, "error": f"{e.smtp_code} {resp}",
+               "smtp_code": e.smtp_code, "smtp_response": resp, "desde": acc["user"]}
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        res = {"success": False, "error": str(e), "smtp_code": None,
+               "smtp_response": str(e), "desde": acc["user"]}
+    _log_smtp({"to": msg["To"], "cc": msg.get("Cc", ""), "subject": subject,
+               "desde": acc["user"], "success": res["success"],
+               "smtp_code": res.get("smtp_code"), "smtp_response": res.get("smtp_response", ""),
+               "error": res.get("error", "")})
+    return res

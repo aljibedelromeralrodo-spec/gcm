@@ -30,6 +30,46 @@ export default function GastosOperacionalesModule({ onNavigate }) {
   const [plantillas, setPlantillas] = useState([]);
   const [iaLoading, setIaLoading] = useState(false);
 
+  const [pagoInputs, setPagoInputs] = useState({});
+  const [pagoLoading, setPagoLoading] = useState(false);
+
+  const setPagoInput = (id, campo, valor) => setPagoInputs(prev => ({ ...prev, [id]: { ...(prev[id] || {}), [campo]: valor } }));
+
+  const registrarPago = async (l) => {
+    const pi = pagoInputs[l.id] || {};
+    if (!pi.monto || parseFloat(pi.monto) <= 0) { setMsg("Ingresá el monto pagado (UF)."); return; }
+    setPagoLoading(true);
+    try {
+      const r = await axios.post(`${API}/api/gastos-operacionales/log/${l.id}/pago`, {
+        monto: parseFloat(pi.monto), fecha: pi.fecha || undefined, origen: "manual",
+      });
+      setMsg(`✅ Pago registrado a ${l.nombre}: ${pi.monto} UF — Saldo pendiente: ${r.data.saldo} UF`);
+      setPagoInputs(prev => ({ ...prev, [l.id]: {} }));
+      loadDefaults();
+    } catch (e) { setMsg("Error: " + (e.response?.data?.detail || e.message)); }
+    setPagoLoading(false);
+  };
+
+  const eliminarPago = async (l, idx) => {
+    if (!window.confirm("¿Eliminar este pago registrado?")) return;
+    try {
+      await axios.delete(`${API}/api/gastos-operacionales/log/${l.id}/pago/${idx}`);
+      loadDefaults();
+    } catch (e) { setMsg("Error: " + (e.response?.data?.detail || e.message)); }
+  };
+
+  const scanPagos = async () => {
+    setPagoLoading(true); setMsg("");
+    try {
+      const r = await axios.post(`${API}/api/gastos-operacionales/pagos/scan`, {}, { timeout: 120000 });
+      setMsg(r.data.detectados > 0
+        ? `✅ ${r.data.detectados} transferencia(s) detectada(s) y registrada(s): ${r.data.detalle.map(d => d.cliente).join(", ")}`
+        : `✅ Correo revisado: sin transferencias nuevas que coincidan con clientes con saldo pendiente. ${r.data.mensaje || ""}`);
+      loadDefaults();
+    } catch (e) { setMsg("Error: " + (e.response?.data?.detail || e.message)); }
+    setPagoLoading(false);
+  };
+
   const leerConIA = async () => {
     if (!nombre || nombre.trim().length < 3) { setMsg("Primero seleccioná o escribí el nombre del cliente."); return; }
     setIaLoading(true); setMsg("");
@@ -411,15 +451,59 @@ export default function GastosOperacionalesModule({ onNavigate }) {
         </div>
       )}
 
-      {/* HISTORIAL */}
+      {/* HISTORIAL DE ENVÍOS + SEGUIMIENTO DE PAGOS */}
       {log.length > 0 && (
         <div style={card} data-testid="gastos-log">
-          <h3 style={{ margin: "0 0 0.8rem", color: "var(--gold)", fontSize: "1rem" }}><i className="fa fa-history" style={{ marginRight: "0.5rem" }} />Últimos envíos</h3>
-          {log.map((l, i) => (
-            <div key={i} style={{ fontSize: "0.85rem", opacity: 0.85, padding: "0.3rem 0", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-              {String(l.enviado_en || "").slice(0, 16).replace("T", " ")} — <b>{l.nombre}</b> ({l.rut}) → {l.to} · {l.total} UF
-            </div>
-          ))}
+          <div style={{ display: "flex", alignItems: "center", gap: "0.8rem", marginBottom: "0.8rem", flexWrap: "wrap" }}>
+            <h3 style={{ margin: 0, color: "var(--gold)", fontSize: "1rem" }}><i className="fa fa-history" style={{ marginRight: "0.5rem" }} />Envíos y Seguimiento de Pagos</h3>
+            <button data-testid="gastos-scan-pagos" onClick={scanPagos} disabled={pagoLoading} style={{ ...btn("rgba(59,130,246,0.8)", true), marginLeft: "auto" }}>
+              <i className={`fa ${pagoLoading ? "fa-spinner fa-spin" : "fa-search-dollar fa-refresh"}`} style={{ marginRight: "0.4rem" }} />🤖 Buscar transferencias en el correo
+            </button>
+          </div>
+          {log.map((l, i) => {
+            const estado = l.estado_pago || "pendiente";
+            const estadoColor = estado === "pagado" ? "#22c55e" : estado === "parcial" ? "#f59e0b" : "#ef4444";
+            const pi = pagoInputs[l.id] || {};
+            return (
+              <div key={l.id || i} data-testid={`gastos-log-${i}`} style={{ border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, padding: "0.7rem 0.9rem", marginBottom: "0.6rem", background: estado === "pagado" ? "rgba(34,197,94,0.05)" : "rgba(255,255,255,0.02)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", fontSize: "0.87rem" }}>
+                  <b>{l.nombre}</b>
+                  <span style={{ opacity: 0.55 }}>{l.rut}</span>
+                  <span style={{ opacity: 0.55 }}>{String(l.enviado_en || "").slice(0, 10)}</span>
+                  <span data-testid={`gastos-log-estado-${i}`} style={{ marginLeft: "auto", color: estadoColor, border: `1px solid ${estadoColor}`, borderRadius: 20, padding: "0.1rem 0.7rem", fontSize: "0.72rem", fontWeight: 800, textTransform: "uppercase" }}>{estado}</span>
+                </div>
+                <div style={{ display: "flex", gap: "1.4rem", marginTop: "0.45rem", fontSize: "0.85rem", flexWrap: "wrap" }}>
+                  <span>Total: <b style={{ color: "var(--gold)" }}>{Number(l.total || 0).toLocaleString("es-CL")} UF</b></span>
+                  <span>Pagado: <b style={{ color: "#22c55e" }} data-testid={`gastos-log-pagado-${i}`}>{Number(l.pagado || 0).toLocaleString("es-CL")} UF</b></span>
+                  <span>Saldo: <b style={{ color: Number(l.saldo) <= 0.01 ? "#22c55e" : "#ef4444" }} data-testid={`gastos-log-saldo-${i}`}>{Number(l.saldo ?? l.total ?? 0).toLocaleString("es-CL")} UF</b></span>
+                </div>
+                {(l.pagos || []).length > 0 && (
+                  <div style={{ marginTop: "0.4rem" }}>
+                    {l.pagos.map((p, j) => (
+                      <div key={j} style={{ display: "flex", gap: 8, alignItems: "center", fontSize: "0.78rem", opacity: 0.85, padding: "0.15rem 0" }}>
+                        <i className={`fa ${p.origen === "auto" ? "fa-magic" : "fa-money"}`} style={{ color: "#22c55e" }} />
+                        <span>{p.fecha}</span>
+                        <b>{Number(p.monto).toLocaleString("es-CL")} UF</b>
+                        <span style={{ opacity: 0.6 }}>{p.origen === "auto" ? "🤖 transferencia detectada" : "manual"}{p.detalle ? ` · ${p.detalle.slice(0, 70)}` : ""}</span>
+                        <button data-testid={`gastos-del-pago-${i}-${j}`} onClick={() => eliminarPago(l, j)} style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", marginLeft: "auto" }}><i className="fa fa-trash" /></button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {Number(l.saldo ?? l.total ?? 0) > 0.01 && (
+                  <div style={{ display: "flex", gap: "0.6rem", marginTop: "0.55rem", alignItems: "end", flexWrap: "wrap" }}>
+                    <div><label style={{ ...lbl, marginBottom: "0.15rem" }}>Fecha de pago</label>
+                      <input data-testid={`gastos-pago-fecha-${i}`} type="date" style={{ ...inp, width: 150, padding: "0.35rem 0.5rem" }} value={pi.fecha || ""} onChange={e => setPagoInput(l.id, "fecha", e.target.value)} /></div>
+                    <div><label style={{ ...lbl, marginBottom: "0.15rem" }}>Monto pagado (UF)</label>
+                      <input data-testid={`gastos-pago-monto-${i}`} type="number" step="0.1" style={{ ...inp, width: 130, padding: "0.35rem 0.5rem" }} placeholder="Ej: 10" value={pi.monto || ""} onChange={e => setPagoInput(l.id, "monto", e.target.value)} /></div>
+                    <button data-testid={`gastos-registrar-pago-${i}`} onClick={() => registrarPago(l)} disabled={pagoLoading} style={btn("#22c55e", true)}>
+                      <i className="fa fa-check" style={{ marginRight: "0.3rem" }} />Registrar pago
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
