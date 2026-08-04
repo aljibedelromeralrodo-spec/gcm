@@ -100,11 +100,11 @@ export default function IntelligencePanel() {
 
       {/* Distribution bar */}
       {tendencias.distribucion_uf && (
-        <div data-testid="distribution-chart" style={{ background: "var(--bg-card)", borderRadius: "12px", padding: "0.75rem 1rem", marginBottom: "0.75rem", border: "1px solid var(--border)" }}>
+        <div data-testid="distribution-chart" style={{ background: "var(--bg-card)", borderRadius: "4px", padding: "0.75rem 1rem", marginBottom: "0.75rem", border: "1px solid var(--border)" }}>
           <div style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--text-primary)", marginBottom: "0.5rem" }}>
             Distribucion por Monto (UF)
           </div>
-          <div style={{ display: "flex", gap: "3px", height: "24px", borderRadius: "6px", overflow: "hidden" }}>
+          <div style={{ display: "flex", gap: "3px", height: "24px", borderRadius: "4px", overflow: "hidden" }}>
             {Object.entries(tendencias.distribucion_uf).map(([range, count]) => {
               const total = Object.values(tendencias.distribucion_uf).reduce((a, b) => a + b, 0);
               const pct = total > 0 ? (count / total * 100) : 0;
@@ -126,13 +126,13 @@ export default function IntelligencePanel() {
 
       {/* Calibration button + Recent learning */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
-        <div style={{ background: "var(--bg-card)", borderRadius: "12px", padding: "0.75rem 1rem", border: "1px solid var(--border)" }}>
+        <div style={{ background: "var(--bg-card)", borderRadius: "4px", padding: "0.75rem 1rem", border: "1px solid var(--border)" }}>
           <div style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--text-primary)", marginBottom: "0.5rem" }}>
             <i className="fa fa-refresh"></i> Calibracion IA
           </div>
           <button data-testid="btn-calibrate" onClick={runCalibration} disabled={calibrating}
             style={{
-              width: "100%", padding: "0.5rem", borderRadius: "8px", border: "1px solid var(--border-gold)",
+              width: "100%", padding: "0.5rem", borderRadius: "4px", border: "1px solid var(--border-gold)",
               background: calibrating ? "var(--bg-hover)" : "linear-gradient(135deg, rgba(212,175,55,0.1), rgba(212,175,55,0.05))",
               color: "var(--gold)", fontWeight: 600, fontSize: "0.8rem", cursor: calibrating ? "wait" : "pointer",
             }}>
@@ -148,7 +148,7 @@ export default function IntelligencePanel() {
           )}
         </div>
 
-        <div style={{ background: "var(--bg-card)", borderRadius: "12px", padding: "0.75rem 1rem", border: "1px solid var(--border)" }}>
+        <div style={{ background: "var(--bg-card)", borderRadius: "4px", padding: "0.75rem 1rem", border: "1px solid var(--border)" }}>
           <div style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--text-primary)", marginBottom: "0.5rem" }}>
             <i className="fa fa-graduation-cap"></i> Aprendizaje Reciente
           </div>

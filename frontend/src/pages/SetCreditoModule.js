@@ -5,9 +5,9 @@ import { estiloConfianza, PanelAprendizaje, useAprendizaje } from "../components
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
-const card = { background: "rgba(15,23,42,0.6)", padding: "1.5rem", borderRadius: "14px", border: "1px solid rgba(255,255,255,0.08)", marginBottom: "1.5rem" };
-const inp = { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "8px", padding: "0.55rem 0.8rem", color: "#fff", fontSize: "0.9rem", width: "100%" };
-const btn = (bg, small) => ({ background: bg, color: bg === "var(--gold)" ? "#0a0e17" : "#fff", border: "none", borderRadius: "8px", padding: small ? "0.4rem 0.8rem" : "0.6rem 1.2rem", fontWeight: 700, cursor: "pointer", fontSize: small ? "0.8rem" : "0.9rem" });
+const card = { background: "rgba(15,23,42,0.6)", padding: "1.5rem", borderRadius: "4px", border: "1px solid rgba(212,175,55,0.2)", marginBottom: "1.5rem" };
+const inp = { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "4px", padding: "0.55rem 0.8rem", color: "#fff", fontSize: "0.9rem", width: "100%" };
+const btn = (bg, small) => ({ background: bg, color: bg === "var(--gold)" ? "#0a0e17" : "#fff", border: "none", borderRadius: "4px", padding: small ? "0.4rem 0.8rem" : "0.6rem 1.2rem", fontWeight: 700, cursor: "pointer", fontSize: small ? "0.8rem" : "0.9rem" });
 const lbl = { display: "block", fontSize: "0.75rem", opacity: 0.6, marginBottom: "0.3rem", textTransform: "uppercase", letterSpacing: "0.5px" };
 
 export default function SetCreditoModule({ onNavigate }) {
@@ -227,11 +227,11 @@ export default function SetCreditoModule({ onNavigate }) {
   return (
     <div style={{ padding: "1.5rem", color: "var(--white)", maxWidth: "1050px" }} data-testid="setcredito-module">
       {onNavigate && (
-        <button data-testid="setcred-volver" onClick={() => onNavigate("clientes")} style={{ marginBottom: "1rem", background: "transparent", border: "1px solid rgba(212,175,55,0.5)", color: "var(--gold)", borderRadius: 8, padding: "0.45rem 1rem", fontWeight: 700, cursor: "pointer" }}>
+        <button data-testid="setcred-volver" onClick={() => onNavigate("clientes")} style={{ marginBottom: "1rem", background: "transparent", border: "1px solid rgba(212,175,55,0.5)", color: "var(--gold)", borderRadius: 4, padding: "0.45rem 1rem", fontWeight: 700, cursor: "pointer" }}>
           <i className="fa fa-arrow-left" /> Volver a Carpeta Clientes
         </button>
       )}
-      {msg && <div data-testid="setcred-msg" style={{ padding: "0.7rem 1rem", borderRadius: "8px", marginBottom: "1rem", background: msg.startsWith("✅") ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)", color: msg.startsWith("✅") ? "#22c55e" : "#ef4444", fontWeight: 600 }}>{msg}</div>}
+      {msg && <div data-testid="setcred-msg" style={{ padding: "0.7rem 1rem", borderRadius: "4px", marginBottom: "1rem", background: msg.startsWith("✅") ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)", color: msg.startsWith("✅") ? "#22c55e" : "#ef4444", fontWeight: 600 }}>{msg}</div>}
 
       {/* Estado migrup */}
       <div data-testid="migrup-status" style={{ ...card, display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap", marginBottom: "1rem", padding: "0.9rem 1.3rem" }}>
@@ -244,7 +244,7 @@ export default function SetCreditoModule({ onNavigate }) {
               : migrup?.configured ? "No se pudo conectar (revisar credenciales)" : "No configurado"}
           </div>
         </div>
-        <button data-testid="setcred-nuevo-contacto" onClick={abrirContacto} disabled={!migrup?.connected} style={btn("#3b82f6", true)}><i className="fa fa-user-plus" style={{ marginRight: "0.4rem" }} />Nuevo contacto eCert</button>
+        <button data-testid="setcred-nuevo-contacto" onClick={abrirContacto} disabled={!migrup?.connected} style={btn("#d4af37", true)}><i className="fa fa-user-plus" style={{ marginRight: "0.4rem" }} />Nuevo contacto eCert</button>
         <span style={{ padding: "0.2rem 0.7rem", borderRadius: "999px", fontSize: "0.8rem", fontWeight: 700, background: migrup?.connected ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)", color: migrup?.connected ? "#22c55e" : "#ef4444" }}>
           {migrup?.connected ? "● Conectado" : "○ Desconectado"}
         </span>
@@ -297,20 +297,20 @@ export default function SetCreditoModule({ onNavigate }) {
           </div>
 
           {/* Subir documento */}
-          <div style={{ display: "flex", gap: "0.8rem", alignItems: "center", flexWrap: "wrap", marginBottom: "1rem", padding: "0.8rem", background: "rgba(255,255,255,0.03)", borderRadius: "8px" }}>
+          <div style={{ display: "flex", gap: "0.8rem", alignItems: "center", flexWrap: "wrap", marginBottom: "1rem", padding: "0.8rem", background: "rgba(255,255,255,0.03)", borderRadius: "4px" }}>
             <span style={{ fontSize: "0.85rem", opacity: 0.7 }}>Tipo:</span>
             <select data-testid="setcred-tipo" value={tipoUpload} onChange={e => setTipoUpload(e.target.value)} style={{ ...inp, width: "auto" }}>
-              {Object.entries(docTipos).map(([k, v]) => <option key={k} value={k} style={{ background: "#1a1f2e" }}>{v}</option>)}
+              {Object.entries(docTipos).map(([k, v]) => <option key={k} value={k} style={{ background: "rgba(15,23,42,0.9)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)" }}>{v}</option>)}
             </select>
             <input ref={fileRef} data-testid="setcred-upload-input" type="file" accept="application/pdf,image/*" onChange={subir} style={{ display: "none" }} />
-            <button data-testid="setcred-upload-btn" onClick={() => fileRef.current?.click()} disabled={loading} style={btn("#3b82f6", true)}><i className="fa fa-upload" style={{ marginRight: "0.4rem" }} />Subir documento</button>
+            <button data-testid="setcred-upload-btn" onClick={() => fileRef.current?.click()} disabled={loading} style={btn("#d4af37", true)}><i className="fa fa-upload" style={{ marginRight: "0.4rem" }} />Subir documento</button>
             <ImportarCorreo destino="set_credito" destinoId={current.id} nombre={current.nombre}
               label="Importar desde correo" onDone={() => abrir(current.id)} />
           </div>
 
           {/* Documentos */}
           {current.archivos.length > 0 && (
-            <div data-testid="setcred-firmar-todo-bar" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.8rem", flexWrap: "wrap", padding: "0.9rem 1rem", background: "rgba(212,175,55,0.1)", border: "1px solid rgba(212,175,55,0.35)", borderRadius: "10px", marginBottom: "1rem" }}>
+            <div data-testid="setcred-firmar-todo-bar" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.8rem", flexWrap: "wrap", padding: "0.9rem 1rem", background: "rgba(212,175,55,0.1)", border: "1px solid rgba(212,175,55,0.35)", borderRadius: "4px", marginBottom: "1rem" }}>
               <div style={{ fontSize: "0.88rem" }}>
                 <b style={{ color: "var(--gold)" }}>Firmar todo de una vez</b> — combina los {current.archivos.filter(a => !a.nombre.startsWith("COMBINADO_SET")).length} documentos en un solo PDF. La firma eCert va en la primera etiqueta "Firma cliente" y en las demás queda la marca de Firma Electrónica Avanzada. <span style={{ opacity: 0.7 }}>(consume solo 1 firma de terceros)</span>
               </div>
@@ -323,7 +323,7 @@ export default function SetCreditoModule({ onNavigate }) {
                 <i className="fa fa-file-pdf-o" style={{ color: "#ef4444" }} />
                 <span style={{ flex: 1 }}>{a.nombre}</span>
                 <span style={{ fontSize: "0.72rem", padding: "0.12rem 0.5rem", borderRadius: "999px", background: "rgba(212,175,55,0.15)", color: "var(--gold)" }}>{docTipos[a.tipo] || "Otro"}</span>
-                <a href={`${API}/api/set-credito/sets/${current.id}/download/${encodeURIComponent(a.ruta)}?inline=true`} target="_blank" rel="noreferrer" style={{ color: "#3b82f6" }} title="Ver"><i className="fa fa-eye" /></a>
+                <a href={`${API}/api/set-credito/sets/${current.id}/download/${encodeURIComponent(a.ruta)}?inline=true`} target="_blank" rel="noreferrer" style={{ color: "#d4af37" }} title="Ver"><i className="fa fa-eye" /></a>
                 <button data-testid={`setcred-firmar-${i}`} onClick={() => abrirFirma(a)} disabled={!migrup?.connected} style={btn("var(--gold)", true)} title="Enviar a firmar"><i className="fa fa-pencil" style={{ marginRight: "0.3rem" }} />Firmar</button>
                 <button onClick={() => borrarFile(a.ruta)} style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer" }}><i className="fa fa-trash" /></button>
               </div>
@@ -341,7 +341,7 @@ export default function SetCreditoModule({ onNavigate }) {
           )}
 
           {/* Set firmado: traer desde eCert, separar y enviar por correo */}
-          <div data-testid="setcred-firmados-section" style={{ marginTop: "1.4rem", padding: "1rem", background: "rgba(34,197,94,0.07)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "10px" }}>
+          <div data-testid="setcred-firmados-section" style={{ marginTop: "1.4rem", padding: "1rem", background: "rgba(34,197,94,0.07)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "4px" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.8rem", flexWrap: "wrap" }}>
               <h4 style={{ color: "#22c55e", fontSize: "0.95rem", margin: 0 }}><i className="fa fa-check-circle" style={{ marginRight: "0.4rem" }} />Set firmado por el cliente</h4>
               <button data-testid="setcred-traer-firmado" onClick={traerFirmado} disabled={loading || !migrup?.connected} style={btn("#22c55e", true)}>
@@ -356,7 +356,7 @@ export default function SetCreditoModule({ onNavigate }) {
                   <div key={i} data-testid={`setcred-firmado-${i}`} style={{ display: "flex", alignItems: "center", gap: "0.7rem", padding: "0.4rem 0.2rem", borderBottom: "1px solid rgba(255,255,255,0.05)", fontSize: "0.85rem" }}>
                     <i className="fa fa-file-pdf-o" style={{ color: "#22c55e" }} />
                     <span style={{ flex: 1 }}>{f.nombre}</span>
-                    <a href={`${API}/api/set-credito/sets/${current.id}/download/${encodeURIComponent(f.ruta)}?inline=true`} target="_blank" rel="noreferrer" style={{ color: "#3b82f6" }} title="Ver"><i className="fa fa-eye" /></a>
+                    <a href={`${API}/api/set-credito/sets/${current.id}/download/${encodeURIComponent(f.ruta)}?inline=true`} target="_blank" rel="noreferrer" style={{ color: "#d4af37" }} title="Ver"><i className="fa fa-eye" /></a>
                   </div>
                 ))}
                 <div style={{ display: "flex", gap: "0.6rem", marginTop: "0.9rem", flexWrap: "wrap", alignItems: "center" }}>
@@ -376,7 +376,7 @@ export default function SetCreditoModule({ onNavigate }) {
       {/* Modal nuevo contacto eCert */}
       {contactoModal && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem" }} onClick={() => setContactoModal(null)}>
-          <div style={{ background: "#1a1f2e", borderRadius: "12px", maxWidth: "500px", width: "100%", padding: "1.5rem", border: "1px solid rgba(255,255,255,0.15)" }} onClick={e => e.stopPropagation()} data-testid="setcred-contacto-modal">
+          <div style={{ background: "rgba(15,23,42,0.9)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", borderRadius: "4px", maxWidth: "500px", width: "100%", padding: "1.5rem", border: "1px solid rgba(255,255,255,0.15)" }} onClick={e => e.stopPropagation()} data-testid="setcred-contacto-modal">
             <h3 style={{ margin: "0 0 0.3rem", color: "var(--gold)" }}>Añade un nuevo contacto para firmar</h3>
             <p style={{ fontSize: "0.83rem", opacity: 0.7, margin: "0 0 1rem" }}>El contacto se crea en eCert Chile (migrup). Podés capturar los datos con el lector de cédula o llenarlos a mano.</p>
             <div style={{ display: "flex", gap: "0.6rem", marginBottom: "1rem", flexWrap: "wrap" }}>
@@ -409,7 +409,7 @@ export default function SetCreditoModule({ onNavigate }) {
       {/* Modal firma */}
       {firmaModal && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem" }} onClick={() => setFirmaModal(null)}>
-          <div style={{ background: "#1a1f2e", borderRadius: "12px", maxWidth: "480px", width: "100%", padding: "1.5rem", border: "1px solid rgba(255,255,255,0.15)" }} onClick={e => e.stopPropagation()} data-testid="setcred-firma-modal">
+          <div style={{ background: "rgba(15,23,42,0.9)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", borderRadius: "4px", maxWidth: "480px", width: "100%", padding: "1.5rem", border: "1px solid rgba(255,255,255,0.15)" }} onClick={e => e.stopPropagation()} data-testid="setcred-firma-modal">
             <h3 style={{ margin: "0 0 0.3rem", color: "var(--gold)" }}>Enviar a firmar</h3>
             <p style={{ fontSize: "0.85rem", opacity: 0.7, margin: "0 0 1rem" }}>{firmaModal.doc_nombre}</p>
             <div style={{ display: "grid", gap: "0.8rem" }}>

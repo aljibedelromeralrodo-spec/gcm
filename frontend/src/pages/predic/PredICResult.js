@@ -17,7 +17,7 @@ export function PredICResult({ result, onExportPDF, form }) {
   // ================================================================
   if (!anyViable) {
     return (
-      <div data-testid="predic-result" style={{ marginTop: "1.25rem", borderRadius: "18px", overflow: "hidden", border: "2px solid rgba(225,112,85,0.4)", background: "rgba(225,112,85,0.08)" }}>
+      <div data-testid="predic-result" style={{ marginTop: "1.25rem", borderRadius: "4px", overflow: "hidden", border: "2px solid rgba(225,112,85,0.4)", background: "rgba(225,112,85,0.08)" }}>
         {/* Status */}
         <div data-testid="predic-result-status" style={{ padding: "1.5rem", textAlign: "center", background: "linear-gradient(135deg, rgba(225,112,85,0.15), rgba(225,112,85,0.05))" }}>
           <div style={{ fontSize: "3rem", marginBottom: "0.3rem" }}>
@@ -34,7 +34,7 @@ export function PredICResult({ result, onExportPDF, form }) {
         <div style={{ padding: "1.25rem" }}>
           {/* Razones principales */}
           {result.razones?.length > 0 && (
-            <div data-testid="predic-result-reasons" style={{ padding: "1rem", borderRadius: "12px", background: "rgba(225,112,85,0.1)", border: "1px solid rgba(225,112,85,0.2)", marginBottom: "1rem" }}>
+            <div data-testid="predic-result-reasons" style={{ padding: "1rem", borderRadius: "4px", background: "rgba(225,112,85,0.1)", border: "1px solid rgba(225,112,85,0.2)", marginBottom: "1rem" }}>
               <div style={{ fontSize: "0.85rem", fontWeight: 700, color: COLORS.red, marginBottom: "0.5rem" }}>
                 <i className="fa fa-exclamation-triangle" style={{ marginRight: "0.3rem" }}></i> Por que no es viable
               </div>
@@ -48,7 +48,7 @@ export function PredICResult({ result, onExportPDF, form }) {
 
           {/* Sugerencias de optimizacion */}
           {result.sugerencias_optimizacion?.length > 0 && (
-            <div data-testid="predic-result-sugerencias" style={{ padding: "1rem", borderRadius: "12px", background: "rgba(108,92,231,0.08)", border: "1px solid rgba(108,92,231,0.2)", marginBottom: "1rem" }}>
+            <div data-testid="predic-result-sugerencias" style={{ padding: "1rem", borderRadius: "4px", background: "rgba(108,92,231,0.08)", border: "1px solid rgba(108,92,231,0.2)", marginBottom: "1rem" }}>
               <div style={{ fontSize: "0.85rem", fontWeight: 700, color: COLORS.accent, marginBottom: "0.5rem" }}>
                 <i className="fa fa-lightbulb-o" style={{ marginRight: "0.3rem" }}></i> Que se puede ajustar
               </div>
@@ -72,7 +72,7 @@ export function PredICResult({ result, onExportPDF, form }) {
   const borderColor = "rgba(0,184,148,0.4)";
 
   return (
-    <div data-testid="predic-result" style={{ marginTop: "1.25rem", borderRadius: "18px", overflow: "hidden", border: `2px solid ${borderColor}`, background: bg }}>
+    <div data-testid="predic-result" style={{ marginTop: "1.25rem", borderRadius: "4px", overflow: "hidden", border: `2px solid ${borderColor}`, background: bg }}>
       {/* Status banner */}
       <div data-testid="predic-result-status" style={{ padding: "1.25rem", textAlign: "center", background: "linear-gradient(135deg, rgba(0,184,148,0.15), rgba(0,184,148,0.05))" }}>
         <div style={{ fontSize: "3rem", marginBottom: "0.3rem" }}>
@@ -87,7 +87,7 @@ export function PredICResult({ result, onExportPDF, form }) {
       <div style={{ padding: "1.25rem" }}>
         {/* Valor Propiedad Solicitada */}
         {result.valor_propiedad_uf > 0 && (
-          <div data-testid="predic-result-propiedad" style={{ textAlign: "center", marginBottom: "0.75rem", padding: "0.7rem", borderRadius: "12px", background: "rgba(212,175,55,0.08)", border: `2px solid ${COLORS.gold}` }}>
+          <div data-testid="predic-result-propiedad" style={{ textAlign: "center", marginBottom: "0.75rem", padding: "0.7rem", borderRadius: "4px", background: "rgba(212,175,55,0.08)", border: `2px solid ${COLORS.gold}` }}>
             <div style={{ fontSize: "0.78rem", color: COLORS.textMuted }}>Valor Propiedad Solicitada</div>
             <div style={{ fontSize: "1.5rem", fontWeight: 800, color: COLORS.gold }}>{result.valor_propiedad_uf} UF</div>
             <div style={{ fontSize: "0.85rem", color: COLORS.textMuted }}>{formatCLP(result.valor_propiedad_clp || (result.valor_propiedad_uf * (result.valor_uf_usado || 39000)))}</div>
@@ -96,7 +96,7 @@ export function PredICResult({ result, onExportPDF, form }) {
 
         {/* Credito solicitado */}
         {result.credito_solicitado_uf > 0 && (
-          <div style={{ textAlign: "center", marginBottom: "0.75rem", padding: "0.7rem", borderRadius: "12px", background: "rgba(108,92,231,0.06)", border: `1px solid ${COLORS.border}` }}>
+          <div style={{ textAlign: "center", marginBottom: "0.75rem", padding: "0.7rem", borderRadius: "4px", background: "rgba(108,92,231,0.06)", border: `1px solid ${COLORS.border}` }}>
             <div style={{ fontSize: "0.78rem", color: COLORS.textMuted }}>Credito Solicitado</div>
             <div style={{ fontSize: "1.3rem", fontWeight: 700, color: COLORS.accentLight }}>{result.credito_solicitado_uf} UF</div>
             <div style={{ fontSize: "0.85rem", color: COLORS.textMuted }}>{formatCLP(result.credito_solicitado_clp)}</div>
@@ -104,7 +104,7 @@ export function PredICResult({ result, onExportPDF, form }) {
         )}
 
         {/* Monto credito aprobable */}
-        <div data-testid="predic-result-max" style={{ textAlign: "center", marginBottom: "1rem", padding: "1rem", borderRadius: "12px", background: "rgba(108,92,231,0.1)", border: `1px solid ${COLORS.border}` }}>
+        <div data-testid="predic-result-max" style={{ textAlign: "center", marginBottom: "1rem", padding: "1rem", borderRadius: "4px", background: "rgba(108,92,231,0.1)", border: `1px solid ${COLORS.border}` }}>
           <div style={{ fontSize: "0.8rem", color: COLORS.textMuted }}>Monto Credito Probable</div>
           <div style={{ fontSize: "2rem", fontWeight: 800, color: COLORS.gold }}>{result.monto_aprobado_uf} UF</div>
           <div style={{ fontSize: "1.1rem", color: COLORS.accentLight, fontWeight: 600 }}>{formatCLP(result.monto_aprobado_clp)}</div>
@@ -112,14 +112,14 @@ export function PredICResult({ result, onExportPDF, form }) {
 
         {/* Dividendo: Opcion 1 + Opcion 2 */}
         <div style={{ display: "grid", gridTemplateColumns: result.dividendo_alternativo_clp > 0 ? "1fr 1fr" : "1fr", gap: "0.5rem", marginBottom: "1rem" }}>
-          <div data-testid="predic-result-dividendo-principal" style={{ textAlign: "center", padding: "0.8rem", borderRadius: "12px", background: "rgba(108,92,231,0.08)", border: `2px solid ${COLORS.accent}` }}>
+          <div data-testid="predic-result-dividendo-principal" style={{ textAlign: "center", padding: "0.8rem", borderRadius: "4px", background: "rgba(108,92,231,0.08)", border: `2px solid ${COLORS.accent}` }}>
             <div style={{ fontSize: "0.65rem", color: COLORS.accent, fontWeight: 700, textTransform: "uppercase", letterSpacing: "1px" }}>Opcion 1 - {result.plazo_anos} anos</div>
             <div style={{ fontSize: "1.4rem", fontWeight: 700, color: COLORS.text }}>{result.dividendo_estimado_uf} UF</div>
             <div style={{ fontSize: "0.95rem", color: COLORS.gold, fontWeight: 600 }}>{formatCLP(result.dividendo_estimado_clp)}</div>
             <div style={{ fontSize: "0.65rem", color: COLORS.green, marginTop: "0.2rem" }}>Dividendo mensual</div>
           </div>
           {result.dividendo_alternativo_clp > 0 && (
-            <div data-testid="predic-result-dividendo-alternativo" style={{ textAlign: "center", padding: "0.8rem", borderRadius: "12px", background: COLORS.card, border: `1px solid ${COLORS.border}` }}>
+            <div data-testid="predic-result-dividendo-alternativo" style={{ textAlign: "center", padding: "0.8rem", borderRadius: "4px", background: COLORS.card, border: `1px solid ${COLORS.border}` }}>
               <div style={{ fontSize: "0.65rem", color: COLORS.textMuted, fontWeight: 700, textTransform: "uppercase", letterSpacing: "1px" }}>Opcion 2 - {result.plazo_alternativo} anos</div>
               <div style={{ fontSize: "1.4rem", fontWeight: 700, color: COLORS.text }}>{result.dividendo_alternativo_uf} UF</div>
               <div style={{ fontSize: "0.95rem", color: COLORS.gold, fontWeight: 600 }}>{formatCLP(result.dividendo_alternativo_clp)}</div>
@@ -132,24 +132,24 @@ export function PredICResult({ result, onExportPDF, form }) {
         {result.seguros && (
           <div data-testid="predic-seguros-section" style={{ marginBottom: "1rem" }}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", marginBottom: "0.4rem" }}>
-              <div data-testid="seguro-desgravamen-box" style={{ textAlign: "center", padding: "0.6rem", borderRadius: "10px", background: "rgba(108,92,231,0.06)", border: `1px solid ${COLORS.border}` }}>
+              <div data-testid="seguro-desgravamen-box" style={{ textAlign: "center", padding: "0.6rem", borderRadius: "4px", background: "rgba(108,92,231,0.06)", border: `1px solid ${COLORS.border}` }}>
                 <div style={{ fontSize: "0.6rem", color: COLORS.textMuted, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px" }}>Seguro Desgravamen</div>
                 <div style={{ fontSize: "1.1rem", fontWeight: 700, color: COLORS.text }}>{formatCLP(result.seguros.seguro_desgravamen)}</div>
                 {result.seguros.tiene_codeudor && <div style={{ fontSize: "0.6rem", color: COLORS.orange, fontWeight: 600 }}>x2 por codeudor (base: {formatCLP(result.seguros.seguro_desgravamen_base)})</div>}
               </div>
-              <div data-testid="seguro-incendio-box" style={{ textAlign: "center", padding: "0.6rem", borderRadius: "10px", background: "rgba(108,92,231,0.06)", border: `1px solid ${COLORS.border}` }}>
+              <div data-testid="seguro-incendio-box" style={{ textAlign: "center", padding: "0.6rem", borderRadius: "4px", background: "rgba(108,92,231,0.06)", border: `1px solid ${COLORS.border}` }}>
                 <div style={{ fontSize: "0.6rem", color: COLORS.textMuted, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px" }}>Seguro de Incendio</div>
                 <div style={{ fontSize: "1.1rem", fontWeight: 700, color: COLORS.text }}>{formatCLP(result.seguros.seguro_incendio)}</div>
               </div>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: result.seguros.dividendo_final_alt > 0 ? "1fr 1fr" : "1fr", gap: "0.5rem" }}>
-              <div data-testid="total-dividendo-final-box" style={{ textAlign: "center", padding: "0.7rem", borderRadius: "12px", background: "linear-gradient(135deg, rgba(108,92,231,0.15), rgba(162,155,254,0.1))", border: `2px solid ${COLORS.accent}` }}>
+              <div data-testid="total-dividendo-final-box" style={{ textAlign: "center", padding: "0.7rem", borderRadius: "4px", background: "linear-gradient(135deg, rgba(108,92,231,0.15), rgba(162,155,254,0.1))", border: `2px solid ${COLORS.accent}` }}>
                 <div style={{ fontSize: "0.6rem", color: COLORS.accent, fontWeight: 700, textTransform: "uppercase", letterSpacing: "1px" }}>Dividendo Final - {result.plazo_anos} anos</div>
                 <div style={{ fontSize: "1.6rem", fontWeight: 800, color: COLORS.gold }}>{formatCLP(result.seguros.dividendo_final)}</div>
                 <div style={{ fontSize: "0.6rem", color: COLORS.textMuted }}>{formatCLP(result.dividendo_estimado_clp)} + {formatCLP(result.seguros.total_seguros)} seguros</div>
               </div>
               {result.seguros.dividendo_final_alt > 0 && (
-                <div data-testid="total-dividendo-final-alt-box" style={{ textAlign: "center", padding: "0.7rem", borderRadius: "12px", background: COLORS.card, border: `1px solid ${COLORS.border}` }}>
+                <div data-testid="total-dividendo-final-alt-box" style={{ textAlign: "center", padding: "0.7rem", borderRadius: "4px", background: COLORS.card, border: `1px solid ${COLORS.border}` }}>
                   <div style={{ fontSize: "0.6rem", color: COLORS.textMuted, fontWeight: 700, textTransform: "uppercase", letterSpacing: "1px" }}>Dividendo Final - {result.plazo_alternativo} anos</div>
                   <div style={{ fontSize: "1.6rem", fontWeight: 800, color: COLORS.gold }}>{formatCLP(result.seguros.dividendo_final_alt)}</div>
                   <div style={{ fontSize: "0.6rem", color: COLORS.textMuted }}>{formatCLP(result.dividendo_alternativo_clp)} + {formatCLP(result.seguros.total_seguros)} seguros</div>
@@ -174,23 +174,23 @@ export function PredICResult({ result, onExportPDF, form }) {
 
         {result.tipo_deudor && (
           <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.75rem", flexWrap: "wrap" }}>
-            <span style={{ padding: "3px 8px", borderRadius: "6px", fontSize: "0.72rem", background: "rgba(108,92,231,0.12)", color: COLORS.accentLight }}>{result.tipo_deudor}</span>
-            {result.edad_plazo > 0 && <span style={{ padding: "3px 8px", borderRadius: "6px", fontSize: "0.72rem", background: (result.edad_final_referencia || result.edad_plazo) > 80 ? "rgba(225,112,85,0.15)" : "rgba(0,184,148,0.12)", color: (result.edad_final_referencia || result.edad_plazo) > 80 ? COLORS.red : COLORS.green }}>Edad+Plazo: {result.edad_final_referencia || result.edad_plazo}{result.edad_plazo_codeudor > 0 ? ` (Titular: ${result.edad_plazo}, Codeudor: ${result.edad_plazo_codeudor})` : ""}</span>}
-            {result.plazo_anos > 0 && <span data-testid="predic-result-plazo" style={{ padding: "3px 8px", borderRadius: "6px", fontSize: "0.72rem", background: result.plazo_en_rango_preferido ? "rgba(0,184,148,0.12)" : "rgba(243,156,18,0.12)", color: result.plazo_en_rango_preferido ? COLORS.green : COLORS.orange }}>
+            <span style={{ padding: "3px 8px", borderRadius: "4px", fontSize: "0.72rem", background: "rgba(108,92,231,0.12)", color: COLORS.accentLight }}>{result.tipo_deudor}</span>
+            {result.edad_plazo > 0 && <span style={{ padding: "3px 8px", borderRadius: "4px", fontSize: "0.72rem", background: (result.edad_final_referencia || result.edad_plazo) > 80 ? "rgba(225,112,85,0.15)" : "rgba(0,184,148,0.12)", color: (result.edad_final_referencia || result.edad_plazo) > 80 ? COLORS.red : COLORS.green }}>Edad+Plazo: {result.edad_final_referencia || result.edad_plazo}{result.edad_plazo_codeudor > 0 ? ` (Titular: ${result.edad_plazo}, Codeudor: ${result.edad_plazo_codeudor})` : ""}</span>}
+            {result.plazo_anos > 0 && <span data-testid="predic-result-plazo" style={{ padding: "3px 8px", borderRadius: "4px", fontSize: "0.72rem", background: result.plazo_en_rango_preferido ? "rgba(0,184,148,0.12)" : "rgba(243,156,18,0.12)", color: result.plazo_en_rango_preferido ? COLORS.green : COLORS.orange }}>
               Plazo: {result.plazo_anos} anos {result.plazo_en_rango_preferido ? "(optimo)" : `(max ${result.plazo_maximo})`}
             </span>}
             {result.plazo_recomendado > 0 && result.plazo_anos !== result.plazo_recomendado && (
-              <span style={{ padding: "3px 8px", borderRadius: "6px", fontSize: "0.72rem", background: "rgba(108,92,231,0.12)", color: COLORS.accentLight }}>
+              <span style={{ padding: "3px 8px", borderRadius: "4px", fontSize: "0.72rem", background: "rgba(108,92,231,0.12)", color: COLORS.accentLight }}>
                 Recomendado: {result.plazo_recomendado} anos
               </span>
             )}
-            {result.tasa_aplicada > 0 && <span style={{ padding: "3px 8px", borderRadius: "6px", fontSize: "0.72rem", background: "rgba(212,175,55,0.12)", color: COLORS.gold }}>Tasa: {result.tasa_aplicada}%</span>}
+            {result.tasa_aplicada > 0 && <span style={{ padding: "3px 8px", borderRadius: "4px", fontSize: "0.72rem", background: "rgba(212,175,55,0.12)", color: COLORS.gold }}>Tasa: {result.tasa_aplicada}%</span>}
           </div>
         )}
 
         {/* Mesa Learning Insight */}
         {result.mesa_learning && result.mesa_learning.source === "mesa_learning" && (
-          <div data-testid="predic-mesa-insight" style={{ padding: "0.75rem", borderRadius: "10px", background: "rgba(108,92,231,0.08)", border: `1px solid ${COLORS.border}`, marginBottom: "0.75rem" }}>
+          <div data-testid="predic-mesa-insight" style={{ padding: "0.75rem", borderRadius: "4px", background: "rgba(108,92,231,0.08)", border: `1px solid ${COLORS.border}`, marginBottom: "0.75rem" }}>
             <div style={{ fontSize: "0.78rem", fontWeight: 700, color: COLORS.accentLight, marginBottom: "0.3rem" }}>
               <i className="fa fa-graduation-cap" style={{ marginRight: "0.3rem" }}></i> Aprendizaje IA (Mesa)
             </div>
@@ -208,7 +208,7 @@ export function PredICResult({ result, onExportPDF, form }) {
 
         {/* Castigos de renta */}
         {(result.castigo_renta_variable > 0 || result.castigo_renta_honorarios > 0) && (
-          <div data-testid="predic-result-castigos" style={{ padding: "0.75rem", borderRadius: "10px", background: "rgba(243,156,18,0.08)", border: "1px solid rgba(243,156,18,0.2)", marginBottom: "0.75rem" }}>
+          <div data-testid="predic-result-castigos" style={{ padding: "0.75rem", borderRadius: "4px", background: "rgba(243,156,18,0.08)", border: "1px solid rgba(243,156,18,0.2)", marginBottom: "0.75rem" }}>
             <div style={{ fontSize: "0.78rem", fontWeight: 700, color: COLORS.orange, marginBottom: "0.3rem" }}>
               <i className="fa fa-info-circle" style={{ marginRight: "0.3rem" }}></i>Castigos de Renta Aplicados
             </div>
@@ -222,7 +222,7 @@ export function PredICResult({ result, onExportPDF, form }) {
 
         {/* Export PDF button */}
         <button data-testid="predic-export-pdf" onClick={onExportPDF}
-          style={{ marginTop: "1rem", width: "100%", padding: "0.75rem", borderRadius: "12px", border: `1px solid ${COLORS.gold}`, background: `linear-gradient(135deg, rgba(212,175,55,0.15), rgba(212,175,55,0.05))`, color: COLORS.gold, fontWeight: 700, fontSize: "0.9rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}>
+          style={{ marginTop: "1rem", width: "100%", padding: "0.75rem", borderRadius: "4px", border: `1px solid ${COLORS.gold}`, background: `linear-gradient(135deg, rgba(212,175,55,0.15), rgba(212,175,55,0.05))`, color: COLORS.gold, fontWeight: 700, fontSize: "0.9rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}>
           <i className="fa fa-file-pdf-o"></i> Exportar Informe PDF
         </button>
 

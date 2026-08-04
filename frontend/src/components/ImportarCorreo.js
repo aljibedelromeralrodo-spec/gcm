@@ -3,7 +3,7 @@ import axios from "axios";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
-const inpS = { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 8, padding: "0.55rem 0.8rem", color: "#fff", fontSize: "0.9rem", width: "100%" };
+const inpS = { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 4, padding: "0.55rem 0.8rem", color: "#fff", fontSize: "0.9rem", width: "100%" };
 
 export default function ImportarCorreo({ destino, destinoId, nombre, onDone, label, style }) {
   const [open, setOpen] = useState(false);
@@ -56,13 +56,13 @@ export default function ImportarCorreo({ destino, destinoId, nombre, onDone, lab
   return (
     <>
       <button data-testid={`importar-correo-btn-${destino}`} onClick={abrir}
-        style={{ background: "rgba(20,184,166,0.15)", border: "1px solid #14b8a6", color: "#2dd4bf", borderRadius: 8, padding: "0.45rem 0.9rem", fontWeight: 700, cursor: "pointer", fontSize: "0.82rem", ...style }}>
+        style={{ background: "rgba(20,184,166,0.15)", border: "1px solid #14b8a6", color: "#2dd4bf", borderRadius: 4, padding: "0.45rem 0.9rem", fontWeight: 700, cursor: "pointer", fontSize: "0.82rem", ...style }}>
         <i className="fa fa-cloud-download" style={{ marginRight: "0.4rem" }} />{label || "Importar desde correo"}
       </button>
       {open && (
         <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.72)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: "3vh 3vw" }}>
           <div data-testid="importar-correo-modal" onClick={e => e.stopPropagation()}
-            style={{ background: "#0f172a", border: "1px solid rgba(148,163,184,0.25)", borderRadius: 14, padding: "1.4rem", width: "min(820px, 96vw)", maxHeight: "90vh", overflow: "auto", display: "grid", gap: 10, color: "#e2e8f0" }}>
+            style={{ background: "#0f172a", border: "1px solid rgba(148,163,184,0.25)", borderRadius: 4, padding: "1.4rem", width: "min(820px, 96vw)", maxHeight: "90vh", overflow: "auto", display: "grid", gap: 10, color: "#e2e8f0" }}>
             <h4 style={{ margin: 0, color: "var(--gold, #d4af37)" }}>
               <i className="fa fa-cloud-download" style={{ marginRight: "0.5rem" }} />{label || "Importar desde correo"}
             </h4>
@@ -77,7 +77,7 @@ export default function ImportarCorreo({ destino, destinoId, nombre, onDone, lab
               <div data-testid="importar-correo-lista" style={{ display: "grid", gap: 6 }}>
                 {correos.map((c, i) => (
                   <label key={i} data-testid={`importar-correo-item-${i}`}
-                    style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "0.8rem 1rem", background: sel[i] ? "rgba(20,184,166,0.12)" : "rgba(255,255,255,0.04)", border: `1px solid ${sel[i] ? "#14b8a6" : "rgba(255,255,255,0.1)"}`, borderRadius: 10, cursor: c.message_id ? "pointer" : "default", fontSize: "1rem" }}>
+                    style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "0.8rem 1rem", background: sel[i] ? "rgba(20,184,166,0.12)" : "rgba(255,255,255,0.04)", border: `1px solid ${sel[i] ? "#14b8a6" : "rgba(255,255,255,0.1)"}`, borderRadius: 4, cursor: c.message_id ? "pointer" : "default", fontSize: "1rem" }}>
                     {c.message_id && <input type="checkbox" checked={!!sel[i]} onChange={() => setSel(s => ({ ...s, [i]: !s[i] }))} style={{ marginTop: 4, width: 18, height: 18, accentColor: "#14b8a6" }} />}
                     <span style={{ flex: 1 }}>
                       <b style={{ fontSize: "1.02rem", lineHeight: 1.35 }}>{c.subject || "(sin asunto)"}</b>
@@ -91,9 +91,9 @@ export default function ImportarCorreo({ destino, destinoId, nombre, onDone, lab
             {msg && <div data-testid="importar-correo-msg" style={{ fontSize: 12.5, fontWeight: 700, color: msg.startsWith("✅") ? "#4ade80" : (msg.startsWith("⚠️") ? "#facc15" : "#f87171") }}>{msg}</div>}
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
               <button data-testid="importar-correo-cerrar" onClick={() => setOpen(false)}
-                style={{ background: "rgba(255,255,255,0.1)", border: "none", color: "#fff", borderRadius: 8, padding: "0.5rem 1rem", fontWeight: 700, cursor: "pointer" }}>Cerrar</button>
+                style={{ background: "rgba(255,255,255,0.1)", border: "none", color: "#fff", borderRadius: 4, padding: "0.5rem 1rem", fontWeight: 700, cursor: "pointer" }}>Cerrar</button>
               <button data-testid="importar-correo-ejecutar" onClick={importar} disabled={importando}
-                style={{ background: "#14b8a6", border: "none", color: "#04211d", borderRadius: 8, padding: "0.5rem 1.1rem", fontWeight: 800, cursor: "pointer" }}>
+                style={{ background: "#14b8a6", border: "none", color: "#04211d", borderRadius: 4, padding: "0.5rem 1.1rem", fontWeight: 800, cursor: "pointer" }}>
                 <i className={`fa ${importando ? "fa-spinner fa-spin" : "fa-cloud-download"}`} style={{ marginRight: "0.4rem" }} />
                 {importando ? "Importando adjuntos…" : "Importar seleccionados"}
               </button>

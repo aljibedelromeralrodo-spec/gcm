@@ -6,7 +6,7 @@ const COLORS = { bg: "#0a0e17", card: "#111827", border: "#1e293b", text: "#e2e8
 
 const S = {
   page: { padding: "1.5rem", color: COLORS.text, maxWidth: "1200px", margin: "0 auto" },
-  card: { background: COLORS.card, borderRadius: "12px", border: `1px solid ${COLORS.border}`, padding: "1.25rem", marginBottom: "1rem" },
+  card: { background: COLORS.card, borderRadius: "4px", border: `1px solid ${COLORS.border}`, padding: "1.25rem", marginBottom: "1rem" },
   badge: (color) => ({ display: "inline-block", padding: "2px 8px", borderRadius: "4px", fontSize: "0.72rem", fontWeight: 600, background: `${color}20`, color }),
   header: { fontSize: "1.1rem", fontWeight: 700, color: COLORS.accent, marginBottom: "0.75rem" },
   subheader: { fontSize: "0.85rem", fontWeight: 700, color: COLORS.text, marginBottom: "0.5rem" },

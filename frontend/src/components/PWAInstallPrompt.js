@@ -45,18 +45,18 @@ export default function PWAInstallPrompt() {
     <div data-testid="pwa-install-banner" style={{
       position: "fixed", bottom: "70px", left: "50%", transform: "translateX(-50%)",
       zIndex: 10000, background: "linear-gradient(135deg, #1a2332 0%, #0f1923 100%)",
-      border: "1px solid rgba(212,175,55,0.3)", borderRadius: "12px",
+      border: "1px solid rgba(212,175,55,0.3)", borderRadius: "4px",
       padding: "12px 16px", display: "flex", alignItems: "center", gap: "12px",
       boxShadow: "0 8px 32px rgba(0,0,0,0.4)", maxWidth: "90vw", width: "360px",
     }}>
-      <img src="/icon-192x192.png" alt="Predictor" style={{ width: "40px", height: "40px", borderRadius: "8px" }} />
+      <img src="/icon-192x192.png" alt="Predictor" style={{ width: "40px", height: "40px", borderRadius: "4px" }} />
       <div style={{ flex: 1 }}>
         <div style={{ color: "#fff", fontSize: "0.85rem", fontWeight: 600 }}>Instalar Predictor</div>
         <div style={{ color: "#aaa", fontSize: "0.7rem" }}>Accede rapido desde tu celular</div>
       </div>
       <button data-testid="pwa-install-btn" onClick={handleInstall} style={{
         background: "linear-gradient(135deg, #d4af37, #c49b2f)", color: "#000",
-        border: "none", borderRadius: "8px", padding: "8px 14px",
+        border: "none", borderRadius: "4px", padding: "8px 14px",
         fontSize: "0.75rem", fontWeight: 700, cursor: "pointer",
       }}>INSTALAR</button>
       <button onClick={handleDismiss} style={{

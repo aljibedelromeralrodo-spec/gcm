@@ -3,8 +3,8 @@ import axios from "axios";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
-const card = { background: "rgba(15,23,42,0.6)", padding: "1.2rem", borderRadius: "14px", border: "1px solid rgba(255,255,255,0.08)", marginBottom: "0.8rem" };
-const inp = { width: "100%", padding: "0.55rem 0.8rem", borderRadius: 8, border: "1px solid rgba(148,163,184,0.3)", background: "#1e293b", color: "#e2e8f0", fontSize: "0.9rem" };
+const card = { background: "rgba(15,23,42,0.6)", padding: "1.2rem", borderRadius: "4px", border: "1px solid rgba(212,175,55,0.2)", marginBottom: "0.8rem" };
+const inp = { width: "100%", padding: "0.55rem 0.8rem", borderRadius: 4, border: "1px solid rgba(148,163,184,0.3)", background: "#1e293b", color: "#e2e8f0", fontSize: "0.9rem" };
 
 export default function BuzonRescateModule() {
   const [pendientes, setPendientes] = useState([]);
@@ -59,12 +59,12 @@ export default function BuzonRescateModule() {
     <div style={{ padding: "1.5rem", color: "var(--white)", maxWidth: 1000 }} data-testid="rescate-module">
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: "0.5rem" }}>
         <h2 style={{ margin: 0, color: "var(--gold)", fontSize: "1.3rem" }}><i className="fa fa-life-ring" style={{ marginRight: 8 }} />Buzón de Rescate — Por Clasificar</h2>
-        <button onClick={load} data-testid="rescate-refresh" style={{ marginLeft: "auto", background: "rgba(255,255,255,0.1)", border: "none", color: "#fff", borderRadius: 8, padding: "0.4rem 0.9rem", cursor: "pointer", fontWeight: 700 }}>
+        <button onClick={load} data-testid="rescate-refresh" style={{ marginLeft: "auto", background: "rgba(255,255,255,0.1)", border: "none", color: "#fff", borderRadius: 4, padding: "0.4rem 0.9rem", cursor: "pointer", fontWeight: 700 }}>
           <i className="fa fa-refresh" style={{ marginRight: 6 }} />Actualizar
         </button>
       </div>
       <p style={{ fontSize: "0.85rem", opacity: 0.7, marginTop: 0 }}>Correos que el sistema no logró clasificar automáticamente. Asígnalos manualmente y se procesarán como si hubieran sido automáticos.</p>
-      {msg && <div data-testid="rescate-msg" style={{ padding: "0.6rem 1rem", borderRadius: 8, background: msg.startsWith("✅") ? "rgba(34,197,94,0.12)" : "rgba(239,68,68,0.12)", border: `1px solid ${msg.startsWith("✅") ? "#22c55e" : "#ef4444"}`, marginBottom: "0.8rem", fontSize: "0.85rem" }}>{msg}</div>}
+      {msg && <div data-testid="rescate-msg" style={{ padding: "0.6rem 1rem", borderRadius: 4, background: msg.startsWith("✅") ? "rgba(34,197,94,0.12)" : "rgba(239,68,68,0.12)", border: `1px solid ${msg.startsWith("✅") ? "#22c55e" : "#ef4444"}`, marginBottom: "0.8rem", fontSize: "0.85rem" }}>{msg}</div>}
 
       {loading && <div style={{ textAlign: "center", padding: "2rem" }}><i className="fa fa-spinner fa-spin" style={{ fontSize: "1.6rem", color: "var(--gold)" }} /></div>}
       {!loading && pendientes.length === 0 && (
@@ -89,7 +89,7 @@ export default function BuzonRescateModule() {
               )}
             </div>
             <button onClick={() => abrirAsignar(p)} data-testid={`rescate-asignar-${i}`}
-              style={{ background: "var(--gold)", border: "none", color: "#1a1f2e", borderRadius: 8, padding: "0.55rem 1.1rem", cursor: "pointer", fontWeight: 800, fontSize: "0.85rem" }}>
+              style={{ background: "var(--gold)", border: "none", color: "#1a1f2e", borderRadius: 4, padding: "0.55rem 1.1rem", cursor: "pointer", fontWeight: 800, fontSize: "0.85rem" }}>
               <i className="fa fa-hand-pointer-o" style={{ marginRight: 6 }} />Asignar Manualmente
             </button>
           </div>
@@ -98,7 +98,7 @@ export default function BuzonRescateModule() {
 
       {asignando && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }} data-testid="rescate-modal">
-          <div style={{ background: "#0f172a", border: "1px solid rgba(212,175,55,0.4)", borderRadius: 14, padding: "1.5rem", width: 480, maxWidth: "92vw" }}>
+          <div style={{ background: "#0f172a", border: "1px solid rgba(212,175,55,0.4)", borderRadius: 4, padding: "1.5rem", width: 480, maxWidth: "92vw" }}>
             <h3 style={{ margin: "0 0 0.4rem", color: "var(--gold)" }}>Asignar correo a un cliente</h3>
             <div style={{ fontSize: "0.8rem", opacity: 0.7, marginBottom: "1rem" }}>{asignando.subject}</div>
             <label style={{ fontSize: "0.8rem", display: "block", marginBottom: 4 }}>Nombre del cliente</label>
@@ -114,9 +114,9 @@ export default function BuzonRescateModule() {
               <option value="carta">Carta de aprobación</option>
             </select>
             <div style={{ display: "flex", gap: 10, marginTop: "1.2rem", justifyContent: "flex-end" }}>
-              <button onClick={() => setAsignando(null)} data-testid="rescate-cancelar" style={{ background: "rgba(255,255,255,0.1)", border: "none", color: "#fff", borderRadius: 8, padding: "0.55rem 1rem", cursor: "pointer" }}>Cancelar</button>
+              <button onClick={() => setAsignando(null)} data-testid="rescate-cancelar" style={{ background: "rgba(255,255,255,0.1)", border: "none", color: "#fff", borderRadius: 4, padding: "0.55rem 1rem", cursor: "pointer" }}>Cancelar</button>
               <button onClick={confirmar} disabled={procesando} data-testid="rescate-confirmar"
-                style={{ background: "#22c55e", border: "none", color: "#052e16", borderRadius: 8, padding: "0.55rem 1.2rem", cursor: "pointer", fontWeight: 800 }}>
+                style={{ background: "#22c55e", border: "none", color: "#052e16", borderRadius: 4, padding: "0.55rem 1.2rem", cursor: "pointer", fontWeight: 800 }}>
                 {procesando ? <><i className="fa fa-spinner fa-spin" /> Procesando…</> : "Confirmar y procesar"}
               </button>
             </div>

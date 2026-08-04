@@ -59,7 +59,7 @@ export default function WhatsAppModule() {
   return (
     <div className="module-content" data-testid="whatsapp-module">
       {/* Portal ejecutivos: compartir archivos desde el teléfono */}
-      <div data-testid="portal-ejecutivos-card" style={{ background: "var(--bg-card)", border: "1px solid rgba(212,175,55,0.4)", borderRadius: 12, padding: "1.25rem", marginBottom: "1.5rem" }}>
+      <div data-testid="portal-ejecutivos-card" style={{ background: "var(--bg-card)", border: "1px solid rgba(212,175,55,0.4)", borderRadius: 4, padding: "1.25rem", marginBottom: "1.5rem" }}>
         <div style={{ fontSize: "1.05rem", fontWeight: 800, color: "var(--gold, #d4af37)", marginBottom: "0.5rem" }}>
           <i className="fa fa-mobile" style={{ marginRight: "0.5rem" }}></i>App móvil para ejecutivos — compartir archivos desde WhatsApp
         </div>
@@ -70,20 +70,20 @@ export default function WhatsAppModule() {
           <li>Elige la carpeta del cliente (o crea una nueva) y los archivos llegan directo al sistema. Puede compartir varios: se van acumulando.</li>
         </ol>
         <button data-testid="btn-copy-portal-link" onClick={() => { navigator.clipboard.writeText(window.location.origin); alert("Link copiado. Envíalo a tus ejecutivos por WhatsApp."); }}
-          style={{ background: "var(--gold, #d4af37)", color: "#0a0e17", border: "none", borderRadius: 8, padding: "0.5rem 1rem", fontWeight: 700, cursor: "pointer", marginRight: "0.6rem" }}>
+          style={{ background: "var(--gold, #d4af37)", color: "#0a0e17", border: "none", borderRadius: 4, padding: "0.5rem 1rem", fontWeight: 700, cursor: "pointer", marginRight: "0.6rem" }}>
           <i className="fa fa-copy" style={{ marginRight: "0.4rem" }}></i>Copiar link
         </button>
         <a data-testid="btn-share-portal-wa" href={`https://wa.me/?text=${encodeURIComponent("Instala la app de Central Mutuos para enviar los documentos de tus clientes directo al sistema: " + window.location.origin + " — Abrila en Chrome y tocá 'Agregar a pantalla de inicio'.")}`} target="_blank" rel="noreferrer"
-          style={{ display: "inline-block", background: "#25d366", color: "#fff", borderRadius: 8, padding: "0.5rem 1rem", fontWeight: 700, textDecoration: "none" }}>
+          style={{ display: "inline-block", background: "#25d366", color: "#fff", borderRadius: 4, padding: "0.5rem 1rem", fontWeight: 700, textDecoration: "none" }}>
           <i className="fa fa-whatsapp" style={{ marginRight: "0.4rem" }}></i>Enviar por WhatsApp
         </a>
       </div>
 
       {/* Connection status */}
-      <div style={{ background: "var(--bg-card)", border: `1px solid ${isConnected ? "rgba(16,185,129,0.5)" : "rgba(245,158,11,0.4)"}`, borderRadius: 12, padding: "1.25rem", marginBottom: "1.5rem" }}>
+      <div style={{ background: "var(--bg-card)", border: `1px solid ${isConnected ? "rgba(16,185,129,0.5)" : "rgba(245,158,11,0.4)"}`, borderRadius: 4, padding: "1.25rem", marginBottom: "1.5rem" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.75rem" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-            <div style={{ width: 50, height: 50, borderRadius: 12, background: isConnected ? "linear-gradient(135deg, #25d366, #128c7e)" : "rgba(245,158,11,0.18)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.6rem", color: isConnected ? "#fff" : "#f59e0b" }}>
+            <div style={{ width: 50, height: 50, borderRadius: 4, background: isConnected ? "linear-gradient(135deg, #25d366, #128c7e)" : "rgba(245,158,11,0.18)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.6rem", color: isConnected ? "#fff" : "#f59e0b" }}>
               <i className="fa fa-whatsapp"></i>
             </div>
             <div>
@@ -97,15 +97,15 @@ export default function WhatsAppModule() {
               </div>
             </div>
           </div>
-          <button onClick={refreshAll} title="Refrescar" style={{ padding: "0.5rem 0.75rem", background: "rgba(255,255,255,0.04)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text-secondary)", cursor: "pointer" }}>
+          <button onClick={refreshAll} title="Refrescar" style={{ padding: "0.5rem 0.75rem", background: "rgba(255,255,255,0.04)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-secondary)", cursor: "pointer" }}>
             <i className="fa fa-refresh"></i>
           </button>
         </div>
 
         {/* QR Code */}
         {hasQR && qrData?.qrCode && (
-          <div data-testid="wa-qr-container" style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "1.5rem", background: "rgba(255,255,255,0.03)", borderRadius: 10, gap: "0.85rem" }}>
-            <div style={{ background: "#fff", padding: "0.75rem", borderRadius: 10 }}>
+          <div data-testid="wa-qr-container" style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "1.5rem", background: "rgba(255,255,255,0.03)", borderRadius: 4, gap: "0.85rem" }}>
+            <div style={{ background: "#fff", padding: "0.75rem", borderRadius: 4 }}>
               <img src={qrData.qrCode} alt="QR Code WhatsApp" style={{ width: 280, height: 280, display: "block" }} />
             </div>
             <div style={{ textAlign: "center", maxWidth: 460 }}>
@@ -125,9 +125,9 @@ export default function WhatsAppModule() {
           <div style={{ marginTop: "1rem", display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
             <input type="text" value={testMessage} onChange={e => setTestMessage(e.target.value)}
               data-testid="wa-test-message"
-              style={{ flex: 1, minWidth: 200, padding: "0.55rem 0.85rem", background: "var(--bg-input)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text-primary)", fontSize: "0.85rem" }} />
+              style={{ flex: 1, minWidth: 200, padding: "0.55rem 0.85rem", background: "var(--bg-input)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-primary)", fontSize: "0.85rem" }} />
             <button onClick={sendTest} disabled={loading} data-testid="wa-test-btn"
-              style={{ padding: "0.55rem 1rem", background: "linear-gradient(135deg, #25d366, #128c7e)", color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, cursor: loading ? "wait" : "pointer", fontSize: "0.85rem" }}>
+              style={{ padding: "0.55rem 1rem", background: "linear-gradient(135deg, #25d366, #128c7e)", color: "#fff", border: "none", borderRadius: 4, fontWeight: 700, cursor: loading ? "wait" : "pointer", fontSize: "0.85rem" }}>
               <i className={`fa ${loading ? 'fa-spinner fa-spin' : 'fa-paper-plane'}`}></i> Enviarme prueba
             </button>
           </div>
@@ -135,12 +135,12 @@ export default function WhatsAppModule() {
       </div>
 
       {/* Approval Queue */}
-      <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: "1.25rem" }}>
+      <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 4, padding: "1.25rem" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
           <h3 style={{ color: "var(--gold)", fontSize: "1rem", margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
             <i className="fa fa-tasks"></i>
             Bandeja de Aprobaciones
-            <span style={{ background: approvals.length > 0 ? "#f59e0b" : "rgba(255,255,255,0.08)", color: approvals.length > 0 ? "#0a0e17" : "var(--text-muted)", borderRadius: 12, padding: "1px 9px", fontSize: "0.7rem", fontWeight: 700 }}>
+            <span style={{ background: approvals.length > 0 ? "#f59e0b" : "rgba(212,175,55,0.2)", color: approvals.length > 0 ? "#0a0e17" : "var(--text-muted)", borderRadius: 4, padding: "1px 9px", fontSize: "0.7rem", fontWeight: 700 }}>
               {approvals.length}
             </span>
           </h3>
@@ -158,7 +158,7 @@ export default function WhatsAppModule() {
           <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }} data-testid="wa-approvals-list">
             {approvals.map(a => (
               <div key={a.id} data-testid={`approval-${a.id}`}
-                style={{ background: "rgba(245,158,11,0.06)", border: "1px solid rgba(245,158,11,0.3)", borderRadius: 10, padding: "0.85rem 1rem" }}>
+                style={{ background: "rgba(245,158,11,0.06)", border: "1px solid rgba(245,158,11,0.3)", borderRadius: 4, padding: "0.85rem 1rem" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
                   <div style={{ fontWeight: 700, color: "var(--text-primary)", fontSize: "0.88rem" }}>
                     <span style={{ color: "#f59e0b", marginRight: 6 }}>#{a.id}</span>
@@ -170,17 +170,17 @@ export default function WhatsAppModule() {
                 </div>
                 {a.description && <div style={{ fontSize: "0.82rem", color: "var(--text-secondary)", marginBottom: 6 }}>{a.description}</div>}
                 {a.suggested_text && (
-                  <div style={{ background: "rgba(0,0,0,0.25)", borderRadius: 6, padding: "0.55rem 0.75rem", fontSize: "0.8rem", color: "var(--text-secondary)", fontStyle: "italic", marginBottom: 8 }}>
+                  <div style={{ background: "rgba(0,0,0,0.25)", borderRadius: 4, padding: "0.55rem 0.75rem", fontSize: "0.8rem", color: "var(--text-secondary)", fontStyle: "italic", marginBottom: 8 }}>
                     "{a.suggested_text}"
                   </div>
                 )}
                 <div style={{ display: "flex", gap: 8 }}>
                   <button onClick={() => resolveApproval(a.id, "approve")} data-testid={`btn-approve-${a.id}`}
-                    style={{ padding: "0.4rem 0.85rem", background: "rgba(16,185,129,0.18)", border: "1px solid #10b981", color: "#10b981", borderRadius: 6, fontWeight: 700, cursor: "pointer", fontSize: "0.78rem" }}>
+                    style={{ padding: "0.4rem 0.85rem", background: "rgba(16,185,129,0.18)", border: "1px solid #10b981", color: "#10b981", borderRadius: 4, fontWeight: 700, cursor: "pointer", fontSize: "0.78rem" }}>
                     <i className="fa fa-check"></i> Aprobar
                   </button>
                   <button onClick={() => resolveApproval(a.id, "reject")} data-testid={`btn-reject-${a.id}`}
-                    style={{ padding: "0.4rem 0.85rem", background: "rgba(239,68,68,0.18)", border: "1px solid #ef4444", color: "#ef4444", borderRadius: 6, fontWeight: 700, cursor: "pointer", fontSize: "0.78rem" }}>
+                    style={{ padding: "0.4rem 0.85rem", background: "rgba(239,68,68,0.18)", border: "1px solid #ef4444", color: "#ef4444", borderRadius: 4, fontWeight: 700, cursor: "pointer", fontSize: "0.78rem" }}>
                     <i className="fa fa-times"></i> Rechazar
                   </button>
                 </div>

@@ -3,7 +3,7 @@ import axios from "axios";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
-const card = { background: "rgba(15,23,42,0.6)", padding: "1.3rem", borderRadius: "14px", border: "1px solid rgba(255,255,255,0.08)" };
+const card = { background: "rgba(15,23,42,0.6)", padding: "1.3rem", borderRadius: "4px", border: "1px solid rgba(212,175,55,0.2)" };
 
 function hora(iso) {
   if (!iso) return "—";
@@ -47,7 +47,7 @@ export default function SaludModule() {
     <div style={{ padding: "1.5rem", color: "var(--white)", maxWidth: 1100 }} data-testid="salud-module">
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: "1.2rem" }}>
         <h2 style={{ margin: 0, color: "var(--gold)", fontSize: "1.3rem" }}><i className="fa fa-heartbeat" style={{ marginRight: 8 }} />Panel de Salud — Flujo 24/7</h2>
-        <button onClick={load} data-testid="salud-refresh" style={{ marginLeft: "auto", background: "rgba(255,255,255,0.1)", border: "none", color: "#fff", borderRadius: 8, padding: "0.4rem 0.9rem", cursor: "pointer", fontWeight: 700 }}>
+        <button onClick={load} data-testid="salud-refresh" style={{ marginLeft: "auto", background: "rgba(255,255,255,0.1)", border: "none", color: "#fff", borderRadius: 4, padding: "0.4rem 0.9rem", cursor: "pointer", fontWeight: 700 }}>
           <i className="fa fa-refresh" style={{ marginRight: 6 }} />Actualizar
         </button>
         <span style={{ fontSize: "0.72rem", opacity: 0.5 }}>Se actualiza solo cada 30 s</span>

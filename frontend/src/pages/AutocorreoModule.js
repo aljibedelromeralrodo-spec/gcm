@@ -177,7 +177,7 @@ export default function AutocorreoModule() {
   return (
     <div style={{ padding: "1.5rem", color: "var(--white)", maxWidth: "1100px" }} data-testid="autocorreo-module">
       {msg && (
-        <div style={{ padding: "0.75rem 1rem", borderRadius: "10px", background: "rgba(59,130,246,0.15)", border: "1px solid #3b82f6", marginBottom: "1rem", fontSize: "0.9rem" }} data-testid="autocorreo-msg">
+        <div style={{ padding: "0.75rem 1rem", borderRadius: "4px", background: "rgba(212,175,55,0.15)", border: "1px solid #d4af37", marginBottom: "1rem", fontSize: "0.9rem" }} data-testid="autocorreo-msg">
           <i className="fa fa-info-circle" style={{ marginRight: "0.5rem" }} />{msg}
           <button onClick={() => setMsg("")} style={{ float: "right", background: "none", border: "none", color: "var(--white)", cursor: "pointer", opacity: 0.6 }}>
             <i className="fa fa-times" />
@@ -188,11 +188,11 @@ export default function AutocorreoModule() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: "1rem", marginBottom: "1.5rem" }}>
         <StatCard label="Total Enviados" value={data.sent} icon="fa-paper-plane" color="#22c55e" />
         <StatCard label="Total Fallidos" value={data.failed} icon="fa-exclamation-triangle" color={data.failed > 0 ? "#ef4444" : "#888"} />
-        <StatCard label="Total Procesados" value={data.total} icon="fa-list" color="#3b82f6" />
+        <StatCard label="Total Procesados" value={data.total} icon="fa-list" color="#d4af37" />
         <StatCard label="Latencia" value="30 seg" icon="fa-bolt" color="#f59e0b" sub="Polling automatico" />
       </div>
 
-      <div className="card" style={{ background: "rgba(15,23,42,0.6)", padding: "1.5rem", borderRadius: "14px", border: "1px solid rgba(255,255,255,0.08)", marginBottom: "1.5rem" }}>
+      <div className="card" style={{ background: "rgba(15,23,42,0.6)", padding: "1.5rem", borderRadius: "4px", border: "1px solid rgba(212,175,55,0.2)", marginBottom: "1.5rem" }}>
         <h3 style={{ margin: "0 0 1rem", color: "var(--gold)", fontSize: "1.1rem" }}>
           <i className="fa fa-cogs" style={{ marginRight: "0.5rem" }} />Controles
         </h3>
@@ -237,7 +237,7 @@ export default function AutocorreoModule() {
         </Row>
 
         {runResult && (
-          <div style={{ marginTop: "1rem", padding: "0.75rem 1rem", background: "rgba(34,197,94,0.1)", border: "1px solid #22c55e", borderRadius: "10px", fontSize: "0.9rem" }} data-testid="run-result">
+          <div style={{ marginTop: "1rem", padding: "0.75rem 1rem", background: "rgba(34,197,94,0.1)", border: "1px solid #22c55e", borderRadius: "4px", fontSize: "0.9rem" }} data-testid="run-result">
             {runResult.message ? (
               <span><strong style={{ color: "#eab308" }}>⏳ En proceso:</strong> {runResult.message}</span>
             ) : runResult.error ? (
@@ -253,7 +253,7 @@ export default function AutocorreoModule() {
       </div>
 
       {/* REPORTE DIARIO 10:00 AM */}
-      <div className="card" data-testid="reporte-diario-card" style={{ background: "rgba(15,23,42,0.6)", padding: "1.5rem", borderRadius: "14px", border: "1px solid rgba(255,255,255,0.08)", marginBottom: "1.5rem" }}>
+      <div className="card" data-testid="reporte-diario-card" style={{ background: "rgba(15,23,42,0.6)", padding: "1.5rem", borderRadius: "4px", border: "1px solid rgba(212,175,55,0.2)", marginBottom: "1.5rem" }}>
         <h3 style={{ margin: "0 0 1rem", color: "var(--gold)", fontSize: "1.1rem" }}>
           <i className="fa fa-calendar-check-o" style={{ marginRight: "0.5rem" }} />Reporte Diario {reporte ? `(${reporte.hora ?? 10}:00 hrs Chile)` : ""}
         </h3>
@@ -270,7 +270,7 @@ export default function AutocorreoModule() {
           </button>
           <button onClick={cambiarHoraReporte} disabled={loading} className="autocorreo-btn"
             data-testid="btn-hora-reporte"
-            style={{ background: "#3b82f6", color: "#fff", marginLeft: "0.5rem" }}>
+            style={{ background: "#d4af37", color: "#fff", marginLeft: "0.5rem" }}>
             <i className="fa fa-clock-o" style={{ marginRight: "0.4rem" }} />{reporte?.hora ?? 10}:00
           </button>
           <button onClick={enviarReporteAhora} disabled={loading} className="autocorreo-btn"
@@ -288,11 +288,11 @@ export default function AutocorreoModule() {
         )}
       </div>
 
-      <div className="card" style={{ background: "rgba(15,23,42,0.6)", padding: "1.5rem", borderRadius: "14px", border: "1px solid rgba(255,255,255,0.08)", marginBottom: "1.5rem" }} data-testid="autocorreo-mailboxes">
+      <div className="card" style={{ background: "rgba(15,23,42,0.6)", padding: "1.5rem", borderRadius: "4px", border: "1px solid rgba(212,175,55,0.2)", marginBottom: "1.5rem" }} data-testid="autocorreo-mailboxes">
         {mailboxes.some(m => m.auth_live === false) && (
           <div data-testid="auth-broken-banner" style={{
             background: "linear-gradient(90deg, #dc2626, #b91c1c)", color: "#fff",
-            padding: "1rem 1.2rem", borderRadius: 12, marginBottom: "1.1rem",
+            padding: "1rem 1.2rem", borderRadius: 4, marginBottom: "1.1rem",
             display: "flex", alignItems: "center", gap: "0.9rem", flexWrap: "wrap",
             boxShadow: "0 4px 20px rgba(220,38,38,0.35)",
           }}>
@@ -310,7 +310,7 @@ export default function AutocorreoModule() {
                 data-testid={`btn-reconnect-${m.slot}`}
                 style={{
                   background: "#fff", color: "#b91c1c", padding: "0.6rem 1.1rem",
-                  borderRadius: 8, fontWeight: 800, textDecoration: "none",
+                  borderRadius: 4, fontWeight: 800, textDecoration: "none",
                   display: "inline-flex", alignItems: "center", gap: 6,
                 }}>
                 <i className="fa fa-google" /> Reconectar {m.role}
@@ -334,8 +334,8 @@ export default function AutocorreoModule() {
             <div key={m.email} data-testid={`mailbox-${m.slot}`}
               style={{
                 background: "rgba(255,255,255,0.03)",
-                border: `1px solid ${m.backoff_remaining_s > 0 ? "#ef4444" : "rgba(255,255,255,0.08)"}`,
-                borderRadius: "10px", padding: "0.9rem 1.1rem",
+                border: `1px solid ${m.backoff_remaining_s > 0 ? "#ef4444" : "rgba(212,175,55,0.2)"}`,
+                borderRadius: "4px", padding: "0.9rem 1.1rem",
                 display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.6rem",
               }}>
               <div style={{ minWidth: 0, flex: 1 }}>
@@ -372,9 +372,9 @@ export default function AutocorreoModule() {
                     data-testid={`connect-oauth-${m.slot}`}
                     className="autocorreo-btn"
                     style={{
-                      background: m.oauth_configured ? "transparent" : "#3b82f6",
+                      background: m.oauth_configured ? "transparent" : "#d4af37",
                       color: m.oauth_configured ? "#93c5fd" : "#fff",
-                      border: m.oauth_configured ? "1px solid #3b82f6" : "none",
+                      border: m.oauth_configured ? "1px solid #d4af37" : "none",
                       textDecoration: "none", display: "inline-flex", alignItems: "center", justifyContent: "center",
                     }}>
                     <i className="fa fa-google" style={{ marginRight: "0.4rem" }} />
@@ -393,7 +393,7 @@ export default function AutocorreoModule() {
           ))}
           {mailboxes.length <= 1 && (
             <div style={{
-              padding: "0.8rem 1rem", borderRadius: 10,
+              padding: "0.8rem 1rem", borderRadius: 4,
               background: "rgba(139,92,246,0.08)", border: "1px dashed #a78bfa",
               fontSize: "0.85rem",
             }} data-testid="add-backup-hint">
@@ -404,7 +404,7 @@ export default function AutocorreoModule() {
         </div>
       </div>
 
-      <div className="card" style={{ background: "rgba(15,23,42,0.6)", padding: "1.5rem", borderRadius: "14px", border: "1px solid rgba(255,255,255,0.08)" }} data-testid="autocorreo-manual-upload">
+      <div className="card" style={{ background: "rgba(15,23,42,0.6)", padding: "1.5rem", borderRadius: "4px", border: "1px solid rgba(212,175,55,0.2)" }} data-testid="autocorreo-manual-upload">
         <h3 style={{ margin: "0 0 0.8rem", color: "var(--gold)", fontSize: "1.1rem" }}>
           <i className="fa fa-cloud-upload" style={{ marginRight: "0.5rem" }} />
           Subida manual (bypass Gmail)
@@ -416,7 +416,7 @@ export default function AutocorreoModule() {
         <ManualUploadForm apiUrl={API_URL} onDone={load} />
       </div>
 
-      <div className="card" style={{ background: "rgba(15,23,42,0.6)", padding: "1.5rem", borderRadius: "14px", border: "1px solid rgba(255,255,255,0.08)" }} data-testid="autocorreo-archive">
+      <div className="card" style={{ background: "rgba(15,23,42,0.6)", padding: "1.5rem", borderRadius: "4px", border: "1px solid rgba(212,175,55,0.2)" }} data-testid="autocorreo-archive">
         <h3 style={{ margin: "0 0 1rem", color: "var(--gold)", fontSize: "1.1rem" }}>
           <i className="fa fa-folder-open" style={{ marginRight: "0.5rem" }} />PDFs ajustados archivados por cliente
           <span style={{ fontSize: "0.75rem", opacity: 0.6, fontWeight: 400, marginLeft: "0.7rem" }}>
@@ -436,8 +436,8 @@ export default function AutocorreoModule() {
               return (
                 <details key={f.cliente} style={{
                   background: "rgba(255,255,255,0.03)",
-                  border: "1px solid rgba(255,255,255,0.08)",
-                  borderRadius: "10px",
+                  border: "1px solid rgba(212,175,55,0.2)",
+                  borderRadius: "4px",
                   padding: "0.6rem 0.9rem",
                 }} data-testid={`archive-folder-${f.cliente}`}>
                   <summary style={{ cursor: "pointer", fontWeight: 700, listStyle: "none", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -476,7 +476,7 @@ export default function AutocorreoModule() {
         )}
       </div>
 
-      <div className="card" style={{ background: "rgba(15,23,42,0.6)", padding: "1.5rem", borderRadius: "14px", border: "1px solid rgba(255,255,255,0.08)" }}>
+      <div className="card" style={{ background: "rgba(15,23,42,0.6)", padding: "1.5rem", borderRadius: "4px", border: "1px solid rgba(212,175,55,0.2)" }}>
         <h3 style={{ margin: "0 0 1rem", color: "var(--gold)", fontSize: "1.1rem" }}>
           <i className="fa fa-list" style={{ marginRight: "0.5rem" }} />Ultimos procesados
         </h3>
@@ -572,7 +572,7 @@ function ManualUploadForm({ apiUrl, onDone }) {
           placeholder="Ej: Jose Cambimbo"
           data-testid="manual-cliente"
           style={{
-            width: "100%", padding: "0.5rem", borderRadius: 8,
+            width: "100%", padding: "0.5rem", borderRadius: 4,
             border: "1px solid rgba(255,255,255,0.15)",
             background: "rgba(0,0,0,0.3)", color: "#fff", fontSize: "0.9rem",
           }} />
@@ -600,7 +600,7 @@ function ManualUploadForm({ apiUrl, onDone }) {
       {result && (
         <div style={{
           background: "rgba(34,197,94,0.1)", border: "1px solid #22c55e",
-          padding: "0.7rem", borderRadius: 8, fontSize: "0.85rem",
+          padding: "0.7rem", borderRadius: 4, fontSize: "0.85rem",
         }}>
           <b>✅ Archivado en {result.folder}</b>
           {(() => {
@@ -657,7 +657,7 @@ function StatCard({ label, value, icon, color, sub }) {
   return (
     <div style={{
       background: "rgba(15,23,42,0.6)", padding: "1.2rem 1.4rem",
-      borderRadius: "14px", border: "1px solid rgba(255,255,255,0.08)",
+      borderRadius: "4px", border: "1px solid rgba(212,175,55,0.2)",
     }} data-testid={`stat-${label.toLowerCase().replace(/\s/g,'-')}`}>
       <div style={{ display: "flex", alignItems: "center", gap: "0.7rem", marginBottom: "0.4rem" }}>
         <i className={`fa ${icon}`} style={{ color, fontSize: "1.2rem" }} />

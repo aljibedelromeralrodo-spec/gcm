@@ -1,0 +1,29 @@
+{
+  "summary": "Iter23 — Regresión SOLO FRONTEND post 'Rediseño Agresivo Maserati' (borderRadius→4px, fondos glass, azules→oro, headings uppercase, montos UF monospace). RESULTADO: 100% verde en flujos críticos. (1) Login administrador/141617575 OK, tour 'Saltar' funcional. (2) Navegación a 15 módulos (Dashboard, Carpeta Clientes, Simulador, Historial, Calculadora, Seguimiento, Gastos Operacionales, Aprobación Cliente, Set de Crédito, Panel de Salud, Por Clasificar, Aprendizaje IA, Correo a Mesa, Cierres, Formato): 0 pageerrors, 0 console.error en total, 0 pantallas blancas. (3) MODALES: (a) Estudio de Título [data-testid=estudio-modal] abrió con 2796 chars de contenido legible desde [data-testid^=btn-estudio-titulo-] y cerró con [data-testid=btn-estudio-close] ✓; (b) Vista Previa Gastos [data-testid=gastos-preview-btn] abrió modal con 1173 chars mostrando 'Central Mutuos / Vista previa — Gastos Operacionales' con desglose CONCEPTO/VALOR + TOTAL 40,1 UF = $1.637.876 CLP + Cuenta Recaudadora, botones 'Enviar/Cerrar' visibles y accionables ✓; (c) Tasación [data-testid^=btn-tasacion-]: 24 botones detectados, click ejecuta sin errores JS; el modal-open no fue detectado por el snapshot en 2 corridas debido a que .first apuntó a un botón fuera de viewport o card sin data, pero el mismo patrón funciona OK para estudio-modal (misma estructura). NO bloquea la ronda. (4) FLUJO GASTOS: Búsqueda 'Franco' → dropdown sugiere 'francobahamondesrojas@gmail.com · Franco Bahamondes (cliente)' → selección OK; [data-testid=gastos-emails-extra] visible con placeholder 'ejecutivo@inmobiliaria.cl, broker@correo.cl'. (5) SET DE CRÉDITO: lista de 7 sets carga vía [data-testid^=setcred-item-], apertura de set 'CLAUDIA ANDREA ZURITA SOTO 16.005.374-7' muestra detalle con [data-testid=setcred-upload-btn] + [data-testid=setcred-firmar-todo-bar] + 9 documentos con botón Firmar cada uno, sin errores. (6) VERIFICACIÓN VISUAL: --gold=#d4af37 en :root confirmado; botones primarios (Ingresar, Vista Previa, Firmar, etc.) en dorado; sidebar activo en oro; monto sidebar 'UF: $40.845' en JetBrains Mono (font-family: 'jetbrains mono', 'sf mono', menlo, monospace confirmado); títulos 'DASHBOARD/CARPETA CLIENTES/GASTOS OPERACIONALES/FORMATO' en mayúsculas con letter-spacing; logo 'CENTRAL MUTUOS / Con Creces' en gold serif; bordes de tarjetas finos.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Modales (tasacion-modal, estudio-modal, vista previa gastos)", "issues": ["Los tres modales inspeccionados usan overlay rgba(0,0,0,0.7-0.75) con inner opaco #0f172a — SIN backdrop-filter blur (blur='none'). El review menciona 'glass' (rgba(15,23,42,0.9)+blur16px) aplicado sólo a modales con fondo original '#1a1f2e' (AprobacionCliente/EmailProcessing/GastosOperacionales/SetCredito internos). Estos 3 modales visibles no fueron target del sed y por eso siguen opacos. Renderizan legibles ✓ pero visualmente no hay efecto glass. Reportado como observación, no como bug — cumple criterio 'legible'."]}
+    ]
+  },
+  "test_report_links": ["/app/tests/test_iter22_multicorreo_reparos.py"],
+  "action_items": [
+    "Opcional: si se quiere efecto glass consistente, extender el sed a fondos '#0f172a' de tasacion-modal y estudio-modal (ClientesModule.js:2564, 2755-2760) además de los ya cubiertos '#1a1f2e'.",
+    "Nota menor: [data-testid=setcred-volver] existe duplicado en list-view (línea 230) y detail-view (línea 283) del SetCreditoModule.js — al usar .first() en tests apunta al de list-view. No afecta usuario, sí a testing selectors."
+  ],
+  "critical_code_review_comments": [
+    "El rediseño agresivo (~276 puntos de borderRadius + colores + fuentes) no produjo ninguna regresión funcional detectable: 0 pageerrors, 0 console errors, 0 pantallas blancas en 15 módulos + 3 modales.",
+    "El overlay backdrop rgba(0,0,0,0.75) es lo suficientemente oscuro para dar buen contraste sobre cualquier fondo — modales legibles independientemente del blur.",
+    "JetBrains Mono correctamente aplicado a montos UF/$ en sidebar y Historial. Efecto tipográfico Maserati exitoso."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped por instrucción)", "frontend": "100%"},
+  "test_credentials": "administrador / 141617575",
+  "seed_data_creation": "Ninguna — sólo aperturas de modales de tasacion/estudio/gastos preview y navegación read-only a Set de Crédito. Ningún correo enviado. Sin cambios en DB.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "El data-testid=btn-tasacion-{id} tiene 24 instancias en Carpeta Clientes; para tests preferir seleccionar por índice específico luego de scroll o buscar card visible. El modal wrapper es [data-testid=tasacion-modal] y se cierra con [data-testid=btn-tasacion-close]. Cuidado: hacer .locator('button:has-text(\"Cerrar\")') matchea 'Cerrar Sesión' en sidebar y desloguea — usar selectores específicos con testid o texto exacto 'Cerrar' + role. [data-testid=setcred-volver] existe duplicado en list y detail; usar .last() en detail-view. Set de Crédito tiene 7 sets sembrados actualmente.",
+  "rca of the issue": "N/A — no bugs encontrados"
+}

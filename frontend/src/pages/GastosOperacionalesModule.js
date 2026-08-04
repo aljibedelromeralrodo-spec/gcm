@@ -6,9 +6,9 @@ import { estiloConfianza, PanelAprendizaje, useAprendizaje } from "../components
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
-const card = { background: "rgba(15,23,42,0.6)", padding: "1.5rem", borderRadius: "14px", border: "1px solid rgba(255,255,255,0.08)", marginBottom: "1.5rem" };
-const inp = { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "8px", padding: "0.55rem 0.8rem", color: "#fff", fontSize: "0.9rem", width: "100%" };
-const btn = (bg, small) => ({ background: bg, color: bg === "var(--gold)" ? "#0a0e17" : "#fff", border: "none", borderRadius: "8px", padding: small ? "0.4rem 0.8rem" : "0.6rem 1.2rem", fontWeight: 700, cursor: "pointer", fontSize: small ? "0.8rem" : "0.9rem" });
+const card = { background: "rgba(15,23,42,0.6)", padding: "1.5rem", borderRadius: "4px", border: "1px solid rgba(212,175,55,0.2)", marginBottom: "1.5rem" };
+const inp = { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "4px", padding: "0.55rem 0.8rem", color: "#fff", fontSize: "0.9rem", width: "100%" };
+const btn = (bg, small) => ({ background: bg, color: bg === "var(--gold)" ? "#0a0e17" : "#fff", border: "none", borderRadius: "4px", padding: small ? "0.4rem 0.8rem" : "0.6rem 1.2rem", fontWeight: 700, cursor: "pointer", fontSize: small ? "0.8rem" : "0.9rem" });
 const lbl = { display: "block", fontSize: "0.75rem", opacity: 0.6, marginBottom: "0.3rem", textTransform: "uppercase", letterSpacing: "0.5px" };
 
 export default function GastosOperacionalesModule({ onNavigate }) {
@@ -285,11 +285,11 @@ export default function GastosOperacionalesModule({ onNavigate }) {
   return (
     <div style={{ padding: "1.5rem", color: "var(--white)", maxWidth: "1000px" }} data-testid="gastos-module">
       {onNavigate && (
-        <button data-testid="gastos-volver" onClick={() => onNavigate("clientes")} style={{ marginBottom: "1rem", background: "transparent", border: "1px solid rgba(212,175,55,0.5)", color: "var(--gold)", borderRadius: 8, padding: "0.45rem 1rem", fontWeight: 700, cursor: "pointer" }}>
+        <button data-testid="gastos-volver" onClick={() => onNavigate("clientes")} style={{ marginBottom: "1rem", background: "transparent", border: "1px solid rgba(212,175,55,0.5)", color: "var(--gold)", borderRadius: 4, padding: "0.45rem 1rem", fontWeight: 700, cursor: "pointer" }}>
           <i className="fa fa-arrow-left" /> Volver a Carpeta Clientes
         </button>
       )}
-      {msg && <div data-testid="gastos-msg" style={{ padding: "0.7rem 1rem", borderRadius: "8px", marginBottom: "1rem", background: msg.startsWith("✅") ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)", color: msg.startsWith("✅") ? "#22c55e" : "#ef4444", fontWeight: 600 }}>{msg}</div>}
+      {msg && <div data-testid="gastos-msg" style={{ padding: "0.7rem 1rem", borderRadius: "4px", marginBottom: "1rem", background: msg.startsWith("✅") ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)", color: msg.startsWith("✅") ? "#22c55e" : "#ef4444", fontWeight: 600 }}>{msg}</div>}
 
       {/* BUSCADOR */}
       <div style={card}>
@@ -297,7 +297,7 @@ export default function GastosOperacionalesModule({ onNavigate }) {
         <div style={{ position: "relative" }}>
           <input data-testid="gastos-buscar" style={inp} placeholder="Ej: Franco Bahamondes o 18.312.893-0" value={q} onChange={e => setQ(e.target.value)} />
           {resultados.length > 0 && (
-            <div style={{ position: "absolute", top: "110%", left: 0, right: 0, background: "#1a1f2e", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "8px", zIndex: 20, overflow: "hidden" }}>
+            <div style={{ position: "absolute", top: "110%", left: 0, right: 0, background: "rgba(15,23,42,0.9)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "4px", zIndex: 20, overflow: "hidden" }}>
               {resultados.map((r, i) => (
                 <div key={i} data-testid={`gastos-resultado-${i}`} onClick={() => elegir(r)} style={{ padding: "0.6rem 1rem", cursor: "pointer", borderBottom: "1px solid rgba(255,255,255,0.05)" }}
                      onMouseEnter={e => e.currentTarget.style.background = "rgba(212,175,55,0.1)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
@@ -381,19 +381,19 @@ export default function GastosOperacionalesModule({ onNavigate }) {
 
       {/* ACCIONES */}
       <div style={{ display: "flex", gap: "0.8rem", flexWrap: "wrap", marginBottom: "1.5rem", alignItems: "center" }}>
-        <button data-testid="gastos-preview-btn" onClick={verPreview} disabled={loading} style={btn("#3b82f6")}><i className="fa fa-eye" style={{ marginRight: "0.4rem" }} />Vista previa</button>
+        <button data-testid="gastos-preview-btn" onClick={verPreview} disabled={loading} style={btn("#d4af37")}><i className="fa fa-eye" style={{ marginRight: "0.4rem" }} />Vista previa</button>
         <button data-testid="gastos-enviar-btn" onClick={enviar} disabled={loading || !emailCliente} style={btn("var(--gold)")}><i className="fa fa-paper-plane" style={{ marginRight: "0.4rem" }} />Enviar al cliente</button>
         <button data-testid="gastos-guardar-plantilla" onClick={guardarPlantilla} disabled={loading} style={btn("rgba(255,255,255,0.12)")}><i className="fa fa-save" style={{ marginRight: "0.4rem" }} />Guardar como plantilla</button>
-        <button data-testid="gastos-guardar-predeterminada" onClick={guardarPredeterminada} disabled={loading} style={btn("rgba(255,255,255,0.08)")}><i className="fa fa-star" style={{ marginRight: "0.4rem" }} />Guardar como predeterminada</button>
+        <button data-testid="gastos-guardar-predeterminada" onClick={guardarPredeterminada} disabled={loading} style={btn("rgba(212,175,55,0.2)")}><i className="fa fa-star" style={{ marginRight: "0.4rem" }} />Guardar como predeterminada</button>
         {plantillas.length > 0 && (
           <>
             <select data-testid="gastos-plantilla-select" onChange={e => { if (e.target.value) aplicarPlantilla(e.target.value); e.target.value = ""; }} defaultValue=""
-              style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(212,175,55,0.4)", color: "#e2e8f0", borderRadius: 8, padding: "0.55rem 0.8rem", fontSize: "0.85rem" }}>
+              style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(212,175,55,0.4)", color: "#e2e8f0", borderRadius: 4, padding: "0.55rem 0.8rem", fontSize: "0.85rem" }}>
               <option value="">📋 Aplicar plantilla…</option>
               {plantillas.map(p => <option key={p.id} value={p.id} style={{ color: "#111" }}>{p.nombre}</option>)}
             </select>
             <select data-testid="gastos-plantilla-eliminar" onChange={e => { if (e.target.value) eliminarPlantilla(e.target.value); e.target.value = ""; }} defaultValue=""
-              style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(239,68,68,0.35)", color: "#f87171", borderRadius: 8, padding: "0.55rem 0.8rem", fontSize: "0.85rem" }}>
+              style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(239,68,68,0.35)", color: "#f87171", borderRadius: 4, padding: "0.55rem 0.8rem", fontSize: "0.85rem" }}>
               <option value="">🗑 Eliminar plantilla…</option>
               {plantillas.map(p => <option key={p.id} value={p.id} style={{ color: "#111" }}>{p.nombre}</option>)}
             </select>
@@ -419,7 +419,7 @@ export default function GastosOperacionalesModule({ onNavigate }) {
           <button data-testid="cobro-enviar-manual" onClick={enviarCobroManual} disabled={cobroLoading || !cobroEmail.includes("@")} style={btn("var(--gold)")}>
             <i className={`fa ${cobroLoading ? "fa-spinner fa-spin" : "fa-paper-plane"}`} style={{ marginRight: "0.4rem" }} />Solicitar datos + cobro
           </button>
-          <button data-testid="cobro-scan" onClick={scanCobros} disabled={cobroLoading} style={btn("rgba(59,130,246,0.8)")}>
+          <button data-testid="cobro-scan" onClick={scanCobros} disabled={cobroLoading} style={btn("rgba(212,175,55,0.8)")}>
             <i className={`fa ${cobroLoading ? "fa-spinner fa-spin" : "fa-refresh"}`} style={{ marginRight: "0.4rem" }} />Buscar solicitudes
           </button>
         </div>
@@ -430,7 +430,7 @@ export default function GastosOperacionalesModule({ onNavigate }) {
         ) : (
           <div style={{ display: "grid", gap: 6 }} data-testid="cobros-lista">
             {cobros.cobros.map((c) => (
-              <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 10, background: c.pagado ? "rgba(34,197,94,0.08)" : "rgba(255,255,255,0.04)", border: `1px solid ${c.pagado ? "rgba(34,197,94,0.35)" : "rgba(255,255,255,0.1)"}`, borderRadius: 8, padding: "0.55rem 0.9rem", fontSize: "0.85rem" }}>
+              <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 10, background: c.pagado ? "rgba(34,197,94,0.08)" : "rgba(255,255,255,0.04)", border: `1px solid ${c.pagado ? "rgba(34,197,94,0.35)" : "rgba(255,255,255,0.1)"}`, borderRadius: 4, padding: "0.55rem 0.9rem", fontSize: "0.85rem" }}>
                 <div style={{ flex: 1 }}>
                   <b>{c.cliente || c.subject || c.from_email}</b>
                   <span style={{ opacity: 0.6 }}> · {c.from_email}</span>
@@ -459,7 +459,7 @@ export default function GastosOperacionalesModule({ onNavigate }) {
           </h3>
           {historial.map((h) => (
             <div key={h.mes} data-testid={`historial-mes-${h.mes}`} style={{ marginBottom: "0.9rem" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0.5rem 0.9rem", background: "rgba(212,175,55,0.08)", border: "1px solid rgba(212,175,55,0.25)", borderRadius: 8, fontSize: "0.9rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0.5rem 0.9rem", background: "rgba(212,175,55,0.08)", border: "1px solid rgba(212,175,55,0.25)", borderRadius: 4, fontSize: "0.9rem" }}>
                 <b style={{ color: "var(--gold)" }}>{h.mes}</b>
                 <span style={{ opacity: 0.8 }}>{h.cantidad} tasación(es) pagada(s)</span>
                 <span style={{ marginLeft: "auto", fontWeight: 700, color: "#4ade80" }}>{h.total_uf.toLocaleString("es-CL")} UF · {h.total_clp}</span>
@@ -484,7 +484,7 @@ export default function GastosOperacionalesModule({ onNavigate }) {
         <div style={card} data-testid="gastos-log">
           <div style={{ display: "flex", alignItems: "center", gap: "0.8rem", marginBottom: "0.8rem", flexWrap: "wrap" }}>
             <h3 style={{ margin: 0, color: "var(--gold)", fontSize: "1rem" }}><i className="fa fa-history" style={{ marginRight: "0.5rem" }} />Envíos y Seguimiento de Pagos</h3>
-            <button data-testid="gastos-scan-pagos" onClick={scanPagos} disabled={pagoLoading} style={{ ...btn("rgba(59,130,246,0.8)", true), marginLeft: "auto" }}>
+            <button data-testid="gastos-scan-pagos" onClick={scanPagos} disabled={pagoLoading} style={{ ...btn("rgba(212,175,55,0.8)", true), marginLeft: "auto" }}>
               <i className={`fa ${pagoLoading ? "fa-spinner fa-spin" : "fa-search-dollar fa-refresh"}`} style={{ marginRight: "0.4rem" }} />🤖 Buscar transferencias en el correo
             </button>
           </div>
@@ -493,7 +493,7 @@ export default function GastosOperacionalesModule({ onNavigate }) {
             const estadoColor = estado === "pagado" ? "#22c55e" : estado === "parcial" ? "#f59e0b" : "#ef4444";
             const pi = pagoInputs[l.id] || {};
             return (
-              <div key={l.id || i} data-testid={`gastos-log-${i}`} style={{ border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, padding: "0.7rem 0.9rem", marginBottom: "0.6rem", background: estado === "pagado" ? "rgba(34,197,94,0.05)" : "rgba(255,255,255,0.02)" }}>
+              <div key={l.id || i} data-testid={`gastos-log-${i}`} style={{ border: "1px solid rgba(212,175,55,0.2)", borderRadius: 4, padding: "0.7rem 0.9rem", marginBottom: "0.6rem", background: estado === "pagado" ? "rgba(34,197,94,0.05)" : "rgba(255,255,255,0.02)" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", fontSize: "0.87rem" }}>
                   <b>{l.nombre}</b>
                   <span style={{ opacity: 0.55 }}>{l.rut}</span>
@@ -538,8 +538,8 @@ export default function GastosOperacionalesModule({ onNavigate }) {
       {/* MODAL PREVIEW */}
       {preview && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem" }} onClick={() => setPreview(null)}>
-          <div style={{ background: "#fff", borderRadius: "12px", maxWidth: "720px", width: "100%", maxHeight: "88vh", overflow: "auto" }} onClick={e => e.stopPropagation()} data-testid="gastos-preview-modal">
-            <div style={{ padding: "0.8rem 1.2rem", background: "#1a1f2e", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0 }}>
+          <div style={{ background: "#fff", borderRadius: "4px", maxWidth: "720px", width: "100%", maxHeight: "88vh", overflow: "auto" }} onClick={e => e.stopPropagation()} data-testid="gastos-preview-modal">
+            <div style={{ padding: "0.8rem 1.2rem", background: "rgba(15,23,42,0.9)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0 }}>
               <span style={{ color: "var(--gold)", fontWeight: 700 }}>Vista previa — {preview.subject}</span>
               <div>
                 <button data-testid="gastos-preview-enviar" onClick={enviar} disabled={loading || !emailCliente} style={{ ...btn("var(--gold)", true), marginRight: "0.6rem" }}>Enviar</button>

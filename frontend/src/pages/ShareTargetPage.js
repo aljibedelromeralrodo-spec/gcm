@@ -192,7 +192,7 @@ export default function ShareTargetPage() {
           <h2 style={{ marginTop: 0 }}>📲 Central Mutuos — Compartir archivos</h2>
           <p style={{ fontSize: 14, color: "#94a3b8" }}>Subí documentos de clientes directo al sistema, sin contraseña.</p>
 
-          <label data-testid="share-pick-files" style={{ display: "block", textAlign: "center", background: "#0ea5e9", color: "#fff", borderRadius: 8, padding: "0.9rem", fontWeight: 700, fontSize: 15, cursor: "pointer", marginBottom: "1rem" }}>
+          <label data-testid="share-pick-files" style={{ display: "block", textAlign: "center", background: "#0ea5e9", color: "#fff", borderRadius: 4, padding: "0.9rem", fontWeight: 700, fontSize: 15, cursor: "pointer", marginBottom: "1rem" }}>
             <i className="fa fa-folder-open" /> Elegir archivos del teléfono
             <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.heic,.webp,.doc,.docx,application/pdf,image/*"
               style={{ display: "none" }}
@@ -203,12 +203,12 @@ export default function ShareTargetPage() {
               }} />
           </label>
 
-          <div style={{ background: "rgba(59,130,246,0.1)", border: "1px solid rgba(59,130,246,0.4)", borderRadius: 8, padding: "0.8rem", fontSize: 13, marginBottom: "0.8rem" }}>
+          <div style={{ background: "rgba(212,175,55,0.1)", border: "1px solid rgba(212,175,55,0.4)", borderRadius: 4, padding: "0.8rem", fontSize: 13, marginBottom: "0.8rem" }}>
             <b>📥 O compartí desde WhatsApp:</b>
             <div style={{ marginTop: 4, color: "#cbd5e1" }}>Mantené presionado un archivo → <b>Compartir</b> → elegí <b>Central Mutuos</b>.</div>
           </div>
 
-          <div style={{ background: "rgba(212,175,55,0.1)", border: "1px solid rgba(212,175,55,0.4)", borderRadius: 8, padding: "0.8rem", fontSize: 13 }}>
+          <div style={{ background: "rgba(212,175,55,0.1)", border: "1px solid rgba(212,175,55,0.4)", borderRadius: 4, padding: "0.8rem", fontSize: 13 }}>
             <b style={{ color: "#facc15" }}>⬇️ Instalá el mini programa (una sola vez):</b>
             <ol style={{ margin: "0.4rem 0 0 1.1rem", padding: 0, color: "#cbd5e1" }}>
               <li>Abrí este link en <b>Chrome</b> del teléfono</li>
@@ -227,7 +227,7 @@ export default function ShareTargetPage() {
     <div style={{ minHeight: "100vh", background: "#0a0f1c", color: "#e2e8f0", padding: "1rem", paddingBottom: "3rem" }}>
       <div style={{ maxWidth: 560, margin: "0 auto" }}>
         <h2 style={{ marginTop: 0 }}>📥 Archivos recibidos</h2>
-        <div style={{ background: "rgba(59,130,246,0.1)", border: "1px solid rgba(59,130,246,0.5)", borderRadius: 8, padding: "0.75rem", marginBottom: "0.6rem" }}>
+        <div style={{ background: "rgba(212,175,55,0.1)", border: "1px solid rgba(212,175,55,0.5)", borderRadius: 4, padding: "0.75rem", marginBottom: "0.6rem" }}>
           <b>{payload.files.length} / {MAX_ACCUMULATED_FILES} archivo(s) acumulado(s):</b>
           {payload.files.length >= MAX_ACCUMULATED_FILES && (
             <div style={{ fontSize: 11, color: "#facc15", marginTop: 4 }}>⚠️ Límite alcanzado. Confirmá esta tanda antes de sumar más.</div>
@@ -238,7 +238,7 @@ export default function ShareTargetPage() {
             ))}
           </ul>
         </div>
-        <div style={{ background: "rgba(250,204,21,0.12)", border: "1px solid rgba(250,204,21,0.4)", borderRadius: 8, padding: "0.6rem 0.8rem", marginBottom: "1rem", fontSize: 12, color: "#facc15" }}>
+        <div style={{ background: "rgba(250,204,21,0.12)", border: "1px solid rgba(250,204,21,0.4)", borderRadius: 4, padding: "0.6rem 0.8rem", marginBottom: "1rem", fontSize: 12, color: "#facc15" }}>
           💡 <b>WhatsApp Business no permite multi-share externo.</b> Podés volver a WhatsApp y compartir MÁS archivos de a uno — se van a ir acumulando acá (hasta 15 min). Cuando termines, confirmá abajo.
           <div style={{ marginTop: 6 }}>
             <button onClick={handleDiscard} data-testid="btn-discard"
@@ -256,7 +256,7 @@ export default function ShareTargetPage() {
                 data-testid={`destino-${d.key}`}
                 style={{ flex: 1, padding: "0.55rem 0.3rem", background: destino === d.key ? d.color : "rgba(255,255,255,0.06)",
                   color: destino === d.key ? "#0a0f1c" : "#cbd5e1", border: `1px solid ${destino === d.key ? d.color : "rgba(148,163,184,0.25)"}`,
-                  borderRadius: 6, fontWeight: 700, fontSize: 11.5, cursor: "pointer", lineHeight: 1.25 }}>
+                  borderRadius: 4, fontWeight: 700, fontSize: 11.5, cursor: "pointer", lineHeight: 1.25 }}>
                 <i className={`fa ${d.icon}`} style={{ display: "block", fontSize: 15, marginBottom: 3 }} />
                 {d.label}
               </button>
@@ -270,10 +270,10 @@ export default function ShareTargetPage() {
 
         {destino === "credito" && (
           <div style={{ display: "flex", gap: 6, marginBottom: "1rem" }}>
-            <button onClick={() => setMode("existing")} data-testid="mode-existing" style={{ flex: 1, padding: "0.6rem", background: mode === "existing" ? "#0ea5e9" : "rgba(255,255,255,0.08)", color: "#fff", border: "none", borderRadius: 6, fontWeight: 700, cursor: "pointer" }}>
+            <button onClick={() => setMode("existing")} data-testid="mode-existing" style={{ flex: 1, padding: "0.6rem", background: mode === "existing" ? "#0ea5e9" : "rgba(212,175,55,0.2)", color: "#fff", border: "none", borderRadius: 4, fontWeight: 700, cursor: "pointer" }}>
               📁 Cliente existente
             </button>
-            <button onClick={() => setMode("new")} data-testid="mode-new" style={{ flex: 1, padding: "0.6rem", background: mode === "new" ? "#22c55e" : "rgba(255,255,255,0.08)", color: "#fff", border: "none", borderRadius: 6, fontWeight: 700, cursor: "pointer" }}>
+            <button onClick={() => setMode("new")} data-testid="mode-new" style={{ flex: 1, padding: "0.6rem", background: mode === "new" ? "#22c55e" : "rgba(212,175,55,0.2)", color: "#fff", border: "none", borderRadius: 4, fontWeight: 700, cursor: "pointer" }}>
               ➕ Cliente nuevo
             </button>
           </div>
@@ -288,9 +288,9 @@ export default function ShareTargetPage() {
               onChange={(e) => setFolderSearch(e.target.value)}
               placeholder="Escribí nombre o RUT (ej: Bryan, 20398906)"
               data-testid="folder-search"
-              style={{ width: "100%", padding: "0.55rem 0.7rem", borderRadius: 6, background: "#1e293b", color: "#e2e8f0", border: "1px solid rgba(148,163,184,0.3)", fontSize: 14, marginBottom: "0.4rem" }}
+              style={{ width: "100%", padding: "0.55rem 0.7rem", borderRadius: 4, background: "#1e293b", color: "#e2e8f0", border: "1px solid rgba(148,163,184,0.3)", fontSize: 14, marginBottom: "0.4rem" }}
             />
-            <div style={{ maxHeight: 260, overflowY: "auto", background: "#0f172a", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 6, marginBottom: "0.8rem" }}>
+            <div style={{ maxHeight: 260, overflowY: "auto", background: "#0f172a", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 4, marginBottom: "0.8rem" }}>
               {(() => {
                 const q = folderSearch.trim().toLowerCase();
                 const norm = (s) => (s || "").toLowerCase().replace(/[.\-\s]/g, "");
@@ -315,7 +315,7 @@ export default function ShareTargetPage() {
               })()}
             </div>
             <button onClick={handleUploadExisting} disabled={!selectedFolder || uploading} data-testid="btn-upload-existing"
-              style={{ width: "100%", padding: "0.75rem", background: (!selectedFolder || uploading) ? "#475569" : "#0ea5e9", color: "#fff", border: "none", borderRadius: 6, fontWeight: 700, fontSize: 14, cursor: uploading ? "wait" : "pointer" }}>
+              style={{ width: "100%", padding: "0.75rem", background: (!selectedFolder || uploading) ? "#475569" : "#0ea5e9", color: "#fff", border: "none", borderRadius: 4, fontWeight: 700, fontSize: 14, cursor: uploading ? "wait" : "pointer" }}>
               <i className={`fa ${uploading ? "fa-spinner fa-spin" : "fa-upload"}`} /> {uploading ? "Subiendo…"
                 : destino === "voucher_tasacion" ? `Guardar ${payload.files.length} voucher(s) de Tasación`
                 : destino === "voucher_gasto_operacional" ? `Guardar ${payload.files.length} voucher(s) de Gasto Op.`
@@ -326,7 +326,7 @@ export default function ShareTargetPage() {
               const hasCodeudor = folder && (folder.codeudor_nombre || "").trim().length > 0;
               if (!hasCodeudor) return null;
               return (
-                <div style={{ marginTop: 10, padding: "0.6rem 0.8rem", background: "rgba(139,92,246,0.12)", border: "1px solid rgba(139,92,246,0.5)", borderRadius: 6, fontSize: 12, color: "#c4b5fd" }}>
+                <div style={{ marginTop: 10, padding: "0.6rem 0.8rem", background: "rgba(139,92,246,0.12)", border: "1px solid rgba(139,92,246,0.5)", borderRadius: 4, fontSize: 12, color: "#c4b5fd" }}>
                   <div style={{ marginBottom: 6, fontWeight: 700 }}>⚠️ Esta carpeta tiene CODEUDOR ({folder.codeudor_nombre})</div>
                   <div style={{ marginBottom: 8 }}>Elegí a quién pertenecen estos {payload.files.length} archivo(s):</div>
                   <div style={{ display: "flex", gap: 6 }}>
@@ -350,19 +350,19 @@ export default function ShareTargetPage() {
           <div>
             <label style={{ display: "block", fontSize: 12, marginBottom: 4, color: "#94a3b8" }}>Nombre del cliente *</label>
             <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Ej: Bryan Contreras" data-testid="new-name-input"
-              style={{ width: "100%", padding: "0.6rem", borderRadius: 6, background: "#1e293b", color: "#e2e8f0", border: "1px solid rgba(148,163,184,0.3)", fontSize: 14, marginBottom: "0.6rem" }} />
+              style={{ width: "100%", padding: "0.6rem", borderRadius: 4, background: "#1e293b", color: "#e2e8f0", border: "1px solid rgba(148,163,184,0.3)", fontSize: 14, marginBottom: "0.6rem" }} />
             <label style={{ display: "block", fontSize: 12, marginBottom: 4, color: "#94a3b8" }}>RUT (opcional)</label>
             <input value={newRut} onChange={(e) => setNewRut(e.target.value)} placeholder="15234567-8" data-testid="new-rut-input"
-              style={{ width: "100%", padding: "0.6rem", borderRadius: 6, background: "#1e293b", color: "#e2e8f0", border: "1px solid rgba(148,163,184,0.3)", fontSize: 14, marginBottom: "0.8rem" }} />
+              style={{ width: "100%", padding: "0.6rem", borderRadius: 4, background: "#1e293b", color: "#e2e8f0", border: "1px solid rgba(148,163,184,0.3)", fontSize: 14, marginBottom: "0.8rem" }} />
             <button onClick={handleCreateAndUpload} disabled={!newName.trim() || uploading} data-testid="btn-create-and-upload"
-              style={{ width: "100%", padding: "0.75rem", background: (!newName.trim() || uploading) ? "#475569" : "#22c55e", color: "#fff", border: "none", borderRadius: 6, fontWeight: 700, fontSize: 14, cursor: uploading ? "wait" : "pointer" }}>
+              style={{ width: "100%", padding: "0.75rem", background: (!newName.trim() || uploading) ? "#475569" : "#22c55e", color: "#fff", border: "none", borderRadius: 4, fontWeight: 700, fontSize: 14, cursor: uploading ? "wait" : "pointer" }}>
               <i className={`fa ${uploading ? "fa-spinner fa-spin" : "fa-plus"}`} /> {uploading ? "Creando y subiendo…" : `Crear carpeta y subir ${payload.files.length} archivo(s)`}
             </button>
           </div>
         )}
 
         {status && (
-          <div style={{ marginTop: "1rem", padding: "0.75rem", background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.5)", borderRadius: 6, whiteSpace: "pre-wrap", fontSize: 13 }} data-testid="share-status">
+          <div style={{ marginTop: "1rem", padding: "0.75rem", background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.5)", borderRadius: 4, whiteSpace: "pre-wrap", fontSize: 13 }} data-testid="share-status">
             {status}
           </div>
         )}

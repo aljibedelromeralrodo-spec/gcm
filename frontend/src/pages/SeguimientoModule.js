@@ -90,7 +90,7 @@ export default function SeguimientoModule() {
     const s = estado.toLowerCase();
     if (s.includes("aprob")) return "#10b981";
     if (s.includes("rechaz")) return "#ef4444";
-    if (s.includes("cierre") || s.includes("pago")) return "#3b82f6";
+    if (s.includes("cierre") || s.includes("pago")) return "#d4af37";
     if (s.includes("pendiente")) return "#f59e0b";
     return "#d4af37";
   };
@@ -277,7 +277,7 @@ export default function SeguimientoModule() {
                           fetchClientes();
                         } catch (err) { alert("Error: " + (err.response?.data?.detail || err.message)); }
                       }}
-                      style={{ background: "transparent", color: estadoColor(c.estado), border: `1px solid ${estadoColor(c.estado)}`, borderRadius: 14, padding: "0.15rem 0.4rem", fontSize: "0.75rem", fontWeight: 700, cursor: "pointer" }}
+                      style={{ background: "transparent", color: estadoColor(c.estado), border: `1px solid ${estadoColor(c.estado)}`, borderRadius: 4, padding: "0.15rem 0.4rem", fontSize: "0.75rem", fontWeight: 700, cursor: "pointer" }}
                       title="Corregir estado manualmente"
                     >
                       <option value="aprobacion" style={{ color: "#10b981", background: "#0f172a" }}>aprobación</option>

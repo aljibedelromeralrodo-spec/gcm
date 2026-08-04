@@ -53,14 +53,14 @@ export default function ProactiveAlertsPanel() {
           Alertas Inteligentes {alertas.length > 0 ? `(${alertas.length})` : ""}
         </div>
         <button data-testid="refresh-alerts-btn" onClick={refresh} disabled={refreshing}
-          style={{ padding: "0.3rem 0.8rem", borderRadius: "6px", border: "1px solid var(--border)", background: "var(--bg-hover)", color: "var(--text-primary)", fontSize: "0.75rem", cursor: "pointer" }}>
+          style={{ padding: "0.3rem 0.8rem", borderRadius: "4px", border: "1px solid var(--border)", background: "var(--bg-hover)", color: "var(--text-primary)", fontSize: "0.75rem", cursor: "pointer" }}>
           <i className={`fa ${refreshing ? "fa-spinner fa-spin" : "fa-refresh"}`} style={{ marginRight: "0.3rem" }}></i>
           {refreshing ? "Analizando..." : "Analizar"}
         </button>
       </div>
 
       {alertas.length === 0 ? (
-        <div style={{ padding: "0.75rem", borderRadius: "8px", background: "rgba(0,184,148,0.06)", border: "1px solid rgba(0,184,148,0.15)", fontSize: "0.78rem", color: "var(--text-secondary)" }}>
+        <div style={{ padding: "0.75rem", borderRadius: "4px", background: "rgba(0,184,148,0.06)", border: "1px solid rgba(0,184,148,0.15)", fontSize: "0.78rem", color: "var(--text-secondary)" }}>
           <i className="fa fa-check-circle" style={{ marginRight: "0.3rem", color: "#00b894" }}></i>
           Sin alertas. Los patrones estan estables.
         </div>
@@ -69,7 +69,7 @@ export default function ProactiveAlertsPanel() {
           {alertas.slice(0, 8).map((a, i) => {
             const sev = SEVERITY_COLORS[a.severidad] || SEVERITY_COLORS.baja;
             return (
-              <div key={i} data-testid={`alert-${i}`} style={{ padding: "0.6rem 0.8rem", borderRadius: "8px", background: sev.bg, border: `1px solid ${sev.border}`, fontSize: "0.78rem" }}>
+              <div key={i} data-testid={`alert-${i}`} style={{ padding: "0.6rem 0.8rem", borderRadius: "4px", background: sev.bg, border: `1px solid ${sev.border}`, fontSize: "0.78rem" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.15rem" }}>
                   <i className={`fa ${sev.icon}`} style={{ color: sev.text, fontSize: "0.8rem" }}></i>
                   <span style={{ fontWeight: 700, color: sev.text, fontSize: "0.7rem", textTransform: "uppercase" }}>

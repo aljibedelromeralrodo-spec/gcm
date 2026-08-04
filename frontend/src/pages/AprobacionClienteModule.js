@@ -7,9 +7,9 @@ import { estiloConfianza, PanelAprendizaje } from "../components/CampoAprendizaj
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
-const card = { background: "rgba(15,23,42,0.6)", padding: "1.5rem", borderRadius: "14px", border: "1px solid rgba(255,255,255,0.08)", marginBottom: "1.5rem" };
-const inp = { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "8px", padding: "0.55rem 0.8rem", color: "#fff", fontSize: "0.9rem", width: "100%" };
-const btn = (bg, small) => ({ background: bg, color: bg === "var(--gold)" ? "#0a0e17" : "#fff", border: "none", borderRadius: "8px", padding: small ? "0.4rem 0.8rem" : "0.6rem 1.2rem", fontWeight: 700, cursor: "pointer", fontSize: small ? "0.8rem" : "0.9rem" });
+const card = { background: "rgba(15,23,42,0.6)", padding: "1.5rem", borderRadius: "4px", border: "1px solid rgba(212,175,55,0.2)", marginBottom: "1.5rem" };
+const inp = { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "4px", padding: "0.55rem 0.8rem", color: "#fff", fontSize: "0.9rem", width: "100%" };
+const btn = (bg, small) => ({ background: bg, color: bg === "var(--gold)" ? "#0a0e17" : "#fff", border: "none", borderRadius: "4px", padding: small ? "0.4rem 0.8rem" : "0.6rem 1.2rem", fontWeight: 700, cursor: "pointer", fontSize: small ? "0.8rem" : "0.9rem" });
 const lbl = { display: "block", fontSize: "0.75rem", opacity: 0.6, marginBottom: "0.3rem", textTransform: "uppercase", letterSpacing: "0.5px" };
 
 const TIPO_LABEL = { simulacion_ajustada: "Simulación ajustada", carta_aprobacion: "Carta de aprobación", otro: "Otro documento" };
@@ -182,11 +182,11 @@ export default function AprobacionClienteModule({ onNavigate }) {
   return (
     <div style={{ padding: "1.5rem", color: "var(--white)", maxWidth: "1000px" }} data-testid="aprobacion-module">
       {onNavigate && (
-        <button data-testid="aprobacion-volver" onClick={() => onNavigate("clientes")} style={{ marginBottom: "1rem", background: "transparent", border: "1px solid rgba(212,175,55,0.5)", color: "var(--gold)", borderRadius: 8, padding: "0.45rem 1rem", fontWeight: 700, cursor: "pointer" }}>
+        <button data-testid="aprobacion-volver" onClick={() => onNavigate("clientes")} style={{ marginBottom: "1rem", background: "transparent", border: "1px solid rgba(212,175,55,0.5)", color: "var(--gold)", borderRadius: 4, padding: "0.45rem 1rem", fontWeight: 700, cursor: "pointer" }}>
           <i className="fa fa-arrow-left" /> Volver a Carpeta Clientes
         </button>
       )}
-      {msg && <div data-testid="aprobacion-msg" style={{ padding: "0.7rem 1rem", borderRadius: "8px", marginBottom: "1rem", background: msg.startsWith("✅") ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)", color: msg.startsWith("✅") ? "#22c55e" : "#ef4444", fontWeight: 600 }}>{msg}</div>}
+      {msg && <div data-testid="aprobacion-msg" style={{ padding: "0.7rem 1rem", borderRadius: "4px", marginBottom: "1rem", background: msg.startsWith("✅") ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)", color: msg.startsWith("✅") ? "#22c55e" : "#ef4444", fontWeight: 600 }}>{msg}</div>}
 
       {/* BUSCADOR */}
       <div style={card}>
@@ -194,7 +194,7 @@ export default function AprobacionClienteModule({ onNavigate }) {
         <div style={{ position: "relative" }}>
           <input data-testid="aprobacion-buscar" style={inp} placeholder="Buscar cliente… detecta automáticamente su correo" value={q} onChange={e => setQ(e.target.value)} />
           {resultados.length > 0 && (
-            <div style={{ position: "absolute", top: "110%", left: 0, right: 0, background: "#1a1f2e", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "8px", zIndex: 20, overflow: "hidden" }}>
+            <div style={{ position: "absolute", top: "110%", left: 0, right: 0, background: "rgba(15,23,42,0.9)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "4px", zIndex: 20, overflow: "hidden" }}>
               {resultados.map((r, i) => (
                 <div key={i} data-testid={`aprobacion-resultado-${i}`} onClick={() => elegir(r)} style={{ padding: "0.6rem 1rem", cursor: "pointer", borderBottom: "1px solid rgba(255,255,255,0.05)" }}
                      onMouseEnter={e => e.currentTarget.style.background = "rgba(212,175,55,0.1)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
@@ -260,10 +260,10 @@ export default function AprobacionClienteModule({ onNavigate }) {
             </span>
             <a data-testid={`aprobacion-ver-pdf-${i}`} href={`${API}/api/aprobacion-cliente/preview-pdf?ruta=${encodeURIComponent(a.ruta)}&origen=${a.origen}&cliente=${encodeURIComponent(nombre)}`}
               target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
-              style={{ fontSize: "0.75rem", color: "#3b82f6", fontWeight: 700, textDecoration: "none", border: "1px solid #3b82f6", borderRadius: 6, padding: "0.15rem 0.55rem" }}>
+              style={{ fontSize: "0.75rem", color: "#d4af37", fontWeight: 700, textDecoration: "none", border: "1px solid #d4af37", borderRadius: 4, padding: "0.15rem 0.55rem" }}>
               <i className="fa fa-eye" style={{ marginRight: "0.3rem" }} />Ver PDF
             </a>
-            <span style={{ fontSize: "0.72rem", padding: "0.12rem 0.5rem", borderRadius: "999px", background: a.tipo === "carta_aprobacion" ? "rgba(34,197,94,0.15)" : a.tipo === "simulacion_ajustada" ? "rgba(212,175,55,0.15)" : "rgba(255,255,255,0.08)", color: a.tipo === "carta_aprobacion" ? "#22c55e" : a.tipo === "simulacion_ajustada" ? "var(--gold)" : "#9aa3b5" }}>{a.tipo === "simulacion_ajustada" ? "Simulación" : TIPO_LABEL[a.tipo]}</span>
+            <span style={{ fontSize: "0.72rem", padding: "0.12rem 0.5rem", borderRadius: "999px", background: a.tipo === "carta_aprobacion" ? "rgba(34,197,94,0.15)" : a.tipo === "simulacion_ajustada" ? "rgba(212,175,55,0.15)" : "rgba(212,175,55,0.2)", color: a.tipo === "carta_aprobacion" ? "#22c55e" : a.tipo === "simulacion_ajustada" ? "var(--gold)" : "#9aa3b5" }}>{a.tipo === "simulacion_ajustada" ? "Simulación" : TIPO_LABEL[a.tipo]}</span>
             <span style={{ fontSize: "0.72rem", opacity: 0.45 }}>{a.origen === "autocorreo" ? "Archivo Autocorreo" : "Carpeta Cliente"}</span>
           </label>
         ))}
@@ -271,7 +271,7 @@ export default function AprobacionClienteModule({ onNavigate }) {
 
       {/* ACCIONES */}
       <div style={{ display: "flex", gap: "0.8rem", flexWrap: "wrap", marginBottom: "1.5rem" }}>
-        <button data-testid="aprobacion-preview-btn" onClick={verPreview} disabled={loading} style={btn("#3b82f6")}><i className="fa fa-eye" style={{ marginRight: "0.4rem" }} />Vista previa</button>
+        <button data-testid="aprobacion-preview-btn" onClick={verPreview} disabled={loading} style={btn("#d4af37")}><i className="fa fa-eye" style={{ marginRight: "0.4rem" }} />Vista previa</button>
         <button data-testid="aprobacion-enviar-btn" onClick={enviar} disabled={loading || !emailCliente} style={btn("var(--gold)")}><i className="fa fa-paper-plane" style={{ marginRight: "0.4rem" }} />Enviar al cliente</button>
         <button data-testid="aprobacion-guardar-cliente" onClick={() => guardarPlantilla(false)} disabled={loading || !nombre} style={btn("rgba(255,255,255,0.12)")}><i className="fa fa-bookmark" style={{ marginRight: "0.4rem" }} />Guardar plantilla del cliente</button>
         <button data-testid="aprobacion-guardar-default" onClick={() => guardarPlantilla(true)} disabled={loading} style={btn("rgba(255,255,255,0.12)")}><i className="fa fa-save" style={{ marginRight: "0.4rem" }} />Usar como plantilla por defecto</button>
@@ -292,8 +292,8 @@ export default function AprobacionClienteModule({ onNavigate }) {
       {/* MODAL PREVIEW */}
       {preview && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem" }} onClick={() => setPreview(null)}>
-          <div style={{ background: "#fff", borderRadius: "12px", maxWidth: "720px", width: "100%", maxHeight: "88vh", overflow: "auto" }} onClick={e => e.stopPropagation()} data-testid="aprobacion-preview-modal">
-            <div style={{ padding: "0.8rem 1.2rem", background: "#1a1f2e", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, zIndex: 5 }}>
+          <div style={{ background: "#fff", borderRadius: "4px", maxWidth: "720px", width: "100%", maxHeight: "88vh", overflow: "auto" }} onClick={e => e.stopPropagation()} data-testid="aprobacion-preview-modal">
+            <div style={{ padding: "0.8rem 1.2rem", background: "rgba(15,23,42,0.9)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, zIndex: 5 }}>
               <span style={{ color: "var(--gold)", fontWeight: 700 }}>Vista previa — {preview.subject}</span>
               <div>
                 <button data-testid="aprobacion-preview-enviar" onClick={enviar} disabled={loading || !emailCliente} style={{ ...btn("var(--gold)", true), marginRight: "0.6rem" }}>Enviar</button>
