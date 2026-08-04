@@ -8,7 +8,7 @@ export default function HistorialModule({ valorUF, onLoadSimulation }) {
   useEffect(() => {
     axios.get(`${API_URL}/api/simulaciones`, { params: { page: 1, limit: 50 } })
       .then(r => setSimulaciones(r.data.simulaciones || r.data))
-      .catch(() => {});
+      .catch((e) => console.error(e));
   }, []);
 
   const handleClick = (sim) => {

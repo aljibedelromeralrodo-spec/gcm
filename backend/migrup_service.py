@@ -12,6 +12,7 @@ import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 BASE = "https://www.migrup.cl/ApiGatewayGrup/api"
+_CA_BUNDLE = os.path.join(os.path.dirname(__file__), "certs", "migrup_bundle.pem")
 _CACHE = {"token": None, "uid": None, "user": None, "ts": 0}
 _TTL = 20 * 60  # 20 min
 
@@ -42,7 +43,7 @@ def login(force=False):
     try:
         r = requests.post(f"{BASE}/Usuarios/UsuariosPorRutyClave",
                           json={"RutUsuario": num, "DVUsuario": dv, "ClaveUsuario": os.environ["MIGRUP_CLAVE"]},
-                          headers=_headers(auth=False), verify=False, timeout=25)
+                          headers=_headers(auth=False), verify=_CA_BUNDLE, timeout=25)
         d = r.json()
     except Exception as e:
         return {"success": False, "error": f"Conexión migrup: {str(e)[:120]}"}
@@ -61,7 +62,7 @@ def _post(ep, payload, retry=True):
     if not lg.get("success"):
         return {"_error": lg.get("error")}
     try:
-        r = requests.post(f"{BASE}/{ep}", json=payload, headers=_headers(), verify=False, timeout=40)
+        r = requests.post(f"{BASE}/{ep}", json=payload, headers=_headers(), verify=_CA_BUNDLE, timeout=40)
     except Exception as e:
         return {"_error": f"Conexión migrup: {str(e)[:120]}"}
     if r.status_code == 401 and retry:

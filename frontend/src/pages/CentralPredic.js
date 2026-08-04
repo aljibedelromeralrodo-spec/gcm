@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 import { API_URL } from "../utils/formatters";
+import { secureGet, secureSet, secureRemove } from "../utils/secureStore";
 import { COLORS, formatCLP } from "./predic/constants";
 import { Field, UFField } from "./predic/PredICFields";
 import { DashCard } from "./predic/PredICWidgets";
@@ -14,8 +15,8 @@ export default function CentralPredic() {
 
   // Check stored session
   useEffect(() => {
-    const saved = localStorage.getItem("predic_auth");
-    if (saved) setAuth(JSON.parse(saved));
+    const saved = secureGet("predic_auth");
+    if (saved) setAuth(saved);
   }, []);
 
   const handleLogin = async () => {
@@ -25,7 +26,7 @@ export default function CentralPredic() {
       const r = await axios.post(`${API_URL}/api/inmobiliaria/auth/login`, loginForm);
       if (r.data.ok) {
         setAuth(r.data);
-        localStorage.setItem("predic_auth", JSON.stringify(r.data));
+        secureSet("predic_auth", r.data);
       } else {
         setLoginError(r.data.error || "Credenciales incorrectas");
       }
@@ -37,7 +38,7 @@ export default function CentralPredic() {
 
   const logout = () => {
     setAuth(null);
-    localStorage.removeItem("predic_auth");
+    secureRemove("predic_auth");
   };
 
   if (!auth) return <PredICLogin form={loginForm} setForm={setLoginForm} onLogin={handleLogin} error={loginError} loading={loginLoading} />;
@@ -112,13 +113,13 @@ function PredICApp({ auth, onLogout }) {
         tasa_subsidio_menor_2000: Math.round(r.data.tasa_subsidio_menor_2000 * 10000) / 100,
         tasa_sin_subsidio: Math.round(r.data.tasa_sin_subsidio * 10000) / 100,
       }))
-      .catch(() => {});
+      .catch((e) => console.error(e));
     axios.get(`${API_URL}/api/inmobiliaria/config/seguros`)
       .then(r => { if (r.data && r.data.seguro_desgravamen) setSeguros(r.data); })
-      .catch(() => {});
+      .catch((e) => console.error(e));
     axios.get(`${API_URL}/api/inmobiliaria/ia-config`)
       .then(r => setChatEnabled(r.data.enabled || false))
-      .catch(() => {});
+      .catch((e) => console.error(e));
   }, []);
 
   const saveTasas = async () => {
@@ -155,7 +156,7 @@ function PredICApp({ auth, onLogout }) {
   };
 
   const loadDashboard = () => {
-    axios.get(`${API_URL}/api/inmobiliaria/mi-dashboard?company=${encodeURIComponent(auth.inmobiliaria || "")}&usuario=${encodeURIComponent(auth.usuario || "")}`).then(r => setDashData(r.data)).catch(() => {});
+    axios.get(`${API_URL}/api/inmobiliaria/mi-dashboard?company=${encodeURIComponent(auth.inmobiliaria || "")}&usuario=${encodeURIComponent(auth.usuario || "")}`).then(r => setDashData(r.data)).catch((e) => console.error(e));
   };
 
   const handlePredict = async () => {
@@ -217,7 +218,7 @@ function PredICApp({ auth, onLogout }) {
         inmobiliaria: auth.inmobiliaria || "",
       });
       setContactSent(true);
-    } catch {}
+    } catch (e) { console.error(e); }
   };
 
   const handleComparar = async () => {
@@ -779,7 +780,7 @@ function PredICApp({ auth, onLogout }) {
                   }, { responseType: "blob" });
                   const url = URL.createObjectURL(new Blob([r.data], { type: "application/pdf" }));
                   const a = document.createElement("a"); a.href = url; a.download = `Comparativa_${(form.nombre_cliente || "Cliente").replace(/ /g,"_")}.pdf`; a.click();
-                } catch {}
+                } catch (e) { console.error(e); }
               }}
                 style={{ width: "100%", marginTop: "0.75rem", padding: "0.7rem", borderRadius: "0px", border: "none", background: "linear-gradient(135deg, rgba(212,175,55,0.9), rgba(180,140,40,0.9))", color: "#fff", fontWeight: 700, fontSize: "0.85rem", cursor: "pointer" }}>
                 <i className="fa fa-file-pdf-o" style={{ marginRight: "0.3rem" }}></i> DESCARGAR PDF COMPARATIVO

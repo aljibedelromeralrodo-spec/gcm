@@ -25,7 +25,7 @@ export default function SaludModule() {
     try {
       const r = await axios.get(`${API}/api/salud/estado`);
       setData(r.data); setError("");
-      axios.get(`${API}/api/calibracion/estado`).then(rc => setCalib(rc.data)).catch(() => {});
+      axios.get(`${API}/api/calibracion/estado`).then(rc => setCalib(rc.data)).catch((e) => console.error(e));
     } catch (e) { setError(e.response?.data?.detail || e.message); }
   }, []);
 

@@ -261,6 +261,74 @@ def _norm_txt(s):
     return re.sub(r"[_\W]+", " ", s).strip()
 
 
+def _seleccionar_mejores(cand):
+    """Elige el mejor candidato por campo: más fuentes gana; en email priman etiquetados."""
+    _validadas = {"carpeta", "aprendido", "gastos", "aprobacion", "set_credito"}
+    out = {c: "" for c in CAMPOS_ENRIQUECER}
+    confianza = {c: "" for c in CAMPOS_ENRIQUECER}
+    fuentes_out = {}
+    for campo in CAMPOS_ENRIQUECER:
+        opciones = list(cand[campo].values())
+        if not opciones:
+            continue
+        if campo == "email":
+            opciones.sort(key=lambda d: (-len(d["fuentes"]), not d["etiquetado"],
+                                         not bool(_FREEMAIL.search(d["valor"]))))
+        else:
+            opciones.sort(key=lambda d: -len(d["fuentes"]))
+        mejor = opciones[0]
+        out[campo] = mejor["valor"]
+        fuentes_out[campo] = sorted(mejor["fuentes"])
+        confianza[campo] = "alta" if (len(mejor["fuentes"]) >= 2 or (mejor["fuentes"] & _validadas)) else "dudosa"
+    return out, confianza, fuentes_out
+
+
+async def _aplicar_patrones(db, rx, dominios, out, confianza, fuentes_out):
+    """Las correcciones previas del usuario (Guardar y Aprender) mandan sobre lo extraído."""
+    pats = await db.patrones_aprendidos.find({"$or": [
+        {"cliente_norm": {"$regex": rx, "$options": "i"}},
+        {"dominio": {"$in": list(dominios)}}]}).sort("creado_en", -1).to_list(50)
+    aplicados = set()
+    for p in pats:
+        campo = p.get("campo")
+        if campo not in CAMPOS_ENRIQUECER or campo in aplicados or not p.get("valor_correcto"):
+            continue
+        es_cliente = re.search(rx, p.get("cliente_norm") or "", re.I)
+        mismo_error = p.get("valor_extraido_norm") and p["valor_extraido_norm"] == re.sub(
+            r"[\s.\-()]", "", (out.get(campo) or "").lower())
+        if es_cliente or mismo_error:
+            out[campo] = p["valor_correcto"]
+            confianza[campo] = "alta"
+            fuentes_out[campo] = ["aprendido"]
+            aplicados.add(campo)
+
+
+async def _fuentes_bd(db, rx, _add):
+    """FUENTES 4-5: base maestra (carpeta, set de crédito) + envíos reales (gastos, aprobaciones)."""
+    f = await db.folders.find_one({"nombre": {"$regex": rx, "$options": "i"}})
+    if f:
+        _add("email", f.get("email") or f.get("email_cliente"), "carpeta")
+        _add("rut", f.get("rut"), "carpeta")
+        _add("telefono", f.get("telefono"), "carpeta")
+        _add("ejecutivo_interno", f.get("ejecutivo_interno"), "carpeta")
+        _add("ejecutivo_nombre", f.get("ejecutivo_externo"), "carpeta")
+        _add("ejecutivo_email", f.get("ejecutivo_externo_email"), "carpeta")
+    s = await db.set_credito.find_one({"nombre": {"$regex": rx, "$options": "i"}})
+    if s:
+        _add("email", s.get("email"), "set_credito")
+        _add("rut", s.get("rut"), "set_credito")
+        _add("telefono", s.get("telefono"), "set_credito")
+    async for g in db.gastos_op_log.find({"nombre": {"$regex": rx, "$options": "i"}}).sort("enviado_en", -1).limit(5):
+        _add("email", g.get("to"), "gastos")
+        _add("rut", g.get("rut"), "gastos")
+    async for l in db.aprobacion_log.find({"nombre": {"$regex": rx, "$options": "i"}}).sort("enviado_en", -1).limit(5):
+        _add("email", l.get("to"), "aprobacion")
+        _add("rut", l.get("rut"), "aprobacion")
+        _add("ejecutivo_nombre", l.get("ejecutivo_nombre"), "aprobacion")
+        _add("ejecutivo_email", l.get("ejecutivo_email"), "aprobacion")
+        _add("ejecutivo_interno", l.get("ejecutivo_interno"), "aprobacion")
+
+
 async def enriquecer_cliente(db, mail, nombre):
     """Cruza Asunto + Cuerpo + OCR de PDFs + TODO el historial en BD (carpetas, sets,
     gastos, aprobaciones) + buzón IMAP. Aplica Patrones Aprendidos. PROHIBIDO inventar.
@@ -319,30 +387,8 @@ async def enriquecer_cliente(db, mail, nombre):
             m_dom = re.search(r"@([\w.-]+)", it.get("sender") or "")
             if m_dom:
                 dominios.add(m_dom.group(1).lower())
-        # FUENTE 4: base de datos maestra (carpeta del cliente + set de crédito)
-        f = await db.folders.find_one({"nombre": {"$regex": rx, "$options": "i"}})
-        if f:
-            _add("email", f.get("email") or f.get("email_cliente"), "carpeta")
-            _add("rut", f.get("rut"), "carpeta")
-            _add("telefono", f.get("telefono"), "carpeta")
-            _add("ejecutivo_interno", f.get("ejecutivo_interno"), "carpeta")
-            _add("ejecutivo_nombre", f.get("ejecutivo_externo"), "carpeta")
-            _add("ejecutivo_email", f.get("ejecutivo_externo_email"), "carpeta")
-        s = await db.set_credito.find_one({"nombre": {"$regex": rx, "$options": "i"}})
-        if s:
-            _add("email", s.get("email"), "set_credito")
-            _add("rut", s.get("rut"), "set_credito")
-            _add("telefono", s.get("telefono"), "set_credito")
-        # FUENTE 5: historial de envíos reales (gastos operacionales y aprobaciones)
-        async for g in db.gastos_op_log.find({"nombre": {"$regex": rx, "$options": "i"}}).sort("enviado_en", -1).limit(5):
-            _add("email", g.get("to"), "gastos")
-            _add("rut", g.get("rut"), "gastos")
-        async for l in db.aprobacion_log.find({"nombre": {"$regex": rx, "$options": "i"}}).sort("enviado_en", -1).limit(5):
-            _add("email", l.get("to"), "aprobacion")
-            _add("rut", l.get("rut"), "aprobacion")
-            _add("ejecutivo_nombre", l.get("ejecutivo_nombre"), "aprobacion")
-            _add("ejecutivo_email", l.get("ejecutivo_email"), "aprobacion")
-            _add("ejecutivo_interno", l.get("ejecutivo_interno"), "aprobacion")
+        # FUENTE 4-5: base maestra + historial de envíos reales
+        await _fuentes_bd(db, rx, _add)
     # FUENTE 6: buzón IMAP (solo si aún no hay correo del cliente)
     if not cand["email"] and mail is not None:
         try:
@@ -359,42 +405,10 @@ async def enriquecer_cliente(db, mail, nombre):
                         _add("ejecutivo_nombre", re.sub(r"<.*?>", "", remit).strip().strip('"'), "buzon")
         except Exception:
             pass
-    # Selección por campo: más fuentes gana; en email priman etiquetados y personales
-    _validadas = {"carpeta", "aprendido", "gastos", "aprobacion", "set_credito"}
-    out = {c: "" for c in CAMPOS_ENRIQUECER}
-    confianza = {c: "" for c in CAMPOS_ENRIQUECER}
-    fuentes_out = {}
-    for campo in CAMPOS_ENRIQUECER:
-        opciones = list(cand[campo].values())
-        if not opciones:
-            continue
-        if campo == "email":
-            opciones.sort(key=lambda d: (-len(d["fuentes"]), not d["etiquetado"],
-                                         not bool(_FREEMAIL.search(d["valor"]))))
-        else:
-            opciones.sort(key=lambda d: -len(d["fuentes"]))
-        mejor = opciones[0]
-        out[campo] = mejor["valor"]
-        fuentes_out[campo] = sorted(mejor["fuentes"])
-        confianza[campo] = "alta" if (len(mejor["fuentes"]) >= 2 or (mejor["fuentes"] & _validadas)) else "dudosa"
-    # PATRONES APRENDIDOS: las correcciones previas del usuario mandan sobre lo extraído
+    # Selección por campo + Patrones Aprendidos (Guardar y Aprender)
+    out, confianza, fuentes_out = _seleccionar_mejores(cand)
     if rx:
-        pats = await db.patrones_aprendidos.find({"$or": [
-            {"cliente_norm": {"$regex": rx, "$options": "i"}},
-            {"dominio": {"$in": list(dominios)}}]}).sort("creado_en", -1).to_list(50)
-        aplicados = set()
-        for p in pats:
-            campo = p.get("campo")
-            if campo not in CAMPOS_ENRIQUECER or campo in aplicados or not p.get("valor_correcto"):
-                continue
-            es_cliente = re.search(rx, p.get("cliente_norm") or "", re.I)
-            mismo_error = p.get("valor_extraido_norm") and p["valor_extraido_norm"] == re.sub(
-                r"[\s.\-()]", "", (out.get(campo) or "").lower())
-            if es_cliente or mismo_error:
-                out[campo] = p["valor_correcto"]
-                confianza[campo] = "alta"
-                fuentes_out[campo] = ["aprendido"]
-                aplicados.add(campo)
+        await _aplicar_patrones(db, rx, dominios, out, confianza, fuentes_out)
     out["confianza"] = confianza
     out["fuentes"] = fuentes_out
     out["remitente"] = remitente_ultimo

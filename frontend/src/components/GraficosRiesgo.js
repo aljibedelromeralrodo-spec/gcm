@@ -20,7 +20,7 @@ export const GraficosRiesgo = () => {
       const prom = Math.round(fs.reduce((a, f) => a + f.prob_aprobacion.porcentaje, 0) / fs.length);
       const top = [...fs].sort((a, b) => b.prob_aprobacion.porcentaje - a.prob_aprobacion.porcentaje).slice(0, 5);
       setDatos({ buckets, prom, total: fs.length, top });
-    }).catch(() => {});
+    }).catch((e) => console.error(e));
   }, []);
   if (!datos) return null;
   const max = Math.max(...datos.buckets, 1);

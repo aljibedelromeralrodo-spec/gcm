@@ -79,7 +79,7 @@ export default function SetCreditoModule({ onNavigate }) {
         }
       })();
     } catch (_e) { /* prefill inválido */ }
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- intencional: prefill solo al montar
 
   const crearSet = async () => {
     if (!nuevo.nombre.trim()) return setMsg("Falta el nombre del cliente");

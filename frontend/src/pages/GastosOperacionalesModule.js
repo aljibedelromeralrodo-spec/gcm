@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
+import DOMPurify from "dompurify";
 import ImportarCorreo from "../components/ImportarCorreo";
 import { EmailAutocomplete } from "../components/EmailAutocomplete";
 import { estiloConfianza, PanelAprendizaje, useAprendizaje } from "../components/CampoAprendizaje";
@@ -95,7 +96,7 @@ export default function GastosOperacionalesModule({ onNavigate }) {
     try {
       const r = await axios.get(`${API}/api/plantillas?tipo=gastos`);
       setPlantillas(r.data.plantillas || []);
-    } catch (_e) { /* noop */ }
+    } catch (e) { console.error(e); }
   }, []);
 
   useEffect(() => { loadPlantillas(); }, [loadPlantillas]);
@@ -132,7 +133,7 @@ export default function GastosOperacionalesModule({ onNavigate }) {
     try {
       const r = await axios.get(`${API}/api/gastos-operacionales/cobros-tasacion/historial`);
       setHistorial(r.data.historial || []);
-    } catch (_e) { /* noop */ }
+    } catch (e) { console.error(e); }
   }, []);
 
   useEffect(() => { loadHistorial(); }, [loadHistorial]);
@@ -141,7 +142,7 @@ export default function GastosOperacionalesModule({ onNavigate }) {
     try {
       const r = await axios.get(`${API}/api/gastos-operacionales/cobros-tasacion`);
       setCobros(r.data);
-    } catch (_e) { /* noop */ }
+    } catch (e) { console.error(e); }
   }, []);
 
   useEffect(() => { loadCobros(); }, [loadCobros]);
@@ -238,7 +239,7 @@ export default function GastosOperacionalesModule({ onNavigate }) {
         })
         .catch(() => { setNombre(p.nombre); setRut(p.rut || ""); });
     } catch (_e) { /* prefill inválido */ }
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- intencional: prefill solo al montar
 
   const total = items.reduce((s, it) => {
     const v = parseFloat(it.valor);
@@ -546,7 +547,7 @@ export default function GastosOperacionalesModule({ onNavigate }) {
                 <button onClick={() => setPreview(null)} style={btn("rgba(255,255,255,0.15)", true)}>Cerrar</button>
               </div>
             </div>
-            <div dangerouslySetInnerHTML={{ __html: preview.body }} />
+            <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(preview.body) }} />
           </div>
         </div>
       )}

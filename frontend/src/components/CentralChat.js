@@ -43,7 +43,7 @@ async function speakText(text, onEnd) {
       await audio.play();
       return;
     }
-  } catch {}
+  } catch (e) { console.error(e); }
 
   // Fallback: browser speech synthesis
   if (!window.speechSynthesis) { onEnd?.(); return; }
@@ -118,7 +118,7 @@ export default function CentralChat({ userName, activeModule }) {
             speakText(texto, () => setSpeaking(false));
           }
         }
-      }).catch(() => {});
+      }).catch((e) => console.error(e));
     }
   }, [open, greeted, msgs.length, autoVoice]);
 
@@ -145,7 +145,7 @@ export default function CentralChat({ userName, activeModule }) {
         if (prev === false) {
           axios.get(`${API}/api/central/health`, { timeout: 10000 })
             .then(() => setConnected(true))
-            .catch(() => {});
+            .catch((e) => console.error(e));
         }
         return prev;
       });
@@ -155,7 +155,7 @@ export default function CentralChat({ userName, activeModule }) {
 
   useEffect(() => {
     return () => {
-      if (recRef.current) try { recRef.current.abort(); } catch {}
+      if (recRef.current) try { recRef.current.abort(); } catch (e) { console.error(e); }
       if (silenceRef.current) clearTimeout(silenceRef.current);
       stopSpeaking();
     };
@@ -297,7 +297,7 @@ export default function CentralChat({ userName, activeModule }) {
     }
 
     if (speaking) { stopSpeaking(); setSpeaking(false); }
-    if (recRef.current) try { recRef.current.abort(); } catch {}
+    if (recRef.current) try { recRef.current.abort(); } catch (e) { console.error(e); }
 
     const rec = new SR();
     rec.lang = "es-CL";
@@ -325,7 +325,7 @@ export default function CentralChat({ userName, activeModule }) {
         silenceRef.current = setTimeout(() => {
           const text = fullTextRef.current.trim() || (final + interim).trim();
           if (text.length > 1) {
-            try { rec.stop(); } catch {}
+            try { rec.stop(); } catch (e) { console.error(e); }
             setRecording(false);
             setLiveText("");
             sendMsg(text, true);
@@ -364,7 +364,7 @@ export default function CentralChat({ userName, activeModule }) {
 
   const stopRecording = useCallback(() => {
     if (silenceRef.current) clearTimeout(silenceRef.current);
-    if (recRef.current) try { recRef.current.stop(); } catch {}
+    if (recRef.current) try { recRef.current.stop(); } catch (e) { console.error(e); }
   }, []);
 
   // Expose startRecording via ref for conversation mode auto-restart
@@ -462,7 +462,7 @@ export default function CentralChat({ userName, activeModule }) {
                   setConversationMode(newMode);
                   if (newMode && !autoVoice) setAutoVoice(true);
                   if (newMode && !recordingRef.current) {
-                    setTimeout(() => { try { startRecordingRef.current?.(); } catch {} }, 300);
+                    setTimeout(() => { try { startRecordingRef.current?.(); } catch (e) { console.error(e); } }, 300);
                   } else if (!newMode && recordingRef.current) {
                     stopRecording();
                   }

@@ -32,7 +32,7 @@ export default function EmailProcessingModule() {
     try {
       const r = await axios.get(`${API}/api/procesamiento/reglas-auto`);
       setReglasAuto({ dominios: (r.data.dominios || []).join(", "), keywords: (r.data.keywords || []).join(", ") });
-    } catch (_e) { /* noop */ }
+    } catch (e) { console.error(e); }
   };
 
   const guardarReglasAuto = async () => {
@@ -54,7 +54,7 @@ export default function EmailProcessingModule() {
       ]);
       setAuto(a.data);
       setAlertas((al.data.alertas || []).filter(x => !x.leida));
-    } catch (_e) { /* noop */ }
+    } catch (e) { console.error(e); }
   };
 
   useEffect(() => {
@@ -121,7 +121,7 @@ export default function EmailProcessingModule() {
     } finally { setBusy(false); }
   };
 
-  useEffect(() => { load(); }, [filter]);
+  useEffect(() => { load(); }, [filter]); // eslint-disable-line react-hooks/exhaustive-deps -- load usa siempre el filter actual vía cierre re-creado
 
   const reevaluar = async () => {
     const clave = window.prompt("REEVALUAR con la regla inviolable:\nArma las carpetas que cumplen y BORRA las que no (desde el viernes).\n\nIngresa la CLAVE de administrador:");

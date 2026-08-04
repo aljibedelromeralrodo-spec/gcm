@@ -1,6 +1,7 @@
 import { useState } from "react";
 import axios from "axios";
 import { API_URL } from "../utils/formatters";
+import { secureSet } from "../utils/secureStore";
 
 export default function LoginPage({ onLogin }) {
   const [rut, setRut] = useState("");
@@ -14,8 +15,8 @@ export default function LoginPage({ onLogin }) {
     setError("");
     try {
       const res = await axios.post(`${API_URL}/api/auth/login`, { rut, password });
-      localStorage.setItem("token", res.data.token);
-      localStorage.setItem("user", JSON.stringify(res.data));
+      secureSet("token", res.data.token);
+      secureSet("user", res.data);
       onLogin(res.data);
     } catch {
       setError("Credenciales inválidas");

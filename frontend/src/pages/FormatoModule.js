@@ -81,7 +81,7 @@ export default function FormatoModule() {
                 });
                 return;
               }
-            } catch {}
+            } catch (e) { console.error(e); }
           }
         }
         // Only clear if not hovering the delete button
@@ -185,7 +185,7 @@ export default function FormatoModule() {
         const tempDoc = await pdfjs.getDocument(url).promise;
         setNumPages(tempDoc.numPages);
         tempDoc.destroy();
-      } catch {}
+      } catch (e) { console.error(e); }
     } catch (err) { console.error("Regen error:", err); }
   };
 

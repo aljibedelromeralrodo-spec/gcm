@@ -11,7 +11,7 @@ export default function CalculadoraModule({ valorUF }) {
   useEffect(() => {
     axios.get(`${API_URL}/api/inmobiliaria/config/seguros`).then(r => {
       if (r.data && r.data.seguro_desgravamen) setSeguros(r.data);
-    }).catch(() => {});
+    }).catch((e) => console.error(e));
   }, []);
 
   const calcularDividendo = (tasa, plazo, monto) => {

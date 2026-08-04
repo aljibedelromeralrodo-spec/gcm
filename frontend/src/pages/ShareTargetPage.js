@@ -78,7 +78,7 @@ export default function ShareTargetPage() {
       setLoading(false);
       const cargarCarpetas = (timeout) => axios.get(`${API}/api/clientes/folders-light`, { timeout })
         .then(r => setFolders(r.data.folders || []));
-      cargarCarpetas(20000).catch(() => { cargarCarpetas(40000).catch(() => {}); });
+      cargarCarpetas(20000).catch(() => { cargarCarpetas(40000).catch((e) => console.error(e)); });
       // Auto-detect: si el primer archivo es PDF/imagen, OCR para extraer RUT
       if (p && p.files && p.files.length > 0) {
         const first = p.files[0];
@@ -108,7 +108,7 @@ export default function ShareTargetPage() {
       }
       setLoading(false);
     })();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- intencional: procesar archivo compartido solo al montar
 
   const handleDiscard = async () => {
     if (!window.confirm(`¿Descartar los ${payload?.files?.length || 0} archivo(s) acumulados?`)) return;

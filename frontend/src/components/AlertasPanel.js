@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { API_URL } from "../utils/formatters";
 
@@ -7,15 +7,15 @@ export default function AlertasPanel() {
   const [dias, setDias] = useState(7);
   const [loading, setLoading] = useState(true);
 
-  const fetchAlertas = () => {
+  const fetchAlertas = useCallback(() => {
     setLoading(true);
     axios.get(`${API_URL}/api/alertas/seguimiento?dias=${dias}`).then(r => {
       setAlertas(r.data.alertas || []);
       setLoading(false);
     }).catch(() => setLoading(false));
-  };
+  }, [dias]);
 
-  useEffect(() => { fetchAlertas(); }, [dias]);
+  useEffect(() => { fetchAlertas(); }, [fetchAlertas]);
 
   if (loading && alertas.length === 0) return null;
 

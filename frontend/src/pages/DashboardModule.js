@@ -25,11 +25,11 @@ export default function DashboardModule({ valorUF, userName, onNavigate }) {
     }).catch(() => {
       // Fallback to individual calls
       axios.get(`${API_URL}/api/central/dashboard`).then(r => { setData(r.data); setLoading(false); }).catch(() => setLoading(false));
-      axios.get(`${API_URL}/api/central/email-status`).then(r => setEmailStatus(r.data)).catch(() => {});
+      axios.get(`${API_URL}/api/central/email-status`).then(r => setEmailStatus(r.data)).catch((e) => console.error(e));
     });
     // Email summary loaded separately (slower, cached 5min)
-    axios.get(`${API_URL}/api/central/email-summary`).then(r => setEmailSummary(r.data)).catch(() => {});
-    axios.get(`${API_URL}/api/gastos-operacionales/cobros-tasacion`).then(r => setCobrosResumen(r.data)).catch(() => {});
+    axios.get(`${API_URL}/api/central/email-summary`).then(r => setEmailSummary(r.data)).catch((e) => console.error(e));
+    axios.get(`${API_URL}/api/gastos-operacionales/cobros-tasacion`).then(r => setCobrosResumen(r.data)).catch((e) => console.error(e));
   }, []);
 
   const refreshKnowledge = async () => {

@@ -35,7 +35,7 @@ export default function SeguimientoModule() {
     try {
       const r = await axios.get(`${API}/api/seguimiento/stats`);
       setStats(r.data);
-    } catch {}
+    } catch (e) { console.error(e); }
   }, []);
 
   useEffect(() => { fetchClientes(); fetchStats(); }, [fetchClientes, fetchStats]);
@@ -58,7 +58,7 @@ export default function SeguimientoModule() {
       await axios.post(`${API}/api/seguimiento/process-emails?max_emails=30`);
       await fetchClientes(search);
       await fetchStats();
-    } catch {}
+    } catch (e) { console.error(e); }
     setProcessing(false);
   };
 

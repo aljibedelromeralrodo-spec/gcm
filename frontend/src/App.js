@@ -2,6 +2,7 @@ import { useState, useEffect, lazy, Suspense } from "react";
 import axios from "axios";
 import "./App.css";
 import { API_URL, formatCurrency } from "./utils/formatters";
+import { secureGet, secureRemove } from "./utils/secureStore";
 import LoginPage from "./pages/LoginPage";
 import CentralPredic from "./pages/CentralPredic";
 import PortalCliente from "./pages/PortalCliente";
@@ -74,8 +75,8 @@ function MainApp() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
-    const saved = localStorage.getItem("user");
-    if (saved) setUser(JSON.parse(saved));
+    const saved = secureGet("user");
+    if (saved) setUser(saved);
     if (!localStorage.getItem("tour_done")) setShowTour(true);
   }, []);
 
@@ -102,16 +103,16 @@ function MainApp() {
 
   useEffect(() => {
     if (!user) return;
-    axios.get(`${API_URL}/api/valor-uf`).then(r => setValorUF(r.data.valor_uf)).catch(() => {});
-    axios.get(`${API_URL}/api/whatsapp/status`).then(r => setWhatsappStatus(r.data)).catch(() => {});
-    axios.get(`${API_URL}/api/central/email-summary`).then(r => setEmailNotif(r.data?.total || 0)).catch(() => {});
+    axios.get(`${API_URL}/api/valor-uf`).then(r => setValorUF(r.data.valor_uf)).catch((e) => console.error(e));
+    axios.get(`${API_URL}/api/whatsapp/status`).then(r => setWhatsappStatus(r.data)).catch((e) => console.error(e));
+    axios.get(`${API_URL}/api/central/email-summary`).then(r => setEmailNotif(r.data?.total || 0)).catch((e) => console.error(e));
     const fetchAlerts = () => {
       axios.get(`${API_URL}/api/admin/alertas`)
         .then(r => setCarpetaAlerts((r.data?.alertas || []).filter(a => !a.leida).length))
-        .catch(() => {});
+        .catch((e) => console.error(e));
       axios.get(`${API_URL}/api/cierres/avisos`)
         .then(r => setCierresAvisos(r.data?.total || 0))
-        .catch(() => {});
+        .catch((e) => console.error(e));
     };
     fetchAlerts();
     const t = setInterval(fetchAlerts, 60000);
@@ -124,8 +125,8 @@ function MainApp() {
   };
 
   const logout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
+    secureRemove("token");
+    secureRemove("user");
     setUser(null);
   };
 
@@ -212,7 +213,7 @@ function MainApp() {
             )}
             {cierresAvisos > 0 && (
               <button className="topbar-notif-btn" data-testid="topbar-cierres-aviso" title="Respuestas de ejecutivos en Cierres"
-                onClick={() => { setActiveModule('cierres'); axios.post(`${API_URL}/api/cierres/avisos/marcar`).then(() => setCierresAvisos(0)).catch(() => {}); }}
+                onClick={() => { setActiveModule('cierres'); axios.post(`${API_URL}/api/cierres/avisos/marcar`).then(() => setCierresAvisos(0)).catch((e) => console.error(e)); }}
                 style={{ color: "#0d9488" }}>
                 <i className="fa fa-handshake-o"></i>
                 <span className="topbar-notif-badge" style={{ background: "#0d9488" }}>{cierresAvisos}</span>

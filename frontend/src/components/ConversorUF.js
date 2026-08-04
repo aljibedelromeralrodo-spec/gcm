@@ -11,7 +11,7 @@ export default function ConversorUF({ style }) {
   const [clpVal, setClpVal] = useState("");
 
   useEffect(() => {
-    axios.get(`${API}/api/valor-uf`).then(r => setUf(Number(r.data.valor_uf || 0))).catch(() => {});
+    axios.get(`${API}/api/valor-uf`).then(r => setUf(Number(r.data.valor_uf || 0))).catch((e) => console.error(e));
   }, []);
 
   const onUf = (v) => {

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import axios from "axios";
+import DOMPurify from "dompurify";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -76,7 +77,7 @@ export default function OportunidadesModule() {
 
   const borrar = async (op) => {
     if (!window.confirm(`¿Eliminar la oportunidad de ${op.nombre}?`)) return;
-    await axios.delete(`${API}/api/oportunidades/${op.id}`).catch(() => {});
+    await axios.delete(`${API}/api/oportunidades/${op.id}`).catch((e) => console.error(e));
     cargar();
   };
 
@@ -192,7 +193,7 @@ export default function OportunidadesModule() {
               <button data-testid="op-preview-cerrar" onClick={() => setPreview(null)} style={{ ...btn("transparent", "#94a3b8"), marginLeft: "auto", fontSize: "1rem" }}>✕</button>
             </div>
             <div style={{ fontSize: "0.8rem", color: "#cbd5e1", marginBottom: 8 }}>Para: <b>{preview.to || "⚠️ sin correo"}</b> · Asunto: {preview.subject}</div>
-            <div style={{ background: "#fff", padding: "1rem", maxHeight: "50vh", overflow: "auto" }} dangerouslySetInnerHTML={{ __html: preview.body }} />
+            <div style={{ background: "#fff", padding: "1rem", maxHeight: "50vh", overflow: "auto" }} dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(preview.body) }} />
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 12 }}>
               <button onClick={() => setPreview(null)} style={{ ...btn("transparent", "#94a3b8"), border: "1px solid #444" }}>Cerrar</button>
               <button data-testid="op-preview-autorizar" onClick={() => autorizar({ id: preview.id, nombre: preview.nombre, email: preview.to })}

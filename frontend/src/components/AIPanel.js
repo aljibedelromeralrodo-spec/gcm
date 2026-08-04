@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
+import DOMPurify from "dompurify";
 import { API_URL, formatUF, formatCurrency } from "../utils/formatters";
 
 export default function AIPanel({ resultado, valorUF }) {
@@ -64,11 +65,11 @@ export default function AIPanel({ resultado, valorUF }) {
           {aiData.recomendacion_ia && (
             <div className="ai-recommendation" data-testid="ai-recomendacion">
               <h4 className="ai-section-title">Recomendación IA</h4>
-              <div className="ai-rec-text" dangerouslySetInnerHTML={{ __html: aiData.recomendacion_ia
+              <div className="ai-rec-text" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(aiData.recomendacion_ia
                 .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
                 .replace(/^## (.*$)/gm, '<h5 style="color:var(--gold);margin:0.5rem 0 0.25rem;font-size:0.85rem;">$1</h5>')
                 .replace(/^# (.*$)/gm, '<h4 style="color:var(--gold);margin:0.75rem 0 0.25rem;font-size:0.9rem;">$1</h4>')
-                .replace(/\n/g, '<br/>')
+                .replace(/\n/g, '<br/>'))
               }} />
             </div>
           )}

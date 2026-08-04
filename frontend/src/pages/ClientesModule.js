@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
+import DOMPurify from "dompurify";
 import ImportarCorreo from "../components/ImportarCorreo";
 import ConversorUF from "../components/ConversorUF";
 
@@ -23,7 +24,7 @@ const BrokersPanel = ({ brokers, dest, setDest, reloadBrokers, soloAdmin }) => {
       else await axios.post(`${API}/api/brokers`, nuevo);
       setNuevo({ nombre: "", contactos: "", emails: "" }); setShowAdd(false); setEditId(null);
       reloadBrokers();
-    } catch (_e) { /* noop */ }
+    } catch (e) { console.error(e); }
   };
   const editar = (b) => {
     setEditId(b.id); setShowAdd(true);
@@ -31,7 +32,7 @@ const BrokersPanel = ({ brokers, dest, setDest, reloadBrokers, soloAdmin }) => {
   };
   const quitar = async (b) => {
     if (!window.confirm(`¿Quitar el broker "${b.nombre}"?`)) return;
-    try { await axios.delete(`${API}/api/brokers/${b.id}`); reloadBrokers(); } catch (_e) { /* noop */ }
+    try { await axios.delete(`${API}/api/brokers/${b.id}`); reloadBrokers(); } catch (e) { console.error(e); }
   };
   const inpS = { padding: "0.4rem 0.6rem", borderRadius: 0, border: "1px solid rgba(148,163,184,0.3)", background: "#232326", color: "#e2e8f0", fontSize: 12 };
   return (
@@ -366,7 +367,7 @@ export default function ClientesModule({ onNavigate }) {
     try {
       const b = await axios.get(`${API}/api/brokers`);
       setBrokers(b.data.brokers || []);
-    } catch (_e) { /* noop */ }
+    } catch (e) { console.error(e); }
   };
 
   const openPedirFaltantes = (f) => {
@@ -507,11 +508,11 @@ export default function ClientesModule({ onNavigate }) {
     try {
       const p = await axios.get(`${API}/api/plantillas?tipo=estudio`);
       setEstudioPlantillas(p.data.plantillas || []);
-    } catch (_e) { /* noop */ }
+    } catch (e) { console.error(e); }
     try {
       const c = await axios.get(`${API}/api/tasacion/contactos`);
       setTasacionContactos(c.data.contactos || []);
-    } catch (_e) { /* noop */ }
+    } catch (e) { console.error(e); }
     setEstudioModal({
       folder: f, archivos,
       destinatarios: defaults.destinatarios.join(", "),
@@ -680,7 +681,7 @@ export default function ClientesModule({ onNavigate }) {
       const r = await axios.post(`${API}/api/escritura/notarias`, m.nn);
       await reloadNotarias();
       setEscrituraModal(prev => ({ ...prev, addNotaria: false, notaria_id: r.data.notaria.id, nn: { ciudad: "", nombre: "", direccion: "", email: "" } }));
-    } catch (_e) { /* noop */ }
+    } catch (e) { console.error(e); }
   };
 
   const escrituraSaveNotariaEmail = async () => {
@@ -690,7 +691,7 @@ export default function ClientesModule({ onNavigate }) {
       await axios.patch(`${API}/api/escritura/notarias/${m.notaria_id}`, { email: m.notaria_email_edit });
       await reloadNotarias();
       setEscrituraModal(prev => ({ ...prev, notaria_email_edit: "", msg: "✅ Correo de la notaría guardado" }));
-    } catch (_e) { /* noop */ }
+    } catch (e) { console.error(e); }
   };
   const refreshUfFromSii = async () => {
     try {
@@ -914,7 +915,7 @@ export default function ClientesModule({ onNavigate }) {
       const r = await axios.get(`${API}/api/clientes/folders/${currentFolder.id}`);
       setCurrentFolder(r.data);
       await loadFolders();
-    } catch (_e) { /* noop */ }
+    } catch (e) { console.error(e); }
     if (errors.length) {
       alert(`✅ Subidos: ${okCount}\n\n❌ Errores:\n${errors.join("\n")}\n\n🔄 El COMBINADO_PROTOCOLO se está regenerando en background (aparecerá en unos segundos).`);
     } else {
@@ -1172,7 +1173,7 @@ export default function ClientesModule({ onNavigate }) {
   useEffect(() => {
     axios.get(`${API}/api/clientes/autocorreo-dest`)
       .then(r => setAutocorreoDest(r.data?.destination || ""))
-      .catch(() => {});
+      .catch((e) => console.error(e));
   }, []);
 
   const openEmailModal = (folder) => {
@@ -2723,7 +2724,7 @@ export default function ClientesModule({ onNavigate }) {
                 )}
                 {m.preview && (
                   <div style={{ background: "#fff", borderRadius: 0, padding: "0.9rem", maxHeight: 260, overflow: "auto" }}>
-                    <div dangerouslySetInnerHTML={{ __html: m.preview.body }} />
+                    <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(m.preview.body) }} />
                     {m.preview.attachments.length > 0 && (
                       <div style={{ marginTop: 8, fontSize: 12, color: "#334155" }}>📎 Adjuntos: {m.preview.attachments.join(", ")}</div>
                     )}
@@ -2941,7 +2942,7 @@ export default function ClientesModule({ onNavigate }) {
                 })()}
                 {m.preview && (
                   <div style={{ background: "#fff", borderRadius: 0, padding: "0.9rem", maxHeight: 260, overflow: "auto" }}>
-                    <div dangerouslySetInnerHTML={{ __html: m.preview.body }} />
+                    <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(m.preview.body) }} />
                     {m.preview.attachments.length > 0 && (
                       <div style={{ marginTop: 8, fontSize: 12, color: "#334155" }}>📎 Adjuntos: {m.preview.attachments.join(", ")}</div>
                     )}
@@ -2991,7 +2992,7 @@ export default function ClientesModule({ onNavigate }) {
                 </label>
                 {m.preview && (
                   <div style={{ background: "#fff", borderRadius: 0, padding: "0.9rem", maxHeight: 240, overflow: "auto" }}>
-                    <div dangerouslySetInnerHTML={{ __html: m.preview.body }} />
+                    <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(m.preview.body) }} />
                   </div>
                 )}
                 <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
@@ -3075,7 +3076,7 @@ export default function ClientesModule({ onNavigate }) {
                 </div>
                 {m.preview && (
                   <div style={{ background: "#fff", borderRadius: 0, padding: "0.9rem", maxHeight: 280, overflow: "auto" }}>
-                    <div dangerouslySetInnerHTML={{ __html: m.preview.body }} />
+                    <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(m.preview.body) }} />
                   </div>
                 )}
                 <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
@@ -3271,7 +3272,7 @@ export default function ClientesModule({ onNavigate }) {
                         rows={12}
                         style={{ width: "100%", padding: "0.6rem 0.8rem", borderRadius: 0, border: "1px solid rgba(250,204,21,0.5)", background: "#232326", color: "#e2e8f0", fontSize: 12, fontFamily: "monospace", resize: "vertical" }} />
                       <div style={{ marginTop: 6, background: "#fff", color: "#111", borderRadius: 0, padding: "0.6rem 0.8rem", maxHeight: 200, overflow: "auto", border: "1px solid rgba(148,163,184,0.3)" }}
-                           dangerouslySetInnerHTML={{ __html: emailModal.editBody }} />
+                           dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(emailModal.editBody) }} />
                       <button onClick={() => setEmailModal({ ...emailModal, editBody: null })} data-testid="email-body-reset"
                         style={{ marginTop: 6, background: "transparent", border: "1px solid rgba(148,163,184,0.3)", color: "#94a3b8", borderRadius: 0, padding: "4px 10px", cursor: "pointer", fontSize: 12 }}>
                         <i className="fa fa-undo" /> Volver al cuerpo automático
@@ -3280,7 +3281,7 @@ export default function ClientesModule({ onNavigate }) {
                   ) : (
                     <div>
                       <div style={{ background: "#fff", color: "#111", borderRadius: 0, padding: "0.6rem 0.8rem", maxHeight: 320, overflow: "auto", border: "1px solid rgba(148,163,184,0.3)" }}
-                           dangerouslySetInnerHTML={{ __html: emailModal.preview.body_html || emailModal.preview.body }} />
+                           dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(emailModal.preview.body_html || emailModal.preview.body) }} />
                       <button onClick={() => setEmailModal({ ...emailModal, editBody: emailModal.preview.body_html || emailModal.preview.body || "" })} data-testid="email-body-edit-btn"
                         style={{ marginTop: 6, background: "rgba(250,204,21,0.15)", border: "1px solid rgba(250,204,21,0.5)", color: "#facc15", borderRadius: 0, padding: "4px 10px", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
                         <i className="fa fa-pencil" /> Editar cuerpo manualmente
@@ -3421,7 +3422,7 @@ export default function ClientesModule({ onNavigate }) {
                         <b style={{ fontSize: 12 }}>Preview (Asunto: <span style={{ color: "#facc15" }}>{p.subject}</span>)</b>
                       </div>
                       <div style={{ background: "#fff", color: "#111", borderRadius: 0, padding: "0.6rem 0.8rem", maxHeight: 280, overflow: "auto", border: "1px solid rgba(148,163,184,0.3)" }}
-                           dangerouslySetInnerHTML={{ __html: p.body_html }} />
+                           dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(p.body_html) }} />
                     </div>
                   </>
                 )}

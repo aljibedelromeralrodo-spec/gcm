@@ -39,7 +39,7 @@ export default function ProactiveAlertsPanel() {
     try {
       await axios.post(`${API_URL}/api/admin/alertas/refresh`);
       fetchAlertas();
-    } catch {}
+    } catch (e) { console.error(e); }
     setRefreshing(false);
   };
 

@@ -33,7 +33,7 @@ export default function LearningStatusPanel() {
     try {
       await axios.post(`${API_URL}/api/admin/learning/trigger`);
       fetchStatus();
-    } catch {}
+    } catch (e) { console.error(e); }
     setTraining(false);
   };
 

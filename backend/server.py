@@ -3374,7 +3374,7 @@ def _validar_item_dict(item):
                    ("monto_credito_solicitar_uf", "Monto del credito a solicitar")]:
         if campos.get(k) in (None, ""):
             faltan.append(lbl)
-    if campos.get("con_subsidio") is True and campos.get("monto_subsidio_uf") in (None, ""):
+    if campos.get("con_subsidio") == True and campos.get("monto_subsidio_uf") in (None, ""):
         faltan.append("Monto del subsidio")
     tipo_cliente = cl.get("tipo_cliente", "dependiente")
     req = CHECKLIST.get(tipo_cliente, {})
@@ -3837,7 +3837,7 @@ async def proc_extract_text(qid: str, allow_vision: bool = True):
         path = folder / fn
         if not path.exists():
             continue
-        texto, metodo = await asyncio.to_thread(ocr_service.extraer_texto, path.read_bytes(), fn, not allow_vision is False)
+        texto, metodo = await asyncio.to_thread(ocr_service.extraer_texto, path.read_bytes(), fn, allow_vision is not False)
         results.append({"filename": fn, "method": metodo, "chars": len(texto)})
     return {"results": results}
 
@@ -4191,7 +4191,7 @@ async def proc_upload_drive(qid: str, force: bool = False, clave: str = ""):
     credit_request = {
         "is_request": True,
         "client_type": tipo_cliente,
-        "subsidy": {"tipo": "con_subsidio" if con_sub is True else "sin_subsidio"},
+        "subsidy": {"tipo": "con_subsidio" if con_sub == True else "sin_subsidio"},
         "codeudor": {"has_codeudor": bool(cod_nombre or hay_codeudor_files), "name": cod_nombre},
     }
     fin_nuevos = {k: v for k, v in {
@@ -8786,7 +8786,7 @@ async def proc_enviar_autocorreo(qid: str, payload: dict = None):
                 "docs_faltantes": {DOC_LABELS.get(t, t): n for t, n in docs_faltantes.items()}}
 
     con_sub = campos.get("con_subsidio")
-    con_sub_txt = "Con subsidio" if con_sub is True else "Sin subsidio" if con_sub is False else "—"
+    con_sub_txt = "Con subsidio" if con_sub == True else "Sin subsidio" if con_sub == False else "—"
     fecha_entrega = (campos.get("fecha_entrega") or "—").capitalize()
     # Buscar PDF agrupado en la carpeta del cliente
     adjuntos = []

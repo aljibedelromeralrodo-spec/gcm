@@ -14,7 +14,7 @@ function PredictivePanel({ formData, valorUF }) {
   useEffect(() => {
     axios.get(`${API_URL}/api/ia/insights`).then(r => {
       setInsights(r.data);
-    }).catch(() => {});
+    }).catch((e) => console.error(e));
   }, []);
 
   const fetchPrediction = useCallback(async (data) => {

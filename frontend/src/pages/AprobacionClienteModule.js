@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
+import DOMPurify from "dompurify";
 import ImportarCorreo from "../components/ImportarCorreo";
 import ConversorUF from "../components/ConversorUF";
 import { EmailAutocomplete } from "../components/EmailAutocomplete";
@@ -226,7 +227,7 @@ export default function AprobacionClienteModule({ onNavigate }) {
               try {
                 const a = await axios.get(`${API}/api/aprobacion-cliente/archivos`, { params: { cliente: nombre } });
                 setArchivos(a.data.archivos || []);
-              } catch (_e) { /* noop */ }
+              } catch (e) { console.error(e); }
             }} />
         </div>
         {plantillaPropia && <div style={{ marginTop: "0.6rem", fontSize: "0.8rem", color: "#10d98e" }}><i className="fa fa-bookmark" style={{ marginRight: "0.35rem" }} />Este cliente tiene plantilla propia guardada</div>}
@@ -305,7 +306,7 @@ export default function AprobacionClienteModule({ onNavigate }) {
                 <b>Adjuntos:</b> {preview.attachments.join(" · ")}
               </div>
             )}
-            <div dangerouslySetInnerHTML={{ __html: preview.body }} />
+            <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(preview.body) }} />
           </div>
         </div>
       )}
