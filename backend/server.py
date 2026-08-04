@@ -7651,7 +7651,11 @@ async def oportunidades_upload(file: UploadFile = File(...)):
 
 
 @api.get("/oportunidades")
-async def oportunidades_list():
+async def oportunidades_list(request: Request):
+    try:
+        await sales_engine.proponer_seguimientos(_base_url_req(request))
+    except Exception:
+        pass
     ops = await sales_engine.listar()
     return {"oportunidades": ops, "resumen": sales_engine.nota_diaria(ops)}
 

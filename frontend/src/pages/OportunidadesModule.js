@@ -54,6 +54,10 @@ export default function OportunidadesModule() {
   };
 
   const preparar = async (op) => {
+    if (op.borrador) {
+      setPreview({ ...op.borrador, id: op.id, to: op.email || "", nombre: op.nombre, bloqueado: bloqueado(op) });
+      return;
+    }
     setBusyId(op.id);
     try {
       const r = await axios.post(`${API}/api/oportunidades/${op.id}/preparar`, {}, { timeout: 60000 });
@@ -158,9 +162,11 @@ export default function OportunidadesModule() {
                   <td style={{ padding: "0.6rem 0.5rem", fontSize: "0.75rem" }}>
                     {op.status === "enviado"
                       ? <span style={{ color: "#34eab9", fontWeight: 700 }}>📨 Enviado{bloqueado(op) ? <div style={{ color: "#94a3b8", fontWeight: 400 }}>🔒 hasta {(op.bloqueado_hasta || "").slice(0, 10)}</div> : null}</span>
-                      : op.status === "expediente_vip"
-                        ? <span style={{ color: "var(--gold)", fontWeight: 700 }}>✦ Desde simulador</span>
-                        : <span style={{ color: "#fb7185", fontWeight: 700 }}>Esperando autorización</span>}
+                      : op.status === "seguimiento_listo"
+                        ? <span style={{ color: "#e7cf7a", fontWeight: 700 }}>📬 Seguimiento listo{op.seguimiento_n ? ` #${op.seguimiento_n}` : ""}<div style={{ color: "#94a3b8", fontWeight: 400 }}>Pasaron los 14 días — autoriza el envío</div></span>
+                        : op.status === "expediente_vip"
+                          ? <span style={{ color: "var(--gold)", fontWeight: 700 }}>✦ Desde simulador</span>
+                          : <span style={{ color: "#fb7185", fontWeight: 700 }}>Esperando autorización</span>}
                   </td>
                   <td style={{ padding: "0.6rem 0.5rem", textAlign: "right", whiteSpace: "nowrap" }}>
                     <button data-testid={`op-preparar-${i}`} onClick={() => preparar(op)} disabled={busyId === op.id}

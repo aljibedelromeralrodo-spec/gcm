@@ -82,6 +82,45 @@ def mensaje_jose_martin(nombre, proyecto="", link_simulador="", pixel_url=""):
     return {"subject": subject, "body": body}
 
 
+def mensaje_seguimiento(nombre, proyecto="", link_simulador="", pixel_url="", interes="nuevo"):
+    """Correo de seguimiento a los 14 días, con gancho según el interés detectado."""
+    primer = (nombre or "").split()[0].title() or "amigo(a)"
+    subject = f"¿Seguimos con tu crédito, {primer}? — Central Mutuos"
+    if interes == "uso_simulador":
+        gancho = f"Vi que usaste mi simulador VIP — ¡bien ahí, {primer}! 🎯 El siguiente paso es simple: me mandas tus documentos y yo me encargo de todo el resto con Gerardo."
+    elif interes == "hizo_clic":
+        gancho = "Vi que le echaste un ojo a mi simulador. Si algún número te dejó pensando, lo revisamos juntos en 5 minutos — sin compromiso."
+    elif interes == "abrio_correo":
+        gancho = "Sé que leíste mi correo anterior 😉. Las condiciones preferentes que te conté siguen vigentes, pero no duran para siempre."
+    else:
+        gancho = "Hace un par de semanas te escribí y no quiero que se te pase: las condiciones preferentes de financiamiento siguen disponibles."
+    ref_proyecto = f" para tu futuro hogar en <b>{proyecto}</b>" if proyecto else ""
+    body = f"""
+<div style="font-family:Georgia,'Times New Roman',serif;max-width:560px;margin:0 auto;color:#0f172a">
+  <div style="background:#0f172a;padding:26px 30px;border-radius:14px 14px 0 0">
+    <div style="color:#e2e8f0;font-size:20px;font-weight:700;letter-spacing:0.18em">CENTRAL MUTUOS</div>
+    <div style="color:#94a3b8;font-size:11px;letter-spacing:0.12em;margin-top:4px">BANCA HIPOTECARIA PRIVADA</div>
+  </div>
+  <div style="background:#ffffff;border:1px solid #e2e8f0;border-top:none;padding:30px;border-radius:0 0 14px 14px">
+    <p style="font-size:16px">Hola {primer}, ¡José Martín de nuevo por acá! 👋</p>
+    <p style="line-height:1.75;color:#334155">{gancho}</p>
+    <p style="line-height:1.75;color:#334155">Sigo teniendo condiciones preferentes de financiamiento hipotecario{ref_proyecto}.
+    Retoma tu simulación cuando quieras — 30 segundos desde el celular:</p>
+    <div style="text-align:center;margin:26px 0">
+      <a href="{link_simulador}" style="background:#0f172a;color:#fff;text-decoration:none;font-family:Arial;
+      font-weight:700;font-size:14px;padding:14px 34px;border-radius:999px;display:inline-block">
+      Retomar mi simulación VIP →</a>
+    </div>
+    <p style="line-height:1.75;color:#334155">Y si prefieres, me respondes este correo y coordinamos una llamada.
+    Para eso estoy, de verdad. ¡Un abrazo! 💪</p>
+    <p style="color:#0f172a;font-weight:700;margin-top:26px">José Martín Benavente<br>
+    <span style="font-weight:400;color:#64748b;font-size:12px">Asesor Comercial VIP · Central Mutuos</span></p>
+  </div>
+  <img src="{pixel_url}" width="1" height="1" alt="" style="display:block">
+</div>"""
+    return {"subject": subject, "body": body}
+
+
 def nota_diaria(oportunidades):
     """Resumen diario de José Martín para Gerardo."""
     hoy = datetime.now(timezone.utc).strftime("%d-%m-%Y")
@@ -89,6 +128,7 @@ def nota_diaria(oportunidades):
     abrieron = [o for o in oportunidades if o.get("estado_interes") in ("abrio_correo", "hizo_clic", "uso_simulador")]
     calientes = [o for o in oportunidades if o.get("estado_interes") in ("hizo_clic", "uso_simulador")]
     pendientes = [o for o in oportunidades if o.get("status") == "pendiente_autorizacion" and o.get("borrador")]
+    seguimientos = [o for o in oportunidades if o.get("status") == "seguimiento_listo"]
     lineas = [f"Gerardo, ¡buenas! José Martín reportándose — {hoy} 📋",
               f"Tenemos {total} oportunidades en cartera."]
     if calientes:
@@ -96,14 +136,19 @@ def nota_diaria(oportunidades):
                       + ", ".join(o["nombre"] for o in calientes[:8]) + ". Yo los llamaría HOY.")
     if abrieron:
         lineas.append(f"👀 {len(abrieron)} abrieron nuestro correo — la propuesta está gustando.")
+    if seguimientos:
+        lineas.append(f"📬 Pasaron los 14 días de {len(seguimientos)} prospecto(s) y ya les dejé el correo de "
+                      f"seguimiento LISTO para tu 'Autorizar Envío': "
+                      + ", ".join(o["nombre"] for o in seguimientos[:8]) + ".")
     if pendientes:
         lineas.append(f"✍️ Tengo {len(pendientes)} borradores listos esperando tu 'Autorizar Envío': "
                       + ", ".join(o["nombre"] for o in pendientes[:8]) + ".")
-    if not (calientes or abrieron or pendientes):
+    if not (calientes or abrieron or pendientes or seguimientos):
         lineas.append("Día tranquilo: sube un listado nuevo y me pongo a trabajar altiro.")
     lineas.append("Nada sale sin tu visto bueno, jefe. Un abrazo — J.M.")
     return {"fecha": hoy, "nota": "\n".join(lineas), "total": total,
-            "calientes": len(calientes), "abrieron": len(abrieron), "pendientes": len(pendientes)}
+            "calientes": len(calientes), "abrieron": len(abrieron),
+            "pendientes": len(pendientes), "seguimientos": len(seguimientos)}
 
 
 # ===================== CAPA DE SERVICIO (MongoDB) =====================
@@ -184,6 +229,28 @@ async def track(oid, tipo):
 
 async def marcar_uso_simulador(oid):
     await db.oportunidades.update_one({"id": oid}, {"$set": {"estado_interes": "uso_simulador"}})
+
+
+async def proponer_seguimientos(base_url):
+    """RECORDATORIO AUTOMÁTICO: al vencer el bloqueo de 14 días, José Martín deja el
+    correo de seguimiento LISTO — Gerardo solo debe presionar 'Autorizar Envío'."""
+    ahora = datetime.now(timezone.utc).isoformat()
+    listos = 0
+    ops_vencidas = await db.oportunidades.find({"status": "enviado",
+                                                "bloqueado_hasta": {"$nin": ["", None], "$lte": ahora}}).to_list(200)
+    for op in ops_vencidas:
+        if "@" not in (op.get("email") or ""):
+            continue
+        link_click = f"{base_url}/api/oportunidades/track/{op['id']}/click"
+        pixel = f"{base_url}/api/oportunidades/track/{op['id']}/pixel.gif"
+        msg = mensaje_seguimiento(op["nombre"], op.get("proyecto", ""), link_click, pixel,
+                                  op.get("estado_interes", "nuevo"))
+        await db.oportunidades.update_one({"id": op["id"]}, {"$set": {
+            "status": "seguimiento_listo", "borrador": msg, "bloqueado_hasta": "",
+            "seguimiento_n": int(op.get("seguimiento_n") or 0) + 1,
+            "seguimiento_propuesto_en": ahora}})
+        listos += 1
+    return listos
 
 
 async def desde_expediente_vip(nombre, rut, sim):
