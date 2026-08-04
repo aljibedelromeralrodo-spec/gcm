@@ -1,0 +1,19 @@
+{
+  "summary": "Iteración 19 — Lote completo (6 features) 100% PASS. Backend 13/13 pytest PASS: (1) GET /api/aprobacion-cliente/datos-cliente devuelve confianza+fuentes (alta/dudosa), (2) POST /api/aprendizaje/correccion guarda patrón y se refleja en el siguiente GET con teléfono +56 9 1234 5678 confianza=alta, (3) GET /api/calibracion/estado devuelve mensaje 'He calibrado mis criterios…', respuestas_mesa=39, asertividad=15%, detalle con prediccion/mesa/acierto, (4) POST /api/firma/generar-link + GET /api/firma/{token} landing pública sin auth con 'Bienvenido a su Firma de' y botón 'Validar Identidad y Firmar con Clave Única' + og:image; GET /api/firma/{token}/og.png devuelve PNG 1200x630; token inválido 404, (5) upload .docx a Melisa Rivera se convierte a PDF (saved termina en .pdf) y cleanup con delete-file {file_path} OK, (6) regresiones (/salud/estado, /rescate/pendientes, /gastos-operacionales/log, /seguimiento/clientes) todas 200. Frontend 4/4 PASS: Aprobación Cliente muestra 5 bordes VERDES tras autocompletar (RUT + correo cliente + ejecutivo externo + correo ejecutivo + ejecutivo interno) — todos 'alta' (2+ fuentes), botón 'Guardar y Aprender' presente y funcional (toast 'aprend'); Panel de Salud: tarjeta 'Panel de Auditoría' con mensaje '\"He calibrado mis criterios basados en las últimas 39 respuestas de la MESA. Mi asertividad actual es del 15%.\"' y badge '15% asertividad'; Set Crédito: al abrir CLAUDIA ANDREA ZURITA SOTO aparece botón 'Link de Firma VIP (WhatsApp)' junto a 'Eliminar set'; Carpeta Clientes: al abrir YACO SOUBALIOTIS el botón 'Agregar Codeudor' aparece en la toolbar del detail view junto a 'Descargar Todo' — fix de iter 18 confirmado.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/tests/test_iter19_features.py", "/app/test_reports/pytest/iter19_results.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Aprobación Cliente: la extracción cruza 5 fuentes (ia_correo, ocr_pdfs, cuerpo_correo, asunto, carpeta, set_credito, buzon, aprendido) con lógica de sortear por número de fuentes + etiquetado — bien diseñado. Confianza='alta' si len(fuentes)>=2 o 'carpeta' está entre las fuentes. Buen guardrail contra alucinaciones.",
+    "Portal Firma VIP: landing sin auth server-rendered con OG image PIL 1200x630, meta tags correctos, botón externo a migrup.cl, incrementa visitas/clicks en Mongo. Diseño 'Maserati' consistente.",
+    "Asertividad 15% es baja (aunque el sistema anota que las respuestas de mesa son 39 y las muestras con predicción probablemente pocas). Considerar mostrar 'muestras_con_prediccion' en la UI para contexto — hoy solo se ve el %."
+  ],
+  "updated_files": ["/app/tests/test_iter19_features.py"],
+  "success_rate": {"backend": "100% (13/13)", "frontend": "100% (4/4)"},
+  "test_credentials": "administrador / 141617575",
+  "seed_data_creation": "Patrón aprendido de teléfono para Melisa Rivera (+56 9 1234 5678) SE MANTIENE (indicado por E1). Link de firma VIP para Melisa Rivera creado en db.firma_links (idempotente por cliente_norm). Archivo .docx de prueba subido y ELIMINADO exitosamente vía delete-file {file_path}.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Todo el lote iter19 PASS. Correr con: `REACT_APP_BACKEND_URL=https://risk-assess-17.preview.emergentagent.com pytest /app/tests/test_iter19_features.py -v --tb=short -p no:xdist`. Melisa Rivera fid=ed93f803-9dee-4da6-9e7f-fef3f5e6f6b9. En frontend, el input de autocompletado de Aprobación Cliente requiere SELECCIONAR la sugerencia del dropdown (no basta con typing + Tab) para disparar los bordes de color."
+}

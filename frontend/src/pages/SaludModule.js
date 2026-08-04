@@ -18,12 +18,14 @@ const Estado = ({ ok, textoOk, textoMal }) => (
 
 export default function SaludModule() {
   const [data, setData] = useState(null);
+  const [calib, setCalib] = useState(null);
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
     try {
       const r = await axios.get(`${API}/api/salud/estado`);
       setData(r.data); setError("");
+      axios.get(`${API}/api/calibracion/estado`).then(rc => setCalib(rc.data)).catch(() => {});
     } catch (e) { setError(e.response?.data?.detail || e.message); }
   }, []);
 
@@ -111,6 +113,31 @@ export default function SaludModule() {
             </div>
           </div>
         </div>
+
+        {/* PANEL DE AUDITORÍA — CALIBRACIÓN DE RIESGO */}
+        {calib && (
+          <div style={{ ...card, gridColumn: "1 / -1", border: "1px solid rgba(212,175,55,0.35)" }} data-testid="salud-auditoria">
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8, flexWrap: "wrap" }}>
+              <h3 style={{ margin: 0, fontSize: "1rem", color: "var(--gold)" }}><i className="fa fa-balance-scale" style={{ marginRight: 6 }} />Panel de Auditoría — Calibración de Riesgo</h3>
+              {calib.asertividad != null && (
+                <span style={{ marginLeft: "auto", fontSize: "1.15rem", fontWeight: 900, color: calib.asertividad >= 80 ? "#22c55e" : calib.asertividad >= 60 ? "#f59e0b" : "#ef4444" }} data-testid="salud-asertividad">
+                  {calib.asertividad}% asertividad
+                </span>
+              )}
+            </div>
+            <div style={{ fontSize: "0.9rem", fontStyle: "italic", opacity: 0.9, marginBottom: 8 }} data-testid="salud-calibracion-msg">“{calib.mensaje}”</div>
+            <div style={{ display: "flex", gap: "1.4rem", fontSize: "0.83rem", flexWrap: "wrap" }}>
+              <span>Respuestas de mesa: <b>{calib.respuestas_mesa}</b></span>
+              <span style={{ color: "#22c55e" }}>Aprobadas: <b>{calib.aprobadas}</b></span>
+              <span style={{ color: "#ef4444" }}>Rechazadas: <b>{calib.rechazadas}</b></span>
+              <span>Con predicción del sistema: <b>{calib.muestras_con_prediccion}</b> ({calib.aciertos} aciertos)</span>
+            </div>
+            {calib.tendencia && <div style={{ marginTop: 8, fontSize: "0.85rem", color: "#f59e0b", fontWeight: 700 }} data-testid="salud-tendencia">{calib.tendencia}</div>}
+            <div style={{ marginTop: 8, fontSize: "0.75rem", opacity: 0.65 }}>
+              Reglas duras activas: {(calib.hard_rules || []).join(" · ")}
+            </div>
+          </div>
+        )}
 
         {/* AUTOCORREO MESA */}
         <div style={{ ...card, gridColumn: "1 / -1" }} data-testid="salud-autocorreo">

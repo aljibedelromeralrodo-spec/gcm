@@ -264,6 +264,16 @@ export default function SetCreditoModule({ onNavigate }) {
               <b style={{ fontSize: "1.15rem", color: "var(--gold)" }}>{current.nombre}</b> <span style={{ opacity: 0.6 }}>{current.rut} · {current.email || "sin correo"}</span>
             </div>
             <button data-testid="setcred-eliminar" onClick={() => eliminarSet(current.id)} style={btn("#ef4444", true)}><i className="fa fa-trash" /> Eliminar set</button>
+            <button data-testid="setcred-link-vip" onClick={async () => {
+              try {
+                const r = await axios.post(`${API}/api/firma/generar-link`, { cliente: current.nombre, rut: current.rut || "", email: current.email || "" });
+                try { await navigator.clipboard.writeText(r.data.url); } catch (_e) { /* clipboard opcional */ }
+                setMsg(`✨ Portal de Firma VIP listo y copiado al portapapeles: ${r.data.url}`);
+                window.open(r.data.whatsapp, "_blank");
+              } catch (e) { setMsg("Error: " + (e.response?.data?.detail || e.message)); }
+            }} style={{ ...btn("#14213D"), marginLeft: "0.6rem", border: "1px solid #E8C567", color: "#E8C567" }} title="Genera el link de lujo con tarjeta VIP para WhatsApp">
+              <i className="fa fa-diamond" style={{ marginRight: "0.4rem" }} />Link de Firma VIP (WhatsApp)
+            </button>
           </div>
 
           {/* Subir documento */}

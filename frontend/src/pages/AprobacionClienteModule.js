@@ -31,6 +31,41 @@ export default function AprobacionClienteModule({ onNavigate }) {
   const [msg, setMsg] = useState("");
   const [log, setLog] = useState([]);
   const [plantillaPropia, setPlantillaPropia] = useState(false);
+  const [confianza, setConfianza] = useState({});
+  const [extraido, setExtraido] = useState({});
+
+  const bordeConf = (campo) => {
+    const c = confianza[campo];
+    if (c === "alta") return { border: "2px solid #22c55e", boxShadow: "0 0 6px rgba(34,197,94,0.25)" };
+    if (c === "dudosa") return { border: "2px solid #f59e0b", boxShadow: "0 0 6px rgba(245,158,11,0.35)" };
+    return {};
+  };
+
+  const guardarAprender = async () => {
+    const pares = [["email", emailCliente], ["rut", rut], ["ejecutivo_nombre", ejecutivoNombre],
+      ["ejecutivo_email", ejecutivoEmail], ["ejecutivo_interno", ejecutivoInterno]];
+    let n = 0;
+    const nuevas = { ...confianza };
+    for (const [campo, val] of pares) {
+      const orig = (extraido[campo] || "").trim();
+      const v = (val || "").trim();
+      if (v && v !== orig) {
+        try {
+          await axios.post(`${API}/api/aprendizaje/correccion`, {
+            cliente: nombre, campo, valor_correcto: v, valor_extraido: orig, remitente: extraido.remitente || "",
+          });
+          nuevas[campo] = "alta"; n++;
+        } catch (_e) { /* siguiente */ }
+      } else if (v && confianza[campo] === "dudosa") {
+        nuevas[campo] = "alta";
+      }
+    }
+    setConfianza(nuevas);
+    setExtraido(prev => ({ ...prev, email: emailCliente, rut, ejecutivo_nombre: ejecutivoNombre, ejecutivo_email: ejecutivoEmail, ejecutivo_interno: ejecutivoInterno }));
+    setMsg(n > 0
+      ? `🧠 ${n} corrección(es) guardada(s) como Patrón Aprendido: la próxima vez no se repetirá el error.`
+      : "✅ Datos validados: no había cambios que aprender.");
+  };
 
   const loadPlantilla = useCallback(async (cliente) => {
     const r = await axios.get(`${API}/api/aprobacion-cliente/plantilla`, { params: { cliente: cliente || "" } });
@@ -66,7 +101,9 @@ export default function AprobacionClienteModule({ onNavigate }) {
       if (d.data.ejecutivo_nombre) setEjecutivoNombre(prev => prev || d.data.ejecutivo_nombre);
       if (d.data.ejecutivo_email) setEjecutivoEmail(prev => prev || d.data.ejecutivo_email);
       if (d.data.ejecutivo_interno) setEjecutivoInterno(prev => prev || d.data.ejecutivo_interno);
-      if (d.data.email && !emailActual) setMsg(`ℹ️ Datos del cliente rellenados desde ${d.data.fuente}${d.data.telefono ? ` · Teléfono: ${d.data.telefono}` : ""}`);
+      setConfianza(d.data.confianza || {});
+      setExtraido({ email: d.data.email || "", rut: d.data.rut || "", ejecutivo_nombre: d.data.ejecutivo_nombre || "", ejecutivo_email: d.data.ejecutivo_email || "", ejecutivo_interno: d.data.ejecutivo_interno || "" });
+      if (d.data.email && !emailActual) setMsg(`ℹ️ Datos rellenados (fuentes: ${d.data.fuente})${d.data.telefono ? ` · Teléfono: ${d.data.telefono}` : ""} — 🟢 seguro · 🟠 revisar y validar`);
     } catch (_e) { /* el usuario puede escribirlo a mano */ }
   };
 
@@ -168,14 +205,23 @@ export default function AprobacionClienteModule({ onNavigate }) {
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 2fr", gap: "1rem", marginTop: "1rem" }}>
           <div><label style={lbl}>Nombre del cliente</label><input data-testid="aprobacion-nombre" style={inp} value={nombre} onChange={e => setNombre(e.target.value)} /></div>
-          <div><label style={lbl}>RUT</label><input data-testid="aprobacion-rut" style={inp} value={rut} onChange={e => setRut(e.target.value)} /></div>
-          <div><label style={lbl}>Correo del cliente (auto o manual)</label><EmailAutocomplete dataTestId="aprobacion-email" style={inp} value={emailCliente} onChange={setEmailCliente} placeholder="cliente@correo.cl" /></div>
+          <div><label style={lbl}>RUT</label><input data-testid="aprobacion-rut" style={{ ...inp, ...bordeConf("rut") }} value={rut} onChange={e => setRut(e.target.value)} /></div>
+          <div><label style={lbl}>Correo del cliente (auto o manual)</label><EmailAutocomplete dataTestId="aprobacion-email" style={{ ...inp, ...bordeConf("email") }} value={emailCliente} onChange={setEmailCliente} placeholder="cliente@correo.cl" /></div>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "2fr 2fr 2fr", gap: "1rem", marginTop: "1rem" }}>
-          <div><label style={lbl}>Ejecutivo que envió la solicitud</label><input data-testid="aprobacion-ejecutivo-nombre" style={inp} value={ejecutivoNombre} onChange={e => setEjecutivoNombre(e.target.value)} placeholder="Nombre del ejecutivo externo" /></div>
-          <div><label style={lbl}>Correo del ejecutivo</label><input data-testid="aprobacion-ejecutivo-email" style={inp} value={ejecutivoEmail} onChange={e => setEjecutivoEmail(e.target.value)} placeholder="ejecutivo@inmobiliaria.cl" /></div>
-          <div><label style={lbl}>Ejecutivo interno (Central Mutuos)</label><input data-testid="aprobacion-ejecutivo-interno" style={inp} value={ejecutivoInterno} onChange={e => setEjecutivoInterno(e.target.value)} placeholder="Nombre del ejecutivo interno" /></div>
+          <div><label style={lbl}>Ejecutivo que envió la solicitud</label><input data-testid="aprobacion-ejecutivo-nombre" style={{ ...inp, ...bordeConf("ejecutivo_nombre") }} value={ejecutivoNombre} onChange={e => setEjecutivoNombre(e.target.value)} placeholder="Nombre del ejecutivo externo" /></div>
+          <div><label style={lbl}>Correo del ejecutivo</label><input data-testid="aprobacion-ejecutivo-email" style={{ ...inp, ...bordeConf("ejecutivo_email") }} value={ejecutivoEmail} onChange={e => setEjecutivoEmail(e.target.value)} placeholder="ejecutivo@inmobiliaria.cl" /></div>
+          <div><label style={lbl}>Ejecutivo interno (Central Mutuos)</label><input data-testid="aprobacion-ejecutivo-interno" style={{ ...inp, ...bordeConf("ejecutivo_interno") }} value={ejecutivoInterno} onChange={e => setEjecutivoInterno(e.target.value)} placeholder="Nombre del ejecutivo interno" /></div>
         </div>
+        {Object.values(confianza).some(Boolean) && (
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: "0.7rem", flexWrap: "wrap" }}>
+            <span style={{ fontSize: "0.75rem", opacity: 0.8 }}>🟢 dato seguro (2+ fuentes) · 🟠 revisa y valida antes de enviar</span>
+            <button data-testid="aprobacion-guardar-aprender" onClick={guardarAprender}
+              style={{ background: "rgba(168,85,247,0.2)", border: "1px solid #a855f7", color: "#d8b4fe", borderRadius: 8, padding: "0.4rem 1rem", cursor: "pointer", fontWeight: 700, fontSize: "0.8rem" }}>
+              <i className="fa fa-graduation-cap" style={{ marginRight: 6 }} />Guardar y Aprender
+            </button>
+          </div>
+        )}
         <div style={{ marginTop: "1rem" }}>
           <ConversorUF />
         </div>

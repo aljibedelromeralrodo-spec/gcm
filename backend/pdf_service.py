@@ -119,6 +119,44 @@ def convertir_a_pdf(raw_bytes, filename):
                 c.showPage(); y = 800
         c.showPage(); c.save(); buf.seek(0)
         return buf.getvalue(), base + ".pdf", True
+    if low.endswith((".docx", ".doc", ".xlsx", ".xls")):
+        try:
+            from reportlab.lib.pagesizes import A4
+            from reportlab.pdfgen import canvas
+            lineas = []
+            if low.endswith((".docx", ".doc")):
+                import docx
+                d = docx.Document(io.BytesIO(raw_bytes))
+                for p in d.paragraphs:
+                    if p.text.strip():
+                        lineas.append(p.text)
+                for t in d.tables:
+                    for row in t.rows:
+                        lineas.append(" | ".join(c.text.strip() for c in row.cells))
+            else:
+                import openpyxl
+                wb = openpyxl.load_workbook(io.BytesIO(raw_bytes), data_only=True)
+                for ws in wb.worksheets:
+                    lineas.append(f"— Hoja: {ws.title} —")
+                    for row in ws.iter_rows(values_only=True):
+                        vals = [str(v) for v in row if v is not None]
+                        if vals:
+                            lineas.append(" | ".join(vals))
+            buf = io.BytesIO()
+            c = canvas.Canvas(buf, pagesize=A4)
+            y = 800
+            for line in lineas[:600]:
+                c.drawString(40, y, line[:110])
+                y -= 14
+                if y < 40:
+                    c.showPage()
+                    y = 800
+            c.showPage()
+            c.save()
+            buf.seek(0)
+            return buf.getvalue(), base + ".pdf", True
+        except Exception as e:
+            raise ValueError(f"No se pudo convertir el documento Office: {e}")
     raise ValueError(f"Formato no soportado para conversion: {fn}")
 
 

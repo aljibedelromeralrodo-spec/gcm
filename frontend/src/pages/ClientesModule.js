@@ -1815,6 +1815,10 @@ export default function ClientesModule({ onNavigate }) {
                 style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.5)", color: "#f87171" }}>
                 <i className="fa fa-exclamation-triangle"></i> Documento Faltante
               </button>
+              <button className="docs-btn secondary" onClick={() => agregarCodeudor(currentFolder)} data-testid={`btn-agregar-codeudor-${currentFolder.id}`}
+                style={{ background: "rgba(251,146,60,0.15)", border: "1px solid rgba(251,146,60,0.5)", color: "#fdba74" }}>
+                <i className="fa fa-user-plus"></i> Agregar Codeudor
+              </button>
               <button className="docs-btn primary" onClick={() => downloadAll(currentFolder.id)} data-testid="btn-download-all">
                 <i className="fa fa-download"></i> Descargar Todo
               </button>

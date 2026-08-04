@@ -2544,6 +2544,78 @@ async def salud_estado():
     }
 
 
+@api.get("/calibracion/estado")
+async def calibracion_estado():
+    """PANEL DE AUDITORÍA: calibra criterios con las últimas 50 respuestas de la MESA
+    y mide la asertividad de la predicción del sistema contra el veredicto real."""
+    resp = await db.seguimiento.find({"estado": {"$in": ["aprobacion", "rechazo"]}}
+                                     ).sort("fecha", -1).limit(50).to_list(50)
+    muestras, aciertos, detalle = 0, 0, []
+    vistos = set()
+    stats_m = await _stats_mesa()
+    for r in resp:
+        cli = (r.get("cliente") or "").strip()
+        if not cli or cli.lower() in vistos:
+            continue
+        vistos.add(cli.lower())
+        toks = [t for t in re.split(r"\s+", cli) if len(t) > 2][:2]
+        if not toks:
+            continue
+        rxc = ".*".join(re.escape(t) for t in toks)
+        f = await db.folders.find_one({"nombre": {"$regex": rxc, "$options": "i"}})
+        if not f:
+            continue
+        pct = f.get("porcentaje")
+        if pct is None:
+            try:
+                pct = _prob_aprobacion_folder(f, stats_m).get("porcentaje")
+            except Exception:
+                continue
+        muestras += 1
+        prediccion = "aprobacion" if float(pct or 0) >= 50 else "rechazo"
+        ok = prediccion == r.get("estado")
+        aciertos += 1 if ok else 0
+        detalle.append({"cliente": cli, "prediccion": prediccion,
+                        "mesa": r.get("estado"), "porcentaje": pct,
+                        "acierto": ok})
+    asertividad = round(aciertos * 100 / muestras) if muestras else None
+    # Cambio de tendencia: % de rechazo reciente vs anterior
+    total = len(resp)
+    mitad = total // 2 if total >= 10 else 0
+    tendencia = ""
+    if mitad:
+        rec = resp[:mitad]
+        ant = resp[mitad:]
+        pr = sum(1 for x in rec if x["estado"] == "rechazo") * 100 / len(rec)
+        pa = sum(1 for x in ant if x["estado"] == "rechazo") * 100 / len(ant)
+        if pr - pa >= 15:
+            tendencia = (f"⚠ La mesa endureció sus criterios: rechazos subieron de "
+                         f"{round(pa)}% a {round(pr)}%. Criterios recalibrados a la baja.")
+        elif pa - pr >= 15:
+            tendencia = (f"✅ La mesa flexibilizó sus criterios: rechazos bajaron de "
+                         f"{round(pa)}% a {round(pr)}%. Criterios recalibrados al alza.")
+    aprobadas = sum(1 for x in resp if x["estado"] == "aprobacion")
+    rechazadas = total - aprobadas
+    snapshot = {
+        "mensaje": (f"He calibrado mis criterios basados en las últimas {total} respuestas de la MESA. "
+                    + (f"Mi asertividad actual es del {asertividad}%." if asertividad is not None
+                       else "Aún no hay suficientes casos con predicción para medir asertividad.")),
+        "respuestas_mesa": total, "aprobadas": aprobadas, "rechazadas": rechazadas,
+        "muestras_con_prediccion": muestras, "aciertos": aciertos,
+        "asertividad": asertividad, "tendencia": tendencia,
+        "hard_rules": ["Mínimo 2.000 UF sin subsidio (alerta crítica a jefatura)",
+                       "0% de probabilidad si falta Cédula, Liquidaciones, AFP o CMF"],
+        "detalle": detalle[:15], "calibrado_en": now_iso(),
+    }
+    await db.config.update_one({"_key": "calibracion"}, {"$set": snapshot}, upsert=True)
+    if tendencia:
+        ya = await db.alertas.find_one({"tipo": "tendencia_mesa", "mensaje": tendencia})
+        if not ya:
+            await db.alertas.insert_one({"id": str(uuid.uuid4()), "tipo": "tendencia_mesa",
+                                         "mensaje": tendencia, "fecha": now_iso(), "leida": False})
+    return snapshot
+
+
 @api.get("/contactos/emails")
 async def contactos_emails(q: str = ""):
     """Autocompletar de correos: junta correos conocidos de carpetas, cola de
@@ -3469,6 +3541,12 @@ def _prob_aprobacion_folder(doc, stats):
     if con_sub:
         prob += 5
         factores.append("+5%: con subsidio")
+    # REGLA DURA: mínimo 2.000 UF sin subsidio
+    alerta_critica = ""
+    if monto and monto < 2000 and not con_sub:
+        alerta_critica = "ALERTA: No cumple criterio mínimo de 2.000 UF. Avisar a jefatura"
+        prob = min(prob, 10)
+        factores.append(f"🔴 {alerta_critica}")
     if tipo_cliente == "independiente":
         prob -= 5
         factores.append("-5%: independiente (boletas)")
@@ -3480,9 +3558,9 @@ def _prob_aprobacion_folder(doc, stats):
     if not cats or faltan_mesa:
         etiquetas = [fsvc.MISSING_LABELS.get(c, c) for c in faltan_mesa] or ["sin documentos"]
         factores.append(f"⛔ 0%: no cumple criterios de envío a mesa (faltan: {', '.join(etiquetas)})")
-        return {"porcentaje": 0, "factores": factores}
+        return {"porcentaje": 0, "factores": factores, "alerta_critica": alerta_critica}
     prob = max(5, min(98, round(prob)))
-    return {"porcentaje": prob, "factores": factores}
+    return {"porcentaje": prob, "factores": factores, "alerta_critica": alerta_critica}
 
 
 @api.get("/procesamiento/queue")
@@ -4123,6 +4201,20 @@ async def proc_upload_drive(qid: str, force: bool = False, clave: str = ""):
         "fecha_entrega": campos.get("fecha_entrega") or "",
         "monto_credito": campos.get("monto_credito_uf") or campos.get("monto_credito_solicitar_uf"),
     }.items() if v not in (None, "")}
+    # REGLA DURA al ingresar la solicitud: mínimo 2.000 UF sin subsidio
+    try:
+        _monto_hr = float(fin_nuevos.get("monto_credito") or 0)
+    except (TypeError, ValueError):
+        _monto_hr = 0
+    if _monto_hr and _monto_hr < 2000 and not con_sub:
+        _msg_hr = "ALERTA: No cumple criterio mínimo de 2.000 UF. Avisar a jefatura"
+        ya_hr = await db.alertas.find_one({"tipo": "hard_rule", "cliente": cliente})
+        if not ya_hr:
+            await db.alertas.insert_one({
+                "id": str(uuid.uuid4()), "tipo": "hard_rule", "nivel": "critica",
+                "cliente": cliente,
+                "mensaje": f"🔴 {_msg_hr} — {cliente}: {_monto_hr:g} UF sin subsidio",
+                "fecha": now_iso(), "leida": False})
     if not folder_doc:
         await db.folders.insert_one({"id": str(uuid.uuid4()), "nombre": cliente,
                                      "rut": cl.get("rut", ""), "archivos": uploaded,
@@ -6963,13 +7055,26 @@ async def aprobacion_buscar(q: str = ""):
 
 @api.get("/aprobacion-cliente/datos-cliente")
 async def aprobacion_datos_cliente(nombre: str = ""):
-    """Rellena email/teléfono/RUT del cliente leyendo la base y los correos de la
-    solicitud de crédito. PROHIBIDO inventar: lo que no aparece queda vacío."""
+    """EXTRACCIÓN ENRIQUECIDA: cruza 3 fuentes (Asunto, Cuerpo del correo, OCR de PDFs)
+    + base de datos (carpetas/set crédito) + buzón. PROHIBIDO inventar.
+    Devuelve confianza por campo: 'alta' (verde: 2+ fuentes o dato validado/aprendido)
+    o 'dudosa' (naranja: 1 sola fuente). Aplica los Patrones Aprendidos del usuario."""
     nombre = (nombre or "").strip()
     if len(nombre) < 3:
         raise HTTPException(status_code=400, detail="Indica el nombre del cliente")
-    out = {"email": "", "telefono": "", "rut": "", "fuente": "",
-           "ejecutivo_nombre": "", "ejecutivo_email": "", "ejecutivo_interno": ""}
+    CAMPOS = ("email", "telefono", "rut", "ejecutivo_nombre", "ejecutivo_email", "ejecutivo_interno")
+    cand = {c: {} for c in CAMPOS}
+    dominios = set()
+
+    def _add(campo, valor, fuente, etiquetado=False):
+        v = (valor or "").strip()
+        if not v:
+            return
+        k = re.sub(r"[\s.\-()]", "", v.lower())
+        d = cand[campo].setdefault(k, {"valor": v, "fuentes": set(), "etiquetado": False})
+        d["fuentes"].add(fuente)
+        d["etiquetado"] = d["etiquetado"] or etiquetado
+
     toks = [t for t in _norm_texto(nombre).split() if len(t) > 2]
     rx = ".*".join(re.escape(t) for t in toks[:2]) if toks else ""
     _excluir = re.compile(
@@ -6977,78 +7082,146 @@ async def aprobacion_datos_cliente(nombre: str = ""):
         r"maestra|ecomac|boetsch|inmobiliaria", re.I)
     _freemail = re.compile(r"@(gmail|hotmail|outlook|yahoo|live|icloud)\.", re.I)
 
-    def _extraer(texto):
+    def _extraer_texto(texto, fuente):
         t = texto or ""
         etiquetados = re.findall(
-            r"(?:correo|e-?mail|mail)\s*(?:del?\s*cliente)?\s*[:=\s]\s*([\w.+-]+@[\w-]+\.[\w.]{2,})",
-            t, re.I)
-        todos = re.findall(r"[\w.+-]+@[\w-]+\.[\w.]{2,}", t)
-        emails = []
-        for e in etiquetados + todos:
-            e = e.strip("-._+")
-            if e and not _excluir.search(e) and e not in emails:
-                emails.append(e)
-        # Prioridad: correo etiquetado como "del cliente" > correo personal (gmail/hotmail/...)
-        emails.sort(key=lambda e: (e not in etiquetados, not _freemail.search(e)))
-        fonos = re.findall(r"(?:\+?56)?[\s.]?9[\s.]?\d{4}[\s.]?\d{4}", t)
-        ruts = re.findall(r"\b\d{1,2}\.?\d{3}\.?\d{3}\s?-\s?[\dkK]\b", t)
-        return emails, fonos, ruts
-
-    def _tomar(emails, fonos, ruts):
-        out["email"] = out["email"] or (emails[0].strip() if emails else "")
-        out["telefono"] = out["telefono"] or (fonos[0].strip() if fonos else "")
-        out["rut"] = out["rut"] or (ruts[0].strip() if ruts else "")
+            r"(?:correo|e-?mail|mail)\s*(?:del?\s*cliente)?\s*[:=\s]\s*([\w.+-]+@[\w-]+\.[\w.]{2,})", t, re.I)
+        for e in etiquetados:
+            if not _excluir.search(e):
+                _add("email", e.strip("-._+"), fuente, etiquetado=True)
+        for e in re.findall(r"[\w.+-]+@[\w-]+\.[\w.]{2,}", t):
+            if not _excluir.search(e):
+                _add("email", e.strip("-._+"), fuente)
+        for f_ in re.findall(r"(?:\+?56)?[\s.]?9[\s.]?\d{4}[\s.]?\d{4}", t):
+            _add("telefono", f_.strip(), fuente)
+        for r_ in re.findall(r"\b\d{1,2}\.?\d{3}\.?\d{3}\s?-\s?[\dkK]\b", t):
+            _add("rut", r_.strip(), fuente)
 
     if rx:
+        # FUENTE 1-3: correos procesados (IA de campos, OCR de PDFs, cuerpo y asunto)
         async for it in db.proc_queue.find({"$or": [
                 {"cliente": {"$regex": rx, "$options": "i"}},
                 {"classification.cliente": {"$regex": rx, "$options": "i"}},
-                {"subject": {"$regex": rx, "$options": "i"}}]}).limit(6):
+                {"subject": {"$regex": rx, "$options": "i"}}]}).limit(8):
             campos = it.get("campos") or {}
             cl = it.get("classification") or {}
-            out["email"] = out["email"] or campos.get("email_cliente") or cl.get("email_cliente") or ""
-            out["rut"] = out["rut"] or cl.get("rut") or campos.get("rut") or ""
-            out["telefono"] = out["telefono"] or campos.get("telefono") or ""
-            out["ejecutivo_nombre"] = out["ejecutivo_nombre"] or campos.get("nombre_ejecutivo") or ""
-            out["ejecutivo_email"] = out["ejecutivo_email"] or campos.get("email_ejecutivo") or ""
-            out["ejecutivo_interno"] = out["ejecutivo_interno"] or campos.get("ejecutivo_interno") or ""
-            _tomar(*_extraer(it.get("body_text") or it.get("body") or ""))
-        if out["email"]:
-            out["fuente"] = "correos procesados"
-    if not out["email"] and rx:
+            _add("email", campos.get("email_cliente"), "ia_correo")
+            _add("email", cl.get("email_cliente"), "ocr_pdfs")
+            _add("rut", cl.get("rut"), "ocr_pdfs")
+            _add("rut", campos.get("rut"), "ia_correo")
+            _add("telefono", campos.get("telefono"), "ia_correo")
+            _add("telefono", cl.get("telefono"), "ocr_pdfs")
+            _add("ejecutivo_nombre", campos.get("nombre_ejecutivo"), "ia_correo")
+            _add("ejecutivo_email", campos.get("email_ejecutivo"), "ia_correo")
+            _add("ejecutivo_interno", campos.get("ejecutivo_interno"), "ia_correo")
+            _extraer_texto(it.get("body_text") or it.get("body_full") or it.get("body") or "", "cuerpo_correo")
+            _extraer_texto(it.get("subject") or "", "asunto")
+            m_dom = re.search(r"@([\w.-]+)", it.get("sender") or "")
+            if m_dom:
+                dominios.add(m_dom.group(1).lower())
+        # FUENTE 4: base de datos (MÁXIMO ESFUERZO antes de pedir el dato manual)
         f = await db.folders.find_one({"nombre": {"$regex": rx, "$options": "i"}})
         if f:
-            out["email"] = f.get("email") or f.get("email_cliente") or ""
-            out["rut"] = out["rut"] or f.get("rut") or ""
-            out["ejecutivo_interno"] = out["ejecutivo_interno"] or f.get("ejecutivo_interno") or ""
-            out["ejecutivo_nombre"] = out["ejecutivo_nombre"] or f.get("ejecutivo_externo") or ""
-            out["ejecutivo_email"] = out["ejecutivo_email"] or f.get("ejecutivo_externo_email") or ""
+            _add("email", f.get("email") or f.get("email_cliente"), "carpeta")
+            _add("rut", f.get("rut"), "carpeta")
+            _add("telefono", f.get("telefono"), "carpeta")
+            _add("ejecutivo_interno", f.get("ejecutivo_interno"), "carpeta")
+            _add("ejecutivo_nombre", f.get("ejecutivo_externo"), "carpeta")
+            _add("ejecutivo_email", f.get("ejecutivo_externo_email"), "carpeta")
         s = await db.set_credito.find_one({"nombre": {"$regex": rx, "$options": "i"}})
         if s:
-            out["email"] = out["email"] or s.get("email") or ""
-            out["rut"] = out["rut"] or s.get("rut") or ""
-        if out["email"]:
-            out["fuente"] = "base de datos"
-    if not out["email"]:
+            _add("email", s.get("email"), "set_credito")
+            _add("rut", s.get("rut"), "set_credito")
+            _add("telefono", s.get("telefono"), "set_credito")
+    # FUENTE 5: buzón IMAP (solo si aún no hay correo del cliente)
+    if not cand["email"]:
         try:
             headers = await asyncio.to_thread(mail.search_email_headers_by_person, nombre, 5)
             mids = [h.get("message_id") for h in headers if h.get("message_id")][:3]
             if mids:
                 msgs = await asyncio.to_thread(mail.fetch_attachments_by_message_ids, mids)
                 for m_ in msgs:
-                    _tomar(*_extraer((m_.get("body") or "") + " " + (m_.get("subject") or "")))
-                    # El remitente del correo de solicitud = ejecutivo que la envió
-                    if not out["ejecutivo_email"]:
-                        remit = m_.get("from") or ""
-                        em_r = re.search(r"[\w.+-]+@[\w-]+\.[\w.]{2,}", remit)
-                        if em_r and not re.search(r"centralmutuos|evaluacionesmutuos|gerardo", em_r.group(0), re.I):
-                            out["ejecutivo_email"] = em_r.group(0)
-                            out["ejecutivo_nombre"] = re.sub(r"<.*?>", "", remit).strip().strip('"') or ""
-                if out["email"]:
-                    out["fuente"] = "buzón de correo (solicitud de crédito)"
+                    _extraer_texto((m_.get("body") or "") + " " + (m_.get("subject") or ""), "buzon")
+                    remit = m_.get("from") or ""
+                    em_r = re.search(r"[\w.+-]+@[\w-]+\.[\w.]{2,}", remit)
+                    if em_r and not re.search(r"centralmutuos|evaluacionesmutuos|gerardo", em_r.group(0), re.I):
+                        _add("ejecutivo_email", em_r.group(0), "buzon")
+                        _add("ejecutivo_nombre", re.sub(r"<.*?>", "", remit).strip().strip('"'), "buzon")
         except Exception:
             pass
+    # Selección por campo: más fuentes gana; en email priman etiquetados y personales
+    out = {c: "" for c in CAMPOS}
+    confianza = {c: "" for c in CAMPOS}
+    fuentes_out = {}
+    for campo in CAMPOS:
+        opciones = list(cand[campo].values())
+        if not opciones:
+            continue
+        if campo == "email":
+            opciones.sort(key=lambda d: (-len(d["fuentes"]), not d["etiquetado"],
+                                         not bool(_freemail.search(d["valor"]))))
+        else:
+            opciones.sort(key=lambda d: -len(d["fuentes"]))
+        mejor = opciones[0]
+        out[campo] = mejor["valor"]
+        fuentes_out[campo] = sorted(mejor["fuentes"])
+        confianza[campo] = "alta" if (len(mejor["fuentes"]) >= 2 or "carpeta" in mejor["fuentes"]) else "dudosa"
+    # PATRONES APRENDIDOS: correcciones previas del usuario mandan sobre lo extraído
+    if rx:
+        pats = await db.patrones_aprendidos.find({"$or": [
+            {"cliente_norm": {"$regex": rx, "$options": "i"}},
+            {"dominio": {"$in": list(dominios)}}]}).sort("creado_en", -1).to_list(50)
+        aplicados = set()
+        for p in pats:
+            campo = p.get("campo")
+            if campo not in CAMPOS or campo in aplicados or not p.get("valor_correcto"):
+                continue
+            es_cliente = re.search(rx, p.get("cliente_norm") or "", re.I)
+            mismo_error = p.get("valor_extraido_norm") and p["valor_extraido_norm"] == re.sub(
+                r"[\s.\-()]", "", (out.get(campo) or "").lower())
+            if es_cliente or mismo_error:
+                out[campo] = p["valor_correcto"]
+                confianza[campo] = "alta"
+                fuentes_out[campo] = ["aprendido"]
+                aplicados.add(campo)
+    out["confianza"] = confianza
+    out["fuentes"] = fuentes_out
+    out["fuente"] = ", ".join(sorted({f_ for fs in fuentes_out.values() for f_ in fs})) or ""
     return out
+
+
+@api.post("/aprendizaje/correccion")
+async def aprendizaje_correccion(payload: dict):
+    """MODO APRENDIZAJE: guarda una corrección manual como Patrón Aprendido para no
+    repetir el error con el mismo cliente o el mismo remitente/formato."""
+    payload = payload or {}
+    cliente = (payload.get("cliente") or "").strip()
+    campo = (payload.get("campo") or "").strip()
+    valor_correcto = (payload.get("valor_correcto") or "").strip()
+    if not cliente or not valor_correcto or campo not in (
+            "email", "telefono", "rut", "ejecutivo_nombre", "ejecutivo_email", "ejecutivo_interno"):
+        raise HTTPException(status_code=400, detail="Indica cliente, campo válido y valor correcto")
+    valor_extraido = (payload.get("valor_extraido") or "").strip()
+    remitente = (payload.get("remitente") or "").strip()
+    m_dom = re.search(r"@([\w.-]+)", remitente)
+    await db.patrones_aprendidos.insert_one({
+        "id": str(uuid.uuid4()), "cliente": cliente, "cliente_norm": _norm_texto(cliente),
+        "campo": campo, "valor_extraido": valor_extraido,
+        "valor_extraido_norm": re.sub(r"[\s.\-()]", "", valor_extraido.lower()),
+        "valor_correcto": valor_correcto, "remitente": remitente,
+        "dominio": m_dom.group(1).lower() if m_dom else "", "creado_en": now_iso()})
+    # Propagar el dato validado al registro maestro (carpeta) para todos los módulos
+    toks = [t for t in _norm_texto(cliente).split() if len(t) > 2]
+    if toks:
+        rx = ".*".join(re.escape(t) for t in toks[:2])
+        campo_folder = {"email": "email", "telefono": "telefono", "rut": "rut",
+                        "ejecutivo_nombre": "ejecutivo_externo",
+                        "ejecutivo_email": "ejecutivo_externo_email",
+                        "ejecutivo_interno": "ejecutivo_interno"}[campo]
+        await db.folders.update_one({"nombre": {"$regex": rx, "$options": "i"}},
+                                    {"$set": {campo_folder: valor_correcto}})
+    total = await db.patrones_aprendidos.count_documents({})
+    return {"ok": True, "patrones_totales": total}
 
 
 @api.get("/aprobacion-cliente/archivos")
@@ -7309,6 +7482,167 @@ async def aprobacion_log():
 
 
 # ---------------------------------------------------------------------------
+# ------------------------------------------------------------------
+# PORTAL DE FIRMA VIP (Banca Privada — Maserati Style)
+# ------------------------------------------------------------------
+from urllib.parse import quote as _urlquote
+from fastapi.responses import Response as _RawResponse
+
+OXFORD = "#0f172a"  # Slate-900: caro y tecnológico
+
+
+@api.post("/firma/generar-link")
+async def firma_generar_link(payload: dict, request: Request):
+    """Genera el link del Portal de Firma Única del cliente (con tarjeta VIP para WhatsApp)."""
+    payload = payload or {}
+    cliente = (payload.get("cliente") or "").strip()
+    if len(cliente) < 3:
+        raise HTTPException(status_code=400, detail="Indica el nombre del cliente")
+    toks = [t for t in _norm_texto(cliente).split() if len(t) > 2]
+    rx = ".*".join(re.escape(t) for t in toks[:2]) if toks else ""
+    rut, email = payload.get("rut", ""), payload.get("email", "")
+    f = await db.folders.find_one({"nombre": {"$regex": rx, "$options": "i"}}) if rx else None
+    s = await db.set_credito.find_one({"nombre": {"$regex": rx, "$options": "i"}}) if rx else None
+    rut = rut or (s or {}).get("rut") or (f or {}).get("rut") or ""
+    email = email or (s or {}).get("email") or (f or {}).get("email") or ""
+    existente = await db.firma_links.find_one({"cliente_norm": _norm_texto(cliente)})
+    if existente:
+        token = existente["token"]
+    else:
+        token = uuid.uuid4().hex[:12]
+        await db.firma_links.insert_one({
+            "id": str(uuid.uuid4()), "token": token, "cliente": cliente.title(),
+            "cliente_norm": _norm_texto(cliente), "rut": rut, "email": email,
+            "visitas": 0, "creado_en": now_iso()})
+    proto = request.headers.get("x-forwarded-proto", "https")
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host", "")
+    url = f"{proto}://{host}/api/firma/{token}"
+    texto_wsp = (f"Estimado(a) {cliente.title().split()[0]}, le compartimos su portal privado de "
+                 f"Firma de Escritura Avanzada de Central Mutuos:\n{url}")
+    return {"ok": True, "url": url, "token": token, "rut": rut, "email": email,
+            "whatsapp": f"https://wa.me/?text={_urlquote(texto_wsp)}"}
+
+
+def _mask_rut(rut):
+    r = (rut or "").replace(".", "").replace("-", "")
+    return f"•••.{r[-7:-4]}.{r[-4:-1]}-{r[-1]}" if len(r) >= 8 else (rut or "")
+
+
+@api.get("/firma/{token}", response_class=HTMLResponse)
+async def firma_portal(token: str):
+    """Landing page de lujo del Portal de Firma Única."""
+    link = await db.firma_links.find_one({"token": token})
+    if not link:
+        return HTMLResponse("<h3 style='font-family:serif;text-align:center;margin-top:20vh'>Enlace no válido o expirado — Central Mutuos</h3>", status_code=404)
+    await db.firma_links.update_one({"token": token}, {"$inc": {"visitas": 1}})
+    nombre = link.get("cliente", "Cliente")
+    og_img = f"/api/firma/{token}/og.png"
+    html = f"""<!DOCTYPE html>
+<html lang="es"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Firma de Escritura Avanzada — Central Mutuos</title>
+<meta property="og:title" content="Firma de Escritura Avanzada — {nombre}">
+<meta property="og:description" content="Documentación Oficial de Alta Seguridad · Central Mutuos">
+<meta property="og:image" content="{og_img}">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Montserrat:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  * {{ margin:0; padding:0; box-sizing:border-box; }}
+  body {{ background:#FAFAF9; font-family:'Montserrat',sans-serif; color:{OXFORD}; min-height:100vh;
+         display:flex; flex-direction:column; align-items:center; justify-content:center; padding:2rem; }}
+  .marca {{ font-family:'Cormorant Garamond',serif; letter-spacing:0.35em; font-size:0.85rem;
+            color:{OXFORD}; opacity:0.7; text-transform:uppercase; margin-bottom:2.5rem; }}
+  .card {{ background:#FFFFFF; border-radius:22px; box-shadow:0 20px 60px rgba(15,23,42,0.10), 0 2px 8px rgba(15,23,42,0.06);
+           padding:3.2rem 2.8rem; max-width:520px; width:100%; text-align:center; border:1px solid #E7E5E4; }}
+  .sello {{ width:64px; height:64px; border-radius:50%; background:{OXFORD}; color:#E2E8F0; display:flex;
+            align-items:center; justify-content:center; font-size:1.6rem; margin:0 auto 1.6rem;
+            box-shadow:0 8px 24px rgba(15,23,42,0.25); }}
+  h1 {{ font-family:'Cormorant Garamond',serif; font-size:1.9rem; font-weight:600; line-height:1.25; margin-bottom:0.6rem; }}
+  h1 b {{ color:#0f172a; border-bottom:2px solid #CBD5E1; }}
+  .sub {{ font-size:0.86rem; color:#6B7280; margin-bottom:2rem; line-height:1.6; }}
+  .datos {{ background:#F8FAFC; border:1px solid #E2E8F0; border-radius:14px; padding:0.9rem 1.2rem; font-size:0.8rem; color:#4B5563;
+            margin-bottom:2rem; display:flex; justify-content:space-between; gap:1rem; flex-wrap:wrap; }}
+  .btn {{ display:inline-flex; align-items:center; gap:0.6rem; background:{OXFORD}; color:#fff; border:none;
+          font-family:'Montserrat',sans-serif; font-weight:600; font-size:0.95rem; padding:1.05rem 2.2rem;
+          border-radius:999px; cursor:pointer; box-shadow:0 10px 30px rgba(15,23,42,0.30);
+          transition:transform .18s ease, box-shadow .18s ease; text-decoration:none; }}
+  .btn:hover {{ transform:translateY(-2px); box-shadow:0 16px 40px rgba(15,23,42,0.38); }}
+  .nota {{ font-size:0.72rem; color:#9CA3AF; margin-top:1.6rem; line-height:1.6; }}
+  .badge {{ position:fixed; bottom:18px; right:22px; display:flex; align-items:center; gap:0.5rem;
+            background:#fff; border:1px solid #E2E8F0; border-radius:999px; padding:0.45rem 1rem;
+            font-size:0.68rem; color:{OXFORD}; box-shadow:0 6px 18px rgba(15,23,42,0.10); font-weight:600; }}
+  .paso {{ display:flex; align-items:center; gap:0.7rem; text-align:left; font-size:0.8rem; color:#4B5563; margin:0.45rem 0; }}
+  .paso span {{ background:#F1F5F9; color:{OXFORD}; font-weight:700; border-radius:50%; width:22px; height:22px;
+                display:inline-flex; align-items:center; justify-content:center; font-size:0.7rem; flex-shrink:0; }}
+</style></head>
+<body>
+  <div class="marca">Central Mutuos · Banca Hipotecaria Privada</div>
+  <div class="card" data-testid="portal-firma-card">
+    <div class="sello">🖋</div>
+    <h1>Bienvenido a su Firma de<br>Escritura Avanzada,<br><b>{nombre}</b></h1>
+    <p class="sub">Su documentación ya se encuentra preparada, validada y cargada con sus datos.
+    No necesita completar formularios: su identidad se verifica con su Clave Única.</p>
+    <div class="datos"><span>Titular: <b>{nombre}</b></span><span>RUT: <b>{_mask_rut(link.get('rut'))}</b></span></div>
+    <div style="margin-bottom:1.8rem">
+      <div class="paso"><span>1</span> Presione el botón de firma segura</div>
+      <div class="paso"><span>2</span> Valide su identidad con su Clave Única</div>
+      <div class="paso"><span>3</span> Listo — recibirá copia firmada en su correo</div>
+    </div>
+    <a class="btn" href="https://www.migrup.cl/" target="_blank" rel="noopener" data-testid="portal-firma-btn"
+       onclick="fetch('/api/firma/{token}/click', {{method:'POST'}}).catch(()=>{{}})">
+      Validar Identidad y Firmar con Clave Única
+    </a>
+    <p class="nota">Proceso certificado por eCert Chile · Firma Electrónica Avanzada Ley 19.799<br>
+    Sus datos ya fueron transmitidos de forma segura: solo necesita su Clave Única.</p>
+  </div>
+  <div class="badge" data-testid="portal-firma-badge">🛡 Cifrado de Grado Militar · Firma Auditada</div>
+</body></html>"""
+    return HTMLResponse(html)
+
+
+@api.post("/firma/{token}/click")
+async def firma_click(token: str):
+    await db.firma_links.update_one({"token": token}, {"$inc": {"clicks_firma": 1},
+                                                       "$set": {"ultimo_click": now_iso()}})
+    return {"ok": True}
+
+
+@api.get("/firma/{token}/og.png")
+async def firma_og_image(token: str):
+    """Tarjeta VIP enriquecida para la previsualización en WhatsApp."""
+    link = await db.firma_links.find_one({"token": token})
+    nombre = (link or {}).get("cliente", "Cliente")
+    from PIL import Image, ImageDraw, ImageFont
+    W, H = 1200, 630
+    img = Image.new("RGB", (W, H), (15, 23, 42))
+    d = ImageDraw.Draw(img)
+    d.rectangle([40, 40, W - 40, H - 40], outline=(148, 163, 184), width=3)
+
+    def _font(size, bold=False):
+        try:
+            return ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSerif%s.ttf"
+                                      % ("-Bold" if bold else ""), size)
+        except Exception:
+            return ImageFont.load_default()
+
+    def _centrar(texto, y, fnt, color):
+        w = d.textlength(texto, font=fnt)
+        d.text(((W - w) / 2, y), texto, font=fnt, fill=color)
+
+    _centrar("C E N T R A L   M U T U O S", 110, _font(44, True), (226, 232, 240))
+    _centrar("BANCA HIPOTECARIA PRIVADA", 180, _font(22), (148, 163, 184))
+    d.line([(W / 2 - 120, 240), (W / 2 + 120, 240)], fill=(148, 163, 184), width=2)
+    _centrar("Firma de Escritura Avanzada", 285, _font(48, True), (255, 255, 255))
+    _centrar(nombre, 370, _font(40), (226, 232, 240))
+    _centrar("Documentación Oficial de Alta Seguridad", 455, _font(28), (203, 213, 225))
+    _centrar("Cifrado · Firma Auditada · eCert Chile", 520, _font(22), (100, 116, 139))
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return _RawResponse(content=buf.getvalue(), media_type="image/png")
+
+
+# ------------------------------------------------------------------
 # Set de Crédito + Firma de documentos (integración migrup / eCert)
 # ---------------------------------------------------------------------------
 import migrup_service as migrup
