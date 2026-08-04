@@ -60,7 +60,7 @@ function PredictivePanel({ formData, valorUF }) {
 
   const getScoreColor = (score) => {
     if (score >= 80) return "#10b981";
-    if (score >= 60) return "#22d3ee";
+    if (score >= 60) return "#d4af37";
     if (score >= 40) return "#f59e0b";
     if (score >= 20) return "#f97316";
     return "#ef4444";
@@ -69,7 +69,7 @@ function PredictivePanel({ formData, valorUF }) {
   const getSeverityColor = (sev) => {
     if (sev === "alta") return "#ef4444";
     if (sev === "media") return "#f59e0b";
-    return "#22d3ee";
+    return "#d4af37";
   };
 
   const hasMinData = (parseFloat(formData.renta_titular) || 0) > 0 &&

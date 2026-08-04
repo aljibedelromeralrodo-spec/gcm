@@ -277,12 +277,12 @@ export default function SeguimientoModule() {
                           fetchClientes();
                         } catch (err) { alert("Error: " + (err.response?.data?.detail || err.message)); }
                       }}
-                      style={{ background: "transparent", color: estadoColor(c.estado), border: `1px solid ${estadoColor(c.estado)}`, borderRadius: 4, padding: "0.15rem 0.4rem", fontSize: "0.75rem", fontWeight: 700, cursor: "pointer" }}
+                      style={{ background: "transparent", color: estadoColor(c.estado), border: `1px solid ${estadoColor(c.estado)}`, borderRadius: 2, padding: "0.15rem 0.4rem", fontSize: "0.75rem", fontWeight: 700, cursor: "pointer" }}
                       title="Corregir estado manualmente"
                     >
-                      <option value="aprobacion" style={{ color: "#10b981", background: "#0f172a" }}>aprobación</option>
-                      <option value="rechazo" style={{ color: "#ef4444", background: "#0f172a" }}>rechazo</option>
-                      <option value="observacion" style={{ color: "#f59e0b", background: "#0f172a" }}>observación</option>
+                      <option value="aprobacion" style={{ color: "#10b981", background: "rgba(15,23,42,0.92)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)" }}>aprobación</option>
+                      <option value="rechazo" style={{ color: "#ef4444", background: "rgba(15,23,42,0.92)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)" }}>rechazo</option>
+                      <option value="observacion" style={{ color: "#f59e0b", background: "rgba(15,23,42,0.92)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)" }}>observación</option>
                     </select>
                   </td>
                   <td style={{ textAlign: "center" }}>{c.total_correos}</td>

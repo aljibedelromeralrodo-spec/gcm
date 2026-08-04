@@ -10,13 +10,13 @@ export const estiloConfianza = (confianza, campo) => {
     border: "1px solid rgba(52, 211, 153, 0.45)",
     background: "linear-gradient(180deg, rgba(16,185,129,0.08) 0%, rgba(15,23,42,0.55) 100%)",
     boxShadow: "0 0 0 1px rgba(52,211,153,0.14), 0 8px 24px -10px rgba(16,185,129,0.35), inset 0 1px 0 rgba(255,255,255,0.04)",
-    borderRadius: "4px",
+    borderRadius: "2px",
   };
   if (c === "dudosa") return {
     border: "1px solid rgba(251, 191, 36, 0.45)",
     background: "linear-gradient(180deg, rgba(245,158,11,0.08) 0%, rgba(15,23,42,0.55) 100%)",
     boxShadow: "0 0 0 1px rgba(251,191,36,0.14), 0 8px 24px -10px rgba(245,158,11,0.38), inset 0 1px 0 rgba(255,255,255,0.04)",
-    borderRadius: "4px",
+    borderRadius: "2px",
   };
   return {};
 };
@@ -75,7 +75,7 @@ export function PanelAprendizaje({ confianza, onGuardar, testId }) {
       display: "flex", alignItems: "center", gap: "1.1rem", flexWrap: "wrap",
       marginTop: "0.9rem", padding: "0.65rem 1rem",
       background: "linear-gradient(135deg, rgba(30,41,59,0.55) 0%, rgba(15,23,42,0.8) 100%)",
-      border: "1px solid rgba(148,163,184,0.14)", borderRadius: "4px",
+      border: "1px solid rgba(148,163,184,0.14)", borderRadius: "2px",
       backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)",
       boxShadow: "0 10px 30px -14px rgba(2,6,23,0.7), inset 0 1px 0 rgba(255,255,255,0.04)",
     }}>
@@ -92,7 +92,7 @@ export function PanelAprendizaje({ confianza, onGuardar, testId }) {
       </span>
       <button data-testid={testId} onClick={onGuardar} style={{
         marginLeft: "auto", background: "linear-gradient(135deg, rgba(51,65,85,0.9), rgba(15,23,42,0.95))",
-        border: "1px solid rgba(212,175,55,0.45)", color: "#e7cf7a", borderRadius: "4px",
+        border: "1px solid rgba(212,175,55,0.45)", color: "#e7cf7a", borderRadius: "2px",
         padding: "0.45rem 1.1rem", cursor: "pointer", fontWeight: 700, fontSize: "0.74rem",
         letterSpacing: "0.1em", textTransform: "uppercase",
         boxShadow: "0 6px 18px -8px rgba(212,175,55,0.35), inset 0 1px 0 rgba(255,255,255,0.06)",

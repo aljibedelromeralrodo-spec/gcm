@@ -46,7 +46,7 @@ export default function AprendizajeModule() {
   const fmtF = (iso) => { try { return new Date(iso).toLocaleString("es-CL"); } catch { return "—"; } };
   const ultimo = analisis[0];
 
-  const card = { background: "rgba(15,23,42,0.85)", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 4, padding: "1.2rem 1.4rem" };
+  const card = { background: "rgba(15,23,42,0.85)", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 2, padding: "1.2rem 1.4rem" };
 
   return (
     <div data-testid="aprendizaje-module" style={{ display: "grid", gap: "1rem" }}>
@@ -56,7 +56,7 @@ export default function AprendizajeModule() {
             <i className="fa fa-graduation-cap" /> Aprendizaje IA — Flujo de información comercial
           </h2>
           <button data-testid="aprendizaje-analizar" onClick={analizar} disabled={analizando}
-            style={{ marginLeft: "auto", background: "#7c3aed", border: "none", color: "#fff", borderRadius: 4, padding: "0.55rem 1.2rem", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>
+            style={{ marginLeft: "auto", background: "#7c3aed", border: "none", color: "#fff", borderRadius: 2, padding: "0.55rem 1.2rem", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>
             <i className={`fa ${analizando ? "fa-spinner fa-spin" : "fa-bolt"}`} /> {analizando ? "Aprendiendo del flujo…" : "Analizar flujo ahora"}
           </button>
         </div>
@@ -75,9 +75,9 @@ export default function AprendizajeModule() {
         <div style={{ display: "flex", gap: 8 }}>
           <input data-testid="aprendizaje-nota-input" value={nota} onChange={e => setNota(e.target.value)}
             placeholder="Ej: Los ejecutivos de Ecomac responden más rápido por la mañana…"
-            style={{ flex: 1, padding: "0.55rem", borderRadius: 4, border: "1px solid rgba(148,163,184,0.3)", background: "#1e293b", color: "#e2e8f0", fontSize: 13 }} />
+            style={{ flex: 1, padding: "0.55rem", borderRadius: 2, border: "1px solid rgba(148,163,184,0.3)", background: "#1e293b", color: "#e2e8f0", fontSize: 13 }} />
           <button data-testid="aprendizaje-nota-guardar" onClick={agregarNota}
-            style={{ background: "var(--gold, #d4af37)", border: "none", color: "#0f172a", borderRadius: 4, padding: "0.55rem 1.1rem", fontSize: 12.5, fontWeight: 800, cursor: "pointer" }}>
+            style={{ background: "var(--gold, #d4af37)", border: "none", color: "#0f172a", borderRadius: 2, padding: "0.55rem 1.1rem", fontSize: 12.5, fontWeight: 800, cursor: "pointer" }}>
             Guardar
           </button>
         </div>
@@ -108,7 +108,7 @@ export default function AprendizajeModule() {
                   ["Estudios", ultimo.stats.estudios_solicitados], ["Etapa 2", ultimo.stats.estudios_etapa2_enviados],
                   ["Reparos pend.", ultimo.stats.reparos_pendientes], ["Cierres consultados", ultimo.stats.cierres_consultados]]
                   .map(([l, v]) => (
-                    <div key={l} style={{ background: "rgba(124,58,237,0.08)", border: "1px solid rgba(124,58,237,0.25)", borderRadius: 4, padding: "0.4rem 0.8rem", fontSize: 12 }}>
+                    <div key={l} style={{ background: "rgba(124,58,237,0.08)", border: "1px solid rgba(124,58,237,0.25)", borderRadius: 2, padding: "0.4rem 0.8rem", fontSize: 12 }}>
                       <b style={{ color: "#a78bfa", fontSize: 15 }}>{v ?? 0}</b> <span style={{ color: "#94a3b8" }}>{l}</span>
                     </div>
                   ))}
@@ -133,7 +133,7 @@ export default function AprendizajeModule() {
             <div style={{ fontWeight: 800, fontSize: 13, color: "#a78bfa", marginBottom: 10 }}><i className="fa fa-rocket" /> Mejoras sugeridas al círculo comercial</div>
             {(ultimo.mejoras || []).length === 0 ? <div style={{ fontSize: 12, color: "#64748b" }}>—</div>
               : (ultimo.mejoras || []).map((m, i) => (
-                <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start", background: "rgba(30,41,59,0.6)", borderRadius: 4, padding: "0.6rem 0.9rem", marginBottom: 6 }}>
+                <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start", background: "rgba(30,41,59,0.6)", borderRadius: 2, padding: "0.6rem 0.9rem", marginBottom: 6 }}>
                   <span style={{ background: `${PRIO_COLOR[m.prioridad] || "#fbbf24"}22`, color: PRIO_COLOR[m.prioridad] || "#fbbf24", border: `1px solid ${PRIO_COLOR[m.prioridad] || "#fbbf24"}`, borderRadius: 999, padding: "1px 10px", fontSize: 10.5, fontWeight: 800, textTransform: "uppercase", flexShrink: 0 }}>{m.prioridad}</span>
                   <div><b style={{ fontSize: 13 }}>{m.titulo}</b><div style={{ fontSize: 12.5, color: "#94a3b8", lineHeight: 1.5 }}>{m.detalle}</div></div>
                 </div>

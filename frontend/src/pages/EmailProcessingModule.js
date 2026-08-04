@@ -308,14 +308,14 @@ export default function EmailProcessingModule() {
           {driveConfigured ? (
             <>
               <span data-testid="drive-badge"
-                    style={{ padding: "6px 12px", borderRadius: 4, background: "#dcfce7", color: "#166534", fontWeight: 700, fontSize: 12, alignSelf: "center" }}>
+                    style={{ padding: "6px 12px", borderRadius: 2, background: "#dcfce7", color: "#166534", fontWeight: 700, fontSize: 12, alignSelf: "center" }}>
                 📂 Almacenamiento local activo
               </span>
               <button data-testid="btn-purge" onClick={purgeDrive} disabled={busy}
                       style={btnStyle("#dc2626")}>🗑️ Purga carpetas Procesamiento</button>
             </>
           ) : (
-            <span style={{ padding: "6px 12px", borderRadius: 4, background: "#fef3c7", color: "#92400e", fontWeight: 700, fontSize: 12, alignSelf: "center" }}>
+            <span style={{ padding: "6px 12px", borderRadius: 2, background: "#fef3c7", color: "#92400e", fontWeight: 700, fontSize: 12, alignSelf: "center" }}>
               ⚠️ Almacenamiento inactivo
             </span>
           )}
@@ -323,7 +323,7 @@ export default function EmailProcessingModule() {
       </div>
 
       {/* PANEL AUTOMÁTICO 24/7 */}
-      <div data-testid="auto-panel" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "10px 14px", borderRadius: 4, marginBottom: 16, background: auto?.enabled ? "#dcfce7" : "#f1f5f9", border: `1px solid ${auto?.enabled ? "#22c55e" : "#cbd5e1"}` }}>
+      <div data-testid="auto-panel" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "10px 14px", borderRadius: 2, marginBottom: 16, background: auto?.enabled ? "#dcfce7" : "#f1f5f9", border: `1px solid ${auto?.enabled ? "#22c55e" : "#cbd5e1"}` }}>
         <span style={{ fontSize: 14, fontWeight: 700, color: auto?.enabled ? "#166534" : "#475569" }}>
           🤖 Procesamiento automático {auto?.enabled ? "ACTIVADO" : "desactivado"}
         </span>
@@ -351,18 +351,18 @@ export default function EmailProcessingModule() {
 
       {/* REGLAS DE CREACIÓN AUTOMÁTICA (editables) */}
       {reglasAuto && (
-        <div data-testid="reglas-auto-panel" style={{ padding: "10px 14px", borderRadius: 4, marginBottom: 16, background: "#eff6ff", border: "1px solid #93c5fd" }}>
+        <div data-testid="reglas-auto-panel" style={{ padding: "10px 14px", borderRadius: 2, marginBottom: 16, background: "#eff6ff", border: "1px solid #d4af37" }}>
           <div style={{ fontWeight: 700, color: "#1e40af", marginBottom: 8 }}>📋 Reglas de creación automática de carpetas (editables)</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 10, alignItems: "end" }}>
             <label style={{ fontSize: 12, color: "#1e3a8a" }}>Dominios de remitente que SIEMPRE crean carpeta (separados por coma)
               <input data-testid="reglas-dominios" value={reglasAuto.dominios}
                 onChange={e => setReglasAuto(prev => ({ ...prev, dominios: e.target.value }))}
-                style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: "1px solid #93c5fd", marginTop: 4, fontSize: 13 }} />
+                style={{ width: "100%", padding: "6px 10px", borderRadius: 2, border: "1px solid #d4af37", marginTop: 4, fontSize: 13 }} />
             </label>
             <label style={{ fontSize: 12, color: "#1e3a8a" }}>Palabras clave del asunto (con PDF adjunto, separadas por coma)
               <input data-testid="reglas-keywords" value={reglasAuto.keywords}
                 onChange={e => setReglasAuto(prev => ({ ...prev, keywords: e.target.value }))}
-                style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: "1px solid #93c5fd", marginTop: 4, fontSize: 13 }} />
+                style={{ width: "100%", padding: "6px 10px", borderRadius: 2, border: "1px solid #d4af37", marginTop: 4, fontSize: 13 }} />
             </label>
             <button data-testid="reglas-guardar" onClick={guardarReglasAuto} style={btnStyle("#2563eb", true)}>💾 Guardar reglas</button>
           </div>
@@ -374,7 +374,7 @@ export default function EmailProcessingModule() {
       )}
 
       {alertas.length > 0 && (
-        <div data-testid="alertas-panel" style={{ padding: "10px 14px", borderRadius: 4, marginBottom: 16, background: "#fefce8", border: "1px solid #facc15" }}>
+        <div data-testid="alertas-panel" style={{ padding: "10px 14px", borderRadius: 2, marginBottom: 16, background: "#fefce8", border: "1px solid #facc15" }}>
           <div style={{ fontWeight: 700, color: "#854d0e", marginBottom: 6 }}>🔔 Carpetas listas para enviar a mesa</div>
           {alertas.map(a => (
             <div key={a.id} data-testid={`alerta-${a.id}`} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0", fontSize: 13, color: "#713f12" }}>
@@ -393,7 +393,7 @@ export default function EmailProcessingModule() {
           return (
             <div key={k} data-testid={`kpi-${k}`}
                  onClick={() => setFilter(k === "total" ? "" : k)}
-                 style={{ cursor: "pointer", padding: 14, borderRadius: 4,
+                 style={{ cursor: "pointer", padding: 14, borderRadius: 2,
                           background: filter===k ? "#fef3c7" : "#ffffff",
                           border: `2px solid ${filter===k ? meta.color : "#e2e8f0"}` }}>
               <div style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase" }}>
@@ -408,7 +408,7 @@ export default function EmailProcessingModule() {
       </div>
 
       {showRules && (
-        <div style={{ background: "#f8fafc", padding: 16, borderRadius: 4, marginBottom: 20, border: "1px solid #e2e8f0" }}>
+        <div style={{ background: "#f8fafc", padding: 16, borderRadius: 2, marginBottom: 20, border: "1px solid #e2e8f0" }}>
           <div style={{ display:"flex", justifyContent:"space-between", marginBottom: 10 }}>
             <h3 style={{ margin: 0 }}>⚙️ Reglas de clasificación</h3>
             <button onClick={addRule} style={btnStyle("#d4af37")}>+ Nueva regla</button>
@@ -428,7 +428,7 @@ export default function EmailProcessingModule() {
       )}
 
       {/* Table */}
-      <div style={{ background: "#ffffff", borderRadius: 4, overflow: "hidden", border: "1px solid #e2e8f0" }}>
+      <div style={{ background: "#ffffff", borderRadius: 2, overflow: "hidden", border: "1px solid #e2e8f0" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr style={{ background: "rgba(15,23,42,0.9)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", color: "#fff" }}>
@@ -559,7 +559,7 @@ function DetailModal({ item, onClose, onReprocess, onSave, onUploadDrive, onExtr
           Adjuntos: {(item.attachments || []).join(", ") || "(sin adjuntos)"}
         </div>
         {item.prob_aprobacion && (
-          <div style={{ background:"#eff6ff", border:"1px solid #93c5fd", borderRadius:8, padding:10, marginBottom:12 }} data-testid="prob-aprobacion-detalle">
+          <div style={{ background:"#eff6ff", border:"1px solid #d4af37", borderRadius:8, padding:10, marginBottom:12 }} data-testid="prob-aprobacion-detalle">
             <div style={{ fontWeight:700, fontSize:13, marginBottom:4 }}>
               📊 Posibilidad de aprobación: <span style={{ fontSize:16, color: item.prob_aprobacion.porcentaje >= 75 ? "#15803d" : item.prob_aprobacion.porcentaje >= 50 ? "#a16207" : "#b91c1c" }}>{item.prob_aprobacion.porcentaje}%</span>
             </div>
@@ -672,7 +672,7 @@ function DetailModal({ item, onClose, onReprocess, onSave, onUploadDrive, onExtr
               ♻ Reprocesar con IA
             </button>
             <button data-testid="btn-extract-text" onClick={() => onExtractText(item.id)} disabled={busy}
-                    style={btnStyle("#0891b2")}>🔍 Leer con OCR</button>
+                    style={btnStyle("#b8942e")}>🔍 Leer con OCR</button>
             {item.status === "clasificado" && (
               <button data-testid="btn-upload-drive" onClick={() => onUploadDrive(item.id)} disabled={busy}
                       style={btnStyle("#22c55e")}>📂 Guardar en Carpeta Cliente</button>
@@ -699,8 +699,8 @@ function DetailModal({ item, onClose, onReprocess, onSave, onUploadDrive, onExtr
 
 const btnStyle = (bg, small=false) => ({
   background: bg, color: "#fff", padding: small ? "4px 10px" : "8px 14px",
-  border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600, fontSize: small ? 12 : 13,
+  border: "none", borderRadius: 2, cursor: "pointer", fontWeight: 600, fontSize: small ? 12 : 13,
 });
 const th = { padding: "10px 12px", textAlign: "left", fontSize: 12, textTransform: "uppercase" };
 const td = { padding: "10px 12px", fontSize: 13, color: "#1a1f2e" };
-const inp = { width: "100%", padding: "6px 10px", border: "1px solid #cbd5e1", borderRadius: 4, marginTop: 4 };
+const inp = { width: "100%", padding: "6px 10px", border: "1px solid #cbd5e1", borderRadius: 2, marginTop: 4 };
