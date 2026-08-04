@@ -98,7 +98,7 @@ export default function BuzonRescateModule() {
 
       {asignando && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }} data-testid="rescate-modal">
-          <div style={{ background: "#0f172a", border: "1px solid rgba(212,175,55,0.4)", borderRadius: 14, padding: "1.5rem", width: 480, maxWidth: "92vw" }}>
+          <div style={{ background: "#0f172a", border: "1px solid rgba(96,165,250,0.4)", borderRadius: 14, padding: "1.5rem", width: 480, maxWidth: "92vw" }}>
             <h3 style={{ margin: "0 0 0.4rem", color: "var(--gold)" }}>Asignar correo a un cliente</h3>
             <div style={{ fontSize: "0.8rem", opacity: 0.7, marginBottom: "1rem" }}>{asignando.subject}</div>
             <label style={{ fontSize: "0.8rem", display: "block", marginBottom: 4 }}>Nombre del cliente</label>

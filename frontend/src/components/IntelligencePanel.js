@@ -133,7 +133,7 @@ export default function IntelligencePanel() {
           <button data-testid="btn-calibrate" onClick={runCalibration} disabled={calibrating}
             style={{
               width: "100%", padding: "0.5rem", borderRadius: "8px", border: "1px solid var(--border-gold)",
-              background: calibrating ? "var(--bg-hover)" : "linear-gradient(135deg, rgba(212,175,55,0.1), rgba(212,175,55,0.05))",
+              background: calibrating ? "var(--bg-hover)" : "linear-gradient(135deg, rgba(96,165,250,0.1), rgba(96,165,250,0.05))",
               color: "var(--gold)", fontWeight: 600, fontSize: "0.8rem", cursor: calibrating ? "wait" : "pointer",
             }}>
             <i className={`fa fa-${calibrating ? 'spinner fa-spin' : 'cogs'}`}></i>

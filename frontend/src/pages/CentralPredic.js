@@ -400,7 +400,7 @@ function PredICApp({ auth, onLogout }) {
               {tasasSaving ? "Guardando..." : "Guardar Tasas"}
             </button>
 
-            <div style={{ marginTop: "1rem", padding: "0.75rem", borderRadius: "10px", background: "rgba(212,175,55,0.08)", border: `1px solid rgba(212,175,55,0.2)` }}>
+            <div style={{ marginTop: "1rem", padding: "0.75rem", borderRadius: "10px", background: "rgba(96,165,250,0.08)", border: `1px solid rgba(96,165,250,0.2)` }}>
               <div style={{ fontSize: "0.75rem", color: COLORS.gold }}>
                 <i className="fa fa-info-circle" style={{ marginRight: "0.3rem" }}></i>
                 Estas tasas se usaran en todas las evaluaciones nuevas. Los cambios se aplican inmediatamente.
@@ -457,7 +457,7 @@ function PredICApp({ auth, onLogout }) {
           </div>
 
           {/* Section: Propiedad */}
-          <div style={{ padding: "0.75rem", borderRadius: "12px", background: "rgba(212,175,55,0.04)", border: `1px solid ${COLORS.border}` }}>
+          <div style={{ padding: "0.75rem", borderRadius: "12px", background: "rgba(96,165,250,0.04)", border: `1px solid ${COLORS.border}` }}>
             <div style={{ fontSize: "0.7rem", fontWeight: 700, color: COLORS.gold, marginBottom: "0.5rem", textTransform: "uppercase", letterSpacing: "1px" }}>
               <i className="fa fa-home" style={{ marginRight: "0.3rem" }}></i>Propiedad y Credito
             </div>
@@ -684,7 +684,7 @@ function PredICApp({ auth, onLogout }) {
         {/* Compare with Competitors Button */}
         {result && !result.error && (
           <button data-testid="predic-comparar-btn" onClick={handleComparar} disabled={comparandoLoad}
-            style={{ width: "100%", marginTop: "1rem", padding: "0.85rem", borderRadius: "12px", border: "2px solid rgba(212,175,55,0.4)", background: "linear-gradient(135deg, rgba(212,175,55,0.15), rgba(212,175,55,0.05))", color: COLORS.gold, fontWeight: 700, fontSize: "0.95rem", cursor: "pointer", transition: "all 0.3s" }}>
+            style={{ width: "100%", marginTop: "1rem", padding: "0.85rem", borderRadius: "12px", border: "2px solid rgba(96,165,250,0.4)", background: "linear-gradient(135deg, rgba(96,165,250,0.15), rgba(96,165,250,0.05))", color: COLORS.gold, fontWeight: 700, fontSize: "0.95rem", cursor: "pointer", transition: "all 0.3s" }}>
             <i className={`fa ${comparandoLoad ? "fa-spinner fa-spin" : "fa-balance-scale"}`} style={{ marginRight: "0.4rem" }}></i>
             {comparandoLoad ? "Comparando..." : "COMPARA CON COMPETIDORES"}
           </button>
@@ -692,9 +692,9 @@ function PredICApp({ auth, onLogout }) {
 
         {/* Comparison Results */}
         {comparacion && (
-          <div data-testid="predic-comparacion" style={{ marginTop: "1rem", borderRadius: "16px", overflow: "hidden", border: `2px solid rgba(212,175,55,0.3)`, background: COLORS.card }}>
+          <div data-testid="predic-comparacion" style={{ marginTop: "1rem", borderRadius: "16px", overflow: "hidden", border: `2px solid rgba(96,165,250,0.3)`, background: COLORS.card }}>
             {/* Header with commercial message */}
-            <div style={{ padding: "1.25rem", background: "linear-gradient(135deg, rgba(212,175,55,0.15), rgba(108,92,231,0.1))", borderBottom: `1px solid ${COLORS.border}` }}>
+            <div style={{ padding: "1.25rem", background: "linear-gradient(135deg, rgba(96,165,250,0.15), rgba(108,92,231,0.1))", borderBottom: `1px solid ${COLORS.border}` }}>
               <div data-testid="comparar-titular" style={{ fontSize: "1.15rem", fontWeight: 800, color: COLORS.gold, marginBottom: "0.3rem" }}>
                 {comparacion.mensaje_comercial?.titular}
               </div>
@@ -710,7 +710,7 @@ function PredICApp({ auth, onLogout }) {
                   Credito: {comparacion.datos_comparacion.monto_credito_uf} UF | {comparacion.datos_comparacion.plazo_anos} anos | Pie {comparacion.datos_comparacion.pie_pct}%
                 </span>
               )}
-              <span style={{ padding: "4px 10px", borderRadius: "8px", fontSize: "0.75rem", fontWeight: 700, background: "rgba(212,175,55,0.15)", color: COLORS.gold }}>
+              <span style={{ padding: "4px 10px", borderRadius: "8px", fontSize: "0.75rem", fontWeight: 700, background: "rgba(96,165,250,0.15)", color: COLORS.gold }}>
                 Tu tasa: {comparacion.resumen?.tasa_mutuaria}%
               </span>
               <span style={{ padding: "4px 10px", borderRadius: "8px", fontSize: "0.75rem", fontWeight: 600, background: "rgba(108,92,231,0.12)", color: COLORS.accentLight }}>
@@ -781,7 +781,7 @@ function PredICApp({ auth, onLogout }) {
                   const a = document.createElement("a"); a.href = url; a.download = `Comparativa_${(form.nombre_cliente || "Cliente").replace(/ /g,"_")}.pdf`; a.click();
                 } catch {}
               }}
-                style={{ width: "100%", marginTop: "0.75rem", padding: "0.7rem", borderRadius: "10px", border: "none", background: "linear-gradient(135deg, rgba(212,175,55,0.9), rgba(180,140,40,0.9))", color: "#fff", fontWeight: 700, fontSize: "0.85rem", cursor: "pointer" }}>
+                style={{ width: "100%", marginTop: "0.75rem", padding: "0.7rem", borderRadius: "10px", border: "none", background: "linear-gradient(135deg, rgba(96,165,250,0.9), rgba(180,140,40,0.9))", color: "#fff", fontWeight: 700, fontSize: "0.85rem", cursor: "pointer" }}>
                 <i className="fa fa-file-pdf-o" style={{ marginRight: "0.3rem" }}></i> DESCARGAR PDF COMPARATIVO
               </button>
             </div>

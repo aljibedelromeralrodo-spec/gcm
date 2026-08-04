@@ -2,7 +2,7 @@ import { useState } from "react";
 import axios from "axios";
 import { API_URL } from "../utils/formatters";
 
-const C = { bg: "#0f172a", card: "#1e293b", accent: "#D4AF37", green: "#10b981", red: "#ef4444", text: "#e2e8f0", muted: "#94a3b8", border: "rgba(212,175,55,0.2)" };
+const C = { bg: "#0f172a", card: "#1e293b", accent: "#60a5fa", green: "#10b981", red: "#ef4444", text: "#e2e8f0", muted: "#94a3b8", border: "rgba(96,165,250,0.2)" };
 
 const ESTADOS = {
   "en proceso": { color: "#f59e0b", icon: "fa-clock", label: "En Proceso" },

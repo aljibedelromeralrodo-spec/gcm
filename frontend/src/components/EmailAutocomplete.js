@@ -27,12 +27,12 @@ export const EmailAutocomplete = ({ value, onChange, style, placeholder, dataTes
         onFocus={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 200)} />
       {open && sugs.length > 0 && (
-        <div style={{ position: "absolute", top: "110%", left: 0, right: 0, background: "#1a1f2e", border: "1px solid rgba(212,175,55,0.4)", borderRadius: 8, zIndex: 40, overflow: "hidden", maxHeight: 220, overflowY: "auto" }}>
+        <div style={{ position: "absolute", top: "110%", left: 0, right: 0, background: "#1a1f2e", border: "1px solid rgba(96,165,250,0.4)", borderRadius: 8, zIndex: 40, overflow: "hidden", maxHeight: 220, overflowY: "auto" }}>
           {sugs.map((s, i) => (
             <div key={i} data-testid={`${dataTestId}-sug-${i}`}
               onMouseDown={() => { onChange(s.email); setOpen(false); }}
               style={{ padding: "0.5rem 0.8rem", cursor: "pointer", fontSize: "0.83rem", borderBottom: "1px solid rgba(255,255,255,0.05)" }}
-              onMouseEnter={e => e.currentTarget.style.background = "rgba(212,175,55,0.1)"}
+              onMouseEnter={e => e.currentTarget.style.background = "rgba(96,165,250,0.1)"}
               onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
               <b>{s.email}</b>
               {s.nombre && <span style={{ opacity: 0.6 }}> · {s.nombre}</span>}

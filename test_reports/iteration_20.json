@@ -1,0 +1,19 @@
+{
+  "summary": "Iteration 20 - Slate redesign + Informes VIP + Simulador Martín. 15/15 backend pytest PASS; frontend slate theme verified (bg slate-950 rgb(2,6,23), sidebar slate-900 rgb(15,23,42), accent azul acero visible, no golden colors), all 5 modules navigable, VIP button present in folder detail with correct testid, public Martín page fully functional on mobile 390x800 (viable case: pct=93%, veredicto 'Martín por acá', abrir button visible).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/tests/test_iter20_martin_vip.py", "/app/test_reports/pytest/iter20.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py sigue siendo un archivo enorme (~7500 líneas). Considerar dividir por dominio (martin/, informes/, salud/, etc.) para mantenibilidad.",
+    "Cleanup automático de la carpeta 'Cliente Prueba Martin': el test iter20 la elimina; verifiqué que había una previa quedada y la borré antes de la corrida."
+  ],
+  "updated_files": ["/app/tests/test_iter20_martin_vip.py"],
+  "success_rate": {"backend": "100% (15/15)", "frontend": "100%"},
+  "test_credentials": "administrador / 141617575 (login vía /api/auth/login con campo 'codigo')",
+  "seed_data_creation": "Se creó y eliminó 1 carpeta temporal 'Cliente Prueba Martin' (rut 11.111.111-1) durante el test. Correo VIP enviado a ethangerardobarr@gmail.com (buzón del sistema).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Login backend usa {codigo, password} en /api/auth/login. folders-light devuelve {folders:[{id,nombre,rut}]}. Martín public page: testids son martin-valor, martin-monto, martin-renta, martin-deudas, martin-subsidio, martin-simular-btn, martin-pct, martin-veredicto, martin-abrir-carpeta-btn (sin sufijo -input). El botón Informe VIP aparece SOLO tras hacer clic en 'Abrir' dentro de la card de la carpeta (data-testid=btn-informe-vip-{fid}).",
+  "rca of the issue": "N/A - todos los tests pasaron. Se hicieron 2 fixes menores solo al test script: (1) endpoint de login usa 'codigo' no 'username', (2) folders-light retorna {folders:[...]} no lista directa."
+}

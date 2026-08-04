@@ -56,7 +56,7 @@ export default function DashboardModule({ valorUF, userName, onNavigate }) {
       <LearningStatusPanel />
       <AlertasPanel />
       {cobrosResumen?.resumen && (
-        <div data-testid="panel-cobros-tasacion" style={{ background: "rgba(15,23,42,0.6)", border: "1px solid rgba(212,175,55,0.25)", borderRadius: 14, padding: "1rem 1.3rem", marginBottom: "1rem" }}>
+        <div data-testid="panel-cobros-tasacion" style={{ background: "rgba(15,23,42,0.6)", border: "1px solid rgba(96,165,250,0.25)", borderRadius: 14, padding: "1rem 1.3rem", marginBottom: "1rem" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: "0.7rem" }}>
             <i className="fa fa-home" style={{ color: "var(--gold)" }} />
             <b style={{ color: "var(--gold)" }}>Cobros de Tasación — Vivienda Usada ({cobrosResumen.resumen.mes})</b>

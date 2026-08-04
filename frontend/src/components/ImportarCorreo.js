@@ -63,7 +63,7 @@ export default function ImportarCorreo({ destino, destinoId, nombre, onDone, lab
         <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.72)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: "3vh 3vw" }}>
           <div data-testid="importar-correo-modal" onClick={e => e.stopPropagation()}
             style={{ background: "#0f172a", border: "1px solid rgba(148,163,184,0.25)", borderRadius: 14, padding: "1.4rem", width: "min(820px, 96vw)", maxHeight: "90vh", overflow: "auto", display: "grid", gap: 10, color: "#e2e8f0" }}>
-            <h4 style={{ margin: 0, color: "var(--gold, #d4af37)" }}>
+            <h4 style={{ margin: 0, color: "var(--gold, #60a5fa)" }}>
               <i className="fa fa-cloud-download" style={{ marginRight: "0.5rem" }} />{label || "Importar desde correo"}
             </h4>
             <label style={{ fontSize: 12 }}>Buscar en el correo (nombre, RUT o asunto) <span style={{ opacity: 0.6 }}>— aparecen los correos coincidentes y eliges de cuál importar los adjuntos</span>

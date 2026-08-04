@@ -49,7 +49,7 @@ export function CentralScorePanel({ score }) {
   const offset = circumference - (s / 100) * circumference;
 
   return (
-    <div data-testid="central-score-panel" style={{ marginTop: "1rem", padding: "1rem", borderRadius: "14px", background: "linear-gradient(135deg, rgba(108,92,231,0.08), rgba(212,175,55,0.05))", border: `1px solid ${COLORS.border}` }}>
+    <div data-testid="central-score-panel" style={{ marginTop: "1rem", padding: "1rem", borderRadius: "14px", background: "linear-gradient(135deg, rgba(108,92,231,0.08), rgba(96,165,250,0.05))", border: `1px solid ${COLORS.border}` }}>
       <div style={{ textAlign: "center", marginBottom: "0.75rem" }}>
         <div style={{ fontSize: "0.85rem", fontWeight: 700, color: COLORS.accentLight, letterSpacing: "1px" }}>CENTRAL MUTUOS SCORE</div>
         <div style={{ fontSize: "0.65rem", color: COLORS.textMuted }}>{score.methodology}</div>

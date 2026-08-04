@@ -208,7 +208,7 @@ export default function SetCreditoModule({ onNavigate }) {
   return (
     <div style={{ padding: "1.5rem", color: "var(--white)", maxWidth: "1050px" }} data-testid="setcredito-module">
       {onNavigate && (
-        <button data-testid="setcred-volver" onClick={() => onNavigate("clientes")} style={{ marginBottom: "1rem", background: "transparent", border: "1px solid rgba(212,175,55,0.5)", color: "var(--gold)", borderRadius: 8, padding: "0.45rem 1rem", fontWeight: 700, cursor: "pointer" }}>
+        <button data-testid="setcred-volver" onClick={() => onNavigate("clientes")} style={{ marginBottom: "1rem", background: "transparent", border: "1px solid rgba(96,165,250,0.5)", color: "var(--gold)", borderRadius: 8, padding: "0.45rem 1rem", fontWeight: 700, cursor: "pointer" }}>
           <i className="fa fa-arrow-left" /> Volver a Carpeta Clientes
         </button>
       )}
@@ -290,7 +290,7 @@ export default function SetCreditoModule({ onNavigate }) {
 
           {/* Documentos */}
           {current.archivos.length > 0 && (
-            <div data-testid="setcred-firmar-todo-bar" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.8rem", flexWrap: "wrap", padding: "0.9rem 1rem", background: "rgba(212,175,55,0.1)", border: "1px solid rgba(212,175,55,0.35)", borderRadius: "10px", marginBottom: "1rem" }}>
+            <div data-testid="setcred-firmar-todo-bar" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.8rem", flexWrap: "wrap", padding: "0.9rem 1rem", background: "rgba(96,165,250,0.1)", border: "1px solid rgba(96,165,250,0.35)", borderRadius: "10px", marginBottom: "1rem" }}>
               <div style={{ fontSize: "0.88rem" }}>
                 <b style={{ color: "var(--gold)" }}>Firmar todo de una vez</b> — combina los {current.archivos.filter(a => !a.nombre.startsWith("COMBINADO_SET")).length} documentos en un solo PDF. La firma eCert va en la primera etiqueta "Firma cliente" y en las demás queda la marca de Firma Electrónica Avanzada. <span style={{ opacity: 0.7 }}>(consume solo 1 firma de terceros)</span>
               </div>
@@ -302,7 +302,7 @@ export default function SetCreditoModule({ onNavigate }) {
               <div key={i} data-testid={`setcred-file-${i}`} style={{ display: "flex", alignItems: "center", gap: "0.7rem", padding: "0.55rem 0.4rem", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
                 <i className="fa fa-file-pdf-o" style={{ color: "#ef4444" }} />
                 <span style={{ flex: 1 }}>{a.nombre}</span>
-                <span style={{ fontSize: "0.72rem", padding: "0.12rem 0.5rem", borderRadius: "999px", background: "rgba(212,175,55,0.15)", color: "var(--gold)" }}>{docTipos[a.tipo] || "Otro"}</span>
+                <span style={{ fontSize: "0.72rem", padding: "0.12rem 0.5rem", borderRadius: "999px", background: "rgba(96,165,250,0.15)", color: "var(--gold)" }}>{docTipos[a.tipo] || "Otro"}</span>
                 <a href={`${API}/api/set-credito/sets/${current.id}/download/${encodeURIComponent(a.ruta)}?inline=true`} target="_blank" rel="noreferrer" style={{ color: "#3b82f6" }} title="Ver"><i className="fa fa-eye" /></a>
                 <button data-testid={`setcred-firmar-${i}`} onClick={() => abrirFirma(a)} disabled={!migrup?.connected} style={btn("var(--gold)", true)} title="Enviar a firmar"><i className="fa fa-pencil" style={{ marginRight: "0.3rem" }} />Firmar</button>
                 <button onClick={() => borrarFile(a.ruta)} style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer" }}><i className="fa fa-trash" /></button>

@@ -103,6 +103,7 @@ async def startup():
     asyncio.create_task(_task_blindada(_daily_report_loop, "reporte_diario"))
     asyncio.create_task(_task_blindada(_uf_auto_loop, "uf"))
     asyncio.create_task(_task_blindada(_firmados_auto_loop, "autocorreo_firmados"))
+    asyncio.create_task(_task_blindada(_informes_vip_loop, "informes_vip_lunes"))
     asyncio.create_task(_task_blindada(_tasacion_fecha_loop, "fecha_tasacion"))
     asyncio.create_task(_task_blindada(_estudio_reparos_loop, "reparos_estudio"))
     asyncio.create_task(_task_blindada(_cobro_tasacion_loop, "cobro_tasacion"))
@@ -7482,6 +7483,476 @@ async def aprobacion_log():
 
 
 # ---------------------------------------------------------------------------
+# ------------------------------------------------------------------
+# SIMULADOR INMOBILIARIO MARTÍN (página pública /api/martin-vip/{token})
+# ------------------------------------------------------------------
+
+MARTIN_TOKEN_KEY = "martin_token"
+
+
+async def _martin_token():
+    cfg = await db.config.find_one({"_key": MARTIN_TOKEN_KEY})
+    if not cfg:
+        token = uuid.uuid4().hex[:10]
+        await db.config.update_one({"_key": MARTIN_TOKEN_KEY}, {"$set": {"token": token}}, upsert=True)
+        return token
+    return cfg["token"]
+
+
+@api.get("/martin/link")
+async def martin_link(request: Request):
+    token = await _martin_token()
+    proto = request.headers.get("x-forwarded-proto", "https")
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host", "")
+    return {"url": f"{proto}://{host}/api/martin-vip/{token}", "token": token}
+
+
+@api.post("/martin/simular")
+async def martin_simular(payload: dict):
+    """CEREBRO DE VIABILIDAD: usa los criterios reales de la MESA (calibración) + reglas duras."""
+    p = payload or {}
+
+    def _f(k):
+        try:
+            return float(str(p.get(k) or 0).replace(".", "").replace(",", "."))
+        except ValueError:
+            return 0.0
+
+    valor, monto = _f("valor_propiedad"), _f("monto_credito")
+    renta, deudas = _f("renta"), _f("deudas")
+    con_sub = bool(p.get("con_subsidio"))
+    if monto <= 0 or valor <= 0:
+        raise HTTPException(status_code=400, detail="Indica valor de la propiedad y monto del crédito (UF)")
+    stats = await _stats_mesa()
+    base = float(stats.get("base", 0.85)) * 100.0
+    prob, factores = base, [f"Base calibrada con la mesa: {round(base)}%"]
+    alerta = ""
+    if monto < 2000 and not con_sub:
+        alerta = "ALERTA: No cumple criterio mínimo de 2.000 UF sin subsidio. Avisar a jefatura."
+        factores.append(f"🔴 {alerta}")
+    ltv = monto / valor if valor else 1
+    if ltv <= 0.8:
+        prob += 8
+        factores.append(f"+8%: financiamiento del {round(ltv*100)}% (pie sano)")
+    elif ltv <= 0.9:
+        prob += 2
+        factores.append(f"+2%: financiamiento del {round(ltv*100)}%")
+    else:
+        prob -= 10
+        factores.append(f"-10%: financiamiento del {round(ltv*100)}% (pie muy bajo)")
+    if con_sub:
+        prob += 6
+        factores.append("+6%: cuenta con subsidio habitacional")
+    cuota_clp = None
+    if renta > 0:
+        try:
+            uf_hoy = await get_valor_uf()
+        except Exception:
+            uf_hoy = 39000
+        r_m = 0.046 / 12
+        cuota_uf = monto * r_m / (1 - (1 + r_m) ** -360)
+        cuota_clp = cuota_uf * uf_hoy
+        carga = (cuota_clp + deudas) / renta
+        if carga <= 0.28:
+            prob += 12
+            factores.append(f"+12%: carga financiera {round(carga*100)}% de la renta (excelente)")
+        elif carga <= 0.40:
+            prob += 3
+            factores.append(f"+3%: carga financiera {round(carga*100)}% (aceptable)")
+        else:
+            prob -= 18
+            factores.append(f"-18%: carga financiera {round(carga*100)}% (sobre el 40% la mesa rechaza)")
+    else:
+        prob -= 5
+        factores.append("-5%: sin renta informada la mesa no puede medir capacidad de pago")
+    prob = max(3, min(97, round(prob)))
+    if alerta:
+        prob = min(prob, 10)
+    if prob >= 85:
+        veredicto = f"¡Hola! Martín por acá 👋. Según mis cálculos, este crédito tiene un {prob}% de éxito. ¡Vamos con todo!"
+    elif prob >= 70:
+        veredicto = f"Martín al habla. Un {prob}% de probabilidad: esto viene muy bien encaminado. ¡Hagámoslo!"
+    elif prob >= 40:
+        veredicto = f"Ojo, un {prob}%. Se puede, pero ajustemos el pie o las deudas antes de presentar. Conversemos."
+    else:
+        veredicto = f"Te seré franco: con estos números llegamos a un {prob}%. Mejor ajustar el monto o sumar subsidio."
+    if alerta:
+        veredicto = "Alto ahí ✋: bajo 2.000 UF sin subsidio la mesa no lo evalúa. Subamos el monto o traigamos el subsidio."
+    return {"porcentaje": prob, "factores": factores, "veredicto": veredicto,
+            "alerta_critica": alerta, "cuota_estimada_clp": round(cuota_clp) if cuota_clp else None,
+            "puede_abrir_carpeta": prob > 70}
+
+
+@api.post("/martin/abrir-carpeta")
+async def martin_abrir_carpeta(payload: dict):
+    """CONVERSIÓN: crea la carpeta en la base maestra con etiqueta 'Lead de Inmobiliaria'."""
+    p = payload or {}
+    token = (p.get("token") or "").strip()
+    if token != await _martin_token():
+        raise HTTPException(status_code=403, detail="Token no válido")
+    nombre = (p.get("nombre") or "").strip().title()
+    rut = (p.get("rut") or "").strip()
+    if len(nombre.split()) < 2 or len(rut) < 8:
+        raise HTTPException(status_code=400, detail="Indica nombre completo y RUT válido")
+    ya = await db.folders.find_one({"nombre": {"$regex": f"^{re.escape(nombre)}$", "$options": "i"}})
+    if ya:
+        return {"ok": True, "id": ya["id"], "mensaje": "El cliente ya tenía carpeta en Central Mutuos"}
+    sim = p.get("simulacion") or {}
+    fid = str(uuid.uuid4())
+    fsvc.folder_dir(nombre).mkdir(parents=True, exist_ok=True)
+    await db.folders.insert_one({
+        "id": fid, "nombre": nombre, "rut": rut, "etiqueta": "Lead de Inmobiliaria",
+        "origen": "simulador_martin", "archivos": [],
+        "datos_financieros": {k: v for k, v in {
+            "valor_propiedad": sim.get("valor_propiedad"),
+            "monto_credito": sim.get("monto_credito"),
+            "con_subsidio": bool(sim.get("con_subsidio")),
+        }.items() if v not in (None, "")},
+        "historial": [{"fecha": now_iso(),
+                       "accion": f"Carpeta creada desde Simulador Martín (viabilidad {sim.get('porcentaje','?')}%) — Lead de Inmobiliaria"}],
+        "created_at": now_iso(), "updated_at": now_iso()})
+    await db.alertas.insert_one({"id": str(uuid.uuid4()), "tipo": "lead_inmobiliaria",
+                                 "cliente": nombre,
+                                 "mensaje": f"🏠 Nuevo Lead de Inmobiliaria desde Simulador Martín: {nombre} ({rut})",
+                                 "fecha": now_iso(), "leida": False})
+    return {"ok": True, "id": fid, "mensaje": f"Carpeta de {nombre} creada en Central Mutuos"}
+
+
+@api.get("/martin-vip/{token}", response_class=HTMLResponse)
+async def martin_portal(token: str):
+    if token != await _martin_token():
+        return HTMLResponse("<h3 style='font-family:serif;text-align:center;margin-top:20vh'>Enlace no válido — Central Mutuos</h3>", status_code=404)
+    html = """<!DOCTYPE html>
+<html lang="es"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simulador Martín — Central Mutuos</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; font-family:'Montserrat',sans-serif; }
+body { min-height:100vh; color:#0f172a; padding:1.2rem; padding-bottom:4rem;
+  background: radial-gradient(1200px 600px at 10% -10%, #dbeafe 0%, transparent 50%),
+              radial-gradient(1000px 500px at 110% 110%, #e2e8f0 0%, transparent 50%), #f8fafc; }
+.wrap { max-width:520px; margin:0 auto; }
+.head { text-align:center; margin:1rem 0 1.6rem; }
+.head .logo { font-weight:800; letter-spacing:0.25em; font-size:0.8rem; color:#0f172a; }
+.head h1 { font-size:1.5rem; font-weight:800; margin-top:0.4rem; }
+.head p { font-size:0.8rem; color:#64748b; margin-top:0.3rem; }
+.glass { background:rgba(255,255,255,0.65); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
+  border:1px solid rgba(15,23,42,0.10); border-radius:18px; box-shadow:0 12px 40px rgba(15,23,42,0.08); }
+.grid { display:grid; grid-template-columns:1fr 1fr; gap:0.7rem; }
+.card { padding:0.9rem; }
+.card label { display:block; font-size:0.62rem; font-weight:600; letter-spacing:0.08em;
+  text-transform:uppercase; color:#64748b; margin-bottom:0.35rem; }
+.card input { width:100%; border:1px solid #cbd5e1; border-radius:10px; padding:0.65rem 0.7rem;
+  font-size:1rem; font-weight:600; color:#0f172a; background:#fff; }
+.card input:focus { outline:none; border-color:#0f172a; }
+.sub { display:flex; align-items:center; gap:0.6rem; padding:0.9rem; font-size:0.85rem; font-weight:600; }
+.sub input { width:20px; height:20px; accent-color:#0f172a; }
+.btn { width:100%; background:#0f172a; color:#fff; font-weight:800; font-size:1rem; border:none;
+  border-radius:999px; padding:1rem; margin-top:1rem; cursor:pointer; box-shadow:0 10px 30px rgba(15,23,42,0.30);
+  transition:transform .15s ease; }
+.btn:active { transform:scale(0.98); }
+.result { margin-top:1.4rem; padding:1.4rem; text-align:center; display:none; }
+.gauge { position:relative; width:210px; height:120px; margin:0 auto; }
+.gauge svg { width:100%; height:100%; }
+.gauge .num { position:absolute; bottom:0; left:0; right:0; font-size:2rem; font-weight:800; }
+.martin { display:flex; gap:0.7rem; align-items:flex-start; margin-top:1.2rem; text-align:left; }
+.martin .avatar { width:44px; height:44px; border-radius:50%; background:#0f172a; color:#bfdbfe;
+  display:flex; align-items:center; justify-content:center; font-weight:800; flex-shrink:0; font-size:1.1rem; }
+.burbuja { background:#0f172a; color:#e2e8f0; border-radius:16px 16px 16px 4px; padding:0.8rem 1rem;
+  font-size:0.85rem; line-height:1.55; box-shadow:0 8px 24px rgba(15,23,42,0.25); }
+.factores { margin-top:1rem; text-align:left; font-size:0.72rem; color:#64748b; line-height:1.7; }
+.btn-lux { display:none; width:100%; margin-top:1.2rem; background:linear-gradient(135deg,#0f172a,#1e3a5f);
+  color:#fff; border:1px solid #60a5fa; font-weight:800; font-size:0.95rem; border-radius:999px;
+  padding:1rem; cursor:pointer; box-shadow:0 12px 34px rgba(37,99,235,0.35); }
+.modal { display:none; position:fixed; inset:0; background:rgba(15,23,42,0.55); z-index:50;
+  align-items:center; justify-content:center; padding:1rem; backdrop-filter:blur(4px); }
+.modal .inner { background:#fff; border-radius:18px; padding:1.6rem; width:100%; max-width:380px; }
+.modal input { width:100%; border:1px solid #cbd5e1; border-radius:10px; padding:0.7rem; font-size:1rem; margin-top:0.7rem; }
+.badge { position:fixed; bottom:12px; right:14px; background:rgba(255,255,255,0.8); backdrop-filter:blur(8px);
+  border:1px solid #e2e8f0; border-radius:999px; padding:0.35rem 0.8rem; font-size:0.6rem; font-weight:700; color:#0f172a; }
+.ok { color:#16a34a; font-weight:700; font-size:0.85rem; margin-top:0.8rem; display:none; }
+</style></head>
+<body><div class="wrap">
+  <div class="head">
+    <div class="logo">CENTRAL MUTUOS</div>
+    <h1>Simulador Martín</h1>
+    <p>Viabilidad hipotecaria instantánea con los criterios reales de la mesa</p>
+  </div>
+  <div class="glass" style="padding:1rem">
+    <div class="grid">
+      <div class="card glass"><label>Valor propiedad (UF)</label><input id="valor" type="number" inputmode="decimal" placeholder="4.500" data-testid="martin-valor"></div>
+      <div class="card glass"><label>Monto crédito (UF)</label><input id="monto" type="number" inputmode="decimal" placeholder="3.600" data-testid="martin-monto"></div>
+      <div class="card glass"><label>Renta líquida (CLP)</label><input id="renta" type="number" inputmode="numeric" placeholder="1.800.000" data-testid="martin-renta"></div>
+      <div class="card glass"><label>Deudas mensuales (CLP)</label><input id="deudas" type="number" inputmode="numeric" placeholder="250.000" data-testid="martin-deudas"></div>
+    </div>
+    <div class="sub glass" style="margin-top:0.7rem"><input id="subsidio" type="checkbox" data-testid="martin-subsidio"><label for="subsidio" style="margin:0;font-size:0.8rem;text-transform:none;letter-spacing:0">Cuenta con subsidio habitacional (DS19/DS1)</label></div>
+    <button class="btn" onclick="simular()" data-testid="martin-simular-btn">Calcular viabilidad</button>
+  </div>
+  <div class="glass result" id="resultado" data-testid="martin-resultado">
+    <div class="gauge">
+      <svg viewBox="0 0 210 120">
+        <path d="M15 110 A 90 90 0 0 1 195 110" fill="none" stroke="#e2e8f0" stroke-width="14" stroke-linecap="round"/>
+        <path id="arco" d="M15 110 A 90 90 0 0 1 195 110" fill="none" stroke="#0f172a" stroke-width="14"
+              stroke-linecap="round" stroke-dasharray="283" stroke-dashoffset="283" style="transition:stroke-dashoffset 1.2s ease, stroke 0.6s"/>
+      </svg>
+      <div class="num" id="pct" data-testid="martin-pct">—</div>
+    </div>
+    <div class="martin">
+      <div class="avatar">M</div>
+      <div class="burbuja" id="veredicto" data-testid="martin-veredicto"></div>
+    </div>
+    <div class="factores" id="factores"></div>
+    <button class="btn-lux" id="btnCarpeta" onclick="abrirModal()" data-testid="martin-abrir-carpeta-btn">✦ Abrir Carpeta en Central Mutuos</button>
+    <div class="ok" id="okMsg" data-testid="martin-ok"></div>
+  </div>
+</div>
+<div class="modal" id="modal" data-testid="martin-modal">
+  <div class="inner">
+    <b style="font-size:1rem">Abrir carpeta del cliente</b>
+    <p style="font-size:0.78rem;color:#64748b;margin-top:0.3rem">Solo necesitamos nombre y RUT. El resto ya lo tiene Martín.</p>
+    <input id="mNombre" placeholder="Nombre y apellido" data-testid="martin-nombre">
+    <input id="mRut" placeholder="RUT (12.345.678-9)" data-testid="martin-rut">
+    <button class="btn" style="margin-top:1rem" onclick="crearCarpeta()" data-testid="martin-crear-btn">Crear carpeta</button>
+    <button style="width:100%;background:none;border:none;color:#64748b;margin-top:0.7rem;cursor:pointer" onclick="document.getElementById('modal').style.display='none'">Cancelar</button>
+  </div>
+</div>
+<div class="badge">🛡 Motor calibrado con la MESA · Central Mutuos</div>
+<script>
+const TOKEN = location.pathname.split('/').pop();
+let ultimaSim = null;
+async function simular() {
+  const body = { valor_propiedad: document.getElementById('valor').value,
+    monto_credito: document.getElementById('monto').value,
+    renta: document.getElementById('renta').value,
+    deudas: document.getElementById('deudas').value,
+    con_subsidio: document.getElementById('subsidio').checked };
+  try {
+    const r = await fetch('/api/martin/simular', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    const d = await r.json();
+    if (!r.ok) { alert(d.detail || 'Revisa los datos'); return; }
+    ultimaSim = Object.assign({}, body, { porcentaje: d.porcentaje });
+    document.getElementById('resultado').style.display = 'block';
+    const p = d.porcentaje;
+    document.getElementById('pct').textContent = p + '%';
+    const color = p >= 70 ? '#16a34a' : p >= 40 ? '#d97706' : '#dc2626';
+    document.getElementById('pct').style.color = color;
+    const arco = document.getElementById('arco');
+    arco.style.stroke = color;
+    arco.style.strokeDashoffset = String(283 - (283 * p / 100));
+    document.getElementById('veredicto').textContent = d.veredicto;
+    document.getElementById('factores').innerHTML = d.factores.map(f => '· ' + f).join('<br>') +
+      (d.cuota_estimada_clp ? '<br>· Dividendo estimado: $' + d.cuota_estimada_clp.toLocaleString('es-CL') + ' (30 años)' : '');
+    document.getElementById('btnCarpeta').style.display = d.puede_abrir_carpeta ? 'block' : 'none';
+    document.getElementById('okMsg').style.display = 'none';
+    document.getElementById('resultado').scrollIntoView({behavior:'smooth'});
+  } catch(e) { alert('Error de conexión'); }
+}
+function abrirModal() { document.getElementById('modal').style.display = 'flex'; }
+async function crearCarpeta() {
+  const nombre = document.getElementById('mNombre').value, rut = document.getElementById('mRut').value;
+  try {
+    const r = await fetch('/api/martin/abrir-carpeta', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ token: TOKEN, nombre, rut, simulacion: ultimaSim }) });
+    const d = await r.json();
+    if (!r.ok) { alert(d.detail || 'Revisa nombre y RUT'); return; }
+    document.getElementById('modal').style.display = 'none';
+    const ok = document.getElementById('okMsg');
+    ok.textContent = '✅ ' + d.mensaje + ' — el equipo de Central Mutuos ya fue notificado.';
+    ok.style.display = 'block';
+  } catch(e) { alert('Error de conexión'); }
+}
+</script>
+</body></html>"""
+    return HTMLResponse(html)
+
+
+# ------------------------------------------------------------------
+# INFORMES VIP DE ESTATUS (PDF estilo Forbes — Slate)
+# ------------------------------------------------------------------
+
+def _informe_vip_pdf(doc, prob):
+    """PDF elegante de estatus del crédito del cliente (paleta Slate #0f172a)."""
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.colors import HexColor
+    from reportlab.pdfgen import canvas as _canvas
+    SLATE, ICE, GRIS = HexColor("#0f172a"), HexColor("#60a5fa"), HexColor("#64748b")
+    buf = io.BytesIO()
+    c = _canvas.Canvas(buf, pagesize=A4)
+    W, H = A4
+    df = doc.get("datos_financieros") or {}
+    nombre = doc.get("nombre", "Cliente")
+    # Portada / cabecera
+    c.setFillColor(SLATE)
+    c.rect(0, H - 150, W, 150, fill=1, stroke=0)
+    c.setFillColor(HexColor("#e2e8f0"))
+    c.setFont("Times-Bold", 24)
+    c.drawString(50, H - 70, "CENTRAL MUTUOS")
+    c.setFont("Helvetica", 9)
+    c.setFillColor(HexColor("#94a3b8"))
+    c.drawString(50, H - 90, "BANCA HIPOTECARIA PRIVADA · INFORME VIP DE ESTATUS")
+    c.setFont("Helvetica", 9)
+    c.drawRightString(W - 50, H - 70, datetime.now(timezone.utc).strftime("%d-%m-%Y"))
+    c.setStrokeColor(ICE)
+    c.setLineWidth(2)
+    c.line(50, H - 105, 200, H - 105)
+    c.setFillColor(HexColor("#ffffff"))
+    c.setFont("Times-Bold", 17)
+    c.drawString(50, H - 132, nombre.title())
+    y = H - 190
+
+    def _seccion(titulo):
+        nonlocal y
+        c.setFillColor(ICE)
+        c.setFont("Helvetica-Bold", 8)
+        c.drawString(50, y, titulo.upper())
+        c.setStrokeColor(HexColor("#cbd5e1"))
+        c.setLineWidth(0.5)
+        c.line(50, y - 5, W - 50, y - 5)
+        y -= 24
+
+    def _fila(k, v):
+        nonlocal y
+        if v in (None, ""):
+            return
+        c.setFillColor(GRIS)
+        c.setFont("Helvetica", 9)
+        c.drawString(58, y, str(k))
+        c.setFillColor(SLATE)
+        c.setFont("Helvetica-Bold", 9)
+        c.drawString(230, y, str(v)[:70])
+        y -= 16
+
+    _seccion("Resumen de la operación")
+    _fila("RUT", doc.get("rut"))
+    _fila("Proyecto", df.get("proyecto"))
+    _fila("Inmobiliaria", df.get("inmobiliaria"))
+    _fila("Valor propiedad", f"{df.get('valor_propiedad')} UF" if df.get("valor_propiedad") else "")
+    _fila("Monto crédito", f"{df.get('monto_credito')} UF" if df.get("monto_credito") else "")
+    _fila("Fecha de entrega", df.get("fecha_entrega"))
+    _fila("Ejecutivo interno", doc.get("ejecutivo_interno"))
+    _fila("Ejecutivo externo", doc.get("ejecutivo_externo"))
+    y -= 8
+    _seccion("Evaluación crediticia")
+    pct = prob.get("porcentaje")
+    c.setFillColor(ICE if (pct or 0) >= 50 else HexColor("#ef4444"))
+    c.setFont("Times-Bold", 30)
+    c.drawString(58, y - 14, f"{pct}%")
+    c.setFillColor(GRIS)
+    c.setFont("Helvetica", 9)
+    c.drawString(140, y - 8, "probabilidad de aprobación en mesa")
+    y -= 44
+    for fct in (prob.get("factores") or [])[:8]:
+        c.setFillColor(GRIS)
+        c.setFont("Helvetica", 8)
+        c.drawString(58, y, f"· {fct[:100]}")
+        y -= 13
+    y -= 10
+    _seccion("Documentación")
+    archivos = doc.get("archivos") or fsvc.scan_archivos(nombre)
+    cats = {}
+    for a in archivos:
+        if isinstance(a, str):
+            rel, fn = (a.rsplit("/", 1) + [""])[:2] if "/" in a else ("", a)
+        else:
+            rel, fn = a.get("subfolder", ""), a.get("nombre", "")
+        cat = fsvc.cat_de_archivo(fn, rel)
+        cats[cat] = cats.get(cat, 0) + 1
+    _fila("Documentos en carpeta", sum(cats.values()))
+    for cat, n in sorted(cats.items()):
+        if cat not in ("combinado",):
+            _fila(f"  {fsvc.MISSING_LABELS.get(cat, cat).title()}", n)
+    y -= 8
+    _seccion("Última actividad")
+    for h in (doc.get("historial") or [])[-6:][::-1]:
+        c.setFillColor(GRIS)
+        c.setFont("Helvetica", 8)
+        c.drawString(58, y, f"{(h.get('fecha') or '')[:10]}  —  {(h.get('accion') or '')[:90]}")
+        y -= 13
+        if y < 90:
+            break
+    c.setFillColor(SLATE)
+    c.rect(0, 0, W, 46, fill=1, stroke=0)
+    c.setFillColor(HexColor("#94a3b8"))
+    c.setFont("Helvetica", 7)
+    c.drawCentredString(W / 2, 26, "Documento confidencial · Central Mutuos · Cifrado y auditado")
+    c.drawCentredString(W / 2, 15, "Informe generado automáticamente por el sistema de inteligencia crediticia")
+    c.showPage()
+    c.save()
+    buf.seek(0)
+    return buf.getvalue()
+
+
+@api.get("/informes/vip/{fid}/pdf")
+async def informe_vip_pdf(fid: str):
+    doc = await _get_folder_doc(fid)
+    prob = _prob_aprobacion_folder(doc, await _stats_mesa())
+    pdf = await asyncio.to_thread(_informe_vip_pdf, doc, prob)
+    fn = f"Informe_VIP_{fsvc.safe_name(doc.get('nombre','cliente'))}.pdf"
+    return _RawResponse(content=pdf, media_type="application/pdf",
+                        headers={"Content-Disposition": f'inline; filename="{fn}"'})
+
+
+@api.post("/informes/vip/{fid}/enviar")
+async def informe_vip_enviar(fid: str, payload: dict):
+    payload = payload or {}
+    doc = await _get_folder_doc(fid)
+    to = (payload.get("to") or doc.get("email") or "").strip()
+    if not to:
+        raise HTTPException(status_code=400, detail="La carpeta no tiene correo del cliente: indícalo")
+    prob = _prob_aprobacion_folder(doc, await _stats_mesa())
+    pdf = await asyncio.to_thread(_informe_vip_pdf, doc, prob)
+    nombre = doc.get("nombre", "Cliente").title()
+    cuerpo = (f"<div style='font-family:Georgia,serif;color:#0f172a;max-width:520px'>"
+              f"<h2 style='font-weight:600'>Estimado(a) {nombre.split()[0]},</h2>"
+              f"<p style='color:#475569;line-height:1.7'>Adjuntamos su <b>Informe VIP de Estatus</b> "
+              f"con el estado actualizado de su operación hipotecaria.</p>"
+              f"<p style='color:#94a3b8;font-size:12px'>Central Mutuos · Banca Hipotecaria Privada</p></div>")
+    res = await asyncio.to_thread(mail.send_mail, to, f"Informe VIP de Estatus — {nombre}", cuerpo,
+                                  [{"filename": f"Informe_VIP_{fsvc.safe_name(nombre)}.pdf",
+                                    "content_b64": _b64(pdf)}], "secundaria")
+    if not res.get("success"):
+        raise HTTPException(status_code=502, detail=f"Error de envío: {res.get('error')}")
+    await db.folders.update_one({"id": fid}, {"$push": {"historial": {
+        "fecha": now_iso(), "accion": f"Informe VIP enviado a {to}"}}})
+    return {"ok": True, "to": to}
+
+
+async def _informes_vip_loop():
+    """Cada lunes envía al administrador el paquete de Informes VIP de carpetas activas."""
+    while True:
+        try:
+            cfg = await db.config.find_one({"_key": "informes_vip"}) or {}
+            if cfg.get("auto", True):
+                ahora = datetime.now(timezone.utc)
+                hoy = ahora.strftime("%Y-%m-%d")
+                if ahora.weekday() == 0 and 11 <= ahora.hour <= 13 and cfg.get("ultimo_envio") != hoy:
+                    hace7 = (ahora - timedelta(days=7)).isoformat()
+                    activos = await db.folders.find({"$or": [
+                        {"updated_at": {"$gte": hace7}},
+                        {"historial.fecha": {"$gte": hace7}}]}).limit(12).to_list(12)
+                    adjuntos = []
+                    stats_m = await _stats_mesa()
+                    for d in activos:
+                        try:
+                            pdf = await asyncio.to_thread(_informe_vip_pdf, d, _prob_aprobacion_folder(d, stats_m))
+                            adjuntos.append({"filename": f"Informe_VIP_{fsvc.safe_name(d.get('nombre','x'))}.pdf",
+                                             "content_b64": _b64(pdf)})
+                        except Exception:
+                            continue
+                    if adjuntos:
+                        await asyncio.to_thread(
+                            mail.send_mail, _sender_por_rol("principal"),
+                            f"📊 Informes VIP de Estatus — semana del {hoy}",
+                            f"<p>Paquete semanal con {len(adjuntos)} informes VIP de carpetas activas.</p>",
+                            adjuntos, "principal")
+                    await db.config.update_one({"_key": "informes_vip"},
+                                               {"$set": {"ultimo_envio": hoy}}, upsert=True)
+        except Exception:
+            pass
+        await asyncio.sleep(1800)
+
+
 # ------------------------------------------------------------------
 # PORTAL DE FIRMA VIP (Banca Privada — Maserati Style)
 # ------------------------------------------------------------------

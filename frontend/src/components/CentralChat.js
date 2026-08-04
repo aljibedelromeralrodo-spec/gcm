@@ -18,7 +18,7 @@ function renderTextWithLinks(text) {
       return (
         <a key={idx} href={href} target="_blank" rel="noreferrer"
            className="central-msg-link" data-testid="central-msg-link"
-           style={{ color: "#d4af37", textDecoration: "underline", wordBreak: "break-all" }}>
+           style={{ color: "#60a5fa", textDecoration: "underline", wordBreak: "break-all" }}>
           {part}
         </a>
       );
@@ -428,8 +428,8 @@ export default function CentralChat({ userName, activeModule }) {
             <div className="central-header-info">
               <span className="central-logo">Martin</span>
               <span className="central-status" data-testid="central-status" style={
-                recording ? { color: "#d4af37" } :
-                speaking ? { color: "#d4af37" } :
+                recording ? { color: "#60a5fa" } :
+                speaking ? { color: "#60a5fa" } :
                 loading ? { color: "#ff9800" } :
                 connected === false ? { color: "#ef4444" } : {}
               }>
@@ -438,7 +438,7 @@ export default function CentralChat({ userName, activeModule }) {
               {connected === false && (
                 <button data-testid="central-reconnect-btn"
                   onClick={() => { setConnected(null); checkHealth(); }}
-                  style={{ background: "rgba(212,175,55,0.2)", border: "1px solid #d4af37", color: "#d4af37", borderRadius: 4, padding: "2px 8px", fontSize: "0.7rem", cursor: "pointer", marginLeft: 6 }}>
+                  style={{ background: "rgba(96,165,250,0.2)", border: "1px solid #60a5fa", color: "#60a5fa", borderRadius: 4, padding: "2px 8px", fontSize: "0.7rem", cursor: "pointer", marginLeft: 6 }}>
                   <i className="fa fa-refresh"></i> Reconectar
                 </button>
               )}
@@ -453,9 +453,9 @@ export default function CentralChat({ userName, activeModule }) {
               )}
               <button className="central-header-action" onClick={() => setAutoVoice(v => !v)}
                 title={autoVoice ? "Desactivar voz" : "Activar voz"} data-testid="central-voice-toggle"
-                style={{ background: autoVoice ? "rgba(212,175,55,0.2)" : "none", borderRadius: 4 }}>
+                style={{ background: autoVoice ? "rgba(96,165,250,0.2)" : "none", borderRadius: 4 }}>
                 <i className={`fa ${autoVoice ? "fa-volume-up" : "fa-volume-off"}`}
-                  style={{ fontSize: "0.75rem", color: autoVoice ? "#d4af37" : "#555" }}></i>
+                  style={{ fontSize: "0.75rem", color: autoVoice ? "#60a5fa" : "#555" }}></i>
               </button>
               <button className="central-header-action" onClick={() => {
                   const newMode = !conversationMode;
@@ -483,8 +483,8 @@ export default function CentralChat({ userName, activeModule }) {
                 </button>
               )}
               <button className="central-header-action" onClick={loadHistory} title="Historial" data-testid="central-history-btn"
-                style={{ background: showHistory ? "rgba(212,175,55,0.15)" : "none" }}>
-                <i className="fa fa-clock-o" style={{ fontSize: "0.75rem", color: showHistory ? "#d4af37" : "#888" }}></i>
+                style={{ background: showHistory ? "rgba(96,165,250,0.15)" : "none" }}>
+                <i className="fa fa-clock-o" style={{ fontSize: "0.75rem", color: showHistory ? "#60a5fa" : "#888" }}></i>
               </button>
               {speaking && <button className="central-stop-speak" onClick={stopSpeak} data-testid="central-stop-speak"><i className="fa fa-stop"></i></button>}
               <button className="central-close" onClick={() => setOpen(false)} data-testid="central-close"><i className="fa fa-chevron-down"></i></button>
