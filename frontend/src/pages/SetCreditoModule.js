@@ -294,6 +294,20 @@ export default function SetCreditoModule({ onNavigate }) {
             }} style={{ ...btn("#14213D"), marginLeft: "0.6rem", border: "1px solid #E8C567", color: "#E8C567" }} title="Genera el link de lujo con tarjeta VIP para WhatsApp">
               <i className="fa fa-diamond" style={{ marginRight: "0.4rem" }} />Link de Firma VIP (WhatsApp)
             </button>
+            <button data-testid="setcred-simulador-vip" onClick={async () => {
+              try {
+                const r = await axios.get(`${API}/api/martin/link`);
+                try { await navigator.clipboard.writeText(r.data.url); } catch (_e) { /* clipboard opcional */ }
+                setMsg(`✦ Link del Simulador Inmobiliario VIP copiado: ${r.data.url}`);
+                const texto = `Hola ${current.nombre.split(" ")[0]} 👋, soy Martín de Central Mutuos. Simula tu crédito hipotecario en 1 minuto con mi asesor VIP: ${r.data.url}`;
+                window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, "_blank");
+              } catch (e) { console.error(e); setMsg("Error: " + (e.response?.data?.detail || e.message)); }
+            }} style={{ ...btn("transparent"), marginLeft: "0.6rem", border: "1px solid transparent", color: "#0a0a0a", fontWeight: 800,
+              backgroundImage: "linear-gradient(135deg, #BF953F, #FCF6BA 45%, #B38728, #FBF5B7 80%, #AA771C), linear-gradient(135deg, #BF953F, #FCF6BA, #B38728, #FBF5B7, #AA771C)",
+              backgroundOrigin: "border-box", backgroundClip: "padding-box, border-box",
+              boxShadow: "0 0 22px -6px rgba(191,149,63,0.6)" }} title="Envía el Simulador Inmobiliario Martín por WhatsApp">
+              <i className="fa fa-diamond" style={{ marginRight: "0.4rem" }} />Generar Link VIP (WhatsApp)
+            </button>
           </div>
 
           {/* Subir documento */}

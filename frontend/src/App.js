@@ -135,7 +135,7 @@ function MainApp() {
   const navItems = [
     { key: 'dashboard', icon: 'fa-th-large', label: 'Dashboard' },
     { key: 'clientes', icon: 'fa-folder-open', label: 'Carpeta Clientes' },
-    { key: 'simulador', icon: 'fa-calculator', label: 'Simulador' },
+    { key: 'simulador', icon: 'fa-calculator', label: 'Simulador Inmobiliario' },
     { key: 'historial', icon: 'fa-history', label: 'Historial' },
     { key: 'calculadora', icon: 'fa-percent', label: 'Calculadora' },
     { key: 'seguimiento', icon: 'fa-road', label: 'Seguimiento' },
