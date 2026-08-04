@@ -85,7 +85,7 @@ export default function CierresModule() {
     <div data-testid="cierres-module" style={{ display: "grid", gap: "1rem" }}>
       <div style={{ background: "rgba(15,23,42,0.85)", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 12, padding: "1.2rem 1.4rem" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-          <h2 style={{ margin: 0, fontSize: "1.15rem", color: "var(--gold, #60a5fa)" }}>
+          <h2 style={{ margin: 0, fontSize: "1.15rem", color: "var(--gold, #d4af37)" }}>
             <i className="fa fa-handshake-o" /> Cierres — Seguimiento de aprobaciones enviadas
           </h2>
           {pendientes > 0 && (
@@ -120,7 +120,7 @@ export default function CierresModule() {
       ) : Object.entries(grupos).map(([grupo, lista]) => (
         <div key={grupo} data-testid="cierres-grupo" style={{ background: "rgba(15,23,42,0.85)", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 12, padding: "1rem 1.2rem" }}>
           <div style={{ fontWeight: 800, fontSize: 14, color: "#e2e8f0", marginBottom: 10 }}>
-            <i className="fa fa-user-circle-o" style={{ color: "var(--gold, #60a5fa)" }} /> {grupo} <span style={{ opacity: 0.6, fontWeight: 600 }}>({lista.length})</span>
+            <i className="fa fa-user-circle-o" style={{ color: "var(--gold, #d4af37)" }} /> {grupo} <span style={{ opacity: 0.6, fontWeight: 600 }}>({lista.length})</span>
           </div>
           <div style={{ display: "grid", gap: 8 }}>
             {lista.map(r => (
@@ -142,7 +142,7 @@ export default function CierresModule() {
                 <div style={{ fontSize: 12, color: "#94a3b8", flex: "0 1 240px" }}>
                   {r.ejecutivo_email
                     ? <><i className="fa fa-envelope-o" /> {r.ejecutivo_email}
-                        {r.ejecutivo_desde_origen && <div style={{ fontSize: 10.5, color: "#60a5fa", fontWeight: 700 }}>↩ tomado de la solicitud de crédito original</div>}
+                        {r.ejecutivo_desde_origen && <div style={{ fontSize: 10.5, color: "#d4af37", fontWeight: 700 }}>↩ tomado de la solicitud de crédito original</div>}
                       </>
                     : <span style={{ color: "#f87171" }}>Sin correo del ejecutivo</span>}
                 </div>
@@ -171,7 +171,7 @@ export default function CierresModule() {
       {edit && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 9998, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={() => setEdit(null)}>
           <div data-testid="cierre-edit-modal" onClick={e => e.stopPropagation()} style={{ background: "#0f172a", border: "1px solid rgba(148,163,184,0.25)", borderRadius: 14, padding: "1.4rem", width: "min(480px, 96vw)", display: "grid", gap: 10 }}>
-            <h3 style={{ margin: 0, fontSize: 15, color: "var(--gold, #60a5fa)" }}>Editar cierre — {edit.nombre}</h3>
+            <h3 style={{ margin: 0, fontSize: 15, color: "var(--gold, #d4af37)" }}>Editar cierre — {edit.nombre}</h3>
             <label style={{ fontSize: 12 }}>Nombre del ejecutivo
               <input style={inp} data-testid="cierre-edit-ejecutivo" value={edit.ejecutivo_nombre || ""} onChange={e => setEdit({ ...edit, ejecutivo_nombre: e.target.value })} placeholder="Ej: Carla" />
             </label>
@@ -189,7 +189,7 @@ export default function CierresModule() {
             </label>
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
               <button onClick={() => setEdit(null)} style={{ background: "transparent", border: "1px solid rgba(148,163,184,0.3)", color: "#94a3b8", borderRadius: 8, padding: "0.5rem 1rem", fontSize: 12.5, cursor: "pointer" }}>Cancelar</button>
-              <button data-testid="cierre-edit-guardar" onClick={guardarEdit} style={{ background: "var(--gold, #60a5fa)", border: "none", color: "#0f172a", borderRadius: 8, padding: "0.5rem 1.2rem", fontSize: 12.5, fontWeight: 800, cursor: "pointer" }}>Guardar</button>
+              <button data-testid="cierre-edit-guardar" onClick={guardarEdit} style={{ background: "var(--gold, #d4af37)", border: "none", color: "#0f172a", borderRadius: 8, padding: "0.5rem 1.2rem", fontSize: 12.5, fontWeight: 800, cursor: "pointer" }}>Guardar</button>
             </div>
           </div>
         </div>

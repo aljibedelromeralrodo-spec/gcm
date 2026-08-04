@@ -59,8 +59,8 @@ export default function WhatsAppModule() {
   return (
     <div className="module-content" data-testid="whatsapp-module">
       {/* Portal ejecutivos: compartir archivos desde el teléfono */}
-      <div data-testid="portal-ejecutivos-card" style={{ background: "var(--bg-card)", border: "1px solid rgba(96,165,250,0.4)", borderRadius: 12, padding: "1.25rem", marginBottom: "1.5rem" }}>
-        <div style={{ fontSize: "1.05rem", fontWeight: 800, color: "var(--gold, #60a5fa)", marginBottom: "0.5rem" }}>
+      <div data-testid="portal-ejecutivos-card" style={{ background: "var(--bg-card)", border: "1px solid rgba(212,175,55,0.4)", borderRadius: 12, padding: "1.25rem", marginBottom: "1.5rem" }}>
+        <div style={{ fontSize: "1.05rem", fontWeight: 800, color: "var(--gold, #d4af37)", marginBottom: "0.5rem" }}>
           <i className="fa fa-mobile" style={{ marginRight: "0.5rem" }}></i>App móvil para ejecutivos — compartir archivos desde WhatsApp
         </div>
         <ol style={{ margin: "0.4rem 0 0.8rem 1.2rem", padding: 0, fontSize: "0.87rem", color: "var(--text-secondary, #94a3b8)", lineHeight: 1.8 }}>
@@ -70,7 +70,7 @@ export default function WhatsAppModule() {
           <li>Elige la carpeta del cliente (o crea una nueva) y los archivos llegan directo al sistema. Puede compartir varios: se van acumulando.</li>
         </ol>
         <button data-testid="btn-copy-portal-link" onClick={() => { navigator.clipboard.writeText(window.location.origin); alert("Link copiado. Envíalo a tus ejecutivos por WhatsApp."); }}
-          style={{ background: "var(--gold, #60a5fa)", color: "#0a0e17", border: "none", borderRadius: 8, padding: "0.5rem 1rem", fontWeight: 700, cursor: "pointer", marginRight: "0.6rem" }}>
+          style={{ background: "var(--gold, #d4af37)", color: "#0a0e17", border: "none", borderRadius: 8, padding: "0.5rem 1rem", fontWeight: 700, cursor: "pointer", marginRight: "0.6rem" }}>
           <i className="fa fa-copy" style={{ marginRight: "0.4rem" }}></i>Copiar link
         </button>
         <a data-testid="btn-share-portal-wa" href={`https://wa.me/?text=${encodeURIComponent("Instala la app de Central Mutuos para enviar los documentos de tus clientes directo al sistema: " + window.location.origin + " — Abrila en Chrome y tocá 'Agregar a pantalla de inicio'.")}`} target="_blank" rel="noreferrer"

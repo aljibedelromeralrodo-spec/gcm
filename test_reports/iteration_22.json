@@ -1,0 +1,20 @@
+{
+  "summary": "Iter22 — Regresión post-sed masivo de colores + multi-correo Gastos + participantes Reparos. BACKEND 8/8 pytest PASS: (a) /gastos-operacionales/enviar preview (confirm:false) dedupe correcto de emails_extra (strings 'a@b.cl, c@d.cl, a@b.cl, cliente@example.cl' → ['a@b.cl','c@d.cl']; cliente_email excluido; forma list soporta dedupe), body HTML + total 100000 OK; (b) preview con emails_extra vacío devuelve []; (c) GET /estudio-titulo/reparos/{fid} responde 200 con estructura {reparos, vendedor, tipo_vivienda, subject} sobre folder existente; (d) source inspection confirma _reparos_cc (server.py:6494) incluye participantes desde doc.estudio_reparos.participantes; (e) _procesar_reparos_folder (server.py:6602-6606) captura remitente + to_cc_emails; (f) email_service.buscar_hilo_por_asunto expone to_cc_emails. FRONTEND 100% PASS post-sed: --gold=#d4af37 verificado, login administrador/141617575 OK, tour 'Saltar' funcional. Navegación exitosa (0 JS pageerrors, 0 console errors) a los 12 módulos: Dashboard(6584), Carpeta Clientes(17332), Gastos Operacionales(8009), Aprobación Cliente(7155), Set de Crédito(5437), Seguimiento(8331), Procesamiento Correo(9384), Panel de Salud(7085), Por Clasificar(6184), Aprendizaje IA(9732), Historial(5619), Simulador(5779). Input [data-testid=gastos-emails-extra] presente y editable con placeholder 'ejecutivo@inmobiliaria.cl, broker@correo.cl'. Búsqueda de 'Franco' en Gastos muestra dropdown sugerencia 'francobahamondesrojas@gmail.com · Franco Bahamondes (cliente)'. Modal de Tasación abrió desde tarjeta. Logo 'Central Mutuos / Con Creces' con gradiente metálico dorado, acentos UI en oro (títulos, botones activos, badges, bordes de tarjetas), tema Slate correcto.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/tests/test_iter22_multicorreo_reparos.py", "/app/test_reports/pytest/iter22.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "El sed masivo (140 reemplazos en 23 archivos) fue seguro: 0 pageerrors, 0 console errors en los 12 módulos verificados. Sin regresiones detectadas.",
+    "server.py sigue en 8908 líneas — split por dominio (gastos/estudio_titulo/aprobacion) sigue siendo recomendable a mediano plazo.",
+    "Dedupe de emails_extra usa string O list y filtra bien el email_cliente (case-insensitive). Robusto."
+  ],
+  "updated_files": ["/app/tests/test_iter22_multicorreo_reparos.py"],
+  "success_rate": {"backend": "100% (8/8)", "frontend": "100%"},
+  "test_credentials": "administrador / 141617575",
+  "seed_data_creation": "Ninguna. Sólo previews (confirm:false) del endpoint de gastos; ningún correo enviado; ninguna carpeta/set creada. DB intacta.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "El endpoint POST /gastos-operacionales/enviar acepta emails_extra como string ('a@b,c@d') o list; usa _gastos_total con clave 'valor' (no 'monto') en items. Preview no requiere email_cliente válido (sólo confirm:true lo valida). Reparos GET no requiere estudio_reparos existente; devuelve estructura vacía por defecto. Endpoint de folders es /api/clientes/folders-light (no /api/folders).",
+  "rca of the issue": "N/A — todos los tests pasaron"
+}

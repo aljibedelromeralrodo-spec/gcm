@@ -28,8 +28,8 @@ export default function ConversorUF({ style }) {
   const inpS = { width: "100%", padding: "0.5rem 0.7rem", borderRadius: 8, border: "1px solid rgba(148,163,184,0.4)", fontSize: "1.05rem", fontWeight: 700, background: "rgba(255,255,255,0.06)", color: "inherit" };
 
   return (
-    <div data-testid="conversor-uf" style={{ padding: "0.8rem 1rem", borderRadius: 10, border: "1px solid rgba(96,165,250,0.35)", background: "rgba(96,165,250,0.06)", ...style }}>
-      <div style={{ fontWeight: 800, fontSize: "0.85rem", marginBottom: 6, color: "var(--gold, #60a5fa)" }}>
+    <div data-testid="conversor-uf" style={{ padding: "0.8rem 1rem", borderRadius: 10, border: "1px solid rgba(212,175,55,0.35)", background: "rgba(212,175,55,0.06)", ...style }}>
+      <div style={{ fontWeight: 800, fontSize: "0.85rem", marginBottom: 6, color: "var(--gold, #d4af37)" }}>
         <i className="fa fa-exchange" style={{ marginRight: "0.4rem" }} />
         Conversor UF ⇄ Pesos {uf ? `(UF hoy: ${fmtCLP(uf)})` : "(cargando UF…)"}
       </div>

@@ -17,6 +17,7 @@ export default function GastosOperacionalesModule({ onNavigate }) {
   const [nombre, setNombre] = useState("");
   const [rut, setRut] = useState("");
   const [emailCliente, setEmailCliente] = useState("");
+  const [emailsExtra, setEmailsExtra] = useState("");
   const [intro, setIntro] = useState("");
   const [items, setItems] = useState([]);
   const [datosPago, setDatosPago] = useState({});
@@ -249,7 +250,7 @@ export default function GastosOperacionalesModule({ onNavigate }) {
   const addItem = () => setItems(prev => [...prev, { concepto: "", valor: 0, texto: "" }]);
 
   const payload = () => ({
-    nombre, rut, email_cliente: emailCliente, intro,
+    nombre, rut, email_cliente: emailCliente, emails_extra: emailsExtra, intro,
     items: items.map(it => ({ ...it, valor: it.valor === "" || it.valor === null ? null : parseFloat(it.valor) })),
     datos_pago: datosPago,
   });
@@ -264,7 +265,8 @@ export default function GastosOperacionalesModule({ onNavigate }) {
   };
 
   const enviar = async () => {
-    if (!window.confirm(`¿Enviar los gastos operacionales a ${emailCliente}?`)) return;
+    const extrasTxt = emailsExtra.trim() ? ` (+ copias: ${emailsExtra.trim()})` : "";
+    if (!window.confirm(`¿Enviar los gastos operacionales a ${emailCliente}${extrasTxt}?`)) return;
     setLoading(true); setMsg("");
     try {
       const r = await axios.post(`${API}/api/gastos-operacionales/enviar`, { ...payload(), confirm: true });
@@ -283,7 +285,7 @@ export default function GastosOperacionalesModule({ onNavigate }) {
   return (
     <div style={{ padding: "1.5rem", color: "var(--white)", maxWidth: "1000px" }} data-testid="gastos-module">
       {onNavigate && (
-        <button data-testid="gastos-volver" onClick={() => onNavigate("clientes")} style={{ marginBottom: "1rem", background: "transparent", border: "1px solid rgba(96,165,250,0.5)", color: "var(--gold)", borderRadius: 8, padding: "0.45rem 1rem", fontWeight: 700, cursor: "pointer" }}>
+        <button data-testid="gastos-volver" onClick={() => onNavigate("clientes")} style={{ marginBottom: "1rem", background: "transparent", border: "1px solid rgba(212,175,55,0.5)", color: "var(--gold)", borderRadius: 8, padding: "0.45rem 1rem", fontWeight: 700, cursor: "pointer" }}>
           <i className="fa fa-arrow-left" /> Volver a Carpeta Clientes
         </button>
       )}
@@ -298,7 +300,7 @@ export default function GastosOperacionalesModule({ onNavigate }) {
             <div style={{ position: "absolute", top: "110%", left: 0, right: 0, background: "#1a1f2e", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "8px", zIndex: 20, overflow: "hidden" }}>
               {resultados.map((r, i) => (
                 <div key={i} data-testid={`gastos-resultado-${i}`} onClick={() => elegir(r)} style={{ padding: "0.6rem 1rem", cursor: "pointer", borderBottom: "1px solid rgba(255,255,255,0.05)" }}
-                     onMouseEnter={e => e.currentTarget.style.background = "rgba(96,165,250,0.1)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                     onMouseEnter={e => e.currentTarget.style.background = "rgba(212,175,55,0.1)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
                   <b>{r.nombre}</b> <span style={{ opacity: 0.6 }}>{r.rut}</span> {r.email && <span style={{ color: "#22c55e", fontSize: "0.8rem" }}> · {r.email}</span>}
                 </div>
               ))}
@@ -311,6 +313,10 @@ export default function GastosOperacionalesModule({ onNavigate }) {
           <div><label style={lbl}>Correo del cliente</label><EmailAutocomplete dataTestId="gastos-email" style={{ ...inp, ...estiloConfianza(confianza, "email") }} value={emailCliente} onChange={setEmailCliente} placeholder="cliente@correo.cl" /></div>
         </div>
         <PanelAprendizaje confianza={confianza} onGuardar={aprender} testId="gastos-guardar-aprender" />
+        <div style={{ marginTop: "0.9rem" }}>
+          <label style={lbl}>Destinatarios adicionales (opcional, separados por coma)</label>
+          <input data-testid="gastos-emails-extra" style={inp} value={emailsExtra} onChange={e => setEmailsExtra(e.target.value)} placeholder="ejecutivo@inmobiliaria.cl, broker@correo.cl" />
+        </div>
         <div style={{ display: "flex", gap: "0.7rem", flexWrap: "wrap", marginTop: "0.8rem", alignItems: "center" }}>
           <button data-testid="gastos-leer-ia" onClick={leerConIA} disabled={iaLoading || !nombre}
             title="Lee con IA los correos (asunto y cuerpo) y documentos del cliente para completar correo, RUT y gastos. Prohibido inventar: solo llena lo que aparece."
@@ -347,7 +353,7 @@ export default function GastosOperacionalesModule({ onNavigate }) {
                 <td style={{ textAlign: "center" }}><button data-testid={`gastos-del-${i}`} onClick={() => delItem(i)} style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer" }}><i className="fa fa-trash" /></button></td>
               </tr>
             ))}
-            <tr style={{ background: "rgba(96,165,250,0.08)" }}>
+            <tr style={{ background: "rgba(212,175,55,0.08)" }}>
               <td style={{ padding: "0.7rem", fontWeight: 700, color: "var(--gold)" }}>TOTAL (autosuma)</td>
               <td data-testid="gastos-total" style={{ padding: "0.7rem", textAlign: "right", fontWeight: 700, color: "var(--gold)", fontSize: "1.05rem" }}>{total.toLocaleString("es-CL", { maximumFractionDigits: 2 })} UF</td>
               <td colSpan={2} style={{ padding: "0.7rem", fontSize: "0.85rem", color: "#4ade80", fontWeight: 700, whiteSpace: "nowrap" }} data-testid="gastos-total-clp">
@@ -382,7 +388,7 @@ export default function GastosOperacionalesModule({ onNavigate }) {
         {plantillas.length > 0 && (
           <>
             <select data-testid="gastos-plantilla-select" onChange={e => { if (e.target.value) aplicarPlantilla(e.target.value); e.target.value = ""; }} defaultValue=""
-              style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(96,165,250,0.4)", color: "#e2e8f0", borderRadius: 8, padding: "0.55rem 0.8rem", fontSize: "0.85rem" }}>
+              style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(212,175,55,0.4)", color: "#e2e8f0", borderRadius: 8, padding: "0.55rem 0.8rem", fontSize: "0.85rem" }}>
               <option value="">📋 Aplicar plantilla…</option>
               {plantillas.map(p => <option key={p.id} value={p.id} style={{ color: "#111" }}>{p.nombre}</option>)}
             </select>
@@ -453,7 +459,7 @@ export default function GastosOperacionalesModule({ onNavigate }) {
           </h3>
           {historial.map((h) => (
             <div key={h.mes} data-testid={`historial-mes-${h.mes}`} style={{ marginBottom: "0.9rem" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0.5rem 0.9rem", background: "rgba(96,165,250,0.08)", border: "1px solid rgba(96,165,250,0.25)", borderRadius: 8, fontSize: "0.9rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0.5rem 0.9rem", background: "rgba(212,175,55,0.08)", border: "1px solid rgba(212,175,55,0.25)", borderRadius: 8, fontSize: "0.9rem" }}>
                 <b style={{ color: "var(--gold)" }}>{h.mes}</b>
                 <span style={{ opacity: 0.8 }}>{h.cantidad} tasación(es) pagada(s)</span>
                 <span style={{ marginLeft: "auto", fontWeight: 700, color: "#4ade80" }}>{h.total_uf.toLocaleString("es-CL")} UF · {h.total_clp}</span>

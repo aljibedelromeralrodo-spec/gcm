@@ -5723,6 +5723,14 @@ def _gastos_html(payload):
 async def gastos_enviar(payload: dict):
     payload = payload or {}
     to = (payload.get("email_cliente") or "").strip()
+    extras_raw = payload.get("emails_extra") or []
+    if isinstance(extras_raw, str):
+        extras_raw = re.split(r"[,;\s]+", extras_raw)
+    extras = []
+    for e in extras_raw:
+        e = (e or "").strip()
+        if e and "@" in e and e.lower() != to.lower() and e.lower() not in [x.lower() for x in extras]:
+            extras.append(e)
     nombre = (payload.get("nombre") or "").strip()
     total = _gastos_total(payload.get("items"))
     try:
@@ -5732,16 +5740,17 @@ async def gastos_enviar(payload: dict):
     subject = payload.get("subject") or f"Gastos Operacionales — {nombre}"
     cuerpo = _gastos_html(payload)
     if not payload.get("confirm"):
-        return {"to": to, "subject": subject, "body": cuerpo, "total": total,
+        return {"to": to, "emails_extra": extras, "subject": subject, "body": cuerpo, "total": total,
                 "sender": _sender_por_rol("secundaria")}
     if not to or "@" not in to:
         raise HTTPException(status_code=400, detail="Correo del cliente inválido")
-    res = await asyncio.to_thread(mail.send_mail, to, subject, cuerpo, [], "secundaria")
+    destinos = [to] + extras
+    res = await asyncio.to_thread(mail.send_mail, destinos, subject, cuerpo, [], "secundaria")
     if not res.get("success"):
         raise HTTPException(status_code=502, detail=res.get("error", "Error de envío"))
     await db.gastos_op_log.insert_one({
         "id": str(uuid.uuid4()), "nombre": nombre, "rut": payload.get("rut", ""),
-        "to": to, "total": total, "items": payload.get("items") or [],
+        "to": to, "emails_extra": extras, "total": total, "items": payload.get("items") or [],
         "intro": payload.get("intro", ""), "datos_pago": payload.get("datos_pago") or {},
         "enviado_en": now_iso(), "desde": res.get("desde", "")})
     # SINCRONIZACIÓN: el correo ingresado queda guardado en la carpeta del cliente
@@ -5752,7 +5761,7 @@ async def gastos_enviar(payload: dict):
             {"$and": [{"nombre": {"$regex": re.escape(t), "$options": "i"}} for t in toks_n[:2]],
              "$or": [{"email": {"$exists": False}}, {"email": ""}]},
             {"$set": {"email": to}})
-    return {"ok": True, "to": to, "subject": subject, "total": total, "sender": res.get("desde", "")}
+    return {"ok": True, "to": to, "emails_extra": extras, "subject": subject, "total": total, "sender": res.get("desde", "")}
 
 
 @api.get("/gastos-operacionales/log")
@@ -6483,10 +6492,12 @@ def _reparos_vendedor_de(doc):
 
 
 def _reparos_cc(doc, excluir=None):
-    """CC del hilo de estudio de título: Victoria + copias guardadas (todos informados)."""
+    """CC del hilo de estudio de título — RESPONDER A TODOS: Victoria + copias guardadas +
+    todos los participantes capturados del hilo (remitente y CC de cada respuesta)."""
     exc = {(e or "").lower() for e in (excluir or [])}
     cc = []
-    for e in [VICTORIA_EMAIL] + list(doc.get("estudio_titulo_cc") or []):
+    participantes = list((doc.get("estudio_reparos") or {}).get("participantes") or [])
+    for e in [VICTORIA_EMAIL] + list(doc.get("estudio_titulo_cc") or []) + participantes:
         if e and "@" in e and e.lower() not in exc and e.lower() not in [x.lower() for x in cc]:
             cc.append(e)
     return cc
@@ -6579,6 +6590,7 @@ async def _procesar_reparos_folder(doc):
     rep = doc.get("estudio_reparos") or {"items": [], "procesados_msgids": [], "estado": "sin_reparos"}
     rep.setdefault("items", [])
     rep.setdefault("procesados_msgids", [])
+    doc["estudio_reparos"] = rep
     msgs = await asyncio.to_thread(mail.buscar_hilo_por_asunto, subject_kw, 8)
     cambios = False
     for msg in msgs:
@@ -6586,6 +6598,12 @@ async def _procesar_reparos_folder(doc):
             continue
         rep["procesados_msgids"].append(msg["msgid"])
         cambios = True
+        # HILO "RESPONDER A TODOS": capturar remitente + destinatarios + CC del mensaje
+        parts = {p.lower() for p in (rep.get("participantes") or [])}
+        for e_ in [msg.get("from_email", "")] + (msg.get("to_cc_emails") or []):
+            if e_ and "@" in e_:
+                parts.add(e_.lower())
+        rep["participantes"] = sorted(parts)
         if msg.get("from_email"):
             rep["abogado_email"] = msg["from_email"]
             rep["thread_msgid"] = msg["msgid"]

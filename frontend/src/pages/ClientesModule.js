@@ -1484,9 +1484,9 @@ export default function ClientesModule({ onNavigate }) {
           <div data-testid="folder-tabs" style={{ display: "flex", gap: 8, margin: "0.9rem 0" }}>
             <button data-testid="tab-clientes" onClick={() => setFolderTab("clientes")}
               style={{ padding: "0.55rem 1.2rem", borderRadius: 10, fontWeight: 800, fontSize: 13, cursor: "pointer",
-                background: folderTab === "clientes" ? "rgba(96,165,250,0.18)" : "rgba(148,163,184,0.08)",
-                border: folderTab === "clientes" ? "2px solid var(--gold, #60a5fa)" : "1.5px solid rgba(148,163,184,0.3)",
-                color: folderTab === "clientes" ? "var(--gold, #60a5fa)" : "#94a3b8" }}>
+                background: folderTab === "clientes" ? "rgba(212,175,55,0.18)" : "rgba(148,163,184,0.08)",
+                border: folderTab === "clientes" ? "2px solid var(--gold, #d4af37)" : "1.5px solid rgba(148,163,184,0.3)",
+                color: folderTab === "clientes" ? "var(--gold, #d4af37)" : "#94a3b8" }}>
               <i className="fa fa-folder"></i> Solicitudes de Crédito ({countClientes})
             </button>
             <button data-testid="tab-escrituracion" onClick={() => setFolderTab("escrituracion")}
@@ -1699,7 +1699,7 @@ export default function ClientesModule({ onNavigate }) {
                     </button>
                     <button data-testid={`btn-gastos-${f.id}`} onClick={() => irAModulo("gastos")}
                       title={`Gasto operacional para ${f.nombre}`}
-                      style={modBtn("var(--gold, #60a5fa)", "var(--gold, #60a5fa)", "#0a0e17", true)}>
+                      style={modBtn("var(--gold, #d4af37)", "var(--gold, #d4af37)", "#0a0e17", true)}>
                       <i className="fa fa-money"></i> GASTO OPERACIONAL
                     </button>
                     <button data-testid={`btn-setcredito-${f.id}`} onClick={() => irAModulo("setcredito")}
@@ -1764,7 +1764,7 @@ export default function ClientesModule({ onNavigate }) {
                     </button>
                     <button data-testid={`btn-historial-${f.id}`} onClick={() => openHistorial(f)}
                       title={`Historial completo de actividades de ${f.nombre}`}
-                      style={modBtn("rgba(96,165,250,0.10)", "#60a5fa", enviadoManual ? "#fff" : "#b8912e")}>
+                      style={modBtn("rgba(212,175,55,0.10)", "#d4af37", enviadoManual ? "#fff" : "#b8912e")}>
                       <i className="fa fa-history"></i> Historial
                     </button>
                   </div>
@@ -1820,7 +1820,7 @@ export default function ClientesModule({ onNavigate }) {
                 <i className="fa fa-user-plus"></i> Agregar Codeudor
               </button>
               <button className="docs-btn secondary" onClick={() => window.open(`${API}/api/informes/vip/${currentFolder.id}/pdf`, "_blank")} data-testid={`btn-informe-vip-${currentFolder.id}`}
-                style={{ background: "rgba(96,165,250,0.12)", border: "1px solid rgba(96,165,250,0.5)", color: "#93c5fd" }}>
+                style={{ background: "rgba(212,175,55,0.12)", border: "1px solid rgba(212,175,55,0.5)", color: "#93c5fd" }}>
                 <i className="fa fa-file-pdf-o"></i> Informe VIP
               </button>
               <button className="docs-btn primary" onClick={() => downloadAll(currentFolder.id)} data-testid="btn-download-all">
@@ -1915,7 +1915,7 @@ export default function ClientesModule({ onNavigate }) {
                 </label>
               </div>
               <div style={{ marginTop: 10 }}>
-                <ConversorUF style={{ background: "#fefce8", border: "1px solid #60a5fa", color: "#1a1f2e" }} />
+                <ConversorUF style={{ background: "#fefce8", border: "1px solid #d4af37", color: "#1a1f2e" }} />
               </div>
               {(() => {
                 const vp = Number(finDraft.valor_propiedad || 0);
@@ -2356,7 +2356,7 @@ export default function ClientesModule({ onNavigate }) {
                           </label>
                         </div>
                         <div style={{ marginTop: 10 }}>
-                          <ConversorUF style={{ background: "#fefce8", border: "1px solid #60a5fa", color: "#1a1f2e" }} />
+                          <ConversorUF style={{ background: "#fefce8", border: "1px solid #d4af37", color: "#1a1f2e" }} />
                         </div>
                         {(() => {
                           const vp = Number(finDraft.valor_propiedad || 0);
@@ -2678,8 +2678,8 @@ export default function ClientesModule({ onNavigate }) {
                     </label>
                   </div>
                 </div>
-                <div style={{ background: "rgba(96,165,250,0.08)", border: "1px solid rgba(96,165,250,0.35)", borderRadius: 8, padding: "0.7rem 0.9rem", display: "grid", gap: "0.4rem" }}>
-                  <div style={{ opacity: 0.85, fontSize: 11, textTransform: "uppercase", fontWeight: 700, color: "#60a5fa" }}>Voucher de pago de la tasación</div>
+                <div style={{ background: "rgba(212,175,55,0.08)", border: "1px solid rgba(212,175,55,0.35)", borderRadius: 8, padding: "0.7rem 0.9rem", display: "grid", gap: "0.4rem" }}>
+                  <div style={{ opacity: 0.85, fontSize: 11, textTransform: "uppercase", fontWeight: 700, color: "#d4af37" }}>Voucher de pago de la tasación</div>
                   <input type="file" accept=".pdf,.jpg,.jpeg,.png" data-testid="tasacion-voucher-input"
                     onChange={e => subirVoucher(e.target.files[0])} style={{ fontSize: 12 }} />
                   {m.voucher_nombre && <div style={{ fontSize: 12, color: "#4ade80" }}>✅ {m.voucher_nombre} — se adjunta y el correo dirá "Adjunto voucher de pago tasación"</div>}
@@ -2712,7 +2712,7 @@ export default function ClientesModule({ onNavigate }) {
                           <button type="button" data-testid={`tasacion-adj-ver-${i}`}
                             title={`Ver ${a.nombre}`}
                             onClick={(e) => { e.preventDefault(); e.stopPropagation(); openPreview(m.folder.id, a.ruta, a.nombre); }}
-                            style={{ background: "rgba(59,130,246,0.15)", border: "1px solid #3b82f6", color: "#60a5fa", borderRadius: 6, padding: "2px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0, opacity: 1 }}>
+                            style={{ background: "rgba(59,130,246,0.15)", border: "1px solid #3b82f6", color: "#d4af37", borderRadius: 6, padding: "2px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0, opacity: 1 }}>
                             <i className="fa fa-eye" /> Ver
                           </button>
                         </label>
@@ -2763,15 +2763,15 @@ export default function ClientesModule({ onNavigate }) {
                 {m.msg && (
                   <div data-testid="estudio-msg" style={{ padding: "0.6rem 0.9rem", borderRadius: 8, background: m.msg.startsWith("✅") ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)", color: m.msg.startsWith("✅") ? "#4ade80" : "#f87171", fontWeight: 600, fontSize: 13 }}>{m.msg}</div>
                 )}
-                <div style={{ display: "flex", gap: 8, alignItems: "center", background: "rgba(96,165,250,0.06)", border: "1px solid rgba(96,165,250,0.25)", borderRadius: 8, padding: "0.5rem 0.9rem", flexWrap: "wrap" }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: "var(--gold, #60a5fa)" }}>📋 Plantillas</span>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", background: "rgba(212,175,55,0.06)", border: "1px solid rgba(212,175,55,0.25)", borderRadius: 8, padding: "0.5rem 0.9rem", flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: "var(--gold, #d4af37)" }}>📋 Plantillas</span>
                   <select data-testid="estudio-plantilla-select" onChange={e => { if (e.target.value) aplicarPlantillaEstudio(e.target.value); e.target.value = ""; }}
                     style={{ ...inpS, width: "auto", flex: 1, minWidth: 180, padding: "5px 8px", fontSize: 12 }} defaultValue="">
                     <option value="">Aplicar plantilla guardada…</option>
                     {estudioPlantillas.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
                   </select>
                   <button data-testid="estudio-plantilla-guardar" onClick={guardarPlantillaEstudio}
-                    style={{ background: "rgba(96,165,250,0.15)", border: "1px solid rgba(96,165,250,0.5)", color: "#60a5fa", borderRadius: 6, padding: "5px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                    style={{ background: "rgba(212,175,55,0.15)", border: "1px solid rgba(212,175,55,0.5)", color: "#d4af37", borderRadius: 6, padding: "5px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
                     💾 Guardar plantilla
                   </button>
                   {estudioPlantillas.length > 0 && (
@@ -2793,7 +2793,7 @@ export default function ClientesModule({ onNavigate }) {
                 </label>
                 <BrokersPanel brokers={brokers} dest={m.destinatarios} setDest={(v) => set("destinatarios", v)} reloadBrokers={reloadBrokers} />
                 <div style={{ background: "rgba(30,41,59,0.5)", border: "1px solid rgba(148,163,184,0.2)", borderRadius: 8, padding: "0.6rem 0.9rem" }}>
-                  <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Con copia (CC) <span style={{ color: "#60a5fa" }}>· opcional — se mantienen informados en TODO el hilo del estudio (reparos, recordatorios y resolución)</span></b>
+                  <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Con copia (CC) <span style={{ color: "#d4af37" }}>· opcional — se mantienen informados en TODO el hilo del estudio (reparos, recordatorios y resolución)</span></b>
                     <input value={m.cc || ""} onChange={e => set("cc", e.target.value)} data-testid="estudio-cc" placeholder="correo1@ejemplo.cl, correo2@ejemplo.cl" style={inpS} />
                   </label>
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
@@ -2807,7 +2807,7 @@ export default function ClientesModule({ onNavigate }) {
                       .filter(x => !String(m.cc || "").toLowerCase().includes(x.em.toLowerCase()))
                       .map((x, i) => (
                         <button key={i} data-testid={`cc-add-broker-${i}`} onClick={() => set("cc", [m.cc, x.em].filter(Boolean).join(", "))}
-                          style={{ background: "rgba(59,130,246,0.12)", border: "1px solid rgba(59,130,246,0.4)", color: "#60a5fa", borderRadius: 12, padding: "3px 10px", fontSize: 11.5, cursor: "pointer" }}>
+                          style={{ background: "rgba(59,130,246,0.12)", border: "1px solid rgba(59,130,246,0.4)", color: "#d4af37", borderRadius: 12, padding: "3px 10px", fontSize: 11.5, cursor: "pointer" }}>
                           + {x.nombre} ({x.em})
                         </button>
                       ))}
@@ -2910,7 +2910,7 @@ export default function ClientesModule({ onNavigate }) {
                             <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.nombre}</span>
                             <button type="button" data-testid={`estudio-doc-ver-${i}`}
                               onClick={() => openPreview(m.folder.id, a.ruta, a.nombre)}
-                              style={{ background: "rgba(59,130,246,0.15)", border: "1px solid #3b82f6", color: "#60a5fa", borderRadius: 6, padding: "2px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
+                              style={{ background: "rgba(59,130,246,0.15)", border: "1px solid #3b82f6", color: "#d4af37", borderRadius: 6, padding: "2px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
                               <i className="fa fa-eye" /> Ver
                             </button>
                           </div>
@@ -2929,7 +2929,7 @@ export default function ClientesModule({ onNavigate }) {
                           <button type="button" data-testid={`estudio-adj-ver-${i}`}
                             title={`Ver ${a.nombre} antes de enviarlo`}
                             onClick={(e) => { e.preventDefault(); e.stopPropagation(); openPreview(m.folder.id, a.ruta, a.nombre); }}
-                            style={{ background: "rgba(59,130,246,0.15)", border: "1px solid #3b82f6", color: "#60a5fa", borderRadius: 6, padding: "2px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
+                            style={{ background: "rgba(59,130,246,0.15)", border: "1px solid #3b82f6", color: "#d4af37", borderRadius: 6, padding: "2px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
                             <i className="fa fa-eye" /> Ver
                           </button>
                         </label>
@@ -3359,9 +3359,9 @@ export default function ClientesModule({ onNavigate }) {
       {/* HISTORIAL MODAL */}
       {historialModal && (
         <div data-testid="historial-modal" onClick={() => setHistorialModal(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9998, padding: "3vh 3vw" }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ background: "#0f172a", color: "#e2e8f0", borderRadius: 12, width: "min(640px, 96vw)", maxHeight: "90vh", overflow: "auto", border: "1px solid rgba(96,165,250,0.4)", boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: "#0f172a", color: "#e2e8f0", borderRadius: 12, width: "min(640px, 96vw)", maxHeight: "90vh", overflow: "auto", border: "1px solid rgba(212,175,55,0.4)", boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}>
             <div style={{ padding: "0.9rem 1.1rem", borderBottom: "1px solid rgba(148,163,184,0.2)", display: "flex", alignItems: "center", gap: 10, position: "sticky", top: 0, background: "#0f172a" }}>
-              <i className="fa fa-history" style={{ color: "#60a5fa" }} />
+              <i className="fa fa-history" style={{ color: "#d4af37" }} />
               <h4 style={{ margin: 0, flex: 1 }}>Historial — {historialModal.folder.nombre}</h4>
               <button onClick={() => setHistorialModal(null)} data-testid="btn-historial-close" style={{ background: "transparent", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 18 }}><i className="fa fa-times" /></button>
             </div>
@@ -3379,7 +3379,7 @@ export default function ClientesModule({ onNavigate }) {
                         <div style={{ fontWeight: 700, fontSize: 13 }}>{ev.titulo}</div>
                         {ev.detalle && <div style={{ fontSize: 11.5, opacity: 0.7 }}>{ev.detalle}</div>}
                       </div>
-                      <div style={{ fontSize: 11.5, color: "#60a5fa", fontWeight: 700, whiteSpace: "nowrap" }}>{fmtActFull(ev.fecha)}</div>
+                      <div style={{ fontSize: 11.5, color: "#d4af37", fontWeight: 700, whiteSpace: "nowrap" }}>{fmtActFull(ev.fecha)}</div>
                     </div>
                   ))}
                 </div>
@@ -3457,8 +3457,8 @@ export default function ClientesModule({ onNavigate }) {
               {m.sug && !m.buscando && (
                 <div data-testid="forzar-sugerencias" style={{ display: "grid", gap: 8 }}>
                   {(m.sug.carpetas || []).length > 0 && (
-                    <div style={{ background: "rgba(96,165,250,0.06)", border: "1px dashed rgba(96,165,250,0.4)", borderRadius: 8, padding: "0.6rem 0.8rem" }}>
-                      <div style={{ fontSize: 11, fontWeight: 800, color: "#60a5fa", marginBottom: 4 }}>📁 CARPETAS EXISTENTES ({m.sug.carpetas.length})</div>
+                    <div style={{ background: "rgba(212,175,55,0.06)", border: "1px dashed rgba(212,175,55,0.4)", borderRadius: 8, padding: "0.6rem 0.8rem" }}>
+                      <div style={{ fontSize: 11, fontWeight: 800, color: "#d4af37", marginBottom: 4 }}>📁 CARPETAS EXISTENTES ({m.sug.carpetas.length})</div>
                       {m.sug.carpetas.map(c => <div key={c.id} style={{ fontSize: 12.5 }}>• {c.nombre} {c.rut && <span style={{ opacity: 0.6 }}>· {c.rut}</span>} — {c.archivos} archivo(s)</div>)}
                     </div>
                   )}
@@ -3558,7 +3558,7 @@ export default function ClientesModule({ onNavigate }) {
 
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end", borderTop: "1px solid rgba(148,163,184,0.15)", paddingTop: "0.8rem" }}>
                       <button onClick={scanReparos} disabled={m.scanning} data-testid="btn-reparos-scan"
-                        style={{ background: "rgba(59,130,246,0.15)", border: "1px solid #3b82f6", color: "#60a5fa", borderRadius: 6, padding: "8px 14px", cursor: "pointer", fontSize: 13, fontWeight: 700 }}>
+                        style={{ background: "rgba(59,130,246,0.15)", border: "1px solid #3b82f6", color: "#d4af37", borderRadius: 6, padding: "8px 14px", cursor: "pointer", fontSize: 13, fontWeight: 700 }}>
                         <i className={`fa ${m.scanning ? "fa-spinner fa-spin" : "fa-refresh"}`} /> {m.scanning ? "Revisando hilo…" : "Buscar reparos ahora"}
                       </button>
                       {satisfecho ? (

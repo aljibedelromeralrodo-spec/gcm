@@ -810,6 +810,9 @@ def buscar_hilo_por_asunto(subject_kw, limit=8):
                 out.append({"msgid": msgid, "from": remitente, "from_email": from_email,
                             "subject": _dec(msg.get("Subject")), "date": fecha,
                             "body": _texto_de_msg(msg),
+                            "to_cc_emails": [e for h in ("To", "Cc")
+                                             for e in re.findall(r"[\w.+-]+@[\w.-]+", _dec(msg.get(h)) or "")
+                                             if e.lower() not in propios],
                             "attachments": [_dec(p.get_filename()) for p in msg.walk() if p.get_filename()]})
             m.logout()
         except Exception:

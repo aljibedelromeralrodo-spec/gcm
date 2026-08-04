@@ -116,7 +116,7 @@ export default function SaludModule() {
 
         {/* PANEL DE AUDITORÍA — CALIBRACIÓN DE RIESGO */}
         {calib && (
-          <div style={{ ...card, gridColumn: "1 / -1", border: "1px solid rgba(96,165,250,0.35)" }} data-testid="salud-auditoria">
+          <div style={{ ...card, gridColumn: "1 / -1", border: "1px solid rgba(212,175,55,0.35)" }} data-testid="salud-auditoria">
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8, flexWrap: "wrap" }}>
               <h3 style={{ margin: 0, fontSize: "1rem", color: "var(--gold)" }}><i className="fa fa-balance-scale" style={{ marginRight: 6 }} />Panel de Auditoría — Calibración de Riesgo</h3>
               {calib.asertividad != null && (

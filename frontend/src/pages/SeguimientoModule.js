@@ -92,7 +92,7 @@ export default function SeguimientoModule() {
     if (s.includes("rechaz")) return "#ef4444";
     if (s.includes("cierre") || s.includes("pago")) return "#3b82f6";
     if (s.includes("pendiente")) return "#f59e0b";
-    return "#60a5fa";
+    return "#d4af37";
   };
 
   return (

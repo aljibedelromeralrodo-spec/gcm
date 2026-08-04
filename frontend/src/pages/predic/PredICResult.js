@@ -87,7 +87,7 @@ export function PredICResult({ result, onExportPDF, form }) {
       <div style={{ padding: "1.25rem" }}>
         {/* Valor Propiedad Solicitada */}
         {result.valor_propiedad_uf > 0 && (
-          <div data-testid="predic-result-propiedad" style={{ textAlign: "center", marginBottom: "0.75rem", padding: "0.7rem", borderRadius: "12px", background: "rgba(96,165,250,0.08)", border: `2px solid ${COLORS.gold}` }}>
+          <div data-testid="predic-result-propiedad" style={{ textAlign: "center", marginBottom: "0.75rem", padding: "0.7rem", borderRadius: "12px", background: "rgba(212,175,55,0.08)", border: `2px solid ${COLORS.gold}` }}>
             <div style={{ fontSize: "0.78rem", color: COLORS.textMuted }}>Valor Propiedad Solicitada</div>
             <div style={{ fontSize: "1.5rem", fontWeight: 800, color: COLORS.gold }}>{result.valor_propiedad_uf} UF</div>
             <div style={{ fontSize: "0.85rem", color: COLORS.textMuted }}>{formatCLP(result.valor_propiedad_clp || (result.valor_propiedad_uf * (result.valor_uf_usado || 39000)))}</div>
@@ -184,7 +184,7 @@ export function PredICResult({ result, onExportPDF, form }) {
                 Recomendado: {result.plazo_recomendado} anos
               </span>
             )}
-            {result.tasa_aplicada > 0 && <span style={{ padding: "3px 8px", borderRadius: "6px", fontSize: "0.72rem", background: "rgba(96,165,250,0.12)", color: COLORS.gold }}>Tasa: {result.tasa_aplicada}%</span>}
+            {result.tasa_aplicada > 0 && <span style={{ padding: "3px 8px", borderRadius: "6px", fontSize: "0.72rem", background: "rgba(212,175,55,0.12)", color: COLORS.gold }}>Tasa: {result.tasa_aplicada}%</span>}
           </div>
         )}
 
@@ -222,7 +222,7 @@ export function PredICResult({ result, onExportPDF, form }) {
 
         {/* Export PDF button */}
         <button data-testid="predic-export-pdf" onClick={onExportPDF}
-          style={{ marginTop: "1rem", width: "100%", padding: "0.75rem", borderRadius: "12px", border: `1px solid ${COLORS.gold}`, background: `linear-gradient(135deg, rgba(96,165,250,0.15), rgba(96,165,250,0.05))`, color: COLORS.gold, fontWeight: 700, fontSize: "0.9rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}>
+          style={{ marginTop: "1rem", width: "100%", padding: "0.75rem", borderRadius: "12px", border: `1px solid ${COLORS.gold}`, background: `linear-gradient(135deg, rgba(212,175,55,0.15), rgba(212,175,55,0.05))`, color: COLORS.gold, fontWeight: 700, fontSize: "0.9rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}>
           <i className="fa fa-file-pdf-o"></i> Exportar Informe PDF
         </button>
 

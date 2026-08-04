@@ -52,7 +52,7 @@ export default function AprendizajeModule() {
     <div data-testid="aprendizaje-module" style={{ display: "grid", gap: "1rem" }}>
       <div style={card}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-          <h2 style={{ margin: 0, fontSize: "1.15rem", color: "var(--gold, #60a5fa)" }}>
+          <h2 style={{ margin: 0, fontSize: "1.15rem", color: "var(--gold, #d4af37)" }}>
             <i className="fa fa-graduation-cap" /> Aprendizaje IA — Flujo de información comercial
           </h2>
           <button data-testid="aprendizaje-analizar" onClick={analizar} disabled={analizando}
@@ -77,7 +77,7 @@ export default function AprendizajeModule() {
             placeholder="Ej: Los ejecutivos de Ecomac responden más rápido por la mañana…"
             style={{ flex: 1, padding: "0.55rem", borderRadius: 8, border: "1px solid rgba(148,163,184,0.3)", background: "#1e293b", color: "#e2e8f0", fontSize: 13 }} />
           <button data-testid="aprendizaje-nota-guardar" onClick={agregarNota}
-            style={{ background: "var(--gold, #60a5fa)", border: "none", color: "#0f172a", borderRadius: 8, padding: "0.55rem 1.1rem", fontSize: 12.5, fontWeight: 800, cursor: "pointer" }}>
+            style={{ background: "var(--gold, #d4af37)", border: "none", color: "#0f172a", borderRadius: 8, padding: "0.55rem 1.1rem", fontSize: 12.5, fontWeight: 800, cursor: "pointer" }}>
             Guardar
           </button>
         </div>

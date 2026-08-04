@@ -182,7 +182,7 @@ export default function AprobacionClienteModule({ onNavigate }) {
   return (
     <div style={{ padding: "1.5rem", color: "var(--white)", maxWidth: "1000px" }} data-testid="aprobacion-module">
       {onNavigate && (
-        <button data-testid="aprobacion-volver" onClick={() => onNavigate("clientes")} style={{ marginBottom: "1rem", background: "transparent", border: "1px solid rgba(96,165,250,0.5)", color: "var(--gold)", borderRadius: 8, padding: "0.45rem 1rem", fontWeight: 700, cursor: "pointer" }}>
+        <button data-testid="aprobacion-volver" onClick={() => onNavigate("clientes")} style={{ marginBottom: "1rem", background: "transparent", border: "1px solid rgba(212,175,55,0.5)", color: "var(--gold)", borderRadius: 8, padding: "0.45rem 1rem", fontWeight: 700, cursor: "pointer" }}>
           <i className="fa fa-arrow-left" /> Volver a Carpeta Clientes
         </button>
       )}
@@ -197,7 +197,7 @@ export default function AprobacionClienteModule({ onNavigate }) {
             <div style={{ position: "absolute", top: "110%", left: 0, right: 0, background: "#1a1f2e", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "8px", zIndex: 20, overflow: "hidden" }}>
               {resultados.map((r, i) => (
                 <div key={i} data-testid={`aprobacion-resultado-${i}`} onClick={() => elegir(r)} style={{ padding: "0.6rem 1rem", cursor: "pointer", borderBottom: "1px solid rgba(255,255,255,0.05)" }}
-                     onMouseEnter={e => e.currentTarget.style.background = "rgba(96,165,250,0.1)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                     onMouseEnter={e => e.currentTarget.style.background = "rgba(212,175,55,0.1)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
                   <b>{r.nombre}</b> <span style={{ opacity: 0.6 }}>{r.rut}</span> {r.email && <span style={{ color: "#22c55e", fontSize: "0.8rem" }}> · {r.email}</span>}
                 </div>
               ))}
@@ -263,7 +263,7 @@ export default function AprobacionClienteModule({ onNavigate }) {
               style={{ fontSize: "0.75rem", color: "#3b82f6", fontWeight: 700, textDecoration: "none", border: "1px solid #3b82f6", borderRadius: 6, padding: "0.15rem 0.55rem" }}>
               <i className="fa fa-eye" style={{ marginRight: "0.3rem" }} />Ver PDF
             </a>
-            <span style={{ fontSize: "0.72rem", padding: "0.12rem 0.5rem", borderRadius: "999px", background: a.tipo === "carta_aprobacion" ? "rgba(34,197,94,0.15)" : a.tipo === "simulacion_ajustada" ? "rgba(96,165,250,0.15)" : "rgba(255,255,255,0.08)", color: a.tipo === "carta_aprobacion" ? "#22c55e" : a.tipo === "simulacion_ajustada" ? "var(--gold)" : "#9aa3b5" }}>{a.tipo === "simulacion_ajustada" ? "Simulación" : TIPO_LABEL[a.tipo]}</span>
+            <span style={{ fontSize: "0.72rem", padding: "0.12rem 0.5rem", borderRadius: "999px", background: a.tipo === "carta_aprobacion" ? "rgba(34,197,94,0.15)" : a.tipo === "simulacion_ajustada" ? "rgba(212,175,55,0.15)" : "rgba(255,255,255,0.08)", color: a.tipo === "carta_aprobacion" ? "#22c55e" : a.tipo === "simulacion_ajustada" ? "var(--gold)" : "#9aa3b5" }}>{a.tipo === "simulacion_ajustada" ? "Simulación" : TIPO_LABEL[a.tipo]}</span>
             <span style={{ fontSize: "0.72rem", opacity: 0.45 }}>{a.origen === "autocorreo" ? "Archivo Autocorreo" : "Carpeta Cliente"}</span>
           </label>
         ))}

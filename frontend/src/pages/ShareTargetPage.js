@@ -65,7 +65,7 @@ export default function ShareTargetPage() {
 
   const DESTINOS = [
     { key: "credito", label: "Documentos crédito", icon: "fa-folder-open", color: "#0ea5e9", desc: "Carpeta del cliente (gestión de crédito)" },
-    { key: "voucher_tasacion", label: "Voucher Tasación", icon: "fa-home", color: "#60a5fa", desc: "Voucher de pago de la tasación" },
+    { key: "voucher_tasacion", label: "Voucher Tasación", icon: "fa-home", color: "#d4af37", desc: "Voucher de pago de la tasación" },
     { key: "voucher_gasto_operacional", label: "Voucher Gasto Op.", icon: "fa-money", color: "#22c55e", desc: "Vouchers de pago del gasto operacional" },
   ];
 
@@ -208,7 +208,7 @@ export default function ShareTargetPage() {
             <div style={{ marginTop: 4, color: "#cbd5e1" }}>Mantené presionado un archivo → <b>Compartir</b> → elegí <b>Central Mutuos</b>.</div>
           </div>
 
-          <div style={{ background: "rgba(96,165,250,0.1)", border: "1px solid rgba(96,165,250,0.4)", borderRadius: 8, padding: "0.8rem", fontSize: 13 }}>
+          <div style={{ background: "rgba(212,175,55,0.1)", border: "1px solid rgba(212,175,55,0.4)", borderRadius: 8, padding: "0.8rem", fontSize: 13 }}>
             <b style={{ color: "#facc15" }}>⬇️ Instalá el mini programa (una sola vez):</b>
             <ol style={{ margin: "0.4rem 0 0 1.1rem", padding: 0, color: "#cbd5e1" }}>
               <li>Abrí este link en <b>Chrome</b> del teléfono</li>
