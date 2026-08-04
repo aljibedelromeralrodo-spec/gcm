@@ -50,6 +50,8 @@ async def ensure_seed():
         {"codigo": "administrador", "nombre": "Administrador", "password": os.environ.get("ADMIN_PASSWORD_1", ""), "rol": "admin"},
         {"codigo": "admin", "nombre": "Administrador", "password": os.environ.get("ADMIN_PASSWORD_2", ""), "rol": "admin"},
     ]:
+        if not u["password"]:
+            u = {k: v for k, v in u.items() if k != "password"}
         await db.users.update_one(
             {"codigo": u["codigo"]},
             {"$set": u, "$setOnInsert": {"created": now_iso()}},
