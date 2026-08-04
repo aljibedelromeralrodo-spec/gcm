@@ -324,3 +324,10 @@
 - Proyecciones agregadas a 3 consultas pesadas (simulaciones, folders resumen semanal, seguimiento _PROY_SEG).
 - Soporte Emergent confirmo: secretos via gestor de Variables de Entorno del deploy; .env NO se comitea.
 - Verificado e2e: login 200, folders 200 (0.2s).
+
+## 2026-06 — RESOLUCION FINAL DEPLOY: PASSED ✅
+- .gitignore: removidos patrones .env (requeridos por Emergent); test_credentials.md sigue excluido.
+- backend/.env saneado: MAIL_APP_PASSWORD, MAIL2_APP_PASSWORD, MIGRUP_CLAVE con placeholders; ADMIN_PASSWORD_1/2 vacios (seed omite pisar password si var vacia -> login preview intacto).
+- Valores reales respaldados en memory/test_credentials.md (fuera de git).
+- Health Check deployment_agent: PASS sin findings. Sistema listo para re-deploy.
+- IMPORTANTE: correo IMAP/SMTP y eCert quedan PAUSADOS en preview hasta restaurar claves reales o configurarlas como secrets al desplegar.
