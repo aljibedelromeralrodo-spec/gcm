@@ -28,6 +28,7 @@ const CierresModule = lazy(() => import("./pages/CierresModule"));
 const AprendizajeModule = lazy(() => import("./pages/AprendizajeModule"));
 const SaludModule = lazy(() => import("./pages/SaludModule"));
 const BuzonRescateModule = lazy(() => import("./pages/BuzonRescateModule"));
+const OportunidadesModule = lazy(() => import("./pages/OportunidadesModule"));
 const GlobalSearch = lazy(() => import("./components/GlobalSearch"));
 const WelcomeTour = lazy(() => import("./components/WelcomeTour"));
 
@@ -48,6 +49,7 @@ const MODULE_TITLES = {
   aprobacion: 'Envío Aprobación Cliente',
   cierres: 'Cierres — Seguimiento de Aprobaciones',
   aprendizaje: 'Aprendizaje IA — Flujo Comercial',
+  oportunidades: 'Centro de Ventas VIP — José Martín',
 };
 
 function App() {
@@ -140,6 +142,7 @@ function MainApp() {
     { key: 'gastos', icon: 'fa-money', label: 'Gastos Operacionales' },
     { key: 'aprobacion', icon: 'fa-trophy', label: 'Aprobación Cliente' },
     { key: 'cierres', icon: 'fa-handshake-o', label: 'Cierres' },
+    ...(user.rol === 'admin' ? [{ key: 'oportunidades', icon: 'fa-diamond', label: 'Centro de Ventas VIP' }] : []),
     { key: 'salud', icon: 'fa-heartbeat', label: 'Panel de Salud' },
     { key: 'rescate', icon: 'fa-life-ring', label: 'Por Clasificar' },
     ...(user.rol === 'admin' ? [{ key: 'aprendizaje', icon: 'fa-graduation-cap', label: 'Aprendizaje IA' }] : []),
@@ -245,6 +248,7 @@ function MainApp() {
         {activeModule === 'salud' && <SaludModule />}
         {activeModule === 'rescate' && <BuzonRescateModule />}
         {activeModule === 'aprendizaje' && <AprendizajeModule />}
+        {activeModule === 'oportunidades' && <OportunidadesModule />}
         </Suspense>
       </main>
     </div>

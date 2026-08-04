@@ -104,3 +104,102 @@ def nota_diaria(oportunidades):
     lineas.append("Nada sale sin tu visto bueno, jefe. Un abrazo — J.M.")
     return {"fecha": hoy, "nota": "\n".join(lineas), "total": total,
             "calientes": len(calientes), "abrieron": len(abrieron), "pendientes": len(pendientes)}
+
+
+# ===================== CAPA DE SERVICIO (MongoDB) =====================
+import uuid
+import asyncio
+from datetime import timedelta
+from database import db
+
+_ORDEN_INTERES = {"nuevo": 0, "abrio_correo": 1, "hizo_clic": 2, "uso_simulador": 3}
+
+
+async def crear_oportunidades(prospectos):
+    nuevos, duplicados = 0, 0
+    for p in prospectos:
+        q = {"email": p["email"]} if p.get("email") else {"nombre": p["nombre"]}
+        if await db.oportunidades.find_one(q):
+            duplicados += 1
+            continue
+        await db.oportunidades.insert_one({
+            "id": str(uuid.uuid4()), **p, "status": "pendiente_autorizacion",
+            "estado_interes": "nuevo", "borrador": None, "aperturas": 0, "clics": 0,
+            "bloqueado_hasta": "", "creado_en": datetime.now(timezone.utc).isoformat()})
+        nuevos += 1
+    return {"nuevos": nuevos, "duplicados": duplicados}
+
+
+async def listar():
+    return await db.oportunidades.find({}, {"_id": 0}).sort("creado_en", -1).to_list(500)
+
+
+async def preparar_borrador(oid, base_url, link_click):
+    op = await db.oportunidades.find_one({"id": oid})
+    if not op:
+        raise ValueError("Oportunidad no encontrada")
+    pixel = f"{base_url}/api/oportunidades/track/{oid}/pixel.gif"
+    msg = mensaje_jose_martin(op["nombre"], op.get("proyecto", ""), link_click, pixel)
+    await db.oportunidades.update_one({"id": oid}, {"$set": {"borrador": msg}})
+    return {**msg, "to": op.get("email", ""), "nombre": op["nombre"]}
+
+
+async def autorizar_envio(oid, send_fn):
+    """CANDADO: solo se ejecuta cuando Gerardo presiona 'Autorizar Envío'.
+    Tras enviar, bloqueo de seguimiento de 14 días (no se puede reenviar)."""
+    op = await db.oportunidades.find_one({"id": oid})
+    if not op:
+        raise ValueError("Oportunidad no encontrada")
+    if not op.get("borrador"):
+        raise ValueError("Primero prepara el borrador de José Martín")
+    to = (op.get("email") or "").strip()
+    if "@" not in to:
+        raise ValueError("La oportunidad no tiene un correo válido")
+    ahora = datetime.now(timezone.utc).isoformat()
+    bloq = op.get("bloqueado_hasta") or ""
+    if bloq and bloq > ahora:
+        raise ValueError(f"Seguimiento activo: bloqueado hasta {bloq[:10]} (regla de 14 días)")
+    res = await asyncio.to_thread(send_fn, to, op["borrador"]["subject"], op["borrador"]["body"])
+    if not res.get("success"):
+        raise RuntimeError(res.get("error", "Error de envío"))
+    hasta = (datetime.now(timezone.utc) + timedelta(days=14)).isoformat()
+    await db.oportunidades.update_one({"id": oid}, {"$set": {
+        "status": "enviado", "enviado_en": ahora, "bloqueado_hasta": hasta,
+        "autorizado_por": "Gerardo"}})
+    return {"ok": True, "to": to, "bloqueado_hasta": hasta}
+
+
+async def track(oid, tipo):
+    campo = "aperturas" if tipo == "pixel" else "clics"
+    estado = "abrio_correo" if tipo == "pixel" else "hizo_clic"
+    op = await db.oportunidades.find_one({"id": oid})
+    if not op:
+        return None
+    upd = {"$inc": {campo: 1}}
+    if _ORDEN_INTERES.get(estado, 0) > _ORDEN_INTERES.get(op.get("estado_interes", "nuevo"), 0):
+        upd["$set"] = {"estado_interes": estado}
+    await db.oportunidades.update_one({"id": oid}, upd)
+    return op
+
+
+async def marcar_uso_simulador(oid):
+    await db.oportunidades.update_one({"id": oid}, {"$set": {"estado_interes": "uso_simulador"}})
+
+
+async def desde_expediente_vip(nombre, rut, sim):
+    """Lead viable del Simulador Martín entra directo al Centro de Ventas VIP."""
+    sim = sim or {}
+    ya = await db.oportunidades.find_one({"nombre": {"$regex": f"^{re.escape(nombre)}$", "$options": "i"}})
+    if ya:
+        await db.oportunidades.update_one({"id": ya["id"]}, {"$set": {
+            "estado_interes": "uso_simulador", "expediente_vip": True, "simulacion": sim, "rut": rut}})
+        return ya["id"]
+    oid = str(uuid.uuid4())
+    await db.oportunidades.insert_one({
+        "id": oid, "nombre": nombre, "email": "", "telefono": "", "proyecto": "",
+        "rut": rut, "status": "expediente_vip", "estado_interes": "uso_simulador",
+        "expediente_vip": True, "simulacion": sim, "borrador": None,
+        "aperturas": 0, "clics": 0, "bloqueado_hasta": "",
+        "creado_en": datetime.now(timezone.utc).isoformat()})
+    return oid
+

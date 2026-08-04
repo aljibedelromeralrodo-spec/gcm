@@ -1,0 +1,25 @@
+{
+  "summary": "Iter24 — Testing FRONTEND completo de las 4 nuevas features (Centro Ventas VIP Oportunidades + Simulador Martín modular con Voz + Expediente VIP + Gráficos de Riesgo gema). RESULTADO: 100% verde en TODOS los flujos requeridos. (1) OPORTUNIDADES: login admin OK, tour saltado, [data-testid=nav-oportunidades] navega correctamente. Stats op-stat-0..3 mostraron 2 en cartera / 1 abrieron / 1 caliente / 1 esperando autorización. op-nota-diaria renderizada con texto natural de José Martín ('Gerardo, ¡buenas!... 2 oportunidades en cartera... 🔥 CALIENTES: Ana Test Gomez... Un abrazo — J.M.'). op-tabla con 2 filas (Ana Test Gomez ⚡ Hizo clic, Pedro Prueba Ventas Nuevo). op-autorizar-1 (Pedro sin borrador) correctamente DISABLED antes de preparar; op-autorizar-0 (Ana con borrador) ENABLED. Clic en op-preparar-1 → op-preview-modal abrió con destinatario pedro.prueba@test.cl y 'Borrador de José Martín — Pedro Prueba Ventas' visible, contenido HTML del correo con firma 'José Martín Benavente'. op-preview-cerrar cerró correctamente. Tras preparar, op-autorizar-1 pasó a ENABLED y nota diaria se re-generó ('Tengo 2 borradores listos... Ana Test Gomez, Pedro Prueba Ventas'). NUNCA se hizo clic en Autorizar Envío ni op-preview-autorizar. (2) SIMULADOR MARTÍN público (HTML servido por backend /api/martin-vip/{token}): GET /api/martin/link OK. valor=4500 monto=4200 → burbuja [data-testid=martin-live] visible con 'José Martín dice: estás pidiendo más del 90%...'. valor=4500 monto=3400 renta=2500000 → martin-simular-btn devuelve gauge martin-pct='97%', martin-veredicto natural, martin-consejo visible, martin-abrir-carpeta-btn con texto '✦ Abrir Expediente VIP'. Clic → modal 'Abrir carpeta del cliente' → nombre 'Cliente Prueba Vip' + RUT '11.111.111-1' → 'Crear carpeta' → mensaje '✅ Carpeta de Cliente Prueba Vip creada en Central Mutuos — el equipo de Central Mutuos ya fue notificado.'. (3) VERIFICACIÓN BACKEND: MongoDB mostró oportunidad {nombre:'Cliente Prueba Vip', expediente_vip:true} + folder {nombre:'Cliente Prueba Vip', rut:'11.111.111-1', id:c9536339...} correctamente persistidos. (4) DASHBOARD: [data-testid=graficos-riesgo] visible, 4 barras (riesgo-barra-0..3) presentes, riesgo-top-* con 5 clientes. (5) REGRESIÓN: nav-clientes y nav-gastos cargaron sin PAGEERRORS ni console.error (0 errores capturados). (6) LIMPIEZA obligatoria completada: eliminadas 1 folder + 3 oportunidades (Cliente Prueba Vip, Ana Test Gomez, Pedro Prueba Ventas). Verificado 0 restantes en ambas colecciones.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Diseño de candado 'Autorizar Envío' + estado disabled hasta que exista borrador está correctamente implementado tanto en UI (op-autorizar-N deshabilitado sin borrador) como en backend (400 sin confirm, ya verificado por main agent).",
+    "Voz de Martín en vivo (martin-live) reacciona bien a inputs con recomendación contextual (>90% financiamiento). Excelente UX.",
+    "Consejo post-simulación (martin-consejo) es genérico ('buen punto de partida') a pesar de un 97% de éxito con pie sano y carga sana — podría ser más celebrativo/específico cuando pct≥90, pero funciona.",
+    "Página /api/martin-vip/{token} es HTML público servido por backend (no SPA React) — solo accesible con token válido: correcto para no-autenticados."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (main agent ya validó por curl)", "frontend": "100%"},
+  "test_credentials": "administrador / 141617575 (login interno). Token martin-vip generado dinámicamente via GET /api/martin/link.",
+  "seed_data_creation": "Se creó 1 folder + 1 oportunidad con expediente_vip=true durante flujo de Expediente VIP (Cliente Prueba Vip / 11.111.111-1). LIMPIEZA CONFIRMADA: todos los datos de prueba (Cliente Prueba Vip + Ana Test Gomez + Pedro Prueba Ventas) eliminados de db.folders y db.oportunidades tras la corrida. Verificado 0 restantes.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Colecciones limpias tras esta corrida. Si el main agent quiere volver a probar el flujo de Oportunidades, deberá re-seedar Ana/Pedro. El token martin-vip es persistente (fc56c05cb5 durante esta corrida) pero se puede regenerar vía GET /api/martin/link. Modal 'Abrir carpeta del cliente' NO tiene testids específicos en sus inputs (martin-carpeta-nombre/rut/crear NO existen) — fallback por placeholder ('ombre'/'RUT') + botón 'Crear carpeta' por texto funciona. Podría añadirse data-testid a esos 3 elementos para robustez.",
+  "rca of the issue": "N/A — no bugs encontrados en las 4 features nuevas."
+}

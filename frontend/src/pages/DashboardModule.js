@@ -5,6 +5,7 @@ import IntelligencePanel from "../components/IntelligencePanel";
 import AlertasPanel from "../components/AlertasPanel";
 import ProactiveAlertsPanel from "../components/ProactiveAlertsPanel";
 import LearningStatusPanel from "../components/LearningStatusPanel";
+import GraficosRiesgo from "../components/GraficosRiesgo";
 
 export default function DashboardModule({ valorUF, userName, onNavigate }) {
   const [data, setData] = useState(null);
@@ -189,6 +190,7 @@ export default function DashboardModule({ valorUF, userName, onNavigate }) {
         </>
       )}
 
+      <GraficosRiesgo />
       <IntelligencePanel />
     </div>
   );

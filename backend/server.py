@@ -1,5 +1,5 @@
 from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Form, Request, Query
-from fastapi.responses import StreamingResponse, JSONResponse, HTMLResponse, FileResponse
+from fastapi.responses import StreamingResponse, JSONResponse, HTMLResponse, FileResponse, RedirectResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -24,6 +24,8 @@ import credit_engine as ce
 import email_service as mail
 import folders_service as fsvc
 from database import client, db
+import sales_engine
+import simulador_engine
 
 app = FastAPI(title="Central Mutuos API")
 api = APIRouter(prefix="/api")
@@ -7379,76 +7381,18 @@ async def martin_link(request: Request):
 async def martin_simular(payload: dict):
     """CEREBRO DE VIABILIDAD: usa los criterios reales de la MESA (calibración) + reglas duras."""
     p = payload or {}
-
-    def _f(k):
-        try:
-            return float(str(p.get(k) or 0).replace(".", "").replace(",", "."))
-        except ValueError:
-            return 0.0
-
-    valor, monto = _f("valor_propiedad"), _f("monto_credito")
-    renta, deudas = _f("renta"), _f("deudas")
-    con_sub = bool(p.get("con_subsidio"))
-    if monto <= 0 or valor <= 0:
-        raise HTTPException(status_code=400, detail="Indica valor de la propiedad y monto del crédito (UF)")
     stats = await _stats_mesa()
-    base = float(stats.get("base", 0.85)) * 100.0
-    prob, factores = base, [f"Base calibrada con la mesa: {round(base)}%"]
-    alerta = ""
-    if monto < 2000 and not con_sub:
-        alerta = "ALERTA: No cumple criterio mínimo de 2.000 UF sin subsidio. Avisar a jefatura."
-        factores.append(f"🔴 {alerta}")
-    ltv = monto / valor if valor else 1
-    if ltv <= 0.8:
-        prob += 8
-        factores.append(f"+8%: financiamiento del {round(ltv*100)}% (pie sano)")
-    elif ltv <= 0.9:
-        prob += 2
-        factores.append(f"+2%: financiamiento del {round(ltv*100)}%")
-    else:
-        prob -= 10
-        factores.append(f"-10%: financiamiento del {round(ltv*100)}% (pie muy bajo)")
-    if con_sub:
-        prob += 6
-        factores.append("+6%: cuenta con subsidio habitacional")
-    cuota_clp = None
-    if renta > 0:
-        try:
-            uf_hoy = await get_valor_uf()
-        except Exception:
-            uf_hoy = 39000
-        r_m = 0.046 / 12
-        cuota_uf = monto * r_m / (1 - (1 + r_m) ** -360)
-        cuota_clp = cuota_uf * uf_hoy
-        carga = (cuota_clp + deudas) / renta
-        if carga <= 0.28:
-            prob += 12
-            factores.append(f"+12%: carga financiera {round(carga*100)}% de la renta (excelente)")
-        elif carga <= 0.40:
-            prob += 3
-            factores.append(f"+3%: carga financiera {round(carga*100)}% (aceptable)")
-        else:
-            prob -= 18
-            factores.append(f"-18%: carga financiera {round(carga*100)}% (sobre el 40% la mesa rechaza)")
-    else:
-        prob -= 5
-        factores.append("-5%: sin renta informada la mesa no puede medir capacidad de pago")
-    prob = max(3, min(97, round(prob)))
-    if alerta:
-        prob = min(prob, 10)
-    if prob >= 85:
-        veredicto = f"¡Hola! Martín por acá 👋. Según mis cálculos, este crédito tiene un {prob}% de éxito. ¡Vamos con todo!"
-    elif prob >= 70:
-        veredicto = f"Martín al habla. Un {prob}% de probabilidad: esto viene muy bien encaminado. ¡Hagámoslo!"
-    elif prob >= 40:
-        veredicto = f"Ojo, un {prob}%. Se puede, pero ajustemos el pie o las deudas antes de presentar. Conversemos."
-    else:
-        veredicto = f"Te seré franco: con estos números llegamos a un {prob}%. Mejor ajustar el monto o sumar subsidio."
-    if alerta:
-        veredicto = "Alto ahí ✋: bajo 2.000 UF sin subsidio la mesa no lo evalúa. Subamos el monto o traigamos el subsidio."
-    return {"porcentaje": prob, "factores": factores, "veredicto": veredicto,
-            "alerta_critica": alerta, "cuota_estimada_clp": round(cuota_clp) if cuota_clp else None,
-            "puede_abrir_carpeta": prob > 70}
+    try:
+        uf_hoy = await get_valor_uf()
+    except Exception:
+        uf_hoy = 39000
+    try:
+        res = simulador_engine.calcular_viabilidad(p, base_mesa=stats.get("base", 0.85), uf_hoy=uf_hoy)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if p.get("op"):
+        await sales_engine.marcar_uso_simulador(str(p.get("op")))
+    return res
 
 
 @api.post("/martin/abrir-carpeta")
@@ -7483,6 +7427,7 @@ async def martin_abrir_carpeta(payload: dict):
                                  "cliente": nombre,
                                  "mensaje": f"🏠 Nuevo Lead de Inmobiliaria desde Simulador Martín: {nombre} ({rut})",
                                  "fecha": now_iso(), "leida": False})
+    await sales_engine.desde_expediente_vip(nombre, rut, sim)
     return {"ok": True, "id": fid, "mensaje": f"Carpeta de {nombre} creada en Central Mutuos"}
 
 
@@ -7555,6 +7500,10 @@ body { min-height:100vh; color:#0f172a; padding:1.2rem; padding-bottom:4rem;
       <div class="card glass"><label>Deudas mensuales (CLP)</label><input id="deudas" type="number" inputmode="numeric" placeholder="250.000" data-testid="martin-deudas"></div>
     </div>
     <div class="sub glass" style="margin-top:0.7rem"><input id="subsidio" type="checkbox" data-testid="martin-subsidio"><label for="subsidio" style="margin:0;font-size:0.8rem;text-transform:none;letter-spacing:0">Cuenta con subsidio habitacional (DS19/DS1)</label></div>
+    <div class="martin" id="liveWrap" style="display:none;margin-top:0.9rem">
+      <div class="avatar">M</div>
+      <div class="burbuja" id="liveTip" data-testid="martin-live"></div>
+    </div>
     <button class="btn" onclick="simular()" data-testid="martin-simular-btn">Calcular viabilidad</button>
   </div>
   <div class="glass result" id="resultado" data-testid="martin-resultado">
@@ -7569,6 +7518,10 @@ body { min-height:100vh; color:#0f172a; padding:1.2rem; padding-bottom:4rem;
     <div class="martin">
       <div class="avatar">M</div>
       <div class="burbuja" id="veredicto" data-testid="martin-veredicto"></div>
+    </div>
+    <div class="martin" id="consejoWrap" style="display:none">
+      <div class="avatar" style="background:#B38728;color:#0f172a">M</div>
+      <div class="burbuja" id="consejo" data-testid="martin-consejo" style="background:#1c1917"></div>
     </div>
     <div class="factores" id="factores"></div>
     <button class="btn-lux" id="btnCarpeta" onclick="abrirModal()" data-testid="martin-abrir-carpeta-btn">✦ Abrir Carpeta en Central Mutuos</button>
@@ -7588,13 +7541,29 @@ body { min-height:100vh; color:#0f172a; padding:1.2rem; padding-bottom:4rem;
 <div class="badge">🛡 Motor calibrado con la MESA · Central Mutuos</div>
 <script>
 const TOKEN = location.pathname.split('/').pop();
+const OP = new URLSearchParams(location.search).get('op') || '';
 let ultimaSim = null;
+function vozMartin() {
+  const v = parseFloat(document.getElementById('valor').value) || 0;
+  const m = parseFloat(document.getElementById('monto').value) || 0;
+  const r = parseFloat(document.getElementById('renta').value) || 0;
+  let tip = '';
+  if (m && m < 2000 && !document.getElementById('subsidio').checked) tip = 'José Martín dice: ojo, bajo 2.000 UF sin subsidio la mesa no evalúa. Activa tu subsidio o ajustemos el monto 😉';
+  else if (v && m && m / v > 0.9) tip = 'José Martín dice: estás pidiendo más del 90% del valor. Con un pie del 10-20% la mesa te mira con otros ojos ✨';
+  else if (v && m && m / v <= 0.8) tip = '¡Ese pie está regio! Financiar el ' + Math.round(m / v * 100) + '% te suma puntos con la mesa 💪 — José Martín';
+  else if (r && r > 0 && r < 800000) tip = 'José Martín dice: con esa renta conviene sumar un complemento o codeudor. ¡Se puede, créeme!';
+  const w = document.getElementById('liveWrap');
+  if (tip) { w.style.display = 'flex'; document.getElementById('liveTip').textContent = tip; }
+  else w.style.display = 'none';
+}
+['valor','monto','renta','deudas'].forEach(id => document.getElementById(id).addEventListener('input', vozMartin));
+document.getElementById('subsidio').addEventListener('change', vozMartin);
 async function simular() {
   const body = { valor_propiedad: document.getElementById('valor').value,
     monto_credito: document.getElementById('monto').value,
     renta: document.getElementById('renta').value,
     deudas: document.getElementById('deudas').value,
-    con_subsidio: document.getElementById('subsidio').checked };
+    con_subsidio: document.getElementById('subsidio').checked, op: OP };
   try {
     const r = await fetch('/api/martin/simular', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
     const d = await r.json();
@@ -7609,9 +7578,14 @@ async function simular() {
     arco.style.stroke = color;
     arco.style.strokeDashoffset = String(283 - (283 * p / 100));
     document.getElementById('veredicto').textContent = d.veredicto;
+    const cw = document.getElementById('consejoWrap');
+    if (d.consejo) { cw.style.display = 'flex'; document.getElementById('consejo').textContent = d.consejo; }
+    else cw.style.display = 'none';
     document.getElementById('factores').innerHTML = d.factores.map(f => '· ' + f).join('<br>') +
       (d.cuota_estimada_clp ? '<br>· Dividendo estimado: $' + d.cuota_estimada_clp.toLocaleString('es-CL') + ' (30 años)' : '');
-    document.getElementById('btnCarpeta').style.display = d.puede_abrir_carpeta ? 'block' : 'none';
+    const btnC = document.getElementById('btnCarpeta');
+    btnC.style.display = d.puede_abrir_carpeta ? 'block' : 'none';
+    btnC.textContent = d.puede_abrir_expediente ? '✦ Abrir Expediente VIP' : '✦ Abrir Carpeta en Central Mutuos';
     document.getElementById('okMsg').style.display = 'none';
     document.getElementById('resultado').scrollIntoView({behavior:'smooth'});
   } catch(e) { alert('Error de conexión'); }
@@ -7636,15 +7610,92 @@ async function crearCarpeta() {
 
 
 # ------------------------------------------------------------------
-# INFORMES VIP DE ESTATUS (PDF estilo Forbes — Slate)
+# CENTRO DE VENTAS VIP — Oportunidades (José Martín Benavente)
+# REGLA INVIOLABLE: nada sale sin que Gerardo presione 'Autorizar Envío'.
+# ------------------------------------------------------------------
+
+def _base_url_req(request: Request):
+    proto = request.headers.get("x-forwarded-proto", "https")
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host", "")
+    return f"{proto}://{host}"
+
+
+@api.post("/oportunidades/upload-excel")
+async def oportunidades_upload(file: UploadFile = File(...)):
+    raw = await file.read()
+    try:
+        prospectos = sales_engine.parsear_excel(raw)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"No pude leer el Excel: {str(e)[:120]}")
+    if not prospectos:
+        raise HTTPException(status_code=400, detail="El Excel no tiene prospectos reconocibles (necesita columnas nombre/correo)")
+    res = await sales_engine.crear_oportunidades(prospectos)
+    return {"ok": True, **res, "total_archivo": len(prospectos)}
+
+
+@api.get("/oportunidades")
+async def oportunidades_list():
+    ops = await sales_engine.listar()
+    return {"oportunidades": ops, "resumen": sales_engine.nota_diaria(ops)}
+
+
+@api.post("/oportunidades/{oid}/preparar")
+async def oportunidades_preparar(oid: str, request: Request):
+    base = _base_url_req(request)
+    link_click = f"{base}/api/oportunidades/track/{oid}/click"
+    try:
+        return await sales_engine.preparar_borrador(oid, base, link_click)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@api.post("/oportunidades/{oid}/autorizar")
+async def oportunidades_autorizar(oid: str, payload: dict):
+    """CANDADO DE SUPERVISIÓN: requiere confirm explícito de Gerardo + bloqueo 14 días."""
+    if not (payload or {}).get("confirm"):
+        raise HTTPException(status_code=400, detail="Falta la autorización explícita de Gerardo")
+
+    def _send(to, subject, body):
+        return mail.send_mail(to, subject, body, [], "secundaria")
+
+    try:
+        return await sales_engine.autorizar_envio(oid, _send)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+@api.get("/oportunidades/track/{oid}/pixel.gif")
+async def oportunidades_pixel(oid: str):
+    await sales_engine.track(oid, "pixel")
+    gif = _b64mod.b64decode("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7")
+    return _RawResponse(content=gif, media_type="image/gif")
+
+
+@api.get("/oportunidades/track/{oid}/click")
+async def oportunidades_click(oid: str, request: Request):
+    await sales_engine.track(oid, "click")
+    token = await _martin_token()
+    return RedirectResponse(f"{_base_url_req(request)}/api/martin-vip/{token}?op={oid}")
+
+
+@api.delete("/oportunidades/{oid}")
+async def oportunidades_delete(oid: str):
+    await db.oportunidades.delete_one({"id": oid})
+    return {"ok": True}
+
+
+# ------------------------------------------------------------------
+# INFORMES VIP DE ESTATUS (PDF estilo Forbes — Oro/Carbono)
 # ------------------------------------------------------------------
 
 def _informe_vip_pdf(doc, prob):
-    """PDF elegante de estatus del crédito del cliente (paleta Slate #0f172a)."""
+    """PDF elegante de estatus del crédito del cliente (paleta Oro 24K / Negro Carbono)."""
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.colors import HexColor
     from reportlab.pdfgen import canvas as _canvas
-    SLATE, ICE, GRIS = HexColor("#0f172a"), HexColor("#60a5fa"), HexColor("#64748b")
+    SLATE, ICE, GRIS = HexColor("#0a0a0a"), HexColor("#d4af37"), HexColor("#6b7280")
     buf = io.BytesIO()
     c = _canvas.Canvas(buf, pagesize=A4)
     W, H = A4
@@ -7653,7 +7704,7 @@ def _informe_vip_pdf(doc, prob):
     # Portada / cabecera
     c.setFillColor(SLATE)
     c.rect(0, H - 150, W, 150, fill=1, stroke=0)
-    c.setFillColor(HexColor("#e2e8f0"))
+    c.setFillColor(HexColor("#FCF6BA"))
     c.setFont("Times-Bold", 24)
     c.drawString(50, H - 70, "CENTRAL MUTUOS")
     c.setFont("Helvetica", 9)
@@ -7703,7 +7754,7 @@ def _informe_vip_pdf(doc, prob):
     y -= 8
     _seccion("Evaluación crediticia")
     pct = prob.get("porcentaje")
-    c.setFillColor(ICE if (pct or 0) >= 50 else HexColor("#ef4444"))
+    c.setFillColor(ICE if (pct or 0) >= 50 else HexColor("#be123c"))
     c.setFont("Times-Bold", 30)
     c.drawString(58, y - 14, f"{pct}%")
     c.setFillColor(GRIS)
