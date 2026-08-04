@@ -600,7 +600,7 @@ async def email_send(payload: dict):
 async def intelligence_panel():
     total = await db.simulaciones.count_documents({})
     aprob = await db.simulaciones.count_documents({"precalificacion_aprobada": True})
-    sims = await db.simulaciones.find().to_list(500)
+    sims = await db.simulaciones.find({}, {"_id": 0, "capacidad_credito_uf": 1}).to_list(500)
     caps = [d.get("capacidad_credito_uf", 0) for d in sims if d.get("capacidad_credito_uf")]
     dist = {"0-1000": 0, "1000-2000": 0, "2000-3000": 0, "3000-5000": 0, "5000+": 0}
     for cval in caps:
@@ -771,7 +771,12 @@ async def _resumen_semanal_html():
     acc_html = ("".join(f'<li style="margin:5px 0">{a}</li>' for a in acciones[:20])
                 if acciones else '<li style="margin:5px 0">Sin acciones pendientes. Todo al día 💪</li>')
     # Tabla de estado de TODAS las carpetas y sus pendientes
-    docs = await db.folders.find().sort("created_at", -1).to_list(300)
+    _proy_carp = {"_id": 0, "nombre": 1, "credit_request.client_type": 1,
+                  "datos_financieros.fecha_entrega": 1, "emails_sent_count": 1,
+                  "escritura_confirmada_at": 1, "escritura_solicitada_at": 1,
+                  "tasacion_solicitada_at": 1, "tasacion_terminado_at": 1,
+                  "estudio_titulo_solicitado_at": 1, "estudio_titulo_terminado_at": 1}
+    docs = await db.folders.find({}, _proy_carp).sort("created_at", -1).to_list(300)
     filas_carp = ""
     td = "padding:5px 8px;border-bottom:1px solid #eceef3;vertical-align:top;font-size:12px;color:#1a1f2e"
     for d in docs:
@@ -1052,6 +1057,9 @@ def _folder_public(doc, con_archivos=False):
     return d
 
 
+_PROY_SEG = {"_id": 0, "cliente": 1, "asunto": 1, "estado": 1, "fecha": 1}
+
+
 async def _mesa_respuesta_folder(d, segs=None):
     """Busca la respuesta de mesa (aprobación/rechazo) para esta carpeta en seguimiento.
     REGLA: si la carpeta ya tiene descargada la carta de aprobación o la simulación
@@ -1061,7 +1069,7 @@ async def _mesa_respuesta_folder(d, segs=None):
     if not toks:
         return None
     if segs is None:
-        segs = await db.seguimiento.find({}).sort("fecha", -1).limit(200).to_list(200)
+        segs = await db.seguimiento.find({}, _PROY_SEG).sort("fecha", -1).limit(200).to_list(200)
     for s in segs:
         texto = _norm_texto(f"{s.get('cliente','')} {s.get('asunto','')}")
         hits = sum(1 for t in toks if t in texto)
@@ -1110,7 +1118,7 @@ async def list_folders(q: str = ""):
     query = {"nombre": {"$regex": q, "$options": "i"}} if q else {}
     docs = await db.folders.find(query).sort("created_at", -1).limit(200).to_list(200)
     stats = await _stats_mesa()
-    segs = await db.seguimiento.find({}).sort("fecha", -1).limit(200).to_list(200)
+    segs = await db.seguimiento.find({}, _PROY_SEG).sort("fecha", -1).limit(200).to_list(200)
     out = []
     for d in docs:
         f = _folder_public(d)
