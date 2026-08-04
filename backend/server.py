@@ -1052,14 +1052,16 @@ def _folder_public(doc, con_archivos=False):
     return d
 
 
-async def _mesa_respuesta_folder(d):
+async def _mesa_respuesta_folder(d, segs=None):
     """Busca la respuesta de mesa (aprobación/rechazo) para esta carpeta en seguimiento.
     REGLA: si la carpeta ya tiene descargada la carta de aprobación o la simulación
-    ajustada, se considera APROBADA por mesa de inmediato."""
+    ajustada, se considera APROBADA por mesa de inmediato.
+    `segs` permite pasar el seguimiento prefetcheado (evita consultas N+1 en listados)."""
     toks = [t for t in _norm_texto(d.get("nombre", "")).split() if len(t) > 2]
     if not toks:
         return None
-    segs = await db.seguimiento.find({}).sort("fecha", -1).limit(200).to_list(200)
+    if segs is None:
+        segs = await db.seguimiento.find({}).sort("fecha", -1).limit(200).to_list(200)
     for s in segs:
         texto = _norm_texto(f"{s.get('cliente','')} {s.get('asunto','')}")
         hits = sum(1 for t in toks if t in texto)
@@ -1108,12 +1110,13 @@ async def list_folders(q: str = ""):
     query = {"nombre": {"$regex": q, "$options": "i"}} if q else {}
     docs = await db.folders.find(query).sort("created_at", -1).limit(200).to_list(200)
     stats = await _stats_mesa()
+    segs = await db.seguimiento.find({}).sort("fecha", -1).limit(200).to_list(200)
     out = []
     for d in docs:
         f = _folder_public(d)
         f["prob_aprobacion"] = _prob_aprobacion_folder(d, stats)
         f["criterios"] = _criterios_folder(d)
-        f["mesa_respuesta"] = await _mesa_respuesta_folder(d)
+        f["mesa_respuesta"] = await _mesa_respuesta_folder(d, segs)
         out.append(f)
     return {"folders": out}
 
