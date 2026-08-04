@@ -8033,7 +8033,7 @@ btnF.addEventListener('click', async () => {{
     msgF.style.display = 'block';
     if (r.ok && d.ok) {{
       msgF.style.background = '#F0FDF4'; msgF.style.border = '1px solid #BBF7D0'; msgF.style.color = '#15803D';
-      msgF.textContent = d.mensaje || '✅ Documentación enviada a eCert. Revise su correo para los códigos de validación';
+      msgF.textContent = d.mensaje || '✅ Documentación enviada. Revise su correo para los códigos de validación';
       btnF.style.display = 'none';
     }} else {{
       msgF.style.background = '#FEF2F2'; msgF.style.border = '1px solid #FECACA'; msgF.style.color = '#B91C1C';
@@ -8059,7 +8059,7 @@ async def firma_click(token: str):
     return {"ok": True}
 
 
-_MSG_FIRMA_OK = "✅ Documentación enviada a eCert. Revise su correo para los códigos de validación"
+_MSG_FIRMA_OK = "✅ Documentación enviada. Revise su correo para los códigos de validación"
 
 
 @api.post("/firma/{token}/firmar")
@@ -8077,8 +8077,13 @@ async def firma_firmar(token: str):
     doc = await db.set_credito.find_one({"nombre": {"$regex": rx, "$options": "i"}}) if rx else None
     if not doc:
         raise HTTPException(status_code=400, detail="Su documentación aún no está preparada. Contacte a su ejecutivo.")
-    rut = (link.get("rut") or doc.get("rut") or "").strip()
-    email = (link.get("email") or doc.get("email") or "").strip()
+    # RUT REAL: siempre prioriza el de la carpeta/set del cliente (fuente de verdad)
+    carpeta = await db.folders.find_one({"nombre": {"$regex": rx, "$options": "i"}},
+                                        {"_id": 0, "rut": 1, "email": 1}) if rx else None
+    rut = ((doc.get("rut") or "").strip() or ((carpeta or {}).get("rut") or "").strip()
+           or (link.get("rut") or "").strip())
+    email = ((link.get("email") or "").strip() or (doc.get("email") or "").strip()
+             or ((carpeta or {}).get("email") or "").strip())
     if not rut or "@" not in email:
         raise HTTPException(status_code=400, detail="Faltan datos de contacto para la firma. Contacte a su ejecutivo.")
     partes = cliente.split()

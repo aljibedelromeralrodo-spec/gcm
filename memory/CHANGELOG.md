@@ -364,3 +364,9 @@
 - Fix 2: guard anti-candado obsoleto en _periodic_mesa_loop (ignora running si last_run_started >30 min).
 - Verificado: run manual proceso 3/3 aprobaciones de hoy (YACO SOUBALIOTIS, NICOLAS SAAVEDRA, Melisa Rivera) sent sin errores.
 - ALERTA OPERATIVA: preview y produccion sondean las MISMAS casillas -> riesgo de autocorreos duplicados. Usuario debe elegir un solo entorno con periodic_enabled.
+
+## 2026-08-04 — Configuracion final Portal Firma
+- MIGRUP_CLAVE_CERT="Rodo0586" (solo se usa cuando firma el titular; terceros va vacia).
+- Portal verificado: CERO redirecciones a migrup.cl, boton ejecuta enviar_a_firmar_tercero interno, cliente permanece en portal Central Mutuos.
+- Mensaje exito actualizado: "Documentacion enviada. Revise su correo para los codigos de validacion".
+- RUT real: prioridad set_credito -> carpeta folders -> link (evita error RUT no coincide con Clave Unica).
