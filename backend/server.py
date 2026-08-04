@@ -8003,21 +8003,46 @@ async def firma_portal(token: str):
     <div class="sello">🖋</div>
     <h1>Bienvenido a su Firma de<br>Escritura Avanzada,<br><b>{nombre}</b></h1>
     <p class="sub">Su documentación ya se encuentra preparada, validada y cargada con sus datos.
-    No necesita completar formularios: su identidad se verifica con su Clave Única.</p>
+    No necesita completar formularios ni iniciar sesión: el sistema firma con las llaves seguras de Central Mutuos.</p>
     <div class="datos"><span>Titular: <b>{nombre}</b></span><span>RUT: <b>{_mask_rut(link.get('rut'))}</b></span></div>
     <div style="margin-bottom:1.8rem">
       <div class="paso"><span>1</span> Presione el botón de firma segura</div>
-      <div class="paso"><span>2</span> Valide su identidad con su Clave Única</div>
-      <div class="paso"><span>3</span> Listo — recibirá copia firmada en su correo</div>
+      <div class="paso"><span>2</span> Su documentación se envía automáticamente a eCert</div>
+      <div class="paso"><span>3</span> Recibirá los códigos de validación en su correo</div>
     </div>
-    <a class="btn" href="https://www.migrup.cl/" target="_blank" rel="noopener" data-testid="portal-firma-btn"
-       onclick="fetch('/api/firma/{token}/click', {{method:'POST'}}).catch(()=>{{}})">
-      Validar Identidad y Firmar con Clave Única
-    </a>
+    <button class="btn" id="btnFirmar" data-testid="portal-firma-btn">🖋 Firmar Documentación</button>
+    <div id="msgFirma" data-testid="portal-firma-msg" style="display:none;margin-top:1.5rem;padding:1rem 1.2rem;border-radius:14px;font-size:0.85rem;line-height:1.6;font-weight:600"></div>
     <p class="nota">Proceso certificado por eCert Chile · Firma Electrónica Avanzada Ley 19.799<br>
-    Sus datos ya fueron transmitidos de forma segura: solo necesita su Clave Única.</p>
+    Sus datos ya fueron transmitidos de forma segura: no necesita iniciar sesión en ningún sitio externo.</p>
   </div>
   <div class="badge" data-testid="portal-firma-badge">🛡 Cifrado de Grado Militar · Firma Auditada</div>
+<script>
+const btnF = document.getElementById('btnFirmar');
+const msgF = document.getElementById('msgFirma');
+btnF.addEventListener('click', async () => {{
+  btnF.disabled = true; btnF.style.opacity = 0.65; btnF.textContent = 'Enviando documentación segura…';
+  fetch('/api/firma/{token}/click', {{method:'POST'}}).catch(()=>{{}});
+  try {{
+    const r = await fetch('/api/firma/{token}/firmar', {{method:'POST'}});
+    let d = {{}}; try {{ d = await r.json(); }} catch(e) {{}}
+    msgF.style.display = 'block';
+    if (r.ok && d.ok) {{
+      msgF.style.background = '#F0FDF4'; msgF.style.border = '1px solid #BBF7D0'; msgF.style.color = '#15803D';
+      msgF.textContent = d.mensaje || '✅ Documentación enviada a eCert. Revise su correo para los códigos de validación';
+      btnF.style.display = 'none';
+    }} else {{
+      msgF.style.background = '#FEF2F2'; msgF.style.border = '1px solid #FECACA'; msgF.style.color = '#B91C1C';
+      msgF.textContent = '⚠ ' + ((d && d.detail) || 'No fue posible enviar la firma en este momento. Contacte a su ejecutivo.');
+      btnF.disabled = false; btnF.style.opacity = 1; btnF.textContent = '🖋 Firmar Documentación';
+    }}
+  }} catch(e) {{
+    msgF.style.display = 'block';
+    msgF.style.background = '#FEF2F2'; msgF.style.border = '1px solid #FECACA'; msgF.style.color = '#B91C1C';
+    msgF.textContent = '⚠ Error de conexión. Intente nuevamente.';
+    btnF.disabled = false; btnF.style.opacity = 1; btnF.textContent = '🖋 Firmar Documentación';
+  }}
+}});
+</script>
 </body></html>"""
     return HTMLResponse(html)
 
@@ -8027,6 +8052,58 @@ async def firma_click(token: str):
     await db.firma_links.update_one({"token": token}, {"$inc": {"clicks_firma": 1},
                                                        "$set": {"ultimo_click": now_iso()}})
     return {"ok": True}
+
+
+_MSG_FIRMA_OK = "✅ Documentación enviada a eCert. Revise su correo para los códigos de validación"
+
+
+@api.post("/firma/{token}/firmar")
+async def firma_firmar(token: str):
+    """Flujo VIP: sube el set combinado del cliente a eCert con las llaves del sistema.
+    El cliente NO necesita iniciar sesión en ningún sitio externo."""
+    link = await db.firma_links.find_one({"token": token})
+    if not link:
+        raise HTTPException(status_code=404, detail="Enlace no válido o expirado")
+    if link.get("firma_enviada_en"):
+        return {"ok": True, "ya_enviada": True, "mensaje": _MSG_FIRMA_OK}
+    cliente = link.get("cliente", "")
+    toks = [t for t in _norm_texto(cliente).split() if len(t) > 2]
+    rx = ".*".join(re.escape(t) for t in toks[:2]) if toks else ""
+    doc = await db.set_credito.find_one({"nombre": {"$regex": rx, "$options": "i"}}) if rx else None
+    if not doc:
+        raise HTTPException(status_code=400, detail="Su documentación aún no está preparada. Contacte a su ejecutivo.")
+    rut = (link.get("rut") or doc.get("rut") or "").strip()
+    email = (link.get("email") or doc.get("email") or "").strip()
+    if not rut or "@" not in email:
+        raise HTTPException(status_code=400, detail="Faltan datos de contacto para la firma. Contacte a su ejecutivo.")
+    partes = cliente.split()
+    firmante = {
+        "nombres": " ".join(partes[:-2]) if len(partes) >= 3 else partes[0],
+        "aPaterno": partes[-2] if len(partes) >= 3 else (partes[-1] if len(partes) >= 2 else ""),
+        "aMaterno": partes[-1] if len(partes) >= 3 else "",
+        "rut": rut, "email": email,
+    }
+    res_comb = await asyncio.to_thread(_set_combinar, doc.get("nombre", ""))
+    if not res_comb["combinado"]:
+        raise HTTPException(status_code=400, detail="Su documentación aún no está preparada. Contacte a su ejecutivo.")
+    target = _set_dir(doc.get("nombre", "")) / res_comb["combinado"]
+    pdf_bytes = target.read_bytes()
+    posiciones = await asyncio.to_thread(pdfs.posiciones_firma_cliente, pdf_bytes)
+    if len(posiciones) > 1:
+        pdf_bytes = await asyncio.to_thread(pdfs.estampar_referencias_firma, pdf_bytes,
+                                            posiciones[1:], cliente)
+    res = await asyncio.to_thread(
+        migrup.enviar_a_firmar_tercero, pdf_bytes, target.stem, firmante,
+        "Portal de Firma Única — Central Mutuos", None, False, posiciones[:1] or None)
+    if not res.get("success"):
+        raise HTTPException(status_code=502, detail=f"No fue posible enviar la firma: {str(res.get('error'))[:180]}")
+    await db.firma_links.update_one({"token": token}, {"$set": {
+        "firma_enviada_en": now_iso(), "firma_ecert": res.get("raw") or {}}})
+    await db.set_credito.update_one({"id": doc["id"]}, {"$push": {"firmas": {
+        "documento": target.name, "firmante": email, "rut": rut,
+        "paginas": res.get("paginas"), "estampas": len(posiciones) or 1,
+        "portal_vip": True, "enviado_en": now_iso()}}})
+    return {"ok": True, "mensaje": _MSG_FIRMA_OK, "paginas": res.get("paginas")}
 
 
 @api.get("/firma/{token}/og.png")

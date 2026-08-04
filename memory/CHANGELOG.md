@@ -341,3 +341,8 @@
 - Optimizadas 3 consultas de _portal_consulta_impl: filtro RUT en DB (_rut_regex_flexible) + proyecciones en folders, proc_queue y simulaciones.
 - Deployment agent: PASS sin findings ni warnings. Claves reales en .env (correo + eCert conectados).
 - Usuario debe pulsar Re-deploy en la plataforma para llevar todo a produccion.
+
+## 2026-06 — Portal Firma VIP cableado a eCert
+- Nuevo endpoint POST /api/firma/{token}/firmar: combina el set del cliente, detecta posiciones y sube a eCert via enviar_a_firmar_tercero (llaves del sistema, sin login externo).
+- MIGRUP_CLAVE_CERT agregada al .env. Boton Firmar Documentacion reemplaza link externo migrup.cl. Idempotente.
+- eCert conectado: 14 firmas terceros disponibles. Probado: UI portal, 400 sin set, 404 token invalido. Envio real NO probado (consume 1 firma).
