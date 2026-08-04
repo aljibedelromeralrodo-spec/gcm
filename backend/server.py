@@ -47,8 +47,8 @@ def clean(doc):
 async def ensure_seed():
     # Garantizar SIEMPRE los usuarios administradores
     for u in [
-        {"codigo": "administrador", "nombre": "Administrador", "password": "141617575", "rol": "admin"},
-        {"codigo": "admin", "nombre": "Administrador", "password": "0586", "rol": "admin"},
+        {"codigo": "administrador", "nombre": "Administrador", "password": os.environ.get("ADMIN_PASSWORD_1", ""), "rol": "admin"},
+        {"codigo": "admin", "nombre": "Administrador", "password": os.environ.get("ADMIN_PASSWORD_2", ""), "rol": "admin"},
     ]:
         await db.users.update_one(
             {"codigo": u["codigo"]},
@@ -8973,10 +8973,11 @@ async def root():
 
 # ---------------------------------------------------------------------------
 app.include_router(api)
+_cors_env = os.environ.get("CORS_ORIGINS", "*")
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=["*"],
+    allow_origins=["*"] if _cors_env == "*" else [o.strip() for o in _cors_env.split(",")],
     allow_methods=["*"],
     allow_headers=["*"],
 )
