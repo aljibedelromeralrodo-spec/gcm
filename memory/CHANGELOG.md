@@ -357,3 +357,10 @@
 - Envio real exitoso: HTTP 200, mensaje de exito, 1 firma consumida (16->15), correo de eCert (notificaciones@migrup.cl, asunto Firma Documento) recibido en Gmail.
 - Idempotencia verificada: segundo click devuelve ya_enviada sin consumir saldo.
 - Flujo VIP 100% operativo. Requiere Re-deploy para produccion.
+
+## 2026-08-04 — FIX: candado autocorreo pegado
+- Causa raiz: running=True quedo pegado tras reinicio del backend (proceso interrumpido no libero flag) -> loop mesa salto aprobaciones todo el dia.
+- Fix 1: startup limpia running=False (ningun run sobrevive reinicio).
+- Fix 2: guard anti-candado obsoleto en _periodic_mesa_loop (ignora running si last_run_started >30 min).
+- Verificado: run manual proceso 3/3 aprobaciones de hoy (YACO SOUBALIOTIS, NICOLAS SAAVEDRA, Melisa Rivera) sent sin errores.
+- ALERTA OPERATIVA: preview y produccion sondean las MISMAS casillas -> riesgo de autocorreos duplicados. Usuario debe elegir un solo entorno con periodic_enabled.

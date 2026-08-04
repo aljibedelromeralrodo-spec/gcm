@@ -101,6 +101,8 @@ async def _task_blindada(coro_fn, nombre):
 @app.on_event("startup")
 async def startup():
     await ensure_seed()
+    # Liberar candado obsoleto: ningún procesamiento sobrevive a un reinicio
+    await db.config.update_one({"_key": "autocorreo_state"}, {"$set": {"running": False}})
     # BLINDADO 24/7: cada loop se reinicia solo si falla
     asyncio.create_task(_task_blindada(_periodic_mesa_loop, "mesa"))
     asyncio.create_task(_task_blindada(_periodic_proc_loop, "ingesta_carpetas"))
@@ -3248,7 +3250,10 @@ async def _periodic_mesa_loop():
         try:
             await asyncio.sleep(300)
             st = await _ac_state()
-            if st.get("periodic_enabled") and not st.get("running"):
+            corriendo = st.get("running")
+            if corriendo and (st.get("last_run_started") or "") < (datetime.now(timezone.utc) - timedelta(minutes=30)).isoformat():
+                corriendo = False  # candado obsoleto (>30 min): se ignora
+            if st.get("periodic_enabled") and not corriendo:
                 destino = st.get("destination") or os.environ.get("MAIL2_USER", "")
                 if destino:
                     ejecutivos = await _mapa_ejecutivos()
