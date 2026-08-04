@@ -56,7 +56,7 @@ export default function DashboardModule({ valorUF, userName, onNavigate }) {
       <LearningStatusPanel />
       <AlertasPanel />
       {cobrosResumen?.resumen && (
-        <div data-testid="panel-cobros-tasacion" style={{ background: "rgba(15,23,42,0.9)", border: "1px solid rgba(212,175,55,0.25)", borderRadius: 2, padding: "1rem 1.3rem", marginBottom: "1rem" }}>
+        <div data-testid="panel-cobros-tasacion" style={{ background: "rgba(14,14,16,0.9)", border: "1px solid rgba(212,175,55,0.25)", borderRadius: 0, padding: "1rem 1.3rem", marginBottom: "1rem" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: "0.7rem" }}>
             <i className="fa fa-home" style={{ color: "var(--gold)" }} />
             <b style={{ color: "var(--gold)" }}>Cobros de Tasación — Vivienda Usada ({cobrosResumen.resumen.mes})</b>
@@ -68,7 +68,7 @@ export default function DashboardModule({ valorUF, userName, onNavigate }) {
               { lbl: "Pagadas", val: cobrosResumen.resumen.pagadas, color: "#4ade80", extra: cobrosResumen.resumen.monto_pagado_clp },
               { lbl: "Pendientes de pago", val: cobrosResumen.resumen.pendientes, color: "#f87171", extra: cobrosResumen.resumen.monto_pendiente_clp },
             ].map((s, i) => (
-              <div key={i} data-testid={`cobros-stat-${i}`} style={{ background: "rgba(255,255,255,0.04)", border: "1px solid transparent", backgroundImage: "linear-gradient(160deg, rgba(15,23,42,0.98), rgba(2,6,23,0.98)), linear-gradient(140deg, #b8860b, #fde68a 45%, #d4af37 65%, #b8860b)", backgroundOrigin: "border-box", backgroundClip: "padding-box, border-box", borderRadius: 2, padding: "0.7rem 1rem", textAlign: "center" }}>
+              <div key={i} data-testid={`cobros-stat-${i}`} style={{ background: "rgba(255,255,255,0.04)", border: "1px solid transparent", backgroundImage: "linear-gradient(160deg, rgba(30,30,30,0.95), rgba(10,10,10,0.98)), linear-gradient(135deg, #BF953F, #FCF6BA, #B38728, #FBF5B7, #AA771C)", boxShadow: "0 35px 70px -20px rgba(0,0,0,0.95), 0 0 38px -16px rgba(191,149,63,0.45)", backgroundOrigin: "border-box", backgroundClip: "padding-box, border-box", borderRadius: 0, padding: "0.7rem 1rem", textAlign: "center" }}>
                 <div style={{ fontSize: "1.6rem", fontWeight: 800, color: s.color }}>{s.val}</div>
                 <div style={{ fontSize: "0.72rem", opacity: 0.7, textTransform: "uppercase", letterSpacing: 0.5 }}>{s.lbl}</div>
                 {s.extra && <div style={{ fontSize: "0.8rem", color: s.color, fontWeight: 700, marginTop: 2 }}>{s.extra}</div>}

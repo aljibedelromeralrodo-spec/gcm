@@ -4,7 +4,7 @@ import { COLORS } from "./constants";
 
 export function StatBox({ label, value, warn }) {
   return (
-    <div style={{ padding: "0.6rem", borderRadius: "2px", background: COLORS.card, border: `1px solid ${COLORS.border}`, textAlign: "center" }}>
+    <div style={{ padding: "0.6rem", borderRadius: "0px", background: COLORS.card, border: `1px solid ${COLORS.border}`, textAlign: "center" }}>
       <div style={{ fontSize: "0.7rem", color: COLORS.textMuted }}>{label}</div>
       <div style={{ fontSize: "1rem", fontWeight: 700, color: warn ? COLORS.orange : COLORS.text }}>{value}</div>
     </div>
@@ -13,7 +13,7 @@ export function StatBox({ label, value, warn }) {
 
 export function DashCard({ label, value, icon, color }) {
   return (
-    <div style={{ padding: "1rem", borderRadius: "2px", background: COLORS.card, border: `1px solid ${COLORS.border}`, textAlign: "center" }}>
+    <div style={{ padding: "1rem", borderRadius: "0px", background: COLORS.card, border: `1px solid ${COLORS.border}`, textAlign: "center" }}>
       <i className={`fa ${icon}`} style={{ fontSize: "1.3rem", color: color || COLORS.accent, marginBottom: "0.3rem", display: "block" }}></i>
       <div style={{ fontSize: "1.5rem", fontWeight: 700, color: COLORS.text }}>{value}</div>
       <div style={{ fontSize: "0.75rem", color: COLORS.textMuted }}>{label}</div>
@@ -29,7 +29,7 @@ export function EvalBadge({ label, result, razones }) {
   const textColor = na ? COLORS.textMuted : ok ? COLORS.green : COLORS.red;
   const icon = na ? "fa-minus" : ok ? "fa-check" : "fa-times";
   return (
-    <div style={{ padding: "0.6rem", borderRadius: "2px", background: bgColor, border: `1px solid ${borderColorEval}`, textAlign: "center" }}>
+    <div style={{ padding: "0.6rem", borderRadius: "0px", background: bgColor, border: `1px solid ${borderColorEval}`, textAlign: "center" }}>
       <div style={{ fontSize: "0.7rem", color: COLORS.textMuted }}>{label}</div>
       <div style={{ fontSize: "0.95rem", fontWeight: 700, color: textColor }}>
         <i className={`fa ${icon}`} style={{ marginRight: "0.3rem" }}></i>{result || "-"}
@@ -49,7 +49,7 @@ export function CentralScorePanel({ score }) {
   const offset = circumference - (s / 100) * circumference;
 
   return (
-    <div data-testid="central-score-panel" style={{ marginTop: "1rem", padding: "1rem", borderRadius: "2px", background: "linear-gradient(135deg, rgba(108,92,231,0.08), rgba(212,175,55,0.05))", border: `1px solid ${COLORS.border}` }}>
+    <div data-testid="central-score-panel" style={{ marginTop: "1rem", padding: "1rem", borderRadius: "0px", background: "linear-gradient(135deg, rgba(108,92,231,0.08), rgba(212,175,55,0.05))", border: `1px solid ${COLORS.border}` }}>
       <div style={{ textAlign: "center", marginBottom: "0.75rem" }}>
         <div style={{ fontSize: "0.85rem", fontWeight: 700, color: COLORS.accentLight, letterSpacing: "1px" }}>CENTRAL MUTUOS SCORE</div>
         <div style={{ fontSize: "0.65rem", color: COLORS.textMuted }}>{score.methodology}</div>
@@ -70,8 +70,8 @@ export function CentralScorePanel({ score }) {
         {score.factors.map((f, i) => (
           <div key={i} style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.72rem" }}>
             <div style={{ width: "90px", color: COLORS.textMuted, flexShrink: 0 }}>{f.factor}</div>
-            <div style={{ flex: 1, height: "6px", borderRadius: "3px", background: COLORS.border, overflow: "hidden" }}>
-              <div style={{ width: `${Math.max(0, (f.score / 25) * 100)}%`, height: "100%", borderRadius: "3px", background: f.score >= 15 ? "#00b894" : f.score >= 8 ? "#fdcb6e" : "#e17055", transition: "width 0.5s ease" }} />
+            <div style={{ flex: 1, height: "6px", borderRadius: "0px", background: COLORS.border, overflow: "hidden" }}>
+              <div style={{ width: `${Math.max(0, (f.score / 25) * 100)}%`, height: "100%", borderRadius: "0px", background: f.score >= 15 ? "#00b894" : f.score >= 8 ? "#fdcb6e" : "#e17055", transition: "width 0.5s ease" }} />
             </div>
             <div style={{ width: "28px", textAlign: "right", fontWeight: 600, color: COLORS.text }}>{f.score}</div>
           </div>
@@ -97,7 +97,7 @@ export function ScoreHistory({ clientName, apiUrl }) {
   if (!clientName || clientName.length < 2 || history.length < 2) return null;
 
   return (
-    <div data-testid="score-history" style={{ marginTop: "1rem", padding: "1rem", borderRadius: "2px", background: COLORS.card, border: `1px solid ${COLORS.border}` }}>
+    <div data-testid="score-history" style={{ marginTop: "1rem", padding: "1rem", borderRadius: "0px", background: COLORS.card, border: `1px solid ${COLORS.border}` }}>
       <div style={{ fontSize: "0.85rem", fontWeight: 700, color: COLORS.accentLight, marginBottom: "0.75rem" }}>
         <i className="fa fa-line-chart" style={{ marginRight: "0.4rem" }}></i>Historial de Scores - {clientName}
       </div>
@@ -108,7 +108,7 @@ export function ScoreHistory({ clientName, apiUrl }) {
             const color = riskColors[h.risk_level] || COLORS.textMuted;
             const date = new Date(h.timestamp).toLocaleDateString("es-CL", { day: "2-digit", month: "short", year: "numeric" });
             return (
-              <div key={i} style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.4rem 0.6rem", borderRadius: "2px", background: i === 0 ? "rgba(108,92,231,0.06)" : "transparent" }}>
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.4rem 0.6rem", borderRadius: "0px", background: i === 0 ? "rgba(108,92,231,0.06)" : "transparent" }}>
                 <div style={{ width: "36px", height: "36px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: "0.85rem", color: color, border: `2px solid ${color}`, flexShrink: 0 }}>
                   {h.score}
                 </div>
@@ -118,7 +118,7 @@ export function ScoreHistory({ clientName, apiUrl }) {
                   </div>
                   <div style={{ fontSize: "0.65rem", color: COLORS.textMuted }}>{date} | {h.usuario} | {h.company_name}</div>
                 </div>
-                <span style={{ padding: "2px 6px", borderRadius: "2px", fontSize: "0.6rem", fontWeight: 700, color, background: `${color}15` }}>{h.risk_level}</span>
+                <span style={{ padding: "2px 6px", borderRadius: "0px", fontSize: "0.6rem", fontWeight: 700, color, background: `${color}15` }}>{h.risk_level}</span>
               </div>
             );
           })}

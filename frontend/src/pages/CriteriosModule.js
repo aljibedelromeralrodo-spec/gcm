@@ -2,12 +2,12 @@ import { useState, useEffect } from "react";
 import axios from "axios";
 import { API_URL } from "../utils/formatters";
 
-const COLORS = { bg: "#0a0e17", card: "#111827", border: "#1e293b", text: "#e2e8f0", textMuted: "#94a3b8", accent: "#6c5ce7", green: "#00b894", red: "#e17055", orange: "#f39c12" };
+const COLORS = { bg: "#0a0e17", card: "#111827", border: "#232326", text: "#e2e8f0", textMuted: "#94a3b8", accent: "#6c5ce7", green: "#00b894", red: "#e17055", orange: "#f39c12" };
 
 const S = {
   page: { padding: "1.5rem", color: COLORS.text, maxWidth: "1200px", margin: "0 auto" },
-  card: { background: COLORS.card, borderRadius: "2px", border: `1px solid ${COLORS.border}`, padding: "1.25rem", marginBottom: "1rem" },
-  badge: (color) => ({ display: "inline-block", padding: "2px 8px", borderRadius: "2px", fontSize: "0.72rem", fontWeight: 600, background: `${color}20`, color }),
+  card: { background: COLORS.card, borderRadius: "0px", border: `1px solid ${COLORS.border}`, padding: "1.25rem", marginBottom: "1rem" },
+  badge: (color) => ({ display: "inline-block", padding: "2px 8px", borderRadius: "0px", fontSize: "0.72rem", fontWeight: 600, background: `${color}20`, color }),
   header: { fontSize: "1.1rem", fontWeight: 700, color: COLORS.accent, marginBottom: "0.75rem" },
   subheader: { fontSize: "0.85rem", fontWeight: 700, color: COLORS.text, marginBottom: "0.5rem" },
   row: { display: "flex", justifyContent: "space-between", padding: "0.3rem 0", borderBottom: `1px solid ${COLORS.border}22`, fontSize: "0.78rem" },

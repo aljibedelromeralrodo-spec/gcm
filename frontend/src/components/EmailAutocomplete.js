@@ -27,7 +27,7 @@ export const EmailAutocomplete = ({ value, onChange, style, placeholder, dataTes
         onFocus={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 200)} />
       {open && sugs.length > 0 && (
-        <div style={{ position: "absolute", top: "110%", left: 0, right: 0, background: "rgba(15,23,42,0.9)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", border: "1px solid rgba(212,175,55,0.4)", borderRadius: 2, zIndex: 40, overflow: "hidden", maxHeight: 220, overflowY: "auto" }}>
+        <div style={{ position: "absolute", top: "110%", left: 0, right: 0, background: "rgba(14,14,16,0.9)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", border: "1px solid rgba(212,175,55,0.4)", borderRadius: 0, zIndex: 40, overflow: "hidden", maxHeight: 220, overflowY: "auto" }}>
           {sugs.map((s, i) => (
             <div key={i} data-testid={`${dataTestId}-sug-${i}`}
               onMouseDown={() => { onChange(s.email); setOpen(false); }}

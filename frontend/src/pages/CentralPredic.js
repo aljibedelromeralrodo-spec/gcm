@@ -48,7 +48,7 @@ export default function CentralPredic() {
 function PredICLogin({ form, setForm, onLogin, error, loading }) {
   return (
     <div style={{ minHeight: "100vh", background: `linear-gradient(135deg, ${COLORS.bg} 0%, #1a1a4e 50%, #0a0e27 100%)`, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Segoe UI', sans-serif" }}>
-      <div style={{ width: "380px", padding: "2.5rem", borderRadius: "2px", background: COLORS.card, border: `1px solid ${COLORS.border}`, boxShadow: "0 20px 60px rgba(0,0,0,0.5)" }}>
+      <div style={{ width: "380px", padding: "2.5rem", borderRadius: "0px", background: COLORS.card, border: `1px solid ${COLORS.border}`, boxShadow: "0 20px 60px rgba(0,0,0,0.5)" }}>
         <div style={{ textAlign: "center", marginBottom: "2rem" }}>
           <div style={{ fontSize: "2.5rem", fontWeight: 800, background: `linear-gradient(135deg, ${COLORS.accent}, ${COLORS.gold})`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
             Central PREDIC
@@ -59,16 +59,16 @@ function PredICLogin({ form, setForm, onLogin, error, loading }) {
           <input data-testid="predic-login-user" placeholder="Usuario" value={form.usuario}
             onChange={e => setForm({...form, usuario: e.target.value})}
             onKeyDown={e => e.key === "Enter" && onLogin()}
-            style={{ padding: "0.85rem 1rem", borderRadius: "2px", border: `1px solid ${COLORS.border}`, background: "rgba(255,255,255,0.05)", color: COLORS.text, fontSize: "1rem", outline: "none" }}
+            style={{ padding: "0.85rem 1rem", borderRadius: "0px", border: `1px solid ${COLORS.border}`, background: "rgba(255,255,255,0.05)", color: COLORS.text, fontSize: "1rem", outline: "none" }}
           />
           <input data-testid="predic-login-pass" type="password" placeholder="Clave" value={form.password}
             onChange={e => setForm({...form, password: e.target.value})}
             onKeyDown={e => e.key === "Enter" && onLogin()}
-            style={{ padding: "0.85rem 1rem", borderRadius: "2px", border: `1px solid ${COLORS.border}`, background: "rgba(255,255,255,0.05)", color: COLORS.text, fontSize: "1rem", outline: "none" }}
+            style={{ padding: "0.85rem 1rem", borderRadius: "0px", border: `1px solid ${COLORS.border}`, background: "rgba(255,255,255,0.05)", color: COLORS.text, fontSize: "1rem", outline: "none" }}
           />
           {error && <div data-testid="predic-login-error" style={{ color: COLORS.red, fontSize: "0.85rem", textAlign: "center" }}>{error}</div>}
           <button data-testid="predic-login-btn" onClick={onLogin} disabled={loading}
-            style={{ padding: "0.9rem", borderRadius: "2px", border: "none", background: `linear-gradient(135deg, ${COLORS.accent}, #4834d4)`, color: "#fff", fontSize: "1rem", fontWeight: 700, cursor: loading ? "wait" : "pointer", letterSpacing: "1px" }}>
+            style={{ padding: "0.9rem", borderRadius: "0px", border: "none", background: `linear-gradient(135deg, ${COLORS.accent}, #4834d4)`, color: "#fff", fontSize: "1rem", fontWeight: 700, cursor: loading ? "wait" : "pointer", letterSpacing: "1px" }}>
             {loading ? "Verificando..." : "INGRESAR"}
           </button>
         </div>
@@ -263,7 +263,7 @@ function PredICApp({ auth, onLogout }) {
     setChatLoading(false);
   };
 
-  const S = { input: { width: "100%", padding: "0.75rem 1rem", borderRadius: "2px", border: `1px solid ${COLORS.border}`, background: "rgba(255,255,255,0.06)", color: COLORS.text, fontSize: "0.95rem", outline: "none", boxSizing: "border-box" } };
+  const S = { input: { width: "100%", padding: "0.75rem 1rem", borderRadius: "0px", border: `1px solid ${COLORS.border}`, background: "rgba(255,255,255,0.06)", color: COLORS.text, fontSize: "0.95rem", outline: "none", boxSizing: "border-box" } };
 
   return (
     <div style={{ minHeight: "100vh", background: `linear-gradient(135deg, ${COLORS.bg} 0%, #1a1a4e 50%, #0a0e27 100%)`, fontFamily: "'Segoe UI', sans-serif", color: COLORS.text }}>
@@ -278,11 +278,11 @@ function PredICApp({ auth, onLogout }) {
         <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
           {[["predictor", "fa-calculator", "Predictor"], ["dashboard", "fa-chart-bar", "Mi Dashboard"], ["config", "fa-cog", "Tasas"]].map(([v, icon, label]) => (
             <button key={v} data-testid={`predic-tab-${v}`} onClick={() => { setView(v); if (v === "dashboard") loadDashboard(); }}
-              style={{ padding: "0.4rem 0.8rem", borderRadius: "2px", border: `1px solid ${view === v ? COLORS.accent : COLORS.border}`, background: view === v ? "rgba(108,92,231,0.15)" : "transparent", color: view === v ? COLORS.accentLight : COLORS.textMuted, fontSize: "0.78rem", fontWeight: 600, cursor: "pointer" }}>
+              style={{ padding: "0.4rem 0.8rem", borderRadius: "0px", border: `1px solid ${view === v ? COLORS.accent : COLORS.border}`, background: view === v ? "rgba(108,92,231,0.15)" : "transparent", color: view === v ? COLORS.accentLight : COLORS.textMuted, fontSize: "0.78rem", fontWeight: 600, cursor: "pointer" }}>
               <i className={`fa ${icon}`} style={{ marginRight: "0.3rem" }}></i>{label}
             </button>
           ))}
-          <button data-testid="predic-logout" onClick={onLogout} style={{ padding: "0.4rem 1rem", borderRadius: "2px", border: `1px solid ${COLORS.border}`, background: "transparent", color: COLORS.textMuted, cursor: "pointer", fontSize: "0.8rem" }}>
+          <button data-testid="predic-logout" onClick={onLogout} style={{ padding: "0.4rem 1rem", borderRadius: "0px", border: `1px solid ${COLORS.border}`, background: "transparent", color: COLORS.textMuted, cursor: "pointer", fontSize: "0.8rem" }}>
             Salir
           </button>
         </div>
@@ -302,13 +302,13 @@ function PredICApp({ auth, onLogout }) {
               </div>
 
               {dashData.recientes?.length > 0 && (
-                <div style={{ padding: "1rem", borderRadius: "2px", background: COLORS.card, border: `1px solid ${COLORS.border}`, marginBottom: "1rem" }}>
+                <div style={{ padding: "1rem", borderRadius: "0px", background: COLORS.card, border: `1px solid ${COLORS.border}`, marginBottom: "1rem" }}>
                   <div style={{ fontWeight: 700, color: COLORS.text, fontSize: "0.9rem", marginBottom: "0.75rem" }}>
                     <i className="fa fa-history" style={{ color: COLORS.accent, marginRight: "0.4rem" }}></i>Mis Predicciones Recientes
                   </div>
                   {dashData.recientes.map((p, i) => (
                     <div key={i} style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.4rem 0", borderBottom: i < dashData.recientes.length - 1 ? `1px solid ${COLORS.border}` : "none" }}>
-                      <span style={{ padding: "2px 6px", borderRadius: "2px", fontSize: "0.7rem", fontWeight: 700, background: p.viable ? "rgba(0,184,148,0.15)" : "rgba(225,112,85,0.15)", color: p.viable ? COLORS.green : COLORS.red }}>{p.viable ? "VIABLE" : "NO"}</span>
+                      <span style={{ padding: "2px 6px", borderRadius: "0px", fontSize: "0.7rem", fontWeight: 700, background: p.viable ? "rgba(0,184,148,0.15)" : "rgba(225,112,85,0.15)", color: p.viable ? COLORS.green : COLORS.red }}>{p.viable ? "VIABLE" : "NO"}</span>
                       <span style={{ fontSize: "0.82rem", color: COLORS.text }}>{formatCLP(p.valor_propiedad_clp || 0)}</span>
                       <span style={{ fontSize: "0.75rem", color: COLORS.textMuted }}>Renta: {formatCLP(p.renta || 0)}</span>
                       <span style={{ marginLeft: "auto", fontSize: "0.7rem", color: COLORS.textMuted }}>{p.timestamp ? new Date(p.timestamp).toLocaleDateString("es-CL") : ""}</span>
@@ -318,7 +318,7 @@ function PredICApp({ auth, onLogout }) {
               )}
 
               {dashData.leads?.length > 0 && (
-                <div style={{ padding: "1rem", borderRadius: "2px", background: COLORS.card, border: `1px solid ${COLORS.border}` }}>
+                <div style={{ padding: "1rem", borderRadius: "0px", background: COLORS.card, border: `1px solid ${COLORS.border}` }}>
                   <div style={{ fontWeight: 700, color: COLORS.text, fontSize: "0.9rem", marginBottom: "0.75rem" }}>
                     <i className="fa fa-users" style={{ color: COLORS.gold, marginRight: "0.4rem" }}></i>Mis Leads
                   </div>
@@ -327,7 +327,7 @@ function PredICApp({ auth, onLogout }) {
                       <i className="fa fa-user" style={{ color: COLORS.accent, fontSize: "0.8rem" }}></i>
                       <span style={{ fontSize: "0.82rem", color: COLORS.text, fontWeight: 500 }}>{l.nombre}</span>
                       <span style={{ fontSize: "0.75rem", color: COLORS.textMuted }}>{l.telefono}</span>
-                      <span style={{ marginLeft: "auto", padding: "1px 6px", borderRadius: "2px", fontSize: "0.68rem", fontWeight: 600, background: l.estado === "nuevo" ? "rgba(243,156,18,0.15)" : "rgba(0,184,148,0.15)", color: l.estado === "nuevo" ? COLORS.orange : COLORS.green }}>{l.estado}</span>
+                      <span style={{ marginLeft: "auto", padding: "1px 6px", borderRadius: "0px", fontSize: "0.68rem", fontWeight: 600, background: l.estado === "nuevo" ? "rgba(243,156,18,0.15)" : "rgba(0,184,148,0.15)", color: l.estado === "nuevo" ? COLORS.orange : COLORS.green }}>{l.estado}</span>
                     </div>
                   ))}
                 </div>
@@ -348,7 +348,7 @@ function PredICApp({ auth, onLogout }) {
       {/* Config View */}
       {view === "config" && (
         <div style={{ maxWidth: "520px", margin: "0 auto", padding: "1.5rem 1rem" }}>
-          <div style={{ background: COLORS.card, borderRadius: "2px", padding: "1.5rem", border: `1px solid ${COLORS.border}` }}>
+          <div style={{ background: COLORS.card, borderRadius: "0px", padding: "1.5rem", border: `1px solid ${COLORS.border}` }}>
             <h3 style={{ fontSize: "1.1rem", fontWeight: 700, color: COLORS.text, marginBottom: "1rem" }}>
               <i className="fa fa-cog" style={{ color: COLORS.gold, marginRight: "0.5rem" }}></i>Configuracion de Tasas de Interes
             </h3>
@@ -357,7 +357,7 @@ function PredICApp({ auth, onLogout }) {
             </p>
 
             <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-              <div style={{ padding: "0.75rem", borderRadius: "2px", background: "rgba(0,184,148,0.06)", border: "1px solid rgba(0,184,148,0.15)" }}>
+              <div style={{ padding: "0.75rem", borderRadius: "0px", background: "rgba(0,184,148,0.06)", border: "1px solid rgba(0,184,148,0.15)" }}>
                 <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "#00b894", marginBottom: "0.6rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>
                   <i className="fa fa-ticket" style={{ marginRight: "0.3rem" }}></i>Tasas Con Subsidio
                 </div>
@@ -395,12 +395,12 @@ function PredICApp({ auth, onLogout }) {
             </div>
 
             <button data-testid="config-save-tasas" onClick={saveTasas} disabled={tasasSaving}
-              style={{ marginTop: "1.25rem", width: "100%", padding: "0.75rem", borderRadius: "2px", border: "none", background: `linear-gradient(135deg, ${COLORS.accent}, #4834d4)`, color: "#fff", fontWeight: 700, fontSize: "0.95rem", cursor: tasasSaving ? "wait" : "pointer" }}>
+              style={{ marginTop: "1.25rem", width: "100%", padding: "0.75rem", borderRadius: "0px", border: "none", background: `linear-gradient(135deg, ${COLORS.accent}, #4834d4)`, color: "#fff", fontWeight: 700, fontSize: "0.95rem", cursor: tasasSaving ? "wait" : "pointer" }}>
               <i className={`fa ${tasasSaving ? "fa-spinner fa-spin" : "fa-save"}`} style={{ marginRight: "0.5rem" }}></i>
               {tasasSaving ? "Guardando..." : "Guardar Tasas"}
             </button>
 
-            <div style={{ marginTop: "1rem", padding: "0.75rem", borderRadius: "2px", background: "rgba(212,175,55,0.08)", border: `2px solid rgba(212,175,55,0.55)` }}>
+            <div style={{ marginTop: "1rem", padding: "0.75rem", borderRadius: "0px", background: "rgba(212,175,55,0.08)", border: `2px solid rgba(212,175,55,0.55)` }}>
               <div style={{ fontSize: "0.75rem", color: COLORS.gold }}>
                 <i className="fa fa-info-circle" style={{ marginRight: "0.3rem" }}></i>
                 Estas tasas se usaran en todas las evaluaciones nuevas. Los cambios se aplican inmediatamente.
@@ -417,7 +417,7 @@ function PredICApp({ auth, onLogout }) {
           {[["subsidio", "Con Subsidio"], ["sin_subsidio", "Sin Subsidio"]].map(([key, label]) => (
             <button key={key} data-testid={`predic-mode-${key}`} onClick={() => { setModo(key); setResult(null); }}
               style={{
-                flex: 1, padding: "0.75rem", borderRadius: "2px", border: `2px solid ${modo === key ? COLORS.accent : COLORS.border}`,
+                flex: 1, padding: "0.75rem", borderRadius: "0px", border: `2px solid ${modo === key ? COLORS.accent : COLORS.border}`,
                 background: modo === key ? `linear-gradient(135deg, rgba(108,92,231,0.2), rgba(108,92,231,0.05))` : "transparent",
                 color: modo === key ? COLORS.accentLight : COLORS.textMuted, fontWeight: 700, fontSize: "0.95rem", cursor: "pointer",
                 transition: "all 0.2s",
@@ -431,7 +431,7 @@ function PredICApp({ auth, onLogout }) {
         <div style={{ display: "flex", flexDirection: "column", gap: "1rem", marginBottom: "1.25rem" }}>
 
           {/* Section: Cliente */}
-          <div style={{ padding: "0.75rem", borderRadius: "2px", background: "rgba(108,92,231,0.04)", border: `1px solid ${COLORS.border}` }}>
+          <div style={{ padding: "0.75rem", borderRadius: "0px", background: "rgba(108,92,231,0.04)", border: `1px solid ${COLORS.border}` }}>
             <div style={{ fontSize: "0.7rem", fontWeight: 700, color: COLORS.accentLight, marginBottom: "0.5rem", textTransform: "uppercase", letterSpacing: "1px" }}>
               <i className="fa fa-user" style={{ marginRight: "0.3rem" }}></i>Cliente
             </div>
@@ -457,7 +457,7 @@ function PredICApp({ auth, onLogout }) {
           </div>
 
           {/* Section: Propiedad */}
-          <div style={{ padding: "0.75rem", borderRadius: "2px", background: "rgba(212,175,55,0.04)", border: `1px solid ${COLORS.border}` }}>
+          <div style={{ padding: "0.75rem", borderRadius: "0px", background: "rgba(212,175,55,0.04)", border: `1px solid ${COLORS.border}` }}>
             <div style={{ fontSize: "0.7rem", fontWeight: 700, color: COLORS.gold, marginBottom: "0.5rem", textTransform: "uppercase", letterSpacing: "1px" }}>
               <i className="fa fa-home" style={{ marginRight: "0.3rem" }}></i>Propiedad y Credito
             </div>
@@ -533,13 +533,13 @@ function PredICApp({ auth, onLogout }) {
             {/* Real-time LTV indicator */}
             {parseFloat(form.valor_propiedad) > 0 && parseFloat(form.monto_credito) > 0 && (
               <div style={{ marginTop: "0.4rem", display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                <span style={{ padding: "2px 6px", borderRadius: "2px", fontSize: "0.65rem", fontWeight: 600,
+                <span style={{ padding: "2px 6px", borderRadius: "0px", fontSize: "0.65rem", fontWeight: 600,
                   background: (parseFloat(form.monto_credito) / parseFloat(form.valor_propiedad)) <= (modo === "subsidio" ? 0.8 : 0.9) ? "rgba(0,184,148,0.12)" : "rgba(225,112,85,0.12)",
                   color: (parseFloat(form.monto_credito) / parseFloat(form.valor_propiedad)) <= (modo === "subsidio" ? 0.8 : 0.9) ? COLORS.green : COLORS.red }}>
                   LTV: {((parseFloat(form.monto_credito) / parseFloat(form.valor_propiedad)) * 100).toFixed(0)}% (max {modo === "subsidio" ? "80" : "90"}%)
                 </span>
                 {parseFloat(form.pie) > 0 && (
-                  <span style={{ padding: "2px 6px", borderRadius: "2px", fontSize: "0.65rem", fontWeight: 600, background: "rgba(108,92,231,0.1)", color: COLORS.accentLight }}>
+                  <span style={{ padding: "2px 6px", borderRadius: "0px", fontSize: "0.65rem", fontWeight: 600, background: "rgba(108,92,231,0.1)", color: COLORS.accentLight }}>
                     Pie: {((parseFloat(form.pie) / parseFloat(form.valor_propiedad)) * 100).toFixed(0)}%
                   </span>
                 )}
@@ -548,7 +548,7 @@ function PredICApp({ auth, onLogout }) {
           </div>
 
           {/* Section: Ingresos */}
-          <div style={{ padding: "0.75rem", borderRadius: "2px", background: "rgba(0,184,148,0.04)", border: `1px solid ${COLORS.border}` }}>
+          <div style={{ padding: "0.75rem", borderRadius: "0px", background: "rgba(0,184,148,0.04)", border: `1px solid ${COLORS.border}` }}>
             <div style={{ fontSize: "0.7rem", fontWeight: 700, color: COLORS.green, marginBottom: "0.5rem", textTransform: "uppercase", letterSpacing: "1px" }}>
               <i className="fa fa-briefcase" style={{ marginRight: "0.3rem" }}></i>Ingresos del Titular
             </div>
@@ -570,11 +570,11 @@ function PredICApp({ auth, onLogout }) {
               const castigo = total - efectiva;
               return (
                 <div style={{ marginTop: "0.4rem", display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                  <span data-testid="predic-renta-total" style={{ padding: "2px 6px", borderRadius: "2px", fontSize: "0.65rem", fontWeight: 600, background: "rgba(0,184,148,0.12)", color: COLORS.green }}>
+                  <span data-testid="predic-renta-total" style={{ padding: "2px 6px", borderRadius: "0px", fontSize: "0.65rem", fontWeight: 600, background: "rgba(0,184,148,0.12)", color: COLORS.green }}>
                     Total: ${total.toLocaleString("es-CL")}
                   </span>
                   {castigo > 0 && (
-                    <span data-testid="predic-renta-castigo" style={{ padding: "2px 6px", borderRadius: "2px", fontSize: "0.65rem", fontWeight: 600, background: "rgba(243,156,18,0.12)", color: COLORS.orange }}>
+                    <span data-testid="predic-renta-castigo" style={{ padding: "2px 6px", borderRadius: "0px", fontSize: "0.65rem", fontWeight: 600, background: "rgba(243,156,18,0.12)", color: COLORS.orange }}>
                       Castigo Renta: -${castigo.toLocaleString("es-CL")} | Efectiva: ${efectiva.toLocaleString("es-CL")}
                     </span>
                   )}
@@ -589,7 +589,7 @@ function PredICApp({ auth, onLogout }) {
                 const ratio = deuda / totalR;
                 return (
                   <div style={{ marginTop: "0.3rem" }}>
-                    <span style={{ padding: "2px 6px", borderRadius: "2px", fontSize: "0.65rem", fontWeight: 600,
+                    <span style={{ padding: "2px 6px", borderRadius: "0px", fontSize: "0.65rem", fontWeight: 600,
                       background: ratio <= 0.35 ? "rgba(0,184,148,0.12)" : "rgba(225,112,85,0.12)",
                       color: ratio <= 0.35 ? COLORS.green : COLORS.red }}>
                       Carga actual: {(ratio * 100).toFixed(0)}% {ratio > 0.35 ? "(>35%)" : ""}
@@ -604,13 +604,13 @@ function PredICApp({ auth, onLogout }) {
 
         {/* Advanced evaluation toggle */}
         <button data-testid="predic-advanced-toggle" onClick={() => setShowAdv(!showAdv)}
-          style={{ width: "100%", padding: "0.6rem", borderRadius: "2px", border: `1px solid ${COLORS.border}`, background: showAdv ? "rgba(108,92,231,0.1)" : "transparent", color: COLORS.textMuted, cursor: "pointer", fontSize: "0.82rem", fontWeight: 600, marginBottom: "0.75rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.4rem" }}>
+          style={{ width: "100%", padding: "0.6rem", borderRadius: "0px", border: `1px solid ${COLORS.border}`, background: showAdv ? "rgba(108,92,231,0.1)" : "transparent", color: COLORS.textMuted, cursor: "pointer", fontSize: "0.82rem", fontWeight: 600, marginBottom: "0.75rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.4rem" }}>
           <i className={`fa fa-${showAdv ? "chevron-up" : "chevron-down"}`}></i>
           Evaluacion Avanzada
         </button>
 
         {showAdv && (
-          <div data-testid="predic-advanced-section" style={{ padding: "1rem", borderRadius: "2px", background: "rgba(108,92,231,0.06)", border: `1px solid ${COLORS.border}`, marginBottom: "0.75rem" }}>
+          <div data-testid="predic-advanced-section" style={{ padding: "1rem", borderRadius: "0px", background: "rgba(108,92,231,0.06)", border: `1px solid ${COLORS.border}`, marginBottom: "0.75rem" }}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", marginBottom: "0.75rem" }}>
               <div>
                 <label style={{ fontSize: "0.72rem", color: COLORS.textMuted, display: "block", marginBottom: "2px" }}>Tipo Deudor</label>
@@ -669,7 +669,7 @@ function PredICApp({ auth, onLogout }) {
         {/* Predict button */}
         <button data-testid="predic-calculate-btn" onClick={handlePredict} disabled={loading}
           style={{
-            width: "100%", padding: "1rem", borderRadius: "2px", border: "none", fontSize: "1.1rem", fontWeight: 800, cursor: loading ? "wait" : "pointer",
+            width: "100%", padding: "1rem", borderRadius: "0px", border: "none", fontSize: "1.1rem", fontWeight: 800, cursor: loading ? "wait" : "pointer",
             background: `linear-gradient(135deg, ${COLORS.accent}, #4834d4, ${COLORS.accent})`, backgroundSize: "200%",
             color: "#fff", letterSpacing: "1px", boxShadow: `0 4px 20px rgba(108,92,231,0.4)`,
             animation: loading ? "none" : undefined,
@@ -684,7 +684,7 @@ function PredICApp({ auth, onLogout }) {
         {/* Compare with Competitors Button */}
         {result && !result.error && (
           <button data-testid="predic-comparar-btn" onClick={handleComparar} disabled={comparandoLoad}
-            style={{ width: "100%", marginTop: "1rem", padding: "0.85rem", borderRadius: "2px", border: "2px solid rgba(212,175,55,0.4)", background: "linear-gradient(135deg, rgba(212,175,55,0.15), rgba(212,175,55,0.05))", color: COLORS.gold, fontWeight: 700, fontSize: "0.95rem", cursor: "pointer", transition: "all 0.3s" }}>
+            style={{ width: "100%", marginTop: "1rem", padding: "0.85rem", borderRadius: "0px", border: "2px solid rgba(212,175,55,0.4)", background: "linear-gradient(135deg, rgba(212,175,55,0.15), rgba(212,175,55,0.05))", color: COLORS.gold, fontWeight: 700, fontSize: "0.95rem", cursor: "pointer", transition: "all 0.3s" }}>
             <i className={`fa ${comparandoLoad ? "fa-spinner fa-spin" : "fa-balance-scale"}`} style={{ marginRight: "0.4rem" }}></i>
             {comparandoLoad ? "Comparando..." : "COMPARA CON COMPETIDORES"}
           </button>
@@ -692,7 +692,7 @@ function PredICApp({ auth, onLogout }) {
 
         {/* Comparison Results */}
         {comparacion && (
-          <div data-testid="predic-comparacion" style={{ marginTop: "1rem", borderRadius: "2px", overflow: "hidden", border: `2px solid rgba(212,175,55,0.3)`, background: COLORS.card }}>
+          <div data-testid="predic-comparacion" style={{ marginTop: "1rem", borderRadius: "0px", overflow: "hidden", border: `2px solid rgba(212,175,55,0.3)`, background: COLORS.card }}>
             {/* Header with commercial message */}
             <div style={{ padding: "1.25rem", background: "linear-gradient(135deg, rgba(212,175,55,0.15), rgba(108,92,231,0.1))", borderBottom: `1px solid ${COLORS.border}` }}>
               <div data-testid="comparar-titular" style={{ fontSize: "1.15rem", fontWeight: 800, color: COLORS.gold, marginBottom: "0.3rem" }}>
@@ -706,18 +706,18 @@ function PredICApp({ auth, onLogout }) {
             {/* Summary badges */}
             <div style={{ padding: "0.75rem 1.25rem", display: "flex", gap: "0.5rem", flexWrap: "wrap", borderBottom: `1px solid ${COLORS.border}` }}>
               {comparacion.datos_comparacion && (
-                <span style={{ padding: "4px 10px", borderRadius: "2px", fontSize: "0.75rem", fontWeight: 600, background: "rgba(212,175,55,0.2)", color: COLORS.text }}>
+                <span style={{ padding: "4px 10px", borderRadius: "0px", fontSize: "0.75rem", fontWeight: 600, background: "rgba(212,175,55,0.2)", color: COLORS.text }}>
                   Credito: {comparacion.datos_comparacion.monto_credito_uf} UF | {comparacion.datos_comparacion.plazo_anos} anos | Pie {comparacion.datos_comparacion.pie_pct}%
                 </span>
               )}
-              <span style={{ padding: "4px 10px", borderRadius: "2px", fontSize: "0.75rem", fontWeight: 700, background: "rgba(212,175,55,0.15)", color: COLORS.gold }}>
+              <span style={{ padding: "4px 10px", borderRadius: "0px", fontSize: "0.75rem", fontWeight: 700, background: "rgba(212,175,55,0.15)", color: COLORS.gold }}>
                 Tu tasa: {comparacion.resumen?.tasa_mutuaria}%
               </span>
-              <span style={{ padding: "4px 10px", borderRadius: "2px", fontSize: "0.75rem", fontWeight: 600, background: "rgba(108,92,231,0.12)", color: COLORS.accentLight }}>
+              <span style={{ padding: "4px 10px", borderRadius: "0px", fontSize: "0.75rem", fontWeight: 600, background: "rgba(108,92,231,0.12)", color: COLORS.accentLight }}>
                 Promedio bancos: {comparacion.resumen?.tasa_promedio_bancos}%
               </span>
               {comparacion.resumen?.diferencia_dividendo_mensual > 0 && (
-                <span style={{ padding: "4px 10px", borderRadius: "2px", fontSize: "0.75rem", fontWeight: 600, background: "rgba(0,184,148,0.12)", color: COLORS.green }}>
+                <span style={{ padding: "4px 10px", borderRadius: "0px", fontSize: "0.75rem", fontWeight: 600, background: "rgba(0,184,148,0.12)", color: COLORS.green }}>
                   Diferencia: ${Math.abs(comparacion.resumen.diferencia_dividendo_mensual).toLocaleString("es-CL")}/mes
                 </span>
               )}
@@ -781,7 +781,7 @@ function PredICApp({ auth, onLogout }) {
                   const a = document.createElement("a"); a.href = url; a.download = `Comparativa_${(form.nombre_cliente || "Cliente").replace(/ /g,"_")}.pdf`; a.click();
                 } catch {}
               }}
-                style={{ width: "100%", marginTop: "0.75rem", padding: "0.7rem", borderRadius: "2px", border: "none", background: "linear-gradient(135deg, rgba(212,175,55,0.9), rgba(180,140,40,0.9))", color: "#fff", fontWeight: 700, fontSize: "0.85rem", cursor: "pointer" }}>
+                style={{ width: "100%", marginTop: "0.75rem", padding: "0.7rem", borderRadius: "0px", border: "none", background: "linear-gradient(135deg, rgba(212,175,55,0.9), rgba(180,140,40,0.9))", color: "#fff", fontWeight: 700, fontSize: "0.85rem", cursor: "pointer" }}>
                 <i className="fa fa-file-pdf-o" style={{ marginRight: "0.3rem" }}></i> DESCARGAR PDF COMPARATIVO
               </button>
             </div>
@@ -790,7 +790,7 @@ function PredICApp({ auth, onLogout }) {
 
         {/* Contact form - appears after result */}
         {result && !result.error && (
-          <div data-testid="predic-contact-section" style={{ marginTop: "1.25rem", borderRadius: "2px", padding: "1.25rem", border: `1px solid ${COLORS.border}`, background: COLORS.card }}>
+          <div data-testid="predic-contact-section" style={{ marginTop: "1.25rem", borderRadius: "0px", padding: "1.25rem", border: `1px solid ${COLORS.border}`, background: COLORS.card }}>
             {contactSent ? (
               <div data-testid="predic-contact-success" style={{ textAlign: "center", padding: "1rem" }}>
                 <i className="fa fa-check-circle" style={{ fontSize: "2.5rem", color: COLORS.green }}></i>
@@ -816,7 +816,7 @@ function PredICApp({ auth, onLogout }) {
                     onChange={e => setContactForm({...contactForm, mensaje: e.target.value})}
                     rows={2} style={{...S.input, resize: "none"}} />
                   <button data-testid="predic-contact-btn" onClick={handleContact}
-                    style={{ padding: "0.8rem", borderRadius: "2px", border: "none", background: `linear-gradient(135deg, ${COLORS.green}, #00a884)`, color: "#fff", fontWeight: 700, fontSize: "0.95rem", cursor: "pointer", boxShadow: `0 4px 15px rgba(0,184,148,0.3)` }}>
+                    style={{ padding: "0.8rem", borderRadius: "0px", border: "none", background: `linear-gradient(135deg, ${COLORS.green}, #00a884)`, color: "#fff", fontWeight: 700, fontSize: "0.95rem", cursor: "pointer", boxShadow: `0 4px 15px rgba(0,184,148,0.3)` }}>
                     <i className="fa fa-paper-plane"></i> ENVIAR MIS DATOS
                   </button>
                 </div>
@@ -828,11 +828,11 @@ function PredICApp({ auth, onLogout }) {
         {/* Debt Calculator */}
         <div style={{ marginTop: "1.5rem" }}>
           <button data-testid="predic-calc-toggle" onClick={() => setShowCalc(!showCalc)}
-            style={{ width: "100%", padding: "0.65rem", borderRadius: "2px", border: `1px solid ${COLORS.border}`, background: "transparent", color: COLORS.accentLight, cursor: "pointer", fontSize: "0.85rem", fontWeight: 600 }}>
+            style={{ width: "100%", padding: "0.65rem", borderRadius: "0px", border: `1px solid ${COLORS.border}`, background: "transparent", color: COLORS.accentLight, cursor: "pointer", fontSize: "0.85rem", fontWeight: 600 }}>
             <i className={`fa fa-calculator`}></i> Calculadora de Endeudamiento {showCalc ? "▲" : "▼"}
           </button>
           {showCalc && (
-            <div data-testid="predic-debt-calculator" style={{ marginTop: "0.75rem", padding: "1rem", borderRadius: "2px", border: `1px solid ${COLORS.border}`, background: COLORS.card }}>
+            <div data-testid="predic-debt-calculator" style={{ marginTop: "0.75rem", padding: "1rem", borderRadius: "0px", border: `1px solid ${COLORS.border}`, background: COLORS.card }}>
               <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
                 <Field label="Monto de la Deuda" icon="fa-money" value={calcForm.monto_deuda} testId="predic-calc-monto"
                   onChange={v => setCalcForm({...calcForm, monto_deuda: v})} style={S.input} />
@@ -851,11 +851,11 @@ function PredICApp({ auth, onLogout }) {
                   </div>
                 </div>
                 <button data-testid="predic-calc-btn" onClick={handleCalc}
-                  style={{ padding: "0.6rem", borderRadius: "2px", border: "none", background: `linear-gradient(135deg, ${COLORS.orange}, #e67e22)`, color: "#fff", fontWeight: 700, cursor: "pointer" }}>
+                  style={{ padding: "0.6rem", borderRadius: "0px", border: "none", background: `linear-gradient(135deg, ${COLORS.orange}, #e67e22)`, color: "#fff", fontWeight: 700, cursor: "pointer" }}>
                   CALCULAR CUOTA
                 </button>
                 {calcResult && (
-                  <div data-testid="predic-calc-result" style={{ padding: "0.75rem", borderRadius: "2px", background: "rgba(243,156,18,0.1)", border: `1px solid rgba(243,156,18,0.3)`, marginTop: "0.3rem" }}>
+                  <div data-testid="predic-calc-result" style={{ padding: "0.75rem", borderRadius: "0px", background: "rgba(243,156,18,0.1)", border: `1px solid rgba(243,156,18,0.3)`, marginTop: "0.3rem" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.9rem" }}>
                       <span style={{ color: COLORS.textMuted }}>Cuota Mensual:</span>
                       <span style={{ fontWeight: 700, color: COLORS.orange }}>{formatCLP(calcResult.cuota_mensual)}</span>
@@ -890,7 +890,7 @@ function PredICApp({ auth, onLogout }) {
 
       {/* Chat Panel */}
       {showChat && chatEnabled && (
-        <div data-testid="predic-chat-panel" style={{ position: "fixed", bottom: "5rem", right: "1.5rem", width: "360px", maxHeight: "500px", borderRadius: "2px", background: COLORS.card, border: `2px solid ${COLORS.accent}`, boxShadow: "0 8px 40px rgba(0,0,0,0.4)", zIndex: 1000, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <div data-testid="predic-chat-panel" style={{ position: "fixed", bottom: "5rem", right: "1.5rem", width: "360px", maxHeight: "500px", borderRadius: "0px", background: COLORS.card, border: `2px solid ${COLORS.accent}`, boxShadow: "0 8px 40px rgba(0,0,0,0.4)", zIndex: 1000, display: "flex", flexDirection: "column", overflow: "hidden" }}>
           {/* Chat Header */}
           <div style={{ padding: "0.75rem 1rem", background: `linear-gradient(135deg, ${COLORS.accent}, rgba(108,92,231,0.8))`, display: "flex", alignItems: "center", gap: "0.5rem" }}>
             <i className="fa fa-robot" style={{ color: "#fff", fontSize: "1.1rem" }}></i>
@@ -916,7 +916,7 @@ function PredICApp({ auth, onLogout }) {
             ))}
             {chatLoading && (
               <div style={{ display: "flex", justifyContent: "flex-start" }}>
-                <div style={{ padding: "0.5rem 0.75rem", borderRadius: "2px", background: "rgba(255,255,255,0.05)", border: `1px solid ${COLORS.border}`, fontSize: "0.8rem", color: COLORS.textMuted }}>
+                <div style={{ padding: "0.5rem 0.75rem", borderRadius: "0px", background: "rgba(255,255,255,0.05)", border: `1px solid ${COLORS.border}`, fontSize: "0.8rem", color: COLORS.textMuted }}>
                   <i className="fa fa-spinner fa-spin"></i> Pensando...
                 </div>
               </div>
@@ -927,9 +927,9 @@ function PredICApp({ auth, onLogout }) {
             <input data-testid="predic-chat-input" value={chatInput} onChange={e => setChatInput(e.target.value)}
               onKeyDown={e => e.key === "Enter" && sendChat()}
               placeholder="Escribe tu consulta..."
-              style={{ flex: 1, padding: "0.5rem 0.75rem", borderRadius: "2px", border: `1px solid ${COLORS.border}`, background: "rgba(255,255,255,0.05)", color: COLORS.text, fontSize: "0.82rem", outline: "none" }} />
+              style={{ flex: 1, padding: "0.5rem 0.75rem", borderRadius: "0px", border: `1px solid ${COLORS.border}`, background: "rgba(255,255,255,0.05)", color: COLORS.text, fontSize: "0.82rem", outline: "none" }} />
             <button data-testid="predic-chat-send" onClick={sendChat} disabled={chatLoading || !chatInput.trim()}
-              style={{ padding: "0.5rem 0.75rem", borderRadius: "2px", border: "none", background: COLORS.accent, color: "#fff", cursor: "pointer", fontSize: "0.85rem" }}>
+              style={{ padding: "0.5rem 0.75rem", borderRadius: "0px", border: "none", background: COLORS.accent, color: "#fff", cursor: "pointer", fontSize: "0.85rem" }}>
               <i className="fa fa-paper-plane"></i>
             </button>
           </div>

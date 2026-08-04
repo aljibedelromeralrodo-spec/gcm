@@ -100,11 +100,11 @@ export default function IntelligencePanel() {
 
       {/* Distribution bar */}
       {tendencias.distribucion_uf && (
-        <div data-testid="distribution-chart" style={{ background: "var(--bg-card)", borderRadius: "2px", padding: "0.75rem 1rem", marginBottom: "0.75rem", border: "1px solid var(--border)" }}>
+        <div data-testid="distribution-chart" style={{ background: "var(--bg-card)", borderRadius: "0px", padding: "0.75rem 1rem", marginBottom: "0.75rem", border: "1px solid var(--border)" }}>
           <div style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--text-primary)", marginBottom: "0.5rem" }}>
             Distribucion por Monto (UF)
           </div>
-          <div style={{ display: "flex", gap: "3px", height: "24px", borderRadius: "2px", overflow: "hidden" }}>
+          <div style={{ display: "flex", gap: "3px", height: "24px", borderRadius: "0px", overflow: "hidden" }}>
             {Object.entries(tendencias.distribucion_uf).map(([range, count]) => {
               const total = Object.values(tendencias.distribucion_uf).reduce((a, b) => a + b, 0);
               const pct = total > 0 ? (count / total * 100) : 0;
@@ -126,13 +126,13 @@ export default function IntelligencePanel() {
 
       {/* Calibration button + Recent learning */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
-        <div style={{ background: "var(--bg-card)", borderRadius: "2px", padding: "0.75rem 1rem", border: "1px solid var(--border)" }}>
+        <div style={{ background: "var(--bg-card)", borderRadius: "0px", padding: "0.75rem 1rem", border: "1px solid var(--border)" }}>
           <div style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--text-primary)", marginBottom: "0.5rem" }}>
             <i className="fa fa-refresh"></i> Calibracion IA
           </div>
           <button data-testid="btn-calibrate" onClick={runCalibration} disabled={calibrating}
             style={{
-              width: "100%", padding: "0.5rem", borderRadius: "2px", border: "1px solid var(--border-gold)",
+              width: "100%", padding: "0.5rem", borderRadius: "0px", border: "1px solid var(--border-gold)",
               background: calibrating ? "var(--bg-hover)" : "linear-gradient(135deg, rgba(212,175,55,0.1), rgba(212,175,55,0.05))",
               color: "var(--gold)", fontWeight: 600, fontSize: "0.8rem", cursor: calibrating ? "wait" : "pointer",
             }}>
@@ -148,14 +148,14 @@ export default function IntelligencePanel() {
           )}
         </div>
 
-        <div style={{ background: "var(--bg-card)", borderRadius: "2px", padding: "0.75rem 1rem", border: "1px solid var(--border)" }}>
+        <div style={{ background: "var(--bg-card)", borderRadius: "0px", padding: "0.75rem 1rem", border: "1px solid var(--border)" }}>
           <div style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--text-primary)", marginBottom: "0.5rem" }}>
             <i className="fa fa-graduation-cap"></i> Aprendizaje Reciente
           </div>
           {aprendizaje_reciente?.length > 0 ? aprendizaje_reciente.slice(0, 3).map((item, i) => (
             <div key={i} data-testid={`learning-item-${i}`} style={{ fontSize: "0.7rem", color: "var(--text-secondary)", marginBottom: "0.25rem", lineHeight: 1.3 }}>
               <span style={{
-                display: "inline-block", padding: "1px 5px", borderRadius: "2px", fontSize: "0.6rem", fontWeight: 600, marginRight: "4px",
+                display: "inline-block", padding: "1px 5px", borderRadius: "0px", fontSize: "0.6rem", fontWeight: 600, marginRight: "4px",
                 background: item.tipo === "aprobacion" ? "rgba(16,185,129,0.15)" : item.tipo === "rechazo" ? "rgba(239,68,68,0.15)" : "rgba(99,102,241,0.15)",
                 color: item.tipo === "aprobacion" ? "#10b981" : item.tipo === "rechazo" ? "#ef4444" : "#6366f1",
               }}>

@@ -5,9 +5,9 @@ import { estiloConfianza, PanelAprendizaje, useAprendizaje } from "../components
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
-const card = { background: "rgba(15,23,42,0.9)", padding: "1.5rem", borderRadius: "2px", border: "1px solid transparent", backgroundImage: "linear-gradient(160deg, rgba(15,23,42,0.98), rgba(2,6,23,0.98)), linear-gradient(140deg, #b8860b, #fde68a 45%, #d4af37 65%, #b8860b)", backgroundOrigin: "border-box", backgroundClip: "padding-box, border-box", marginBottom: "1.5rem" };
-const inp = { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "2px", padding: "0.55rem 0.8rem", color: "#fff", fontSize: "0.9rem", width: "100%" };
-const btn = (bg, small) => ({ background: bg, color: bg === "var(--gold)" ? "#0a0e17" : "#fff", border: "none", borderRadius: "2px", padding: small ? "0.4rem 0.8rem" : "0.6rem 1.2rem", fontWeight: 700, cursor: "pointer", fontSize: small ? "0.8rem" : "0.9rem" });
+const card = { background: "rgba(14,14,16,0.9)", padding: "1.5rem", borderRadius: "0px", border: "1px solid transparent", backgroundImage: "linear-gradient(160deg, rgba(30,30,30,0.95), rgba(10,10,10,0.98)), linear-gradient(135deg, #BF953F, #FCF6BA, #B38728, #FBF5B7, #AA771C)", boxShadow: "0 35px 70px -20px rgba(0,0,0,0.95), 0 0 38px -16px rgba(191,149,63,0.45)", backgroundOrigin: "border-box", backgroundClip: "padding-box, border-box", marginBottom: "1.5rem" };
+const inp = { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "0px", padding: "0.55rem 0.8rem", color: "#fff", fontSize: "0.9rem", width: "100%" };
+const btn = (bg, small) => ({ background: bg, color: bg === "var(--gold)" ? "#0a0e17" : "#fff", border: "none", borderRadius: "0px", padding: small ? "0.4rem 0.8rem" : "0.6rem 1.2rem", fontWeight: 700, cursor: "pointer", fontSize: small ? "0.8rem" : "0.9rem" });
 const lbl = { display: "block", fontSize: "0.75rem", opacity: 0.6, marginBottom: "0.3rem", textTransform: "uppercase", letterSpacing: "0.5px" };
 
 export default function SetCreditoModule({ onNavigate }) {
@@ -227,11 +227,11 @@ export default function SetCreditoModule({ onNavigate }) {
   return (
     <div style={{ padding: "1.5rem", color: "var(--white)", maxWidth: "1050px" }} data-testid="setcredito-module">
       {onNavigate && (
-        <button data-testid="setcred-volver" onClick={() => onNavigate("clientes")} style={{ marginBottom: "1rem", background: "transparent", border: "1px solid rgba(212,175,55,0.5)", color: "var(--gold)", borderRadius: 2, padding: "0.45rem 1rem", fontWeight: 700, cursor: "pointer" }}>
+        <button data-testid="setcred-volver" onClick={() => onNavigate("clientes")} style={{ marginBottom: "1rem", background: "transparent", border: "1px solid rgba(212,175,55,0.5)", color: "var(--gold)", borderRadius: 0, padding: "0.45rem 1rem", fontWeight: 700, cursor: "pointer" }}>
           <i className="fa fa-arrow-left" /> Volver a Carpeta Clientes
         </button>
       )}
-      {msg && <div data-testid="setcred-msg" style={{ padding: "0.7rem 1rem", borderRadius: "2px", marginBottom: "1rem", background: msg.startsWith("✅") ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)", color: msg.startsWith("✅") ? "#22c55e" : "#ef4444", fontWeight: 600 }}>{msg}</div>}
+      {msg && <div data-testid="setcred-msg" style={{ padding: "0.7rem 1rem", borderRadius: "0px", marginBottom: "1rem", background: msg.startsWith("✅") ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)", color: msg.startsWith("✅") ? "#22c55e" : "#ef4444", fontWeight: 600 }}>{msg}</div>}
 
       {/* Estado migrup */}
       <div data-testid="migrup-status" style={{ ...card, display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap", marginBottom: "1rem", padding: "0.9rem 1.3rem" }}>
@@ -297,10 +297,10 @@ export default function SetCreditoModule({ onNavigate }) {
           </div>
 
           {/* Subir documento */}
-          <div style={{ display: "flex", gap: "0.8rem", alignItems: "center", flexWrap: "wrap", marginBottom: "1rem", padding: "0.8rem", background: "rgba(255,255,255,0.03)", borderRadius: "2px" }}>
+          <div style={{ display: "flex", gap: "0.8rem", alignItems: "center", flexWrap: "wrap", marginBottom: "1rem", padding: "0.8rem", background: "rgba(255,255,255,0.03)", borderRadius: "0px" }}>
             <span style={{ fontSize: "0.85rem", opacity: 0.7 }}>Tipo:</span>
             <select data-testid="setcred-tipo" value={tipoUpload} onChange={e => setTipoUpload(e.target.value)} style={{ ...inp, width: "auto" }}>
-              {Object.entries(docTipos).map(([k, v]) => <option key={k} value={k} style={{ background: "rgba(15,23,42,0.9)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)" }}>{v}</option>)}
+              {Object.entries(docTipos).map(([k, v]) => <option key={k} value={k} style={{ background: "rgba(14,14,16,0.9)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)" }}>{v}</option>)}
             </select>
             <input ref={fileRef} data-testid="setcred-upload-input" type="file" accept="application/pdf,image/*" onChange={subir} style={{ display: "none" }} />
             <button data-testid="setcred-upload-btn" onClick={() => fileRef.current?.click()} disabled={loading} style={btn("#d4af37", true)}><i className="fa fa-upload" style={{ marginRight: "0.4rem" }} />Subir documento</button>
@@ -310,7 +310,7 @@ export default function SetCreditoModule({ onNavigate }) {
 
           {/* Documentos */}
           {current.archivos.length > 0 && (
-            <div data-testid="setcred-firmar-todo-bar" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.8rem", flexWrap: "wrap", padding: "0.9rem 1rem", background: "rgba(212,175,55,0.1)", border: "1px solid rgba(212,175,55,0.35)", borderRadius: "2px", marginBottom: "1rem" }}>
+            <div data-testid="setcred-firmar-todo-bar" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.8rem", flexWrap: "wrap", padding: "0.9rem 1rem", background: "rgba(212,175,55,0.1)", border: "1px solid rgba(212,175,55,0.35)", borderRadius: "0px", marginBottom: "1rem" }}>
               <div style={{ fontSize: "0.88rem" }}>
                 <b style={{ color: "var(--gold)" }}>Firmar todo de una vez</b> — combina los {current.archivos.filter(a => !a.nombre.startsWith("COMBINADO_SET")).length} documentos en un solo PDF. La firma eCert va en la primera etiqueta "Firma cliente" y en las demás queda la marca de Firma Electrónica Avanzada. <span style={{ opacity: 0.7 }}>(consume solo 1 firma de terceros)</span>
               </div>
@@ -341,7 +341,7 @@ export default function SetCreditoModule({ onNavigate }) {
           )}
 
           {/* Set firmado: traer desde eCert, separar y enviar por correo */}
-          <div data-testid="setcred-firmados-section" style={{ marginTop: "1.4rem", padding: "1rem", background: "rgba(34,197,94,0.07)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "2px" }}>
+          <div data-testid="setcred-firmados-section" style={{ marginTop: "1.4rem", padding: "1rem", background: "rgba(34,197,94,0.07)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "0px" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.8rem", flexWrap: "wrap" }}>
               <h4 style={{ color: "#22c55e", fontSize: "0.95rem", margin: 0 }}><i className="fa fa-check-circle" style={{ marginRight: "0.4rem" }} />Set firmado por el cliente</h4>
               <button data-testid="setcred-traer-firmado" onClick={traerFirmado} disabled={loading || !migrup?.connected} style={btn("#22c55e", true)}>
@@ -376,7 +376,7 @@ export default function SetCreditoModule({ onNavigate }) {
       {/* Modal nuevo contacto eCert */}
       {contactoModal && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem" }} onClick={() => setContactoModal(null)}>
-          <div style={{ background: "rgba(15,23,42,0.9)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", borderRadius: "2px", maxWidth: "500px", width: "100%", padding: "1.5rem", border: "1px solid rgba(255,255,255,0.15)" }} onClick={e => e.stopPropagation()} data-testid="setcred-contacto-modal">
+          <div style={{ background: "rgba(14,14,16,0.9)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", borderRadius: "0px", maxWidth: "500px", width: "100%", padding: "1.5rem", border: "1px solid rgba(255,255,255,0.15)" }} onClick={e => e.stopPropagation()} data-testid="setcred-contacto-modal">
             <h3 style={{ margin: "0 0 0.3rem", color: "var(--gold)" }}>Añade un nuevo contacto para firmar</h3>
             <p style={{ fontSize: "0.83rem", opacity: 0.7, margin: "0 0 1rem" }}>El contacto se crea en eCert Chile (migrup). Podés capturar los datos con el lector de cédula o llenarlos a mano.</p>
             <div style={{ display: "flex", gap: "0.6rem", marginBottom: "1rem", flexWrap: "wrap" }}>
@@ -409,7 +409,7 @@ export default function SetCreditoModule({ onNavigate }) {
       {/* Modal firma */}
       {firmaModal && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem" }} onClick={() => setFirmaModal(null)}>
-          <div style={{ background: "rgba(15,23,42,0.9)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", borderRadius: "2px", maxWidth: "480px", width: "100%", padding: "1.5rem", border: "1px solid rgba(255,255,255,0.15)" }} onClick={e => e.stopPropagation()} data-testid="setcred-firma-modal">
+          <div style={{ background: "rgba(14,14,16,0.9)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", borderRadius: "0px", maxWidth: "480px", width: "100%", padding: "1.5rem", border: "1px solid rgba(255,255,255,0.15)" }} onClick={e => e.stopPropagation()} data-testid="setcred-firma-modal">
             <h3 style={{ margin: "0 0 0.3rem", color: "var(--gold)" }}>Enviar a firmar</h3>
             <p style={{ fontSize: "0.85rem", opacity: 0.7, margin: "0 0 1rem" }}>{firmaModal.doc_nombre}</p>
             <div style={{ display: "grid", gap: "0.8rem" }}>

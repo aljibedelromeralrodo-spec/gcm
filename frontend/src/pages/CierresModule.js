@@ -79,11 +79,11 @@ export default function CierresModule() {
   }, {});
   const pendientes = rows.filter(r => r.toca_preguntar).length;
 
-  const inp = { width: "100%", padding: "0.45rem", borderRadius: 2, border: "1px solid rgba(148,163,184,0.3)", background: "#1e293b", color: "#e2e8f0", fontSize: 13 };
+  const inp = { width: "100%", padding: "0.45rem", borderRadius: 0, border: "1px solid rgba(148,163,184,0.3)", background: "#232326", color: "#e2e8f0", fontSize: 13 };
 
   return (
     <div data-testid="cierres-module" style={{ display: "grid", gap: "1rem" }}>
-      <div style={{ background: "rgba(15,23,42,0.85)", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 2, padding: "1.2rem 1.4rem" }}>
+      <div style={{ background: "rgba(14,14,16,0.85)", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 0, padding: "1.2rem 1.4rem" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <h2 style={{ margin: 0, fontSize: "1.15rem", color: "var(--gold, #d4af37)" }}>
             <i className="fa fa-handshake-o" /> Cierres — Seguimiento de aprobaciones enviadas
@@ -101,7 +101,7 @@ export default function CierresModule() {
             <input type="checkbox" checked={verTodos} data-testid="cierres-filtro-todos"
               onChange={e => setVerTodos(e.target.checked)} /> Ver todos (sin ventana mensual)
           </label>
-          <button onClick={load} data-testid="cierres-refresh" style={{ background: "rgba(148,163,184,0.1)", border: "1px solid rgba(148,163,184,0.3)", color: "#94a3b8", borderRadius: 2, padding: "0.4rem 0.9rem", fontSize: 12.5, cursor: "pointer" }}>
+          <button onClick={load} data-testid="cierres-refresh" style={{ background: "rgba(148,163,184,0.1)", border: "1px solid rgba(148,163,184,0.3)", color: "#94a3b8", borderRadius: 0, padding: "0.4rem 0.9rem", fontSize: 12.5, cursor: "pointer" }}>
             <i className="fa fa-refresh" /> Actualizar
           </button>
         </div>
@@ -118,13 +118,13 @@ export default function CierresModule() {
       ) : rows.length === 0 ? (
         <div data-testid="cierres-empty" style={{ textAlign: "center", padding: "2rem", color: "#94a3b8" }}>No hay aprobaciones enviadas{soloEntrega ? " con entrega inmediata" : ""}.</div>
       ) : Object.entries(grupos).map(([grupo, lista]) => (
-        <div key={grupo} data-testid="cierres-grupo" style={{ background: "rgba(15,23,42,0.85)", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 2, padding: "1rem 1.2rem" }}>
+        <div key={grupo} data-testid="cierres-grupo" style={{ background: "rgba(14,14,16,0.85)", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 0, padding: "1rem 1.2rem" }}>
           <div style={{ fontWeight: 800, fontSize: 14, color: "#e2e8f0", marginBottom: 10 }}>
             <i className="fa fa-user-circle-o" style={{ color: "var(--gold, #d4af37)" }} /> {grupo} <span style={{ opacity: 0.6, fontWeight: 600 }}>({lista.length})</span>
           </div>
           <div style={{ display: "grid", gap: 8 }}>
             {lista.map(r => (
-              <div key={r.id} data-testid={`cierre-row-${r.id}`} style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", background: r.toca_preguntar ? "rgba(245,158,11,0.06)" : "rgba(30,41,59,0.6)", border: r.toca_preguntar ? "1.5px solid rgba(245,158,11,0.4)" : "1px solid rgba(148,163,184,0.12)", borderRadius: 2, padding: "0.7rem 1rem" }}>
+              <div key={r.id} data-testid={`cierre-row-${r.id}`} style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", background: r.toca_preguntar ? "rgba(245,158,11,0.06)" : "rgba(28,28,30,0.6)", border: r.toca_preguntar ? "1.5px solid rgba(245,158,11,0.4)" : "1px solid rgba(148,163,184,0.12)", borderRadius: 0, padding: "0.7rem 1rem" }}>
                 <div style={{ flex: "1 1 220px", minWidth: 200 }}>
                   <div style={{ fontWeight: 800, fontSize: 13.5 }}>{r.nombre} {r.rut && <span style={{ opacity: 0.6, fontWeight: 600 }}>· {r.rut}</span>}
                     {r.respuesta_final === "continua" && <span data-testid={`cierre-continua-${r.id}`} style={{ marginLeft: 8, background: "rgba(13,148,136,0.2)", color: "#2dd4bf", borderRadius: 999, padding: "2px 10px", fontSize: 11, fontWeight: 800 }}>✅ Confirmó que continúa</span>}
@@ -148,17 +148,17 @@ export default function CierresModule() {
                 </div>
                 <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
                   <button data-testid={`cierre-edit-${r.id}`} onClick={() => setEdit({ ...r })}
-                    style={{ background: "rgba(148,163,184,0.1)", border: "1px solid rgba(148,163,184,0.3)", color: "#94a3b8", borderRadius: 2, padding: "0.45rem 0.9rem", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                    style={{ background: "rgba(148,163,184,0.1)", border: "1px solid rgba(148,163,184,0.3)", color: "#94a3b8", borderRadius: 0, padding: "0.45rem 0.9rem", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
                     <i className="fa fa-pencil" /> Editar
                   </button>
                   <button data-testid={`cierre-consultar-${r.id}`} onClick={() => consultar(r)} disabled={sending === r.id}
                     title="Enviar correo al ejecutivo preguntando si el cliente continúa el crédito con nosotros"
-                    style={{ background: r.toca_preguntar ? "#0d9488" : "rgba(13,148,136,0.25)", border: "none", color: "#fff", borderRadius: 2, padding: "0.45rem 1rem", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>
+                    style={{ background: r.toca_preguntar ? "#0d9488" : "rgba(13,148,136,0.25)", border: "none", color: "#fff", borderRadius: 0, padding: "0.45rem 1rem", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>
                     <i className={`fa ${sending === r.id ? "fa-spinner fa-spin" : "fa-paper-plane"}`} /> Preguntar al ejecutivo
                   </button>
                   <button data-testid={`cierre-no-continua-${r.id}`} onClick={() => marcarNoContinua(r)}
                     title="El ejecutivo respondió que el cliente NO continuará el crédito — permite borrar la carpeta de la base de datos"
-                    style={{ background: "rgba(185,28,28,0.15)", border: "1.5px solid #b91c1c", color: "#f87171", borderRadius: 2, padding: "0.45rem 0.9rem", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>
+                    style={{ background: "rgba(185,28,28,0.15)", border: "1.5px solid #b91c1c", color: "#f87171", borderRadius: 0, padding: "0.45rem 0.9rem", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>
                     <i className="fa fa-times-circle" /> No continúa
                   </button>
                 </div>
@@ -170,7 +170,7 @@ export default function CierresModule() {
 
       {edit && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 9998, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={() => setEdit(null)}>
-          <div data-testid="cierre-edit-modal" onClick={e => e.stopPropagation()} style={{ background: "rgba(15,23,42,0.92)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", border: "1px solid rgba(148,163,184,0.25)", borderRadius: 2, padding: "1.4rem", width: "min(480px, 96vw)", display: "grid", gap: 10 }}>
+          <div data-testid="cierre-edit-modal" onClick={e => e.stopPropagation()} style={{ background: "rgba(14,14,16,0.92)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", border: "1px solid rgba(148,163,184,0.25)", borderRadius: 0, padding: "1.4rem", width: "min(480px, 96vw)", display: "grid", gap: 10 }}>
             <h3 style={{ margin: 0, fontSize: 15, color: "var(--gold, #d4af37)" }}>Editar cierre — {edit.nombre}</h3>
             <label style={{ fontSize: 12 }}>Nombre del ejecutivo
               <input style={inp} data-testid="cierre-edit-ejecutivo" value={edit.ejecutivo_nombre || ""} onChange={e => setEdit({ ...edit, ejecutivo_nombre: e.target.value })} placeholder="Ej: Carla" />
@@ -188,8 +188,8 @@ export default function CierresModule() {
               <input type="checkbox" checked={!!edit.entrega_inmediata} data-testid="cierre-edit-entrega" onChange={e => setEdit({ ...edit, entrega_inmediata: e.target.checked })} /> Entrega inmediata
             </label>
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-              <button onClick={() => setEdit(null)} style={{ background: "transparent", border: "1px solid rgba(148,163,184,0.3)", color: "#94a3b8", borderRadius: 2, padding: "0.5rem 1rem", fontSize: 12.5, cursor: "pointer" }}>Cancelar</button>
-              <button data-testid="cierre-edit-guardar" onClick={guardarEdit} style={{ background: "var(--gold, #d4af37)", border: "none", color: "#0f172a", borderRadius: 2, padding: "0.5rem 1.2rem", fontSize: 12.5, fontWeight: 800, cursor: "pointer" }}>Guardar</button>
+              <button onClick={() => setEdit(null)} style={{ background: "transparent", border: "1px solid rgba(148,163,184,0.3)", color: "#94a3b8", borderRadius: 0, padding: "0.5rem 1rem", fontSize: 12.5, cursor: "pointer" }}>Cancelar</button>
+              <button data-testid="cierre-edit-guardar" onClick={guardarEdit} style={{ background: "var(--gold, #d4af37)", border: "none", color: "#101012", borderRadius: 0, padding: "0.5rem 1.2rem", fontSize: 12.5, fontWeight: 800, cursor: "pointer" }}>Guardar</button>
             </div>
           </div>
         </div>

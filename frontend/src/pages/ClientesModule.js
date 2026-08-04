@@ -33,9 +33,9 @@ const BrokersPanel = ({ brokers, dest, setDest, reloadBrokers, soloAdmin }) => {
     if (!window.confirm(`¿Quitar el broker "${b.nombre}"?`)) return;
     try { await axios.delete(`${API}/api/brokers/${b.id}`); reloadBrokers(); } catch (_e) { /* noop */ }
   };
-  const inpS = { padding: "0.4rem 0.6rem", borderRadius: 2, border: "1px solid rgba(148,163,184,0.3)", background: "#1e293b", color: "#e2e8f0", fontSize: 12 };
+  const inpS = { padding: "0.4rem 0.6rem", borderRadius: 0, border: "1px solid rgba(148,163,184,0.3)", background: "#232326", color: "#e2e8f0", fontSize: 12 };
   return (
-    <div data-testid="brokers-panel" style={{ background: "rgba(212,175,55,0.06)", border: "1px solid rgba(212,175,55,0.25)", borderRadius: 2, padding: "0.7rem 0.9rem" }}>
+    <div data-testid="brokers-panel" style={{ background: "rgba(212,175,55,0.06)", border: "1px solid rgba(212,175,55,0.25)", borderRadius: 0, padding: "0.7rem 0.9rem" }}>
       <div style={{ opacity: 0.8, fontSize: 11, textTransform: "uppercase", marginBottom: 6, fontWeight: 700 }}>
         {soloAdmin ? "Plantillas de brokers (editar / agregar / quitar)" : "Brokers — marca para agregarlos al envío"}
       </div>
@@ -66,7 +66,7 @@ const BrokersPanel = ({ brokers, dest, setDest, reloadBrokers, soloAdmin }) => {
           <button onClick={() => { setShowAdd(false); setEditId(null); setNuevo({ nombre: "", contactos: "", emails: "" }); }} style={{ ...inpS, background: "transparent", cursor: "pointer" }}>Cancelar</button>
         </div>
       ) : (
-        <button onClick={() => setShowAdd(true)} data-testid="broker-add-btn" style={{ marginTop: 8, background: "transparent", border: "1px dashed rgba(212,175,55,0.5)", color: "#d4af37", borderRadius: 2, padding: "0.3rem 0.7rem", fontSize: 11.5, cursor: "pointer" }}>
+        <button onClick={() => setShowAdd(true)} data-testid="broker-add-btn" style={{ marginTop: 8, background: "transparent", border: "1px dashed rgba(212,175,55,0.5)", color: "#d4af37", borderRadius: 0, padding: "0.3rem 0.7rem", fontSize: 11.5, cursor: "pointer" }}>
           <i className="fa fa-plus" /> Agregar broker
         </button>
       )}
@@ -146,7 +146,7 @@ function UFAmountInput({ value, onChange, uf, testid, dataTestid }) {
         }}
         placeholder="Ingresá UF o CLP…"
         data-testid={dataTestid || testid}
-        style={{ width: "100%", padding: "0.4rem 0.5rem", borderRadius: 2, border: "1px solid #d4d4d8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }}
+        style={{ width: "100%", padding: "0.4rem 0.5rem", borderRadius: 0, border: "1px solid #d4d4d8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }}
       />
       {preview && (
         <div style={{ fontSize: 10, color: "#b8942e", marginTop: 2, fontWeight: 500 }}>{preview}</div>
@@ -1483,14 +1483,14 @@ export default function ClientesModule({ onNavigate }) {
 
           <div data-testid="folder-tabs" style={{ display: "flex", gap: 8, margin: "0.9rem 0" }}>
             <button data-testid="tab-clientes" onClick={() => setFolderTab("clientes")}
-              style={{ padding: "0.55rem 1.2rem", borderRadius: 2, fontWeight: 800, fontSize: 13, cursor: "pointer",
+              style={{ padding: "0.55rem 1.2rem", borderRadius: 0, fontWeight: 800, fontSize: 13, cursor: "pointer",
                 background: folderTab === "clientes" ? "rgba(212,175,55,0.18)" : "rgba(148,163,184,0.08)",
                 border: folderTab === "clientes" ? "2px solid var(--gold, #d4af37)" : "1.5px solid rgba(148,163,184,0.3)",
                 color: folderTab === "clientes" ? "var(--gold, #d4af37)" : "#94a3b8" }}>
               <i className="fa fa-folder"></i> Solicitudes de Crédito ({countClientes})
             </button>
             <button data-testid="tab-escrituracion" onClick={() => setFolderTab("escrituracion")}
-              style={{ padding: "0.55rem 1.2rem", borderRadius: 2, fontWeight: 800, fontSize: 13, cursor: "pointer",
+              style={{ padding: "0.55rem 1.2rem", borderRadius: 0, fontWeight: 800, fontSize: 13, cursor: "pointer",
                 background: folderTab === "escrituracion" ? "rgba(168,85,247,0.18)" : "rgba(148,163,184,0.08)",
                 border: folderTab === "escrituracion" ? "2px solid #a855f7" : "1.5px solid rgba(148,163,184,0.3)",
                 color: folderTab === "escrituracion" ? "#a855f7" : "#94a3b8" }}>
@@ -1563,13 +1563,13 @@ export default function ClientesModule({ onNavigate }) {
               };
               const modBtn = (bg, border, color, big) => ({
                 display: "flex", alignItems: "center", gap: 6, padding: big ? "0.55rem 1rem" : "0.45rem 0.8rem",
-                borderRadius: 2, border: `1.5px solid ${border}`, background: bg, color,
+                borderRadius: 0, border: `1.5px solid ${border}`, background: bg, color,
                 fontWeight: 800, fontSize: big ? 13 : 11.5, cursor: "pointer", whiteSpace: "nowrap",
               });
               return (
                 <div key={f.id} className="clientes-card" data-testid={`folder-${f.id}`} style={cardStyle}>
                   {enviadoManual && (
-                    <div style={{ position: "absolute", top: 8, left: 8, background: "#fff", color: "#dc2626", borderRadius: 2, padding: "2px 8px", fontSize: 10, fontWeight: 800 }} data-testid={`badge-enviado-${f.id}`}>
+                    <div style={{ position: "absolute", top: 8, left: 8, background: "#fff", color: "#dc2626", borderRadius: 0, padding: "2px 8px", fontSize: 10, fontWeight: 800 }} data-testid={`badge-enviado-${f.id}`}>
                       ✅ ENVIADO (manual)
                     </div>
                   )}
@@ -1586,25 +1586,25 @@ export default function ClientesModule({ onNavigate }) {
                     <span className="clientes-file-count">{f.total_archivos || 0} archivos</span>
                     <div style={{ display: "flex", gap: 6, marginTop: 4, flexWrap: "wrap" }}>
                       {f.is_ready_to_send && (
-                        <span style={{ fontSize: 10, background: "rgba(34,197,94,0.25)", color: "#15803d", padding: "2px 6px", borderRadius: 2, fontWeight: 700 }}>🎯 Lista para enviar</span>
+                        <span style={{ fontSize: 10, background: "rgba(34,197,94,0.25)", color: "#15803d", padding: "2px 6px", borderRadius: 0, fontWeight: 700 }}>🎯 Lista para enviar</span>
                       )}
                       {f.emails_sent_count > 0 && (
-                        <span title={`Último envío: ${(f.last_email_sent_at || "").slice(0,19).replace('T',' ')}`} style={{ fontSize: 10, background: "rgba(212,175,55,0.2)", color: "#1d4ed8", padding: "2px 6px", borderRadius: 2, fontWeight: 700 }}>📧 Enviado a mesa × {f.emails_sent_count}{f.last_email_sent_at ? ` · ${fmtAct(f.last_email_sent_at)}` : ""}</span>
+                        <span title={`Último envío: ${(f.last_email_sent_at || "").slice(0,19).replace('T',' ')}`} style={{ fontSize: 10, background: "rgba(212,175,55,0.2)", color: "#1d4ed8", padding: "2px 6px", borderRadius: 0, fontWeight: 700 }}>📧 Enviado a mesa × {f.emails_sent_count}{f.last_email_sent_at ? ` · ${fmtAct(f.last_email_sent_at)}` : ""}</span>
                       )}
                       {hasFin ? (
-                        <span style={{ fontSize: 10, background: "rgba(34,197,94,0.15)", color: "#16a34a", padding: "2px 6px", borderRadius: 2 }}>💰 Datos OK</span>
+                        <span style={{ fontSize: 10, background: "rgba(34,197,94,0.15)", color: "#16a34a", padding: "2px 6px", borderRadius: 0 }}>💰 Datos OK</span>
                       ) : (
-                        <span style={{ fontSize: 10, background: "rgba(250,204,21,0.15)", color: "#a16207", padding: "2px 6px", borderRadius: 2 }}>💰 Sin datos financieros</span>
+                        <span style={{ fontSize: 10, background: "rgba(250,204,21,0.15)", color: "#a16207", padding: "2px 6px", borderRadius: 0 }}>💰 Sin datos financieros</span>
                       )}
                       {f.datos_financieros?.fecha_entrega && (
-                        <span data-testid={`badge-entrega-${f.id}`} style={{ fontSize: 10, background: "rgba(139,92,246,0.15)", color: "#7c3aed", padding: "2px 6px", borderRadius: 2, fontWeight: 700 }}>🏠 Entrega {f.datos_financieros.fecha_entrega}</span>
+                        <span data-testid={`badge-entrega-${f.id}`} style={{ fontSize: 10, background: "rgba(139,92,246,0.15)", color: "#7c3aed", padding: "2px 6px", borderRadius: 0, fontWeight: 700 }}>🏠 Entrega {f.datos_financieros.fecha_entrega}</span>
                       )}
                     </div>
                     {missing.length > 0 && (
                       <div data-testid={`missing-docs-${f.id}`} style={{ display: "flex", gap: 4, marginTop: 5, flexWrap: "wrap", alignItems: "center" }}>
                         <span style={{ fontSize: 10, fontWeight: 800, color: enviadoManual ? "#fff" : "#dc2626" }}>⚠️ FALTA:</span>
                         {missing.map(m => (
-                          <span key={m} style={{ fontSize: 10, fontWeight: 700, background: enviadoManual ? "rgba(255,255,255,0.25)" : "rgba(220,38,38,0.15)", color: enviadoManual ? "#fff" : "#dc2626", padding: "2px 7px", borderRadius: 2, border: enviadoManual ? "1px solid rgba(255,255,255,0.4)" : "1px solid rgba(220,38,38,0.35)" }}>
+                          <span key={m} style={{ fontSize: 10, fontWeight: 700, background: enviadoManual ? "rgba(255,255,255,0.25)" : "rgba(220,38,38,0.15)", color: enviadoManual ? "#fff" : "#dc2626", padding: "2px 7px", borderRadius: 0, border: enviadoManual ? "1px solid rgba(255,255,255,0.4)" : "1px solid rgba(220,38,38,0.35)" }}>
                             {CAT_LABELS[m] || m}
                           </span>
                         ))}
@@ -1613,7 +1613,7 @@ export default function ClientesModule({ onNavigate }) {
                     {(f.criterios || []).length > 0 && (
                       <div data-testid={`criterios-list-${f.id}`} style={{ display: "flex", gap: 4, marginTop: 5, flexWrap: "wrap", alignItems: "center" }}>
                         {f.criterios.map(c => (
-                          <span key={c.nombre} title={c.nombre} style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 2,
+                          <span key={c.nombre} title={c.nombre} style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 0,
                             background: enviadoManual ? "rgba(255,255,255,0.2)" : (c.ok ? "rgba(34,197,94,0.12)" : "rgba(148,163,184,0.12)"),
                             color: enviadoManual ? "#fff" : (c.ok ? "#16a34a" : "#94a3b8"),
                             border: `1px solid ${c.ok ? "rgba(34,197,94,0.4)" : "rgba(148,163,184,0.3)"}` }}>
@@ -1630,7 +1630,7 @@ export default function ClientesModule({ onNavigate }) {
                       )}
                       {missing.length > 0 && f.source_email && (
                         <button data-testid={`btn-pedir-faltantes-${f.id}`} onClick={() => openPedirFaltantes(f)}
-                          style={{ fontSize: 10.5, fontWeight: 800, padding: "3px 10px", borderRadius: 2, cursor: "pointer",
+                          style={{ fontSize: 10.5, fontWeight: 800, padding: "3px 10px", borderRadius: 0, cursor: "pointer",
                             background: "rgba(220,38,38,0.12)", color: enviadoManual ? "#fff" : "#dc2626", border: "1.5px solid rgba(220,38,38,0.5)" }}>
                           📩 Pedir faltantes al remitente{f.faltantes_pedidos_at ? ` ✓ Solicitado ${fmtAct(f.faltantes_pedidos_at)}` : ""}
                         </button>
@@ -1642,7 +1642,7 @@ export default function ClientesModule({ onNavigate }) {
                     <div style={{ display: "flex", gap: 8, alignItems: "stretch", flexShrink: 0 }}>
                       <div data-testid={`prob-aprobacion-${f.id}`}
                         title={`Posibilidades de aprobación\n${(f.prob_aprobacion.factores || []).join("\n")}`}
-                        style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minWidth: 88, padding: "6px 10px", borderRadius: 2,
+                        style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minWidth: 88, padding: "6px 10px", borderRadius: 0,
                           background: enviadoManual ? "rgba(255,255,255,0.15)" : (f.prob_aprobacion.porcentaje >= 75 ? "rgba(34,197,94,0.12)" : f.prob_aprobacion.porcentaje >= 50 ? "rgba(250,204,21,0.18)" : "rgba(220,38,38,0.12)") }}>
                         <span style={{ fontSize: 36, fontWeight: 900, lineHeight: 1,
                           color: enviadoManual ? "#fff" : (f.prob_aprobacion.porcentaje >= 75 ? "#16a34a" : f.prob_aprobacion.porcentaje >= 50 ? "#a16207" : "#dc2626") }}>
@@ -1651,7 +1651,7 @@ export default function ClientesModule({ onNavigate }) {
                         <span style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, opacity: 0.85, color: enviadoManual ? "#fff" : undefined }}>aprobación</span>
                       </div>
                       <div data-testid={`mesa-criterios-${f.id}`}
-                        style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minWidth: 92, padding: "6px 10px", borderRadius: 2,
+                        style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minWidth: 92, padding: "6px 10px", borderRadius: 0,
                           background: f.mesa_respuesta === "aprobada" ? "rgba(34,197,94,0.15)" : (f.mesa_respuesta === "rechazada" ? "rgba(220,38,38,0.15)" : "rgba(148,163,184,0.1)"),
                           border: f.mesa_respuesta ? "1.5px solid " + (f.mesa_respuesta === "aprobada" ? "#22c55e" : "#dc2626") : "1px dashed rgba(148,163,184,0.4)" }}>
                         <span style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, opacity: 0.8, color: enviadoManual ? "#fff" : undefined }}>Mesa</span>
@@ -1830,7 +1830,7 @@ export default function ClientesModule({ onNavigate }) {
           </div>
 
           {finOpenId === currentFolder.id && (
-            <div data-testid={`fin-detail-panel`} style={{ background: "rgba(212,175,55,0.08)", border: "1px solid #d4af37", borderRadius: 2, padding: "0.9rem", marginBottom: "0.8rem" }}>
+            <div data-testid={`fin-detail-panel`} style={{ background: "rgba(212,175,55,0.08)", border: "1px solid #d4af37", borderRadius: 0, padding: "0.9rem", marginBottom: "0.8rem" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.6rem" }}>
                 <h5 style={{ margin: 0, color: "#b8942e" }}>
                   <i className="fa fa-dollar" /> Datos financieros del cliente
@@ -1854,25 +1854,25 @@ export default function ClientesModule({ onNavigate }) {
                   const ad = m ? m[2].trim() : (currentFolder.source_email.includes("@") ? currentFolder.source_email.trim() : "");
                   const disp = nm ? `${nm} <${ad}>` : ad;
                   return (
-                    <div data-testid="fin-origen" style={{ gridColumn: "1 / -1", background: "#dbeafe", border: "1px solid #d4af37", borderRadius: 2, padding: "0.5rem 0.7rem", fontSize: 12 }}>
+                    <div data-testid="fin-origen" style={{ gridColumn: "1 / -1", background: "#dbeafe", border: "1px solid #d4af37", borderRadius: 0, padding: "0.5rem 0.7rem", fontSize: 12 }}>
                       <b style={{ color: "#1e3a8a" }}>📧 Origen de la solicitud:</b> <span style={{ color: "#b8942e", fontFamily: "monospace" }}>{disp}</span>
                     </div>
                   );
                 })()}
                 <label style={{ fontSize: 12, color: "#dc2626", fontWeight: 700 }}><b style={{ display: "block", color: "#dc2626", fontWeight: 800 }}>Inmobiliaria</b>
-                  <input type="text" value={finDraft.inmobiliaria || ""} onChange={(e) => setFinDraft({ ...finDraft, inmobiliaria: e.target.value })} style={{ width: "100%", padding: "0.4rem 0.5rem", borderRadius: 2, border: "1px solid #94a3b8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }} />
+                  <input type="text" value={finDraft.inmobiliaria || ""} onChange={(e) => setFinDraft({ ...finDraft, inmobiliaria: e.target.value })} style={{ width: "100%", padding: "0.4rem 0.5rem", borderRadius: 0, border: "1px solid #94a3b8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }} />
                 </label>
                 <label style={{ fontSize: 12, color: "#dc2626", fontWeight: 700 }}><b style={{ display: "block", color: "#dc2626", fontWeight: 800 }}>Proyecto</b>
-                  <input type="text" value={finDraft.proyecto || ""} onChange={(e) => setFinDraft({ ...finDraft, proyecto: e.target.value })} style={{ width: "100%", padding: "0.4rem 0.5rem", borderRadius: 2, border: "1px solid #94a3b8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }} />
+                  <input type="text" value={finDraft.proyecto || ""} onChange={(e) => setFinDraft({ ...finDraft, proyecto: e.target.value })} style={{ width: "100%", padding: "0.4rem 0.5rem", borderRadius: 0, border: "1px solid #94a3b8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }} />
                 </label>
                 <label style={{ fontSize: 12, gridColumn: "1 / -1", color: "#dc2626", fontWeight: 700 }}><b style={{ display: "block", color: "#dc2626", fontWeight: 800 }}>Tipo de operación</b>
-                  <select value={finDraft.con_subsidio ? "con" : "sin"} onChange={(e) => setFinDraft({ ...finDraft, con_subsidio: e.target.value === "con" })} style={{ width: "100%", padding: "0.4rem 0.5rem", borderRadius: 2, border: "1px solid #94a3b8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }}>
+                  <select value={finDraft.con_subsidio ? "con" : "sin"} onChange={(e) => setFinDraft({ ...finDraft, con_subsidio: e.target.value === "con" })} style={{ width: "100%", padding: "0.4rem 0.5rem", borderRadius: 0, border: "1px solid #94a3b8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }}>
                     <option value="con">CON subsidio (DS1 / DS19)</option>
                     <option value="sin">SIN subsidio</option>
                   </select>
                 </label>
                 <label style={{ fontSize: 12, color: "#dc2626", fontWeight: 700 }}><b style={{ display: "block", color: "#dc2626", fontWeight: 800 }}>Tipo propiedad</b>
-                  <select value={finDraft.tipo_propiedad || ""} onChange={(e) => setFinDraft({ ...finDraft, tipo_propiedad: e.target.value })} style={{ width: "100%", padding: "0.4rem 0.5rem", borderRadius: 2, border: "1px solid #94a3b8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }}>
+                  <select value={finDraft.tipo_propiedad || ""} onChange={(e) => setFinDraft({ ...finDraft, tipo_propiedad: e.target.value })} style={{ width: "100%", padding: "0.4rem 0.5rem", borderRadius: 0, border: "1px solid #94a3b8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }}>
                     <option value="">— seleccionar —</option>
                     <option value="Departamento">Departamento</option>
                     <option value="Casa">Casa</option>
@@ -1883,35 +1883,35 @@ export default function ClientesModule({ onNavigate }) {
                   </select>
                 </label>
                 <label style={{ fontSize: 12, color: "#dc2626", fontWeight: 700 }}><b style={{ display: "block", color: "#dc2626", fontWeight: 800 }}>Fecha de entrega</b>
-                  <select value={finDraft.fecha_entrega || ""} onChange={(e) => setFinDraft({ ...finDraft, fecha_entrega: e.target.value })} data-testid="fin-fecha-entrega-detail" style={{ width: "100%", padding: "0.4rem 0.5rem", borderRadius: 2, border: "1px solid #94a3b8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }}>
+                  <select value={finDraft.fecha_entrega || ""} onChange={(e) => setFinDraft({ ...finDraft, fecha_entrega: e.target.value })} data-testid="fin-fecha-entrega-detail" style={{ width: "100%", padding: "0.4rem 0.5rem", borderRadius: 0, border: "1px solid #94a3b8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }}>
                     <option value="">— seleccionar —</option>
                     <option value="inmediata">Inmediata</option>
                     <option value="futura">Futura</option>
                   </select>
                 </label>
                 <label style={{ fontSize: 12, color: "#dc2626", fontWeight: 700 }}><b style={{ display: "block", color: "#dc2626", fontWeight: 800 }}>Valor propiedad (UF)</b>
-                  <input type="number" step="0.01" value={finDraft.valor_propiedad || ""} onChange={(e) => setFinDraft({ ...finDraft, valor_propiedad: e.target.value })} style={{ width: "100%", padding: "0.35rem", borderRadius: 2, border: "1px solid #d4d4d8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }} />
+                  <input type="number" step="0.01" value={finDraft.valor_propiedad || ""} onChange={(e) => setFinDraft({ ...finDraft, valor_propiedad: e.target.value })} style={{ width: "100%", padding: "0.35rem", borderRadius: 0, border: "1px solid #d4d4d8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }} />
                 </label>
                 {finDraft.con_subsidio && (
                   <label style={{ fontSize: 12, color: "#dc2626", fontWeight: 700 }}><b style={{ display: "block", color: "#dc2626", fontWeight: 800 }}>Subsidio (UF)</b>
-                    <input type="number" step="0.01" value={finDraft.monto_subsidio || ""} onChange={(e) => setFinDraft({ ...finDraft, monto_subsidio: e.target.value })} style={{ width: "100%", padding: "0.35rem", borderRadius: 2, border: "1px solid #d4d4d8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }} />
+                    <input type="number" step="0.01" value={finDraft.monto_subsidio || ""} onChange={(e) => setFinDraft({ ...finDraft, monto_subsidio: e.target.value })} style={{ width: "100%", padding: "0.35rem", borderRadius: 0, border: "1px solid #d4d4d8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }} />
                   </label>
                 )}
                 {finDraft.con_subsidio && (
                   <label style={{ fontSize: 12, color: "#dc2626", fontWeight: 700 }}><b style={{ display: "block", color: "#dc2626", fontWeight: 800 }}>Ahorro (UF)</b>
-                    <input type="number" step="0.01" value={finDraft.ahorro || ""} onChange={(e) => setFinDraft({ ...finDraft, ahorro: e.target.value })} style={{ width: "100%", padding: "0.35rem", borderRadius: 2, border: "1px solid #d4d4d8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }} />
+                    <input type="number" step="0.01" value={finDraft.ahorro || ""} onChange={(e) => setFinDraft({ ...finDraft, ahorro: e.target.value })} style={{ width: "100%", padding: "0.35rem", borderRadius: 0, border: "1px solid #d4d4d8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }} />
                   </label>
                 )}
                 {!finDraft.con_subsidio && (
                   <label style={{ fontSize: 12, color: "#dc2626", fontWeight: 700 }}><b style={{ display: "block", color: "#dc2626", fontWeight: 800 }}>Pie (UF)</b>
-                    <input type="number" step="0.01" value={finDraft.monto_pie || ""} onChange={(e) => setFinDraft({ ...finDraft, monto_pie: e.target.value })} style={{ width: "100%", padding: "0.35rem", borderRadius: 2, border: "1px solid #d4d4d8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }} />
+                    <input type="number" step="0.01" value={finDraft.monto_pie || ""} onChange={(e) => setFinDraft({ ...finDraft, monto_pie: e.target.value })} style={{ width: "100%", padding: "0.35rem", borderRadius: 0, border: "1px solid #d4d4d8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }} />
                   </label>
                 )}
                 <label style={{ fontSize: 12, color: "#dc2626", fontWeight: 700 }}><b style={{ display: "block", color: "#dc2626", fontWeight: 800 }}>Monto crédito (UF)</b>
-                  <input type="number" step="0.01" value={finDraft.monto_credito || ""} onChange={(e) => setFinDraft({ ...finDraft, monto_credito: e.target.value })} style={{ width: "100%", padding: "0.35rem", borderRadius: 2, border: "1px solid #d4d4d8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }} />
+                  <input type="number" step="0.01" value={finDraft.monto_credito || ""} onChange={(e) => setFinDraft({ ...finDraft, monto_credito: e.target.value })} style={{ width: "100%", padding: "0.35rem", borderRadius: 0, border: "1px solid #d4d4d8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }} />
                 </label>
                 <label style={{ fontSize: 12, color: "#dc2626", fontWeight: 700 }}><b style={{ display: "block", color: "#dc2626", fontWeight: 800 }}>Reserva (UF)</b>
-                  <input type="number" step="0.01" value={finDraft.monto_reserva || ""} onChange={(e) => setFinDraft({ ...finDraft, monto_reserva: e.target.value })} style={{ width: "100%", padding: "0.35rem", borderRadius: 2, border: "1px solid #d4d4d8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }} />
+                  <input type="number" step="0.01" value={finDraft.monto_reserva || ""} onChange={(e) => setFinDraft({ ...finDraft, monto_reserva: e.target.value })} style={{ width: "100%", padding: "0.35rem", borderRadius: 0, border: "1px solid #d4d4d8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }} />
                 </label>
               </div>
               <div style={{ marginTop: 10 }}>
@@ -1934,13 +1934,13 @@ export default function ClientesModule({ onNavigate }) {
                 const pctCredito = vp > 0 ? (mc / vp) * 100 : 0;
                 return (
                   <div style={{ marginTop: 8, display: "grid", gap: 6 }}>
-                    <div style={{ padding: "0.7rem 0.9rem", borderRadius: 2, background: ok ? "#dcfce7" : "#fee2e2", color: ok ? "#166534" : "#991b1b", fontSize: 14.5, fontWeight: 700, lineHeight: 1.45 }}>
+                    <div style={{ padding: "0.7rem 0.9rem", borderRadius: 0, background: ok ? "#dcfce7" : "#fee2e2", color: ok ? "#166534" : "#991b1b", fontSize: 14.5, fontWeight: 700, lineHeight: 1.45 }}>
                       {ok
                         ? `✅ Suma cuadra: ${suma.toFixed(2)} UF = ${vp.toFixed(2)} UF`
                         : `⚠️ Diferencia: ${diff.toFixed(2)} UF (suma actual: ${suma.toFixed(2)} vs valor propiedad: ${vp.toFixed(2)}). ${finDraft.con_subsidio ? 'Subsidio + Ahorro + Reserva + Crédito' : 'Pie + Reserva + Crédito'} debe = Valor propiedad.`}
                     </div>
                     {!finDraft.con_subsidio && mc > 0 && (
-                      <div style={{ padding: "0.6rem 0.8rem", borderRadius: 2, background: excedeMax ? "#fee2e2" : "#e0f2fe", color: excedeMax ? "#991b1b" : "#075985", fontSize: 13.5, fontWeight: 600, lineHeight: 1.45 }}>
+                      <div style={{ padding: "0.6rem 0.8rem", borderRadius: 0, background: excedeMax ? "#fee2e2" : "#e0f2fe", color: excedeMax ? "#991b1b" : "#075985", fontSize: 13.5, fontWeight: 600, lineHeight: 1.45 }}>
                         {excedeMax
                           ? `🚫 Crédito ${mc.toFixed(2)} UF supera el 80% máximo (${max80.toFixed(2)} UF) — SIN subsidio no permite más del 80% del valor propiedad. Actual: ${pctCredito.toFixed(1)}%.`
                           : `📊 Crédito representa ${pctCredito.toFixed(1)}% del valor propiedad (máximo permitido SIN subsidio: 80% = ${max80.toFixed(2)} UF).`}
@@ -2013,7 +2013,7 @@ export default function ClientesModule({ onNavigate }) {
                 <>
                   {titularFiles.map(renderFile)}
                   {codFiles.length > 0 && (
-                    <div data-testid="codeudor-subfolder" style={{ marginTop: 14, border: "1.5px dashed #8b5cf6", borderRadius: 2, padding: "10px 12px", background: "rgba(139,92,246,0.06)" }}>
+                    <div data-testid="codeudor-subfolder" style={{ marginTop: 14, border: "1.5px dashed #8b5cf6", borderRadius: 0, padding: "10px 12px", background: "rgba(139,92,246,0.06)" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, color: "#7c3aed", fontWeight: 800, fontSize: 13 }}>
                         <i className="fa fa-folder"></i> Subcarpeta Codeudor{currentFolder.codeudor_nombre ? `: ${currentFolder.codeudor_nombre}` : ""}
                         <span style={{ fontWeight: 600, opacity: 0.7 }}>({codFiles.length} archivo{codFiles.length !== 1 ? "s" : ""})</span>
@@ -2022,7 +2022,7 @@ export default function ClientesModule({ onNavigate }) {
                     </div>
                   )}
                   {estudioFiles.length > 0 && (
-                    <div data-testid="estudio-subfolder" style={{ marginTop: 14, border: "1.5px dashed #14b8a6", borderRadius: 2, padding: "10px 12px", background: "rgba(20,184,166,0.06)" }}>
+                    <div data-testid="estudio-subfolder" style={{ marginTop: 14, border: "1.5px dashed #14b8a6", borderRadius: 0, padding: "10px 12px", background: "rgba(20,184,166,0.06)" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, color: "#0d9488", fontWeight: 800, fontSize: 13 }}>
                         <i className="fa fa-balance-scale"></i> Carpeta Estudio de Título (separada)
                         <span style={{ fontWeight: 600, opacity: 0.7 }}>({estudioFiles.length} archivo{estudioFiles.length !== 1 ? "s" : ""})</span>
@@ -2109,7 +2109,7 @@ export default function ClientesModule({ onNavigate }) {
               <i className="fa fa-refresh"></i> Refrescar
             </button>
           </div>
-          <div style={{ padding: "1rem", background: "rgba(212,175,55,0.08)", border: "1px solid #d4af37", borderRadius: 2, marginBottom: "1rem", fontSize: "0.88rem", lineHeight: 1.6 }}>
+          <div style={{ padding: "1rem", background: "rgba(212,175,55,0.08)", border: "1px solid #d4af37", borderRadius: 0, marginBottom: "1rem", fontSize: "0.88rem", lineHeight: 1.6 }}>
             <b>Reglas activas:</b><br/>
             Un correo se clasifica como <b>solicitud de crédito</b> si menciona «solicitud de crédito/financiamiento» O trae ≥3 documentos típicos (cédula, liquidaciones, AFP, CMF, impuesto renta, boletas honorarios).<br/>
             <b>Tipo cliente</b>: dependiente (liquidación+AFP) · independiente (impuesto renta+boletas).<br/>
@@ -2136,19 +2136,19 @@ export default function ClientesModule({ onNavigate }) {
                         <i className="fa fa-user"></i> {f.nombre}
                         {f.rut && <small style={{ opacity: 0.6 }}> ({f.rut})</small>}
                         {cr.manual_override && (
-                          <span data-testid={`manual-badge-${f.id}`} style={{ background: "#ede9fe", color: "#6d28d9", padding: "2px 8px", borderRadius: 2, fontSize: 11, fontWeight: 700, marginLeft: 8 }}>
+                          <span data-testid={`manual-badge-${f.id}`} style={{ background: "#ede9fe", color: "#6d28d9", padding: "2px 8px", borderRadius: 0, fontSize: 11, fontWeight: 700, marginLeft: 8 }}>
                             <i className="fa fa-pencil" style={{ marginRight: 4 }} />editado manualmente
                           </span>
                         )}
                       </h4>
                       {!isEditing && (
                         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-                          <span style={{ background: cr.is_request ? "#dcfce7" : "#fee2e2", color: cr.is_request ? "#166534" : "#991b1b", padding: "2px 8px", borderRadius: 2, fontSize: 12, fontWeight: 700 }}>
+                          <span style={{ background: cr.is_request ? "#dcfce7" : "#fee2e2", color: cr.is_request ? "#166534" : "#991b1b", padding: "2px 8px", borderRadius: 0, fontSize: 12, fontWeight: 700 }}>
                             {cr.is_request ? "✓ Solicitud" : "✗ No"}
                           </span>
-                          <span style={{ background: "#fef3c7", color: "#92400e", padding: "2px 8px", borderRadius: 2, fontSize: 12 }}>{cr.client_type || "?"}</span>
-                          <span style={{ background: "#e0e7ff", color: "#3730a3", padding: "2px 8px", borderRadius: 2, fontSize: 12 }}>{sub.tipo || "?"}</span>
-                          {cod.has_codeudor && <span style={{ background: "#fce7f3", color: "#9d174d", padding: "2px 8px", borderRadius: 2, fontSize: 12 }}>+ codeudor {cod.name || "s/n"}</span>}
+                          <span style={{ background: "#fef3c7", color: "#92400e", padding: "2px 8px", borderRadius: 0, fontSize: 12 }}>{cr.client_type || "?"}</span>
+                          <span style={{ background: "#e0e7ff", color: "#3730a3", padding: "2px 8px", borderRadius: 0, fontSize: 12 }}>{sub.tipo || "?"}</span>
+                          {cod.has_codeudor && <span style={{ background: "#fce7f3", color: "#9d174d", padding: "2px 8px", borderRadius: 0, fontSize: 12 }}>+ codeudor {cod.name || "s/n"}</span>}
                           <button className="docs-btn secondary" style={{ padding: "0.3rem 0.6rem", fontSize: 12 }} onClick={() => startEdit(f)} data-testid={`btn-edit-${f.id}`}>
                             <i className="fa fa-pencil" /> Editar
                           </button>
@@ -2165,17 +2165,17 @@ export default function ClientesModule({ onNavigate }) {
                     </div>
 
                     {isEditing && (
-                      <div data-testid={`edit-form-${f.id}`} style={{ background: "rgba(139,92,246,0.08)", border: "1px solid #8b5cf6", borderRadius: 2, padding: "0.9rem", marginBottom: "0.6rem", display: "grid", gap: "0.7rem", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
+                      <div data-testid={`edit-form-${f.id}`} style={{ background: "rgba(139,92,246,0.08)", border: "1px solid #8b5cf6", borderRadius: 0, padding: "0.9rem", marginBottom: "0.6rem", display: "grid", gap: "0.7rem", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
                         <label style={{ fontSize: 12 }}>
                           <b style={{ display: "block", marginBottom: 4 }}>¿Es solicitud?</b>
-                          <select value={editDraft.is_request ? "si" : "no"} onChange={(e) => setEditDraft({ ...editDraft, is_request: e.target.value === "si" })} data-testid={`edit-is-request-${f.id}`} style={{ width: "100%", padding: "0.35rem", borderRadius: 2, border: "1px solid #d4d4d8" }}>
+                          <select value={editDraft.is_request ? "si" : "no"} onChange={(e) => setEditDraft({ ...editDraft, is_request: e.target.value === "si" })} data-testid={`edit-is-request-${f.id}`} style={{ width: "100%", padding: "0.35rem", borderRadius: 0, border: "1px solid #d4d4d8" }}>
                             <option value="si">Sí, es solicitud</option>
                             <option value="no">No es solicitud</option>
                           </select>
                         </label>
                         <label style={{ fontSize: 12 }}>
                           <b style={{ display: "block", marginBottom: 4 }}>Tipo de cliente</b>
-                          <select value={editDraft.client_type} onChange={(e) => setEditDraft({ ...editDraft, client_type: e.target.value })} data-testid={`edit-client-type-${f.id}`} style={{ width: "100%", padding: "0.35rem", borderRadius: 2, border: "1px solid #d4d4d8" }}>
+                          <select value={editDraft.client_type} onChange={(e) => setEditDraft({ ...editDraft, client_type: e.target.value })} data-testid={`edit-client-type-${f.id}`} style={{ width: "100%", padding: "0.35rem", borderRadius: 0, border: "1px solid #d4d4d8" }}>
                             <option value="dependiente">Dependiente (liquidación + AFP)</option>
                             <option value="independiente">Independiente (impuesto renta + boletas)</option>
                             <option value="desconocido">Desconocido / Por revisar</option>
@@ -2183,7 +2183,7 @@ export default function ClientesModule({ onNavigate }) {
                         </label>
                         <label style={{ fontSize: 12 }}>
                           <b style={{ display: "block", marginBottom: 4 }}>Subsidio</b>
-                          <select value={editDraft.subsidy_tipo} onChange={(e) => setEditDraft({ ...editDraft, subsidy_tipo: e.target.value })} data-testid={`edit-subsidy-${f.id}`} style={{ width: "100%", padding: "0.35rem", borderRadius: 2, border: "1px solid #d4d4d8" }}>
+                          <select value={editDraft.subsidy_tipo} onChange={(e) => setEditDraft({ ...editDraft, subsidy_tipo: e.target.value })} data-testid={`edit-subsidy-${f.id}`} style={{ width: "100%", padding: "0.35rem", borderRadius: 0, border: "1px solid #d4d4d8" }}>
                             <option value="con_subsidio">Con subsidio (DS1 / DS19)</option>
                             <option value="sin_subsidio">Sin subsidio</option>
                           </select>
@@ -2192,7 +2192,7 @@ export default function ClientesModule({ onNavigate }) {
                           <b style={{ display: "block", marginBottom: 4 }}>Codeudor</b>
                           <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                             <input type="checkbox" checked={!!editDraft.codeudor_has} onChange={(e) => setEditDraft({ ...editDraft, codeudor_has: e.target.checked })} data-testid={`edit-codeudor-has-${f.id}`} />
-                            <input type="text" placeholder="Nombre codeudor" value={editDraft.codeudor_name || ""} onChange={(e) => setEditDraft({ ...editDraft, codeudor_name: e.target.value, codeudor_has: true })} data-testid={`edit-codeudor-name-${f.id}`} style={{ flex: 1, padding: "0.35rem", borderRadius: 2, border: "1px solid #d4d4d8", fontSize: 12 }} />
+                            <input type="text" placeholder="Nombre codeudor" value={editDraft.codeudor_name || ""} onChange={(e) => setEditDraft({ ...editDraft, codeudor_name: e.target.value, codeudor_has: true })} data-testid={`edit-codeudor-name-${f.id}`} style={{ flex: 1, padding: "0.35rem", borderRadius: 0, border: "1px solid #d4d4d8", fontSize: 12 }} />
                           </div>
                         </label>
                         <div style={{ gridColumn: "1 / -1", display: "flex", gap: 8, justifyContent: "flex-end" }}>
@@ -2211,7 +2211,7 @@ export default function ClientesModule({ onNavigate }) {
                     </div>
 
                     {/* ARCHIVOS TOOLBAR */}
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 6, padding: "0.4rem 0.6rem", background: "rgba(15,23,42,0.4)", borderRadius: 2, border: "1px solid rgba(148,163,184,0.15)" }}>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 6, padding: "0.4rem 0.6rem", background: "rgba(14,14,16,0.4)", borderRadius: 0, border: "1px solid rgba(148,163,184,0.15)" }}>
                       <span style={{ fontSize: 12, opacity: 0.85, marginRight: "auto", alignSelf: "center" }}>
                         <i className="fa fa-files-o" /> Archivos {selectionCount(f.id) > 0 && <span style={{ color: "#facc15" }}>· {selectionCount(f.id)} seleccionados</span>}
                       </span>
@@ -2219,7 +2219,7 @@ export default function ClientesModule({ onNavigate }) {
                         onClick={() => triggerUpload(f.id, "")}
                         data-testid={`btn-upload-file-${f.id}`}
                         disabled={uploadingFor === f.id}
-                        style={{ background: "rgba(34,197,94,0.15)", border: "1px solid rgba(34,197,94,0.5)", color: "#4ade80", borderRadius: 2, padding: "4px 10px", cursor: "pointer", fontSize: 12 }}
+                        style={{ background: "rgba(34,197,94,0.15)", border: "1px solid rgba(34,197,94,0.5)", color: "#4ade80", borderRadius: 0, padding: "4px 10px", cursor: "pointer", fontSize: 12 }}
                         title="Subir archivo manualmente"
                       >
                         <i className={`fa ${uploadingFor === f.id ? "fa-spinner fa-spin" : "fa-plus"}`} /> Agregar archivo
@@ -2227,7 +2227,7 @@ export default function ClientesModule({ onNavigate }) {
                       <button
                         onClick={() => agregarCodeudor(f)}
                         data-testid={`btn-agregar-codeudor-${f.id}`}
-                        style={{ background: "rgba(251,146,60,0.15)", border: "1px solid rgba(251,146,60,0.5)", color: "#fdba74", borderRadius: 2, padding: "4px 10px", cursor: "pointer", fontSize: 12 }}
+                        style={{ background: "rgba(251,146,60,0.15)", border: "1px solid rgba(251,146,60,0.5)", color: "#fdba74", borderRadius: 0, padding: "4px 10px", cursor: "pointer", fontSize: 12 }}
                         title="Crear subcarpeta del codeudor y subir sus archivos"
                       >
                         <i className="fa fa-user-plus" /> Agregar Codeudor
@@ -2236,7 +2236,7 @@ export default function ClientesModule({ onNavigate }) {
                         onClick={() => mergeByProtocol(f)}
                         data-testid={`btn-merge-proto-${f.id}`}
                         disabled={mergingProto === f.id}
-                        style={{ background: "rgba(250,204,21,0.15)", border: "1px solid rgba(250,204,21,0.5)", color: "#facc15", borderRadius: 2, padding: "4px 10px", cursor: "pointer", fontSize: 12, fontWeight: 600 }}
+                        style={{ background: "rgba(250,204,21,0.15)", border: "1px solid rgba(250,204,21,0.5)", color: "#facc15", borderRadius: 0, padding: "4px 10px", cursor: "pointer", fontSize: 12, fontWeight: 600 }}
                         title="Combinar TODOS los archivos siguiendo el orden del protocolo"
                       >
                         <i className={`fa ${mergingProto === f.id ? "fa-spinner fa-spin" : "fa-list-ol"}`} /> Combinar por Protocolo
@@ -2245,7 +2245,7 @@ export default function ClientesModule({ onNavigate }) {
                         onClick={() => mergeSelected(f.id)}
                         data-testid={`btn-merge-${f.id}`}
                         disabled={merging || selectionCount(f.id) < 1}
-                        style={{ background: "rgba(168,85,247,0.15)", border: "1px solid rgba(168,85,247,0.5)", color: "#c084fc", borderRadius: 2, padding: "4px 10px", cursor: selectionCount(f.id) < 1 ? "not-allowed" : "pointer", opacity: selectionCount(f.id) < 1 ? 0.5 : 1, fontSize: 12 }}
+                        style={{ background: "rgba(168,85,247,0.15)", border: "1px solid rgba(168,85,247,0.5)", color: "#c084fc", borderRadius: 0, padding: "4px 10px", cursor: selectionCount(f.id) < 1 ? "not-allowed" : "pointer", opacity: selectionCount(f.id) < 1 ? 0.5 : 1, fontSize: 12 }}
                         title="Combinar PDFs seleccionados en un único archivo"
                       >
                         <i className={`fa ${merging ? "fa-spinner fa-spin" : "fa-object-group"}`} /> Combinar PDFs
@@ -2253,7 +2253,7 @@ export default function ClientesModule({ onNavigate }) {
                       <button
                         onClick={() => openEmailModal(f)}
                         data-testid={`btn-send-email-${f.id}`}
-                        style={{ background: "rgba(212,175,55,0.18)", border: "1px solid rgba(212,175,55,0.5)", color: "#d4af37", borderRadius: 2, padding: "4px 10px", cursor: "pointer", fontSize: 12 }}
+                        style={{ background: "rgba(212,175,55,0.18)", border: "1px solid rgba(212,175,55,0.5)", color: "#d4af37", borderRadius: 0, padding: "4px 10px", cursor: "pointer", fontSize: 12 }}
                         title="Generar y enviar correo con antecedentes"
                       >
                         <i className="fa fa-paper-plane" /> Enviar correo
@@ -2261,7 +2261,7 @@ export default function ClientesModule({ onNavigate }) {
                       {selectionCount(f.id) > 0 && (
                         <button
                           onClick={() => clearSelection(f.id)}
-                          style={{ background: "transparent", border: "1px solid rgba(148,163,184,0.3)", color: "#94a3b8", borderRadius: 2, padding: "4px 10px", cursor: "pointer", fontSize: 11 }}
+                          style={{ background: "transparent", border: "1px solid rgba(148,163,184,0.3)", color: "#94a3b8", borderRadius: 0, padding: "4px 10px", cursor: "pointer", fontSize: 11 }}
                           title="Limpiar selección"
                         >
                           <i className="fa fa-times" /> Limpiar
@@ -2270,7 +2270,7 @@ export default function ClientesModule({ onNavigate }) {
                     </div>
 
                     {finOpenId === f.id && (
-                      <div data-testid={`fin-panel-${f.id}`} style={{ background: "rgba(212,175,55,0.08)", border: "1px solid #d4af37", borderRadius: 2, padding: "0.9rem", marginBottom: "0.6rem" }}>
+                      <div data-testid={`fin-panel-${f.id}`} style={{ background: "rgba(212,175,55,0.08)", border: "1px solid #d4af37", borderRadius: 0, padding: "0.9rem", marginBottom: "0.6rem" }}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.6rem" }}>
                           <h5 style={{ margin: 0, color: "#b8942e" }}><i className="fa fa-dollar" /> Datos financieros del cliente</h5>
                           <div style={{ display: "flex", gap: 6 }}>
@@ -2283,30 +2283,30 @@ export default function ClientesModule({ onNavigate }) {
                         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "0.5rem" }}>
                           <label style={{ fontSize: 12, color: "#dc2626", fontWeight: 700 }}>
                             <b style={{ display: "block", color: "#dc2626", fontWeight: 800 }}>Cliente</b>
-                            <input type="text" value={f.nombre} readOnly style={{ width: "100%", padding: "0.4rem 0.5rem", borderRadius: 2, background: "#f1f5f9", border: "1px solid #94a3b8", fontSize: 13, color: "#000", fontWeight: 600 }} />
+                            <input type="text" value={f.nombre} readOnly style={{ width: "100%", padding: "0.4rem 0.5rem", borderRadius: 0, background: "#f1f5f9", border: "1px solid #94a3b8", fontSize: 13, color: "#000", fontWeight: 600 }} />
                           </label>
                           <label style={{ fontSize: 12, color: "#dc2626", fontWeight: 700 }}>
                             <b style={{ display: "block", color: "#dc2626", fontWeight: 800 }}>RUT</b>
-                            <input type="text" value={f.rut || ""} readOnly style={{ width: "100%", padding: "0.4rem 0.5rem", borderRadius: 2, background: "#f1f5f9", border: "1px solid #94a3b8", fontSize: 13, color: "#000", fontWeight: 600 }} />
+                            <input type="text" value={f.rut || ""} readOnly style={{ width: "100%", padding: "0.4rem 0.5rem", borderRadius: 0, background: "#f1f5f9", border: "1px solid #94a3b8", fontSize: 13, color: "#000", fontWeight: 600 }} />
                           </label>
                           <label style={{ fontSize: 12, color: "#dc2626", fontWeight: 700 }}>
                             <b style={{ display: "block", color: "#dc2626", fontWeight: 800 }}>Proyecto</b>
-                            <input type="text" value={finDraft.proyecto || ""} onChange={(e) => setFinDraft({ ...finDraft, proyecto: e.target.value })} data-testid={`fin-proyecto-${f.id}`} style={{ width: "100%", padding: "0.4rem 0.5rem", borderRadius: 2, border: "1px solid #94a3b8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }} />
+                            <input type="text" value={finDraft.proyecto || ""} onChange={(e) => setFinDraft({ ...finDraft, proyecto: e.target.value })} data-testid={`fin-proyecto-${f.id}`} style={{ width: "100%", padding: "0.4rem 0.5rem", borderRadius: 0, border: "1px solid #94a3b8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }} />
                           </label>
                           <label style={{ fontSize: 12, color: "#dc2626", fontWeight: 700 }}>
                             <b style={{ display: "block", color: "#dc2626", fontWeight: 800 }}>Inmobiliaria</b>
-                            <input type="text" value={finDraft.inmobiliaria || ""} onChange={(e) => setFinDraft({ ...finDraft, inmobiliaria: e.target.value })} data-testid={`fin-inmobiliaria-${f.id}`} style={{ width: "100%", padding: "0.4rem 0.5rem", borderRadius: 2, border: "1px solid #94a3b8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }} />
+                            <input type="text" value={finDraft.inmobiliaria || ""} onChange={(e) => setFinDraft({ ...finDraft, inmobiliaria: e.target.value })} data-testid={`fin-inmobiliaria-${f.id}`} style={{ width: "100%", padding: "0.4rem 0.5rem", borderRadius: 0, border: "1px solid #94a3b8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }} />
                           </label>
                           <label style={{ fontSize: 12, gridColumn: "1 / -1", color: "#dc2626", fontWeight: 700 }}>
                             <b style={{ display: "block", color: "#dc2626", fontWeight: 800 }}>Tipo de operación</b>
-                            <select value={finDraft.con_subsidio ? "con" : "sin"} onChange={(e) => setFinDraft({ ...finDraft, con_subsidio: e.target.value === "con" })} data-testid={`fin-subsidy-${f.id}`} style={{ width: "100%", padding: "0.4rem 0.5rem", borderRadius: 2, border: "1px solid #94a3b8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }}>
+                            <select value={finDraft.con_subsidio ? "con" : "sin"} onChange={(e) => setFinDraft({ ...finDraft, con_subsidio: e.target.value === "con" })} data-testid={`fin-subsidy-${f.id}`} style={{ width: "100%", padding: "0.4rem 0.5rem", borderRadius: 0, border: "1px solid #94a3b8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }}>
                               <option value="con">CON subsidio (DS1 / DS19)</option>
                               <option value="sin">SIN subsidio</option>
                             </select>
                           </label>
                           <label style={{ fontSize: 12, color: "#dc2626", fontWeight: 700 }}>
                             <b style={{ display: "block", color: "#dc2626", fontWeight: 800 }}>Tipo propiedad</b>
-                            <select value={finDraft.tipo_propiedad || ""} onChange={(e) => setFinDraft({ ...finDraft, tipo_propiedad: e.target.value })} data-testid={`fin-tipo-prop-${f.id}`} style={{ width: "100%", padding: "0.4rem 0.5rem", borderRadius: 2, border: "1px solid #94a3b8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }}>
+                            <select value={finDraft.tipo_propiedad || ""} onChange={(e) => setFinDraft({ ...finDraft, tipo_propiedad: e.target.value })} data-testid={`fin-tipo-prop-${f.id}`} style={{ width: "100%", padding: "0.4rem 0.5rem", borderRadius: 0, border: "1px solid #94a3b8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }}>
                               <option value="">— seleccioná —</option>
                               <option value="Departamento">Departamento</option>
                               <option value="Casa">Casa</option>
@@ -2318,7 +2318,7 @@ export default function ClientesModule({ onNavigate }) {
                           </label>
                           <label style={{ fontSize: 12, color: "#dc2626", fontWeight: 700 }}>
                             <b style={{ display: "block", color: "#dc2626", fontWeight: 800 }}>Fecha de entrega</b>
-                            <select value={finDraft.fecha_entrega || ""} onChange={(e) => setFinDraft({ ...finDraft, fecha_entrega: e.target.value })} data-testid={`fin-fecha-entrega-${f.id}`} style={{ width: "100%", padding: "0.4rem 0.5rem", borderRadius: 2, border: "1px solid #94a3b8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }}>
+                            <select value={finDraft.fecha_entrega || ""} onChange={(e) => setFinDraft({ ...finDraft, fecha_entrega: e.target.value })} data-testid={`fin-fecha-entrega-${f.id}`} style={{ width: "100%", padding: "0.4rem 0.5rem", borderRadius: 0, border: "1px solid #94a3b8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }}>
                               <option value="">— seleccioná —</option>
                               <option value="inmediata">Inmediata</option>
                               <option value="futura">Futura</option>
@@ -2374,13 +2374,13 @@ export default function ClientesModule({ onNavigate }) {
                           const pctCredito = vp > 0 ? (mc / vp) * 100 : 0;
                           return (
                             <div style={{ marginTop: 8, display: "grid", gap: 6 }}>
-                              <div data-testid={`fin-sum-${f.id}`} style={{ padding: "0.7rem 0.9rem", borderRadius: 2, background: ok ? "#dcfce7" : "#fee2e2", color: ok ? "#166534" : "#991b1b", fontSize: 14.5, fontWeight: 700, lineHeight: 1.45 }}>
+                              <div data-testid={`fin-sum-${f.id}`} style={{ padding: "0.7rem 0.9rem", borderRadius: 0, background: ok ? "#dcfce7" : "#fee2e2", color: ok ? "#166534" : "#991b1b", fontSize: 14.5, fontWeight: 700, lineHeight: 1.45 }}>
                                 {ok
                                   ? `✅ Suma cuadra: ${suma.toFixed(2)} UF = ${vp.toFixed(2)} UF`
                                   : `⚠️ Diferencia: ${diff.toFixed(2)} UF (suma actual: ${suma.toFixed(2)} vs valor propiedad: ${vp.toFixed(2)}). ${finDraft.con_subsidio ? 'Subsidio + Ahorro + Reserva + Crédito' : 'Pie + Reserva + Crédito'} debe = Valor propiedad.`}
                               </div>
                               {!finDraft.con_subsidio && mc > 0 && (
-                                <div data-testid={`fin-80pct-${f.id}`} style={{ padding: "0.6rem 0.8rem", borderRadius: 2, background: excedeMax ? "#fee2e2" : "#e0f2fe", color: excedeMax ? "#991b1b" : "#075985", fontSize: 13.5, fontWeight: 600, lineHeight: 1.45 }}>
+                                <div data-testid={`fin-80pct-${f.id}`} style={{ padding: "0.6rem 0.8rem", borderRadius: 0, background: excedeMax ? "#fee2e2" : "#e0f2fe", color: excedeMax ? "#991b1b" : "#075985", fontSize: 13.5, fontWeight: 600, lineHeight: 1.45 }}>
                                   {excedeMax
                                     ? `🚫 Crédito ${mc.toFixed(2)} UF supera el 80% máximo (${max80.toFixed(2)} UF) — SIN subsidio no permite más del 80% del valor propiedad. Actual: ${pctCredito.toFixed(1)}%.`
                                     : `📊 Crédito representa ${pctCredito.toFixed(1)}% del valor propiedad (máximo permitido SIN subsidio: 80% = ${max80.toFixed(2)} UF).`}
@@ -2397,13 +2397,13 @@ export default function ClientesModule({ onNavigate }) {
                       </div>
                     )}
                     {(f.subfolders || []).map(s => (
-                      <details key={s.name} style={{ background: "rgba(255,255,255,0.03)", borderRadius: 2, padding: "0.4rem 0.7rem", marginTop: 4 }}>
+                      <details key={s.name} style={{ background: "rgba(255,255,255,0.03)", borderRadius: 0, padding: "0.4rem 0.7rem", marginTop: 4 }}>
                         <summary style={{ cursor: "pointer", fontWeight: 600, fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
                           <span><i className="fa fa-folder"></i> {s.name} ({s.files.length})</span>
                           <button
                             onClick={(e) => { e.preventDefault(); e.stopPropagation(); triggerUpload(f.id, s.name); }}
                             data-testid={`btn-upload-sub-${f.id}-${s.name}`}
-                            style={{ marginLeft: "auto", background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.35)", color: "#4ade80", borderRadius: 2, padding: "1px 8px", cursor: "pointer", fontSize: 11 }}
+                            style={{ marginLeft: "auto", background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.35)", color: "#4ade80", borderRadius: 0, padding: "1px 8px", cursor: "pointer", fontSize: 11 }}
                             title={`Subir archivo a ${s.name}`}
                           >
                             <i className="fa fa-plus" /> Aquí
@@ -2414,7 +2414,7 @@ export default function ClientesModule({ onNavigate }) {
                             const rel = `${s.name}/${ff.name}`;
                             const sel = isSelected(f.id, rel);
                             return (
-                              <li key={ff.name} style={{ opacity: 0.9, display: "flex", alignItems: "center", gap: 6, padding: "3px 4px", background: sel ? "rgba(250,204,21,0.08)" : "transparent", borderRadius: 2 }}>
+                              <li key={ff.name} style={{ opacity: 0.9, display: "flex", alignItems: "center", gap: 6, padding: "3px 4px", background: sel ? "rgba(250,204,21,0.08)" : "transparent", borderRadius: 0 }}>
                                 <input
                                   type="checkbox"
                                   checked={sel}
@@ -2430,7 +2430,7 @@ export default function ClientesModule({ onNavigate }) {
                                   title="Ver / Preview"
                                   onClick={() => openPreview(f.id, rel, ff.name)}
                                   data-testid={`aj-preview-${f.id}-${ff.name}`}
-                                  style={{ background: "rgba(212,175,55,0.15)", border: "1px solid rgba(212,175,55,0.4)", color: "#d4af37", borderRadius: 2, padding: "2px 8px", cursor: "pointer", fontSize: 11 }}
+                                  style={{ background: "rgba(212,175,55,0.15)", border: "1px solid rgba(212,175,55,0.4)", color: "#d4af37", borderRadius: 0, padding: "2px 8px", cursor: "pointer", fontSize: 11 }}
                                 >
                                   <i className="fa fa-eye"></i>
                                 </button>
@@ -2440,7 +2440,7 @@ export default function ClientesModule({ onNavigate }) {
                                     onClick={() => splitBundled(f.id, rel, ff.name)}
                                     disabled={splittingRel === rel}
                                     data-testid={`aj-split-${f.id}-${ff.name}`}
-                                    style={{ background: "rgba(168,85,247,0.15)", border: "1px solid rgba(168,85,247,0.4)", color: "#c084fc", borderRadius: 2, padding: "2px 8px", cursor: "pointer", fontSize: 11 }}
+                                    style={{ background: "rgba(168,85,247,0.15)", border: "1px solid rgba(168,85,247,0.4)", color: "#c084fc", borderRadius: 0, padding: "2px 8px", cursor: "pointer", fontSize: 11 }}
                                   >
                                     <i className={`fa ${splittingRel === rel ? "fa-spinner fa-spin" : "fa-cut"}`}></i>
                                   </button>
@@ -2449,7 +2449,7 @@ export default function ClientesModule({ onNavigate }) {
                                   title="Descargar"
                                   onClick={() => downloadFile(f.id, rel)}
                                   data-testid={`aj-download-${f.id}-${ff.name}`}
-                                  style={{ background: "rgba(148,163,184,0.15)", border: "1px solid rgba(148,163,184,0.4)", color: "#94a3b8", borderRadius: 2, padding: "2px 8px", cursor: "pointer", fontSize: 11 }}
+                                  style={{ background: "rgba(148,163,184,0.15)", border: "1px solid rgba(148,163,184,0.4)", color: "#94a3b8", borderRadius: 0, padding: "2px 8px", cursor: "pointer", fontSize: 11 }}
                                 >
                                   <i className="fa fa-download"></i>
                                 </button>
@@ -2457,7 +2457,7 @@ export default function ClientesModule({ onNavigate }) {
                                   title="Eliminar"
                                   onClick={() => deleteClientFile(f.id, rel)}
                                   data-testid={`aj-delete-${f.id}-${ff.name}`}
-                                  style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.4)", color: "#f87171", borderRadius: 2, padding: "2px 8px", cursor: "pointer", fontSize: 11 }}
+                                  style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.4)", color: "#f87171", borderRadius: 0, padding: "2px 8px", cursor: "pointer", fontSize: 11 }}
                                 >
                                   <i className="fa fa-trash"></i>
                                 </button>
@@ -2489,8 +2489,8 @@ export default function ClientesModule({ onNavigate }) {
           <div
             onClick={(e) => e.stopPropagation()}
             style={{
-              background: "rgba(15,23,42,0.92)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", color: "#e2e8f0",
-              borderRadius: 2, boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
+              background: "rgba(14,14,16,0.92)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", color: "#e2e8f0",
+              borderRadius: 0, boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
               width: "min(1200px, 96vw)", height: "min(900px, 92vh)",
               display: "flex", flexDirection: "column", overflow: "hidden",
               border: "1px solid rgba(148,163,184,0.25)",
@@ -2499,7 +2499,7 @@ export default function ClientesModule({ onNavigate }) {
             <div style={{
               display: "flex", alignItems: "center", gap: 10,
               padding: "0.6rem 0.9rem", borderBottom: "1px solid rgba(148,163,184,0.2)",
-              background: "rgba(15,23,42,0.9)",
+              background: "rgba(14,14,16,0.9)",
             }}>
               <i className={`fa ${previewFile.mime === "pdf" ? "fa-file-pdf-o" : previewFile.mime === "image" ? "fa-file-image-o" : "fa-file-o"}`} style={{ color: "#facc15" }} />
               <span style={{ flex: 1, fontWeight: 600, fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{previewFile.name}</span>
@@ -2507,19 +2507,19 @@ export default function ClientesModule({ onNavigate }) {
                 href={previewFile.url.replace("?inline=true", "")}
                 target="_blank" rel="noreferrer"
                 data-testid="preview-download-link"
-                style={{ background: "rgba(148,163,184,0.15)", color: "#e2e8f0", padding: "5px 12px", borderRadius: 2, textDecoration: "none", fontSize: 12 }}
+                style={{ background: "rgba(148,163,184,0.15)", color: "#e2e8f0", padding: "5px 12px", borderRadius: 0, textDecoration: "none", fontSize: 12 }}
               >
                 <i className="fa fa-download" /> Descargar
               </a>
               <button
                 onClick={closePreview}
                 data-testid="btn-preview-close"
-                style={{ background: "rgba(239,68,68,0.2)", color: "#fca5a5", border: "1px solid rgba(239,68,68,0.4)", borderRadius: 2, padding: "5px 12px", cursor: "pointer", fontSize: 12 }}
+                style={{ background: "rgba(239,68,68,0.2)", color: "#fca5a5", border: "1px solid rgba(239,68,68,0.4)", borderRadius: 0, padding: "5px 12px", cursor: "pointer", fontSize: 12 }}
               >
                 <i className="fa fa-times" /> Cerrar
               </button>
             </div>
-            <div style={{ flex: 1, background: "#1e293b", overflow: "hidden" }}>
+            <div style={{ flex: 1, background: "#232326", overflow: "hidden" }}>
               {previewFile.mime === "pdf" && (
                 <iframe title={previewFile.name} src={previewFile.url} style={{ width: "100%", height: "100%", border: "none", background: "#fff" }} />
               )}
@@ -2557,11 +2557,11 @@ export default function ClientesModule({ onNavigate }) {
       {tasacionModal && (() => {
         const m = tasacionModal;
         const set = (k, v) => setTasacionModal(prev => ({ ...prev, [k]: v, preview: null }));
-        const inpS = { width: "100%", padding: "0.5rem", borderRadius: 2, border: "1px solid rgba(148,163,184,0.3)", background: "#1e293b", color: "#e2e8f0", fontSize: 13 };
+        const inpS = { width: "100%", padding: "0.5rem", borderRadius: 0, border: "1px solid rgba(148,163,184,0.3)", background: "#232326", color: "#e2e8f0", fontSize: 13 };
         const lblS = { fontSize: 12 };
         return (
           <div data-testid="tasacion-modal" onClick={() => setTasacionModal(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9998, padding: "3vh 3vw" }}>
-            <div onClick={(e) => e.stopPropagation()} style={{ background: "rgba(15,23,42,0.92)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", color: "#e2e8f0", borderRadius: 2, width: "min(760px, 96vw)", maxHeight: "94vh", overflow: "auto", border: "1px solid rgba(148,163,184,0.25)", boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}>
+            <div onClick={(e) => e.stopPropagation()} style={{ background: "rgba(14,14,16,0.92)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", color: "#e2e8f0", borderRadius: 0, width: "min(760px, 96vw)", maxHeight: "94vh", overflow: "auto", border: "1px solid rgba(148,163,184,0.25)", boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}>
               <div style={{ padding: "0.9rem 1.1rem", borderBottom: "1px solid rgba(148,163,184,0.2)", display: "flex", alignItems: "center", gap: 10 }}>
                 <i className="fa fa-home" style={{ color: "#fb923c" }} />
                 <h4 style={{ margin: 0, flex: 1 }}>Solicitud de Tasación — {m.folder.nombre}</h4>
@@ -2569,12 +2569,12 @@ export default function ClientesModule({ onNavigate }) {
               </div>
               <div style={{ padding: "1rem 1.1rem", display: "grid", gap: "0.75rem" }}>
                 {m.msg && (
-                  <div data-testid="tasacion-msg" style={{ padding: "0.6rem 0.9rem", borderRadius: 2, background: m.msg.startsWith("✅") ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)", color: m.msg.startsWith("✅") ? "#4ade80" : "#f87171", fontWeight: 600, fontSize: 13 }}>{m.msg}</div>
+                  <div data-testid="tasacion-msg" style={{ padding: "0.6rem 0.9rem", borderRadius: 0, background: m.msg.startsWith("✅") ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)", color: m.msg.startsWith("✅") ? "#4ade80" : "#f87171", fontWeight: 600, fontSize: 13 }}>{m.msg}</div>
                 )}
                 <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Destinatarios <span style={{ color: "#4ade80" }}>· la tasación SIEMPRE va a Value Property y Victoria Vilches</span></b>
                   <input value={m.destinatarios} onChange={e => set("destinatarios", e.target.value)} data-testid="tasacion-destinatarios" style={inpS} />
                 </label>
-                <div style={{ background: "rgba(30,41,59,0.7)", borderRadius: 2, padding: "0.5rem 0.9rem", fontSize: 12, opacity: 0.85 }}>
+                <div style={{ background: "rgba(28,28,30,0.7)", borderRadius: 0, padding: "0.5rem 0.9rem", fontSize: 12, opacity: 0.85 }}>
                   Asunto: SOLICITUD TASACION // {m.folder.nombre}{m.folder.rut ? ` Rut: ${m.folder.rut}` : ""}
                 </div>
                 <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Texto inicial del correo (editable)</b>
@@ -2597,7 +2597,7 @@ export default function ClientesModule({ onNavigate }) {
                   </label>
                 </div>
                 {m.modalidad === "inmobiliaria" && (
-                  <div style={{ background: "rgba(139,92,246,0.08)", border: "1px solid rgba(139,92,246,0.3)", borderRadius: 2, padding: "0.7rem 0.9rem", display: "grid", gap: "0.6rem" }}>
+                  <div style={{ background: "rgba(139,92,246,0.08)", border: "1px solid rgba(139,92,246,0.3)", borderRadius: 0, padding: "0.7rem 0.9rem", display: "grid", gap: "0.6rem" }}>
                     <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Inmobiliaria <span style={{ opacity: 0.6 }}>(si ya tiene plantilla guardada, autocompleta el contacto)</span></b>
                       <input value={m.inmobiliaria} onChange={e => pickInmoPlantilla(e.target.value)} list="inmo-plantillas" placeholder="Ej: Ecomac" data-testid="tasacion-inmobiliaria" style={inpS} />
                       <datalist id="inmo-plantillas">
@@ -2616,7 +2616,7 @@ export default function ClientesModule({ onNavigate }) {
                   </div>
                 )}
                 {m.modalidad === "broker" && (
-                  <div style={{ background: "rgba(212,175,55,0.06)", border: "1px solid rgba(212,175,55,0.3)", borderRadius: 2, padding: "0.7rem 0.9rem", display: "grid", gap: "0.6rem" }}>
+                  <div style={{ background: "rgba(212,175,55,0.06)", border: "1px solid rgba(212,175,55,0.3)", borderRadius: 0, padding: "0.7rem 0.9rem", display: "grid", gap: "0.6rem" }}>
                     <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Broker <span style={{ opacity: 0.6 }}>(su contacto va en el correo, se puede editar abajo)</span></b>
                       <select value={m.broker_id} data-testid="tasacion-broker" style={inpS}
                         onChange={e => {
@@ -2658,11 +2658,11 @@ export default function ClientesModule({ onNavigate }) {
                   </label>
                 </div>
                 {!m.archivos.some(a => a.sel && /carta|oferta|aprobaci/i.test(a.nombre)) && (
-                  <div data-testid="tasacion-sin-carta" style={{ fontSize: 12, color: "#facc15", background: "rgba(250,204,21,0.08)", border: "1px solid rgba(250,204,21,0.35)", borderRadius: 2, padding: "6px 10px" }}>
+                  <div data-testid="tasacion-sin-carta" style={{ fontSize: 12, color: "#facc15", background: "rgba(250,204,21,0.08)", border: "1px solid rgba(250,204,21,0.35)", borderRadius: 0, padding: "6px 10px" }}>
                     ⚠️ No hay <b>carta de aprobación</b> seleccionada en los adjuntos — la solicitud debe incluirla.
                   </div>
                 )}
-                <div style={{ background: "rgba(30,41,59,0.7)", borderRadius: 2, padding: "0.7rem 0.9rem", display: "grid", gap: "0.6rem" }}>
+                <div style={{ background: "rgba(28,28,30,0.7)", borderRadius: 0, padding: "0.7rem 0.9rem", display: "grid", gap: "0.6rem" }}>
                   <div style={{ opacity: 0.8, fontSize: 11, textTransform: "uppercase", fontWeight: 700 }}>
                     {m.modalidad === "usada" ? "Contacto del vendedor (para que el tasador coordine)" : "Contacto para coordinar la visita del tasador"}
                   </div>
@@ -2678,13 +2678,13 @@ export default function ClientesModule({ onNavigate }) {
                     </label>
                   </div>
                 </div>
-                <div style={{ background: "rgba(212,175,55,0.08)", border: "1px solid rgba(212,175,55,0.35)", borderRadius: 2, padding: "0.7rem 0.9rem", display: "grid", gap: "0.4rem" }}>
+                <div style={{ background: "rgba(212,175,55,0.08)", border: "1px solid rgba(212,175,55,0.35)", borderRadius: 0, padding: "0.7rem 0.9rem", display: "grid", gap: "0.4rem" }}>
                   <div style={{ opacity: 0.85, fontSize: 11, textTransform: "uppercase", fontWeight: 700, color: "#d4af37" }}>Voucher de pago de la tasación</div>
                   <input type="file" accept=".pdf,.jpg,.jpeg,.png" data-testid="tasacion-voucher-input"
                     onChange={e => subirVoucher(e.target.files[0])} style={{ fontSize: 12 }} />
                   {m.voucher_nombre && <div style={{ fontSize: 12, color: "#4ade80" }}>✅ {m.voucher_nombre} — se adjunta y el correo dirá "Adjunto voucher de pago tasación"</div>}
                 </div>
-                <div style={{ background: "rgba(234,88,12,0.08)", border: "1px solid rgba(234,88,12,0.3)", borderRadius: 2, padding: "0.7rem 0.9rem", display: "flex", gap: 8, alignItems: "end", flexWrap: "wrap" }}>
+                <div style={{ background: "rgba(234,88,12,0.08)", border: "1px solid rgba(234,88,12,0.3)", borderRadius: 0, padding: "0.7rem 0.9rem", display: "flex", gap: 8, alignItems: "end", flexWrap: "wrap" }}>
                   <label style={{ ...lblS, flex: 1, minWidth: 200 }}><b style={{ display: "block", marginBottom: 4 }}>📅 Fecha de tasación informada por Value Property</b>
                     <input value={m.fecha_tasacion} onChange={e => setTasacionModal(prev => ({ ...prev, fecha_tasacion: e.target.value }))} placeholder="Aún sin fecha" data-testid="tasacion-fecha-vp" style={inpS} />
                   </label>
@@ -2699,7 +2699,7 @@ export default function ClientesModule({ onNavigate }) {
                   <textarea value={m.observaciones} onChange={e => set("observaciones", e.target.value)} rows={2} placeholder="Ej: Se adjunta carta oferta. Ya contamos con tasaciones de este proyecto." data-testid="tasacion-observaciones" style={{ ...inpS, resize: "vertical" }} />
                 </label>
                 {m.archivos.length > 0 && (
-                  <div style={{ background: "rgba(30,41,59,0.7)", borderRadius: 2, padding: "0.7rem 0.9rem" }}>
+                  <div style={{ background: "rgba(28,28,30,0.7)", borderRadius: 0, padding: "0.7rem 0.9rem" }}>
                     <div style={{ opacity: 0.7, fontSize: 11, textTransform: "uppercase", marginBottom: 6 }}>Adjuntos — SOLO la carta de aprobación y el voucher pueden enviarse; el resto está bloqueado</div>
                     <div style={{ display: "grid", gap: 4, maxHeight: 140, overflow: "auto" }}>
                       {m.archivos.map((a, i) => {
@@ -2712,7 +2712,7 @@ export default function ClientesModule({ onNavigate }) {
                           <button type="button" data-testid={`tasacion-adj-ver-${i}`}
                             title={`Ver ${a.nombre}`}
                             onClick={(e) => { e.preventDefault(); e.stopPropagation(); openPreview(m.folder.id, a.ruta, a.nombre); }}
-                            style={{ background: "rgba(212,175,55,0.15)", border: "1px solid #d4af37", color: "#d4af37", borderRadius: 2, padding: "2px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0, opacity: 1 }}>
+                            style={{ background: "rgba(212,175,55,0.15)", border: "1px solid #d4af37", color: "#d4af37", borderRadius: 0, padding: "2px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0, opacity: 1 }}>
                             <i className="fa fa-eye" /> Ver
                           </button>
                         </label>
@@ -2722,7 +2722,7 @@ export default function ClientesModule({ onNavigate }) {
                   </div>
                 )}
                 {m.preview && (
-                  <div style={{ background: "#fff", borderRadius: 2, padding: "0.9rem", maxHeight: 260, overflow: "auto" }}>
+                  <div style={{ background: "#fff", borderRadius: 0, padding: "0.9rem", maxHeight: 260, overflow: "auto" }}>
                     <div dangerouslySetInnerHTML={{ __html: m.preview.body }} />
                     {m.preview.attachments.length > 0 && (
                       <div style={{ marginTop: 8, fontSize: 12, color: "#334155" }}>📎 Adjuntos: {m.preview.attachments.join(", ")}</div>
@@ -2731,12 +2731,12 @@ export default function ClientesModule({ onNavigate }) {
                 )}
                 <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
                   <button onClick={tasacionPreview} disabled={m.loading} data-testid="btn-tasacion-preview"
-                    style={{ padding: "0.55rem 1.1rem", borderRadius: 2, border: "1px solid rgba(148,163,184,0.4)", background: "transparent", color: "#e2e8f0", fontWeight: 700, cursor: "pointer" }}>
+                    style={{ padding: "0.55rem 1.1rem", borderRadius: 0, border: "1px solid rgba(148,163,184,0.4)", background: "transparent", color: "#e2e8f0", fontWeight: 700, cursor: "pointer" }}>
                     <i className={`fa ${m.loading ? "fa-spinner fa-spin" : "fa-eye"}`} /> Ver preview
                   </button>
                   <button onClick={tasacionEnviar} disabled={m.loading || !m.direccion.trim()} data-testid="btn-tasacion-enviar"
                     title={!m.direccion.trim() ? "Falta la dirección de la propiedad" : ""}
-                    style={{ padding: "0.55rem 1.1rem", borderRadius: 2, border: "none", background: "#ea580c", color: "#fff", fontWeight: 800, cursor: "pointer", opacity: (m.loading || !m.direccion.trim()) ? 0.6 : 1 }}>
+                    style={{ padding: "0.55rem 1.1rem", borderRadius: 0, border: "none", background: "#ea580c", color: "#fff", fontWeight: 800, cursor: "pointer", opacity: (m.loading || !m.direccion.trim()) ? 0.6 : 1 }}>
                     <i className={`fa ${m.loading ? "fa-spinner fa-spin" : "fa-paper-plane"}`} /> Enviar solicitud
                   </button>
                 </div>
@@ -2749,11 +2749,11 @@ export default function ClientesModule({ onNavigate }) {
       {estudioModal && (() => {
         const m = estudioModal;
         const set = (k, v) => setEstudioModal(prev => ({ ...prev, [k]: v, preview: null }));
-        const inpS = { width: "100%", padding: "0.5rem", borderRadius: 2, border: "1px solid rgba(148,163,184,0.3)", background: "#1e293b", color: "#e2e8f0", fontSize: 13 };
+        const inpS = { width: "100%", padding: "0.5rem", borderRadius: 0, border: "1px solid rgba(148,163,184,0.3)", background: "#232326", color: "#e2e8f0", fontSize: 13 };
         const lblS = { fontSize: 12 };
         return (
           <div data-testid="estudio-modal" onClick={() => setEstudioModal(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9998, padding: "3vh 3vw" }}>
-            <div onClick={(e) => e.stopPropagation()} style={{ background: "rgba(15,23,42,0.92)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", color: "#e2e8f0", borderRadius: 2, width: "min(760px, 96vw)", maxHeight: "94vh", overflow: "auto", border: "1px solid rgba(148,163,184,0.25)", boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}>
+            <div onClick={(e) => e.stopPropagation()} style={{ background: "rgba(14,14,16,0.92)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", color: "#e2e8f0", borderRadius: 0, width: "min(760px, 96vw)", maxHeight: "94vh", overflow: "auto", border: "1px solid rgba(148,163,184,0.25)", boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}>
               <div style={{ padding: "0.9rem 1.1rem", borderBottom: "1px solid rgba(148,163,184,0.2)", display: "flex", alignItems: "center", gap: 10 }}>
                 <i className="fa fa-balance-scale" style={{ color: "#2dd4bf" }} />
                 <h4 style={{ margin: 0, flex: 1 }}>Solicitud de Estudio de Título — {m.folder.nombre}</h4>
@@ -2761,9 +2761,9 @@ export default function ClientesModule({ onNavigate }) {
               </div>
               <div style={{ padding: "1rem 1.1rem", display: "grid", gap: "0.75rem" }}>
                 {m.msg && (
-                  <div data-testid="estudio-msg" style={{ padding: "0.6rem 0.9rem", borderRadius: 2, background: m.msg.startsWith("✅") ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)", color: m.msg.startsWith("✅") ? "#4ade80" : "#f87171", fontWeight: 600, fontSize: 13 }}>{m.msg}</div>
+                  <div data-testid="estudio-msg" style={{ padding: "0.6rem 0.9rem", borderRadius: 0, background: m.msg.startsWith("✅") ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)", color: m.msg.startsWith("✅") ? "#4ade80" : "#f87171", fontWeight: 600, fontSize: 13 }}>{m.msg}</div>
                 )}
-                <div style={{ display: "flex", gap: 8, alignItems: "center", background: "rgba(212,175,55,0.06)", border: "1px solid rgba(212,175,55,0.25)", borderRadius: 2, padding: "0.5rem 0.9rem", flexWrap: "wrap" }}>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", background: "rgba(212,175,55,0.06)", border: "1px solid rgba(212,175,55,0.25)", borderRadius: 0, padding: "0.5rem 0.9rem", flexWrap: "wrap" }}>
                   <span style={{ fontSize: 12, fontWeight: 700, color: "var(--gold, #d4af37)" }}>📋 Plantillas</span>
                   <select data-testid="estudio-plantilla-select" onChange={e => { if (e.target.value) aplicarPlantillaEstudio(e.target.value); e.target.value = ""; }}
                     style={{ ...inpS, width: "auto", flex: 1, minWidth: 180, padding: "5px 8px", fontSize: 12 }} defaultValue="">
@@ -2771,7 +2771,7 @@ export default function ClientesModule({ onNavigate }) {
                     {estudioPlantillas.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
                   </select>
                   <button data-testid="estudio-plantilla-guardar" onClick={guardarPlantillaEstudio}
-                    style={{ background: "rgba(212,175,55,0.15)", border: "1px solid rgba(212,175,55,0.5)", color: "#d4af37", borderRadius: 2, padding: "5px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                    style={{ background: "rgba(212,175,55,0.15)", border: "1px solid rgba(212,175,55,0.5)", color: "#d4af37", borderRadius: 0, padding: "5px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
                     💾 Guardar plantilla
                   </button>
                   {estudioPlantillas.length > 0 && (
@@ -2785,21 +2785,21 @@ export default function ClientesModule({ onNavigate }) {
                 <button data-testid="estudio-enriquecer" onClick={() => enriquecerCarpeta(m.folder, "estudio")}
                   disabled={enriching === m.folder.id + "estudio"}
                   title="Busca en el correo (asunto, cuerpo y adjuntos) documentos del estudio de título y los guarda en 07_estudio_titulo. NUNCA se mezclan con los documentos de la solicitud de crédito."
-                  style={{ background: "rgba(212,175,55,0.12)", border: "1.5px solid #d4af37", color: "#d4af37", borderRadius: 2, padding: "0.55rem 1rem", fontSize: 12.5, fontWeight: 800, cursor: "pointer", textAlign: "left" }}>
+                  style={{ background: "rgba(212,175,55,0.12)", border: "1.5px solid #d4af37", color: "#d4af37", borderRadius: 0, padding: "0.55rem 1rem", fontSize: 12.5, fontWeight: 800, cursor: "pointer", textAlign: "left" }}>
                   <i className={`fa ${enriching === m.folder.id + "estudio" ? "fa-spinner fa-spin" : "fa-magic"}`}></i> 🔎 Enriquecer archivos del Estudio de Título (busca en el correo · se guardan separados de la solicitud de crédito)
                 </button>
                 <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Destinatarios <span style={{ color: "#4ade80" }}>· broker seleccionado + Victoria Vilches siempre en copia</span></b>
                   <input value={m.destinatarios} onChange={e => set("destinatarios", e.target.value)} data-testid="estudio-destinatarios" style={inpS} />
                 </label>
                 <BrokersPanel brokers={brokers} dest={m.destinatarios} setDest={(v) => set("destinatarios", v)} reloadBrokers={reloadBrokers} />
-                <div style={{ background: "rgba(30,41,59,0.5)", border: "1px solid rgba(148,163,184,0.2)", borderRadius: 2, padding: "0.6rem 0.9rem" }}>
+                <div style={{ background: "rgba(28,28,30,0.5)", border: "1px solid rgba(148,163,184,0.2)", borderRadius: 0, padding: "0.6rem 0.9rem" }}>
                   <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Con copia (CC) <span style={{ color: "#d4af37" }}>· opcional — se mantienen informados en TODO el hilo del estudio (reparos, recordatorios y resolución)</span></b>
                     <input value={m.cc || ""} onChange={e => set("cc", e.target.value)} data-testid="estudio-cc" placeholder="correo1@ejemplo.cl, correo2@ejemplo.cl" style={inpS} />
                   </label>
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
                     {m.folder.source_email && !String(m.cc || "").toLowerCase().includes(String(m.folder.source_email).toLowerCase()) && (
                       <button data-testid="cc-add-cliente" onClick={() => set("cc", [m.cc, m.folder.source_email].filter(Boolean).join(", "))}
-                        style={{ background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.4)", color: "#4ade80", borderRadius: 2, padding: "3px 10px", fontSize: 11.5, cursor: "pointer" }}>
+                        style={{ background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.4)", color: "#4ade80", borderRadius: 0, padding: "3px 10px", fontSize: 11.5, cursor: "pointer" }}>
                         + Cliente/Solicitante ({m.folder.source_email})
                       </button>
                     )}
@@ -2807,13 +2807,13 @@ export default function ClientesModule({ onNavigate }) {
                       .filter(x => !String(m.cc || "").toLowerCase().includes(x.em.toLowerCase()))
                       .map((x, i) => (
                         <button key={i} data-testid={`cc-add-broker-${i}`} onClick={() => set("cc", [m.cc, x.em].filter(Boolean).join(", "))}
-                          style={{ background: "rgba(212,175,55,0.12)", border: "1px solid rgba(212,175,55,0.4)", color: "#d4af37", borderRadius: 2, padding: "3px 10px", fontSize: 11.5, cursor: "pointer" }}>
+                          style={{ background: "rgba(212,175,55,0.12)", border: "1px solid rgba(212,175,55,0.4)", color: "#d4af37", borderRadius: 0, padding: "3px 10px", fontSize: 11.5, cursor: "pointer" }}>
                           + {x.nombre} ({x.em})
                         </button>
                       ))}
                   </div>
                 </div>
-                <div style={{ background: "rgba(30,41,59,0.7)", borderRadius: 2, padding: "0.5rem 0.9rem", fontSize: 12, opacity: 0.85 }}>
+                <div style={{ background: "rgba(28,28,30,0.7)", borderRadius: 0, padding: "0.5rem 0.9rem", fontSize: 12, opacity: 0.85 }}>
                   Asunto: SOLICITUD ESTUDIO DE TITULOS // {m.folder.nombre}{m.folder.rut ? ` ${m.folder.rut}` : ""}
                 </div>
                 <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Texto inicial del correo (editable)</b>
@@ -2886,7 +2886,7 @@ export default function ClientesModule({ onNavigate }) {
                   return (
                   <>
                   {docsEstudio.length > 0 && (
-                    <div data-testid="estudio-docs-recibidos" style={{ background: "rgba(20,184,166,0.08)", border: "1.5px dashed #14b8a6", borderRadius: 2, padding: "0.7rem 0.9rem" }}>
+                    <div data-testid="estudio-docs-recibidos" style={{ background: "rgba(20,184,166,0.08)", border: "1.5px dashed #14b8a6", borderRadius: 0, padding: "0.7rem 0.9rem" }}>
                       <div style={{ color: "#2dd4bf", fontSize: 11, textTransform: "uppercase", fontWeight: 800, marginBottom: 4 }}>
                         ⚖ Documentos del Estudio de Título recibidos ({docsEstudio.length})
                       </div>
@@ -2895,7 +2895,7 @@ export default function ClientesModule({ onNavigate }) {
                       </div>
                       <button data-testid="btn-estudio-etapa2" onClick={() => enviarEtapa2(m)} disabled={m.loading}
                         title="Etapa 2: enviar al abogado los documentos del estudio recibidos, con copia a Victoria Vilches, en el mismo hilo del correo"
-                        style={{ background: "#0d9488", border: "none", color: "#fff", borderRadius: 2, padding: "0.5rem 1rem", fontSize: 12.5, fontWeight: 800, cursor: "pointer", marginBottom: 8 }}>
+                        style={{ background: "#0d9488", border: "none", color: "#fff", borderRadius: 0, padding: "0.5rem 1rem", fontSize: 12.5, fontWeight: 800, cursor: "pointer", marginBottom: 8 }}>
                         <i className={`fa ${m.loading ? "fa-spinner fa-spin" : "fa-paper-plane"}`} /> 📤 Etapa 2: Enviar documentos recibidos a Guillermo Marluf (CC Victoria Vilches)
                       </button>
                       {m.folder.estudio_docs_enviados_abogado_at && (
@@ -2910,7 +2910,7 @@ export default function ClientesModule({ onNavigate }) {
                             <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.nombre}</span>
                             <button type="button" data-testid={`estudio-doc-ver-${i}`}
                               onClick={() => openPreview(m.folder.id, a.ruta, a.nombre)}
-                              style={{ background: "rgba(212,175,55,0.15)", border: "1px solid #d4af37", color: "#d4af37", borderRadius: 2, padding: "2px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
+                              style={{ background: "rgba(212,175,55,0.15)", border: "1px solid #d4af37", color: "#d4af37", borderRadius: 0, padding: "2px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
                               <i className="fa fa-eye" /> Ver
                             </button>
                           </div>
@@ -2918,7 +2918,7 @@ export default function ClientesModule({ onNavigate }) {
                       </div>
                     </div>
                   )}
-                  <div style={{ background: "rgba(30,41,59,0.7)", borderRadius: 2, padding: "0.7rem 0.9rem" }}>
+                  <div style={{ background: "rgba(28,28,30,0.7)", borderRadius: 0, padding: "0.7rem 0.9rem" }}>
                     <div style={{ opacity: 0.7, fontSize: 11, textTransform: "uppercase", marginBottom: 6 }}>Adjuntos de la solicitud — la carta de aprobación va preseleccionada</div>
                     <div style={{ display: "grid", gap: 4, maxHeight: 140, overflow: "auto" }}>
                       {adjCredito.map((a, i) => (
@@ -2929,7 +2929,7 @@ export default function ClientesModule({ onNavigate }) {
                           <button type="button" data-testid={`estudio-adj-ver-${i}`}
                             title={`Ver ${a.nombre} antes de enviarlo`}
                             onClick={(e) => { e.preventDefault(); e.stopPropagation(); openPreview(m.folder.id, a.ruta, a.nombre); }}
-                            style={{ background: "rgba(212,175,55,0.15)", border: "1px solid #d4af37", color: "#d4af37", borderRadius: 2, padding: "2px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
+                            style={{ background: "rgba(212,175,55,0.15)", border: "1px solid #d4af37", color: "#d4af37", borderRadius: 0, padding: "2px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
                             <i className="fa fa-eye" /> Ver
                           </button>
                         </label>
@@ -2940,7 +2940,7 @@ export default function ClientesModule({ onNavigate }) {
                   );
                 })()}
                 {m.preview && (
-                  <div style={{ background: "#fff", borderRadius: 2, padding: "0.9rem", maxHeight: 260, overflow: "auto" }}>
+                  <div style={{ background: "#fff", borderRadius: 0, padding: "0.9rem", maxHeight: 260, overflow: "auto" }}>
                     <div dangerouslySetInnerHTML={{ __html: m.preview.body }} />
                     {m.preview.attachments.length > 0 && (
                       <div style={{ marginTop: 8, fontSize: 12, color: "#334155" }}>📎 Adjuntos: {m.preview.attachments.join(", ")}</div>
@@ -2949,11 +2949,11 @@ export default function ClientesModule({ onNavigate }) {
                 )}
                 <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
                   <button onClick={estudioPreview} disabled={m.loading} data-testid="btn-estudio-preview"
-                    style={{ padding: "0.55rem 1.1rem", borderRadius: 2, border: "1px solid rgba(148,163,184,0.4)", background: "transparent", color: "#e2e8f0", fontWeight: 700, cursor: "pointer" }}>
+                    style={{ padding: "0.55rem 1.1rem", borderRadius: 0, border: "1px solid rgba(148,163,184,0.4)", background: "transparent", color: "#e2e8f0", fontWeight: 700, cursor: "pointer" }}>
                     <i className={`fa ${m.loading ? "fa-spinner fa-spin" : "fa-eye"}`} /> Ver preview
                   </button>
                   <button onClick={estudioEnviar} disabled={m.loading} data-testid="btn-estudio-enviar"
-                    style={{ padding: "0.55rem 1.1rem", borderRadius: 2, border: "none", background: "#0d9488", color: "#fff", fontWeight: 800, cursor: "pointer", opacity: m.loading ? 0.6 : 1 }}>
+                    style={{ padding: "0.55rem 1.1rem", borderRadius: 0, border: "none", background: "#0d9488", color: "#fff", fontWeight: 800, cursor: "pointer", opacity: m.loading ? 0.6 : 1 }}>
                     <i className={`fa ${m.loading ? "fa-spinner fa-spin" : "fa-paper-plane"}`} /> Enviar solicitud
                   </button>
                 </div>
@@ -2966,11 +2966,11 @@ export default function ClientesModule({ onNavigate }) {
       {pedirModal && (() => {
         const m = pedirModal;
         const set = (k, v) => setPedirModal(prev => ({ ...prev, [k]: v, preview: null }));
-        const inpS = { width: "100%", padding: "0.5rem", borderRadius: 2, border: "1px solid rgba(148,163,184,0.3)", background: "#1e293b", color: "#e2e8f0", fontSize: 13 };
+        const inpS = { width: "100%", padding: "0.5rem", borderRadius: 0, border: "1px solid rgba(148,163,184,0.3)", background: "#232326", color: "#e2e8f0", fontSize: 13 };
         const lblS = { fontSize: 12 };
         return (
           <div data-testid="pedir-modal" onClick={() => setPedirModal(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9998, padding: "3vh 3vw" }}>
-            <div onClick={(e) => e.stopPropagation()} style={{ background: "rgba(15,23,42,0.92)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", color: "#e2e8f0", borderRadius: 2, width: "min(680px, 96vw)", maxHeight: "94vh", overflow: "auto", border: "1px solid rgba(148,163,184,0.25)", boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}>
+            <div onClick={(e) => e.stopPropagation()} style={{ background: "rgba(14,14,16,0.92)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", color: "#e2e8f0", borderRadius: 0, width: "min(680px, 96vw)", maxHeight: "94vh", overflow: "auto", border: "1px solid rgba(148,163,184,0.25)", boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}>
               <div style={{ padding: "0.9rem 1.1rem", borderBottom: "1px solid rgba(148,163,184,0.2)", display: "flex", alignItems: "center", gap: 10 }}>
                 <i className="fa fa-envelope" style={{ color: "#f87171" }} />
                 <h4 style={{ margin: 0, flex: 1 }}>Pedir documentos faltantes — {m.folder.nombre}</h4>
@@ -2978,7 +2978,7 @@ export default function ClientesModule({ onNavigate }) {
               </div>
               <div style={{ padding: "1rem 1.1rem", display: "grid", gap: "0.75rem" }}>
                 {m.msg && (
-                  <div data-testid="pedir-msg" style={{ padding: "0.6rem 0.9rem", borderRadius: 2, background: m.msg.startsWith("✅") ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)", color: m.msg.startsWith("✅") ? "#4ade80" : "#f87171", fontWeight: 600, fontSize: 13 }}>{m.msg}</div>
+                  <div data-testid="pedir-msg" style={{ padding: "0.6rem 0.9rem", borderRadius: 0, background: m.msg.startsWith("✅") ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)", color: m.msg.startsWith("✅") ? "#4ade80" : "#f87171", fontWeight: 600, fontSize: 13 }}>{m.msg}</div>
                 )}
                 <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Destinatario (quien nos envió la solicitud de crédito)</b>
                   <input value={m.destinatario} onChange={e => set("destinatario", e.target.value)} data-testid="pedir-destinatario" style={inpS} />
@@ -2990,17 +2990,17 @@ export default function ClientesModule({ onNavigate }) {
                   <textarea value={m.mensaje} onChange={e => set("mensaje", e.target.value)} rows={2} data-testid="pedir-mensaje" style={{ ...inpS, resize: "vertical" }} />
                 </label>
                 {m.preview && (
-                  <div style={{ background: "#fff", borderRadius: 2, padding: "0.9rem", maxHeight: 240, overflow: "auto" }}>
+                  <div style={{ background: "#fff", borderRadius: 0, padding: "0.9rem", maxHeight: 240, overflow: "auto" }}>
                     <div dangerouslySetInnerHTML={{ __html: m.preview.body }} />
                   </div>
                 )}
                 <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
                   <button onClick={pedirPreview} disabled={m.loading} data-testid="btn-pedir-preview"
-                    style={{ padding: "0.55rem 1.1rem", borderRadius: 2, border: "1px solid rgba(148,163,184,0.4)", background: "transparent", color: "#e2e8f0", fontWeight: 700, cursor: "pointer" }}>
+                    style={{ padding: "0.55rem 1.1rem", borderRadius: 0, border: "1px solid rgba(148,163,184,0.4)", background: "transparent", color: "#e2e8f0", fontWeight: 700, cursor: "pointer" }}>
                     <i className={`fa ${m.loading ? "fa-spinner fa-spin" : "fa-eye"}`} /> Ver preview
                   </button>
                   <button onClick={pedirEnviar} disabled={m.loading || !m.destinatario.includes("@")} data-testid="btn-pedir-enviar"
-                    style={{ padding: "0.55rem 1.1rem", borderRadius: 2, border: "none", background: "#dc2626", color: "#fff", fontWeight: 800, cursor: "pointer", opacity: (m.loading || !m.destinatario.includes("@")) ? 0.6 : 1 }}>
+                    style={{ padding: "0.55rem 1.1rem", borderRadius: 0, border: "none", background: "#dc2626", color: "#fff", fontWeight: 800, cursor: "pointer", opacity: (m.loading || !m.destinatario.includes("@")) ? 0.6 : 1 }}>
                     <i className={`fa ${m.loading ? "fa-spinner fa-spin" : "fa-paper-plane"}`} /> Enviar solicitud de faltantes
                   </button>
                 </div>
@@ -3013,12 +3013,12 @@ export default function ClientesModule({ onNavigate }) {
       {escrituraModal && (() => {
         const m = escrituraModal;
         const set = (k, v) => setEscrituraModal(prev => ({ ...prev, [k]: v, preview: null }));
-        const inpS = { width: "100%", padding: "0.5rem", borderRadius: 2, border: "1px solid rgba(148,163,184,0.3)", background: "#1e293b", color: "#e2e8f0", fontSize: 13 };
+        const inpS = { width: "100%", padding: "0.5rem", borderRadius: 0, border: "1px solid rgba(148,163,184,0.3)", background: "#232326", color: "#e2e8f0", fontSize: 13 };
         const lblS = { fontSize: 12 };
         const notariaSel = notarias.find(n => n.id === m.notaria_id);
         return (
           <div data-testid="escritura-modal" onClick={() => setEscrituraModal(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9998, padding: "3vh 3vw" }}>
-            <div onClick={(e) => e.stopPropagation()} style={{ background: "rgba(15,23,42,0.92)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", color: "#e2e8f0", borderRadius: 2, width: "min(760px, 96vw)", maxHeight: "94vh", overflow: "auto", border: "1px solid rgba(148,163,184,0.25)", boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}>
+            <div onClick={(e) => e.stopPropagation()} style={{ background: "rgba(14,14,16,0.92)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", color: "#e2e8f0", borderRadius: 0, width: "min(760px, 96vw)", maxHeight: "94vh", overflow: "auto", border: "1px solid rgba(148,163,184,0.25)", boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}>
               <div style={{ padding: "0.9rem 1.1rem", borderBottom: "1px solid rgba(148,163,184,0.2)", display: "flex", alignItems: "center", gap: 10 }}>
                 <i className="fa fa-pencil" style={{ color: "#f472b6" }} />
                 <h4 style={{ margin: 0, flex: 1 }}>Firma de Escritura — {m.folder.nombre}</h4>
@@ -3026,7 +3026,7 @@ export default function ClientesModule({ onNavigate }) {
               </div>
               <div style={{ padding: "1rem 1.1rem", display: "grid", gap: "0.75rem" }}>
                 {m.msg && (
-                  <div data-testid="escritura-msg" style={{ padding: "0.6rem 0.9rem", borderRadius: 2, background: m.msg.startsWith("✅") ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)", color: m.msg.startsWith("✅") ? "#4ade80" : "#f87171", fontWeight: 600, fontSize: 13 }}>{m.msg}</div>
+                  <div data-testid="escritura-msg" style={{ padding: "0.6rem 0.9rem", borderRadius: 0, background: m.msg.startsWith("✅") ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)", color: m.msg.startsWith("✅") ? "#4ade80" : "#f87171", fontWeight: 600, fontSize: 13 }}>{m.msg}</div>
                 )}
                 <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Correo del cliente <span style={{ color: "#f87171" }}>*</span></b>
                   <input value={m.email_cliente} onChange={e => set("email_cliente", e.target.value)} placeholder="cliente@correo.cl" data-testid="escritura-email" style={inpS} />
@@ -3038,14 +3038,14 @@ export default function ClientesModule({ onNavigate }) {
                   </select>
                 </label>
                 {notariaSel && !notariaSel.email && (
-                  <div style={{ display: "flex", gap: 6, alignItems: "center", background: "rgba(250,204,21,0.08)", border: "1px solid rgba(250,204,21,0.3)", borderRadius: 2, padding: "0.5rem 0.8rem", fontSize: 12 }}>
+                  <div style={{ display: "flex", gap: 6, alignItems: "center", background: "rgba(250,204,21,0.08)", border: "1px solid rgba(250,204,21,0.3)", borderRadius: 0, padding: "0.5rem 0.8rem", fontSize: 12 }}>
                     <span style={{ color: "#facc15" }}>⚠️ Esta notaría no tiene correo: no recibirá el aviso de confirmación.</span>
                     <input value={m.notaria_email_edit} onChange={e => setEscrituraModal(prev => ({ ...prev, notaria_email_edit: e.target.value }))} placeholder="correo@notaria.cl" data-testid="escritura-notaria-email" style={{ ...inpS, flex: 1, width: "auto" }} />
                     <button onClick={escrituraSaveNotariaEmail} data-testid="escritura-notaria-email-save" style={{ ...inpS, width: "auto", background: "#a16207", border: "none", fontWeight: 700, cursor: "pointer" }}>Guardar</button>
                   </div>
                 )}
                 {m.addNotaria ? (
-                  <div style={{ background: "rgba(236,72,153,0.06)", border: "1px dashed rgba(236,72,153,0.4)", borderRadius: 2, padding: "0.7rem 0.9rem", display: "grid", gap: "0.5rem" }}>
+                  <div style={{ background: "rgba(236,72,153,0.06)", border: "1px dashed rgba(236,72,153,0.4)", borderRadius: 0, padding: "0.7rem 0.9rem", display: "grid", gap: "0.5rem" }}>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1.5fr", gap: "0.5rem" }}>
                       <input value={m.nn.ciudad} onChange={e => setEscrituraModal(prev => ({ ...prev, nn: { ...prev.nn, ciudad: e.target.value } }))} placeholder="Ciudad *" data-testid="notaria-new-ciudad" style={inpS} />
                       <input value={m.nn.nombre} onChange={e => setEscrituraModal(prev => ({ ...prev, nn: { ...prev.nn, nombre: e.target.value } }))} placeholder="Nombre notaría" data-testid="notaria-new-nombre" style={inpS} />
@@ -3057,7 +3057,7 @@ export default function ClientesModule({ onNavigate }) {
                     </div>
                   </div>
                 ) : (
-                  <button onClick={() => setEscrituraModal(prev => ({ ...prev, addNotaria: true }))} data-testid="btn-add-notaria" style={{ justifySelf: "start", background: "transparent", border: "1px dashed rgba(236,72,153,0.5)", color: "#f9a8d4", borderRadius: 2, padding: "0.3rem 0.7rem", fontSize: 11.5, cursor: "pointer" }}>
+                  <button onClick={() => setEscrituraModal(prev => ({ ...prev, addNotaria: true }))} data-testid="btn-add-notaria" style={{ justifySelf: "start", background: "transparent", border: "1px dashed rgba(236,72,153,0.5)", color: "#f9a8d4", borderRadius: 0, padding: "0.3rem 0.7rem", fontSize: 11.5, cursor: "pointer" }}>
                     <i className="fa fa-plus" /> Agregar notaría nueva
                   </button>
                 )}
@@ -3069,23 +3069,23 @@ export default function ClientesModule({ onNavigate }) {
                     <input type="time" value={m.hora} onChange={e => set("hora", e.target.value)} data-testid="escritura-hora" style={inpS} />
                   </label>
                 </div>
-                <div style={{ fontSize: 11.5, opacity: 0.75, background: "rgba(34,197,94,0.06)", border: "1px solid rgba(34,197,94,0.25)", borderRadius: 2, padding: "0.5rem 0.8rem", lineHeight: 1.6 }}>
+                <div style={{ fontSize: 11.5, opacity: 0.75, background: "rgba(34,197,94,0.06)", border: "1px solid rgba(34,197,94,0.25)", borderRadius: 0, padding: "0.5rem 0.8rem", lineHeight: 1.6 }}>
                   El cliente recibe el correo con el botón <b>"CONFIRMO QUE ASISTIRÉ"</b>. Al confirmar, indica si va solo, con mandatario y/o codeudor,
                   y se avisa automáticamente a la <b>notaría</b> (si tiene correo) y a <b>Victoria Vilches, Daniela Galindo y Rodrigo Ibáñez</b> con el día, horario y acompañantes.
                 </div>
                 {m.preview && (
-                  <div style={{ background: "#fff", borderRadius: 2, padding: "0.9rem", maxHeight: 280, overflow: "auto" }}>
+                  <div style={{ background: "#fff", borderRadius: 0, padding: "0.9rem", maxHeight: 280, overflow: "auto" }}>
                     <div dangerouslySetInnerHTML={{ __html: m.preview.body }} />
                   </div>
                 )}
                 <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
                   <button onClick={escrituraPreview} disabled={m.loading} data-testid="btn-escritura-preview"
-                    style={{ padding: "0.55rem 1.1rem", borderRadius: 2, border: "1px solid rgba(148,163,184,0.4)", background: "transparent", color: "#e2e8f0", fontWeight: 700, cursor: "pointer" }}>
+                    style={{ padding: "0.55rem 1.1rem", borderRadius: 0, border: "1px solid rgba(148,163,184,0.4)", background: "transparent", color: "#e2e8f0", fontWeight: 700, cursor: "pointer" }}>
                     <i className={`fa ${m.loading ? "fa-spinner fa-spin" : "fa-eye"}`} /> Ver preview
                   </button>
                   <button onClick={escrituraEnviar} disabled={m.loading || !m.email_cliente.includes("@") || !m.fecha || !m.notaria_id} data-testid="btn-escritura-enviar"
                     title={!m.email_cliente.includes("@") ? "Falta el correo del cliente" : (!m.fecha ? "Falta la fecha" : (!m.notaria_id ? "Falta la notaría" : ""))}
-                    style={{ padding: "0.55rem 1.1rem", borderRadius: 2, border: "none", background: "#db2777", color: "#fff", fontWeight: 800, cursor: "pointer", opacity: (m.loading || !m.email_cliente.includes("@") || !m.fecha || !m.notaria_id) ? 0.6 : 1 }}>
+                    style={{ padding: "0.55rem 1.1rem", borderRadius: 0, border: "none", background: "#db2777", color: "#fff", fontWeight: 800, cursor: "pointer", opacity: (m.loading || !m.email_cliente.includes("@") || !m.fecha || !m.notaria_id) ? 0.6 : 1 }}>
                     <i className={`fa ${m.loading ? "fa-spinner fa-spin" : "fa-paper-plane"}`} /> Enviar aviso al cliente
                   </button>
                 </div>
@@ -3115,14 +3115,14 @@ export default function ClientesModule({ onNavigate }) {
           + (emailModal.ejecutivo_externo ? ` — Ejecutivo: ${emailModal.ejecutivo_externo}` : "");
         return (
           <div data-testid="email-modal" onClick={closeEmailModal} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9998, padding: "3vh 3vw" }}>
-            <div onClick={(e) => e.stopPropagation()} style={{ background: "rgba(15,23,42,0.92)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", color: "#e2e8f0", borderRadius: 2, width: "min(760px, 96vw)", maxHeight: "94vh", overflow: "auto", border: "1px solid rgba(148,163,184,0.25)", boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}>
+            <div onClick={(e) => e.stopPropagation()} style={{ background: "rgba(14,14,16,0.92)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", color: "#e2e8f0", borderRadius: 0, width: "min(760px, 96vw)", maxHeight: "94vh", overflow: "auto", border: "1px solid rgba(148,163,184,0.25)", boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}>
               <div style={{ padding: "0.9rem 1.1rem", borderBottom: "1px solid rgba(148,163,184,0.2)", display: "flex", alignItems: "center", gap: 10 }}>
                 <i className="fa fa-paper-plane" style={{ color: "#d4af37" }} />
                 <h4 style={{ margin: 0, flex: 1 }}>Enviar correo con antecedentes</h4>
                 <button onClick={closeEmailModal} data-testid="btn-email-close" style={{ background: "transparent", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 18 }}><i className="fa fa-times" /></button>
               </div>
               <div style={{ padding: "1rem 1.1rem", display: "grid", gap: "0.75rem" }}>
-                <div style={{ background: "rgba(30,41,59,0.7)", borderRadius: 2, padding: "0.7rem 0.9rem", fontSize: 13, lineHeight: 1.5 }}>
+                <div style={{ background: "rgba(28,28,30,0.7)", borderRadius: 0, padding: "0.7rem 0.9rem", fontSize: 13, lineHeight: 1.5 }}>
                   <div style={{ opacity: 0.7, fontSize: 11, textTransform: "uppercase", marginBottom: 4 }}>Datos que se incluirán en el correo</div>
                   <div><b>Cliente:</b> {f.nombre}</div>
                   <div><b>RUT:</b> {f.rut || <span style={{ color: "#f87171" }}>— falta</span>}</div>
@@ -3144,9 +3144,9 @@ export default function ClientesModule({ onNavigate }) {
                     value={emailModal.to}
                     readOnly
                     data-testid="email-to-input"
-                    style={{ width: "100%", padding: "0.5rem", borderRadius: 2, border: "1px solid rgba(148,163,184,0.3)", background: "#1e293b", color: "#e2e8f0", fontSize: 13, cursor: "not-allowed", opacity: 0.85 }}
+                    style={{ width: "100%", padding: "0.5rem", borderRadius: 0, border: "1px solid rgba(148,163,184,0.3)", background: "#232326", color: "#e2e8f0", fontSize: 13, cursor: "not-allowed", opacity: 0.85 }}
                   />
-                  <div style={{ marginTop: 6, padding: "6px 10px", borderRadius: 2, background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.4)", color: "#fca5a5", fontSize: 11, fontWeight: 500 }}>
+                  <div style={{ marginTop: 6, padding: "6px 10px", borderRadius: 0, background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.4)", color: "#fca5a5", fontSize: 11, fontWeight: 500 }}>
                     🔒 <b>Regla inviolable</b>: todos los correos a mesa se envían solo a la cuenta Central Mutuos. No se puede modificar el destinatario.
                   </div>
                 </label>
@@ -3157,7 +3157,7 @@ export default function ClientesModule({ onNavigate }) {
                     value={emailModal.ejecutivo || ""}
                     onChange={(e) => setEmailModal({ ...emailModal, ejecutivo: e.target.value })}
                     data-testid="email-ejecutivo-select"
-                    style={{ width: "100%", padding: "0.5rem", borderRadius: 2, border: "1px solid rgba(148,163,184,0.3)", background: "#1e293b", color: "#e2e8f0", fontSize: 13 }}>
+                    style={{ width: "100%", padding: "0.5rem", borderRadius: 0, border: "1px solid rgba(148,163,184,0.3)", background: "#232326", color: "#e2e8f0", fontSize: 13 }}>
                     <option value="">— Seleccionar ejecutivo —</option>
                     <option value="Deisy Salazar">Deisy Salazar</option>
                     <option value="Yerile Barrera">Yerile Barrera</option>
@@ -3173,13 +3173,13 @@ export default function ClientesModule({ onNavigate }) {
                     onChange={(e) => setEmailModal({ ...emailModal, ejecutivo_externo: e.target.value })}
                     placeholder="Ej: Javiera Garrido — World Consultores"
                     data-testid="email-ejecutivo-externo-input"
-                    style={{ width: "100%", padding: "0.5rem", borderRadius: 2, border: "1px solid rgba(148,163,184,0.3)", background: "#1e293b", color: "#e2e8f0", fontSize: 13 }}
+                    style={{ width: "100%", padding: "0.5rem", borderRadius: 0, border: "1px solid rgba(148,163,184,0.3)", background: "#232326", color: "#e2e8f0", fontSize: 13 }}
                   />
                 </label>
 
                 <label style={{ fontSize: 12 }}>
                   <b style={{ display: "block", marginBottom: 4 }}>Asunto <span style={{ color: "#f87171" }}>🔒 prefijo fijo</span> + texto adicional (opcional)</b>
-                  <div style={{ padding: "0.45rem 0.6rem", borderRadius: 2, background: "rgba(239,68,68,0.08)", border: "1px dashed rgba(239,68,68,0.4)", fontSize: 12, color: "#fca5a5", marginBottom: 6 }} data-testid="email-subject-prefijo">
+                  <div style={{ padding: "0.45rem 0.6rem", borderRadius: 0, background: "rgba(239,68,68,0.08)", border: "1px dashed rgba(239,68,68,0.4)", fontSize: 12, color: "#fca5a5", marginBottom: 6 }} data-testid="email-subject-prefijo">
                     🔒 {prefijoAsunto}
                   </div>
                   <input
@@ -3188,7 +3188,7 @@ export default function ClientesModule({ onNavigate }) {
                     onChange={(e) => setEmailModal({ ...emailModal, subject_extra: e.target.value })}
                     placeholder="Agregar al asunto (ej: URGENTE, con codeudor…) — el prefijo nunca se borra"
                     data-testid="email-subject-input"
-                    style={{ width: "100%", padding: "0.5rem", borderRadius: 2, border: "1px solid rgba(148,163,184,0.3)", background: "#1e293b", color: "#e2e8f0", fontSize: 13 }}
+                    style={{ width: "100%", padding: "0.5rem", borderRadius: 0, border: "1px solid rgba(148,163,184,0.3)", background: "#232326", color: "#e2e8f0", fontSize: 13 }}
                   />
                   <div style={{ marginTop: 5, fontSize: 11, opacity: 0.75 }} data-testid="email-subject-final">
                     Asunto final: <span style={{ color: "#facc15" }}>{previewSubject}</span>
@@ -3203,11 +3203,11 @@ export default function ClientesModule({ onNavigate }) {
                     rows={3}
                     placeholder="Comentarios extra para el destinatario…"
                     data-testid="email-extra-input"
-                    style={{ width: "100%", padding: "0.5rem", borderRadius: 2, border: "1px solid rgba(148,163,184,0.3)", background: "#1e293b", color: "#e2e8f0", fontSize: 13, resize: "vertical" }}
+                    style={{ width: "100%", padding: "0.5rem", borderRadius: 0, border: "1px solid rgba(148,163,184,0.3)", background: "#232326", color: "#e2e8f0", fontSize: 13, resize: "vertical" }}
                   />
                 </label>
 
-                <div style={{ background: "rgba(30,41,59,0.5)", borderRadius: 2, padding: "0.6rem 0.9rem", fontSize: 12, display: "grid", gap: 6 }}>
+                <div style={{ background: "rgba(28,28,30,0.5)", borderRadius: 0, padding: "0.6rem 0.9rem", fontSize: 12, display: "grid", gap: 6 }}>
                   <div style={{ opacity: 0.7, fontSize: 11, textTransform: "uppercase" }}>Adjuntos</div>
                   <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
                     <input
@@ -3254,7 +3254,7 @@ export default function ClientesModule({ onNavigate }) {
                     </span>
                   </div>
                   {(emailModal.preview.missing_docs || []).length > 0 && (
-                    <div data-testid="email-missing-docs-warning" style={{ marginBottom: 8, padding: "8px 12px", borderRadius: 2, background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.5)", color: "#fca5a5", fontSize: 12 }}>
+                    <div data-testid="email-missing-docs-warning" style={{ marginBottom: 8, padding: "8px 12px", borderRadius: 0, background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.5)", color: "#fca5a5", fontSize: 12 }}>
                       <b>🚫 Documentación incompleta — faltan:</b> {emailModal.preview.missing_docs.join(" · ")}
                       <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, cursor: "pointer", color: "#fecaca", fontWeight: 600 }}>
                         <input type="checkbox" checked={!!emailModal.force_incompleto}
@@ -3269,20 +3269,20 @@ export default function ClientesModule({ onNavigate }) {
                       <textarea value={emailModal.editBody} data-testid="email-body-editor"
                         onChange={(e) => setEmailModal({ ...emailModal, editBody: e.target.value })}
                         rows={12}
-                        style={{ width: "100%", padding: "0.6rem 0.8rem", borderRadius: 2, border: "1px solid rgba(250,204,21,0.5)", background: "#1e293b", color: "#e2e8f0", fontSize: 12, fontFamily: "monospace", resize: "vertical" }} />
-                      <div style={{ marginTop: 6, background: "#fff", color: "#111", borderRadius: 2, padding: "0.6rem 0.8rem", maxHeight: 200, overflow: "auto", border: "1px solid rgba(148,163,184,0.3)" }}
+                        style={{ width: "100%", padding: "0.6rem 0.8rem", borderRadius: 0, border: "1px solid rgba(250,204,21,0.5)", background: "#232326", color: "#e2e8f0", fontSize: 12, fontFamily: "monospace", resize: "vertical" }} />
+                      <div style={{ marginTop: 6, background: "#fff", color: "#111", borderRadius: 0, padding: "0.6rem 0.8rem", maxHeight: 200, overflow: "auto", border: "1px solid rgba(148,163,184,0.3)" }}
                            dangerouslySetInnerHTML={{ __html: emailModal.editBody }} />
                       <button onClick={() => setEmailModal({ ...emailModal, editBody: null })} data-testid="email-body-reset"
-                        style={{ marginTop: 6, background: "transparent", border: "1px solid rgba(148,163,184,0.3)", color: "#94a3b8", borderRadius: 2, padding: "4px 10px", cursor: "pointer", fontSize: 12 }}>
+                        style={{ marginTop: 6, background: "transparent", border: "1px solid rgba(148,163,184,0.3)", color: "#94a3b8", borderRadius: 0, padding: "4px 10px", cursor: "pointer", fontSize: 12 }}>
                         <i className="fa fa-undo" /> Volver al cuerpo automático
                       </button>
                     </div>
                   ) : (
                     <div>
-                      <div style={{ background: "#fff", color: "#111", borderRadius: 2, padding: "0.6rem 0.8rem", maxHeight: 320, overflow: "auto", border: "1px solid rgba(148,163,184,0.3)" }}
+                      <div style={{ background: "#fff", color: "#111", borderRadius: 0, padding: "0.6rem 0.8rem", maxHeight: 320, overflow: "auto", border: "1px solid rgba(148,163,184,0.3)" }}
                            dangerouslySetInnerHTML={{ __html: emailModal.preview.body_html || emailModal.preview.body }} />
                       <button onClick={() => setEmailModal({ ...emailModal, editBody: emailModal.preview.body_html || emailModal.preview.body || "" })} data-testid="email-body-edit-btn"
-                        style={{ marginTop: 6, background: "rgba(250,204,21,0.15)", border: "1px solid rgba(250,204,21,0.5)", color: "#facc15", borderRadius: 2, padding: "4px 10px", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
+                        style={{ marginTop: 6, background: "rgba(250,204,21,0.15)", border: "1px solid rgba(250,204,21,0.5)", color: "#facc15", borderRadius: 0, padding: "4px 10px", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
                         <i className="fa fa-pencil" /> Editar cuerpo manualmente
                       </button>
                     </div>
@@ -3295,17 +3295,17 @@ export default function ClientesModule({ onNavigate }) {
                 </div>
               )}
               <div style={{ padding: "0.8rem 1.1rem", borderTop: "1px solid rgba(148,163,184,0.2)", display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                <button onClick={closeEmailModal} disabled={emailModal.sending} style={{ background: "transparent", border: "1px solid rgba(148,163,184,0.3)", color: "#94a3b8", borderRadius: 2, padding: "6px 14px", cursor: "pointer", fontSize: 13 }}>Cancelar</button>
+                <button onClick={closeEmailModal} disabled={emailModal.sending} style={{ background: "transparent", border: "1px solid rgba(148,163,184,0.3)", color: "#94a3b8", borderRadius: 0, padding: "6px 14px", cursor: "pointer", fontSize: 13 }}>Cancelar</button>
                 {!emailModal.preview ? (
                   <button onClick={previewClientEmail} disabled={emailModal.sending || !emailModal.to} data-testid="btn-email-preview"
-                    style={{ background: !emailModal.to ? "rgba(148,163,184,0.15)" : "rgba(250,204,21,0.2)", border: `1px solid ${!emailModal.to ? "rgba(148,163,184,0.3)" : "rgba(250,204,21,0.6)"}`, color: !emailModal.to ? "#94a3b8" : "#facc15", borderRadius: 2, padding: "6px 14px", cursor: (emailModal.sending || !emailModal.to) ? "not-allowed" : "pointer", fontSize: 13, fontWeight: 600 }}
+                    style={{ background: !emailModal.to ? "rgba(148,163,184,0.15)" : "rgba(250,204,21,0.2)", border: `1px solid ${!emailModal.to ? "rgba(148,163,184,0.3)" : "rgba(250,204,21,0.6)"}`, color: !emailModal.to ? "#94a3b8" : "#facc15", borderRadius: 0, padding: "6px 14px", cursor: (emailModal.sending || !emailModal.to) ? "not-allowed" : "pointer", fontSize: 13, fontWeight: 600 }}
                     title={!emailModal.to ? "Completá el destinatario primero" : "Generar preview"}>
                     <i className={`fa ${emailModal.sending ? "fa-spinner fa-spin" : "fa-eye"}`} /> {emailModal.sending ? "Generando…" : (!emailModal.to ? "Completá destinatario" : "Ver Preview")}
                   </button>
                 ) : (
                   <>
                     <button onClick={() => setEmailModal({ ...emailModal, preview: null })} disabled={emailModal.sending}
-                      style={{ background: "transparent", border: "1px solid rgba(148,163,184,0.3)", color: "#94a3b8", borderRadius: 2, padding: "6px 14px", cursor: "pointer", fontSize: 13 }}>
+                      style={{ background: "transparent", border: "1px solid rgba(148,163,184,0.3)", color: "#94a3b8", borderRadius: 0, padding: "6px 14px", cursor: "pointer", fontSize: 13 }}>
                       <i className="fa fa-pencil" /> Editar
                     </button>
                     <button onClick={async () => {
@@ -3313,7 +3313,7 @@ export default function ClientesModule({ onNavigate }) {
                         closeEmailModal();
                       }} disabled={emailModal.sending} data-testid="btn-marcar-enviado"
                       title="Marca la carpeta como ENVIADA manualmente (la pinta roja) sin enviar el correo"
-                      style={{ background: "#ec4899", border: "1px solid #be185d", color: "#fff", borderRadius: 2, padding: "6px 14px", cursor: "pointer", fontSize: 13, fontWeight: 700 }}>
+                      style={{ background: "#ec4899", border: "1px solid #be185d", color: "#fff", borderRadius: 0, padding: "6px 14px", cursor: "pointer", fontSize: 13, fontWeight: 700 }}>
                       <i className="fa fa-check" /> Marcar como enviado
                     </button>
                     {(() => {
@@ -3339,7 +3339,7 @@ export default function ClientesModule({ onNavigate }) {
                           style={{
                             background: bloqueado ? "#7f1d1d" : "#16a34a",
                             border: `1px solid ${bloqueado ? "#450a0a" : "#15803d"}`,
-                            color: "#fff", borderRadius: 2, padding: "6px 18px",
+                            color: "#fff", borderRadius: 0, padding: "6px 18px",
                             cursor: (emailModal.sending || bloqueado) ? "not-allowed" : "pointer",
                             fontSize: 13, fontWeight: 700,
                             boxShadow: bloqueado ? "none" : "0 2px 8px rgba(22,163,74,0.4)",
@@ -3359,8 +3359,8 @@ export default function ClientesModule({ onNavigate }) {
       {/* HISTORIAL MODAL */}
       {historialModal && (
         <div data-testid="historial-modal" onClick={() => setHistorialModal(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9998, padding: "3vh 3vw" }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ background: "rgba(15,23,42,0.92)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", color: "#e2e8f0", borderRadius: 2, width: "min(640px, 96vw)", maxHeight: "90vh", overflow: "auto", border: "1px solid rgba(212,175,55,0.4)", boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}>
-            <div style={{ padding: "0.9rem 1.1rem", borderBottom: "1px solid rgba(148,163,184,0.2)", display: "flex", alignItems: "center", gap: 10, position: "sticky", top: 0, background: "rgba(15,23,42,0.92)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)" }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: "rgba(14,14,16,0.92)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", color: "#e2e8f0", borderRadius: 0, width: "min(640px, 96vw)", maxHeight: "90vh", overflow: "auto", border: "1px solid rgba(212,175,55,0.4)", boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}>
+            <div style={{ padding: "0.9rem 1.1rem", borderBottom: "1px solid rgba(148,163,184,0.2)", display: "flex", alignItems: "center", gap: 10, position: "sticky", top: 0, background: "rgba(14,14,16,0.92)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)" }}>
               <i className="fa fa-history" style={{ color: "#d4af37" }} />
               <h4 style={{ margin: 0, flex: 1 }}>Historial — {historialModal.folder.nombre}</h4>
               <button onClick={() => setHistorialModal(null)} data-testid="btn-historial-close" style={{ background: "transparent", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 18 }}><i className="fa fa-times" /></button>
@@ -3393,7 +3393,7 @@ export default function ClientesModule({ onNavigate }) {
         const p = missingDocsModal.preview;
         return (
           <div data-testid="missing-docs-modal" onClick={closeMissingDocsModal} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9998, padding: "3vh 3vw" }}>
-            <div onClick={(e) => e.stopPropagation()} style={{ background: "rgba(15,23,42,0.92)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", color: "#e2e8f0", borderRadius: 2, width: "min(760px, 96vw)", maxHeight: "94vh", overflow: "auto", border: "1px solid rgba(239,68,68,0.5)", boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}>
+            <div onClick={(e) => e.stopPropagation()} style={{ background: "rgba(14,14,16,0.92)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", color: "#e2e8f0", borderRadius: 0, width: "min(760px, 96vw)", maxHeight: "94vh", overflow: "auto", border: "1px solid rgba(239,68,68,0.5)", boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}>
               <div style={{ padding: "0.9rem 1.1rem", borderBottom: "1px solid rgba(148,163,184,0.2)", display: "flex", alignItems: "center", gap: 10 }}>
                 <i className="fa fa-exclamation-triangle" style={{ color: "#f87171" }} />
                 <h4 style={{ margin: 0, flex: 1 }}>Correo de documento faltante — {missingDocsModal.folder.nombre}</h4>
@@ -3402,7 +3402,7 @@ export default function ClientesModule({ onNavigate }) {
               <div style={{ padding: "1rem 1.1rem", display: "grid", gap: "0.75rem" }}>
                 {p && (
                   <>
-                    <div style={{ background: "rgba(239,68,68,0.1)", borderRadius: 2, padding: "0.7rem 0.9rem", fontSize: 13 }}>
+                    <div style={{ background: "rgba(239,68,68,0.1)", borderRadius: 0, padding: "0.7rem 0.9rem", fontSize: 13 }}>
                       <div style={{ opacity: 0.7, fontSize: 11, textTransform: "uppercase", marginBottom: 4 }}>Detección automática</div>
                       <div><b>Cliente tipo:</b> {p.client_type}</div>
                       <div><b>Documentos presentes:</b> {p.present.join(", ") || "ninguno"}</div>
@@ -3410,26 +3410,26 @@ export default function ClientesModule({ onNavigate }) {
                       {p.source_email && <div style={{ opacity: 0.75, fontSize: 12, marginTop: 4 }}><b>Origen:</b> {p.source_email}</div>}
                     </div>
                     <label style={{ fontSize: 12 }}><b style={{ display: "block", marginBottom: 4 }}>Destinatario *</b>
-                      <input type="email" value={missingDocsModal.to} onChange={(e) => setMissingDocsModal({ ...missingDocsModal, to: e.target.value })} onBlur={refreshMissingDocsPreview} data-testid="missing-to" style={{ width: "100%", padding: "0.5rem", borderRadius: 2, border: "1px solid rgba(148,163,184,0.3)", background: "#1e293b", color: "#e2e8f0", fontSize: 13 }} />
+                      <input type="email" value={missingDocsModal.to} onChange={(e) => setMissingDocsModal({ ...missingDocsModal, to: e.target.value })} onBlur={refreshMissingDocsPreview} data-testid="missing-to" style={{ width: "100%", padding: "0.5rem", borderRadius: 0, border: "1px solid rgba(148,163,184,0.3)", background: "#232326", color: "#e2e8f0", fontSize: 13 }} />
                     </label>
                     <label style={{ fontSize: 12 }}><b style={{ display: "block", marginBottom: 4 }}>Mensaje adicional (opcional)</b>
-                      <textarea value={missingDocsModal.extra} onChange={(e) => setMissingDocsModal({ ...missingDocsModal, extra: e.target.value })} onBlur={refreshMissingDocsPreview} rows={2} data-testid="missing-extra" style={{ width: "100%", padding: "0.5rem", borderRadius: 2, border: "1px solid rgba(148,163,184,0.3)", background: "#1e293b", color: "#e2e8f0", fontSize: 13 }} />
+                      <textarea value={missingDocsModal.extra} onChange={(e) => setMissingDocsModal({ ...missingDocsModal, extra: e.target.value })} onBlur={refreshMissingDocsPreview} rows={2} data-testid="missing-extra" style={{ width: "100%", padding: "0.5rem", borderRadius: 0, border: "1px solid rgba(148,163,184,0.3)", background: "#232326", color: "#e2e8f0", fontSize: 13 }} />
                     </label>
                     <div>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
                         <i className="fa fa-eye" style={{ color: "#facc15" }} />
                         <b style={{ fontSize: 12 }}>Preview (Asunto: <span style={{ color: "#facc15" }}>{p.subject}</span>)</b>
                       </div>
-                      <div style={{ background: "#fff", color: "#111", borderRadius: 2, padding: "0.6rem 0.8rem", maxHeight: 280, overflow: "auto", border: "1px solid rgba(148,163,184,0.3)" }}
+                      <div style={{ background: "#fff", color: "#111", borderRadius: 0, padding: "0.6rem 0.8rem", maxHeight: 280, overflow: "auto", border: "1px solid rgba(148,163,184,0.3)" }}
                            dangerouslySetInnerHTML={{ __html: p.body_html }} />
                     </div>
                   </>
                 )}
               </div>
               <div style={{ padding: "0.8rem 1.1rem", borderTop: "1px solid rgba(148,163,184,0.2)", display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                <button onClick={closeMissingDocsModal} disabled={missingDocsModal.sending} style={{ background: "transparent", border: "1px solid rgba(148,163,184,0.3)", color: "#94a3b8", borderRadius: 2, padding: "6px 14px", cursor: "pointer", fontSize: 13 }}>Cancelar</button>
+                <button onClick={closeMissingDocsModal} disabled={missingDocsModal.sending} style={{ background: "transparent", border: "1px solid rgba(148,163,184,0.3)", color: "#94a3b8", borderRadius: 0, padding: "6px 14px", cursor: "pointer", fontSize: 13 }}>Cancelar</button>
                 <button onClick={confirmSendMissingDocs} disabled={missingDocsModal.sending || !p} data-testid="btn-missing-send"
-                  style={{ background: "#16a34a", border: "1px solid #15803d", color: "#fff", borderRadius: 2, padding: "6px 18px", cursor: "pointer", fontSize: 13, fontWeight: 700, boxShadow: "0 2px 8px rgba(22,163,74,0.4)" }}>
+                  style={{ background: "#16a34a", border: "1px solid #15803d", color: "#fff", borderRadius: 0, padding: "6px 18px", cursor: "pointer", fontSize: 13, fontWeight: 700, boxShadow: "0 2px 8px rgba(22,163,74,0.4)" }}>
                   <i className={`fa ${missingDocsModal.sending ? "fa-spinner fa-spin" : "fa-paper-plane"}`} /> {missingDocsModal.sending ? "Procesando…" : "Enviar correo"}
                 </button>
               </div>
@@ -3440,10 +3440,10 @@ export default function ClientesModule({ onNavigate }) {
 
       {forzarModal && (() => {
         const m = forzarModal;
-        const inpF = { width: "100%", padding: "0.55rem", borderRadius: 2, border: "1px solid rgba(148,163,184,0.3)", background: "#1e293b", color: "#e2e8f0", fontSize: 13 };
+        const inpF = { width: "100%", padding: "0.55rem", borderRadius: 0, border: "1px solid rgba(148,163,184,0.3)", background: "#232326", color: "#e2e8f0", fontSize: 13 };
         return (
           <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 9998, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={() => !m.forzando && setForzarModal(null)}>
-            <div data-testid="forzar-modal" onClick={e => e.stopPropagation()} style={{ background: "rgba(15,23,42,0.92)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", border: "1px solid rgba(148,163,184,0.25)", borderRadius: 2, padding: "1.4rem", width: "min(640px, 96vw)", maxHeight: "90vh", overflow: "auto", display: "grid", gap: 10 }}>
+            <div data-testid="forzar-modal" onClick={e => e.stopPropagation()} style={{ background: "rgba(14,14,16,0.92)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", border: "1px solid rgba(148,163,184,0.25)", borderRadius: 0, padding: "1.4rem", width: "min(640px, 96vw)", maxHeight: "90vh", overflow: "auto", display: "grid", gap: 10 }}>
               <h3 style={{ margin: 0, fontSize: 15, color: "#f59e0b" }}><i className="fa fa-bolt" /> Forzar Carpeta — buscá por nombre y/o RUT</h3>
               <label style={{ fontSize: 12 }}>Nombre del cliente <span style={{ opacity: 0.6 }}>(al escribir aparecen sugerencias de correos, archivos y carpetas)</span>
                 <input data-testid="forzar-nombre" autoFocus style={inpF} value={m.nombre}
@@ -3457,13 +3457,13 @@ export default function ClientesModule({ onNavigate }) {
               {m.sug && !m.buscando && (
                 <div data-testid="forzar-sugerencias" style={{ display: "grid", gap: 8 }}>
                   {(m.sug.carpetas || []).length > 0 && (
-                    <div style={{ background: "rgba(212,175,55,0.06)", border: "1px dashed rgba(212,175,55,0.4)", borderRadius: 2, padding: "0.6rem 0.8rem" }}>
+                    <div style={{ background: "rgba(212,175,55,0.06)", border: "1px dashed rgba(212,175,55,0.4)", borderRadius: 0, padding: "0.6rem 0.8rem" }}>
                       <div style={{ fontSize: 11, fontWeight: 800, color: "#d4af37", marginBottom: 4 }}>📁 CARPETAS EXISTENTES ({m.sug.carpetas.length})</div>
                       {m.sug.carpetas.map(c => <div key={c.id} style={{ fontSize: 12.5 }}>• {c.nombre} {c.rut && <span style={{ opacity: 0.6 }}>· {c.rut}</span>} — {c.archivos} archivo(s)</div>)}
                     </div>
                   )}
                   {(m.sug.correos || []).length > 0 && (
-                    <div style={{ background: "rgba(212,175,55,0.06)", border: "1px dashed rgba(212,175,55,0.4)", borderRadius: 2, padding: "0.6rem 0.8rem" }}>
+                    <div style={{ background: "rgba(212,175,55,0.06)", border: "1px dashed rgba(212,175,55,0.4)", borderRadius: 0, padding: "0.6rem 0.8rem" }}>
                       <div style={{ fontSize: 11, fontWeight: 800, color: "#d4af37", marginBottom: 4 }}>📧 CORREOS EN EL BUZÓN ({m.sug.correos.length}) — marcá uno o varios para descargar exactamente esos</div>
                       {m.sug.correos.map((c, i) => (
                         <label key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 12, marginBottom: 4, cursor: c.message_id ? "pointer" : "default" }}>
@@ -3475,7 +3475,7 @@ export default function ClientesModule({ onNavigate }) {
                     </div>
                   )}
                   {(m.sug.cola || []).length > 0 && (
-                    <div style={{ background: "rgba(139,92,246,0.06)", border: "1px dashed rgba(139,92,246,0.4)", borderRadius: 2, padding: "0.6rem 0.8rem" }}>
+                    <div style={{ background: "rgba(139,92,246,0.06)", border: "1px dashed rgba(139,92,246,0.4)", borderRadius: 0, padding: "0.6rem 0.8rem" }}>
                       <div style={{ fontSize: 11, fontWeight: 800, color: "#a78bfa", marginBottom: 4 }}>📥 EN LA COLA DE PROCESAMIENTO ({m.sug.cola.length})</div>
                       {m.sug.cola.map((c, i) => <div key={i} style={{ fontSize: 12 }}>• {(c.subject || "").slice(0, 55)} — {c.adjuntos} adjunto(s)</div>)}
                     </div>
@@ -3487,9 +3487,9 @@ export default function ClientesModule({ onNavigate }) {
               )}
               {m.msg && <div data-testid="forzar-msg" style={{ fontSize: 12.5, fontWeight: 700, color: m.msg.startsWith("✅") ? "#4ade80" : "#f87171" }}>{m.msg}</div>}
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                <button onClick={() => setForzarModal(null)} disabled={m.forzando} style={{ background: "transparent", border: "1px solid rgba(148,163,184,0.3)", color: "#94a3b8", borderRadius: 2, padding: "0.55rem 1rem", fontSize: 12.5, cursor: "pointer" }}>Cerrar</button>
+                <button onClick={() => setForzarModal(null)} disabled={m.forzando} style={{ background: "transparent", border: "1px solid rgba(148,163,184,0.3)", color: "#94a3b8", borderRadius: 0, padding: "0.55rem 1rem", fontSize: 12.5, cursor: "pointer" }}>Cerrar</button>
                 <button data-testid="forzar-ejecutar" onClick={ejecutarForzar} disabled={m.forzando || (!m.nombre.trim() && !m.rut.trim())}
-                  style={{ background: "#f59e0b", border: "none", color: "#0f172a", borderRadius: 2, padding: "0.55rem 1.3rem", fontSize: 12.5, fontWeight: 800, cursor: "pointer" }}>
+                  style={{ background: "#f59e0b", border: "none", color: "#101012", borderRadius: 0, padding: "0.55rem 1.3rem", fontSize: 12.5, fontWeight: 800, cursor: "pointer" }}>
                   <i className={`fa ${m.forzando ? "fa-spinner fa-spin" : "fa-bolt"}`} /> {m.forzando ? "Forzando (busca y descarga adjuntos)…" : "Forzar Carpeta"}
                 </button>
               </div>
@@ -3508,7 +3508,7 @@ export default function ClientesModule({ onNavigate }) {
         const fmtF = (iso) => iso ? new Date(iso).toLocaleString("es-CL", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
         return (
           <div data-testid="reparos-modal" onClick={() => setReparosModal(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9998, padding: "3vh 3vw" }}>
-            <div onClick={(e) => e.stopPropagation()} style={{ background: "rgba(15,23,42,0.92)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", color: "#e2e8f0", borderRadius: 2, width: "min(720px, 96vw)", maxHeight: "94vh", overflow: "auto", border: "1px solid rgba(148,163,184,0.25)", boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}>
+            <div onClick={(e) => e.stopPropagation()} style={{ background: "rgba(14,14,16,0.92)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", color: "#e2e8f0", borderRadius: 0, width: "min(720px, 96vw)", maxHeight: "94vh", overflow: "auto", border: "1px solid rgba(148,163,184,0.25)", boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}>
               <div style={{ padding: "0.9rem 1.1rem", borderBottom: "1px solid rgba(148,163,184,0.2)", display: "flex", alignItems: "center", gap: 10 }}>
                 <i className="fa fa-gavel" style={{ color: satisfecho ? "#4ade80" : "#f87171" }} />
                 <h4 style={{ margin: 0, flex: 1 }}>Reparos Estudio de Título — {m.folder.nombre}</h4>
@@ -3516,13 +3516,13 @@ export default function ClientesModule({ onNavigate }) {
               </div>
               <div style={{ padding: "1rem 1.1rem", display: "grid", gap: "0.75rem" }}>
                 {m.msg && (
-                  <div data-testid="reparos-msg" style={{ padding: "0.6rem 0.9rem", borderRadius: 2, background: m.msg.startsWith("Error") ? "rgba(239,68,68,0.15)" : "rgba(34,197,94,0.15)", color: m.msg.startsWith("Error") ? "#f87171" : "#4ade80", fontWeight: 600, fontSize: 13 }}>{m.msg}</div>
+                  <div data-testid="reparos-msg" style={{ padding: "0.6rem 0.9rem", borderRadius: 0, background: m.msg.startsWith("Error") ? "rgba(239,68,68,0.15)" : "rgba(34,197,94,0.15)", color: m.msg.startsWith("Error") ? "#f87171" : "#4ade80", fontWeight: 600, fontSize: 13 }}>{m.msg}</div>
                 )}
                 {m.loading ? (
                   <div style={{ textAlign: "center", padding: "1.5rem" }}><i className="fa fa-spinner fa-spin" /> Cargando reparos…</div>
                 ) : (
                   <>
-                    <div style={{ fontSize: 12, color: "#94a3b8", background: "rgba(148,163,184,0.07)", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 2, padding: "0.6rem 0.9rem", display: "grid", gap: 3 }}>
+                    <div style={{ fontSize: 12, color: "#94a3b8", background: "rgba(148,163,184,0.07)", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 0, padding: "0.6rem 0.9rem", display: "grid", gap: 3 }}>
                       <div>🤖 El sistema revisa automáticamente el <b>hilo del correo</b> del estudio de título. Cuando el abogado envía reparos, se reenvían de inmediato al vendedor (CC Victoria Vilches).</div>
                       {rep.abogado_email && <div>⚖ Abogado detectado en el hilo: <b style={{ color: "#e2e8f0" }}>{rep.abogado_email}</b></div>}
                       {vendedor.email && <div>🏠 Vendedor: <b style={{ color: "#e2e8f0" }}>{vendedor.nombre || "—"}</b> · {vendedor.email}{vendedor.telefono ? ` · ${vendedor.telefono}` : ""}</div>}
@@ -3543,7 +3543,7 @@ export default function ClientesModule({ onNavigate }) {
                     ) : (
                       <div style={{ display: "grid", gap: 6 }}>
                         {items.map((it) => (
-                          <label key={it.n} data-testid={`reparo-item-${it.n}`} style={{ display: "flex", alignItems: "flex-start", gap: 10, background: it.satisfecho ? "rgba(34,197,94,0.08)" : "rgba(239,68,68,0.06)", border: `1px solid ${it.satisfecho ? "rgba(34,197,94,0.35)" : "rgba(239,68,68,0.25)"}`, borderRadius: 2, padding: "0.6rem 0.9rem", cursor: "pointer" }}>
+                          <label key={it.n} data-testid={`reparo-item-${it.n}`} style={{ display: "flex", alignItems: "flex-start", gap: 10, background: it.satisfecho ? "rgba(34,197,94,0.08)" : "rgba(239,68,68,0.06)", border: `1px solid ${it.satisfecho ? "rgba(34,197,94,0.35)" : "rgba(239,68,68,0.25)"}`, borderRadius: 0, padding: "0.6rem 0.9rem", cursor: "pointer" }}>
                             <input type="checkbox" checked={!!it.satisfecho} onChange={(e) => toggleReparo(it.n, e.target.checked)} data-testid={`reparo-check-${it.n}`} style={{ marginTop: 3, width: 16, height: 16, accentColor: "#22c55e", cursor: "pointer" }} />
                             <div style={{ flex: 1 }}>
                               <div style={{ fontSize: 13, color: it.satisfecho ? "#86efac" : "#e2e8f0", textDecoration: it.satisfecho ? "line-through" : "none" }}>{it.n}. {it.texto}</div>
@@ -3558,17 +3558,17 @@ export default function ClientesModule({ onNavigate }) {
 
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end", borderTop: "1px solid rgba(148,163,184,0.15)", paddingTop: "0.8rem" }}>
                       <button onClick={scanReparos} disabled={m.scanning} data-testid="btn-reparos-scan"
-                        style={{ background: "rgba(212,175,55,0.15)", border: "1px solid #d4af37", color: "#d4af37", borderRadius: 2, padding: "8px 14px", cursor: "pointer", fontSize: 13, fontWeight: 700 }}>
+                        style={{ background: "rgba(212,175,55,0.15)", border: "1px solid #d4af37", color: "#d4af37", borderRadius: 0, padding: "8px 14px", cursor: "pointer", fontSize: 13, fontWeight: 700 }}>
                         <i className={`fa ${m.scanning ? "fa-spinner fa-spin" : "fa-refresh"}`} /> {m.scanning ? "Revisando hilo…" : "Buscar reparos ahora"}
                       </button>
                       {satisfecho ? (
-                        <div data-testid="reparos-satisfecho-badge" style={{ background: "rgba(34,197,94,0.15)", border: "1px solid #22c55e", color: "#4ade80", borderRadius: 2, padding: "8px 14px", fontSize: 13, fontWeight: 700 }}>
+                        <div data-testid="reparos-satisfecho-badge" style={{ background: "rgba(34,197,94,0.15)", border: "1px solid #22c55e", color: "#4ade80", borderRadius: 0, padding: "8px 14px", fontSize: 13, fontWeight: 700 }}>
                           ✅ Todos los reparos satisfechos {rep.declarado_satisfecho_at ? `· ${fmtF(rep.declarado_satisfecho_at)}` : ""} {rep.declarado_por === "abogado" ? "(confirmado por el abogado)" : ""}
                         </div>
                       ) : (
                         <button onClick={declararReparos} disabled={m.declarando || items.length === 0 || pendientes > 0} data-testid="btn-reparos-declarar"
                           title={pendientes > 0 ? `Faltan ${pendientes} reparo(s) por marcar como satisfechos` : ""}
-                          style={{ background: (m.declarando || items.length === 0 || pendientes > 0) ? "#475569" : "#16a34a", border: "none", color: "#fff", borderRadius: 2, padding: "8px 16px", cursor: (items.length === 0 || pendientes > 0) ? "not-allowed" : "pointer", fontSize: 13, fontWeight: 700 }}>
+                          style={{ background: (m.declarando || items.length === 0 || pendientes > 0) ? "#475569" : "#16a34a", border: "none", color: "#fff", borderRadius: 0, padding: "8px 16px", cursor: (items.length === 0 || pendientes > 0) ? "not-allowed" : "pointer", fontSize: 13, fontWeight: 700 }}>
                           <i className={`fa ${m.declarando ? "fa-spinner fa-spin" : "fa-check-circle"}`} /> {m.declarando ? "Enviando aviso…" : "Declaro que todos los reparos han sido recibidos satisfactoriamente y podemos continuar con el estudio de título"}
                         </button>
                       )}

@@ -438,7 +438,7 @@ export default function CentralChat({ userName, activeModule }) {
               {connected === false && (
                 <button data-testid="central-reconnect-btn"
                   onClick={() => { setConnected(null); checkHealth(); }}
-                  style={{ background: "rgba(212,175,55,0.2)", border: "1px solid #d4af37", color: "#d4af37", borderRadius: 2, padding: "2px 8px", fontSize: "0.7rem", cursor: "pointer", marginLeft: 6 }}>
+                  style={{ background: "rgba(212,175,55,0.2)", border: "1px solid #d4af37", color: "#d4af37", borderRadius: 0, padding: "2px 8px", fontSize: "0.7rem", cursor: "pointer", marginLeft: 6 }}>
                   <i className="fa fa-refresh"></i> Reconectar
                 </button>
               )}
@@ -453,7 +453,7 @@ export default function CentralChat({ userName, activeModule }) {
               )}
               <button className="central-header-action" onClick={() => setAutoVoice(v => !v)}
                 title={autoVoice ? "Desactivar voz" : "Activar voz"} data-testid="central-voice-toggle"
-                style={{ background: autoVoice ? "rgba(212,175,55,0.2)" : "none", borderRadius: 2 }}>
+                style={{ background: autoVoice ? "rgba(212,175,55,0.2)" : "none", borderRadius: 0 }}>
                 <i className={`fa ${autoVoice ? "fa-volume-up" : "fa-volume-off"}`}
                   style={{ fontSize: "0.75rem", color: autoVoice ? "#d4af37" : "#555" }}></i>
               </button>
@@ -471,7 +471,7 @@ export default function CentralChat({ userName, activeModule }) {
                 data-testid="central-convo-toggle"
                 style={{
                   background: conversationMode ? "rgba(16,185,129,0.3)" : "none",
-                  borderRadius: 2,
+                  borderRadius: 0,
                   animation: conversationMode ? "pulse 1.8s infinite" : "none",
                 }}>
                 <i className={`fa ${conversationMode ? "fa-comments" : "fa-comments-o"}`}
