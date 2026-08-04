@@ -77,6 +77,11 @@ agenthub/agents/youtube/db
 .cache/
 
 memory/test_credentials.md
+**/test_credentials.md
+test_credentials.md
+*.log
+logs/
+/var/log/
 
 # Mobile development
 android-sdk/frontend/node_modules/.cache/default-development/0.pack
