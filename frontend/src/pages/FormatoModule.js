@@ -359,7 +359,7 @@ export default function FormatoModule() {
                         data-testid={`merge-file-${idx}`}>
                         <span className="merge-drag-handle"><i className="fa fa-bars"></i></span>
                         <span className="merge-file-num">{idx + 1}</span>
-                        <i className={`fa ${/\.(jpg|jpeg|png)$/i.test(f.name) ? "fa-file-image-o" : "fa-file-pdf-o"}`} style={{ color: /\.(jpg|jpeg|png)$/i.test(f.name) ? "#4ade80" : "#d4af37" }}></i>
+                        <i className={`fa ${/\.(jpg|jpeg|png)$/i.test(f.name) ? "fa-file-image-o" : "fa-file-pdf-o"}`} style={{ color: /\.(jpg|jpeg|png)$/i.test(f.name) ? "#34eab9" : "#d4af37" }}></i>
                         <span className="merge-file-name">{f.name}</span>
                         <button className="merge-remove-btn" onClick={() => removeMergeFile(f.id)} data-testid={`merge-remove-${idx}`}>
                           <i className="fa fa-times"></i>

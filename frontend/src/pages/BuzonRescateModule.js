@@ -3,7 +3,7 @@ import axios from "axios";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
-const card = { background: "rgba(14,14,16,0.9)", padding: "1.2rem", borderRadius: "0px", border: "1px solid transparent", backgroundImage: "linear-gradient(160deg, rgba(30,30,30,0.95), rgba(10,10,10,0.98)), linear-gradient(135deg, #BF953F, #FCF6BA, #B38728, #FBF5B7, #AA771C)", boxShadow: "0 35px 70px -20px rgba(0,0,0,0.95), 0 0 38px -16px rgba(191,149,63,0.45)", backgroundOrigin: "border-box", backgroundClip: "padding-box, border-box", marginBottom: "0.8rem" };
+const card = { background: "rgba(14,14,16,0.9)", padding: "1.2rem", borderRadius: "0px", border: "1px solid transparent", backgroundImage: "linear-gradient(115deg, rgba(255,255,255,0.09) 0%, rgba(255,255,255,0.02) 18%, transparent 32%), linear-gradient(160deg, rgba(30,30,30,0.95), rgba(10,10,10,0.98)), linear-gradient(135deg, #BF953F, #FCF6BA, #B38728, #FBF5B7, #AA771C)", boxShadow: "0 35px 70px -20px rgba(0,0,0,0.95), 0 0 38px -16px rgba(191,149,63,0.45)", backgroundOrigin: "border-box", backgroundClip: "padding-box, padding-box, border-box", marginBottom: "0.8rem" };
 const inp = { width: "100%", padding: "0.55rem 0.8rem", borderRadius: 0, border: "1px solid rgba(148,163,184,0.3)", background: "#232326", color: "#e2e8f0", fontSize: "0.9rem" };
 
 export default function BuzonRescateModule() {
@@ -64,11 +64,11 @@ export default function BuzonRescateModule() {
         </button>
       </div>
       <p style={{ fontSize: "0.85rem", opacity: 0.7, marginTop: 0 }}>Correos que el sistema no logró clasificar automáticamente. Asígnalos manualmente y se procesarán como si hubieran sido automáticos.</p>
-      {msg && <div data-testid="rescate-msg" style={{ padding: "0.6rem 1rem", borderRadius: 0, background: msg.startsWith("✅") ? "rgba(34,197,94,0.12)" : "rgba(239,68,68,0.12)", border: `1px solid ${msg.startsWith("✅") ? "#22c55e" : "#ef4444"}`, marginBottom: "0.8rem", fontSize: "0.85rem" }}>{msg}</div>}
+      {msg && <div data-testid="rescate-msg" style={{ padding: "0.6rem 1rem", borderRadius: 0, background: msg.startsWith("✅") ? "rgba(16,217,142,0.12)" : "rgba(225,29,72,0.12)", border: `1px solid ${msg.startsWith("✅") ? "#10d98e" : "#e11d48"}`, marginBottom: "0.8rem", fontSize: "0.85rem" }}>{msg}</div>}
 
       {loading && <div style={{ textAlign: "center", padding: "2rem" }}><i className="fa fa-spinner fa-spin" style={{ fontSize: "1.6rem", color: "var(--gold)" }} /></div>}
       {!loading && pendientes.length === 0 && (
-        <div style={{ ...card, textAlign: "center", color: "#22c55e" }} data-testid="rescate-vacio">
+        <div style={{ ...card, textAlign: "center", color: "#10d98e" }} data-testid="rescate-vacio">
           <i className="fa fa-check-circle" style={{ fontSize: "1.6rem" }} /><br />No hay correos pendientes por clasificar. Todo procesado automáticamente.
         </div>
       )}
@@ -116,7 +116,7 @@ export default function BuzonRescateModule() {
             <div style={{ display: "flex", gap: 10, marginTop: "1.2rem", justifyContent: "flex-end" }}>
               <button onClick={() => setAsignando(null)} data-testid="rescate-cancelar" style={{ background: "rgba(255,255,255,0.1)", border: "none", color: "#fff", borderRadius: 0, padding: "0.55rem 1rem", cursor: "pointer" }}>Cancelar</button>
               <button onClick={confirmar} disabled={procesando} data-testid="rescate-confirmar"
-                style={{ background: "#22c55e", border: "none", color: "#052e16", borderRadius: 0, padding: "0.55rem 1.2rem", cursor: "pointer", fontWeight: 800 }}>
+                style={{ background: "#10d98e", border: "none", color: "#052e16", borderRadius: 0, padding: "0.55rem 1.2rem", cursor: "pointer", fontWeight: 800 }}>
                 {procesando ? <><i className="fa fa-spinner fa-spin" /> Procesando…</> : "Confirmar y procesar"}
               </button>
             </div>

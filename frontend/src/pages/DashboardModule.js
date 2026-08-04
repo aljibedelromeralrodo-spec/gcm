@@ -65,10 +65,10 @@ export default function DashboardModule({ valorUF, userName, onNavigate }) {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "0.7rem" }}>
             {[
               { lbl: "Cobros enviados", val: cobrosResumen.resumen.enviadas, color: "#d4af37", extra: "" },
-              { lbl: "Pagadas", val: cobrosResumen.resumen.pagadas, color: "#4ade80", extra: cobrosResumen.resumen.monto_pagado_clp },
-              { lbl: "Pendientes de pago", val: cobrosResumen.resumen.pendientes, color: "#f87171", extra: cobrosResumen.resumen.monto_pendiente_clp },
+              { lbl: "Pagadas", val: cobrosResumen.resumen.pagadas, color: "#34eab9", extra: cobrosResumen.resumen.monto_pagado_clp },
+              { lbl: "Pendientes de pago", val: cobrosResumen.resumen.pendientes, color: "#fb7185", extra: cobrosResumen.resumen.monto_pendiente_clp },
             ].map((s, i) => (
-              <div key={i} data-testid={`cobros-stat-${i}`} style={{ background: "rgba(255,255,255,0.04)", border: "1px solid transparent", backgroundImage: "linear-gradient(160deg, rgba(30,30,30,0.95), rgba(10,10,10,0.98)), linear-gradient(135deg, #BF953F, #FCF6BA, #B38728, #FBF5B7, #AA771C)", boxShadow: "0 35px 70px -20px rgba(0,0,0,0.95), 0 0 38px -16px rgba(191,149,63,0.45)", backgroundOrigin: "border-box", backgroundClip: "padding-box, border-box", borderRadius: 0, padding: "0.7rem 1rem", textAlign: "center" }}>
+              <div key={i} data-testid={`cobros-stat-${i}`} style={{ background: "rgba(255,255,255,0.04)", border: "1px solid transparent", backgroundImage: "linear-gradient(115deg, rgba(255,255,255,0.09) 0%, rgba(255,255,255,0.02) 18%, transparent 32%), linear-gradient(160deg, rgba(30,30,30,0.95), rgba(10,10,10,0.98)), linear-gradient(135deg, #BF953F, #FCF6BA, #B38728, #FBF5B7, #AA771C)", boxShadow: "0 35px 70px -20px rgba(0,0,0,0.95), 0 0 38px -16px rgba(191,149,63,0.45)", backgroundOrigin: "border-box", backgroundClip: "padding-box, padding-box, border-box", borderRadius: 0, padding: "0.7rem 1rem", textAlign: "center" }}>
                 <div style={{ fontSize: "1.6rem", fontWeight: 800, color: s.color }}>{s.val}</div>
                 <div style={{ fontSize: "0.72rem", opacity: 0.7, textTransform: "uppercase", letterSpacing: 0.5 }}>{s.lbl}</div>
                 {s.extra && <div style={{ fontSize: "0.8rem", color: s.color, fontWeight: 700, marginTop: 2 }}>{s.extra}</div>}
@@ -80,8 +80,8 @@ export default function DashboardModule({ valorUF, userName, onNavigate }) {
       {emailStatus && (
         <div className="dash-email-status" data-testid="email-status-bar">
           <span className="dash-email-dot" style={{
-            background: emailStatus.connected ? "#10b981" : "#ef4444",
-            boxShadow: emailStatus.connected ? "0 0 8px #10b981" : "0 0 8px #ef4444"
+            background: emailStatus.connected ? "#10d98e" : "#e11d48",
+            boxShadow: emailStatus.connected ? "0 0 8px #10d98e" : "0 0 8px #e11d48"
           }}></span>
           <div className="dash-email-info">
             <div className="dash-email-label">

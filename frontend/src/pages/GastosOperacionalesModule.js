@@ -6,7 +6,7 @@ import { estiloConfianza, PanelAprendizaje, useAprendizaje } from "../components
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
-const card = { background: "rgba(14,14,16,0.9)", padding: "1.5rem", borderRadius: "0px", border: "1px solid transparent", backgroundImage: "linear-gradient(160deg, rgba(30,30,30,0.95), rgba(10,10,10,0.98)), linear-gradient(135deg, #BF953F, #FCF6BA, #B38728, #FBF5B7, #AA771C)", boxShadow: "0 35px 70px -20px rgba(0,0,0,0.95), 0 0 38px -16px rgba(191,149,63,0.45)", backgroundOrigin: "border-box", backgroundClip: "padding-box, border-box", marginBottom: "1.5rem" };
+const card = { background: "rgba(14,14,16,0.9)", padding: "1.5rem", borderRadius: "0px", border: "1px solid transparent", backgroundImage: "linear-gradient(115deg, rgba(255,255,255,0.09) 0%, rgba(255,255,255,0.02) 18%, transparent 32%), linear-gradient(160deg, rgba(30,30,30,0.95), rgba(10,10,10,0.98)), linear-gradient(135deg, #BF953F, #FCF6BA, #B38728, #FBF5B7, #AA771C)", boxShadow: "0 35px 70px -20px rgba(0,0,0,0.95), 0 0 38px -16px rgba(191,149,63,0.45)", backgroundOrigin: "border-box", backgroundClip: "padding-box, padding-box, border-box", marginBottom: "1.5rem" };
 const inp = { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "0px", padding: "0.55rem 0.8rem", color: "#fff", fontSize: "0.9rem", width: "100%" };
 const btn = (bg, small) => ({ background: bg, color: bg === "var(--gold)" ? "#0a0e17" : "#fff", border: "none", borderRadius: "0px", padding: small ? "0.4rem 0.8rem" : "0.6rem 1.2rem", fontWeight: 700, cursor: "pointer", fontSize: small ? "0.8rem" : "0.9rem" });
 const lbl = { display: "block", fontSize: "0.75rem", opacity: 0.6, marginBottom: "0.3rem", textTransform: "uppercase", letterSpacing: "0.5px" };
@@ -289,7 +289,7 @@ export default function GastosOperacionalesModule({ onNavigate }) {
           <i className="fa fa-arrow-left" /> Volver a Carpeta Clientes
         </button>
       )}
-      {msg && <div data-testid="gastos-msg" style={{ padding: "0.7rem 1rem", borderRadius: "0px", marginBottom: "1rem", background: msg.startsWith("✅") ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)", color: msg.startsWith("✅") ? "#22c55e" : "#ef4444", fontWeight: 600 }}>{msg}</div>}
+      {msg && <div data-testid="gastos-msg" style={{ padding: "0.7rem 1rem", borderRadius: "0px", marginBottom: "1rem", background: msg.startsWith("✅") ? "rgba(16,217,142,0.15)" : "rgba(225,29,72,0.15)", color: msg.startsWith("✅") ? "#10d98e" : "#e11d48", fontWeight: 600 }}>{msg}</div>}
 
       {/* BUSCADOR */}
       <div style={card}>
@@ -301,7 +301,7 @@ export default function GastosOperacionalesModule({ onNavigate }) {
               {resultados.map((r, i) => (
                 <div key={i} data-testid={`gastos-resultado-${i}`} onClick={() => elegir(r)} style={{ padding: "0.6rem 1rem", cursor: "pointer", borderBottom: "1px solid rgba(255,255,255,0.05)" }}
                      onMouseEnter={e => e.currentTarget.style.background = "rgba(212,175,55,0.1)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                  <b>{r.nombre}</b> <span style={{ opacity: 0.6 }}>{r.rut}</span> {r.email && <span style={{ color: "#22c55e", fontSize: "0.8rem" }}> · {r.email}</span>}
+                  <b>{r.nombre}</b> <span style={{ opacity: 0.6 }}>{r.rut}</span> {r.email && <span style={{ color: "#10d98e", fontSize: "0.8rem" }}> · {r.email}</span>}
                 </div>
               ))}
             </div>
@@ -320,7 +320,7 @@ export default function GastosOperacionalesModule({ onNavigate }) {
         <div style={{ display: "flex", gap: "0.7rem", flexWrap: "wrap", marginTop: "0.8rem", alignItems: "center" }}>
           <button data-testid="gastos-leer-ia" onClick={leerConIA} disabled={iaLoading || !nombre}
             title="Lee con IA los correos (asunto y cuerpo) y documentos del cliente para completar correo, RUT y gastos. Prohibido inventar: solo llena lo que aparece."
-            style={btn("#8b5cf6", true)}>
+            style={btn("#2e5ce6", true)}>
             <i className={`fa ${iaLoading ? "fa-spinner fa-spin" : "fa-magic"}`} style={{ marginRight: "0.4rem" }} />
             {iaLoading ? "Leyendo correos y documentos…" : "🤖 Leer datos con IA (correos + documentos)"}
           </button>
@@ -350,13 +350,13 @@ export default function GastosOperacionalesModule({ onNavigate }) {
                 <td style={{ padding: "0.35rem" }}><input data-testid={`gastos-concepto-${i}`} style={inp} value={it.concepto} onChange={e => setItem(i, "concepto", e.target.value)} /></td>
                 <td style={{ padding: "0.35rem" }}><input data-testid={`gastos-valor-${i}`} type="number" step="0.1" style={{ ...inp, textAlign: "right" }} value={it.valor ?? ""} onChange={e => setItem(i, "valor", e.target.value)} placeholder="—" /></td>
                 <td style={{ padding: "0.35rem" }}><input data-testid={`gastos-texto-${i}`} style={inp} value={it.texto || ""} onChange={e => setItem(i, "texto", e.target.value)} placeholder="Ej: Pagada" /></td>
-                <td style={{ textAlign: "center" }}><button data-testid={`gastos-del-${i}`} onClick={() => delItem(i)} style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer" }}><i className="fa fa-trash" /></button></td>
+                <td style={{ textAlign: "center" }}><button data-testid={`gastos-del-${i}`} onClick={() => delItem(i)} style={{ background: "none", border: "none", color: "#e11d48", cursor: "pointer" }}><i className="fa fa-trash" /></button></td>
               </tr>
             ))}
             <tr style={{ background: "rgba(212,175,55,0.08)" }}>
               <td style={{ padding: "0.7rem", fontWeight: 700, color: "var(--gold)" }}>TOTAL (autosuma)</td>
               <td data-testid="gastos-total" style={{ padding: "0.7rem", textAlign: "right", fontWeight: 700, color: "var(--gold)", fontSize: "1.05rem" }}>{total.toLocaleString("es-CL", { maximumFractionDigits: 2 })} UF</td>
-              <td colSpan={2} style={{ padding: "0.7rem", fontSize: "0.85rem", color: "#4ade80", fontWeight: 700, whiteSpace: "nowrap" }} data-testid="gastos-total-clp">
+              <td colSpan={2} style={{ padding: "0.7rem", fontSize: "0.85rem", color: "#34eab9", fontWeight: 700, whiteSpace: "nowrap" }} data-testid="gastos-total-clp">
                 {Number(cobros.valor_uf || 0) > 0
                   ? `≈ $${Math.round(total * Number(cobros.valor_uf)).toLocaleString("es-CL")} CLP (UF hoy $${Number(cobros.valor_uf).toLocaleString("es-CL")})`
                   : ""}
@@ -393,7 +393,7 @@ export default function GastosOperacionalesModule({ onNavigate }) {
               {plantillas.map(p => <option key={p.id} value={p.id} style={{ color: "#111" }}>{p.nombre}</option>)}
             </select>
             <select data-testid="gastos-plantilla-eliminar" onChange={e => { if (e.target.value) eliminarPlantilla(e.target.value); e.target.value = ""; }} defaultValue=""
-              style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(239,68,68,0.35)", color: "#f87171", borderRadius: 0, padding: "0.55rem 0.8rem", fontSize: "0.85rem" }}>
+              style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(225,29,72,0.35)", color: "#fb7185", borderRadius: 0, padding: "0.55rem 0.8rem", fontSize: "0.85rem" }}>
               <option value="">🗑 Eliminar plantilla…</option>
               {plantillas.map(p => <option key={p.id} value={p.id} style={{ color: "#111" }}>{p.nombre}</option>)}
             </select>
@@ -430,7 +430,7 @@ export default function GastosOperacionalesModule({ onNavigate }) {
         ) : (
           <div style={{ display: "grid", gap: 6 }} data-testid="cobros-lista">
             {cobros.cobros.map((c) => (
-              <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 10, background: c.pagado ? "rgba(34,197,94,0.08)" : "rgba(255,255,255,0.04)", border: `1px solid ${c.pagado ? "rgba(34,197,94,0.35)" : "rgba(255,255,255,0.1)"}`, borderRadius: 0, padding: "0.55rem 0.9rem", fontSize: "0.85rem" }}>
+              <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 10, background: c.pagado ? "rgba(16,217,142,0.08)" : "rgba(255,255,255,0.04)", border: `1px solid ${c.pagado ? "rgba(16,217,142,0.35)" : "rgba(255,255,255,0.1)"}`, borderRadius: 0, padding: "0.55rem 0.9rem", fontSize: "0.85rem" }}>
                 <div style={{ flex: 1 }}>
                   <b>{c.cliente || c.subject || c.from_email}</b>
                   <span style={{ opacity: 0.6 }}> · {c.from_email}</span>
@@ -441,7 +441,7 @@ export default function GastosOperacionalesModule({ onNavigate }) {
                   </div>
                 </div>
                 <button data-testid={`cobro-pagado-${c.id}`} onClick={() => marcarPagado(c)}
-                  style={{ ...btn(c.pagado ? "rgba(34,197,94,0.85)" : "rgba(255,255,255,0.12)", true), whiteSpace: "nowrap" }}>
+                  style={{ ...btn(c.pagado ? "rgba(16,217,142,0.85)" : "rgba(255,255,255,0.12)", true), whiteSpace: "nowrap" }}>
                   <i className={`fa ${c.pagado ? "fa-check-circle" : "fa-money"}`} style={{ marginRight: "0.3rem" }} />
                   {c.pagado ? `Tasación pagada ✓ ${String(c.pagado_at || "").slice(0, 10)}` : "Tasación pagada"}
                 </button>
@@ -462,14 +462,14 @@ export default function GastosOperacionalesModule({ onNavigate }) {
               <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0.5rem 0.9rem", background: "rgba(212,175,55,0.08)", border: "1px solid rgba(212,175,55,0.25)", borderRadius: 0, fontSize: "0.9rem" }}>
                 <b style={{ color: "var(--gold)" }}>{h.mes}</b>
                 <span style={{ opacity: 0.8 }}>{h.cantidad} tasación(es) pagada(s)</span>
-                <span style={{ marginLeft: "auto", fontWeight: 700, color: "#4ade80" }}>{h.total_uf.toLocaleString("es-CL")} UF · {h.total_clp}</span>
+                <span style={{ marginLeft: "auto", fontWeight: 700, color: "#34eab9" }}>{h.total_uf.toLocaleString("es-CL")} UF · {h.total_clp}</span>
               </div>
               <div style={{ padding: "0.3rem 0.5rem" }}>
                 {h.detalle.map((d, i) => (
                   <div key={i} style={{ display: "flex", gap: 8, fontSize: "0.8rem", opacity: 0.85, padding: "0.25rem 0.4rem", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
                     <span style={{ flex: 1 }}><b>{d.cliente}</b> <span style={{ opacity: 0.6 }}>· {d.from_email}</span></span>
                     <span style={{ opacity: 0.7 }}>{String(d.pagado_at || "").slice(0, 10)}</span>
-                    <span style={{ color: "#4ade80", fontWeight: 600 }}>{d.monto_clp}</span>
+                    <span style={{ color: "#34eab9", fontWeight: 600 }}>{d.monto_clp}</span>
                     <span style={{ opacity: 0.5, fontSize: "0.72rem" }}>{d.origen_pago === "auto" ? "🤖 auto" : "manual"}</span>
                   </div>
                 ))}
@@ -490,10 +490,10 @@ export default function GastosOperacionalesModule({ onNavigate }) {
           </div>
           {log.map((l, i) => {
             const estado = l.estado_pago || "pendiente";
-            const estadoColor = estado === "pagado" ? "#22c55e" : estado === "parcial" ? "#f59e0b" : "#ef4444";
+            const estadoColor = estado === "pagado" ? "#10d98e" : estado === "parcial" ? "#f59e0b" : "#e11d48";
             const pi = pagoInputs[l.id] || {};
             return (
-              <div key={l.id || i} data-testid={`gastos-log-${i}`} style={{ border: "1px solid transparent", backgroundImage: "linear-gradient(160deg, rgba(30,30,30,0.95), rgba(10,10,10,0.98)), linear-gradient(135deg, #BF953F, #FCF6BA, #B38728, #FBF5B7, #AA771C)", boxShadow: "0 35px 70px -20px rgba(0,0,0,0.95), 0 0 38px -16px rgba(191,149,63,0.45)", backgroundOrigin: "border-box", backgroundClip: "padding-box, border-box", borderRadius: 0, padding: "0.7rem 0.9rem", marginBottom: "0.6rem", background: estado === "pagado" ? "rgba(34,197,94,0.05)" : "rgba(255,255,255,0.02)" }}>
+              <div key={l.id || i} data-testid={`gastos-log-${i}`} style={{ border: "1px solid transparent", backgroundImage: "linear-gradient(115deg, rgba(255,255,255,0.09) 0%, rgba(255,255,255,0.02) 18%, transparent 32%), linear-gradient(160deg, rgba(30,30,30,0.95), rgba(10,10,10,0.98)), linear-gradient(135deg, #BF953F, #FCF6BA, #B38728, #FBF5B7, #AA771C)", boxShadow: "0 35px 70px -20px rgba(0,0,0,0.95), 0 0 38px -16px rgba(191,149,63,0.45)", backgroundOrigin: "border-box", backgroundClip: "padding-box, padding-box, border-box", borderRadius: 0, padding: "0.7rem 0.9rem", marginBottom: "0.6rem", background: estado === "pagado" ? "rgba(16,217,142,0.05)" : "rgba(255,255,255,0.02)" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", fontSize: "0.87rem" }}>
                   <b>{l.nombre}</b>
                   <span style={{ opacity: 0.55 }}>{l.rut}</span>
@@ -502,18 +502,18 @@ export default function GastosOperacionalesModule({ onNavigate }) {
                 </div>
                 <div style={{ display: "flex", gap: "1.4rem", marginTop: "0.45rem", fontSize: "0.85rem", flexWrap: "wrap" }}>
                   <span>Total: <b style={{ color: "var(--gold)" }}>{Number(l.total || 0).toLocaleString("es-CL")} UF</b></span>
-                  <span>Pagado: <b style={{ color: "#22c55e" }} data-testid={`gastos-log-pagado-${i}`}>{Number(l.pagado || 0).toLocaleString("es-CL")} UF</b></span>
-                  <span>Saldo: <b style={{ color: Number(l.saldo) <= 0.01 ? "#22c55e" : "#ef4444" }} data-testid={`gastos-log-saldo-${i}`}>{Number(l.saldo ?? l.total ?? 0).toLocaleString("es-CL")} UF</b></span>
+                  <span>Pagado: <b style={{ color: "#10d98e" }} data-testid={`gastos-log-pagado-${i}`}>{Number(l.pagado || 0).toLocaleString("es-CL")} UF</b></span>
+                  <span>Saldo: <b style={{ color: Number(l.saldo) <= 0.01 ? "#10d98e" : "#e11d48" }} data-testid={`gastos-log-saldo-${i}`}>{Number(l.saldo ?? l.total ?? 0).toLocaleString("es-CL")} UF</b></span>
                 </div>
                 {(l.pagos || []).length > 0 && (
                   <div style={{ marginTop: "0.4rem" }}>
                     {l.pagos.map((p, j) => (
                       <div key={j} style={{ display: "flex", gap: 8, alignItems: "center", fontSize: "0.78rem", opacity: 0.85, padding: "0.15rem 0" }}>
-                        <i className={`fa ${p.origen === "auto" ? "fa-magic" : "fa-money"}`} style={{ color: "#22c55e" }} />
+                        <i className={`fa ${p.origen === "auto" ? "fa-magic" : "fa-money"}`} style={{ color: "#10d98e" }} />
                         <span>{p.fecha}</span>
                         <b>{Number(p.monto).toLocaleString("es-CL")} UF</b>
                         <span style={{ opacity: 0.6 }}>{p.origen === "auto" ? "🤖 transferencia detectada" : "manual"}{p.detalle ? ` · ${p.detalle.slice(0, 70)}` : ""}</span>
-                        <button data-testid={`gastos-del-pago-${i}-${j}`} onClick={() => eliminarPago(l, j)} style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", marginLeft: "auto" }}><i className="fa fa-trash" /></button>
+                        <button data-testid={`gastos-del-pago-${i}-${j}`} onClick={() => eliminarPago(l, j)} style={{ background: "none", border: "none", color: "#e11d48", cursor: "pointer", marginLeft: "auto" }}><i className="fa fa-trash" /></button>
                       </div>
                     ))}
                   </div>
@@ -524,7 +524,7 @@ export default function GastosOperacionalesModule({ onNavigate }) {
                       <input data-testid={`gastos-pago-fecha-${i}`} type="date" style={{ ...inp, width: 150, padding: "0.35rem 0.5rem" }} value={pi.fecha || ""} onChange={e => setPagoInput(l.id, "fecha", e.target.value)} /></div>
                     <div><label style={{ ...lbl, marginBottom: "0.15rem" }}>Monto pagado (UF)</label>
                       <input data-testid={`gastos-pago-monto-${i}`} type="number" step="0.1" style={{ ...inp, width: 130, padding: "0.35rem 0.5rem" }} placeholder="Ej: 10" value={pi.monto || ""} onChange={e => setPagoInput(l.id, "monto", e.target.value)} /></div>
-                    <button data-testid={`gastos-registrar-pago-${i}`} onClick={() => registrarPago(l)} disabled={pagoLoading} style={btn("#22c55e", true)}>
+                    <button data-testid={`gastos-registrar-pago-${i}`} onClick={() => registrarPago(l)} disabled={pagoLoading} style={btn("#10d98e", true)}>
                       <i className="fa fa-check" style={{ marginRight: "0.3rem" }} />Registrar pago
                     </button>
                   </div>

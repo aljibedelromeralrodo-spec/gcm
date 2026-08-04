@@ -268,7 +268,7 @@ export default function SimuladorModule({ valorUF, loadedSimulation }) {
                           {resultado.eval_btg !== 'APROBADO/A' && resultado.eval_btg !== 'VIABLE' &&
                            resultado.eval_ameris !== 'APROBADO/A' && resultado.eval_ameris !== 'VIABLE' && (
                             <div className="eval-reasons">
-                              <p style={{fontWeight: 700, color: '#ef4444'}}>Sin opciones viables</p>
+                              <p style={{fontWeight: 700, color: '#e11d48'}}>Sin opciones viables</p>
                               {resultado.eval_btg_razones?.map((r, i) => <p key={'b'+i}>{r}</p>)}
                               {resultado.eval_ameris_razones?.map((r, i) => <p key={'a'+i}>{r}</p>)}
                             </div>

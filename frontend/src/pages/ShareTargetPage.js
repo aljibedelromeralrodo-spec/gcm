@@ -66,7 +66,7 @@ export default function ShareTargetPage() {
   const DESTINOS = [
     { key: "credito", label: "Documentos crédito", icon: "fa-folder-open", color: "#d4af37", desc: "Carpeta del cliente (gestión de crédito)" },
     { key: "voucher_tasacion", label: "Voucher Tasación", icon: "fa-home", color: "#d4af37", desc: "Voucher de pago de la tasación" },
-    { key: "voucher_gasto_operacional", label: "Voucher Gasto Op.", icon: "fa-money", color: "#22c55e", desc: "Vouchers de pago del gasto operacional" },
+    { key: "voucher_gasto_operacional", label: "Voucher Gasto Op.", icon: "fa-money", color: "#10d98e", desc: "Vouchers de pago del gasto operacional" },
   ];
 
   useEffect(() => {
@@ -242,7 +242,7 @@ export default function ShareTargetPage() {
           💡 <b>WhatsApp Business no permite multi-share externo.</b> Podés volver a WhatsApp y compartir MÁS archivos de a uno — se van a ir acumulando acá (hasta 15 min). Cuando termines, confirmá abajo.
           <div style={{ marginTop: 6 }}>
             <button onClick={handleDiscard} data-testid="btn-discard"
-              style={{ background: "transparent", border: "1px solid rgba(248,113,113,0.5)", color: "#f87171", padding: "3px 10px", borderRadius: 0, fontSize: 11, cursor: "pointer" }}>
+              style={{ background: "transparent", border: "1px solid rgba(248,113,113,0.5)", color: "#fb7185", padding: "3px 10px", borderRadius: 0, fontSize: 11, cursor: "pointer" }}>
               🗑️ Descartar todos y empezar de cero
             </button>
           </div>
@@ -273,7 +273,7 @@ export default function ShareTargetPage() {
             <button onClick={() => setMode("existing")} data-testid="mode-existing" style={{ flex: 1, padding: "0.6rem", background: mode === "existing" ? "#d4af37" : "rgba(212,175,55,0.2)", color: "#fff", border: "none", borderRadius: 0, fontWeight: 700, cursor: "pointer" }}>
               📁 Cliente existente
             </button>
-            <button onClick={() => setMode("new")} data-testid="mode-new" style={{ flex: 1, padding: "0.6rem", background: mode === "new" ? "#22c55e" : "rgba(212,175,55,0.2)", color: "#fff", border: "none", borderRadius: 0, fontWeight: 700, cursor: "pointer" }}>
+            <button onClick={() => setMode("new")} data-testid="mode-new" style={{ flex: 1, padding: "0.6rem", background: mode === "new" ? "#10d98e" : "rgba(212,175,55,0.2)", color: "#fff", border: "none", borderRadius: 0, fontWeight: 700, cursor: "pointer" }}>
               ➕ Cliente nuevo
             </button>
           </div>
@@ -326,16 +326,16 @@ export default function ShareTargetPage() {
               const hasCodeudor = folder && (folder.codeudor_nombre || "").trim().length > 0;
               if (!hasCodeudor) return null;
               return (
-                <div style={{ marginTop: 10, padding: "0.6rem 0.8rem", background: "rgba(139,92,246,0.12)", border: "1px solid rgba(139,92,246,0.5)", borderRadius: 0, fontSize: 12, color: "#c4b5fd" }}>
+                <div style={{ marginTop: 10, padding: "0.6rem 0.8rem", background: "rgba(46,92,230,0.12)", border: "1px solid rgba(46,92,230,0.5)", borderRadius: 0, fontSize: 12, color: "#c4b5fd" }}>
                   <div style={{ marginBottom: 6, fontWeight: 700 }}>⚠️ Esta carpeta tiene CODEUDOR ({folder.codeudor_nombre})</div>
                   <div style={{ marginBottom: 8 }}>Elegí a quién pertenecen estos {payload.files.length} archivo(s):</div>
                   <div style={{ display: "flex", gap: 6 }}>
                     <button onClick={() => setRouteToCodeudor(false)} data-testid="btn-route-titular"
-                      style={{ flex: 1, padding: "6px", background: !routeToCodeudor ? "#d4af37" : "transparent", border: `1px solid ${!routeToCodeudor ? "#d4af37" : "rgba(139,92,246,0.5)"}`, color: "#fff", borderRadius: 0, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                      style={{ flex: 1, padding: "6px", background: !routeToCodeudor ? "#d4af37" : "transparent", border: `1px solid ${!routeToCodeudor ? "#d4af37" : "rgba(46,92,230,0.5)"}`, color: "#fff", borderRadius: 0, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
                       👤 Titular ({folder.nombre.slice(0, 20)})
                     </button>
                     <button onClick={() => setRouteToCodeudor(true)} data-testid="btn-route-codeudor"
-                      style={{ flex: 1, padding: "6px", background: routeToCodeudor ? "#8b5cf6" : "transparent", border: `1px solid ${routeToCodeudor ? "#8b5cf6" : "rgba(139,92,246,0.5)"}`, color: "#fff", borderRadius: 0, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                      style={{ flex: 1, padding: "6px", background: routeToCodeudor ? "#2e5ce6" : "transparent", border: `1px solid ${routeToCodeudor ? "#2e5ce6" : "rgba(46,92,230,0.5)"}`, color: "#fff", borderRadius: 0, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
                       👥 Codeudor ({folder.codeudor_nombre.slice(0, 20)})
                     </button>
                   </div>
@@ -355,14 +355,14 @@ export default function ShareTargetPage() {
             <input value={newRut} onChange={(e) => setNewRut(e.target.value)} placeholder="15234567-8" data-testid="new-rut-input"
               style={{ width: "100%", padding: "0.6rem", borderRadius: 0, background: "#232326", color: "#e2e8f0", border: "1px solid rgba(148,163,184,0.3)", fontSize: 14, marginBottom: "0.8rem" }} />
             <button onClick={handleCreateAndUpload} disabled={!newName.trim() || uploading} data-testid="btn-create-and-upload"
-              style={{ width: "100%", padding: "0.75rem", background: (!newName.trim() || uploading) ? "#475569" : "#22c55e", color: "#fff", border: "none", borderRadius: 0, fontWeight: 700, fontSize: 14, cursor: uploading ? "wait" : "pointer" }}>
+              style={{ width: "100%", padding: "0.75rem", background: (!newName.trim() || uploading) ? "#475569" : "#10d98e", color: "#fff", border: "none", borderRadius: 0, fontWeight: 700, fontSize: 14, cursor: uploading ? "wait" : "pointer" }}>
               <i className={`fa ${uploading ? "fa-spinner fa-spin" : "fa-plus"}`} /> {uploading ? "Creando y subiendo…" : `Crear carpeta y subir ${payload.files.length} archivo(s)`}
             </button>
           </div>
         )}
 
         {status && (
-          <div style={{ marginTop: "1rem", padding: "0.75rem", background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.5)", borderRadius: 0, whiteSpace: "pre-wrap", fontSize: 13 }} data-testid="share-status">
+          <div style={{ marginTop: "1rem", padding: "0.75rem", background: "rgba(16,217,142,0.12)", border: "1px solid rgba(16,217,142,0.5)", borderRadius: 0, whiteSpace: "pre-wrap", fontSize: 13 }} data-testid="share-status">
             {status}
           </div>
         )}

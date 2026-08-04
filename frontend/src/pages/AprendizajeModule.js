@@ -3,7 +3,7 @@ import axios from "axios";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
-const PRIO_COLOR = { alta: "#f87171", media: "#fbbf24", baja: "#4ade80" };
+const PRIO_COLOR = { alta: "#fb7185", media: "#fbbf24", baja: "#34eab9" };
 
 export default function AprendizajeModule() {
   const [analisis, setAnalisis] = useState([]);
@@ -56,7 +56,7 @@ export default function AprendizajeModule() {
             <i className="fa fa-graduation-cap" /> Aprendizaje IA — Flujo de información comercial
           </h2>
           <button data-testid="aprendizaje-analizar" onClick={analizar} disabled={analizando}
-            style={{ marginLeft: "auto", background: "#7c3aed", border: "none", color: "#fff", borderRadius: 0, padding: "0.55rem 1.2rem", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>
+            style={{ marginLeft: "auto", background: "#1e46c0", border: "none", color: "#fff", borderRadius: 0, padding: "0.55rem 1.2rem", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>
             <i className={`fa ${analizando ? "fa-spinner fa-spin" : "fa-bolt"}`} /> {analizando ? "Aprendiendo del flujo…" : "Analizar flujo ahora"}
           </button>
         </div>
@@ -65,12 +65,12 @@ export default function AprendizajeModule() {
           solicitud → carpeta → mesa → aprobación → tasación → estudio de título → gastos → escrituración → cierre.
           Regla inviolable: solo aprende de datos reales del sistema, sin inventar métricas.
         </p>
-        {msg && <div data-testid="aprendizaje-msg" style={{ marginTop: 8, fontSize: 12.5, color: msg.startsWith("✅") ? "#4ade80" : "#f87171", fontWeight: 700 }}>{msg}</div>}
+        {msg && <div data-testid="aprendizaje-msg" style={{ marginTop: 8, fontSize: 12.5, color: msg.startsWith("✅") ? "#34eab9" : "#fb7185", fontWeight: 700 }}>{msg}</div>}
       </div>
 
       <div style={card}>
         <div style={{ fontWeight: 800, fontSize: 13.5, color: "#e2e8f0", marginBottom: 8 }}>
-          <i className="fa fa-comment-o" style={{ color: "#7c3aed" }} /> Enséñale a la IA (notas del flujo comercial)
+          <i className="fa fa-comment-o" style={{ color: "#1e46c0" }} /> Enséñale a la IA (notas del flujo comercial)
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <input data-testid="aprendizaje-nota-input" value={nota} onChange={e => setNota(e.target.value)}
@@ -108,7 +108,7 @@ export default function AprendizajeModule() {
                   ["Estudios", ultimo.stats.estudios_solicitados], ["Etapa 2", ultimo.stats.estudios_etapa2_enviados],
                   ["Reparos pend.", ultimo.stats.reparos_pendientes], ["Cierres consultados", ultimo.stats.cierres_consultados]]
                   .map(([l, v]) => (
-                    <div key={l} style={{ background: "rgba(124,58,237,0.08)", border: "1px solid rgba(124,58,237,0.25)", borderRadius: 0, padding: "0.4rem 0.8rem", fontSize: 12 }}>
+                    <div key={l} style={{ background: "rgba(30,70,192,0.08)", border: "1px solid rgba(30,70,192,0.25)", borderRadius: 0, padding: "0.4rem 0.8rem", fontSize: 12 }}>
                       <b style={{ color: "#a78bfa", fontSize: 15 }}>{v ?? 0}</b> <span style={{ color: "#94a3b8" }}>{l}</span>
                     </div>
                   ))}
@@ -118,12 +118,12 @@ export default function AprendizajeModule() {
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "1rem" }}>
             <div style={card}>
-              <div style={{ fontWeight: 800, fontSize: 13, color: "#4ade80", marginBottom: 8 }}><i className="fa fa-lightbulb-o" /> Aprendizajes del flujo</div>
+              <div style={{ fontWeight: 800, fontSize: 13, color: "#34eab9", marginBottom: 8 }}><i className="fa fa-lightbulb-o" /> Aprendizajes del flujo</div>
               {(ultimo.aprendizajes || []).length === 0 ? <div style={{ fontSize: 12, color: "#64748b" }}>—</div>
                 : (ultimo.aprendizajes || []).map((a, i) => <div key={i} style={{ fontSize: 12.5, color: "#cbd5e1", marginBottom: 6, lineHeight: 1.5 }}>• {a}</div>)}
             </div>
             <div style={card}>
-              <div style={{ fontWeight: 800, fontSize: 13, color: "#f87171", marginBottom: 8 }}><i className="fa fa-exclamation-triangle" /> Cuellos de botella</div>
+              <div style={{ fontWeight: 800, fontSize: 13, color: "#fb7185", marginBottom: 8 }}><i className="fa fa-exclamation-triangle" /> Cuellos de botella</div>
               {(ultimo.cuellos_botella || []).length === 0 ? <div style={{ fontSize: 12, color: "#64748b" }}>—</div>
                 : (ultimo.cuellos_botella || []).map((a, i) => <div key={i} style={{ fontSize: 12.5, color: "#cbd5e1", marginBottom: 6, lineHeight: 1.5 }}>• {a}</div>)}
             </div>

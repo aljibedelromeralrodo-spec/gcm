@@ -110,7 +110,7 @@ export default function CierresModule() {
           Luego, con el botón preguntás (clic por clic, envío manual) si el cliente va a continuar el crédito con nosotros,
           y a los 3 días de cada consulta el aviso se reactiva para volver a preguntar.
         </p>
-        {msg && <div data-testid="cierres-msg" style={{ marginTop: 8, fontSize: 12.5, color: msg.startsWith("✅") ? "#4ade80" : "#f87171", fontWeight: 700 }}>{msg}</div>}
+        {msg && <div data-testid="cierres-msg" style={{ marginTop: 8, fontSize: 12.5, color: msg.startsWith("✅") ? "#34eab9" : "#fb7185", fontWeight: 700 }}>{msg}</div>}
       </div>
 
       {loading ? (
@@ -144,7 +144,7 @@ export default function CierresModule() {
                     ? <><i className="fa fa-envelope-o" /> {r.ejecutivo_email}
                         {r.ejecutivo_desde_origen && <div style={{ fontSize: 10.5, color: "#d4af37", fontWeight: 700 }}>↩ tomado de la solicitud de crédito original</div>}
                       </>
-                    : <span style={{ color: "#f87171" }}>Sin correo del ejecutivo</span>}
+                    : <span style={{ color: "#fb7185" }}>Sin correo del ejecutivo</span>}
                 </div>
                 <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
                   <button data-testid={`cierre-edit-${r.id}`} onClick={() => setEdit({ ...r })}
@@ -158,7 +158,7 @@ export default function CierresModule() {
                   </button>
                   <button data-testid={`cierre-no-continua-${r.id}`} onClick={() => marcarNoContinua(r)}
                     title="El ejecutivo respondió que el cliente NO continuará el crédito — permite borrar la carpeta de la base de datos"
-                    style={{ background: "rgba(185,28,28,0.15)", border: "1.5px solid #b91c1c", color: "#f87171", borderRadius: 0, padding: "0.45rem 0.9rem", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>
+                    style={{ background: "rgba(185,28,28,0.15)", border: "1.5px solid #9f1239", color: "#fb7185", borderRadius: 0, padding: "0.45rem 0.9rem", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>
                     <i className="fa fa-times-circle" /> No continúa
                   </button>
                 </div>

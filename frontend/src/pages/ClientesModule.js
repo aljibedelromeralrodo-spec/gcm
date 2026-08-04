@@ -53,7 +53,7 @@ const BrokersPanel = ({ brokers, dest, setDest, reloadBrokers, soloAdmin }) => {
             <button onClick={() => editar(b)} title="Editar broker" data-testid={`broker-edit-${b.id}`}
               style={{ background: "transparent", border: "none", color: "#d4af37", cursor: "pointer" }}><i className="fa fa-pencil" /></button>
             <button onClick={() => quitar(b)} title="Quitar broker" data-testid={`broker-del-${b.id}`}
-              style={{ background: "transparent", border: "none", color: "#f87171", cursor: "pointer" }}><i className="fa fa-trash" /></button>
+              style={{ background: "transparent", border: "none", color: "#fb7185", cursor: "pointer" }}><i className="fa fa-trash" /></button>
           </div>
         ))}
       </div>
@@ -62,7 +62,7 @@ const BrokersPanel = ({ brokers, dest, setDest, reloadBrokers, soloAdmin }) => {
           <input value={nuevo.nombre} onChange={e => setNuevo({ ...nuevo, nombre: e.target.value })} placeholder="Nombre broker" data-testid="broker-new-nombre" style={{ ...inpS, flex: 1, minWidth: 110 }} />
           <input value={nuevo.contactos} onChange={e => setNuevo({ ...nuevo, contactos: e.target.value })} placeholder="Personas de contacto" data-testid="broker-new-contactos" style={{ ...inpS, flex: 1, minWidth: 130 }} />
           <input value={nuevo.emails} onChange={e => setNuevo({ ...nuevo, emails: e.target.value })} placeholder="correos separados por coma" data-testid="broker-new-emails" style={{ ...inpS, flex: 2, minWidth: 170 }} />
-          <button onClick={guardar} data-testid="broker-new-save" style={{ ...inpS, background: "#2563eb", border: "none", fontWeight: 700, cursor: "pointer" }}>{editId ? "Actualizar" : "Guardar"}</button>
+          <button onClick={guardar} data-testid="broker-new-save" style={{ ...inpS, background: "#0f52ba", border: "none", fontWeight: 700, cursor: "pointer" }}>{editId ? "Actualizar" : "Guardar"}</button>
           <button onClick={() => { setShowAdd(false); setEditId(null); setNuevo({ nombre: "", contactos: "", emails: "" }); }} style={{ ...inpS, background: "transparent", cursor: "pointer" }}>Cancelar</button>
         </div>
       ) : (
@@ -1491,9 +1491,9 @@ export default function ClientesModule({ onNavigate }) {
             </button>
             <button data-testid="tab-escrituracion" onClick={() => setFolderTab("escrituracion")}
               style={{ padding: "0.55rem 1.2rem", borderRadius: 0, fontWeight: 800, fontSize: 13, cursor: "pointer",
-                background: folderTab === "escrituracion" ? "rgba(168,85,247,0.18)" : "rgba(148,163,184,0.08)",
-                border: folderTab === "escrituracion" ? "2px solid #a855f7" : "1.5px solid rgba(148,163,184,0.3)",
-                color: folderTab === "escrituracion" ? "#a855f7" : "#94a3b8" }}>
+                background: folderTab === "escrituracion" ? "rgba(46,92,230,0.18)" : "rgba(148,163,184,0.08)",
+                border: folderTab === "escrituracion" ? "2px solid #2e5ce6" : "1.5px solid rgba(148,163,184,0.3)",
+                color: folderTab === "escrituracion" ? "#2e5ce6" : "#94a3b8" }}>
               <i className="fa fa-pencil-square"></i> Escrituración ({countEscrituracion})
             </button>
           </div>
@@ -1555,8 +1555,8 @@ export default function ClientesModule({ onNavigate }) {
               const hasFin = f.datos_financieros && f.datos_financieros.valor_propiedad;
               const enviadoManual = f.envio_manual === true;
               const cardStyle = enviadoManual
-                ? { position: "relative", background: "#dc2626", borderLeft: "5px solid #7f1d1d", color: "#fff", flexWrap: "wrap" }
-                : { position: "relative", flexWrap: "wrap", borderLeft: (f.emails_sent_count > 0) ? "5px solid #d4af37" : (f.is_ready_to_send ? "5px solid #22c55e" : (f.codeudor_nombre ? "5px solid #8b5cf6" : "")), background: (f.emails_sent_count > 0) ? "rgba(212,175,55,0.06)" : (f.is_ready_to_send ? "rgba(34,197,94,0.06)" : undefined) };
+                ? { position: "relative", background: "#be123c", borderLeft: "5px solid #7f1d1d", color: "#fff", flexWrap: "wrap" }
+                : { position: "relative", flexWrap: "wrap", borderLeft: (f.emails_sent_count > 0) ? "5px solid #d4af37" : (f.is_ready_to_send ? "5px solid #10d98e" : (f.codeudor_nombre ? "5px solid #2e5ce6" : "")), background: (f.emails_sent_count > 0) ? "rgba(212,175,55,0.06)" : (f.is_ready_to_send ? "rgba(16,217,142,0.06)" : undefined) };
               const irAModulo = (mod) => {
                 sessionStorage.setItem("cm_prefill_cliente", JSON.stringify({ nombre: f.nombre, rut: f.rut || "" }));
                 onNavigate && onNavigate(mod);
@@ -1569,12 +1569,12 @@ export default function ClientesModule({ onNavigate }) {
               return (
                 <div key={f.id} className="clientes-card" data-testid={`folder-${f.id}`} style={cardStyle}>
                   {enviadoManual && (
-                    <div style={{ position: "absolute", top: 8, left: 8, background: "#fff", color: "#dc2626", borderRadius: 0, padding: "2px 8px", fontSize: 10, fontWeight: 800 }} data-testid={`badge-enviado-${f.id}`}>
+                    <div style={{ position: "absolute", top: 8, left: 8, background: "#fff", color: "#be123c", borderRadius: 0, padding: "2px 8px", fontSize: 10, fontWeight: 800 }} data-testid={`badge-enviado-${f.id}`}>
                       ✅ ENVIADO (manual)
                     </div>
                   )}
                   {missing.length > 0 && (
-                    <div title={`Faltan: ${missing.join(", ")}`} style={{ position: "absolute", top: 8, right: 8, background: "#dc2626", color: "#fff", borderRadius: "50%", width: 22, height: 22, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, boxShadow: "0 2px 8px rgba(220,38,38,0.5)" }}>
+                    <div title={`Faltan: ${missing.join(", ")}`} style={{ position: "absolute", top: 8, right: 8, background: "#be123c", color: "#fff", borderRadius: "50%", width: 22, height: 22, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, boxShadow: "0 2px 8px rgba(190,18,60,0.5)" }}>
                       {missing.length}
                     </div>
                   )}
@@ -1586,25 +1586,25 @@ export default function ClientesModule({ onNavigate }) {
                     <span className="clientes-file-count">{f.total_archivos || 0} archivos</span>
                     <div style={{ display: "flex", gap: 6, marginTop: 4, flexWrap: "wrap" }}>
                       {f.is_ready_to_send && (
-                        <span style={{ fontSize: 10, background: "rgba(34,197,94,0.25)", color: "#15803d", padding: "2px 6px", borderRadius: 0, fontWeight: 700 }}>🎯 Lista para enviar</span>
+                        <span style={{ fontSize: 10, background: "rgba(16,217,142,0.25)", color: "#0e9f6e", padding: "2px 6px", borderRadius: 0, fontWeight: 700 }}>🎯 Lista para enviar</span>
                       )}
                       {f.emails_sent_count > 0 && (
-                        <span title={`Último envío: ${(f.last_email_sent_at || "").slice(0,19).replace('T',' ')}`} style={{ fontSize: 10, background: "rgba(212,175,55,0.2)", color: "#1d4ed8", padding: "2px 6px", borderRadius: 0, fontWeight: 700 }}>📧 Enviado a mesa × {f.emails_sent_count}{f.last_email_sent_at ? ` · ${fmtAct(f.last_email_sent_at)}` : ""}</span>
+                        <span title={`Último envío: ${(f.last_email_sent_at || "").slice(0,19).replace('T',' ')}`} style={{ fontSize: 10, background: "rgba(212,175,55,0.2)", color: "#0a3d91", padding: "2px 6px", borderRadius: 0, fontWeight: 700 }}>📧 Enviado a mesa × {f.emails_sent_count}{f.last_email_sent_at ? ` · ${fmtAct(f.last_email_sent_at)}` : ""}</span>
                       )}
                       {hasFin ? (
-                        <span style={{ fontSize: 10, background: "rgba(34,197,94,0.15)", color: "#16a34a", padding: "2px 6px", borderRadius: 0 }}>💰 Datos OK</span>
+                        <span style={{ fontSize: 10, background: "rgba(16,217,142,0.15)", color: "#10c98a", padding: "2px 6px", borderRadius: 0 }}>💰 Datos OK</span>
                       ) : (
                         <span style={{ fontSize: 10, background: "rgba(250,204,21,0.15)", color: "#a16207", padding: "2px 6px", borderRadius: 0 }}>💰 Sin datos financieros</span>
                       )}
                       {f.datos_financieros?.fecha_entrega && (
-                        <span data-testid={`badge-entrega-${f.id}`} style={{ fontSize: 10, background: "rgba(139,92,246,0.15)", color: "#7c3aed", padding: "2px 6px", borderRadius: 0, fontWeight: 700 }}>🏠 Entrega {f.datos_financieros.fecha_entrega}</span>
+                        <span data-testid={`badge-entrega-${f.id}`} style={{ fontSize: 10, background: "rgba(46,92,230,0.15)", color: "#1e46c0", padding: "2px 6px", borderRadius: 0, fontWeight: 700 }}>🏠 Entrega {f.datos_financieros.fecha_entrega}</span>
                       )}
                     </div>
                     {missing.length > 0 && (
                       <div data-testid={`missing-docs-${f.id}`} style={{ display: "flex", gap: 4, marginTop: 5, flexWrap: "wrap", alignItems: "center" }}>
-                        <span style={{ fontSize: 10, fontWeight: 800, color: enviadoManual ? "#fff" : "#dc2626" }}>⚠️ FALTA:</span>
+                        <span style={{ fontSize: 10, fontWeight: 800, color: enviadoManual ? "#fff" : "#be123c" }}>⚠️ FALTA:</span>
                         {missing.map(m => (
-                          <span key={m} style={{ fontSize: 10, fontWeight: 700, background: enviadoManual ? "rgba(255,255,255,0.25)" : "rgba(220,38,38,0.15)", color: enviadoManual ? "#fff" : "#dc2626", padding: "2px 7px", borderRadius: 0, border: enviadoManual ? "1px solid rgba(255,255,255,0.4)" : "1px solid rgba(220,38,38,0.35)" }}>
+                          <span key={m} style={{ fontSize: 10, fontWeight: 700, background: enviadoManual ? "rgba(255,255,255,0.25)" : "rgba(190,18,60,0.15)", color: enviadoManual ? "#fff" : "#be123c", padding: "2px 7px", borderRadius: 0, border: enviadoManual ? "1px solid rgba(255,255,255,0.4)" : "1px solid rgba(190,18,60,0.35)" }}>
                             {CAT_LABELS[m] || m}
                           </span>
                         ))}
@@ -1614,9 +1614,9 @@ export default function ClientesModule({ onNavigate }) {
                       <div data-testid={`criterios-list-${f.id}`} style={{ display: "flex", gap: 4, marginTop: 5, flexWrap: "wrap", alignItems: "center" }}>
                         {f.criterios.map(c => (
                           <span key={c.nombre} title={c.nombre} style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 0,
-                            background: enviadoManual ? "rgba(255,255,255,0.2)" : (c.ok ? "rgba(34,197,94,0.12)" : "rgba(148,163,184,0.12)"),
-                            color: enviadoManual ? "#fff" : (c.ok ? "#16a34a" : "#94a3b8"),
-                            border: `1px solid ${c.ok ? "rgba(34,197,94,0.4)" : "rgba(148,163,184,0.3)"}` }}>
+                            background: enviadoManual ? "rgba(255,255,255,0.2)" : (c.ok ? "rgba(16,217,142,0.12)" : "rgba(148,163,184,0.12)"),
+                            color: enviadoManual ? "#fff" : (c.ok ? "#10c98a" : "#94a3b8"),
+                            border: `1px solid ${c.ok ? "rgba(16,217,142,0.4)" : "rgba(148,163,184,0.3)"}` }}>
                             {c.ok ? "✓" : "✗"} {c.nombre}
                           </span>
                         ))}
@@ -1631,7 +1631,7 @@ export default function ClientesModule({ onNavigate }) {
                       {missing.length > 0 && f.source_email && (
                         <button data-testid={`btn-pedir-faltantes-${f.id}`} onClick={() => openPedirFaltantes(f)}
                           style={{ fontSize: 10.5, fontWeight: 800, padding: "3px 10px", borderRadius: 0, cursor: "pointer",
-                            background: "rgba(220,38,38,0.12)", color: enviadoManual ? "#fff" : "#dc2626", border: "1.5px solid rgba(220,38,38,0.5)" }}>
+                            background: "rgba(190,18,60,0.12)", color: enviadoManual ? "#fff" : "#be123c", border: "1.5px solid rgba(190,18,60,0.5)" }}>
                           📩 Pedir faltantes al remitente{f.faltantes_pedidos_at ? ` ✓ Solicitado ${fmtAct(f.faltantes_pedidos_at)}` : ""}
                         </button>
                       )}
@@ -1643,23 +1643,23 @@ export default function ClientesModule({ onNavigate }) {
                       <div data-testid={`prob-aprobacion-${f.id}`}
                         title={`Posibilidades de aprobación\n${(f.prob_aprobacion.factores || []).join("\n")}`}
                         style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minWidth: 88, padding: "6px 10px", borderRadius: 0,
-                          background: enviadoManual ? "rgba(255,255,255,0.15)" : (f.prob_aprobacion.porcentaje >= 75 ? "rgba(34,197,94,0.12)" : f.prob_aprobacion.porcentaje >= 50 ? "rgba(250,204,21,0.18)" : "rgba(220,38,38,0.12)") }}>
+                          background: enviadoManual ? "rgba(255,255,255,0.15)" : (f.prob_aprobacion.porcentaje >= 75 ? "rgba(16,217,142,0.12)" : f.prob_aprobacion.porcentaje >= 50 ? "rgba(250,204,21,0.18)" : "rgba(190,18,60,0.12)") }}>
                         <span style={{ fontSize: 36, fontWeight: 900, lineHeight: 1,
-                          color: enviadoManual ? "#fff" : (f.prob_aprobacion.porcentaje >= 75 ? "#16a34a" : f.prob_aprobacion.porcentaje >= 50 ? "#a16207" : "#dc2626") }}>
+                          color: enviadoManual ? "#fff" : (f.prob_aprobacion.porcentaje >= 75 ? "#10c98a" : f.prob_aprobacion.porcentaje >= 50 ? "#a16207" : "#be123c") }}>
                           {f.prob_aprobacion.porcentaje}%
                         </span>
                         <span style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, opacity: 0.85, color: enviadoManual ? "#fff" : undefined }}>aprobación</span>
                       </div>
                       <div data-testid={`mesa-criterios-${f.id}`}
                         style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minWidth: 92, padding: "6px 10px", borderRadius: 0,
-                          background: f.mesa_respuesta === "aprobada" ? "rgba(34,197,94,0.15)" : (f.mesa_respuesta === "rechazada" ? "rgba(220,38,38,0.15)" : "rgba(148,163,184,0.1)"),
-                          border: f.mesa_respuesta ? "1.5px solid " + (f.mesa_respuesta === "aprobada" ? "#22c55e" : "#dc2626") : "1px dashed rgba(148,163,184,0.4)" }}>
+                          background: f.mesa_respuesta === "aprobada" ? "rgba(16,217,142,0.15)" : (f.mesa_respuesta === "rechazada" ? "rgba(190,18,60,0.15)" : "rgba(148,163,184,0.1)"),
+                          border: f.mesa_respuesta ? "1.5px solid " + (f.mesa_respuesta === "aprobada" ? "#10d98e" : "#be123c") : "1px dashed rgba(148,163,184,0.4)" }}>
                         <span style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, opacity: 0.8, color: enviadoManual ? "#fff" : undefined }}>Mesa</span>
-                        {f.mesa_respuesta === "aprobada" && <span style={{ fontSize: 13, fontWeight: 900, color: "#16a34a" }}>✅ APROBADA</span>}
-                        {f.mesa_respuesta === "rechazada" && <span style={{ fontSize: 13, fontWeight: 900, color: "#dc2626" }}>❌ RECHAZADA</span>}
+                        {f.mesa_respuesta === "aprobada" && <span style={{ fontSize: 13, fontWeight: 900, color: "#10c98a" }}>✅ APROBADA</span>}
+                        {f.mesa_respuesta === "rechazada" && <span style={{ fontSize: 13, fontWeight: 900, color: "#be123c" }}>❌ RECHAZADA</span>}
                         {!f.mesa_respuesta && <span style={{ fontSize: 11, fontWeight: 700, opacity: 0.6, color: enviadoManual ? "#fff" : undefined }}>Sin respuesta</span>}
                         {(f.criterios || []).length > 0 && (
-                          <span style={{ fontSize: 10, fontWeight: 700, marginTop: 2, color: enviadoManual ? "#fff" : ((f.criterios.filter(c => c.ok).length === f.criterios.length) ? "#16a34a" : "#a16207") }}>
+                          <span style={{ fontSize: 10, fontWeight: 700, marginTop: 2, color: enviadoManual ? "#fff" : ((f.criterios.filter(c => c.ok).length === f.criterios.length) ? "#10c98a" : "#a16207") }}>
                             criterios {f.criterios.filter(c => c.ok).length}/{f.criterios.length}
                           </span>
                         )}
@@ -1673,14 +1673,14 @@ export default function ClientesModule({ onNavigate }) {
                       onClick={() => toggleEnvioManual(f)}
                       title={enviadoManual ? "Marcar como NO enviado" : "Marcar como ENVIADO (pinta la carpeta roja)"}
                       style={enviadoManual
-                        ? { background: "#fff", color: "#dc2626", border: "1px solid #fff", fontWeight: 800 }
-                        : { background: "rgba(220,38,38,0.1)", color: "#dc2626", border: "1px solid #dc2626", fontWeight: 700 }}>
+                        ? { background: "#fff", color: "#be123c", border: "1px solid #fff", fontWeight: 800 }
+                        : { background: "rgba(190,18,60,0.1)", color: "#be123c", border: "1px solid #be123c", fontWeight: 700 }}>
                       <i className={`fa ${enviadoManual ? "fa-check-square" : "fa-square-o"}`}></i> {enviadoManual ? "Enviado" : "No enviado"}
                     </button>
                     {f.is_ready_to_send && (
                       <button className="docs-btn" onClick={() => openFolder(f.id, "email")} data-testid={`btn-enviar-ya-${f.id}`}
                         title="Lista para enviar: abre la carpeta y prepara el autocorreo con preview automático"
-                        style={{ background: "#22c55e", color: "#fff", border: "1px solid #15803d", fontWeight: 700, boxShadow: "0 2px 8px rgba(34,197,94,0.4)" }}>
+                        style={{ background: "#10d98e", color: "#fff", border: "1px solid #0e9f6e", fontWeight: 700, boxShadow: "0 2px 8px rgba(16,217,142,0.4)" }}>
                         <i className="fa fa-paper-plane"></i> 🚀 Enviar Ya
                       </button>
                     )}
@@ -1691,10 +1691,10 @@ export default function ClientesModule({ onNavigate }) {
                       <i className="fa fa-trash"></i>
                     </button>
                   </div>
-                  <div data-testid={`modulos-carpeta-${f.id}`} style={{ width: "100%", display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10, paddingTop: 10, borderTop: enviadoManual ? "1px solid rgba(255,255,255,0.3)" : "1px solid rgba(139,92,246,0.25)" }}>
+                  <div data-testid={`modulos-carpeta-${f.id}`} style={{ width: "100%", display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10, paddingTop: 10, borderTop: enviadoManual ? "1px solid rgba(255,255,255,0.3)" : "1px solid rgba(46,92,230,0.25)" }}>
                     <button data-testid={`btn-aprobacion-${f.id}`} onClick={() => irAModulo("aprobacion")}
                       title={`Enviar aprobación al cliente ${f.nombre}`}
-                      style={modBtn("rgba(34,197,94,0.12)", "#22c55e", enviadoManual ? "#fff" : "#16a34a")}>
+                      style={modBtn("rgba(16,217,142,0.12)", "#10d98e", enviadoManual ? "#fff" : "#10c98a")}>
                       <i className="fa fa-trophy"></i> Enviar Aprobación Cliente
                     </button>
                     <button data-testid={`btn-gastos-${f.id}`} onClick={() => irAModulo("gastos")}
@@ -1704,7 +1704,7 @@ export default function ClientesModule({ onNavigate }) {
                     </button>
                     <button data-testid={`btn-setcredito-${f.id}`} onClick={() => irAModulo("setcredito")}
                       title={`Firma set de crédito de ${f.nombre}`}
-                      style={modBtn("rgba(212,175,55,0.12)", "#d4af37", enviadoManual ? "#fff" : "#2563eb")}>
+                      style={modBtn("rgba(212,175,55,0.12)", "#d4af37", enviadoManual ? "#fff" : "#0f52ba")}>
                       <i className="fa fa-pencil-square-o"></i> Firma Set de Crédito
                     </button>
                     <button data-testid={`btn-tasacion-${f.id}`} onClick={() => openTasacion(f)}
@@ -1715,7 +1715,7 @@ export default function ClientesModule({ onNavigate }) {
                     {f.tasacion_solicitada_at && (
                       <button data-testid={`btn-tasacion-terminada-${f.id}`} onClick={() => marcarTerminado(f, "tasacion", !f.tasacion_terminado_at)}
                         title={f.tasacion_terminado_at ? "Desmarcar: la tasación vuelve a estado solicitada" : "Marcar la tasación como TERMINADA (queda registrado con fecha y hora)"}
-                        style={modBtn(f.tasacion_terminado_at ? "rgba(34,197,94,0.15)" : "rgba(148,163,184,0.1)", f.tasacion_terminado_at ? "#22c55e" : "#94a3b8", f.tasacion_terminado_at ? "#4ade80" : (enviadoManual ? "#fff" : "#94a3b8"))}>
+                        style={modBtn(f.tasacion_terminado_at ? "rgba(16,217,142,0.15)" : "rgba(148,163,184,0.1)", f.tasacion_terminado_at ? "#10d98e" : "#94a3b8", f.tasacion_terminado_at ? "#34eab9" : (enviadoManual ? "#fff" : "#94a3b8"))}>
                         <i className="fa fa-check-circle"></i> {f.tasacion_terminado_at ? "Tasación terminada" : "¿Tasación terminada?"}
                       </button>
                     )}
@@ -1727,7 +1727,7 @@ export default function ClientesModule({ onNavigate }) {
                     {f.estudio_titulo_solicitado_at && (
                       <button data-testid={`btn-estudio-terminado-${f.id}`} onClick={() => marcarTerminado(f, "estudio_titulo", !f.estudio_titulo_terminado_at)}
                         title={f.estudio_titulo_terminado_at ? "Desmarcar: el estudio vuelve a estado solicitado" : "Marcar el estudio de título como TERMINADO (queda registrado con fecha y hora)"}
-                        style={modBtn(f.estudio_titulo_terminado_at ? "rgba(34,197,94,0.15)" : "rgba(148,163,184,0.1)", f.estudio_titulo_terminado_at ? "#22c55e" : "#94a3b8", f.estudio_titulo_terminado_at ? "#4ade80" : (enviadoManual ? "#fff" : "#94a3b8"))}>
+                        style={modBtn(f.estudio_titulo_terminado_at ? "rgba(16,217,142,0.15)" : "rgba(148,163,184,0.1)", f.estudio_titulo_terminado_at ? "#10d98e" : "#94a3b8", f.estudio_titulo_terminado_at ? "#34eab9" : (enviadoManual ? "#fff" : "#94a3b8"))}>
                         <i className="fa fa-check-circle"></i> {f.estudio_titulo_terminado_at ? "E. Título terminado" : "¿E. Título terminado?"}
                       </button>
                     )}
@@ -1739,9 +1739,9 @@ export default function ClientesModule({ onNavigate }) {
                       return (
                         <button data-testid={`btn-reparos-${f.id}`} onClick={() => openReparos(f)}
                           title={`Reparos del estudio de título de ${f.nombre} (detección automática en el hilo del abogado)`}
-                          style={modBtn(satisfecho ? "rgba(34,197,94,0.12)" : (pendientes ? "rgba(239,68,68,0.14)" : "rgba(148,163,184,0.1)"),
-                            satisfecho ? "#22c55e" : (pendientes ? "#ef4444" : "#94a3b8"),
-                            satisfecho ? "#4ade80" : (pendientes ? "#f87171" : (enviadoManual ? "#fff" : "#94a3b8")))}>
+                          style={modBtn(satisfecho ? "rgba(16,217,142,0.12)" : (pendientes ? "rgba(225,29,72,0.14)" : "rgba(148,163,184,0.1)"),
+                            satisfecho ? "#10d98e" : (pendientes ? "#e11d48" : "#94a3b8"),
+                            satisfecho ? "#34eab9" : (pendientes ? "#fb7185" : (enviadoManual ? "#fff" : "#94a3b8")))}>
                           <i className="fa fa-gavel"></i> Reparos E. Título{satisfecho ? " ✅ resueltos" : (items.length ? ` (${pendientes} pendiente${pendientes === 1 ? "" : "s"})` : "")}
                         </button>
                       );
@@ -1759,7 +1759,7 @@ export default function ClientesModule({ onNavigate }) {
                     </button>
                     <button data-testid={`btn-escrituracion-toggle-${f.id}`} onClick={() => toggleEscrituracion(f)}
                       title={f.is_escrituracion ? "Devolver esta carpeta a Solicitudes de Crédito" : "Mover esta carpeta a la pestaña Escrituración"}
-                      style={modBtn(f.is_escrituracion ? "rgba(148,163,184,0.12)" : "rgba(168,85,247,0.12)", f.is_escrituracion ? "#94a3b8" : "#a855f7", enviadoManual ? "#fff" : (f.is_escrituracion ? "#94a3b8" : "#9333ea"))}>
+                      style={modBtn(f.is_escrituracion ? "rgba(148,163,184,0.12)" : "rgba(46,92,230,0.12)", f.is_escrituracion ? "#94a3b8" : "#2e5ce6", enviadoManual ? "#fff" : (f.is_escrituracion ? "#94a3b8" : "#9333ea"))}>
                       <i className="fa fa-exchange"></i> {f.is_escrituracion ? "Devolver a Clientes" : "Mover a Escrituración"}
                     </button>
                     <button data-testid={`btn-historial-${f.id}`} onClick={() => openHistorial(f)}
@@ -1788,7 +1788,7 @@ export default function ClientesModule({ onNavigate }) {
                 <i className={`fa ${loading ? "fa-spinner fa-spin" : "fa-envelope"}`}></i> Buscar Adjuntos
               </button>
               <button className="docs-btn secondary" onClick={() => document.getElementById('manual-upload-input').click()} disabled={uploadingManual} data-testid="btn-upload-manual"
-                style={{ background: "rgba(139,92,246,0.15)", border: "1px solid #8b5cf6", color: "#a78bfa" }}>
+                style={{ background: "rgba(46,92,230,0.15)", border: "1px solid #2e5ce6", color: "#a78bfa" }}>
                 <i className={`fa ${uploadingManual ? "fa-spinner fa-spin" : "fa-upload"}`}></i> {uploadingManual ? "Subiendo…" : "Subir Archivo"}
               </button>
               <input id="manual-upload-input" type="file" multiple style={{ display: "none" }} onChange={handleManualUpload}
@@ -1808,11 +1808,11 @@ export default function ClientesModule({ onNavigate }) {
                 <i className="fa fa-dollar"></i> Datos Financieros
               </button>
               <button className="docs-btn secondary" onClick={() => openEmailModal(currentFolder)} data-testid="btn-send-autocorreo-detail"
-                style={{ background: "#16a34a", border: "1px solid #15803d", color: "#fff", fontWeight: 600 }}>
+                style={{ background: "#10c98a", border: "1px solid #0e9f6e", color: "#fff", fontWeight: 600 }}>
                 <i className="fa fa-paper-plane"></i> Enviar a Mesa
               </button>
               <button className="docs-btn secondary" onClick={() => openMissingDocsModal(currentFolder)} data-testid="btn-missing-docs-detail"
-                style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.5)", color: "#f87171" }}>
+                style={{ background: "rgba(225,29,72,0.15)", border: "1px solid rgba(225,29,72,0.5)", color: "#fb7185" }}>
                 <i className="fa fa-exclamation-triangle"></i> Documento Faltante
               </button>
               <button className="docs-btn secondary" onClick={() => agregarCodeudor(currentFolder)} data-testid={`btn-agregar-codeudor-${currentFolder.id}`}
@@ -1839,7 +1839,7 @@ export default function ClientesModule({ onNavigate }) {
                   </span>
                 </h5>
                 <div style={{ display: "flex", gap: 6 }}>
-                  <button className="docs-btn secondary" onClick={() => runOcrFin(currentFolder.id)} disabled={ocrRunning || finSaving} style={{ background: "#7c3aed", color: "#fff", border: "none", padding: "0.35rem 0.7rem", fontSize: 12 }}>
+                  <button className="docs-btn secondary" onClick={() => runOcrFin(currentFolder.id)} disabled={ocrRunning || finSaving} style={{ background: "#1e46c0", color: "#fff", border: "none", padding: "0.35rem 0.7rem", fontSize: 12 }}>
                     <i className="fa fa-magic" /> {ocrRunning ? "Leyendo PDFs..." : "Autodetectar con IA"}
                   </button>
                   <button className="docs-btn primary" onClick={() => saveFinPanel(currentFolder.id)} disabled={finSaving} style={{ padding: "0.35rem 0.7rem", fontSize: 12 }}>
@@ -1859,19 +1859,19 @@ export default function ClientesModule({ onNavigate }) {
                     </div>
                   );
                 })()}
-                <label style={{ fontSize: 12, color: "#dc2626", fontWeight: 700 }}><b style={{ display: "block", color: "#dc2626", fontWeight: 800 }}>Inmobiliaria</b>
+                <label style={{ fontSize: 12, color: "#be123c", fontWeight: 700 }}><b style={{ display: "block", color: "#be123c", fontWeight: 800 }}>Inmobiliaria</b>
                   <input type="text" value={finDraft.inmobiliaria || ""} onChange={(e) => setFinDraft({ ...finDraft, inmobiliaria: e.target.value })} style={{ width: "100%", padding: "0.4rem 0.5rem", borderRadius: 0, border: "1px solid #94a3b8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }} />
                 </label>
-                <label style={{ fontSize: 12, color: "#dc2626", fontWeight: 700 }}><b style={{ display: "block", color: "#dc2626", fontWeight: 800 }}>Proyecto</b>
+                <label style={{ fontSize: 12, color: "#be123c", fontWeight: 700 }}><b style={{ display: "block", color: "#be123c", fontWeight: 800 }}>Proyecto</b>
                   <input type="text" value={finDraft.proyecto || ""} onChange={(e) => setFinDraft({ ...finDraft, proyecto: e.target.value })} style={{ width: "100%", padding: "0.4rem 0.5rem", borderRadius: 0, border: "1px solid #94a3b8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }} />
                 </label>
-                <label style={{ fontSize: 12, gridColumn: "1 / -1", color: "#dc2626", fontWeight: 700 }}><b style={{ display: "block", color: "#dc2626", fontWeight: 800 }}>Tipo de operación</b>
+                <label style={{ fontSize: 12, gridColumn: "1 / -1", color: "#be123c", fontWeight: 700 }}><b style={{ display: "block", color: "#be123c", fontWeight: 800 }}>Tipo de operación</b>
                   <select value={finDraft.con_subsidio ? "con" : "sin"} onChange={(e) => setFinDraft({ ...finDraft, con_subsidio: e.target.value === "con" })} style={{ width: "100%", padding: "0.4rem 0.5rem", borderRadius: 0, border: "1px solid #94a3b8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }}>
                     <option value="con">CON subsidio (DS1 / DS19)</option>
                     <option value="sin">SIN subsidio</option>
                   </select>
                 </label>
-                <label style={{ fontSize: 12, color: "#dc2626", fontWeight: 700 }}><b style={{ display: "block", color: "#dc2626", fontWeight: 800 }}>Tipo propiedad</b>
+                <label style={{ fontSize: 12, color: "#be123c", fontWeight: 700 }}><b style={{ display: "block", color: "#be123c", fontWeight: 800 }}>Tipo propiedad</b>
                   <select value={finDraft.tipo_propiedad || ""} onChange={(e) => setFinDraft({ ...finDraft, tipo_propiedad: e.target.value })} style={{ width: "100%", padding: "0.4rem 0.5rem", borderRadius: 0, border: "1px solid #94a3b8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }}>
                     <option value="">— seleccionar —</option>
                     <option value="Departamento">Departamento</option>
@@ -1882,35 +1882,35 @@ export default function ClientesModule({ onNavigate }) {
                     <option value="Bodega">Bodega</option>
                   </select>
                 </label>
-                <label style={{ fontSize: 12, color: "#dc2626", fontWeight: 700 }}><b style={{ display: "block", color: "#dc2626", fontWeight: 800 }}>Fecha de entrega</b>
+                <label style={{ fontSize: 12, color: "#be123c", fontWeight: 700 }}><b style={{ display: "block", color: "#be123c", fontWeight: 800 }}>Fecha de entrega</b>
                   <select value={finDraft.fecha_entrega || ""} onChange={(e) => setFinDraft({ ...finDraft, fecha_entrega: e.target.value })} data-testid="fin-fecha-entrega-detail" style={{ width: "100%", padding: "0.4rem 0.5rem", borderRadius: 0, border: "1px solid #94a3b8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }}>
                     <option value="">— seleccionar —</option>
                     <option value="inmediata">Inmediata</option>
                     <option value="futura">Futura</option>
                   </select>
                 </label>
-                <label style={{ fontSize: 12, color: "#dc2626", fontWeight: 700 }}><b style={{ display: "block", color: "#dc2626", fontWeight: 800 }}>Valor propiedad (UF)</b>
+                <label style={{ fontSize: 12, color: "#be123c", fontWeight: 700 }}><b style={{ display: "block", color: "#be123c", fontWeight: 800 }}>Valor propiedad (UF)</b>
                   <input type="number" step="0.01" value={finDraft.valor_propiedad || ""} onChange={(e) => setFinDraft({ ...finDraft, valor_propiedad: e.target.value })} style={{ width: "100%", padding: "0.35rem", borderRadius: 0, border: "1px solid #d4d4d8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }} />
                 </label>
                 {finDraft.con_subsidio && (
-                  <label style={{ fontSize: 12, color: "#dc2626", fontWeight: 700 }}><b style={{ display: "block", color: "#dc2626", fontWeight: 800 }}>Subsidio (UF)</b>
+                  <label style={{ fontSize: 12, color: "#be123c", fontWeight: 700 }}><b style={{ display: "block", color: "#be123c", fontWeight: 800 }}>Subsidio (UF)</b>
                     <input type="number" step="0.01" value={finDraft.monto_subsidio || ""} onChange={(e) => setFinDraft({ ...finDraft, monto_subsidio: e.target.value })} style={{ width: "100%", padding: "0.35rem", borderRadius: 0, border: "1px solid #d4d4d8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }} />
                   </label>
                 )}
                 {finDraft.con_subsidio && (
-                  <label style={{ fontSize: 12, color: "#dc2626", fontWeight: 700 }}><b style={{ display: "block", color: "#dc2626", fontWeight: 800 }}>Ahorro (UF)</b>
+                  <label style={{ fontSize: 12, color: "#be123c", fontWeight: 700 }}><b style={{ display: "block", color: "#be123c", fontWeight: 800 }}>Ahorro (UF)</b>
                     <input type="number" step="0.01" value={finDraft.ahorro || ""} onChange={(e) => setFinDraft({ ...finDraft, ahorro: e.target.value })} style={{ width: "100%", padding: "0.35rem", borderRadius: 0, border: "1px solid #d4d4d8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }} />
                   </label>
                 )}
                 {!finDraft.con_subsidio && (
-                  <label style={{ fontSize: 12, color: "#dc2626", fontWeight: 700 }}><b style={{ display: "block", color: "#dc2626", fontWeight: 800 }}>Pie (UF)</b>
+                  <label style={{ fontSize: 12, color: "#be123c", fontWeight: 700 }}><b style={{ display: "block", color: "#be123c", fontWeight: 800 }}>Pie (UF)</b>
                     <input type="number" step="0.01" value={finDraft.monto_pie || ""} onChange={(e) => setFinDraft({ ...finDraft, monto_pie: e.target.value })} style={{ width: "100%", padding: "0.35rem", borderRadius: 0, border: "1px solid #d4d4d8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }} />
                   </label>
                 )}
-                <label style={{ fontSize: 12, color: "#dc2626", fontWeight: 700 }}><b style={{ display: "block", color: "#dc2626", fontWeight: 800 }}>Monto crédito (UF)</b>
+                <label style={{ fontSize: 12, color: "#be123c", fontWeight: 700 }}><b style={{ display: "block", color: "#be123c", fontWeight: 800 }}>Monto crédito (UF)</b>
                   <input type="number" step="0.01" value={finDraft.monto_credito || ""} onChange={(e) => setFinDraft({ ...finDraft, monto_credito: e.target.value })} style={{ width: "100%", padding: "0.35rem", borderRadius: 0, border: "1px solid #d4d4d8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }} />
                 </label>
-                <label style={{ fontSize: 12, color: "#dc2626", fontWeight: 700 }}><b style={{ display: "block", color: "#dc2626", fontWeight: 800 }}>Reserva (UF)</b>
+                <label style={{ fontSize: 12, color: "#be123c", fontWeight: 700 }}><b style={{ display: "block", color: "#be123c", fontWeight: 800 }}>Reserva (UF)</b>
                   <input type="number" step="0.01" value={finDraft.monto_reserva || ""} onChange={(e) => setFinDraft({ ...finDraft, monto_reserva: e.target.value })} style={{ width: "100%", padding: "0.35rem", borderRadius: 0, border: "1px solid #d4d4d8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }} />
                 </label>
               </div>
@@ -2003,7 +2003,7 @@ export default function ClientesModule({ onNavigate }) {
                     const r = await axios.get(`${API}/api/clientes/folders/${currentFolder.id}`);
                     setCurrentFolder(r.data);
                   }}
-                  style={{ marginLeft: 6, color: "#dc2626", borderColor: "#dc2626" }}
+                  style={{ marginLeft: 6, color: "#be123c", borderColor: "#be123c" }}
                 >
                   <i className="fa fa-trash"></i>
                 </button>
@@ -2013,8 +2013,8 @@ export default function ClientesModule({ onNavigate }) {
                 <>
                   {titularFiles.map(renderFile)}
                   {codFiles.length > 0 && (
-                    <div data-testid="codeudor-subfolder" style={{ marginTop: 14, border: "1.5px dashed #8b5cf6", borderRadius: 0, padding: "10px 12px", background: "rgba(139,92,246,0.06)" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, color: "#7c3aed", fontWeight: 800, fontSize: 13 }}>
+                    <div data-testid="codeudor-subfolder" style={{ marginTop: 14, border: "1.5px dashed #2e5ce6", borderRadius: 0, padding: "10px 12px", background: "rgba(46,92,230,0.06)" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, color: "#1e46c0", fontWeight: 800, fontSize: 13 }}>
                         <i className="fa fa-folder"></i> Subcarpeta Codeudor{currentFolder.codeudor_nombre ? `: ${currentFolder.codeudor_nombre}` : ""}
                         <span style={{ fontWeight: 600, opacity: 0.7 }}>({codFiles.length} archivo{codFiles.length !== 1 ? "s" : ""})</span>
                       </div>
@@ -2130,7 +2130,7 @@ export default function ClientesModule({ onNavigate }) {
                 const cod = cr.codeudor || {};
                 const isEditing = editingId === f.id;
                 return (
-                  <div key={f.id} className="clientes-card" style={{ padding: "1rem", flexDirection: "column", alignItems: "stretch", borderLeft: cr.manual_override ? "3px solid #8b5cf6" : "" }} data-testid={`ajuste-${f.id}`}>
+                  <div key={f.id} className="clientes-card" style={{ padding: "1rem", flexDirection: "column", alignItems: "stretch", borderLeft: cr.manual_override ? "3px solid #2e5ce6" : "" }} data-testid={`ajuste-${f.id}`}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem", gap: "0.5rem", flexWrap: "wrap" }}>
                       <h4 style={{ margin: 0 }}>
                         <i className="fa fa-user"></i> {f.nombre}
@@ -2156,7 +2156,7 @@ export default function ClientesModule({ onNavigate }) {
                             <i className="fa fa-dollar" /> Datos financieros
                           </button>
                           {cr.manual_override && (
-                            <button className="docs-btn secondary" style={{ padding: "0.3rem 0.6rem", fontSize: 12, color: "#ef4444" }} onClick={() => resetEdit(f.id)} data-testid={`btn-reset-${f.id}`}>
+                            <button className="docs-btn secondary" style={{ padding: "0.3rem 0.6rem", fontSize: 12, color: "#e11d48" }} onClick={() => resetEdit(f.id)} data-testid={`btn-reset-${f.id}`}>
                               <i className="fa fa-undo" /> Volver a auto
                             </button>
                           )}
@@ -2165,7 +2165,7 @@ export default function ClientesModule({ onNavigate }) {
                     </div>
 
                     {isEditing && (
-                      <div data-testid={`edit-form-${f.id}`} style={{ background: "rgba(139,92,246,0.08)", border: "1px solid #8b5cf6", borderRadius: 0, padding: "0.9rem", marginBottom: "0.6rem", display: "grid", gap: "0.7rem", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
+                      <div data-testid={`edit-form-${f.id}`} style={{ background: "rgba(46,92,230,0.08)", border: "1px solid #2e5ce6", borderRadius: 0, padding: "0.9rem", marginBottom: "0.6rem", display: "grid", gap: "0.7rem", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
                         <label style={{ fontSize: 12 }}>
                           <b style={{ display: "block", marginBottom: 4 }}>¿Es solicitud?</b>
                           <select value={editDraft.is_request ? "si" : "no"} onChange={(e) => setEditDraft({ ...editDraft, is_request: e.target.value === "si" })} data-testid={`edit-is-request-${f.id}`} style={{ width: "100%", padding: "0.35rem", borderRadius: 0, border: "1px solid #d4d4d8" }}>
@@ -2199,7 +2199,7 @@ export default function ClientesModule({ onNavigate }) {
                           <button className="docs-btn secondary" onClick={cancelEdit} data-testid={`btn-cancel-${f.id}`} disabled={savingEdit}>
                             <i className="fa fa-times" /> Cancelar
                           </button>
-                          <button className="docs-btn" style={{ background: "#8b5cf6", color: "#fff" }} onClick={() => saveEdit(f.id)} data-testid={`btn-save-${f.id}`} disabled={savingEdit}>
+                          <button className="docs-btn" style={{ background: "#2e5ce6", color: "#fff" }} onClick={() => saveEdit(f.id)} data-testid={`btn-save-${f.id}`} disabled={savingEdit}>
                             <i className="fa fa-check" /> {savingEdit ? "Guardando..." : "Guardar"}
                           </button>
                         </div>
@@ -2219,7 +2219,7 @@ export default function ClientesModule({ onNavigate }) {
                         onClick={() => triggerUpload(f.id, "")}
                         data-testid={`btn-upload-file-${f.id}`}
                         disabled={uploadingFor === f.id}
-                        style={{ background: "rgba(34,197,94,0.15)", border: "1px solid rgba(34,197,94,0.5)", color: "#4ade80", borderRadius: 0, padding: "4px 10px", cursor: "pointer", fontSize: 12 }}
+                        style={{ background: "rgba(16,217,142,0.15)", border: "1px solid rgba(16,217,142,0.5)", color: "#34eab9", borderRadius: 0, padding: "4px 10px", cursor: "pointer", fontSize: 12 }}
                         title="Subir archivo manualmente"
                       >
                         <i className={`fa ${uploadingFor === f.id ? "fa-spinner fa-spin" : "fa-plus"}`} /> Agregar archivo
@@ -2245,7 +2245,7 @@ export default function ClientesModule({ onNavigate }) {
                         onClick={() => mergeSelected(f.id)}
                         data-testid={`btn-merge-${f.id}`}
                         disabled={merging || selectionCount(f.id) < 1}
-                        style={{ background: "rgba(168,85,247,0.15)", border: "1px solid rgba(168,85,247,0.5)", color: "#c084fc", borderRadius: 0, padding: "4px 10px", cursor: selectionCount(f.id) < 1 ? "not-allowed" : "pointer", opacity: selectionCount(f.id) < 1 ? 0.5 : 1, fontSize: 12 }}
+                        style={{ background: "rgba(46,92,230,0.15)", border: "1px solid rgba(46,92,230,0.5)", color: "#c084fc", borderRadius: 0, padding: "4px 10px", cursor: selectionCount(f.id) < 1 ? "not-allowed" : "pointer", opacity: selectionCount(f.id) < 1 ? 0.5 : 1, fontSize: 12 }}
                         title="Combinar PDFs seleccionados en un único archivo"
                       >
                         <i className={`fa ${merging ? "fa-spinner fa-spin" : "fa-object-group"}`} /> Combinar PDFs
@@ -2274,38 +2274,38 @@ export default function ClientesModule({ onNavigate }) {
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.6rem" }}>
                           <h5 style={{ margin: 0, color: "#b8942e" }}><i className="fa fa-dollar" /> Datos financieros del cliente</h5>
                           <div style={{ display: "flex", gap: 6 }}>
-                            <button className="docs-btn secondary" onClick={() => runOcrFin(f.id)} data-testid={`btn-ocr-${f.id}`} disabled={ocrRunning || finSaving} style={{ background: "#7c3aed", color: "#fff", border: "none", padding: "0.35rem 0.7rem", fontSize: 12 }}>
+                            <button className="docs-btn secondary" onClick={() => runOcrFin(f.id)} data-testid={`btn-ocr-${f.id}`} disabled={ocrRunning || finSaving} style={{ background: "#1e46c0", color: "#fff", border: "none", padding: "0.35rem 0.7rem", fontSize: 12 }}>
                               <i className="fa fa-magic" /> {ocrRunning ? "Leyendo PDFs..." : "Leer con OCR"}
                             </button>
                             <button className="docs-btn secondary" onClick={closeFinPanel} disabled={ocrRunning || finSaving} style={{ padding: "0.35rem 0.7rem", fontSize: 12 }}>Cerrar</button>
                           </div>
                         </div>
                         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "0.5rem" }}>
-                          <label style={{ fontSize: 12, color: "#dc2626", fontWeight: 700 }}>
-                            <b style={{ display: "block", color: "#dc2626", fontWeight: 800 }}>Cliente</b>
+                          <label style={{ fontSize: 12, color: "#be123c", fontWeight: 700 }}>
+                            <b style={{ display: "block", color: "#be123c", fontWeight: 800 }}>Cliente</b>
                             <input type="text" value={f.nombre} readOnly style={{ width: "100%", padding: "0.4rem 0.5rem", borderRadius: 0, background: "#f1f5f9", border: "1px solid #94a3b8", fontSize: 13, color: "#000", fontWeight: 600 }} />
                           </label>
-                          <label style={{ fontSize: 12, color: "#dc2626", fontWeight: 700 }}>
-                            <b style={{ display: "block", color: "#dc2626", fontWeight: 800 }}>RUT</b>
+                          <label style={{ fontSize: 12, color: "#be123c", fontWeight: 700 }}>
+                            <b style={{ display: "block", color: "#be123c", fontWeight: 800 }}>RUT</b>
                             <input type="text" value={f.rut || ""} readOnly style={{ width: "100%", padding: "0.4rem 0.5rem", borderRadius: 0, background: "#f1f5f9", border: "1px solid #94a3b8", fontSize: 13, color: "#000", fontWeight: 600 }} />
                           </label>
-                          <label style={{ fontSize: 12, color: "#dc2626", fontWeight: 700 }}>
-                            <b style={{ display: "block", color: "#dc2626", fontWeight: 800 }}>Proyecto</b>
+                          <label style={{ fontSize: 12, color: "#be123c", fontWeight: 700 }}>
+                            <b style={{ display: "block", color: "#be123c", fontWeight: 800 }}>Proyecto</b>
                             <input type="text" value={finDraft.proyecto || ""} onChange={(e) => setFinDraft({ ...finDraft, proyecto: e.target.value })} data-testid={`fin-proyecto-${f.id}`} style={{ width: "100%", padding: "0.4rem 0.5rem", borderRadius: 0, border: "1px solid #94a3b8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }} />
                           </label>
-                          <label style={{ fontSize: 12, color: "#dc2626", fontWeight: 700 }}>
-                            <b style={{ display: "block", color: "#dc2626", fontWeight: 800 }}>Inmobiliaria</b>
+                          <label style={{ fontSize: 12, color: "#be123c", fontWeight: 700 }}>
+                            <b style={{ display: "block", color: "#be123c", fontWeight: 800 }}>Inmobiliaria</b>
                             <input type="text" value={finDraft.inmobiliaria || ""} onChange={(e) => setFinDraft({ ...finDraft, inmobiliaria: e.target.value })} data-testid={`fin-inmobiliaria-${f.id}`} style={{ width: "100%", padding: "0.4rem 0.5rem", borderRadius: 0, border: "1px solid #94a3b8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }} />
                           </label>
-                          <label style={{ fontSize: 12, gridColumn: "1 / -1", color: "#dc2626", fontWeight: 700 }}>
-                            <b style={{ display: "block", color: "#dc2626", fontWeight: 800 }}>Tipo de operación</b>
+                          <label style={{ fontSize: 12, gridColumn: "1 / -1", color: "#be123c", fontWeight: 700 }}>
+                            <b style={{ display: "block", color: "#be123c", fontWeight: 800 }}>Tipo de operación</b>
                             <select value={finDraft.con_subsidio ? "con" : "sin"} onChange={(e) => setFinDraft({ ...finDraft, con_subsidio: e.target.value === "con" })} data-testid={`fin-subsidy-${f.id}`} style={{ width: "100%", padding: "0.4rem 0.5rem", borderRadius: 0, border: "1px solid #94a3b8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }}>
                               <option value="con">CON subsidio (DS1 / DS19)</option>
                               <option value="sin">SIN subsidio</option>
                             </select>
                           </label>
-                          <label style={{ fontSize: 12, color: "#dc2626", fontWeight: 700 }}>
-                            <b style={{ display: "block", color: "#dc2626", fontWeight: 800 }}>Tipo propiedad</b>
+                          <label style={{ fontSize: 12, color: "#be123c", fontWeight: 700 }}>
+                            <b style={{ display: "block", color: "#be123c", fontWeight: 800 }}>Tipo propiedad</b>
                             <select value={finDraft.tipo_propiedad || ""} onChange={(e) => setFinDraft({ ...finDraft, tipo_propiedad: e.target.value })} data-testid={`fin-tipo-prop-${f.id}`} style={{ width: "100%", padding: "0.4rem 0.5rem", borderRadius: 0, border: "1px solid #94a3b8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }}>
                               <option value="">— seleccioná —</option>
                               <option value="Departamento">Departamento</option>
@@ -2316,42 +2316,42 @@ export default function ClientesModule({ onNavigate }) {
                               <option value="Bodega">Bodega</option>
                             </select>
                           </label>
-                          <label style={{ fontSize: 12, color: "#dc2626", fontWeight: 700 }}>
-                            <b style={{ display: "block", color: "#dc2626", fontWeight: 800 }}>Fecha de entrega</b>
+                          <label style={{ fontSize: 12, color: "#be123c", fontWeight: 700 }}>
+                            <b style={{ display: "block", color: "#be123c", fontWeight: 800 }}>Fecha de entrega</b>
                             <select value={finDraft.fecha_entrega || ""} onChange={(e) => setFinDraft({ ...finDraft, fecha_entrega: e.target.value })} data-testid={`fin-fecha-entrega-${f.id}`} style={{ width: "100%", padding: "0.4rem 0.5rem", borderRadius: 0, border: "1px solid #94a3b8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }}>
                               <option value="">— seleccioná —</option>
                               <option value="inmediata">Inmediata</option>
                               <option value="futura">Futura</option>
                             </select>
                           </label>
-                          <label style={{ fontSize: 12, color: "#dc2626", fontWeight: 700 }}>
-                            <b style={{ display: "block", color: "#dc2626", fontWeight: 800 }}>Valor propiedad (UF)</b>
+                          <label style={{ fontSize: 12, color: "#be123c", fontWeight: 700 }}>
+                            <b style={{ display: "block", color: "#be123c", fontWeight: 800 }}>Valor propiedad (UF)</b>
                             <UFAmountInput value={finDraft.valor_propiedad} onChange={(v) => setFinDraft({ ...finDraft, valor_propiedad: v })} uf={ufValue} dataTestid={`fin-valor-${f.id}`} />
                           </label>
                           {finDraft.con_subsidio && (
-                            <label style={{ fontSize: 12, color: "#dc2626", fontWeight: 700 }}>
-                              <b style={{ display: "block", color: "#dc2626", fontWeight: 800 }}>Monto subsidio (UF)</b>
+                            <label style={{ fontSize: 12, color: "#be123c", fontWeight: 700 }}>
+                              <b style={{ display: "block", color: "#be123c", fontWeight: 800 }}>Monto subsidio (UF)</b>
                               <UFAmountInput value={finDraft.monto_subsidio} onChange={(v) => setFinDraft({ ...finDraft, monto_subsidio: v })} uf={ufValue} dataTestid={`fin-subsidio-${f.id}`} />
                             </label>
                           )}
                           {finDraft.con_subsidio && (
-                            <label style={{ fontSize: 12, color: "#dc2626", fontWeight: 700 }}>
-                              <b style={{ display: "block", color: "#dc2626", fontWeight: 800 }}>Ahorro (UF)</b>
+                            <label style={{ fontSize: 12, color: "#be123c", fontWeight: 700 }}>
+                              <b style={{ display: "block", color: "#be123c", fontWeight: 800 }}>Ahorro (UF)</b>
                               <UFAmountInput value={finDraft.ahorro} onChange={(v) => setFinDraft({ ...finDraft, ahorro: v })} uf={ufValue} dataTestid={`fin-ahorro-${f.id}`} />
                             </label>
                           )}
                           {!finDraft.con_subsidio && (
-                            <label style={{ fontSize: 12, color: "#dc2626", fontWeight: 700 }}>
-                              <b style={{ display: "block", color: "#dc2626", fontWeight: 800 }}>Pie (UF)</b>
+                            <label style={{ fontSize: 12, color: "#be123c", fontWeight: 700 }}>
+                              <b style={{ display: "block", color: "#be123c", fontWeight: 800 }}>Pie (UF)</b>
                               <UFAmountInput value={finDraft.monto_pie} onChange={(v) => setFinDraft({ ...finDraft, monto_pie: v })} uf={ufValue} dataTestid={`fin-pie-${f.id}`} />
                             </label>
                           )}
-                          <label style={{ fontSize: 12, color: "#dc2626", fontWeight: 700 }}>
-                            <b style={{ display: "block", color: "#dc2626", fontWeight: 800 }}>Monto del crédito (UF)</b>
+                          <label style={{ fontSize: 12, color: "#be123c", fontWeight: 700 }}>
+                            <b style={{ display: "block", color: "#be123c", fontWeight: 800 }}>Monto del crédito (UF)</b>
                             <UFAmountInput value={finDraft.monto_credito} onChange={(v) => setFinDraft({ ...finDraft, monto_credito: v })} uf={ufValue} dataTestid={`fin-credito-${f.id}`} />
                           </label>
-                          <label style={{ fontSize: 12, color: "#dc2626", fontWeight: 700 }}>
-                            <b style={{ display: "block", color: "#dc2626", fontWeight: 800 }}>Reserva (UF)</b>
+                          <label style={{ fontSize: 12, color: "#be123c", fontWeight: 700 }}>
+                            <b style={{ display: "block", color: "#be123c", fontWeight: 800 }}>Reserva (UF)</b>
                             <UFAmountInput value={finDraft.monto_reserva} onChange={(v) => setFinDraft({ ...finDraft, monto_reserva: v })} uf={ufValue} dataTestid={`fin-reserva-${f.id}`} />
                           </label>
                         </div>
@@ -2403,7 +2403,7 @@ export default function ClientesModule({ onNavigate }) {
                           <button
                             onClick={(e) => { e.preventDefault(); e.stopPropagation(); triggerUpload(f.id, s.name); }}
                             data-testid={`btn-upload-sub-${f.id}-${s.name}`}
-                            style={{ marginLeft: "auto", background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.35)", color: "#4ade80", borderRadius: 0, padding: "1px 8px", cursor: "pointer", fontSize: 11 }}
+                            style={{ marginLeft: "auto", background: "rgba(16,217,142,0.12)", border: "1px solid rgba(16,217,142,0.35)", color: "#34eab9", borderRadius: 0, padding: "1px 8px", cursor: "pointer", fontSize: 11 }}
                             title={`Subir archivo a ${s.name}`}
                           >
                             <i className="fa fa-plus" /> Aquí
@@ -2440,7 +2440,7 @@ export default function ClientesModule({ onNavigate }) {
                                     onClick={() => splitBundled(f.id, rel, ff.name)}
                                     disabled={splittingRel === rel}
                                     data-testid={`aj-split-${f.id}-${ff.name}`}
-                                    style={{ background: "rgba(168,85,247,0.15)", border: "1px solid rgba(168,85,247,0.4)", color: "#c084fc", borderRadius: 0, padding: "2px 8px", cursor: "pointer", fontSize: 11 }}
+                                    style={{ background: "rgba(46,92,230,0.15)", border: "1px solid rgba(46,92,230,0.4)", color: "#c084fc", borderRadius: 0, padding: "2px 8px", cursor: "pointer", fontSize: 11 }}
                                   >
                                     <i className={`fa ${splittingRel === rel ? "fa-spinner fa-spin" : "fa-cut"}`}></i>
                                   </button>
@@ -2457,7 +2457,7 @@ export default function ClientesModule({ onNavigate }) {
                                   title="Eliminar"
                                   onClick={() => deleteClientFile(f.id, rel)}
                                   data-testid={`aj-delete-${f.id}-${ff.name}`}
-                                  style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.4)", color: "#f87171", borderRadius: 0, padding: "2px 8px", cursor: "pointer", fontSize: 11 }}
+                                  style={{ background: "rgba(225,29,72,0.15)", border: "1px solid rgba(225,29,72,0.4)", color: "#fb7185", borderRadius: 0, padding: "2px 8px", cursor: "pointer", fontSize: 11 }}
                                 >
                                   <i className="fa fa-trash"></i>
                                 </button>
@@ -2514,7 +2514,7 @@ export default function ClientesModule({ onNavigate }) {
               <button
                 onClick={closePreview}
                 data-testid="btn-preview-close"
-                style={{ background: "rgba(239,68,68,0.2)", color: "#fca5a5", border: "1px solid rgba(239,68,68,0.4)", borderRadius: 0, padding: "5px 12px", cursor: "pointer", fontSize: 12 }}
+                style={{ background: "rgba(225,29,72,0.2)", color: "#fda4af", border: "1px solid rgba(225,29,72,0.4)", borderRadius: 0, padding: "5px 12px", cursor: "pointer", fontSize: 12 }}
               >
                 <i className="fa fa-times" /> Cerrar
               </button>
@@ -2569,9 +2569,9 @@ export default function ClientesModule({ onNavigate }) {
               </div>
               <div style={{ padding: "1rem 1.1rem", display: "grid", gap: "0.75rem" }}>
                 {m.msg && (
-                  <div data-testid="tasacion-msg" style={{ padding: "0.6rem 0.9rem", borderRadius: 0, background: m.msg.startsWith("✅") ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)", color: m.msg.startsWith("✅") ? "#4ade80" : "#f87171", fontWeight: 600, fontSize: 13 }}>{m.msg}</div>
+                  <div data-testid="tasacion-msg" style={{ padding: "0.6rem 0.9rem", borderRadius: 0, background: m.msg.startsWith("✅") ? "rgba(16,217,142,0.15)" : "rgba(225,29,72,0.15)", color: m.msg.startsWith("✅") ? "#34eab9" : "#fb7185", fontWeight: 600, fontSize: 13 }}>{m.msg}</div>
                 )}
-                <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Destinatarios <span style={{ color: "#4ade80" }}>· la tasación SIEMPRE va a Value Property y Victoria Vilches</span></b>
+                <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Destinatarios <span style={{ color: "#34eab9" }}>· la tasación SIEMPRE va a Value Property y Victoria Vilches</span></b>
                   <input value={m.destinatarios} onChange={e => set("destinatarios", e.target.value)} data-testid="tasacion-destinatarios" style={inpS} />
                 </label>
                 <div style={{ background: "rgba(28,28,30,0.7)", borderRadius: 0, padding: "0.5rem 0.9rem", fontSize: 12, opacity: 0.85 }}>
@@ -2597,7 +2597,7 @@ export default function ClientesModule({ onNavigate }) {
                   </label>
                 </div>
                 {m.modalidad === "inmobiliaria" && (
-                  <div style={{ background: "rgba(139,92,246,0.08)", border: "1px solid rgba(139,92,246,0.3)", borderRadius: 0, padding: "0.7rem 0.9rem", display: "grid", gap: "0.6rem" }}>
+                  <div style={{ background: "rgba(46,92,230,0.08)", border: "1px solid rgba(46,92,230,0.3)", borderRadius: 0, padding: "0.7rem 0.9rem", display: "grid", gap: "0.6rem" }}>
                     <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Inmobiliaria <span style={{ opacity: 0.6 }}>(si ya tiene plantilla guardada, autocompleta el contacto)</span></b>
                       <input value={m.inmobiliaria} onChange={e => pickInmoPlantilla(e.target.value)} list="inmo-plantillas" placeholder="Ej: Ecomac" data-testid="tasacion-inmobiliaria" style={inpS} />
                       <datalist id="inmo-plantillas">
@@ -2632,7 +2632,7 @@ export default function ClientesModule({ onNavigate }) {
                     <BrokersPanel brokers={brokers} dest={""} setDest={() => {}} reloadBrokers={reloadBrokers} soloAdmin />
                   </div>
                 )}
-                <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Dirección de la propiedad <span style={{ color: "#f87171" }}>*</span></b>
+                <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Dirección de la propiedad <span style={{ color: "#fb7185" }}>*</span></b>
                   <input value={m.direccion} onChange={e => set("direccion", e.target.value)} placeholder="Ej: ELISA CORREA 527, LOS SAUCES, LA FLORIDA" data-testid="tasacion-direccion" style={inpS} />
                 </label>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.75rem" }}>
@@ -2682,7 +2682,7 @@ export default function ClientesModule({ onNavigate }) {
                   <div style={{ opacity: 0.85, fontSize: 11, textTransform: "uppercase", fontWeight: 700, color: "#d4af37" }}>Voucher de pago de la tasación</div>
                   <input type="file" accept=".pdf,.jpg,.jpeg,.png" data-testid="tasacion-voucher-input"
                     onChange={e => subirVoucher(e.target.files[0])} style={{ fontSize: 12 }} />
-                  {m.voucher_nombre && <div style={{ fontSize: 12, color: "#4ade80" }}>✅ {m.voucher_nombre} — se adjunta y el correo dirá "Adjunto voucher de pago tasación"</div>}
+                  {m.voucher_nombre && <div style={{ fontSize: 12, color: "#34eab9" }}>✅ {m.voucher_nombre} — se adjunta y el correo dirá "Adjunto voucher de pago tasación"</div>}
                 </div>
                 <div style={{ background: "rgba(234,88,12,0.08)", border: "1px solid rgba(234,88,12,0.3)", borderRadius: 0, padding: "0.7rem 0.9rem", display: "flex", gap: 8, alignItems: "end", flexWrap: "wrap" }}>
                   <label style={{ ...lblS, flex: 1, minWidth: 200 }}><b style={{ display: "block", marginBottom: 4 }}>📅 Fecha de tasación informada por Value Property</b>
@@ -2761,7 +2761,7 @@ export default function ClientesModule({ onNavigate }) {
               </div>
               <div style={{ padding: "1rem 1.1rem", display: "grid", gap: "0.75rem" }}>
                 {m.msg && (
-                  <div data-testid="estudio-msg" style={{ padding: "0.6rem 0.9rem", borderRadius: 0, background: m.msg.startsWith("✅") ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)", color: m.msg.startsWith("✅") ? "#4ade80" : "#f87171", fontWeight: 600, fontSize: 13 }}>{m.msg}</div>
+                  <div data-testid="estudio-msg" style={{ padding: "0.6rem 0.9rem", borderRadius: 0, background: m.msg.startsWith("✅") ? "rgba(16,217,142,0.15)" : "rgba(225,29,72,0.15)", color: m.msg.startsWith("✅") ? "#34eab9" : "#fb7185", fontWeight: 600, fontSize: 13 }}>{m.msg}</div>
                 )}
                 <div style={{ display: "flex", gap: 8, alignItems: "center", background: "rgba(212,175,55,0.06)", border: "1px solid rgba(212,175,55,0.25)", borderRadius: 0, padding: "0.5rem 0.9rem", flexWrap: "wrap" }}>
                   <span style={{ fontSize: 12, fontWeight: 700, color: "var(--gold, #d4af37)" }}>📋 Plantillas</span>
@@ -2788,7 +2788,7 @@ export default function ClientesModule({ onNavigate }) {
                   style={{ background: "rgba(212,175,55,0.12)", border: "1.5px solid #d4af37", color: "#d4af37", borderRadius: 0, padding: "0.55rem 1rem", fontSize: 12.5, fontWeight: 800, cursor: "pointer", textAlign: "left" }}>
                   <i className={`fa ${enriching === m.folder.id + "estudio" ? "fa-spinner fa-spin" : "fa-magic"}`}></i> 🔎 Enriquecer archivos del Estudio de Título (busca en el correo · se guardan separados de la solicitud de crédito)
                 </button>
-                <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Destinatarios <span style={{ color: "#4ade80" }}>· broker seleccionado + Victoria Vilches siempre en copia</span></b>
+                <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Destinatarios <span style={{ color: "#34eab9" }}>· broker seleccionado + Victoria Vilches siempre en copia</span></b>
                   <input value={m.destinatarios} onChange={e => set("destinatarios", e.target.value)} data-testid="estudio-destinatarios" style={inpS} />
                 </label>
                 <BrokersPanel brokers={brokers} dest={m.destinatarios} setDest={(v) => set("destinatarios", v)} reloadBrokers={reloadBrokers} />
@@ -2799,7 +2799,7 @@ export default function ClientesModule({ onNavigate }) {
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
                     {m.folder.source_email && !String(m.cc || "").toLowerCase().includes(String(m.folder.source_email).toLowerCase()) && (
                       <button data-testid="cc-add-cliente" onClick={() => set("cc", [m.cc, m.folder.source_email].filter(Boolean).join(", "))}
-                        style={{ background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.4)", color: "#4ade80", borderRadius: 0, padding: "3px 10px", fontSize: 11.5, cursor: "pointer" }}>
+                        style={{ background: "rgba(16,217,142,0.12)", border: "1px solid rgba(16,217,142,0.4)", color: "#34eab9", borderRadius: 0, padding: "3px 10px", fontSize: 11.5, cursor: "pointer" }}>
                         + Cliente/Solicitante ({m.folder.source_email})
                       </button>
                     )}
@@ -2899,7 +2899,7 @@ export default function ClientesModule({ onNavigate }) {
                         <i className={`fa ${m.loading ? "fa-spinner fa-spin" : "fa-paper-plane"}`} /> 📤 Etapa 2: Enviar documentos recibidos a Guillermo Marluf (CC Victoria Vilches)
                       </button>
                       {m.folder.estudio_docs_enviados_abogado_at && (
-                        <div data-testid="estudio-etapa2-badge" style={{ fontSize: 11, color: "#4ade80", fontWeight: 700, marginBottom: 6 }}>
+                        <div data-testid="estudio-etapa2-badge" style={{ fontSize: 11, color: "#34eab9", fontWeight: 700, marginBottom: 6 }}>
                           ✅ Etapa 2 realizada: {(m.folder.estudio_docs_enviados_abogado || []).length} documento(s) enviados el {new Date(m.folder.estudio_docs_enviados_abogado_at).toLocaleString("es-CL")}
                         </div>
                       )}
@@ -2972,13 +2972,13 @@ export default function ClientesModule({ onNavigate }) {
           <div data-testid="pedir-modal" onClick={() => setPedirModal(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9998, padding: "3vh 3vw" }}>
             <div onClick={(e) => e.stopPropagation()} style={{ background: "rgba(14,14,16,0.92)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", color: "#e2e8f0", borderRadius: 0, width: "min(680px, 96vw)", maxHeight: "94vh", overflow: "auto", border: "1px solid rgba(148,163,184,0.25)", boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}>
               <div style={{ padding: "0.9rem 1.1rem", borderBottom: "1px solid rgba(148,163,184,0.2)", display: "flex", alignItems: "center", gap: 10 }}>
-                <i className="fa fa-envelope" style={{ color: "#f87171" }} />
+                <i className="fa fa-envelope" style={{ color: "#fb7185" }} />
                 <h4 style={{ margin: 0, flex: 1 }}>Pedir documentos faltantes — {m.folder.nombre}</h4>
                 <button onClick={() => setPedirModal(null)} data-testid="btn-pedir-close" style={{ background: "transparent", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 18 }}><i className="fa fa-times" /></button>
               </div>
               <div style={{ padding: "1rem 1.1rem", display: "grid", gap: "0.75rem" }}>
                 {m.msg && (
-                  <div data-testid="pedir-msg" style={{ padding: "0.6rem 0.9rem", borderRadius: 0, background: m.msg.startsWith("✅") ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)", color: m.msg.startsWith("✅") ? "#4ade80" : "#f87171", fontWeight: 600, fontSize: 13 }}>{m.msg}</div>
+                  <div data-testid="pedir-msg" style={{ padding: "0.6rem 0.9rem", borderRadius: 0, background: m.msg.startsWith("✅") ? "rgba(16,217,142,0.15)" : "rgba(225,29,72,0.15)", color: m.msg.startsWith("✅") ? "#34eab9" : "#fb7185", fontWeight: 600, fontSize: 13 }}>{m.msg}</div>
                 )}
                 <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Destinatario (quien nos envió la solicitud de crédito)</b>
                   <input value={m.destinatario} onChange={e => set("destinatario", e.target.value)} data-testid="pedir-destinatario" style={inpS} />
@@ -3000,7 +3000,7 @@ export default function ClientesModule({ onNavigate }) {
                     <i className={`fa ${m.loading ? "fa-spinner fa-spin" : "fa-eye"}`} /> Ver preview
                   </button>
                   <button onClick={pedirEnviar} disabled={m.loading || !m.destinatario.includes("@")} data-testid="btn-pedir-enviar"
-                    style={{ padding: "0.55rem 1.1rem", borderRadius: 0, border: "none", background: "#dc2626", color: "#fff", fontWeight: 800, cursor: "pointer", opacity: (m.loading || !m.destinatario.includes("@")) ? 0.6 : 1 }}>
+                    style={{ padding: "0.55rem 1.1rem", borderRadius: 0, border: "none", background: "#be123c", color: "#fff", fontWeight: 800, cursor: "pointer", opacity: (m.loading || !m.destinatario.includes("@")) ? 0.6 : 1 }}>
                     <i className={`fa ${m.loading ? "fa-spinner fa-spin" : "fa-paper-plane"}`} /> Enviar solicitud de faltantes
                   </button>
                 </div>
@@ -3026,12 +3026,12 @@ export default function ClientesModule({ onNavigate }) {
               </div>
               <div style={{ padding: "1rem 1.1rem", display: "grid", gap: "0.75rem" }}>
                 {m.msg && (
-                  <div data-testid="escritura-msg" style={{ padding: "0.6rem 0.9rem", borderRadius: 0, background: m.msg.startsWith("✅") ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)", color: m.msg.startsWith("✅") ? "#4ade80" : "#f87171", fontWeight: 600, fontSize: 13 }}>{m.msg}</div>
+                  <div data-testid="escritura-msg" style={{ padding: "0.6rem 0.9rem", borderRadius: 0, background: m.msg.startsWith("✅") ? "rgba(16,217,142,0.15)" : "rgba(225,29,72,0.15)", color: m.msg.startsWith("✅") ? "#34eab9" : "#fb7185", fontWeight: 600, fontSize: 13 }}>{m.msg}</div>
                 )}
-                <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Correo del cliente <span style={{ color: "#f87171" }}>*</span></b>
+                <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Correo del cliente <span style={{ color: "#fb7185" }}>*</span></b>
                   <input value={m.email_cliente} onChange={e => set("email_cliente", e.target.value)} placeholder="cliente@correo.cl" data-testid="escritura-email" style={inpS} />
                 </label>
-                <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Notaría (por ciudad) <span style={{ color: "#f87171" }}>*</span></b>
+                <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Notaría (por ciudad) <span style={{ color: "#fb7185" }}>*</span></b>
                   <select value={m.notaria_id} onChange={e => set("notaria_id", e.target.value)} data-testid="escritura-notaria" style={inpS}>
                     <option value="">— Seleccionar notaría —</option>
                     {notarias.map(n => <option key={n.id} value={n.id}>{n.ciudad} — {n.nombre} · {n.direccion}</option>)}
@@ -3062,14 +3062,14 @@ export default function ClientesModule({ onNavigate }) {
                   </button>
                 )}
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
-                  <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Día de la firma <span style={{ color: "#f87171" }}>*</span></b>
+                  <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Día de la firma <span style={{ color: "#fb7185" }}>*</span></b>
                     <input type="date" value={m.fecha} onChange={e => set("fecha", e.target.value)} data-testid="escritura-fecha" style={inpS} />
                   </label>
                   <label style={lblS}><b style={{ display: "block", marginBottom: 4 }}>Horario <span style={{ opacity: 0.6 }}>(10:00 por defecto — horario a sugerir si es distinto)</span></b>
                     <input type="time" value={m.hora} onChange={e => set("hora", e.target.value)} data-testid="escritura-hora" style={inpS} />
                   </label>
                 </div>
-                <div style={{ fontSize: 11.5, opacity: 0.75, background: "rgba(34,197,94,0.06)", border: "1px solid rgba(34,197,94,0.25)", borderRadius: 0, padding: "0.5rem 0.8rem", lineHeight: 1.6 }}>
+                <div style={{ fontSize: 11.5, opacity: 0.75, background: "rgba(16,217,142,0.06)", border: "1px solid rgba(16,217,142,0.25)", borderRadius: 0, padding: "0.5rem 0.8rem", lineHeight: 1.6 }}>
                   El cliente recibe el correo con el botón <b>"CONFIRMO QUE ASISTIRÉ"</b>. Al confirmar, indica si va solo, con mandatario y/o codeudor,
                   y se avisa automáticamente a la <b>notaría</b> (si tiene correo) y a <b>Victoria Vilches, Daniela Galindo y Rodrigo Ibáñez</b> con el día, horario y acompañantes.
                 </div>
@@ -3125,7 +3125,7 @@ export default function ClientesModule({ onNavigate }) {
                 <div style={{ background: "rgba(28,28,30,0.7)", borderRadius: 0, padding: "0.7rem 0.9rem", fontSize: 13, lineHeight: 1.5 }}>
                   <div style={{ opacity: 0.7, fontSize: 11, textTransform: "uppercase", marginBottom: 4 }}>Datos que se incluirán en el correo</div>
                   <div><b>Cliente:</b> {f.nombre}</div>
-                  <div><b>RUT:</b> {f.rut || <span style={{ color: "#f87171" }}>— falta</span>}</div>
+                  <div><b>RUT:</b> {f.rut || <span style={{ color: "#fb7185" }}>— falta</span>}</div>
                   <div><b>Tipo:</b> {conSub ? "CON subsidio (DS1 / DS19)" : "SIN subsidio"}</div>
                   <div><b>Inmobiliaria:</b> {df.inmobiliaria || <span style={{ color: "#facc15" }}>— falta (completar en Ver datos financieros)</span>}</div>
                   {df.proyecto && <div><b>Proyecto:</b> {df.proyecto}</div>}
@@ -3138,7 +3138,7 @@ export default function ClientesModule({ onNavigate }) {
                 </div>
 
                 <label style={{ fontSize: 12 }}>
-                  <b style={{ display: "block", marginBottom: 4 }}>Destinatario <span style={{ color: "#f87171" }}>🔒 fijo</span></b>
+                  <b style={{ display: "block", marginBottom: 4 }}>Destinatario <span style={{ color: "#fb7185" }}>🔒 fijo</span></b>
                   <input
                     type="email"
                     value={emailModal.to}
@@ -3146,7 +3146,7 @@ export default function ClientesModule({ onNavigate }) {
                     data-testid="email-to-input"
                     style={{ width: "100%", padding: "0.5rem", borderRadius: 0, border: "1px solid rgba(148,163,184,0.3)", background: "#232326", color: "#e2e8f0", fontSize: 13, cursor: "not-allowed", opacity: 0.85 }}
                   />
-                  <div style={{ marginTop: 6, padding: "6px 10px", borderRadius: 0, background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.4)", color: "#fca5a5", fontSize: 11, fontWeight: 500 }}>
+                  <div style={{ marginTop: 6, padding: "6px 10px", borderRadius: 0, background: "rgba(225,29,72,0.12)", border: "1px solid rgba(225,29,72,0.4)", color: "#fda4af", fontSize: 11, fontWeight: 500 }}>
                     🔒 <b>Regla inviolable</b>: todos los correos a mesa se envían solo a la cuenta Central Mutuos. No se puede modificar el destinatario.
                   </div>
                 </label>
@@ -3178,8 +3178,8 @@ export default function ClientesModule({ onNavigate }) {
                 </label>
 
                 <label style={{ fontSize: 12 }}>
-                  <b style={{ display: "block", marginBottom: 4 }}>Asunto <span style={{ color: "#f87171" }}>🔒 prefijo fijo</span> + texto adicional (opcional)</b>
-                  <div style={{ padding: "0.45rem 0.6rem", borderRadius: 0, background: "rgba(239,68,68,0.08)", border: "1px dashed rgba(239,68,68,0.4)", fontSize: 12, color: "#fca5a5", marginBottom: 6 }} data-testid="email-subject-prefijo">
+                  <b style={{ display: "block", marginBottom: 4 }}>Asunto <span style={{ color: "#fb7185" }}>🔒 prefijo fijo</span> + texto adicional (opcional)</b>
+                  <div style={{ padding: "0.45rem 0.6rem", borderRadius: 0, background: "rgba(225,29,72,0.08)", border: "1px dashed rgba(225,29,72,0.4)", fontSize: 12, color: "#fda4af", marginBottom: 6 }} data-testid="email-subject-prefijo">
                     🔒 {prefijoAsunto}
                   </div>
                   <input
@@ -3254,12 +3254,12 @@ export default function ClientesModule({ onNavigate }) {
                     </span>
                   </div>
                   {(emailModal.preview.missing_docs || []).length > 0 && (
-                    <div data-testid="email-missing-docs-warning" style={{ marginBottom: 8, padding: "8px 12px", borderRadius: 0, background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.5)", color: "#fca5a5", fontSize: 12 }}>
+                    <div data-testid="email-missing-docs-warning" style={{ marginBottom: 8, padding: "8px 12px", borderRadius: 0, background: "rgba(225,29,72,0.12)", border: "1px solid rgba(225,29,72,0.5)", color: "#fda4af", fontSize: 12 }}>
                       <b>🚫 Documentación incompleta — faltan:</b> {emailModal.preview.missing_docs.join(" · ")}
                       <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, cursor: "pointer", color: "#fecaca", fontWeight: 600 }}>
                         <input type="checkbox" checked={!!emailModal.force_incompleto}
                           onChange={(e) => setEmailModal({ ...emailModal, force_incompleto: e.target.checked })}
-                          data-testid="email-force-incompleto" style={{ accentColor: "#ef4444" }} />
+                          data-testid="email-force-incompleto" style={{ accentColor: "#e11d48" }} />
                         Asumo el envío manual con documentación incompleta
                       </label>
                     </div>
@@ -3337,8 +3337,8 @@ export default function ClientesModule({ onNavigate }) {
                       return (
                         <button onClick={confirmSendClientEmail} disabled={emailModal.sending || bloqueado} data-testid="btn-email-send" title={title}
                           style={{
-                            background: bloqueado ? "#7f1d1d" : "#16a34a",
-                            border: `1px solid ${bloqueado ? "#450a0a" : "#15803d"}`,
+                            background: bloqueado ? "#7f1d1d" : "#10c98a",
+                            border: `1px solid ${bloqueado ? "#450a0a" : "#0e9f6e"}`,
                             color: "#fff", borderRadius: 0, padding: "6px 18px",
                             cursor: (emailModal.sending || bloqueado) ? "not-allowed" : "pointer",
                             fontSize: 13, fontWeight: 700,
@@ -3393,20 +3393,20 @@ export default function ClientesModule({ onNavigate }) {
         const p = missingDocsModal.preview;
         return (
           <div data-testid="missing-docs-modal" onClick={closeMissingDocsModal} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9998, padding: "3vh 3vw" }}>
-            <div onClick={(e) => e.stopPropagation()} style={{ background: "rgba(14,14,16,0.92)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", color: "#e2e8f0", borderRadius: 0, width: "min(760px, 96vw)", maxHeight: "94vh", overflow: "auto", border: "1px solid rgba(239,68,68,0.5)", boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}>
+            <div onClick={(e) => e.stopPropagation()} style={{ background: "rgba(14,14,16,0.92)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", color: "#e2e8f0", borderRadius: 0, width: "min(760px, 96vw)", maxHeight: "94vh", overflow: "auto", border: "1px solid rgba(225,29,72,0.5)", boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}>
               <div style={{ padding: "0.9rem 1.1rem", borderBottom: "1px solid rgba(148,163,184,0.2)", display: "flex", alignItems: "center", gap: 10 }}>
-                <i className="fa fa-exclamation-triangle" style={{ color: "#f87171" }} />
+                <i className="fa fa-exclamation-triangle" style={{ color: "#fb7185" }} />
                 <h4 style={{ margin: 0, flex: 1 }}>Correo de documento faltante — {missingDocsModal.folder.nombre}</h4>
                 <button onClick={closeMissingDocsModal} style={{ background: "transparent", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 18 }}><i className="fa fa-times" /></button>
               </div>
               <div style={{ padding: "1rem 1.1rem", display: "grid", gap: "0.75rem" }}>
                 {p && (
                   <>
-                    <div style={{ background: "rgba(239,68,68,0.1)", borderRadius: 0, padding: "0.7rem 0.9rem", fontSize: 13 }}>
+                    <div style={{ background: "rgba(225,29,72,0.1)", borderRadius: 0, padding: "0.7rem 0.9rem", fontSize: 13 }}>
                       <div style={{ opacity: 0.7, fontSize: 11, textTransform: "uppercase", marginBottom: 4 }}>Detección automática</div>
                       <div><b>Cliente tipo:</b> {p.client_type}</div>
                       <div><b>Documentos presentes:</b> {p.present.join(", ") || "ninguno"}</div>
-                      <div style={{ color: "#f87171" }}><b>Documentos faltantes:</b> {p.missing.length > 0 ? p.missing.join(", ") : "ninguno detectado"}</div>
+                      <div style={{ color: "#fb7185" }}><b>Documentos faltantes:</b> {p.missing.length > 0 ? p.missing.join(", ") : "ninguno detectado"}</div>
                       {p.source_email && <div style={{ opacity: 0.75, fontSize: 12, marginTop: 4 }}><b>Origen:</b> {p.source_email}</div>}
                     </div>
                     <label style={{ fontSize: 12 }}><b style={{ display: "block", marginBottom: 4 }}>Destinatario *</b>
@@ -3429,7 +3429,7 @@ export default function ClientesModule({ onNavigate }) {
               <div style={{ padding: "0.8rem 1.1rem", borderTop: "1px solid rgba(148,163,184,0.2)", display: "flex", gap: 8, justifyContent: "flex-end" }}>
                 <button onClick={closeMissingDocsModal} disabled={missingDocsModal.sending} style={{ background: "transparent", border: "1px solid rgba(148,163,184,0.3)", color: "#94a3b8", borderRadius: 0, padding: "6px 14px", cursor: "pointer", fontSize: 13 }}>Cancelar</button>
                 <button onClick={confirmSendMissingDocs} disabled={missingDocsModal.sending || !p} data-testid="btn-missing-send"
-                  style={{ background: "#16a34a", border: "1px solid #15803d", color: "#fff", borderRadius: 0, padding: "6px 18px", cursor: "pointer", fontSize: 13, fontWeight: 700, boxShadow: "0 2px 8px rgba(22,163,74,0.4)" }}>
+                  style={{ background: "#10c98a", border: "1px solid #0e9f6e", color: "#fff", borderRadius: 0, padding: "6px 18px", cursor: "pointer", fontSize: 13, fontWeight: 700, boxShadow: "0 2px 8px rgba(22,163,74,0.4)" }}>
                   <i className={`fa ${missingDocsModal.sending ? "fa-spinner fa-spin" : "fa-paper-plane"}`} /> {missingDocsModal.sending ? "Procesando…" : "Enviar correo"}
                 </button>
               </div>
@@ -3475,17 +3475,17 @@ export default function ClientesModule({ onNavigate }) {
                     </div>
                   )}
                   {(m.sug.cola || []).length > 0 && (
-                    <div style={{ background: "rgba(139,92,246,0.06)", border: "1px dashed rgba(139,92,246,0.4)", borderRadius: 0, padding: "0.6rem 0.8rem" }}>
+                    <div style={{ background: "rgba(46,92,230,0.06)", border: "1px dashed rgba(46,92,230,0.4)", borderRadius: 0, padding: "0.6rem 0.8rem" }}>
                       <div style={{ fontSize: 11, fontWeight: 800, color: "#a78bfa", marginBottom: 4 }}>📥 EN LA COLA DE PROCESAMIENTO ({m.sug.cola.length})</div>
                       {m.sug.cola.map((c, i) => <div key={i} style={{ fontSize: 12 }}>• {(c.subject || "").slice(0, 55)} — {c.adjuntos} adjunto(s)</div>)}
                     </div>
                   )}
                   {!(m.sug.carpetas || []).length && !(m.sug.correos || []).length && !(m.sug.cola || []).length && (
-                    <div style={{ fontSize: 12, color: "#f87171" }}>Sin coincidencias por ahora — podés forzar igual y el sistema hará la búsqueda profunda (cuerpo de correos incluido).</div>
+                    <div style={{ fontSize: 12, color: "#fb7185" }}>Sin coincidencias por ahora — podés forzar igual y el sistema hará la búsqueda profunda (cuerpo de correos incluido).</div>
                   )}
                 </div>
               )}
-              {m.msg && <div data-testid="forzar-msg" style={{ fontSize: 12.5, fontWeight: 700, color: m.msg.startsWith("✅") ? "#4ade80" : "#f87171" }}>{m.msg}</div>}
+              {m.msg && <div data-testid="forzar-msg" style={{ fontSize: 12.5, fontWeight: 700, color: m.msg.startsWith("✅") ? "#34eab9" : "#fb7185" }}>{m.msg}</div>}
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
                 <button onClick={() => setForzarModal(null)} disabled={m.forzando} style={{ background: "transparent", border: "1px solid rgba(148,163,184,0.3)", color: "#94a3b8", borderRadius: 0, padding: "0.55rem 1rem", fontSize: 12.5, cursor: "pointer" }}>Cerrar</button>
                 <button data-testid="forzar-ejecutar" onClick={ejecutarForzar} disabled={m.forzando || (!m.nombre.trim() && !m.rut.trim())}
@@ -3510,13 +3510,13 @@ export default function ClientesModule({ onNavigate }) {
           <div data-testid="reparos-modal" onClick={() => setReparosModal(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9998, padding: "3vh 3vw" }}>
             <div onClick={(e) => e.stopPropagation()} style={{ background: "rgba(14,14,16,0.92)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", color: "#e2e8f0", borderRadius: 0, width: "min(720px, 96vw)", maxHeight: "94vh", overflow: "auto", border: "1px solid rgba(148,163,184,0.25)", boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}>
               <div style={{ padding: "0.9rem 1.1rem", borderBottom: "1px solid rgba(148,163,184,0.2)", display: "flex", alignItems: "center", gap: 10 }}>
-                <i className="fa fa-gavel" style={{ color: satisfecho ? "#4ade80" : "#f87171" }} />
+                <i className="fa fa-gavel" style={{ color: satisfecho ? "#34eab9" : "#fb7185" }} />
                 <h4 style={{ margin: 0, flex: 1 }}>Reparos Estudio de Título — {m.folder.nombre}</h4>
                 <button onClick={() => setReparosModal(null)} data-testid="btn-reparos-close" style={{ background: "transparent", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 18 }}><i className="fa fa-times" /></button>
               </div>
               <div style={{ padding: "1rem 1.1rem", display: "grid", gap: "0.75rem" }}>
                 {m.msg && (
-                  <div data-testid="reparos-msg" style={{ padding: "0.6rem 0.9rem", borderRadius: 0, background: m.msg.startsWith("Error") ? "rgba(239,68,68,0.15)" : "rgba(34,197,94,0.15)", color: m.msg.startsWith("Error") ? "#f87171" : "#4ade80", fontWeight: 600, fontSize: 13 }}>{m.msg}</div>
+                  <div data-testid="reparos-msg" style={{ padding: "0.6rem 0.9rem", borderRadius: 0, background: m.msg.startsWith("Error") ? "rgba(225,29,72,0.15)" : "rgba(16,217,142,0.15)", color: m.msg.startsWith("Error") ? "#fb7185" : "#34eab9", fontWeight: 600, fontSize: 13 }}>{m.msg}</div>
                 )}
                 {m.loading ? (
                   <div style={{ textAlign: "center", padding: "1.5rem" }}><i className="fa fa-spinner fa-spin" /> Cargando reparos…</div>
@@ -3529,7 +3529,7 @@ export default function ClientesModule({ onNavigate }) {
                       {!vendedor.email && <div style={{ color: "#facc15" }}>⚠️ No hay correo del vendedor registrado — el reenvío automático de reparos no podrá enviarse.</div>}
                       {rep.detectado_en && <div>📥 Primeros reparos detectados: {fmtF(rep.detectado_en)}</div>}
                       {rep.reenviado_vendedor_at && <div>📤 Reparos reenviados al vendedor: {fmtF(rep.reenviado_vendedor_at)}</div>}
-                      {rep.reenvio_vendedor_error && <div style={{ color: "#f87171" }}>⚠️ Reenvío al vendedor: {rep.reenvio_vendedor_error}</div>}
+                      {rep.reenvio_vendedor_error && <div style={{ color: "#fb7185" }}>⚠️ Reenvío al vendedor: {rep.reenvio_vendedor_error}</div>}
                       {rep.recordatorio_enviado_at && <div>⏰ Recordatorio de estado enviado al abogado: {fmtF(rep.recordatorio_enviado_at)}</div>}
                       {m.data?.tipo_vivienda === "usada" && !rep.recordatorio_enviado_at && !satisfecho && items.length > 0 && (
                         <div>⏰ Vivienda usada: si a los 5 días no hay avance, se consultará el estado en el mismo hilo (una vez).</div>
@@ -3543,11 +3543,11 @@ export default function ClientesModule({ onNavigate }) {
                     ) : (
                       <div style={{ display: "grid", gap: 6 }}>
                         {items.map((it) => (
-                          <label key={it.n} data-testid={`reparo-item-${it.n}`} style={{ display: "flex", alignItems: "flex-start", gap: 10, background: it.satisfecho ? "rgba(34,197,94,0.08)" : "rgba(239,68,68,0.06)", border: `1px solid ${it.satisfecho ? "rgba(34,197,94,0.35)" : "rgba(239,68,68,0.25)"}`, borderRadius: 0, padding: "0.6rem 0.9rem", cursor: "pointer" }}>
-                            <input type="checkbox" checked={!!it.satisfecho} onChange={(e) => toggleReparo(it.n, e.target.checked)} data-testid={`reparo-check-${it.n}`} style={{ marginTop: 3, width: 16, height: 16, accentColor: "#22c55e", cursor: "pointer" }} />
+                          <label key={it.n} data-testid={`reparo-item-${it.n}`} style={{ display: "flex", alignItems: "flex-start", gap: 10, background: it.satisfecho ? "rgba(16,217,142,0.08)" : "rgba(225,29,72,0.06)", border: `1px solid ${it.satisfecho ? "rgba(16,217,142,0.35)" : "rgba(225,29,72,0.25)"}`, borderRadius: 0, padding: "0.6rem 0.9rem", cursor: "pointer" }}>
+                            <input type="checkbox" checked={!!it.satisfecho} onChange={(e) => toggleReparo(it.n, e.target.checked)} data-testid={`reparo-check-${it.n}`} style={{ marginTop: 3, width: 16, height: 16, accentColor: "#10d98e", cursor: "pointer" }} />
                             <div style={{ flex: 1 }}>
-                              <div style={{ fontSize: 13, color: it.satisfecho ? "#86efac" : "#e2e8f0", textDecoration: it.satisfecho ? "line-through" : "none" }}>{it.n}. {it.texto}</div>
-                              <div style={{ fontSize: 11, color: it.satisfecho ? "#4ade80" : "#f87171", fontWeight: 700, marginTop: 2 }}>
+                              <div style={{ fontSize: 13, color: it.satisfecho ? "#6ee7c7" : "#e2e8f0", textDecoration: it.satisfecho ? "line-through" : "none" }}>{it.n}. {it.texto}</div>
+                              <div style={{ fontSize: 11, color: it.satisfecho ? "#34eab9" : "#fb7185", fontWeight: 700, marginTop: 2 }}>
                                 {it.satisfecho ? `✅ Reparo aceptado${it.satisfecho_en ? ` · ${fmtF(it.satisfecho_en)}` : ""}` : "Pendiente — marcar la casilla \"Reparo aceptado\" cuando quede resuelto"}
                               </div>
                             </div>
@@ -3562,13 +3562,13 @@ export default function ClientesModule({ onNavigate }) {
                         <i className={`fa ${m.scanning ? "fa-spinner fa-spin" : "fa-refresh"}`} /> {m.scanning ? "Revisando hilo…" : "Buscar reparos ahora"}
                       </button>
                       {satisfecho ? (
-                        <div data-testid="reparos-satisfecho-badge" style={{ background: "rgba(34,197,94,0.15)", border: "1px solid #22c55e", color: "#4ade80", borderRadius: 0, padding: "8px 14px", fontSize: 13, fontWeight: 700 }}>
+                        <div data-testid="reparos-satisfecho-badge" style={{ background: "rgba(16,217,142,0.15)", border: "1px solid #10d98e", color: "#34eab9", borderRadius: 0, padding: "8px 14px", fontSize: 13, fontWeight: 700 }}>
                           ✅ Todos los reparos satisfechos {rep.declarado_satisfecho_at ? `· ${fmtF(rep.declarado_satisfecho_at)}` : ""} {rep.declarado_por === "abogado" ? "(confirmado por el abogado)" : ""}
                         </div>
                       ) : (
                         <button onClick={declararReparos} disabled={m.declarando || items.length === 0 || pendientes > 0} data-testid="btn-reparos-declarar"
                           title={pendientes > 0 ? `Faltan ${pendientes} reparo(s) por marcar como satisfechos` : ""}
-                          style={{ background: (m.declarando || items.length === 0 || pendientes > 0) ? "#475569" : "#16a34a", border: "none", color: "#fff", borderRadius: 0, padding: "8px 16px", cursor: (items.length === 0 || pendientes > 0) ? "not-allowed" : "pointer", fontSize: 13, fontWeight: 700 }}>
+                          style={{ background: (m.declarando || items.length === 0 || pendientes > 0) ? "#475569" : "#10c98a", border: "none", color: "#fff", borderRadius: 0, padding: "8px 16px", cursor: (items.length === 0 || pendientes > 0) ? "not-allowed" : "pointer", fontSize: 13, fontWeight: 700 }}>
                           <i className={`fa ${m.declarando ? "fa-spinner fa-spin" : "fa-check-circle"}`} /> {m.declarando ? "Enviando aviso…" : "Declaro que todos los reparos han sido recibidos satisfactoriamente y podemos continuar con el estudio de título"}
                         </button>
                       )}

@@ -88,7 +88,7 @@ export default function UsuariosModule() {
               </select>
             </div>
           </div>
-          {error && <p style={{ color: "#ef4444", fontSize: "0.85rem", margin: "0.5rem 0" }} data-testid="user-error">{error}</p>}
+          {error && <p style={{ color: "#e11d48", fontSize: "0.85rem", margin: "0.5rem 0" }} data-testid="user-error">{error}</p>}
           <div className="clientes-form-actions">
             <button className="docs-btn secondary" onClick={() => { setShowCreate(false); setError(""); }}>Cancelar</button>
             <button className="docs-btn primary" onClick={createUser} disabled={loading} data-testid="btn-confirm-create-user">

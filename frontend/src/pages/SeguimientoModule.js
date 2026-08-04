@@ -88,8 +88,8 @@ export default function SeguimientoModule() {
   const estadoColor = (estado) => {
     if (!estado) return "#888";
     const s = estado.toLowerCase();
-    if (s.includes("aprob")) return "#10b981";
-    if (s.includes("rechaz")) return "#ef4444";
+    if (s.includes("aprob")) return "#10d98e";
+    if (s.includes("rechaz")) return "#e11d48";
     if (s.includes("cierre") || s.includes("pago")) return "#d4af37";
     if (s.includes("pendiente")) return "#f59e0b";
     return "#d4af37";
@@ -280,8 +280,8 @@ export default function SeguimientoModule() {
                       style={{ background: "transparent", color: estadoColor(c.estado), border: `1px solid ${estadoColor(c.estado)}`, borderRadius: 0, padding: "0.15rem 0.4rem", fontSize: "0.75rem", fontWeight: 700, cursor: "pointer" }}
                       title="Corregir estado manualmente"
                     >
-                      <option value="aprobacion" style={{ color: "#10b981", background: "rgba(14,14,16,0.92)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)" }}>aprobación</option>
-                      <option value="rechazo" style={{ color: "#ef4444", background: "rgba(14,14,16,0.92)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)" }}>rechazo</option>
+                      <option value="aprobacion" style={{ color: "#10d98e", background: "rgba(14,14,16,0.92)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)" }}>aprobación</option>
+                      <option value="rechazo" style={{ color: "#e11d48", background: "rgba(14,14,16,0.92)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)" }}>rechazo</option>
                       <option value="observacion" style={{ color: "#f59e0b", background: "rgba(14,14,16,0.92)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)" }}>observación</option>
                     </select>
                   </td>
@@ -344,7 +344,7 @@ export default function SeguimientoModule() {
                     {fichaData.simulaciones.map((s, i) => (
                       <div key={i} className="ficha-entry">
                         <span className="ficha-entry-date">{s.timestamp ? new Date(s.timestamp).toLocaleDateString("es-CL") : ""}</span>
-                        <span className={`ficha-entry-estado ${s.precalificacion_aprobada ? '' : 'fail'}`} style={{ color: s.precalificacion_aprobada ? "#10b981" : "#ef4444" }}>
+                        <span className={`ficha-entry-estado ${s.precalificacion_aprobada ? '' : 'fail'}`} style={{ color: s.precalificacion_aprobada ? "#10d98e" : "#e11d48" }}>
                           {s.precalificacion_aprobada ? "Aprobado" : "Rechazado"}
                         </span>
                         <span className="ficha-entry-text">{s.capacidad_credito_uf ? `${s.capacidad_credito_uf} UF` : ""}</span>

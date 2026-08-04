@@ -39,8 +39,8 @@ export default function IntelligencePanel() {
   if (!data) return null;
 
   const { tendencias, calibracion, conocimiento, aprendizaje_reciente } = data;
-  const tasaColor = tendencias.tasa_aprobacion >= 70 ? "#10b981" : tendencias.tasa_aprobacion >= 50 ? "#f59e0b" : "#ef4444";
-  const precisionColor = calibracion.precision_ia >= 80 ? "#10b981" : calibracion.precision_ia >= 60 ? "#f59e0b" : calibracion.total === 0 ? "var(--text-muted)" : "#ef4444";
+  const tasaColor = tendencias.tasa_aprobacion >= 70 ? "#10d98e" : tendencias.tasa_aprobacion >= 50 ? "#f59e0b" : "#e11d48";
+  const precisionColor = calibracion.precision_ia >= 80 ? "#10d98e" : calibracion.precision_ia >= 60 ? "#f59e0b" : calibracion.total === 0 ? "var(--text-muted)" : "#e11d48";
 
   return (
     <div data-testid="intelligence-panel" style={{ marginTop: "1.5rem" }}>
@@ -108,7 +108,7 @@ export default function IntelligencePanel() {
             {Object.entries(tendencias.distribucion_uf).map(([range, count]) => {
               const total = Object.values(tendencias.distribucion_uf).reduce((a, b) => a + b, 0);
               const pct = total > 0 ? (count / total * 100) : 0;
-              const colors = { "0-1000": "#6366f1", "1000-2000": "#8b5cf6", "2000-3000": "#a78bfa", "3000-5000": "#c4b5fd", "5000+": "#ddd6fe" };
+              const colors = { "0-1000": "#2e5ce6", "1000-2000": "#2e5ce6", "2000-3000": "#a78bfa", "3000-5000": "#c4b5fd", "5000+": "#ddd6fe" };
               return pct > 0 ? (
                 <div key={range} title={`${range} UF: ${count} (${pct.toFixed(0)}%)`}
                   style={{ flex: pct, background: colors[range] || "#94a3b8", minWidth: pct > 3 ? "auto" : "0", transition: "flex 0.5s" }}
@@ -156,8 +156,8 @@ export default function IntelligencePanel() {
             <div key={i} data-testid={`learning-item-${i}`} style={{ fontSize: "0.7rem", color: "var(--text-secondary)", marginBottom: "0.25rem", lineHeight: 1.3 }}>
               <span style={{
                 display: "inline-block", padding: "1px 5px", borderRadius: "0px", fontSize: "0.6rem", fontWeight: 600, marginRight: "4px",
-                background: item.tipo === "aprobacion" ? "rgba(16,185,129,0.15)" : item.tipo === "rechazo" ? "rgba(239,68,68,0.15)" : "rgba(99,102,241,0.15)",
-                color: item.tipo === "aprobacion" ? "#10b981" : item.tipo === "rechazo" ? "#ef4444" : "#6366f1",
+                background: item.tipo === "aprobacion" ? "rgba(16,217,142,0.15)" : item.tipo === "rechazo" ? "rgba(225,29,72,0.15)" : "rgba(99,102,241,0.15)",
+                color: item.tipo === "aprobacion" ? "#10d98e" : item.tipo === "rechazo" ? "#e11d48" : "#2e5ce6",
               }}>
                 {item.tipo}
               </span>

@@ -71,7 +71,7 @@ export default function ImportarCorreo({ destino, destinoId, nombre, onDone, lab
             </label>
             {buscando && <div style={{ fontSize: 12.5, opacity: 0.7 }}><i className="fa fa-spinner fa-spin" /> Buscando en el buzón…</div>}
             {!buscando && q.trim().length >= 3 && correos.length === 0 && (
-              <div style={{ fontSize: 12, color: "#f87171" }}>Sin coincidencias por ahora — probá con otro nombre, apellido o RUT.</div>
+              <div style={{ fontSize: 12, color: "#fb7185" }}>Sin coincidencias por ahora — probá con otro nombre, apellido o RUT.</div>
             )}
             {correos.length > 0 && (
               <div data-testid="importar-correo-lista" style={{ display: "grid", gap: 6 }}>
@@ -88,7 +88,7 @@ export default function ImportarCorreo({ destino, destinoId, nombre, onDone, lab
                 ))}
               </div>
             )}
-            {msg && <div data-testid="importar-correo-msg" style={{ fontSize: 12.5, fontWeight: 700, color: msg.startsWith("✅") ? "#4ade80" : (msg.startsWith("⚠️") ? "#facc15" : "#f87171") }}>{msg}</div>}
+            {msg && <div data-testid="importar-correo-msg" style={{ fontSize: 12.5, fontWeight: 700, color: msg.startsWith("✅") ? "#34eab9" : (msg.startsWith("⚠️") ? "#facc15" : "#fb7185") }}>{msg}</div>}
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
               <button data-testid="importar-correo-cerrar" onClick={() => setOpen(false)}
                 style={{ background: "rgba(255,255,255,0.1)", border: "none", color: "#fff", borderRadius: 0, padding: "0.5rem 1rem", fontWeight: 700, cursor: "pointer" }}>Cerrar</button>

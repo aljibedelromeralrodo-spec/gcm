@@ -59,15 +59,15 @@ function PredictivePanel({ formData, valorUF }) {
   }, [formData, fetchPrediction]);
 
   const getScoreColor = (score) => {
-    if (score >= 80) return "#10b981";
+    if (score >= 80) return "#10d98e";
     if (score >= 60) return "#d4af37";
     if (score >= 40) return "#f59e0b";
     if (score >= 20) return "#f97316";
-    return "#ef4444";
+    return "#e11d48";
   };
 
   const getSeverityColor = (sev) => {
-    if (sev === "alta") return "#ef4444";
+    if (sev === "alta") return "#e11d48";
     if (sev === "media") return "#f59e0b";
     return "#d4af37";
   };

@@ -80,7 +80,7 @@ export default function WhatsAppModule() {
       </div>
 
       {/* Connection status */}
-      <div style={{ background: "var(--bg-card)", border: `1px solid ${isConnected ? "rgba(16,185,129,0.5)" : "rgba(245,158,11,0.4)"}`, borderRadius: 0, padding: "1.25rem", marginBottom: "1.5rem" }}>
+      <div style={{ background: "var(--bg-card)", border: `1px solid ${isConnected ? "rgba(16,217,142,0.5)" : "rgba(245,158,11,0.4)"}`, borderRadius: 0, padding: "1.25rem", marginBottom: "1.5rem" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.75rem" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
             <div style={{ width: 50, height: 50, borderRadius: 0, background: isConnected ? "linear-gradient(135deg, #25d366, #128c7e)" : "rgba(245,158,11,0.18)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.6rem", color: isConnected ? "#fff" : "#f59e0b" }}>
@@ -88,7 +88,7 @@ export default function WhatsAppModule() {
             </div>
             <div>
               <div style={{ fontSize: "1.1rem", fontWeight: 800, color: "var(--text-primary)" }}>
-                WhatsApp {isConnected ? <span style={{ color: "#10b981" }}>Conectado</span> : <span style={{ color: "#f59e0b" }}>Esperando vincular</span>}
+                WhatsApp {isConnected ? <span style={{ color: "#10d98e" }}>Conectado</span> : <span style={{ color: "#f59e0b" }}>Esperando vincular</span>}
               </div>
               <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: 2 }} data-testid="wa-status-text">
                 {isConnected
@@ -151,7 +151,7 @@ export default function WhatsAppModule() {
 
         {approvals.length === 0 ? (
           <div style={{ textAlign: "center", padding: "2rem 1rem", color: "var(--text-muted)" }}>
-            <i className="fa fa-check-circle" style={{ fontSize: "2rem", color: "#10b981", opacity: 0.5 }}></i>
+            <i className="fa fa-check-circle" style={{ fontSize: "2rem", color: "#10d98e", opacity: 0.5 }}></i>
             <p style={{ marginTop: "0.5rem", fontSize: "0.85rem" }}>No hay aprobaciones pendientes</p>
           </div>
         ) : (
@@ -176,11 +176,11 @@ export default function WhatsAppModule() {
                 )}
                 <div style={{ display: "flex", gap: 8 }}>
                   <button onClick={() => resolveApproval(a.id, "approve")} data-testid={`btn-approve-${a.id}`}
-                    style={{ padding: "0.4rem 0.85rem", background: "rgba(16,185,129,0.18)", border: "1px solid #10b981", color: "#10b981", borderRadius: 0, fontWeight: 700, cursor: "pointer", fontSize: "0.78rem" }}>
+                    style={{ padding: "0.4rem 0.85rem", background: "rgba(16,217,142,0.18)", border: "1px solid #10d98e", color: "#10d98e", borderRadius: 0, fontWeight: 700, cursor: "pointer", fontSize: "0.78rem" }}>
                     <i className="fa fa-check"></i> Aprobar
                   </button>
                   <button onClick={() => resolveApproval(a.id, "reject")} data-testid={`btn-reject-${a.id}`}
-                    style={{ padding: "0.4rem 0.85rem", background: "rgba(239,68,68,0.18)", border: "1px solid #ef4444", color: "#ef4444", borderRadius: 0, fontWeight: 700, cursor: "pointer", fontSize: "0.78rem" }}>
+                    style={{ padding: "0.4rem 0.85rem", background: "rgba(225,29,72,0.18)", border: "1px solid #e11d48", color: "#e11d48", borderRadius: 0, fontWeight: 700, cursor: "pointer", fontSize: "0.78rem" }}>
                     <i className="fa fa-times"></i> Rechazar
                   </button>
                 </div>

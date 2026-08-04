@@ -431,7 +431,7 @@ export default function CentralChat({ userName, activeModule }) {
                 recording ? { color: "#d4af37" } :
                 speaking ? { color: "#d4af37" } :
                 loading ? { color: "#ff9800" } :
-                connected === false ? { color: "#ef4444" } : {}
+                connected === false ? { color: "#e11d48" } : {}
               }>
                 {recording ? "Escuchando..." : speaking ? "Hablando..." : loading ? "Pensando..." : connected === false ? "Sin conexion" : "Tu guia"}
               </span>
@@ -447,8 +447,8 @@ export default function CentralChat({ userName, activeModule }) {
               {connected !== null && (
                 <span className="central-conn-dot" data-testid="central-conn-indicator"
                   style={{ width: 8, height: 8, borderRadius: "50%", display: "inline-block",
-                    background: connected ? "#10b981" : "#ef4444",
-                    boxShadow: connected ? "0 0 6px #10b981" : "0 0 6px #ef4444" }}
+                    background: connected ? "#10d98e" : "#e11d48",
+                    boxShadow: connected ? "0 0 6px #10d98e" : "0 0 6px #e11d48" }}
                   title={connected ? "Conectado" : "Sin conexion"} />
               )}
               <button className="central-header-action" onClick={() => setAutoVoice(v => !v)}
@@ -470,12 +470,12 @@ export default function CentralChat({ userName, activeModule }) {
                 title={conversationMode ? "Modo conversacion ACTIVO - click para salir" : "Activar modo conversacion"}
                 data-testid="central-convo-toggle"
                 style={{
-                  background: conversationMode ? "rgba(16,185,129,0.3)" : "none",
+                  background: conversationMode ? "rgba(16,217,142,0.3)" : "none",
                   borderRadius: 0,
                   animation: conversationMode ? "pulse 1.8s infinite" : "none",
                 }}>
                 <i className={`fa ${conversationMode ? "fa-comments" : "fa-comments-o"}`}
-                  style={{ fontSize: "0.75rem", color: conversationMode ? "#10b981" : "#888" }}></i>
+                  style={{ fontSize: "0.75rem", color: conversationMode ? "#10d98e" : "#888" }}></i>
               </button>
               {msgs.length > 0 && (
                 <button className="central-header-action" onClick={exportChat} title="Exportar chat" data-testid="central-export-btn">

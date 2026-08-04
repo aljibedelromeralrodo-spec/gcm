@@ -3,7 +3,7 @@ import axios from "axios";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
-const card = { background: "rgba(14,14,16,0.9)", padding: "1.3rem", borderRadius: "0px", border: "1px solid transparent", backgroundImage: "linear-gradient(160deg, rgba(30,30,30,0.95), rgba(10,10,10,0.98)), linear-gradient(135deg, #BF953F, #FCF6BA, #B38728, #FBF5B7, #AA771C)", boxShadow: "0 35px 70px -20px rgba(0,0,0,0.95), 0 0 38px -16px rgba(191,149,63,0.45)", backgroundOrigin: "border-box", backgroundClip: "padding-box, border-box" };
+const card = { background: "rgba(14,14,16,0.9)", padding: "1.3rem", borderRadius: "0px", border: "1px solid transparent", backgroundImage: "linear-gradient(115deg, rgba(255,255,255,0.09) 0%, rgba(255,255,255,0.02) 18%, transparent 32%), linear-gradient(160deg, rgba(30,30,30,0.95), rgba(10,10,10,0.98)), linear-gradient(135deg, #BF953F, #FCF6BA, #B38728, #FBF5B7, #AA771C)", boxShadow: "0 35px 70px -20px rgba(0,0,0,0.95), 0 0 38px -16px rgba(191,149,63,0.45)", backgroundOrigin: "border-box", backgroundClip: "padding-box, padding-box, border-box" };
 
 function hora(iso) {
   if (!iso) return "—";
@@ -11,7 +11,7 @@ function hora(iso) {
 }
 
 const Estado = ({ ok, textoOk, textoMal }) => (
-  <span style={{ color: ok ? "#22c55e" : "#ef4444", fontWeight: 800, fontSize: "0.8rem", border: `1px solid ${ok ? "#22c55e" : "#ef4444"}`, borderRadius: 20, padding: "0.15rem 0.7rem" }}>
+  <span style={{ color: ok ? "#10d98e" : "#e11d48", fontWeight: 800, fontSize: "0.8rem", border: `1px solid ${ok ? "#10d98e" : "#e11d48"}`, borderRadius: 20, padding: "0.15rem 0.7rem" }}>
     {ok ? `● ${textoOk}` : `● ${textoMal}`}
   </span>
 );
@@ -35,7 +35,7 @@ export default function SaludModule() {
     return () => clearInterval(t);
   }, [load]);
 
-  if (error) return <div style={{ padding: "2rem", color: "#ef4444" }} data-testid="salud-error">Error cargando el panel: {error}</div>;
+  if (error) return <div style={{ padding: "2rem", color: "#e11d48" }} data-testid="salud-error">Error cargando el panel: {error}</div>;
   if (!data) return <div style={{ padding: "3rem", textAlign: "center" }}><i className="fa fa-spinner fa-spin" style={{ fontSize: "2rem", color: "var(--gold)" }} /></div>;
 
   const m = data.monitoreo_buzon || {};
@@ -64,7 +64,7 @@ export default function SaludModule() {
             <div>Revisión cada <b style={{ color: "var(--gold)" }}>{m.intervalo_min} min</b>{m.corriendo_ahora ? " · 🔄 revisando ahora…" : ""}</div>
             <div>Última revisión: <b data-testid="salud-ultima-revision">{hora(m.ultima_revision)}</b> {m.hace_min != null && <span style={{ opacity: 0.6 }}>(hace {m.hace_min} min)</span>}</div>
             <div style={{ opacity: 0.75 }}>Último ciclo: {m.ultimo_resultado?.enqueued ?? 0} nuevos · {m.ultimo_resultado?.processed ?? 0} procesados · {m.ultimo_resultado?.carpetas ?? 0} carpetas</div>
-            {(m.ultimo_resultado?.errors || []).slice(0, 2).map((e, i) => <div key={i} style={{ color: "#f87171", fontSize: "0.75rem" }}>⚠ {e}</div>)}
+            {(m.ultimo_resultado?.errors || []).slice(0, 2).map((e, i) => <div key={i} style={{ color: "#fb7185", fontSize: "0.75rem" }}>⚠ {e}</div>)}
           </div>
         </div>
 
@@ -75,7 +75,7 @@ export default function SaludModule() {
             <Estado ok={true} textoOk="MODO FORZADO" textoMal="" />
           </div>
           <div style={{ fontSize: "0.86rem", lineHeight: 1.9 }}>
-            <div>Creadas últimas 24 h: <b style={{ color: "#22c55e" }} data-testid="salud-carpetas-24h">{f.creadas_24h}</b> · Descartados: <b style={{ color: "#f59e0b" }}>{f.descartados_24h}</b></div>
+            <div>Creadas últimas 24 h: <b style={{ color: "#10d98e" }} data-testid="salud-carpetas-24h">{f.creadas_24h}</b> · Descartados: <b style={{ color: "#f59e0b" }}>{f.descartados_24h}</b></div>
             {(f.ultimas || []).map((x, i) => (
               <div key={i} style={{ fontSize: "0.78rem", opacity: 0.85 }}>📁 {x.nombre} <span style={{ opacity: 0.55 }}>· {hora(x.fecha)} · {x.origen}</span></div>
             ))}
@@ -88,7 +88,7 @@ export default function SaludModule() {
             <h3 style={{ margin: 0, fontSize: "1rem", color: "var(--gold)" }}><i className="fa fa-paper-plane" style={{ marginRight: 6 }} />3. Cola de correos (goteo anti-bloqueo)</h3>
             <Estado ok={(c.fallidos_24h || 0) === 0} textoOk="SIN ERRORES 24H" textoMal={`${c.fallidos_24h} ERROR(ES) 24H`} />
             <span style={{ fontSize: "0.75rem", opacity: 0.7 }}>Goteo: 1 correo cada <b>{c.goteo_seg}s</b> · Reintento automático a los <b>{c.reintento_seg}s</b></span>
-            <span style={{ marginLeft: "auto", fontSize: "0.85rem" }}>Enviados 24 h: <b style={{ color: "#22c55e" }} data-testid="salud-enviados-24h">{c.enviados_24h}</b></span>
+            <span style={{ marginLeft: "auto", fontSize: "0.85rem" }}>Enviados 24 h: <b style={{ color: "#10d98e" }} data-testid="salud-enviados-24h">{c.enviados_24h}</b></span>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
             <div>
@@ -96,7 +96,7 @@ export default function SaludModule() {
               {(c.ultimos_envios || []).length === 0 && <div style={{ fontSize: "0.8rem", opacity: 0.5 }}>Sin envíos registrados aún</div>}
               {(c.ultimos_envios || []).map((e, i) => (
                 <div key={i} style={{ fontSize: "0.78rem", padding: "0.2rem 0", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-                  <span style={{ color: e.ok ? "#22c55e" : "#ef4444", fontWeight: 700 }}>{e.smtp_code || "—"}</span>
+                  <span style={{ color: e.ok ? "#10d98e" : "#e11d48", fontWeight: 700 }}>{e.smtp_code || "—"}</span>
                   <span style={{ opacity: 0.8 }}> → {e.to}</span>
                   <span style={{ opacity: 0.5 }}> · {(e.subject || "").slice(0, 40)} · {hora(e.fecha)}</span>
                 </div>
@@ -104,9 +104,9 @@ export default function SaludModule() {
             </div>
             <div>
               <div style={{ fontSize: "0.72rem", textTransform: "uppercase", opacity: 0.6, marginBottom: 4 }}>Errores de envío (log_errores_correo)</div>
-              {(c.ultimos_errores || []).length === 0 && <div style={{ fontSize: "0.8rem", color: "#22c55e" }}>✓ Sin errores registrados</div>}
+              {(c.ultimos_errores || []).length === 0 && <div style={{ fontSize: "0.8rem", color: "#10d98e" }}>✓ Sin errores registrados</div>}
               {(c.ultimos_errores || []).map((e, i) => (
-                <div key={i} style={{ fontSize: "0.78rem", padding: "0.2rem 0", borderBottom: "1px solid rgba(255,255,255,0.05)", color: "#fca5a5" }}>
+                <div key={i} style={{ fontSize: "0.78rem", padding: "0.2rem 0", borderBottom: "1px solid rgba(255,255,255,0.05)", color: "#fda4af" }}>
                   <b>{e.smtp_code || "—"}</b> → {e.destinatario} <span style={{ opacity: 0.7 }}>· intento {e.intento} · {(e.error || "").slice(0, 60)} · {hora(e.fecha)}</span>
                 </div>
               ))}
@@ -120,7 +120,7 @@ export default function SaludModule() {
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8, flexWrap: "wrap" }}>
               <h3 style={{ margin: 0, fontSize: "1rem", color: "var(--gold)" }}><i className="fa fa-balance-scale" style={{ marginRight: 6 }} />Panel de Auditoría — Calibración de Riesgo</h3>
               {calib.asertividad != null && (
-                <span style={{ marginLeft: "auto", fontSize: "1.15rem", fontWeight: 900, color: calib.asertividad >= 80 ? "#22c55e" : calib.asertividad >= 60 ? "#f59e0b" : "#ef4444" }} data-testid="salud-asertividad">
+                <span style={{ marginLeft: "auto", fontSize: "1.15rem", fontWeight: 900, color: calib.asertividad >= 80 ? "#10d98e" : calib.asertividad >= 60 ? "#f59e0b" : "#e11d48" }} data-testid="salud-asertividad">
                   {calib.asertividad}% asertividad
                 </span>
               )}
@@ -128,8 +128,8 @@ export default function SaludModule() {
             <div style={{ fontSize: "0.9rem", fontStyle: "italic", opacity: 0.9, marginBottom: 8 }} data-testid="salud-calibracion-msg">“{calib.mensaje}”</div>
             <div style={{ display: "flex", gap: "1.4rem", fontSize: "0.83rem", flexWrap: "wrap" }}>
               <span>Respuestas de mesa: <b>{calib.respuestas_mesa}</b></span>
-              <span style={{ color: "#22c55e" }}>Aprobadas: <b>{calib.aprobadas}</b></span>
-              <span style={{ color: "#ef4444" }}>Rechazadas: <b>{calib.rechazadas}</b></span>
+              <span style={{ color: "#10d98e" }}>Aprobadas: <b>{calib.aprobadas}</b></span>
+              <span style={{ color: "#e11d48" }}>Rechazadas: <b>{calib.rechazadas}</b></span>
               <span>Con predicción del sistema: <b>{calib.muestras_con_prediccion}</b> ({calib.aciertos} aciertos)</span>
             </div>
             {calib.tendencia && <div style={{ marginTop: 8, fontSize: "0.85rem", color: "#f59e0b", fontWeight: 700 }} data-testid="salud-tendencia">{calib.tendencia}</div>}

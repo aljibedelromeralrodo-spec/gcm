@@ -5,7 +5,7 @@ import { estiloConfianza, PanelAprendizaje, useAprendizaje } from "../components
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
-const card = { background: "rgba(14,14,16,0.9)", padding: "1.5rem", borderRadius: "0px", border: "1px solid transparent", backgroundImage: "linear-gradient(160deg, rgba(30,30,30,0.95), rgba(10,10,10,0.98)), linear-gradient(135deg, #BF953F, #FCF6BA, #B38728, #FBF5B7, #AA771C)", boxShadow: "0 35px 70px -20px rgba(0,0,0,0.95), 0 0 38px -16px rgba(191,149,63,0.45)", backgroundOrigin: "border-box", backgroundClip: "padding-box, border-box", marginBottom: "1.5rem" };
+const card = { background: "rgba(14,14,16,0.9)", padding: "1.5rem", borderRadius: "0px", border: "1px solid transparent", backgroundImage: "linear-gradient(115deg, rgba(255,255,255,0.09) 0%, rgba(255,255,255,0.02) 18%, transparent 32%), linear-gradient(160deg, rgba(30,30,30,0.95), rgba(10,10,10,0.98)), linear-gradient(135deg, #BF953F, #FCF6BA, #B38728, #FBF5B7, #AA771C)", boxShadow: "0 35px 70px -20px rgba(0,0,0,0.95), 0 0 38px -16px rgba(191,149,63,0.45)", backgroundOrigin: "border-box", backgroundClip: "padding-box, padding-box, border-box", marginBottom: "1.5rem" };
 const inp = { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "0px", padding: "0.55rem 0.8rem", color: "#fff", fontSize: "0.9rem", width: "100%" };
 const btn = (bg, small) => ({ background: bg, color: bg === "var(--gold)" ? "#0a0e17" : "#fff", border: "none", borderRadius: "0px", padding: small ? "0.4rem 0.8rem" : "0.6rem 1.2rem", fontWeight: 700, cursor: "pointer", fontSize: small ? "0.8rem" : "0.9rem" });
 const lbl = { display: "block", fontSize: "0.75rem", opacity: 0.6, marginBottom: "0.3rem", textTransform: "uppercase", letterSpacing: "0.5px" };
@@ -231,7 +231,7 @@ export default function SetCreditoModule({ onNavigate }) {
           <i className="fa fa-arrow-left" /> Volver a Carpeta Clientes
         </button>
       )}
-      {msg && <div data-testid="setcred-msg" style={{ padding: "0.7rem 1rem", borderRadius: "0px", marginBottom: "1rem", background: msg.startsWith("✅") ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)", color: msg.startsWith("✅") ? "#22c55e" : "#ef4444", fontWeight: 600 }}>{msg}</div>}
+      {msg && <div data-testid="setcred-msg" style={{ padding: "0.7rem 1rem", borderRadius: "0px", marginBottom: "1rem", background: msg.startsWith("✅") ? "rgba(16,217,142,0.15)" : "rgba(225,29,72,0.15)", color: msg.startsWith("✅") ? "#10d98e" : "#e11d48", fontWeight: 600 }}>{msg}</div>}
 
       {/* Estado migrup */}
       <div data-testid="migrup-status" style={{ ...card, display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap", marginBottom: "1rem", padding: "0.9rem 1.3rem" }}>
@@ -245,7 +245,7 @@ export default function SetCreditoModule({ onNavigate }) {
           </div>
         </div>
         <button data-testid="setcred-nuevo-contacto" onClick={abrirContacto} disabled={!migrup?.connected} style={btn("#d4af37", true)}><i className="fa fa-user-plus" style={{ marginRight: "0.4rem" }} />Nuevo contacto eCert</button>
-        <span style={{ padding: "0.2rem 0.7rem", borderRadius: "999px", fontSize: "0.8rem", fontWeight: 700, background: migrup?.connected ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)", color: migrup?.connected ? "#22c55e" : "#ef4444" }}>
+        <span style={{ padding: "0.2rem 0.7rem", borderRadius: "999px", fontSize: "0.8rem", fontWeight: 700, background: migrup?.connected ? "rgba(16,217,142,0.15)" : "rgba(225,29,72,0.15)", color: migrup?.connected ? "#10d98e" : "#e11d48" }}>
           {migrup?.connected ? "● Conectado" : "○ Desconectado"}
         </span>
       </div>
@@ -283,7 +283,7 @@ export default function SetCreditoModule({ onNavigate }) {
               <button data-testid="setcred-volver" onClick={() => setCurrent(null)} style={{ ...btn("rgba(255,255,255,0.1)", true), marginRight: "0.8rem" }}><i className="fa fa-arrow-left" /> Volver</button>
               <b style={{ fontSize: "1.15rem", color: "var(--gold)" }}>{current.nombre}</b> <span style={{ opacity: 0.6 }}>{current.rut} · {current.email || "sin correo"}</span>
             </div>
-            <button data-testid="setcred-eliminar" onClick={() => eliminarSet(current.id)} style={btn("#ef4444", true)}><i className="fa fa-trash" /> Eliminar set</button>
+            <button data-testid="setcred-eliminar" onClick={() => eliminarSet(current.id)} style={btn("#e11d48", true)}><i className="fa fa-trash" /> Eliminar set</button>
             <button data-testid="setcred-link-vip" onClick={async () => {
               try {
                 const r = await axios.post(`${API}/api/firma/generar-link`, { cliente: current.nombre, rut: current.rut || "", email: current.email || "" });
@@ -320,12 +320,12 @@ export default function SetCreditoModule({ onNavigate }) {
           {current.archivos.filter(a => !a.nombre.startsWith("COMBINADO_SET")).length === 0 ? <div style={{ opacity: 0.5 }}>Sin documentos. Subí los del set (seguros, solicitud de crédito, declaración de salud).</div> :
             current.archivos.filter(a => !a.nombre.startsWith("COMBINADO_SET")).map((a, i) => (
               <div key={i} data-testid={`setcred-file-${i}`} style={{ display: "flex", alignItems: "center", gap: "0.7rem", padding: "0.55rem 0.4rem", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-                <i className="fa fa-file-pdf-o" style={{ color: "#ef4444" }} />
+                <i className="fa fa-file-pdf-o" style={{ color: "#e11d48" }} />
                 <span style={{ flex: 1 }}>{a.nombre}</span>
                 <span style={{ fontSize: "0.72rem", padding: "0.12rem 0.5rem", borderRadius: "999px", background: "rgba(212,175,55,0.15)", color: "var(--gold)" }}>{docTipos[a.tipo] || "Otro"}</span>
                 <a href={`${API}/api/set-credito/sets/${current.id}/download/${encodeURIComponent(a.ruta)}?inline=true`} target="_blank" rel="noreferrer" style={{ color: "#d4af37" }} title="Ver"><i className="fa fa-eye" /></a>
                 <button data-testid={`setcred-firmar-${i}`} onClick={() => abrirFirma(a)} disabled={!migrup?.connected} style={btn("var(--gold)", true)} title="Enviar a firmar"><i className="fa fa-pencil" style={{ marginRight: "0.3rem" }} />Firmar</button>
-                <button onClick={() => borrarFile(a.ruta)} style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer" }}><i className="fa fa-trash" /></button>
+                <button onClick={() => borrarFile(a.ruta)} style={{ background: "none", border: "none", color: "#e11d48", cursor: "pointer" }}><i className="fa fa-trash" /></button>
               </div>
             ))}
 
@@ -341,10 +341,10 @@ export default function SetCreditoModule({ onNavigate }) {
           )}
 
           {/* Set firmado: traer desde eCert, separar y enviar por correo */}
-          <div data-testid="setcred-firmados-section" style={{ marginTop: "1.4rem", padding: "1rem", background: "rgba(34,197,94,0.07)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "0px" }}>
+          <div data-testid="setcred-firmados-section" style={{ marginTop: "1.4rem", padding: "1rem", background: "rgba(16,217,142,0.07)", border: "1px solid rgba(16,217,142,0.3)", borderRadius: "0px" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.8rem", flexWrap: "wrap" }}>
-              <h4 style={{ color: "#22c55e", fontSize: "0.95rem", margin: 0 }}><i className="fa fa-check-circle" style={{ marginRight: "0.4rem" }} />Set firmado por el cliente</h4>
-              <button data-testid="setcred-traer-firmado" onClick={traerFirmado} disabled={loading || !migrup?.connected} style={btn("#22c55e", true)}>
+              <h4 style={{ color: "#10d98e", fontSize: "0.95rem", margin: 0 }}><i className="fa fa-check-circle" style={{ marginRight: "0.4rem" }} />Set firmado por el cliente</h4>
+              <button data-testid="setcred-traer-firmado" onClick={traerFirmado} disabled={loading || !migrup?.connected} style={btn("#10d98e", true)}>
                 <i className="fa fa-cloud-download" style={{ marginRight: "0.4rem" }} />Traer firmado desde eCert y separar
               </button>
             </div>
@@ -354,7 +354,7 @@ export default function SetCreditoModule({ onNavigate }) {
               <>
                 {(current.firmados || []).map((f, i) => (
                   <div key={i} data-testid={`setcred-firmado-${i}`} style={{ display: "flex", alignItems: "center", gap: "0.7rem", padding: "0.4rem 0.2rem", borderBottom: "1px solid rgba(255,255,255,0.05)", fontSize: "0.85rem" }}>
-                    <i className="fa fa-file-pdf-o" style={{ color: "#22c55e" }} />
+                    <i className="fa fa-file-pdf-o" style={{ color: "#10d98e" }} />
                     <span style={{ flex: 1 }}>{f.nombre}</span>
                     <a href={`${API}/api/set-credito/sets/${current.id}/download/${encodeURIComponent(f.ruta)}?inline=true`} target="_blank" rel="noreferrer" style={{ color: "#d4af37" }} title="Ver"><i className="fa fa-eye" /></a>
                   </div>
@@ -362,7 +362,7 @@ export default function SetCreditoModule({ onNavigate }) {
                 <div style={{ display: "flex", gap: "0.6rem", marginTop: "0.9rem", flexWrap: "wrap", alignItems: "center" }}>
                   <input data-testid="setcred-correos-envio" value={correosEnvio} onChange={e => setCorreosEnvio(e.target.value)}
                          placeholder="correo1@..., correo2@..." style={{ ...inp, flex: 1, minWidth: "280px" }} />
-                  <button data-testid="setcred-enviar-firmados" onClick={enviarFirmados} disabled={loading} style={btn("#22c55e")}>
+                  <button data-testid="setcred-enviar-firmados" onClick={enviarFirmados} disabled={loading} style={btn("#10d98e")}>
                     <i className="fa fa-paper-plane" style={{ marginRight: "0.4rem" }} />Enviar set firmado por correo
                   </button>
                 </div>
@@ -381,7 +381,7 @@ export default function SetCreditoModule({ onNavigate }) {
             <p style={{ fontSize: "0.83rem", opacity: 0.7, margin: "0 0 1rem" }}>El contacto se crea en eCert Chile (migrup). Podés capturar los datos con el lector de cédula o llenarlos a mano.</p>
             <div style={{ display: "flex", gap: "0.6rem", marginBottom: "1rem", flexWrap: "wrap" }}>
               <input ref={cedulaRef} type="file" accept="application/pdf,image/*" onChange={ocrCedula} style={{ display: "none" }} data-testid="contacto-cedula-input" />
-              <button data-testid="contacto-ocr-btn" onClick={() => cedulaRef.current?.click()} disabled={ocrLoading} style={btn("#8b5cf6", true)}>
+              <button data-testid="contacto-ocr-btn" onClick={() => cedulaRef.current?.click()} disabled={ocrLoading} style={btn("#2e5ce6", true)}>
                 <i className={`fa ${ocrLoading ? "fa-spinner fa-spin" : "fa-id-card-o"}`} style={{ marginRight: "0.4rem" }} />{ocrLoading ? "Leyendo cédula..." : "Capturar desde cédula (OCR)"}
               </button>
             </div>
@@ -395,7 +395,7 @@ export default function SetCreditoModule({ onNavigate }) {
               <div><label style={lbl}>Correo electrónico *</label><input data-testid="contacto-email" style={inp} value={contactoModal.email} onChange={e => setContactoModal({ ...contactoModal, email: e.target.value })} /></div>
               <div><label style={lbl}>Confirmar correo electrónico *</label><input data-testid="contacto-email2" style={inp} value={contactoModal.email2} onChange={e => setContactoModal({ ...contactoModal, email2: e.target.value })} /></div>
               {contactoModal.email && contactoModal.email2 && contactoModal.email !== contactoModal.email2 && (
-                <div style={{ color: "#ef4444", fontSize: "0.8rem" }} data-testid="contacto-email-error">Los correos no coinciden</div>
+                <div style={{ color: "#e11d48", fontSize: "0.8rem" }} data-testid="contacto-email-error">Los correos no coinciden</div>
               )}
             </div>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.6rem", marginTop: "1.2rem" }}>

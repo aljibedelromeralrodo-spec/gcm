@@ -6,9 +6,9 @@ const API = process.env.REACT_APP_BACKEND_URL;
 const STATUS_META = {
   pendiente:   { label: "Pendiente",   color: "#eab308", emoji: "🟡" },
   procesando:  { label: "Procesando",  color: "#d4af37", emoji: "🔵" },
-  clasificado: { label: "Clasificado", color: "#22c55e", emoji: "🟢" },
+  clasificado: { label: "Clasificado", color: "#10d98e", emoji: "🟢" },
   revisar:     { label: "Revisar",     color: "#f97316", emoji: "🟠" },
-  error:       { label: "Error",       color: "#ef4444", emoji: "🔴" },
+  error:       { label: "Error",       color: "#e11d48", emoji: "🔴" },
   descartado:  { label: "Descartado",  color: "#6b7280", emoji: "⚫" },
 };
 
@@ -300,11 +300,11 @@ export default function EmailProcessingModule() {
           <button data-testid="btn-ingest" onClick={ingest} disabled={busy}
                   style={btnStyle("#d4af37")}>📨 Ingestar Inbox</button>
           <button data-testid="btn-process" onClick={processPending} disabled={busy}
-                  style={btnStyle("#22c55e")}>⚡ Procesar pendientes</button>
+                  style={btnStyle("#10d98e")}>⚡ Procesar pendientes</button>
           <button data-testid="btn-reevaluar" onClick={reevaluar} disabled={busy}
                   style={btnStyle("#f59e0b")}>🧹 Reevaluar (regla)</button>
           <button data-testid="btn-rules" onClick={() => setShowRules(!showRules)}
-                  style={btnStyle("#8b5cf6")}>⚙️ Reglas ({rules.length})</button>
+                  style={btnStyle("#2e5ce6")}>⚙️ Reglas ({rules.length})</button>
           {driveConfigured ? (
             <>
               <span data-testid="drive-badge"
@@ -312,7 +312,7 @@ export default function EmailProcessingModule() {
                 📂 Almacenamiento local activo
               </span>
               <button data-testid="btn-purge" onClick={purgeDrive} disabled={busy}
-                      style={btnStyle("#dc2626")}>🗑️ Purga carpetas Procesamiento</button>
+                      style={btnStyle("#be123c")}>🗑️ Purga carpetas Procesamiento</button>
             </>
           ) : (
             <span style={{ padding: "6px 12px", borderRadius: 0, background: "#fef3c7", color: "#92400e", fontWeight: 700, fontSize: 12, alignSelf: "center" }}>
@@ -323,12 +323,12 @@ export default function EmailProcessingModule() {
       </div>
 
       {/* PANEL AUTOMÁTICO 24/7 */}
-      <div data-testid="auto-panel" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "10px 14px", borderRadius: 0, marginBottom: 16, background: auto?.enabled ? "#dcfce7" : "#f1f5f9", border: `1px solid ${auto?.enabled ? "#22c55e" : "#cbd5e1"}` }}>
+      <div data-testid="auto-panel" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "10px 14px", borderRadius: 0, marginBottom: 16, background: auto?.enabled ? "#dcfce7" : "#f1f5f9", border: `1px solid ${auto?.enabled ? "#10d98e" : "#cbd5e1"}` }}>
         <span style={{ fontSize: 14, fontWeight: 700, color: auto?.enabled ? "#166534" : "#475569" }}>
           🤖 Procesamiento automático {auto?.enabled ? "ACTIVADO" : "desactivado"}
         </span>
         <button data-testid="btn-auto-toggle" onClick={toggleAuto} disabled={!auto}
-                style={btnStyle(auto?.enabled ? "#dc2626" : "#22c55e", true)}>
+                style={btnStyle(auto?.enabled ? "#be123c" : "#10d98e", true)}>
           {auto?.enabled ? "Desactivar" : "Activar"}
         </button>
         {auto?.enabled && (
@@ -337,7 +337,7 @@ export default function EmailProcessingModule() {
                     title="Cambiar frecuencia de revisión">
               ⏱ cada {auto?.interval_min || 10} min
             </button>
-            <button data-testid="btn-auto-run-now" onClick={runAutoNow} disabled={auto?.running} style={btnStyle("#8b5cf6", true)}>
+            <button data-testid="btn-auto-run-now" onClick={runAutoNow} disabled={auto?.running} style={btnStyle("#2e5ce6", true)}>
               {auto?.running ? "⏳ Corriendo…" : "▶ Ejecutar ahora"}
             </button>
             <span style={{ fontSize: 12, color: "#64748b" }}>
@@ -364,12 +364,12 @@ export default function EmailProcessingModule() {
                 onChange={e => setReglasAuto(prev => ({ ...prev, keywords: e.target.value }))}
                 style={{ width: "100%", padding: "6px 10px", borderRadius: 0, border: "1px solid #d4af37", marginTop: 4, fontSize: 13 }} />
             </label>
-            <button data-testid="reglas-guardar" onClick={guardarReglasAuto} style={btnStyle("#2563eb", true)}>💾 Guardar reglas</button>
+            <button data-testid="reglas-guardar" onClick={guardarReglasAuto} style={btnStyle("#0f52ba", true)}>💾 Guardar reglas</button>
           </div>
           <div style={{ fontSize: 11, color: "#3730a3", marginTop: 6 }}>
             También crea carpeta siempre que el asunto diga "solicitud de crédito/financiamiento/preaprobación". Si el correo no trae los documentos mínimos, se descarta con una alerta.
           </div>
-          {reglasMsg && <div data-testid="reglas-msg" style={{ fontSize: 12.5, fontWeight: 700, marginTop: 6, color: reglasMsg.startsWith("✅") ? "#15803d" : "#b91c1c" }}>{reglasMsg}</div>}
+          {reglasMsg && <div data-testid="reglas-msg" style={{ fontSize: 12.5, fontWeight: 700, marginTop: 6, color: reglasMsg.startsWith("✅") ? "#0e9f6e" : "#9f1239" }}>{reglasMsg}</div>}
         </div>
       )}
 
@@ -421,7 +421,7 @@ export default function EmailProcessingModule() {
                 <strong>{r.name}</strong> — si contiene <code>{r.pattern}</code> →
                 {" "}{JSON.stringify(r.classify_as || {})}
               </div>
-              <button onClick={() => deleteRule(r.id)} style={btnStyle("#ef4444")}>Eliminar</button>
+              <button onClick={() => deleteRule(r.id)} style={btnStyle("#e11d48")}>Eliminar</button>
             </div>
           ))}
         </div>
@@ -460,7 +460,7 @@ export default function EmailProcessingModule() {
                     {r.prob_aprobacion ? (
                       <span style={{ fontWeight: 800, padding: "2px 8px", borderRadius: 999,
                         background: r.prob_aprobacion.porcentaje >= 75 ? "#dcfce7" : r.prob_aprobacion.porcentaje >= 50 ? "#fef9c3" : "#fee2e2",
-                        color: r.prob_aprobacion.porcentaje >= 75 ? "#15803d" : r.prob_aprobacion.porcentaje >= 50 ? "#a16207" : "#b91c1c" }}>
+                        color: r.prob_aprobacion.porcentaje >= 75 ? "#0e9f6e" : r.prob_aprobacion.porcentaje >= 50 ? "#a16207" : "#9f1239" }}>
                         {r.prob_aprobacion.porcentaje}%
                       </span>
                     ) : "—"}
@@ -545,7 +545,7 @@ function DetailModal({ item, onClose, onReprocess, onSave, onUploadDrive, onExtr
           {item.sender} · {(item.date_iso || "").slice(0,16).replace("T"," ")} · Status: <b>{item.status}</b>
         </div>
         {item.status === "descartado" && item.descartado_motivo && (
-          <div data-testid="descartado-motivo" style={{ background:"#fef2f2", border:"1px solid #fecaca", color:"#b91c1c", padding:"10px 14px", borderRadius:8, marginBottom:12, fontSize:13 }}>
+          <div data-testid="descartado-motivo" style={{ background:"#fef2f2", border:"1px solid #fecaca", color:"#9f1239", padding:"10px 14px", borderRadius:8, marginBottom:12, fontSize:13 }}>
             🚫 <b>Descartado por regla:</b> {item.descartado_motivo}
             {item.descartado_en ? ` · ${String(item.descartado_en).slice(0,16).replace("T"," ")}` : ""}
             <div style={{ color:"#7f1d1d", fontSize:12, marginTop:4 }}>Si corresponde armar la carpeta igual, usa el botón "📂 Armar carpeta manualmente" más abajo.</div>
@@ -561,7 +561,7 @@ function DetailModal({ item, onClose, onReprocess, onSave, onUploadDrive, onExtr
         {item.prob_aprobacion && (
           <div style={{ background:"#eff6ff", border:"1px solid #d4af37", borderRadius:8, padding:10, marginBottom:12 }} data-testid="prob-aprobacion-detalle">
             <div style={{ fontWeight:700, fontSize:13, marginBottom:4 }}>
-              📊 Posibilidad de aprobación: <span style={{ fontSize:16, color: item.prob_aprobacion.porcentaje >= 75 ? "#15803d" : item.prob_aprobacion.porcentaje >= 50 ? "#a16207" : "#b91c1c" }}>{item.prob_aprobacion.porcentaje}%</span>
+              📊 Posibilidad de aprobación: <span style={{ fontSize:16, color: item.prob_aprobacion.porcentaje >= 75 ? "#0e9f6e" : item.prob_aprobacion.porcentaje >= 50 ? "#a16207" : "#9f1239" }}>{item.prob_aprobacion.porcentaje}%</span>
             </div>
             <ul style={{ margin:0, paddingLeft:18, fontSize:11.5, color:"#374151" }}>
               {(item.prob_aprobacion.factores || []).map((f, i) => <li key={i}>{f}</li>)}
@@ -655,13 +655,13 @@ function DetailModal({ item, onClose, onReprocess, onSave, onUploadDrive, onExtr
                   style={btnStyle("#f59e0b")}>📎 Adjuntar documento a mano (auto-convierte a PDF)</button>
         </div>
         {item.drive_folder_id && (
-          <div style={{ background:"#ecfdf5", border:"1px solid #86efac", padding:8, borderRadius:6,
+          <div style={{ background:"#ecfdf5", border:"1px solid #6ee7c7", padding:8, borderRadius:6,
                         fontSize:12, marginBottom:12, color:"#065f46" }}>
             📁 Ya subido a Drive (mock): <code>{item.drive_folder_id}</code>
           </div>
         )}
         {item.drive_folder_id && (
-          <div style={{ background:"#ecfdf5", border:"1px solid #86efac", padding:8, borderRadius:6,
+          <div style={{ background:"#ecfdf5", border:"1px solid #6ee7c7", padding:8, borderRadius:6,
                         fontSize:12, marginBottom:12, color:"#065f46" }}>
             📂 Guardado en carpeta local: <b>{item.drive_folder_id}</b>
           </div>
@@ -675,7 +675,7 @@ function DetailModal({ item, onClose, onReprocess, onSave, onUploadDrive, onExtr
                     style={btnStyle("#b8942e")}>🔍 Leer con OCR</button>
             {item.status === "clasificado" && (
               <button data-testid="btn-upload-drive" onClick={() => onUploadDrive(item.id)} disabled={busy}
-                      style={btnStyle("#22c55e")}>📂 Guardar en Carpeta Cliente</button>
+                      style={btnStyle("#10d98e")}>📂 Guardar en Carpeta Cliente</button>
             )}
             {item.status === "descartado" && (
               <button data-testid="btn-armar-manual" onClick={() => onUploadDrive(item.id)} disabled={busy}
@@ -689,7 +689,7 @@ function DetailModal({ item, onClose, onReprocess, onSave, onUploadDrive, onExtr
           <div style={{ display:"flex", gap: 8 }}>
             <button onClick={onClose} style={btnStyle("#64748b")}>Cerrar</button>
             <button data-testid="btn-save-correction" onClick={guardar} disabled={busy}
-                    style={btnStyle("#22c55e")}>Guardar corrección</button>
+                    style={btnStyle("#10d98e")}>Guardar corrección</button>
           </div>
         </div>
       </div>

@@ -2,17 +2,17 @@ import { useState } from "react";
 import axios from "axios";
 import { API_URL } from "../utils/formatters";
 
-const C = { bg: "#101012", card: "#232326", accent: "#d4af37", green: "#10b981", red: "#ef4444", text: "#e2e8f0", muted: "#94a3b8", border: "rgba(212,175,55,0.2)" };
+const C = { bg: "#101012", card: "#232326", accent: "#d4af37", green: "#10d98e", red: "#e11d48", text: "#e2e8f0", muted: "#94a3b8", border: "rgba(212,175,55,0.2)" };
 
 const ESTADOS = {
   "en proceso": { color: "#f59e0b", icon: "fa-clock", label: "En Proceso" },
-  "pre-aprobado": { color: "#10b981", icon: "fa-check-circle", label: "Pre-Aprobado" },
-  "aprobado": { color: "#10b981", icon: "fa-check-double", label: "Aprobado" },
-  "rechazado": { color: "#ef4444", icon: "fa-times-circle", label: "Rechazado" },
-  "documentacion": { color: "#6366f1", icon: "fa-file-alt", label: "En Documentacion" },
-  "escritura": { color: "#8b5cf6", icon: "fa-pen-fancy", label: "Escritura" },
+  "pre-aprobado": { color: "#10d98e", icon: "fa-check-circle", label: "Pre-Aprobado" },
+  "aprobado": { color: "#10d98e", icon: "fa-check-double", label: "Aprobado" },
+  "rechazado": { color: "#e11d48", icon: "fa-times-circle", label: "Rechazado" },
+  "documentacion": { color: "#2e5ce6", icon: "fa-file-alt", label: "En Documentacion" },
+  "escritura": { color: "#2e5ce6", icon: "fa-pen-fancy", label: "Escritura" },
   "tasacion": { color: "#f59e0b", icon: "fa-home", label: "Tasacion" },
-  "cierre": { color: "#10b981", icon: "fa-flag-checkered", label: "Cierre" },
+  "cierre": { color: "#10d98e", icon: "fa-flag-checkered", label: "Cierre" },
 };
 
 export default function PortalCliente() {

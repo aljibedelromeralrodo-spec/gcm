@@ -42,14 +42,14 @@ export default function AlertasPanel() {
             const diasSin = Math.floor((Date.now() - new Date(a.created_at).getTime()) / 86400000);
             return (
               <div key={i} data-testid={`alerta-row-${i}`} style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.5rem 0", borderBottom: i < alertas.length - 1 ? "1px solid var(--border)" : "none" }}>
-                <div style={{ width: "32px", height: "32px", borderRadius: "0px", background: diasSin > 14 ? "rgba(239,68,68,0.15)" : "rgba(245,158,11,0.15)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <span style={{ fontSize: "0.75rem", fontWeight: 700, color: diasSin > 14 ? "#ef4444" : "#f59e0b" }}>{diasSin}d</span>
+                <div style={{ width: "32px", height: "32px", borderRadius: "0px", background: diasSin > 14 ? "rgba(225,29,72,0.15)" : "rgba(245,158,11,0.15)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <span style={{ fontSize: "0.75rem", fontWeight: 700, color: diasSin > 14 ? "#e11d48" : "#f59e0b" }}>{diasSin}d</span>
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: "0.82rem", fontWeight: 600, color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.cliente_display || "-"}</div>
                   <div style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>{a.proyecto || "Sin proyecto"} - {a.ejecutivo_cm || "Sin ejecutivo"}</div>
                 </div>
-                <span style={{ padding: "2px 8px", borderRadius: "0px", fontSize: "0.7rem", fontWeight: 600, background: "rgba(99,102,241,0.12)", color: "#6366f1", whiteSpace: "nowrap" }}>{a.estado || "en proceso"}</span>
+                <span style={{ padding: "2px 8px", borderRadius: "0px", fontSize: "0.7rem", fontWeight: 600, background: "rgba(99,102,241,0.12)", color: "#2e5ce6", whiteSpace: "nowrap" }}>{a.estado || "en proceso"}</span>
               </div>
             );
           })}

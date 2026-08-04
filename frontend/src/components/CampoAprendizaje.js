@@ -8,8 +8,8 @@ export const estiloConfianza = (confianza, campo) => {
   const c = (confianza || {})[campo];
   if (c === "alta") return {
     border: "1px solid rgba(52, 211, 153, 0.45)",
-    background: "linear-gradient(180deg, rgba(16,185,129,0.08) 0%, rgba(14,14,16,0.55) 100%)",
-    boxShadow: "0 0 0 1px rgba(52,211,153,0.14), 0 8px 24px -10px rgba(16,185,129,0.35), inset 0 1px 0 rgba(255,255,255,0.04)",
+    background: "linear-gradient(180deg, rgba(16,217,142,0.08) 0%, rgba(14,14,16,0.55) 100%)",
+    boxShadow: "0 0 0 1px rgba(52,211,153,0.14), 0 8px 24px -10px rgba(16,217,142,0.35), inset 0 1px 0 rgba(255,255,255,0.04)",
     borderRadius: "0px",
   };
   if (c === "dudosa") return {
@@ -83,7 +83,7 @@ export function PanelAprendizaje({ confianza, onGuardar, testId }) {
         Motor de Extracción · IA
       </span>
       <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: "0.76rem", color: "#cbd5e1" }}>
-        <span style={dot("radial-gradient(circle at 35% 35%, #6ee7b7, #059669)", "rgba(16,185,129,0.55)")} />
+        <span style={dot("radial-gradient(circle at 35% 35%, #6ee7b7, #0bb586)", "rgba(16,217,142,0.55)")} />
         Dato seguro (2+ fuentes)
       </span>
       <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: "0.76rem", color: "#cbd5e1" }}>

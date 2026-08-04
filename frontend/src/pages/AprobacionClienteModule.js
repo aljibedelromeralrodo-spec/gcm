@@ -7,7 +7,7 @@ import { estiloConfianza, PanelAprendizaje } from "../components/CampoAprendizaj
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
-const card = { background: "rgba(14,14,16,0.9)", padding: "1.5rem", borderRadius: "0px", border: "1px solid transparent", backgroundImage: "linear-gradient(160deg, rgba(30,30,30,0.95), rgba(10,10,10,0.98)), linear-gradient(135deg, #BF953F, #FCF6BA, #B38728, #FBF5B7, #AA771C)", boxShadow: "0 35px 70px -20px rgba(0,0,0,0.95), 0 0 38px -16px rgba(191,149,63,0.45)", backgroundOrigin: "border-box", backgroundClip: "padding-box, border-box", marginBottom: "1.5rem" };
+const card = { background: "rgba(14,14,16,0.9)", padding: "1.5rem", borderRadius: "0px", border: "1px solid transparent", backgroundImage: "linear-gradient(115deg, rgba(255,255,255,0.09) 0%, rgba(255,255,255,0.02) 18%, transparent 32%), linear-gradient(160deg, rgba(30,30,30,0.95), rgba(10,10,10,0.98)), linear-gradient(135deg, #BF953F, #FCF6BA, #B38728, #FBF5B7, #AA771C)", boxShadow: "0 35px 70px -20px rgba(0,0,0,0.95), 0 0 38px -16px rgba(191,149,63,0.45)", backgroundOrigin: "border-box", backgroundClip: "padding-box, padding-box, border-box", marginBottom: "1.5rem" };
 const inp = { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "0px", padding: "0.55rem 0.8rem", color: "#fff", fontSize: "0.9rem", width: "100%" };
 const btn = (bg, small) => ({ background: bg, color: bg === "var(--gold)" ? "#0a0e17" : "#fff", border: "none", borderRadius: "0px", padding: small ? "0.4rem 0.8rem" : "0.6rem 1.2rem", fontWeight: 700, cursor: "pointer", fontSize: small ? "0.8rem" : "0.9rem" });
 const lbl = { display: "block", fontSize: "0.75rem", opacity: 0.6, marginBottom: "0.3rem", textTransform: "uppercase", letterSpacing: "0.5px" };
@@ -37,7 +37,7 @@ export default function AprobacionClienteModule({ onNavigate }) {
 
   const bordeConf = (campo) => {
     const c = confianza[campo];
-    if (c === "alta") return { border: "2px solid #22c55e", boxShadow: "0 0 6px rgba(34,197,94,0.25)" };
+    if (c === "alta") return { border: "2px solid #10d98e", boxShadow: "0 0 6px rgba(16,217,142,0.25)" };
     if (c === "dudosa") return { border: "2px solid #f59e0b", boxShadow: "0 0 6px rgba(245,158,11,0.35)" };
     return {};
   };
@@ -186,7 +186,7 @@ export default function AprobacionClienteModule({ onNavigate }) {
           <i className="fa fa-arrow-left" /> Volver a Carpeta Clientes
         </button>
       )}
-      {msg && <div data-testid="aprobacion-msg" style={{ padding: "0.7rem 1rem", borderRadius: "0px", marginBottom: "1rem", background: msg.startsWith("✅") ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)", color: msg.startsWith("✅") ? "#22c55e" : "#ef4444", fontWeight: 600 }}>{msg}</div>}
+      {msg && <div data-testid="aprobacion-msg" style={{ padding: "0.7rem 1rem", borderRadius: "0px", marginBottom: "1rem", background: msg.startsWith("✅") ? "rgba(16,217,142,0.15)" : "rgba(225,29,72,0.15)", color: msg.startsWith("✅") ? "#10d98e" : "#e11d48", fontWeight: 600 }}>{msg}</div>}
 
       {/* BUSCADOR */}
       <div style={card}>
@@ -198,7 +198,7 @@ export default function AprobacionClienteModule({ onNavigate }) {
               {resultados.map((r, i) => (
                 <div key={i} data-testid={`aprobacion-resultado-${i}`} onClick={() => elegir(r)} style={{ padding: "0.6rem 1rem", cursor: "pointer", borderBottom: "1px solid rgba(255,255,255,0.05)" }}
                      onMouseEnter={e => e.currentTarget.style.background = "rgba(212,175,55,0.1)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                  <b>{r.nombre}</b> <span style={{ opacity: 0.6 }}>{r.rut}</span> {r.email && <span style={{ color: "#22c55e", fontSize: "0.8rem" }}> · {r.email}</span>}
+                  <b>{r.nombre}</b> <span style={{ opacity: 0.6 }}>{r.rut}</span> {r.email && <span style={{ color: "#10d98e", fontSize: "0.8rem" }}> · {r.email}</span>}
                 </div>
               ))}
             </div>
@@ -229,7 +229,7 @@ export default function AprobacionClienteModule({ onNavigate }) {
               } catch (_e) { /* noop */ }
             }} />
         </div>
-        {plantillaPropia && <div style={{ marginTop: "0.6rem", fontSize: "0.8rem", color: "#22c55e" }}><i className="fa fa-bookmark" style={{ marginRight: "0.35rem" }} />Este cliente tiene plantilla propia guardada</div>}
+        {plantillaPropia && <div style={{ marginTop: "0.6rem", fontSize: "0.8rem", color: "#10d98e" }}><i className="fa fa-bookmark" style={{ marginRight: "0.35rem" }} />Este cliente tiene plantilla propia guardada</div>}
       </div>
 
       {/* CONTENIDO DEL CORREO */}
@@ -263,7 +263,7 @@ export default function AprobacionClienteModule({ onNavigate }) {
               style={{ fontSize: "0.75rem", color: "#d4af37", fontWeight: 700, textDecoration: "none", border: "1px solid #d4af37", borderRadius: 0, padding: "0.15rem 0.55rem" }}>
               <i className="fa fa-eye" style={{ marginRight: "0.3rem" }} />Ver PDF
             </a>
-            <span style={{ fontSize: "0.72rem", padding: "0.12rem 0.5rem", borderRadius: "999px", background: a.tipo === "carta_aprobacion" ? "rgba(34,197,94,0.15)" : a.tipo === "simulacion_ajustada" ? "rgba(212,175,55,0.15)" : "rgba(212,175,55,0.2)", color: a.tipo === "carta_aprobacion" ? "#22c55e" : a.tipo === "simulacion_ajustada" ? "var(--gold)" : "#9aa3b5" }}>{a.tipo === "simulacion_ajustada" ? "Simulación" : TIPO_LABEL[a.tipo]}</span>
+            <span style={{ fontSize: "0.72rem", padding: "0.12rem 0.5rem", borderRadius: "999px", background: a.tipo === "carta_aprobacion" ? "rgba(16,217,142,0.15)" : a.tipo === "simulacion_ajustada" ? "rgba(212,175,55,0.15)" : "rgba(212,175,55,0.2)", color: a.tipo === "carta_aprobacion" ? "#10d98e" : a.tipo === "simulacion_ajustada" ? "var(--gold)" : "#9aa3b5" }}>{a.tipo === "simulacion_ajustada" ? "Simulación" : TIPO_LABEL[a.tipo]}</span>
             <span style={{ fontSize: "0.72rem", opacity: 0.45 }}>{a.origen === "autocorreo" ? "Archivo Autocorreo" : "Carpeta Cliente"}</span>
           </label>
         ))}

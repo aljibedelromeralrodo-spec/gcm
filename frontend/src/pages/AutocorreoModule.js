@@ -186,13 +186,13 @@ export default function AutocorreoModule() {
       )}
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: "1rem", marginBottom: "1.5rem" }}>
-        <StatCard label="Total Enviados" value={data.sent} icon="fa-paper-plane" color="#22c55e" />
-        <StatCard label="Total Fallidos" value={data.failed} icon="fa-exclamation-triangle" color={data.failed > 0 ? "#ef4444" : "#888"} />
+        <StatCard label="Total Enviados" value={data.sent} icon="fa-paper-plane" color="#10d98e" />
+        <StatCard label="Total Fallidos" value={data.failed} icon="fa-exclamation-triangle" color={data.failed > 0 ? "#e11d48" : "#888"} />
         <StatCard label="Total Procesados" value={data.total} icon="fa-list" color="#d4af37" />
         <StatCard label="Latencia" value="30 seg" icon="fa-bolt" color="#f59e0b" sub="Polling automatico" />
       </div>
 
-      <div className="card" style={{ background: "rgba(14,14,16,0.9)", padding: "1.5rem", borderRadius: "0px", border: "1px solid transparent", backgroundImage: "linear-gradient(160deg, rgba(30,30,30,0.95), rgba(10,10,10,0.98)), linear-gradient(135deg, #BF953F, #FCF6BA, #B38728, #FBF5B7, #AA771C)", boxShadow: "0 35px 70px -20px rgba(0,0,0,0.95), 0 0 38px -16px rgba(191,149,63,0.45)", backgroundOrigin: "border-box", backgroundClip: "padding-box, border-box", marginBottom: "1.5rem" }}>
+      <div className="card" style={{ background: "rgba(14,14,16,0.9)", padding: "1.5rem", borderRadius: "0px", border: "1px solid transparent", backgroundImage: "linear-gradient(115deg, rgba(255,255,255,0.09) 0%, rgba(255,255,255,0.02) 18%, transparent 32%), linear-gradient(160deg, rgba(30,30,30,0.95), rgba(10,10,10,0.98)), linear-gradient(135deg, #BF953F, #FCF6BA, #B38728, #FBF5B7, #AA771C)", boxShadow: "0 35px 70px -20px rgba(0,0,0,0.95), 0 0 38px -16px rgba(191,149,63,0.45)", backgroundOrigin: "border-box", backgroundClip: "padding-box, padding-box, border-box", marginBottom: "1.5rem" }}>
         <h3 style={{ margin: "0 0 1rem", color: "var(--gold)", fontSize: "1.1rem" }}>
           <i className="fa fa-cogs" style={{ marginRight: "0.5rem" }} />Controles
         </h3>
@@ -200,7 +200,7 @@ export default function AutocorreoModule() {
         <Row label="Sistema Correo a Mesa" right={<StatusPill active={data.enabled} />}>
           <button onClick={toggleEnabled} disabled={loading} className="autocorreo-btn"
             data-testid="btn-toggle-enabled"
-            style={{ background: data.enabled ? "#ef4444" : "#22c55e", color: "#fff" }}>
+            style={{ background: data.enabled ? "#e11d48" : "#10d98e", color: "#fff" }}>
             {data.enabled ? "Desactivar" : "Activar"}
           </button>
         </Row>
@@ -208,7 +208,7 @@ export default function AutocorreoModule() {
         <Row label="Procesamiento Automatico (cada 30s)" right={<StatusPill active={data.periodic_enabled} />}>
           <button onClick={togglePeriodic} disabled={loading} className="autocorreo-btn"
             data-testid="btn-toggle-periodic"
-            style={{ background: data.periodic_enabled ? "#ef4444" : "#22c55e", color: "#fff" }}>
+            style={{ background: data.periodic_enabled ? "#e11d48" : "#10d98e", color: "#fff" }}>
             {data.periodic_enabled ? "Pausar" : "Activar 24/7"}
           </button>
         </Row>
@@ -237,23 +237,23 @@ export default function AutocorreoModule() {
         </Row>
 
         {runResult && (
-          <div style={{ marginTop: "1rem", padding: "0.75rem 1rem", background: "rgba(34,197,94,0.1)", border: "1px solid #22c55e", borderRadius: "0px", fontSize: "0.9rem" }} data-testid="run-result">
+          <div style={{ marginTop: "1rem", padding: "0.75rem 1rem", background: "rgba(16,217,142,0.1)", border: "1px solid #10d98e", borderRadius: "0px", fontSize: "0.9rem" }} data-testid="run-result">
             {runResult.message ? (
               <span><strong style={{ color: "#eab308" }}>⏳ En proceso:</strong> {runResult.message}</span>
             ) : runResult.error ? (
-              <span style={{ color: "#ef4444" }}>Error: {runResult.error}</span>
+              <span style={{ color: "#e11d48" }}>Error: {runResult.error}</span>
             ) : (
-              <span><strong style={{ color: "#22c55e" }}>Ejecucion completa:</strong> {runResult.sent || 0} enviados, {runResult.processed || 0} procesados</span>
+              <span><strong style={{ color: "#10d98e" }}>Ejecucion completa:</strong> {runResult.sent || 0} enviados, {runResult.processed || 0} procesados</span>
             )}
             {runResult.errors && runResult.errors.length > 0 && (
-              <div style={{ marginTop: "0.5rem", color: "#ef4444" }}>Errores: {runResult.errors.slice(0,3).join(" | ")}</div>
+              <div style={{ marginTop: "0.5rem", color: "#e11d48" }}>Errores: {runResult.errors.slice(0,3).join(" | ")}</div>
             )}
           </div>
         )}
       </div>
 
       {/* REPORTE DIARIO 10:00 AM */}
-      <div className="card" data-testid="reporte-diario-card" style={{ background: "rgba(14,14,16,0.9)", padding: "1.5rem", borderRadius: "0px", border: "1px solid transparent", backgroundImage: "linear-gradient(160deg, rgba(30,30,30,0.95), rgba(10,10,10,0.98)), linear-gradient(135deg, #BF953F, #FCF6BA, #B38728, #FBF5B7, #AA771C)", boxShadow: "0 35px 70px -20px rgba(0,0,0,0.95), 0 0 38px -16px rgba(191,149,63,0.45)", backgroundOrigin: "border-box", backgroundClip: "padding-box, border-box", marginBottom: "1.5rem" }}>
+      <div className="card" data-testid="reporte-diario-card" style={{ background: "rgba(14,14,16,0.9)", padding: "1.5rem", borderRadius: "0px", border: "1px solid transparent", backgroundImage: "linear-gradient(115deg, rgba(255,255,255,0.09) 0%, rgba(255,255,255,0.02) 18%, transparent 32%), linear-gradient(160deg, rgba(30,30,30,0.95), rgba(10,10,10,0.98)), linear-gradient(135deg, #BF953F, #FCF6BA, #B38728, #FBF5B7, #AA771C)", boxShadow: "0 35px 70px -20px rgba(0,0,0,0.95), 0 0 38px -16px rgba(191,149,63,0.45)", backgroundOrigin: "border-box", backgroundClip: "padding-box, padding-box, border-box", marginBottom: "1.5rem" }}>
         <h3 style={{ margin: "0 0 1rem", color: "var(--gold)", fontSize: "1.1rem" }}>
           <i className="fa fa-calendar-check-o" style={{ marginRight: "0.5rem" }} />Reporte Diario {reporte ? `(${reporte.hora ?? 10}:00 hrs Chile)` : ""}
         </h3>
@@ -265,7 +265,7 @@ export default function AutocorreoModule() {
         <Row label="Envío automático diario" right={<StatusPill active={!!reporte?.enabled} />}>
           <button onClick={toggleReporte} disabled={loading} className="autocorreo-btn"
             data-testid="btn-toggle-reporte"
-            style={{ background: reporte?.enabled ? "#ef4444" : "#22c55e", color: "#fff" }}>
+            style={{ background: reporte?.enabled ? "#e11d48" : "#10d98e", color: "#fff" }}>
             {reporte?.enabled ? "Desactivar" : "Activar"}
           </button>
           <button onClick={cambiarHoraReporte} disabled={loading} className="autocorreo-btn"
@@ -283,18 +283,18 @@ export default function AutocorreoModule() {
           <div style={{ fontSize: "0.82rem", opacity: 0.8, marginTop: "0.4rem" }} data-testid="reporte-last-result">
             Último envío: {formatDate(reporte.last_result.enviado_en)} → {reporte.last_result.destino} ·{" "}
             {reporte.last_result.recibidas} recibidas · {reporte.last_result.enviadas} enviadas a mesa
-            {reporte.last_result.error && <span style={{ color: "#ef4444" }}> · Error: {reporte.last_result.error}</span>}
+            {reporte.last_result.error && <span style={{ color: "#e11d48" }}> · Error: {reporte.last_result.error}</span>}
           </div>
         )}
       </div>
 
-      <div className="card" style={{ background: "rgba(14,14,16,0.9)", padding: "1.5rem", borderRadius: "0px", border: "1px solid transparent", backgroundImage: "linear-gradient(160deg, rgba(30,30,30,0.95), rgba(10,10,10,0.98)), linear-gradient(135deg, #BF953F, #FCF6BA, #B38728, #FBF5B7, #AA771C)", boxShadow: "0 35px 70px -20px rgba(0,0,0,0.95), 0 0 38px -16px rgba(191,149,63,0.45)", backgroundOrigin: "border-box", backgroundClip: "padding-box, border-box", marginBottom: "1.5rem" }} data-testid="autocorreo-mailboxes">
+      <div className="card" style={{ background: "rgba(14,14,16,0.9)", padding: "1.5rem", borderRadius: "0px", border: "1px solid transparent", backgroundImage: "linear-gradient(115deg, rgba(255,255,255,0.09) 0%, rgba(255,255,255,0.02) 18%, transparent 32%), linear-gradient(160deg, rgba(30,30,30,0.95), rgba(10,10,10,0.98)), linear-gradient(135deg, #BF953F, #FCF6BA, #B38728, #FBF5B7, #AA771C)", boxShadow: "0 35px 70px -20px rgba(0,0,0,0.95), 0 0 38px -16px rgba(191,149,63,0.45)", backgroundOrigin: "border-box", backgroundClip: "padding-box, padding-box, border-box", marginBottom: "1.5rem" }} data-testid="autocorreo-mailboxes">
         {mailboxes.some(m => m.auth_live === false) && (
           <div data-testid="auth-broken-banner" style={{
-            background: "linear-gradient(90deg, #dc2626, #b91c1c)", color: "#fff",
+            background: "linear-gradient(90deg, #be123c, #9f1239)", color: "#fff",
             padding: "1rem 1.2rem", borderRadius: 0, marginBottom: "1.1rem",
             display: "flex", alignItems: "center", gap: "0.9rem", flexWrap: "wrap",
-            boxShadow: "0 4px 20px rgba(220,38,38,0.35)",
+            boxShadow: "0 4px 20px rgba(190,18,60,0.35)",
           }}>
             <i className="fa fa-exclamation-triangle" style={{ fontSize: "1.6rem" }} />
             <div style={{ flex: 1, minWidth: 240 }}>
@@ -309,7 +309,7 @@ export default function AutocorreoModule() {
               <a key={m.email} href={`${API_URL}${m.connect_url}`} target="_blank" rel="noreferrer"
                 data-testid={`btn-reconnect-${m.slot}`}
                 style={{
-                  background: "#fff", color: "#b91c1c", padding: "0.6rem 1.1rem",
+                  background: "#fff", color: "#9f1239", padding: "0.6rem 1.1rem",
                   borderRadius: 0, fontWeight: 800, textDecoration: "none",
                   display: "inline-flex", alignItems: "center", gap: 6,
                 }}>
@@ -334,7 +334,7 @@ export default function AutocorreoModule() {
             <div key={m.email} data-testid={`mailbox-${m.slot}`}
               style={{
                 background: "rgba(255,255,255,0.03)",
-                border: `1px solid ${m.backoff_remaining_s > 0 ? "#ef4444" : "rgba(212,175,55,0.2)"}`,
+                border: `1px solid ${m.backoff_remaining_s > 0 ? "#e11d48" : "rgba(212,175,55,0.2)"}`,
                 borderRadius: "0px", padding: "0.9rem 1.1rem",
                 display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.6rem",
               }}>
@@ -343,7 +343,7 @@ export default function AutocorreoModule() {
                   <span style={{
                     fontSize: "0.7rem", fontWeight: 700, letterSpacing: 1,
                     padding: "0.15rem 0.5rem", borderRadius: 999,
-                    background: m.role === "principal" ? "rgba(245,158,11,0.18)" : "rgba(139,92,246,0.18)",
+                    background: m.role === "principal" ? "rgba(245,158,11,0.18)" : "rgba(46,92,230,0.18)",
                     color: m.role === "principal" ? "#f59e0b" : "#a78bfa",
                     textTransform: "uppercase",
                   }}>{m.role}</span>
@@ -351,16 +351,16 @@ export default function AutocorreoModule() {
                 </div>
                 <div style={{ fontSize: "0.8rem", opacity: 0.75, marginTop: "0.3rem" }}>
                   {m.auth_method === "oauth" && (
-                    <span style={{ color: "#22c55e" }}><i className="fa fa-check-circle" /> OAuth conectado</span>
+                    <span style={{ color: "#10d98e" }}><i className="fa fa-check-circle" /> OAuth conectado</span>
                   )}
                   {m.auth_method === "app_password" && (
-                    <span style={{ color: "#22c55e" }}><i className="fa fa-key" /> App Password conectado</span>
+                    <span style={{ color: "#10d98e" }}><i className="fa fa-key" /> App Password conectado</span>
                   )}
                   {m.auth_method === "none" && (
                     <span style={{ color: "#f59e0b" }}><i className="fa fa-exclamation-triangle" /> Sin credenciales</span>
                   )}
                   {m.backoff_remaining_s > 0 && (
-                    <span style={{ color: "#ef4444", marginLeft: "0.7rem" }}>
+                    <span style={{ color: "#e11d48", marginLeft: "0.7rem" }}>
                       <i className="fa fa-hourglass-half" /> OVERQUOTA — reintenta en {Math.floor(m.backoff_remaining_s / 60)}min {m.backoff_remaining_s % 60}s
                     </span>
                   )}
@@ -394,7 +394,7 @@ export default function AutocorreoModule() {
           {mailboxes.length <= 1 && (
             <div style={{
               padding: "0.8rem 1rem", borderRadius: 0,
-              background: "rgba(139,92,246,0.08)", border: "1px dashed #a78bfa",
+              background: "rgba(46,92,230,0.08)", border: "1px dashed #a78bfa",
               fontSize: "0.85rem",
             }} data-testid="add-backup-hint">
               <b><i className="fa fa-lightbulb-o" /> Sumá una cuenta de respaldo</b><br/>
@@ -404,7 +404,7 @@ export default function AutocorreoModule() {
         </div>
       </div>
 
-      <div className="card" style={{ background: "rgba(14,14,16,0.9)", padding: "1.5rem", borderRadius: "0px", border: "1px solid transparent", backgroundImage: "linear-gradient(160deg, rgba(30,30,30,0.95), rgba(10,10,10,0.98)), linear-gradient(135deg, #BF953F, #FCF6BA, #B38728, #FBF5B7, #AA771C)", boxShadow: "0 35px 70px -20px rgba(0,0,0,0.95), 0 0 38px -16px rgba(191,149,63,0.45)", backgroundOrigin: "border-box", backgroundClip: "padding-box, border-box" }} data-testid="autocorreo-manual-upload">
+      <div className="card" style={{ background: "rgba(14,14,16,0.9)", padding: "1.5rem", borderRadius: "0px", border: "1px solid transparent", backgroundImage: "linear-gradient(115deg, rgba(255,255,255,0.09) 0%, rgba(255,255,255,0.02) 18%, transparent 32%), linear-gradient(160deg, rgba(30,30,30,0.95), rgba(10,10,10,0.98)), linear-gradient(135deg, #BF953F, #FCF6BA, #B38728, #FBF5B7, #AA771C)", boxShadow: "0 35px 70px -20px rgba(0,0,0,0.95), 0 0 38px -16px rgba(191,149,63,0.45)", backgroundOrigin: "border-box", backgroundClip: "padding-box, padding-box, border-box" }} data-testid="autocorreo-manual-upload">
         <h3 style={{ margin: "0 0 0.8rem", color: "var(--gold)", fontSize: "1.1rem" }}>
           <i className="fa fa-cloud-upload" style={{ marginRight: "0.5rem" }} />
           Subida manual (bypass Gmail)
@@ -416,7 +416,7 @@ export default function AutocorreoModule() {
         <ManualUploadForm apiUrl={API_URL} onDone={load} />
       </div>
 
-      <div className="card" style={{ background: "rgba(14,14,16,0.9)", padding: "1.5rem", borderRadius: "0px", border: "1px solid transparent", backgroundImage: "linear-gradient(160deg, rgba(30,30,30,0.95), rgba(10,10,10,0.98)), linear-gradient(135deg, #BF953F, #FCF6BA, #B38728, #FBF5B7, #AA771C)", boxShadow: "0 35px 70px -20px rgba(0,0,0,0.95), 0 0 38px -16px rgba(191,149,63,0.45)", backgroundOrigin: "border-box", backgroundClip: "padding-box, border-box" }} data-testid="autocorreo-archive">
+      <div className="card" style={{ background: "rgba(14,14,16,0.9)", padding: "1.5rem", borderRadius: "0px", border: "1px solid transparent", backgroundImage: "linear-gradient(115deg, rgba(255,255,255,0.09) 0%, rgba(255,255,255,0.02) 18%, transparent 32%), linear-gradient(160deg, rgba(30,30,30,0.95), rgba(10,10,10,0.98)), linear-gradient(135deg, #BF953F, #FCF6BA, #B38728, #FBF5B7, #AA771C)", boxShadow: "0 35px 70px -20px rgba(0,0,0,0.95), 0 0 38px -16px rgba(191,149,63,0.45)", backgroundOrigin: "border-box", backgroundClip: "padding-box, padding-box, border-box" }} data-testid="autocorreo-archive">
         <h3 style={{ margin: "0 0 1rem", color: "var(--gold)", fontSize: "1.1rem" }}>
           <i className="fa fa-folder-open" style={{ marginRight: "0.5rem" }} />PDFs ajustados archivados por cliente
           <span style={{ fontSize: "0.75rem", opacity: 0.6, fontWeight: 400, marginLeft: "0.7rem" }}>
@@ -436,7 +436,7 @@ export default function AutocorreoModule() {
               return (
                 <details key={f.cliente} style={{
                   background: "rgba(255,255,255,0.03)",
-                  border: "1px solid transparent", backgroundImage: "linear-gradient(160deg, rgba(30,30,30,0.95), rgba(10,10,10,0.98)), linear-gradient(135deg, #BF953F, #FCF6BA, #B38728, #FBF5B7, #AA771C)", boxShadow: "0 35px 70px -20px rgba(0,0,0,0.95), 0 0 38px -16px rgba(191,149,63,0.45)", backgroundOrigin: "border-box", backgroundClip: "padding-box, border-box",
+                  border: "1px solid transparent", backgroundImage: "linear-gradient(115deg, rgba(255,255,255,0.09) 0%, rgba(255,255,255,0.02) 18%, transparent 32%), linear-gradient(160deg, rgba(30,30,30,0.95), rgba(10,10,10,0.98)), linear-gradient(135deg, #BF953F, #FCF6BA, #B38728, #FBF5B7, #AA771C)", boxShadow: "0 35px 70px -20px rgba(0,0,0,0.95), 0 0 38px -16px rgba(191,149,63,0.45)", backgroundOrigin: "border-box", backgroundClip: "padding-box, padding-box, border-box",
                   borderRadius: "0px",
                   padding: "0.6rem 0.9rem",
                 }} data-testid={`archive-folder-${f.cliente}`}>
@@ -476,7 +476,7 @@ export default function AutocorreoModule() {
         )}
       </div>
 
-      <div className="card" style={{ background: "rgba(14,14,16,0.9)", padding: "1.5rem", borderRadius: "0px", border: "1px solid transparent", backgroundImage: "linear-gradient(160deg, rgba(30,30,30,0.95), rgba(10,10,10,0.98)), linear-gradient(135deg, #BF953F, #FCF6BA, #B38728, #FBF5B7, #AA771C)", boxShadow: "0 35px 70px -20px rgba(0,0,0,0.95), 0 0 38px -16px rgba(191,149,63,0.45)", backgroundOrigin: "border-box", backgroundClip: "padding-box, border-box" }}>
+      <div className="card" style={{ background: "rgba(14,14,16,0.9)", padding: "1.5rem", borderRadius: "0px", border: "1px solid transparent", backgroundImage: "linear-gradient(115deg, rgba(255,255,255,0.09) 0%, rgba(255,255,255,0.02) 18%, transparent 32%), linear-gradient(160deg, rgba(30,30,30,0.95), rgba(10,10,10,0.98)), linear-gradient(135deg, #BF953F, #FCF6BA, #B38728, #FBF5B7, #AA771C)", boxShadow: "0 35px 70px -20px rgba(0,0,0,0.95), 0 0 38px -16px rgba(191,149,63,0.45)", backgroundOrigin: "border-box", backgroundClip: "padding-box, padding-box, border-box" }}>
         <h3 style={{ margin: "0 0 1rem", color: "var(--gold)", fontSize: "1.1rem" }}>
           <i className="fa fa-list" style={{ marginRight: "0.5rem" }} />Ultimos procesados
         </h3>
@@ -501,18 +501,18 @@ export default function AutocorreoModule() {
                   <td style={{ padding: "0.6rem" }}>
                     <span style={{
                       padding: "0.15rem 0.55rem", borderRadius: "999px", fontSize: "0.78rem", fontWeight: 700,
-                      background: r.status === "sent" ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)",
-                      color: r.status === "sent" ? "#22c55e" : "#ef4444",
+                      background: r.status === "sent" ? "rgba(16,217,142,0.15)" : "rgba(225,29,72,0.15)",
+                      color: r.status === "sent" ? "#10d98e" : "#e11d48",
                     }}>{r.status === "sent" ? "Enviado" : "Fallido"}</span>
                   </td>
                   <td style={{ padding: "0.6rem", maxWidth: "220px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} data-testid={`reenviado-${i}`}
                       title={r.reenviado ? `Reenviado a ${r.reenviado_a}${r.reenviado_fecha ? " el " + formatDate(r.reenviado_fecha) : ""}` : "Sin reenvío detectado en Enviados"}>
                     {r.reenviado
-                      ? <span style={{ color: "#22c55e", fontWeight: 600 }}><i className="fa fa-share" style={{ marginRight: "0.35rem" }} />{r.reenviado_a || "Sí"}</span>
+                      ? <span style={{ color: "#10d98e", fontWeight: 600 }}><i className="fa fa-share" style={{ marginRight: "0.35rem" }} />{r.reenviado_a || "Sí"}</span>
                       : <span style={{ opacity: 0.35 }}>—</span>}
                   </td>
                   <td style={{ padding: "0.6rem", opacity: 0.7, fontSize: "0.8rem", maxWidth: "240px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {r.error ? <span style={{ color: "#ef4444" }}>{r.error}</span> : (r.attachments_info || "—")}
+                    {r.error ? <span style={{ color: "#e11d48" }}>{r.error}</span> : (r.attachments_info || "—")}
                   </td>
                 </tr>
               ))}
@@ -599,7 +599,7 @@ function ManualUploadForm({ apiUrl, onDone }) {
       </button>
       {result && (
         <div style={{
-          background: "rgba(34,197,94,0.1)", border: "1px solid #22c55e",
+          background: "rgba(16,217,142,0.1)", border: "1px solid #10d98e",
           padding: "0.7rem", borderRadius: 0, fontSize: "0.85rem",
         }}>
           <b>✅ Archivado en {result.folder}</b>
@@ -611,7 +611,7 @@ function ManualUploadForm({ apiUrl, onDone }) {
               <div style={{ marginTop: 6 }}>
                 <a href={url} target="_blank" rel="noreferrer"
                    data-testid="link-open-adjusted"
-                   style={{ color: "#22c55e", fontWeight: 700, textDecoration: "underline" }}>
+                   style={{ color: "#10d98e", fontWeight: 700, textDecoration: "underline" }}>
                   <i className="fa fa-external-link" /> Abrir PDF ajustado ahora
                 </a>
               </div>
@@ -629,7 +629,7 @@ function ManualUploadForm({ apiUrl, onDone }) {
             })}
           </ul>
           {result.errors && result.errors.length > 0 && (
-            <div style={{ marginTop: 6, color: "#fca5a5" }}>
+            <div style={{ marginTop: 6, color: "#fda4af" }}>
               Errores: {result.errors.map((e, i) => <div key={i}>• {e.file}: {e.error}</div>)}
             </div>
           )}
@@ -643,9 +643,9 @@ function StatusPill({ active }) {
   return (
     <span style={{
       padding: "0.25rem 0.75rem", borderRadius: "999px", fontSize: "0.8rem", fontWeight: 700,
-      background: active ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)",
-      color: active ? "#22c55e" : "#ef4444",
-      border: `1px solid ${active ? "#22c55e" : "#ef4444"}`,
+      background: active ? "rgba(16,217,142,0.15)" : "rgba(225,29,72,0.15)",
+      color: active ? "#10d98e" : "#e11d48",
+      border: `1px solid ${active ? "#10d98e" : "#e11d48"}`,
     }}>
       <i className={`fa ${active ? "fa-check-circle" : "fa-times-circle"}`} style={{ marginRight: "0.4rem" }} />
       {active ? "Activo" : "Inactivo"}
@@ -657,7 +657,7 @@ function StatCard({ label, value, icon, color, sub }) {
   return (
     <div style={{
       background: "rgba(14,14,16,0.9)", padding: "1.2rem 1.4rem",
-      borderRadius: "0px", border: "1px solid transparent", backgroundImage: "linear-gradient(160deg, rgba(30,30,30,0.95), rgba(10,10,10,0.98)), linear-gradient(135deg, #BF953F, #FCF6BA, #B38728, #FBF5B7, #AA771C)", boxShadow: "0 35px 70px -20px rgba(0,0,0,0.95), 0 0 38px -16px rgba(191,149,63,0.45)", backgroundOrigin: "border-box", backgroundClip: "padding-box, border-box",
+      borderRadius: "0px", border: "1px solid transparent", backgroundImage: "linear-gradient(115deg, rgba(255,255,255,0.09) 0%, rgba(255,255,255,0.02) 18%, transparent 32%), linear-gradient(160deg, rgba(30,30,30,0.95), rgba(10,10,10,0.98)), linear-gradient(135deg, #BF953F, #FCF6BA, #B38728, #FBF5B7, #AA771C)", boxShadow: "0 35px 70px -20px rgba(0,0,0,0.95), 0 0 38px -16px rgba(191,149,63,0.45)", backgroundOrigin: "border-box", backgroundClip: "padding-box, padding-box, border-box",
     }} data-testid={`stat-${label.toLowerCase().replace(/\s/g,'-')}`}>
       <div style={{ display: "flex", alignItems: "center", gap: "0.7rem", marginBottom: "0.4rem" }}>
         <i className={`fa ${icon}`} style={{ color, fontSize: "1.2rem" }} />
