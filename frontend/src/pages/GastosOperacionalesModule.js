@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import ImportarCorreo from "../components/ImportarCorreo";
+import { EmailAutocomplete } from "../components/EmailAutocomplete";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -287,7 +288,7 @@ export default function GastosOperacionalesModule({ onNavigate }) {
         <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 2fr", gap: "1rem", marginTop: "1rem" }}>
           <div><label style={lbl}>Nombre del cliente</label><input data-testid="gastos-nombre" style={inp} value={nombre} onChange={e => setNombre(e.target.value)} /></div>
           <div><label style={lbl}>RUT</label><input data-testid="gastos-rut" style={inp} value={rut} onChange={e => setRut(e.target.value)} /></div>
-          <div><label style={lbl}>Correo del cliente</label><input data-testid="gastos-email" style={inp} value={emailCliente} onChange={e => setEmailCliente(e.target.value)} placeholder="cliente@correo.cl" /></div>
+          <div><label style={lbl}>Correo del cliente</label><EmailAutocomplete dataTestId="gastos-email" style={inp} value={emailCliente} onChange={setEmailCliente} placeholder="cliente@correo.cl" /></div>
         </div>
         <div style={{ display: "flex", gap: "0.7rem", flexWrap: "wrap", marginTop: "0.8rem", alignItems: "center" }}>
           <button data-testid="gastos-leer-ia" onClick={leerConIA} disabled={iaLoading || !nombre}

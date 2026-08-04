@@ -2219,6 +2219,7 @@ def _fin_resumen_html(doc):
     falta = "<span style='color:#dc2626;font-weight:bold'>— FALTA</span>"
     filas = [("Solicitud recibida de", f"{origen_nombre} · {origen_mail}".strip(" ·") or None),
              ("Ejecutivo interno", doc.get("ejecutivo_interno")),
+             ("Ejecutivo externo", doc.get("ejecutivo_externo")),
              ("Proyecto", df.get("proyecto")), ("Inmobiliaria", df.get("inmobiliaria")),
              ("Tipo propiedad", df.get("tipo_propiedad")),
              ("Fecha de entrega", (df.get("fecha_entrega") or "").capitalize() or None),
@@ -2256,6 +2257,10 @@ async def folder_send_email(fid: str, payload: dict):
     if payload.get("confirm") and payload.get("ejecutivo_interno") and payload["ejecutivo_interno"] != doc.get("ejecutivo_interno"):
         await db.folders.update_one({"id": fid}, {"$set": {"ejecutivo_interno": ejecutivo}})
         doc["ejecutivo_interno"] = ejecutivo
+    ejecutivo_ext = (payload.get("ejecutivo_externo") or doc.get("ejecutivo_externo") or "").strip()
+    if payload.get("ejecutivo_externo") and payload["ejecutivo_externo"].strip() != (doc.get("ejecutivo_externo") or ""):
+        await db.folders.update_one({"id": fid}, {"$set": {"ejecutivo_externo": ejecutivo_ext}})
+        doc["ejecutivo_externo"] = ejecutivo_ext
     if not ejecutivo:
         missing_labels.append("Ejecutivo interno (Deisy/Yerile/Gerardo)")
     if payload.get("confirm") and missing_labels and not payload.get("force_incompleto"):
@@ -2292,9 +2297,14 @@ async def folder_send_email(fid: str, payload: dict):
                 attach_names.append(p.name)
         except ValueError:
             continue
+    # REGLA: el asunto SIEMPRE lleva el prefijo fijo; lo del usuario se AGREGA, nunca reemplaza.
+    prefijo_subj = (f"Antecedentes crédito hipotecario — {nombre}" + (f" ({rut})" if rut else "")
+                    + (f" — Entrega: {fecha_entrega.capitalize()}" if fecha_entrega else ""))
+    extra_subj = (payload.get("subject_extra") or "").strip()
     subject = payload.get("subject") or (
-        f"Antecedentes crédito hipotecario — {nombre}" + (f" ({rut})" if rut else "")
-        + (f" — Entrega: {fecha_entrega.capitalize()}" if fecha_entrega else ""))
+        prefijo_subj
+        + (f" — {extra_subj}" if extra_subj else "")
+        + (f" — Ejecutivo: {ejecutivo_ext}" if ejecutivo_ext else ""))
     fin_html = _fin_resumen_html(doc)
     body_override = (payload.get("body_html") or "").strip()
     cuerpo = body_override or f"""
@@ -2451,6 +2461,107 @@ async def correos_smtp_log(limit: int = 50, solo_errores: bool = False):
     q = {"success": False} if solo_errores else {}
     docs = await db.correos_smtp_log.find(q).sort("fecha", -1).limit(min(limit, 200)).to_list(min(limit, 200))
     return {"log": [clean(d) for d in docs]}
+
+
+@api.get("/salud/estado")
+async def salud_estado():
+    """Panel de Salud: estado en vivo del flujo lineal (monitoreo -> carpetas -> cola de correos)."""
+    ahora = datetime.now(timezone.utc)
+
+    def _mins_desde(iso):
+        try:
+            return round((ahora - datetime.fromisoformat(iso)).total_seconds() / 60, 1)
+        except Exception:
+            return None
+
+    proc = await db.config.find_one({"_key": "proc_auto"}) or {}
+    ac = await db.config.find_one({"_key": "autocorreo_state"}) or {}
+    intervalo = max(2, int(proc.get("interval_min") or 2))
+    hace_min = _mins_desde(proc.get("last_run") or "")
+    ac_hace = _mins_desde(ac.get("last_run") or "")
+    hace24 = (ahora - timedelta(hours=24)).isoformat()
+    enviados_24h = await db.correos_smtp_log.count_documents({"success": True, "fecha": {"$gte": hace24}})
+    fallidos_24h = await db.log_errores_correo.count_documents({"fecha": {"$gte": hace24}})
+    carpetas_24h = await db.folders.count_documents({"created_at": {"$gte": hace24}})
+    descartados_24h = await db.proc_queue.count_documents({"descartado_en": {"$gte": hace24}})
+    ult_envios = await db.correos_smtp_log.find({}).sort("fecha", -1).limit(8).to_list(8)
+    ult_errores = await db.log_errores_correo.find({}).sort("fecha", -1).limit(8).to_list(8)
+    ult_carpetas = await db.folders.find({}, {"nombre": 1, "created_at": 1, "origen": 1}
+                                         ).sort("created_at", -1).limit(6).to_list(6)
+    return {
+        "monitoreo_buzon": {
+            "activo": bool(proc.get("enabled", True)),
+            "intervalo_min": intervalo,
+            "corriendo_ahora": bool(proc.get("running")),
+            "ultima_revision": proc.get("last_run"),
+            "hace_min": hace_min,
+            "alerta": hace_min is None or hace_min > intervalo * 3,
+            "ultimo_resultado": proc.get("last_result") or {},
+        },
+        "autocorreo_mesa": {
+            "activo": bool(ac.get("enabled")),
+            "ultima_corrida": ac.get("last_run"),
+            "hace_min": ac_hace,
+            "alerta": ac_hace is None or ac_hace > 20,
+            "ultimo_resultado": ac.get("last_run_result") or {},
+        },
+        "cola_correos": {
+            "goteo_seg": mail.PAUSA_ENTRE_CORREOS,
+            "reintento_seg": mail.REINTENTO_ESPERA,
+            "enviados_24h": enviados_24h,
+            "fallidos_24h": fallidos_24h,
+            "ultimos_envios": [{"fecha": d.get("fecha"), "to": d.get("to"),
+                                "subject": (d.get("subject") or "")[:60],
+                                "smtp_code": d.get("smtp_code"), "ok": d.get("success")}
+                               for d in ult_envios],
+            "ultimos_errores": [{"fecha": d.get("fecha"), "destinatario": d.get("destinatario"),
+                                 "smtp_code": d.get("smtp_code"),
+                                 "error": (d.get("error") or "")[:100], "intento": d.get("intento")}
+                                for d in ult_errores],
+        },
+        "carpetas": {
+            "creadas_24h": carpetas_24h,
+            "descartados_24h": descartados_24h,
+            "ultimas": [{"nombre": f.get("nombre"), "fecha": f.get("created_at"),
+                         "origen": f.get("origen", "correo")} for f in ult_carpetas],
+        },
+        "hora_servidor": ahora.isoformat(),
+    }
+
+
+@api.get("/contactos/emails")
+async def contactos_emails(q: str = ""):
+    """Autocompletar de correos: junta correos conocidos de carpetas, cola de
+    procesamiento (clientes y ejecutivos) y remitentes recientes."""
+    ql = (q or "").strip().lower()
+    vistos, out = set(), []
+
+    def add(email_, nombre="", origen=""):
+        e = (email_ or "").strip().lower().rstrip(".,;")
+        if not e or "@" not in e or e in vistos:
+            return
+        if ql and ql not in e and ql not in (nombre or "").lower():
+            return
+        vistos.add(e)
+        out.append({"email": e, "nombre": (nombre or "").strip(), "origen": origen})
+
+    async for f in db.folders.find({}, {"nombre": 1, "email": 1, "ejecutivo_externo_email": 1,
+                                        "ejecutivo_externo": 1}).limit(300):
+        add(f.get("email"), f.get("nombre"), "cliente")
+        add(f.get("ejecutivo_externo_email"), f.get("ejecutivo_externo"), "ejecutivo")
+    async for it in db.proc_queue.find(
+            {}, {"sender": 1, "classification.cliente": 1, "classification.email_cliente": 1,
+                 "campos.email_ejecutivo": 1, "campos.nombre_ejecutivo": 1}
+    ).sort("date_iso", -1).limit(400):
+        cl = it.get("classification") or {}
+        c = it.get("campos") or {}
+        add(cl.get("email_cliente"), cl.get("cliente"), "cliente")
+        add(c.get("email_ejecutivo"), c.get("nombre_ejecutivo"), "ejecutivo")
+        s = it.get("sender") or ""
+        m = re.search(r"[\w.+-]+@[\w-]+\.[\w.-]+", s)
+        if m:
+            add(m.group(0), re.sub(r"<.*", "", s).strip(' "'), "remitente")
+    return {"contactos": out[:15]}
 
 
 @api.get("/seguimiento/clientes")
@@ -4036,7 +4147,7 @@ async def proc_purge():
 async def _proc_auto_state():
     st = await db.config.find_one({"_key": "proc_auto"})
     if not st:
-        st = {"_key": "proc_auto", "enabled": True, "interval_min": 10,
+        st = {"_key": "proc_auto", "enabled": True, "interval_min": 2,
               "last_run": None, "running": False, "last_result": {}}
         await db.config.insert_one(dict(st))
     # BLINDAJE 24/7: la creación de carpetas SIEMPRE está activa
@@ -4096,6 +4207,23 @@ async def _run_proc_auto():
                 resumen["carpetas"] += 1
             except HTTPException as he:
                 if he.status_code == 412:
+                    # FLUJO LINEAL: creación FORZADA de carpeta para cada cliente nuevo
+                    # detectado con nombre válido y adjuntos (la regla ya no descarta).
+                    cl_auto = it.get("classification") or {}
+                    nombre_cli_f = (cl_auto.get("cliente") or "").strip()
+                    if len(nombre_cli_f.split()) >= 2 and (cl_auto.get("documentos") or []):
+                        try:
+                            await proc_upload_drive(it["id"], force=True, clave=CLAVE_FORZAR_CARPETA)
+                            resumen["carpetas"] += 1
+                            await db.alertas.insert_one({
+                                "id": str(uuid.uuid4()), "tipo": "carpeta_forzada",
+                                "cliente": nombre_cli_f,
+                                "mensaje": (f"📁 Carpeta creada en modo FORZADO para {nombre_cli_f} "
+                                            f"(no cumplía la regla: {he.detail[:80]})"),
+                                "fecha": now_iso(), "leida": False})
+                            continue
+                        except Exception as e2:
+                            resumen["errors"].append(f"forzado '{nombre_cli_f[:25]}': {str(e2)[:60]}")
                     await db.proc_queue.update_one({"id": it["id"]}, {"$set": {
                         "status": "descartado", "descartado_motivo": he.detail,
                         "descartado_en": now_iso()}})
@@ -4133,7 +4261,7 @@ async def _periodic_proc_loop():
             st = await _proc_auto_state()
             if not st.get("enabled") or st.get("running"):
                 continue
-            intervalo = max(2, int(st.get("interval_min") or 10))
+            intervalo = max(2, int(st.get("interval_min") or 2))
             last = st.get("last_run")
             if last:
                 try:
@@ -5418,6 +5546,14 @@ async def gastos_enviar(payload: dict):
         "to": to, "total": total, "items": payload.get("items") or [],
         "intro": payload.get("intro", ""), "datos_pago": payload.get("datos_pago") or {},
         "enviado_en": now_iso(), "desde": res.get("desde", "")})
+    # SINCRONIZACIÓN: el correo ingresado queda guardado en la carpeta del cliente
+    # para que todos los módulos (aprobación, tasación, etc.) lo tengan disponible.
+    toks_n = [t for t in re.split(r"\s+", nombre) if len(t) >= 3]
+    if toks_n:
+        await db.folders.update_one(
+            {"$and": [{"nombre": {"$regex": re.escape(t), "$options": "i"}} for t in toks_n[:2]],
+             "$or": [{"email": {"$exists": False}}, {"email": ""}]},
+            {"$set": {"email": to}})
     return {"ok": True, "to": to, "subject": subject, "total": total, "sender": res.get("desde", "")}
 
 

@@ -1183,6 +1183,8 @@ export default function ClientesModule({ onNavigate }) {
       folder,
       to: defaultTo,
       subject: "",
+      subject_extra: "",
+      ejecutivo_externo: folder.ejecutivo_externo || "",
       extra: "",
       ejecutivo: folder.ejecutivo_interno || "",
       sending: false,
@@ -1211,7 +1213,7 @@ export default function ClientesModule({ onNavigate }) {
   const buildEmailPayload = (em) => {
     const p = {
       to_addr: em.to,
-      subject: em.subject || null,
+      subject_extra: em.subject_extra || "",
       body_extra: em.extra || "",
       include_merged: !!em.include_merged,
       include_codeudor_merged: !!em.include_codeudor_merged,
@@ -1221,6 +1223,7 @@ export default function ClientesModule({ onNavigate }) {
     }
     if (em.editBody != null) p.body_html = em.editBody;
     if (em.ejecutivo) p.ejecutivo_interno = em.ejecutivo;
+    if (em.ejecutivo_externo) p.ejecutivo_externo = em.ejecutivo_externo;
     if (em.force_incompleto) p.force_incompleto = true;
     return p;
   };
@@ -3090,7 +3093,10 @@ export default function ClientesModule({ onNavigate }) {
           const uf = v < 20000 ? v : v / (Number(ufValue) || 40842);
           return `UF ${uf.toLocaleString('es-CL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
         };
-        const previewSubject = emailModal.subject || `Antecedentes crédito hipotecario — ${f.nombre}${f.rut ? ` (${f.rut})` : ""}${df.fecha_entrega ? ` — Entrega: ${df.fecha_entrega.charAt(0).toUpperCase() + df.fecha_entrega.slice(1)}` : ""}`;
+        const prefijoAsunto = `Antecedentes crédito hipotecario — ${f.nombre}${f.rut ? ` (${f.rut})` : ""}${df.fecha_entrega ? ` — Entrega: ${df.fecha_entrega.charAt(0).toUpperCase() + df.fecha_entrega.slice(1)}` : ""}`;
+        const previewSubject = prefijoAsunto
+          + (emailModal.subject_extra ? ` — ${emailModal.subject_extra}` : "")
+          + (emailModal.ejecutivo_externo ? ` — Ejecutivo: ${emailModal.ejecutivo_externo}` : "");
         return (
           <div data-testid="email-modal" onClick={closeEmailModal} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9998, padding: "3vh 3vw" }}>
             <div onClick={(e) => e.stopPropagation()} style={{ background: "#0f172a", color: "#e2e8f0", borderRadius: 12, width: "min(760px, 96vw)", maxHeight: "94vh", overflow: "auto", border: "1px solid rgba(148,163,184,0.25)", boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}>
@@ -3144,15 +3150,33 @@ export default function ClientesModule({ onNavigate }) {
                 </label>
 
                 <label style={{ fontSize: 12 }}>
-                  <b style={{ display: "block", marginBottom: 4 }}>Asunto (opcional — se autogenera si lo dejás vacío)</b>
+                  <b style={{ display: "block", marginBottom: 4 }}>Ejecutivo externo (de dónde viene la solicitud) <span style={{ color: "#facc15" }}>se agrega al asunto y al correo</span></b>
                   <input
                     type="text"
-                    value={emailModal.subject}
-                    onChange={(e) => setEmailModal({ ...emailModal, subject: e.target.value })}
-                    placeholder={previewSubject}
+                    value={emailModal.ejecutivo_externo || ""}
+                    onChange={(e) => setEmailModal({ ...emailModal, ejecutivo_externo: e.target.value })}
+                    placeholder="Ej: Javiera Garrido — World Consultores"
+                    data-testid="email-ejecutivo-externo-input"
+                    style={{ width: "100%", padding: "0.5rem", borderRadius: 6, border: "1px solid rgba(148,163,184,0.3)", background: "#1e293b", color: "#e2e8f0", fontSize: 13 }}
+                  />
+                </label>
+
+                <label style={{ fontSize: 12 }}>
+                  <b style={{ display: "block", marginBottom: 4 }}>Asunto <span style={{ color: "#f87171" }}>🔒 prefijo fijo</span> + texto adicional (opcional)</b>
+                  <div style={{ padding: "0.45rem 0.6rem", borderRadius: 6, background: "rgba(239,68,68,0.08)", border: "1px dashed rgba(239,68,68,0.4)", fontSize: 12, color: "#fca5a5", marginBottom: 6 }} data-testid="email-subject-prefijo">
+                    🔒 {prefijoAsunto}
+                  </div>
+                  <input
+                    type="text"
+                    value={emailModal.subject_extra || ""}
+                    onChange={(e) => setEmailModal({ ...emailModal, subject_extra: e.target.value })}
+                    placeholder="Agregar al asunto (ej: URGENTE, con codeudor…) — el prefijo nunca se borra"
                     data-testid="email-subject-input"
                     style={{ width: "100%", padding: "0.5rem", borderRadius: 6, border: "1px solid rgba(148,163,184,0.3)", background: "#1e293b", color: "#e2e8f0", fontSize: 13 }}
                   />
+                  <div style={{ marginTop: 5, fontSize: 11, opacity: 0.75 }} data-testid="email-subject-final">
+                    Asunto final: <span style={{ color: "#facc15" }}>{previewSubject}</span>
+                  </div>
                 </label>
 
                 <label style={{ fontSize: 12 }}>

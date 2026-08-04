@@ -26,6 +26,7 @@ const SetCreditoModule = lazy(() => import("./pages/SetCreditoModule"));
 const EmailProcessingModule = lazy(() => import("./pages/EmailProcessingModule"));
 const CierresModule = lazy(() => import("./pages/CierresModule"));
 const AprendizajeModule = lazy(() => import("./pages/AprendizajeModule"));
+const SaludModule = lazy(() => import("./pages/SaludModule"));
 const GlobalSearch = lazy(() => import("./components/GlobalSearch"));
 const WelcomeTour = lazy(() => import("./components/WelcomeTour"));
 
@@ -138,6 +139,7 @@ function MainApp() {
     { key: 'gastos', icon: 'fa-money', label: 'Gastos Operacionales' },
     { key: 'aprobacion', icon: 'fa-trophy', label: 'Aprobación Cliente' },
     { key: 'cierres', icon: 'fa-handshake-o', label: 'Cierres' },
+    { key: 'salud', icon: 'fa-heartbeat', label: 'Panel de Salud' },
     ...(user.rol === 'admin' ? [{ key: 'aprendizaje', icon: 'fa-graduation-cap', label: 'Aprendizaje IA' }] : []),
     { key: 'setcredito', icon: 'fa-pencil-square-o', label: 'Set de Crédito' },
     ...(user.rol === 'admin' ? [{ key: 'usuarios', icon: 'fa-user-plus', label: 'Usuarios' }] : []),
@@ -238,6 +240,7 @@ function MainApp() {
         {activeModule === 'aprobacion' && <AprobacionClienteModule onNavigate={setActiveModule} />}
         {activeModule === 'setcredito' && <SetCreditoModule onNavigate={setActiveModule} />}
         {activeModule === 'cierres' && <CierresModule />}
+        {activeModule === 'salud' && <SaludModule />}
         {activeModule === 'aprendizaje' && <AprendizajeModule />}
         </Suspense>
       </main>

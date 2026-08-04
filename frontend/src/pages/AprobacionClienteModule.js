@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import ImportarCorreo from "../components/ImportarCorreo";
 import ConversorUF from "../components/ConversorUF";
+import { EmailAutocomplete } from "../components/EmailAutocomplete";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -168,7 +169,7 @@ export default function AprobacionClienteModule({ onNavigate }) {
         <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 2fr", gap: "1rem", marginTop: "1rem" }}>
           <div><label style={lbl}>Nombre del cliente</label><input data-testid="aprobacion-nombre" style={inp} value={nombre} onChange={e => setNombre(e.target.value)} /></div>
           <div><label style={lbl}>RUT</label><input data-testid="aprobacion-rut" style={inp} value={rut} onChange={e => setRut(e.target.value)} /></div>
-          <div><label style={lbl}>Correo del cliente (auto o manual)</label><input data-testid="aprobacion-email" style={inp} value={emailCliente} onChange={e => setEmailCliente(e.target.value)} placeholder="cliente@correo.cl" /></div>
+          <div><label style={lbl}>Correo del cliente (auto o manual)</label><EmailAutocomplete dataTestId="aprobacion-email" style={inp} value={emailCliente} onChange={setEmailCliente} placeholder="cliente@correo.cl" /></div>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "2fr 2fr 2fr", gap: "1rem", marginTop: "1rem" }}>
           <div><label style={lbl}>Ejecutivo que envió la solicitud</label><input data-testid="aprobacion-ejecutivo-nombre" style={inp} value={ejecutivoNombre} onChange={e => setEjecutivoNombre(e.target.value)} placeholder="Nombre del ejecutivo externo" /></div>

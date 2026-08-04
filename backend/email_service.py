@@ -818,19 +818,24 @@ def buscar_hilo_por_asunto(subject_kw, limit=8):
     return out
 
 
-def _log_smtp(entry):
-    """Guarda el resultado SMTP completo de cada envío en la base de datos."""
+def _log_db_insert(coleccion, entry):
+    """Insert síncrono en Mongo (usable desde hilos de envío)."""
     try:
         from pymongo import MongoClient
-        global _smtp_log_col
-        if "_smtp_log_col" not in globals() or _smtp_log_col is None:
-            _smtp_log_col = MongoClient(os.environ["MONGO_URL"],
-                                        serverSelectionTimeoutMS=3000)[os.environ["DB_NAME"]]["correos_smtp_log"]
+        global _log_db_cli
+        if "_log_db_cli" not in globals() or _log_db_cli is None:
+            _log_db_cli = MongoClient(os.environ["MONGO_URL"],
+                                      serverSelectionTimeoutMS=3000)[os.environ["DB_NAME"]]
         from datetime import datetime, timezone
         entry["fecha"] = datetime.now(timezone.utc).isoformat()
-        _smtp_log_col.insert_one(entry)
+        _log_db_cli[coleccion].insert_one(entry)
     except Exception:
         pass
+
+
+def _log_smtp(entry):
+    """Guarda el resultado SMTP completo de cada envío en la base de datos."""
+    _log_db_insert("correos_smtp_log", entry)
 
 
 def _fmt_refused(refused):
@@ -873,10 +878,49 @@ def _blindaje_simulaciones(attachments, clave=""):
     return out, ajustados
 
 
+def _intentar_envio(acc, msg):
+    """Un intento SMTP; devuelve dict con success + smtp_code + smtp_response."""
+    try:
+        ctx = ssl.create_default_context()
+        with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=25, context=ctx) as s:
+            s.login(acc["user"], acc["pwd"])
+            refused = s.send_message(msg)
+        if refused:
+            det = _fmt_refused(refused)
+            code = list(refused.values())[0][0]
+            res = {"success": False, "error": f"Destinatario rechazado por SMTP: {det}",
+                   "smtp_code": code, "smtp_response": det, "desde": acc["user"]}
+        else:
+            res = {"success": True, "desde": acc["user"], "smtp_code": 250,
+                   "smtp_response": "250 OK — aceptado por el servidor SMTP de Gmail"}
+    except smtplib.SMTPRecipientsRefused as e:
+        det = _fmt_refused(e.recipients)
+        code = list(e.recipients.values())[0][0] if e.recipients else None
+        res = {"success": False, "error": f"Todos los destinatarios rechazados: {det}",
+               "smtp_code": code, "smtp_response": det, "desde": acc["user"]}
+    except smtplib.SMTPResponseException as e:
+        resp = e.smtp_error.decode(errors="ignore") if isinstance(e.smtp_error, bytes) else str(e.smtp_error)
+        res = {"success": False, "error": f"{e.smtp_code} {resp}",
+               "smtp_code": e.smtp_code, "smtp_response": resp, "desde": acc["user"]}
+    except Exception as e:
+        res = {"success": False, "error": str(e), "smtp_code": None,
+               "smtp_response": str(e), "desde": acc["user"]}
+    return res
+
+
+# --- THROTTLING (envío controlado, siempre activo en segundo plano) ---
+import threading
+_envio_lock = threading.Lock()
+_ultimo_envio_ts = 0.0
+PAUSA_ENTRE_CORREOS = 10   # regla 1: 10 segundos entre cada correo
+REINTENTO_ESPERA = 60      # regla 2: 1 reintento automático a los 60 segundos
+
+
 def send_mail(to, subject, body_html, attachments=None, desde="secundaria", cc=None, headers=None, clave_sin_ajuste=""):
-    """Envia un correo. attachments: [{filename, content_b64}]
-    desde: 'secundaria' (gerardo.ext@, para PDFs a clientes) o 'principal'.
-    cc: str o lista. headers: dict extra (ej In-Reply-To, References)."""
+    """Envia un correo con envío controlado (throttling):
+    1) pausa mínima de 10s entre correos, 2) 1 reintento automático tras 60s si falla,
+    3) todo error SMTP queda en la colección 'log_errores_correo' (fecha + destinatario).
+    attachments: [{filename, content_b64}]. desde: 'secundaria' o 'principal'."""
     if not configured():
         return {"success": False, "error": "Correo no configurado"}
     acc = None
@@ -906,31 +950,27 @@ def send_mail(to, subject, body_html, attachments=None, desde="secundaria", cc=N
             msg.attach(part)
         except Exception:
             continue
-    try:
-        ctx = ssl.create_default_context()
-        with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=25, context=ctx) as s:
-            s.login(acc["user"], acc["pwd"])
-            refused = s.send_message(msg)
-        if refused:
-            det = _fmt_refused(refused)
-            code = list(refused.values())[0][0]
-            res = {"success": False, "error": f"Destinatario rechazado por SMTP: {det}",
-                   "smtp_code": code, "smtp_response": det, "desde": acc["user"]}
-        else:
-            res = {"success": True, "desde": acc["user"], "smtp_code": 250,
-                   "smtp_response": "250 OK — aceptado por el servidor SMTP de Gmail"}
-    except smtplib.SMTPRecipientsRefused as e:
-        det = _fmt_refused(e.recipients)
-        code = list(e.recipients.values())[0][0] if e.recipients else None
-        res = {"success": False, "error": f"Todos los destinatarios rechazados: {det}",
-               "smtp_code": code, "smtp_response": det, "desde": acc["user"]}
-    except smtplib.SMTPResponseException as e:
-        resp = e.smtp_error.decode(errors="ignore") if isinstance(e.smtp_error, bytes) else str(e.smtp_error)
-        res = {"success": False, "error": f"{e.smtp_code} {resp}",
-               "smtp_code": e.smtp_code, "smtp_response": resp, "desde": acc["user"]}
-    except Exception as e:
-        res = {"success": False, "error": str(e), "smtp_code": None,
-               "smtp_response": str(e), "desde": acc["user"]}
+    global _ultimo_envio_ts
+    res = {"success": False, "error": "sin intento"}
+    for intento in (1, 2):
+        with _envio_lock:
+            espera = PAUSA_ENTRE_CORREOS - (time.time() - _ultimo_envio_ts)
+            if espera > 0:
+                time.sleep(espera)
+            res = _intentar_envio(acc, msg)
+            _ultimo_envio_ts = time.time()
+        if res.get("success"):
+            break
+        # Regla 3: error SMTP completo -> log_errores_correo (fecha + destinatario)
+        _log_db_insert("log_errores_correo", {
+            "destinatario": msg["To"], "cc": msg.get("Cc", ""), "subject": subject,
+            "desde": acc["user"], "intento": intento,
+            "smtp_code": res.get("smtp_code"), "smtp_response": res.get("smtp_response", ""),
+            "error": res.get("error", "")})
+        if intento == 1:
+            time.sleep(REINTENTO_ESPERA)
+    if not res.get("success") and res.get("error"):
+        res["error"] = f"{res['error']} (se reintentó 1 vez tras {REINTENTO_ESPERA}s)"
     _log_smtp({"to": msg["To"], "cc": msg.get("Cc", ""), "subject": subject,
                "desde": acc["user"], "success": res["success"],
                "smtp_code": res.get("smtp_code"), "smtp_response": res.get("smtp_response", ""),

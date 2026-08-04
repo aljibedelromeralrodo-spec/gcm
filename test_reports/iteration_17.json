@@ -1,0 +1,33 @@
+{
+  "summary": "Iteration 17 testing completed. All 7 backend endpoints validated (Salud estado structure with intervalo 2min/goteo 10s/reintento 60s; contactos/emails autocomplete; monitoreo loop advances every 2 min — verified ultima_revision moved from 13min to 1.5min after 150s wait; folder send-email preview subject starts with 'Antecedentes crédito hipotecario — ' and includes '— URGENTE' and '— Ejecutivo: Javiera Garrido'; regressions on smtp-log and gastos-operacionales/log passed). Frontend: Panel de Salud module with 3+1 tarjetas (monitoreo FUNCIONANDO / Revisión cada 2 min, carpetas MODO FORZADO, cola goteo 10s + errores section, autocorreo) verified via data-testids and refresh works. Gastos Operacionales and Aprobación Cliente email autocomplete work end-to-end (suggestion → filled). Carpeta Clientes send-to-mesa modal shows locked prefix (🔒), ejecutivo externo input, subject-extra input, and preview 'Asunto final' preserves prefix and appends URGENTE + Ejecutivo: Javiera Garrido. FIXED one blocking bug during testing: AprobacionClienteModule.js was missing import of EmailAutocomplete (ReferenceError). After fix, all flows PASS.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "AprobacionClienteModule", "issue": "Missing import of EmailAutocomplete caused runtime ReferenceError that crashed the whole module (Uncaught: EmailAutocomplete is not defined). Fixed by adding 'import { EmailAutocomplete } from ../components/EmailAutocomplete'.", "selector": "[data-testid=aprobacion-email]", "priority": "HIGH_FIXED"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/tests/test_salud_correos_iter17.py",
+    "/app/test_reports/pytest/iter17_results.xml"
+  ],
+  "action_items": [
+    "None — all tested features passing. Fix already applied to AprobacionClienteModule import."
+  ],
+  "critical_code_review_comments": [
+    "AprobacionClienteModule.js was using EmailAutocomplete without importing it — indicates missing lint step / smoke test before push. Suggest running ESLint no-undef in CI.",
+    "Backend supervisor watches /app/backend/tests/ (uvicorn --reload) — creating pytest files under backend/tests/ causes cascading reloads and multi-minute request stalls. Recommend excluding tests/ via --reload-exclude or moving tests to /app/tests/ (done for this iteration)."
+  ],
+  "updated_files": [
+    "/app/frontend/src/pages/AprobacionClienteModule.js (added missing EmailAutocomplete import)",
+    "/app/tests/test_salud_correos_iter17.py (new pytest suite)"
+  ],
+  "success_rate": {"backend": "100% (7/7)", "frontend": "100% (all data-testids present and functional)"},
+  "test_credentials": "administrador / 141617575",
+  "seed_data_creation": "None — used existing folders (PAULA MACARENA RIVERA ROMERO) for send-email preview.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend tests live at /app/tests/test_salud_correos_iter17.py — run with `pytest tests/test_salud_correos_iter17.py -p no:xdist`. The monitoreo_avanza test takes ~150s; you can skip with `-k 'not monitoreo_avanza'`. Do NOT place test files under /app/backend/tests/ because uvicorn --reload watches them and will cause request timeouts. If backend appears hung, `sudo supervisorctl restart backend` and wait ~10s.",
+  "rca_of_the_issue": "AprobacionClienteModule.js referenced EmailAutocomplete JSX component without importing it. Whitescreen 'Uncaught runtime error: ReferenceError: EmailAutocomplete is not defined'. Reproduction: login → click 'Aprobación Cliente' in sidebar → red error overlay. Mitigation: added `import { EmailAutocomplete } from '../components/EmailAutocomplete';` after ConversorUF import. Verified fix by re-running Playwright test: autocomplete dropdown appears with data-testid aprobacion-email-sug-0 and click fills the email field."
+}
