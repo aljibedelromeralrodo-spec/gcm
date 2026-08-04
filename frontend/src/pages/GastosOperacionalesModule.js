@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import ImportarCorreo from "../components/ImportarCorreo";
 import { EmailAutocomplete } from "../components/EmailAutocomplete";
+import { estiloConfianza, PanelAprendizaje, useAprendizaje } from "../components/CampoAprendizaje";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -198,9 +199,27 @@ export default function GastosOperacionalesModule({ onNavigate }) {
     return () => clearTimeout(t);
   }, [q]);
 
+  const { confianza, autofill, guardarAprender } = useAprendizaje();
+
+  const autofillDatos = async (cliente, emailActual) => {
+    try {
+      const d = await autofill(cliente);
+      if (!emailActual && d.email) setEmailCliente(prev => prev || d.email);
+      if (d.rut) setRut(prev => prev || d.rut);
+    } catch (_e) { /* el usuario puede escribirlo a mano */ }
+  };
+
+  const aprender = async () => {
+    const n = await guardarAprender(nombre, [["email", emailCliente], ["rut", rut]]);
+    setMsg(n > 0
+      ? `🧠 ${n} corrección(es) guardada(s) como Patrón Aprendido: la próxima vez no se repetirá el error.`
+      : "✅ Datos validados: no había cambios que aprender.");
+  };
+
   const elegir = (r) => {
     setNombre(r.nombre); setRut(r.rut); if (r.email) setEmailCliente(r.email);
     setResultados([]); setQ("");
+    autofillDatos(r.nombre, r.email || "");
   };
 
   useEffect(() => {
@@ -214,6 +233,7 @@ export default function GastosOperacionalesModule({ onNavigate }) {
           const res = (r.data.resultados || [])[0];
           const el = res || { nombre: p.nombre, rut: p.rut || "", email: "" };
           setNombre(el.nombre); setRut(el.rut || ""); if (el.email) setEmailCliente(el.email);
+          autofillDatos(el.nombre, el.email || "");
         })
         .catch(() => { setNombre(p.nombre); setRut(p.rut || ""); });
     } catch (_e) { /* prefill inválido */ }
@@ -287,9 +307,10 @@ export default function GastosOperacionalesModule({ onNavigate }) {
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 2fr", gap: "1rem", marginTop: "1rem" }}>
           <div><label style={lbl}>Nombre del cliente</label><input data-testid="gastos-nombre" style={inp} value={nombre} onChange={e => setNombre(e.target.value)} /></div>
-          <div><label style={lbl}>RUT</label><input data-testid="gastos-rut" style={inp} value={rut} onChange={e => setRut(e.target.value)} /></div>
-          <div><label style={lbl}>Correo del cliente</label><EmailAutocomplete dataTestId="gastos-email" style={inp} value={emailCliente} onChange={setEmailCliente} placeholder="cliente@correo.cl" /></div>
+          <div><label style={lbl}>RUT</label><input data-testid="gastos-rut" style={{ ...inp, ...estiloConfianza(confianza, "rut") }} value={rut} onChange={e => setRut(e.target.value)} /></div>
+          <div><label style={lbl}>Correo del cliente</label><EmailAutocomplete dataTestId="gastos-email" style={{ ...inp, ...estiloConfianza(confianza, "email") }} value={emailCliente} onChange={setEmailCliente} placeholder="cliente@correo.cl" /></div>
         </div>
+        <PanelAprendizaje confianza={confianza} onGuardar={aprender} testId="gastos-guardar-aprender" />
         <div style={{ display: "flex", gap: "0.7rem", flexWrap: "wrap", marginTop: "0.8rem", alignItems: "center" }}>
           <button data-testid="gastos-leer-ia" onClick={leerConIA} disabled={iaLoading || !nombre}
             title="Lee con IA los correos (asunto y cuerpo) y documentos del cliente para completar correo, RUT y gastos. Prohibido inventar: solo llena lo que aparece."

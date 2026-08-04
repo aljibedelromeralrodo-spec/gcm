@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import axios from "axios";
 import ImportarCorreo from "../components/ImportarCorreo";
+import { estiloConfianza, PanelAprendizaje, useAprendizaje } from "../components/CampoAprendizaje";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -24,6 +25,23 @@ export default function SetCreditoModule({ onNavigate }) {
   const fileRef = useRef();
   const cedulaRef = useRef();
   const [tipoUpload, setTipoUpload] = useState("solicitud_credito");
+  const { confianza, autofill, guardarAprender } = useAprendizaje();
+
+  const autofillNuevo = async (nombreParam) => {
+    const n = (nombreParam || nuevo.nombre || "").trim();
+    if (n.length < 3) return;
+    try {
+      const d = await autofill(n);
+      setNuevo(prev => ({ ...prev, rut: prev.rut || d.rut || "", email: prev.email || d.email || "" }));
+    } catch (_e) { /* el usuario puede escribirlo a mano */ }
+  };
+
+  const aprenderNuevo = async () => {
+    const n = await guardarAprender(nuevo.nombre, [["email", nuevo.email], ["rut", nuevo.rut]]);
+    setMsg(n > 0
+      ? `🧠 ${n} corrección(es) guardada(s) como Patrón Aprendido: la próxima vez no se repetirá el error.`
+      : "✅ Datos validados: no había cambios que aprender.");
+  };
 
   const loadSets = useCallback(async () => {
     const r = await axios.get(`${API}/api/set-credito/sets`);
@@ -57,6 +75,7 @@ export default function SetCreditoModule({ onNavigate }) {
         } else {
           setNuevo({ nombre: p.nombre, rut: p.rut || "", email: "" });
           setMsg(`✅ Cliente "${p.nombre}" precargado desde su carpeta — crea su set de crédito`);
+          autofillNuevo(p.nombre);
         }
       })();
     } catch (_e) { /* prefill inválido */ }
@@ -237,11 +256,12 @@ export default function SetCreditoModule({ onNavigate }) {
           <div style={card}>
             <h3 style={{ margin: "0 0 1rem", color: "var(--gold)", fontSize: "1.1rem" }}><i className="fa fa-folder-plus" style={{ marginRight: "0.5rem" }} />Nuevo Set de Crédito</h3>
             <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 2fr auto", gap: "1rem", alignItems: "end" }}>
-              <div><label style={lbl}>Nombre del cliente</label><input data-testid="setcred-nombre" style={inp} value={nuevo.nombre} onChange={e => setNuevo({ ...nuevo, nombre: e.target.value })} /></div>
-              <div><label style={lbl}>RUT</label><input data-testid="setcred-rut" style={inp} value={nuevo.rut} onChange={e => setNuevo({ ...nuevo, rut: e.target.value })} /></div>
-              <div><label style={lbl}>Correo (para firmar)</label><input data-testid="setcred-email" style={inp} value={nuevo.email} onChange={e => setNuevo({ ...nuevo, email: e.target.value })} placeholder="cliente@correo.cl" /></div>
+              <div><label style={lbl}>Nombre del cliente</label><input data-testid="setcred-nombre" style={inp} value={nuevo.nombre} onChange={e => setNuevo({ ...nuevo, nombre: e.target.value })} onBlur={() => autofillNuevo()} /></div>
+              <div><label style={lbl}>RUT</label><input data-testid="setcred-rut" style={{ ...inp, ...estiloConfianza(confianza, "rut") }} value={nuevo.rut} onChange={e => setNuevo({ ...nuevo, rut: e.target.value })} /></div>
+              <div><label style={lbl}>Correo (para firmar)</label><input data-testid="setcred-email" style={{ ...inp, ...estiloConfianza(confianza, "email") }} value={nuevo.email} onChange={e => setNuevo({ ...nuevo, email: e.target.value })} placeholder="cliente@correo.cl" /></div>
               <button data-testid="setcred-crear" onClick={crearSet} disabled={loading} style={btn("var(--gold)")}>Crear</button>
             </div>
+            <PanelAprendizaje confianza={confianza} onGuardar={aprenderNuevo} testId="setcred-guardar-aprender" />
           </div>
 
           {/* Lista de sets */}

@@ -725,5 +725,5 @@ requieren re-deploy para llegar a producción.
 - P1: Panel de "Correos Descartados" con rescate a 1 clic (crear carpeta desde correo descartado).
 - P1: Vista/alerta de errores SMTP en la UI (ya existe GET /api/correos/smtp-log?solo_errores=true).
 - P2: Afinar detección automática de transferencias cuando el usuario comparta un comprobante bancario real.
-- P2: Modularizar server.py (>7900 líneas).
+- P2: Modularizar server.py (~8900 líneas; extracción/aprendizaje ya movidos a ai_extract.py 2026-08-04).
 - Pendiente usuario: prueba en vivo de Auto-correo con saldo eCert.

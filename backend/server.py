@@ -7054,175 +7054,25 @@ async def aprobacion_buscar(q: str = ""):
     return {"resultados": resultados[:8]}
 
 
+@api.get("/aprendizaje/datos-cliente")
 @api.get("/aprobacion-cliente/datos-cliente")
 async def aprobacion_datos_cliente(nombre: str = ""):
-    """EXTRACCIÓN ENRIQUECIDA: cruza 3 fuentes (Asunto, Cuerpo del correo, OCR de PDFs)
-    + base de datos (carpetas/set crédito) + buzón. PROHIBIDO inventar.
-    Devuelve confianza por campo: 'alta' (verde: 2+ fuentes o dato validado/aprendido)
-    o 'dudosa' (naranja: 1 sola fuente). Aplica los Patrones Aprendidos del usuario."""
+    """EXTRACCION ENRIQUECIDA (centralizada en ai_extract.enriquecer_cliente):
+    cruza Asunto + Cuerpo + OCR de PDFs + historial completo en base de datos
+    (carpetas, sets, gastos, aprobaciones) + buzon IMAP + Patrones Aprendidos."""
     nombre = (nombre or "").strip()
     if len(nombre) < 3:
         raise HTTPException(status_code=400, detail="Indica el nombre del cliente")
-    CAMPOS = ("email", "telefono", "rut", "ejecutivo_nombre", "ejecutivo_email", "ejecutivo_interno")
-    cand = {c: {} for c in CAMPOS}
-    dominios = set()
-
-    def _add(campo, valor, fuente, etiquetado=False):
-        v = (valor or "").strip()
-        if not v:
-            return
-        k = re.sub(r"[\s.\-()]", "", v.lower())
-        d = cand[campo].setdefault(k, {"valor": v, "fuentes": set(), "etiquetado": False})
-        d["fuentes"].add(fuente)
-        d["etiquetado"] = d["etiquetado"] or etiquetado
-
-    toks = [t for t in _norm_texto(nombre).split() if len(t) > 2]
-    rx = ".*".join(re.escape(t) for t in toks[:2]) if toks else ""
-    _excluir = re.compile(
-        r"centralmutuos|evaluacionesmutuos|aprobaciones@|gerardo|noreply|no-?reply|mailer|"
-        r"maestra|ecomac|boetsch|inmobiliaria", re.I)
-    _freemail = re.compile(r"@(gmail|hotmail|outlook|yahoo|live|icloud)\.", re.I)
-
-    def _extraer_texto(texto, fuente):
-        t = texto or ""
-        etiquetados = re.findall(
-            r"(?:correo|e-?mail|mail)\s*(?:del?\s*cliente)?\s*[:=\s]\s*([\w.+-]+@[\w-]+\.[\w.]{2,})", t, re.I)
-        for e in etiquetados:
-            if not _excluir.search(e):
-                _add("email", e.strip("-._+"), fuente, etiquetado=True)
-        for e in re.findall(r"[\w.+-]+@[\w-]+\.[\w.]{2,}", t):
-            if not _excluir.search(e):
-                _add("email", e.strip("-._+"), fuente)
-        for f_ in re.findall(r"(?:\+?56)?[\s.]?9[\s.]?\d{4}[\s.]?\d{4}", t):
-            _add("telefono", f_.strip(), fuente)
-        for r_ in re.findall(r"\b\d{1,2}\.?\d{3}\.?\d{3}\s?-\s?[\dkK]\b", t):
-            _add("rut", r_.strip(), fuente)
-
-    if rx:
-        # FUENTE 1-3: correos procesados (IA de campos, OCR de PDFs, cuerpo y asunto)
-        async for it in db.proc_queue.find({"$or": [
-                {"cliente": {"$regex": rx, "$options": "i"}},
-                {"classification.cliente": {"$regex": rx, "$options": "i"}},
-                {"subject": {"$regex": rx, "$options": "i"}}]}).limit(8):
-            campos = it.get("campos") or {}
-            cl = it.get("classification") or {}
-            _add("email", campos.get("email_cliente"), "ia_correo")
-            _add("email", cl.get("email_cliente"), "ocr_pdfs")
-            _add("rut", cl.get("rut"), "ocr_pdfs")
-            _add("rut", campos.get("rut"), "ia_correo")
-            _add("telefono", campos.get("telefono"), "ia_correo")
-            _add("telefono", cl.get("telefono"), "ocr_pdfs")
-            _add("ejecutivo_nombre", campos.get("nombre_ejecutivo"), "ia_correo")
-            _add("ejecutivo_email", campos.get("email_ejecutivo"), "ia_correo")
-            _add("ejecutivo_interno", campos.get("ejecutivo_interno"), "ia_correo")
-            _extraer_texto(it.get("body_text") or it.get("body_full") or it.get("body") or "", "cuerpo_correo")
-            _extraer_texto(it.get("subject") or "", "asunto")
-            m_dom = re.search(r"@([\w.-]+)", it.get("sender") or "")
-            if m_dom:
-                dominios.add(m_dom.group(1).lower())
-        # FUENTE 4: base de datos (MÁXIMO ESFUERZO antes de pedir el dato manual)
-        f = await db.folders.find_one({"nombre": {"$regex": rx, "$options": "i"}})
-        if f:
-            _add("email", f.get("email") or f.get("email_cliente"), "carpeta")
-            _add("rut", f.get("rut"), "carpeta")
-            _add("telefono", f.get("telefono"), "carpeta")
-            _add("ejecutivo_interno", f.get("ejecutivo_interno"), "carpeta")
-            _add("ejecutivo_nombre", f.get("ejecutivo_externo"), "carpeta")
-            _add("ejecutivo_email", f.get("ejecutivo_externo_email"), "carpeta")
-        s = await db.set_credito.find_one({"nombre": {"$regex": rx, "$options": "i"}})
-        if s:
-            _add("email", s.get("email"), "set_credito")
-            _add("rut", s.get("rut"), "set_credito")
-            _add("telefono", s.get("telefono"), "set_credito")
-    # FUENTE 5: buzón IMAP (solo si aún no hay correo del cliente)
-    if not cand["email"]:
-        try:
-            headers = await asyncio.to_thread(mail.search_email_headers_by_person, nombre, 5)
-            mids = [h.get("message_id") for h in headers if h.get("message_id")][:3]
-            if mids:
-                msgs = await asyncio.to_thread(mail.fetch_attachments_by_message_ids, mids)
-                for m_ in msgs:
-                    _extraer_texto((m_.get("body") or "") + " " + (m_.get("subject") or ""), "buzon")
-                    remit = m_.get("from") or ""
-                    em_r = re.search(r"[\w.+-]+@[\w-]+\.[\w.]{2,}", remit)
-                    if em_r and not re.search(r"centralmutuos|evaluacionesmutuos|gerardo", em_r.group(0), re.I):
-                        _add("ejecutivo_email", em_r.group(0), "buzon")
-                        _add("ejecutivo_nombre", re.sub(r"<.*?>", "", remit).strip().strip('"'), "buzon")
-        except Exception:
-            pass
-    # Selección por campo: más fuentes gana; en email priman etiquetados y personales
-    out = {c: "" for c in CAMPOS}
-    confianza = {c: "" for c in CAMPOS}
-    fuentes_out = {}
-    for campo in CAMPOS:
-        opciones = list(cand[campo].values())
-        if not opciones:
-            continue
-        if campo == "email":
-            opciones.sort(key=lambda d: (-len(d["fuentes"]), not d["etiquetado"],
-                                         not bool(_freemail.search(d["valor"]))))
-        else:
-            opciones.sort(key=lambda d: -len(d["fuentes"]))
-        mejor = opciones[0]
-        out[campo] = mejor["valor"]
-        fuentes_out[campo] = sorted(mejor["fuentes"])
-        confianza[campo] = "alta" if (len(mejor["fuentes"]) >= 2 or "carpeta" in mejor["fuentes"]) else "dudosa"
-    # PATRONES APRENDIDOS: correcciones previas del usuario mandan sobre lo extraído
-    if rx:
-        pats = await db.patrones_aprendidos.find({"$or": [
-            {"cliente_norm": {"$regex": rx, "$options": "i"}},
-            {"dominio": {"$in": list(dominios)}}]}).sort("creado_en", -1).to_list(50)
-        aplicados = set()
-        for p in pats:
-            campo = p.get("campo")
-            if campo not in CAMPOS or campo in aplicados or not p.get("valor_correcto"):
-                continue
-            es_cliente = re.search(rx, p.get("cliente_norm") or "", re.I)
-            mismo_error = p.get("valor_extraido_norm") and p["valor_extraido_norm"] == re.sub(
-                r"[\s.\-()]", "", (out.get(campo) or "").lower())
-            if es_cliente or mismo_error:
-                out[campo] = p["valor_correcto"]
-                confianza[campo] = "alta"
-                fuentes_out[campo] = ["aprendido"]
-                aplicados.add(campo)
-    out["confianza"] = confianza
-    out["fuentes"] = fuentes_out
-    out["fuente"] = ", ".join(sorted({f_ for fs in fuentes_out.values() for f_ in fs})) or ""
-    return out
+    return await ai_extract.enriquecer_cliente(db, mail, nombre)
 
 
 @api.post("/aprendizaje/correccion")
 async def aprendizaje_correccion(payload: dict):
-    """MODO APRENDIZAJE: guarda una corrección manual como Patrón Aprendido para no
-    repetir el error con el mismo cliente o el mismo remitente/formato."""
-    payload = payload or {}
-    cliente = (payload.get("cliente") or "").strip()
-    campo = (payload.get("campo") or "").strip()
-    valor_correcto = (payload.get("valor_correcto") or "").strip()
-    if not cliente or not valor_correcto or campo not in (
-            "email", "telefono", "rut", "ejecutivo_nombre", "ejecutivo_email", "ejecutivo_interno"):
-        raise HTTPException(status_code=400, detail="Indica cliente, campo válido y valor correcto")
-    valor_extraido = (payload.get("valor_extraido") or "").strip()
-    remitente = (payload.get("remitente") or "").strip()
-    m_dom = re.search(r"@([\w.-]+)", remitente)
-    await db.patrones_aprendidos.insert_one({
-        "id": str(uuid.uuid4()), "cliente": cliente, "cliente_norm": _norm_texto(cliente),
-        "campo": campo, "valor_extraido": valor_extraido,
-        "valor_extraido_norm": re.sub(r"[\s.\-()]", "", valor_extraido.lower()),
-        "valor_correcto": valor_correcto, "remitente": remitente,
-        "dominio": m_dom.group(1).lower() if m_dom else "", "creado_en": now_iso()})
-    # Propagar el dato validado al registro maestro (carpeta) para todos los módulos
-    toks = [t for t in _norm_texto(cliente).split() if len(t) > 2]
-    if toks:
-        rx = ".*".join(re.escape(t) for t in toks[:2])
-        campo_folder = {"email": "email", "telefono": "telefono", "rut": "rut",
-                        "ejecutivo_nombre": "ejecutivo_externo",
-                        "ejecutivo_email": "ejecutivo_externo_email",
-                        "ejecutivo_interno": "ejecutivo_interno"}[campo]
-        await db.folders.update_one({"nombre": {"$regex": rx, "$options": "i"}},
-                                    {"$set": {campo_folder: valor_correcto}})
-    total = await db.patrones_aprendidos.count_documents({})
-    return {"ok": True, "patrones_totales": total}
+    """MODO APRENDIZAJE: guarda la correccion manual como Patron Aprendido (ai_extract)."""
+    try:
+        return await ai_extract.guardar_correccion(db, payload or {})
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @api.get("/aprobacion-cliente/archivos")

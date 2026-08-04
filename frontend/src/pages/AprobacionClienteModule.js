@@ -3,6 +3,7 @@ import axios from "axios";
 import ImportarCorreo from "../components/ImportarCorreo";
 import ConversorUF from "../components/ConversorUF";
 import { EmailAutocomplete } from "../components/EmailAutocomplete";
+import { estiloConfianza, PanelAprendizaje } from "../components/CampoAprendizaje";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -102,7 +103,7 @@ export default function AprobacionClienteModule({ onNavigate }) {
       if (d.data.ejecutivo_email) setEjecutivoEmail(prev => prev || d.data.ejecutivo_email);
       if (d.data.ejecutivo_interno) setEjecutivoInterno(prev => prev || d.data.ejecutivo_interno);
       setConfianza(d.data.confianza || {});
-      setExtraido({ email: d.data.email || "", rut: d.data.rut || "", ejecutivo_nombre: d.data.ejecutivo_nombre || "", ejecutivo_email: d.data.ejecutivo_email || "", ejecutivo_interno: d.data.ejecutivo_interno || "" });
+      setExtraido({ email: d.data.email || "", rut: d.data.rut || "", ejecutivo_nombre: d.data.ejecutivo_nombre || "", ejecutivo_email: d.data.ejecutivo_email || "", ejecutivo_interno: d.data.ejecutivo_interno || "", remitente: d.data.remitente || "" });
       if (d.data.email && !emailActual) setMsg(`ℹ️ Datos rellenados (fuentes: ${d.data.fuente})${d.data.telefono ? ` · Teléfono: ${d.data.telefono}` : ""} — 🟢 seguro · 🟠 revisar y validar`);
     } catch (_e) { /* el usuario puede escribirlo a mano */ }
   };
@@ -213,15 +214,7 @@ export default function AprobacionClienteModule({ onNavigate }) {
           <div><label style={lbl}>Correo del ejecutivo</label><input data-testid="aprobacion-ejecutivo-email" style={{ ...inp, ...bordeConf("ejecutivo_email") }} value={ejecutivoEmail} onChange={e => setEjecutivoEmail(e.target.value)} placeholder="ejecutivo@inmobiliaria.cl" /></div>
           <div><label style={lbl}>Ejecutivo interno (Central Mutuos)</label><input data-testid="aprobacion-ejecutivo-interno" style={{ ...inp, ...bordeConf("ejecutivo_interno") }} value={ejecutivoInterno} onChange={e => setEjecutivoInterno(e.target.value)} placeholder="Nombre del ejecutivo interno" /></div>
         </div>
-        {Object.values(confianza).some(Boolean) && (
-          <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: "0.7rem", flexWrap: "wrap" }}>
-            <span style={{ fontSize: "0.75rem", opacity: 0.8 }}>🟢 dato seguro (2+ fuentes) · 🟠 revisa y valida antes de enviar</span>
-            <button data-testid="aprobacion-guardar-aprender" onClick={guardarAprender}
-              style={{ background: "rgba(168,85,247,0.2)", border: "1px solid #a855f7", color: "#d8b4fe", borderRadius: 8, padding: "0.4rem 1rem", cursor: "pointer", fontWeight: 700, fontSize: "0.8rem" }}>
-              <i className="fa fa-graduation-cap" style={{ marginRight: 6 }} />Guardar y Aprender
-            </button>
-          </div>
-        )}
+        <PanelAprendizaje confianza={confianza} onGuardar={guardarAprender} testId="aprobacion-guardar-aprender" />
         <div style={{ marginTop: "1rem" }}>
           <ConversorUF />
         </div>
