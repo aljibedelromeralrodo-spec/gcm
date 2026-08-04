@@ -38,6 +38,20 @@ export default function BuzonRescateModule() {
     setMsg("");
   };
 
+  const descartar = async (p) => {
+    if (!window.confirm(`¿Descartar DEFINITIVAMENTE este correo?\n\n"${p.subject || "(sin asunto)"}"\n\nNo volverá a aparecer en el buzón.`)) return;
+    setProcesando(true);
+    try {
+      await axios.post(`${API}/api/rescate/${p.id}/descartar`);
+      setMsg("✅ Correo descartado definitivamente — no volverá a aparecer.");
+      load();
+    } catch (e) {
+      console.error(e);
+      setMsg("❌ " + (e.response?.data?.detail || e.message));
+    }
+    setProcesando(false);
+  };
+
   const confirmar = async () => {
     if (!clienteInput || clienteInput.trim().split(/\s+/).length < 2) {
       setMsg("Ingresa el nombre completo del cliente (nombre y apellido).");
@@ -91,6 +105,10 @@ export default function BuzonRescateModule() {
             <button onClick={() => abrirAsignar(p)} data-testid={`rescate-asignar-${i}`}
               style={{ background: "var(--gold)", border: "none", color: "#1a1f2e", borderRadius: 0, padding: "0.55rem 1.1rem", cursor: "pointer", fontWeight: 800, fontSize: "0.85rem" }}>
               <i className="fa fa-hand-pointer-o" style={{ marginRight: 6 }} />Asignar Manualmente
+            </button>
+            <button onClick={() => descartar(p)} data-testid={`rescate-descartar-${i}`} disabled={procesando}
+              style={{ background: "rgba(225,29,72,0.12)", border: "1px solid rgba(225,29,72,0.55)", color: "#fb7185", borderRadius: 0, padding: "0.55rem 1.1rem", cursor: "pointer", fontWeight: 800, fontSize: "0.85rem" }}>
+              <i className="fa fa-trash-o" style={{ marginRight: 6 }} />Descartar Definitivamente
             </button>
           </div>
         </div>

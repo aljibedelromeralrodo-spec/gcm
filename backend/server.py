@@ -3999,6 +3999,20 @@ async def rescate_pendientes():
     return {"pendientes": [clean(d) for d in docs]}
 
 
+@api.post("/rescate/{pid}/descartar")
+async def rescate_descartar(pid: str):
+    """Descarte definitivo: el correo no corresponde al negocio; sale del buzón para siempre."""
+    pend = await db.correos_pendientes.find_one({"$or": [{"id": pid}, {"qid": pid}]})
+    if not pend:
+        raise HTTPException(status_code=404, detail="Correo pendiente no encontrado")
+    await db.correos_pendientes.update_one({"id": pend["id"]}, {"$set": {
+        "estado": "descartado_definitivo", "descartado_en": now_iso()}})
+    if pend.get("qid"):
+        await db.proc_queue.update_one({"id": pend["qid"]}, {"$set": {
+            "status": "descartado_definitivo", "descartado_motivo": "Descartado manualmente por Gerardo (Buzón de Rescate)"}})
+    return {"ok": True}
+
+
 @api.post("/rescate/{pid}/asignar")
 async def rescate_asignar(pid: str, payload: dict):
     """Asignación manual: elige cliente y tipo de documento; mueve los archivos a la
