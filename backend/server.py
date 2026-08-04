@@ -7955,23 +7955,31 @@ def _mask_rut(rut):
 
 
 @api.get("/firma/{token}", response_class=HTMLResponse)
-async def firma_portal(token: str):
+async def firma_portal(token: str, request: Request):
     """Landing page de lujo del Portal de Firma Única."""
     link = await db.firma_links.find_one({"token": token})
     if not link:
         return HTMLResponse("<h3 style='font-family:serif;text-align:center;margin-top:20vh'>Enlace no válido o expirado — Central Mutuos</h3>", status_code=404)
     await db.firma_links.update_one({"token": token}, {"$inc": {"visitas": 1}})
     nombre = link.get("cliente", "Cliente")
-    og_img = f"/api/firma/{token}/og.png"
+    proto = request.headers.get("x-forwarded-proto", "https")
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host", "")
+    og_img = f"{proto}://{host}/api/firma/{token}/og.png"
+    og_url = f"{proto}://{host}/api/firma/{token}"
     html = f"""<!DOCTYPE html>
 <html lang="es"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Firma de Escritura Avanzada — Central Mutuos</title>
-<meta property="og:title" content="Firma de Escritura Avanzada — {nombre}">
-<meta property="og:description" content="Documentación Oficial de Alta Seguridad · Central Mutuos">
+<meta property="og:title" content="Documentación Oficial VIP - Central Mutuos">
+<meta property="og:description" content="Hola {nombre}, acceda a su portal privado para la Firma Electrónica Avanzada.">
 <meta property="og:image" content="{og_img}">
+<meta property="og:image:width" content="600">
+<meta property="og:image:height" content="600">
+<meta property="og:url" content="{og_url}">
 <meta property="og:type" content="website">
+<meta property="og:site_name" content="Central Mutuos · Banca Hipotecaria Privada">
 <meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="{og_img}">
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Montserrat:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   * {{ margin:0; padding:0; box-sizing:border-box; }}
@@ -8118,19 +8126,22 @@ async def firma_firmar(token: str):
 
 @api.get("/firma/{token}/og.png")
 async def firma_og_image(token: str):
-    """Tarjeta VIP enriquecida para la previsualización en WhatsApp."""
+    """Tarjeta VIP 600x600: fondo negro absoluto, oro 24K y nombre del cliente centrado."""
     link = await db.firma_links.find_one({"token": token})
     nombre = (link or {}).get("cliente", "Cliente")
     from PIL import Image, ImageDraw, ImageFont
-    W, H = 1200, 630
-    img = Image.new("RGB", (W, H), (15, 23, 42))
+    W = H = 600
+    ORO, ORO_CLARO, ORO_OSCURO = (212, 175, 55), (244, 220, 130), (150, 116, 30)
+    img = Image.new("RGB", (W, H), (0, 0, 0))
     d = ImageDraw.Draw(img)
-    d.rectangle([40, 40, W - 40, H - 40], outline=(148, 163, 184), width=3)
+    # Doble marco dorado estilo joyería
+    d.rectangle([16, 16, W - 16, H - 16], outline=ORO, width=3)
+    d.rectangle([28, 28, W - 28, H - 28], outline=ORO_OSCURO, width=1)
 
     def _font(size, bold=False):
         try:
-            return ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSerif%s.ttf"
-                                      % ("-Bold" if bold else ""), size)
+            return ImageFont.truetype("/usr/share/fonts/truetype/liberation/LiberationSerif-%s.ttf"
+                                      % ("Bold" if bold else "Regular"), size)
         except Exception:
             return ImageFont.load_default()
 
@@ -8138,13 +8149,21 @@ async def firma_og_image(token: str):
         w = d.textlength(texto, font=fnt)
         d.text(((W - w) / 2, y), texto, font=fnt, fill=color)
 
-    _centrar("C E N T R A L   M U T U O S", 110, _font(44, True), (226, 232, 240))
-    _centrar("BANCA HIPOTECARIA PRIVADA", 180, _font(22), (148, 163, 184))
-    d.line([(W / 2 - 120, 240), (W / 2 + 120, 240)], fill=(148, 163, 184), width=2)
-    _centrar("Firma de Escritura Avanzada", 285, _font(48, True), (255, 255, 255))
-    _centrar(nombre, 370, _font(40), (226, 232, 240))
-    _centrar("Documentación Oficial de Alta Seguridad", 455, _font(28), (203, 213, 225))
-    _centrar("Cifrado · Firma Auditada · eCert Chile", 520, _font(22), (100, 116, 139))
+    # Monograma CM en oro
+    _centrar("CM", 68, _font(64, True), ORO_CLARO)
+    d.line([(W / 2 - 90, 155), (W / 2 + 90, 155)], fill=ORO, width=2)
+    _centrar("CENTRAL MUTUOS", 175, _font(34, True), ORO)
+    _centrar("BANCA HIPOTECARIA PRIVADA", 222, _font(16), ORO_OSCURO)
+    _centrar("Firma de Escritura", 285, _font(38, True), (255, 255, 255))
+    _centrar("Avanzada", 335, _font(38, True), (255, 255, 255))
+    # Nombre del cliente centrado en oro
+    fnt_n = _font(30, True)
+    if d.textlength(nombre, font=fnt_n) > W - 90:
+        fnt_n = _font(24, True)
+    _centrar(nombre, 415, fnt_n, ORO_CLARO)
+    d.line([(W / 2 - 60, 470), (W / 2 + 60, 470)], fill=ORO_OSCURO, width=1)
+    _centrar("Documentación Oficial VIP", 495, _font(20), (203, 213, 225))
+    _centrar("Cifrado · Firma Auditada · eCert Chile", 530, _font(15), ORO_OSCURO)
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     return _RawResponse(content=buf.getvalue(), media_type="image/png")

@@ -370,3 +370,8 @@
 - Portal verificado: CERO redirecciones a migrup.cl, boton ejecuta enviar_a_firmar_tercero interno, cliente permanece en portal Central Mutuos.
 - Mensaje exito actualizado: "Documentacion enviada. Revise su correo para los codigos de validacion".
 - RUT real: prioridad set_credito -> carpeta folders -> link (evita error RUT no coincide con Clave Unica).
+
+## 2026-08-04 — Impacto Visual VIP WhatsApp
+- OG tags portal firma: og:title "Documentacion Oficial VIP - Central Mutuos", og:description personalizada con nombre, og:image URL ABSOLUTA (600x600) + og:url/site_name.
+- og.png redisenada 600x600: negro absoluto, doble marco oro 24K, monograma CM, nombre cliente centrado en oro (fuente LiberationSerif; DejaVu no existe en el pod).
+- Confirmado: 0 redirecciones externas, boton ejecuta firma interna.
