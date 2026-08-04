@@ -1,0 +1,75 @@
+{
+  "typography": {
+    "font_family": "Inter, sans-serif",
+    "headings": "Inter font. Use tracking-tight for large headings, and uppercase with wide tracking (tracking-widest) and smaller sizes for section titles (small caps effect).",
+    "body": "Inter text-base or text-sm for dashboard density.",
+    "tables": "Tabular-nums (font-variant-numeric: tabular-nums), text-sm, minimal typography."
+  },
+  "colors": {
+    "background_base": "#0f172a",
+    "background_card": "#1e293b",
+    "border_default": "rgba(255,255,255,0.1)",
+    "gold_accent": "#d4af37",
+    "gold_soft": "rgba(212, 175, 55, 0.4)",
+    "text_primary": "#f8fafc",
+    "text_secondary": "#94a3b8",
+    "success": "#10b981",
+    "danger": "#ef4444",
+    "info": "#3b82f6"
+  },
+  "visual enhancers": {
+    "glassmorphism": "Used for sidebar, topbar, and modals: backdrop-blur-xl bg-slate-900/60 with a 1px inner border of white/10 or gold/20.",
+    "metallic_logo": "Central Mutuos logo must use a linear gradient text effect (silver/gold) to simulate a metallic finish. E.g., background: linear-gradient(135deg, #e2e8f0 0%, #94a3b8 40%, #d4af37 60%, #fef08a 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;",
+    "shadows": "Deep ambient shadows on risk charts and cards to give depth without looking messy.",
+    "borders": "Square corners (rounded-none or max rounded-sm). Ultra-thin 1px solid borders in border-slate-800 or rgba(212,175,55,0.3) (soft gold)."
+  },
+  "component name": "Dashboard, Sidebar, Login Page, Client Folders, Modals, Forms",
+  "grids": {
+    "dashboard": "High Density Grid (Mode B): Tight gaps (gap-4 or gap-6). Cards span based on summary vs primary data.",
+    "forms": "Use grid-cols-1 md:grid-cols-2 lg:grid-cols-3 for dense form fields."
+  },
+  "layouts": {
+    "sidebar": "Fixed left sidebar with glassmorphism. Content offset by sidebar width.",
+    "modals": "Large, centered, overlay with dark translucent backdrop (bg-slate-950/80 backdrop-blur-sm), modal itself uses glassmorphism.",
+    "cards": "Minimalist rectangular cards, no large radii, thin gold/slate borders."
+  },
+  "motion": {
+    "hover_states": "Subtle background tint changes (e.g., bg-white/5) or border color changes to gold on hover.",
+    "transitions": "Use specific transitions like 'transition-colors duration-200 ease-in-out' instead of 'transition-all'."
+  },
+  "accessibility": {
+    "contrast": "Ensure text contrast meets APCA/WCAG standards. Use Slate 400 for secondary text, never darker.",
+    "data_testid": "CRITICAL: DO NOT remove or alter any existing data-testid attributes.",
+    "language": "All UI text must remain in Spanish."
+  },
+  "media": {
+    "charts": "Risk charts use soft gradients with deep shadows.",
+    "tables": "Minimalist high-end tables. Remove vertical borders, use very subtle horizontal borders. Rows hover with 5% gold opacity."
+  },
+  "3d libraries": "None needed for this specific problem unless using Recharts for risk charts.",
+  "image urls": [
+    {
+      "url": "https://images.unsplash.com/photo-1758964297394-1eab6102f9d3?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzl8MHwxfHNlYXJjaHwyfHxkYXJrJTIwbHV4dXJ5JTIwYWJzdHJhY3QlMjBhcmNoaXRlY3R1cmUlMjBnb2xkfGVufDB8fHx8MTc4NTgxMjEwMHww&ixlib=rb-4.1.0&q=85",
+      "description": "Abstract pattern of warm golden vertical lines",
+      "category": "Login Page Background"
+    }
+  ],
+  "component_path": [
+    "/app/frontend/src/App.css",
+    "/app/frontend/src/index.css",
+    "/app/frontend/tailwind.config.js"
+  ],
+  "instructions_to_main_agent": [
+    "REWRITE /app/frontend/src/App.css to replace the old navy/blue theme with the deep Slate (#0f172a) 'Terminal de Inversión Maserati' theme.",
+    "Ensure all CSS variables map to Slate and Soft Gold (#d4af37). REMOVE all blue colors currently mapped to var(--gold) and replace with actual gold.",
+    "Make the sidebar and modals use Glassmorphism (backdrop-filter: blur(16px); background: rgba(15, 23, 42, 0.75)).",
+    "Apply 'modern square corners' (border-radius: 4px or 0) globally across inputs, cards, and buttons.",
+    "Implement the 'Central Mutuos' logo in the sidebar with a metallic text gradient.",
+    "Update table styles in App.css to be high-end: tabular-nums, uppercase headers, subtle horizontal lines, no vertical lines, and a faint gold hover state.",
+    "Update section titles to use small caps (text-transform: uppercase, font-size: smaller, letter-spacing: wider).",
+    "Form inputs should be dark (#0f172a or #1e293b) with thin borders, focusing into soft gold.",
+    "Make sure the 'Motor de Extracción' AI panels use dark themes with subtle green/amber halos based on the status.",
+    "DO NOT break any functionality, components logic, or remove any data-testid."
+  ],
+  "UNIVERSAL GUIDELINES FOR MAIN AGENT": "You tend to converge toward generic, 'on distribution' outputs. In frontend design, this creates what users call the 'AI slop' aesthetic. Avoid this: make creative, distinctive frontends that surprise and delight. Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients. Create depth through layered design elements with z-index hierarchy. Use glass-morphism effects with backdrop filters (12-24px blur). You MUST NOT apply universal transition. Eg: transition: all. This results in breaking transforms. Always add transitions for specific interactive elements like button, input excluding transforms. You MUST NOT center align the app container. Always use modern button styles like pill-shaped, or sharp button with interaction animations & color relevant to the app style. NEVER: use AI assistant Emoji characters. Use 2-3x more spacing than feels comfortable. Subtle grain textures, noise overlays, custom cursors, selection states, and loading animations: separates good from extraordinary. CRITICAL: DO NOT use complete transparent background in header, overlays, any surface that has content under it. All interactive and key informational elements MUST include a data-testid attribute to facilitate robust automated testing."
+}
