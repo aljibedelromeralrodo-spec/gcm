@@ -336,3 +336,8 @@
 - Restauradas claves reales en backend/.env: MAIL_APP_PASSWORD, MAIL2_APP_PASSWORD, MIGRUP_CLAVE (eCert), ADMIN_PASSWORD_1/2.
 - Verificado: eCert login OK, IMAP ambas cuentas OK, login app 200.
 - PRODUCCION requiere re-deploy (o configurar secrets en el deploy) para reconectarse.
+
+## 2026-06 — Listo para re-deploy (PASS limpio)
+- Optimizadas 3 consultas de _portal_consulta_impl: filtro RUT en DB (_rut_regex_flexible) + proyecciones en folders, proc_queue y simulaciones.
+- Deployment agent: PASS sin findings ni warnings. Claves reales en .env (correo + eCert conectados).
+- Usuario debe pulsar Re-deploy en la plataforma para llevar todo a produccion.
