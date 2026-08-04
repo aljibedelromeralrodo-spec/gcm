@@ -8890,14 +8890,15 @@ async def _portal_consulta_impl(rut: str):
     if len(rn) < 7:
         return {"found": False, "rut": rut, "operaciones": [], "simulaciones": []}
     operaciones = []
-    # Carpetas de clientes con ese RUT
-    folders = await db.folders.find({}).limit(300).to_list(300)
+    rx_rut = {"$regex": _rut_regex_flexible(rut), "$options": "i"}
+    # Carpetas de clientes con ese RUT (filtro en DB + proyección)
+    folders = await db.folders.find({"rut": rx_rut}, {"_id": 0, "nombre": 1, "rut": 1}).limit(300).to_list(300)
     nombres_match = set()
     for f in folders:
         if _norm_rut(f.get("rut")) == rn:
             nombres_match.add((f.get("nombre") or "").strip())
-    # Gestiones procesadas con ese RUT
-    items = await db.proc_queue.find({}).limit(300).to_list(300)
+    # Gestiones procesadas con ese RUT (filtro en DB + proyección)
+    items = await db.proc_queue.find({"classification.rut": rx_rut}, {"_id": 0, "classification": 1}).limit(300).to_list(300)
     for it in items:
         cl = it.get("classification", {}) or {}
         if _norm_rut(cl.get("rut")) == rn and (cl.get("cliente") or "").strip():
@@ -8930,7 +8931,9 @@ async def _portal_consulta_impl(rut: str):
                         else "Su solicitud está en revisión de antecedentes."),
         })
     sims = []
-    async for s in db.simulaciones.find({}).sort("timestamp", -1).limit(200):
+    _proy_sim = {"_id": 0, "rut": 1, "nombre_completo": 1, "precalificacion_aprobada": 1,
+                 "capacidad_credito_uf": 1, "timestamp": 1}
+    async for s in db.simulaciones.find({"rut": rx_rut}, _proy_sim).sort("timestamp", -1).limit(200):
         if _norm_rut(s.get("rut")) == rn:
             sims.append({"nombre_completo": s.get("nombre_completo", ""),
                          "precalificacion_aprobada": bool(s.get("precalificacion_aprobada")),
