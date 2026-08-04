@@ -331,3 +331,8 @@
 - Valores reales respaldados en memory/test_credentials.md (fuera de git).
 - Health Check deployment_agent: PASS sin findings. Sistema listo para re-deploy.
 - IMPORTANTE: correo IMAP/SMTP y eCert quedan PAUSADOS en preview hasta restaurar claves reales o configurarlas como secrets al desplegar.
+
+## 2026-06 — Reconexion claves preview
+- Restauradas claves reales en backend/.env: MAIL_APP_PASSWORD, MAIL2_APP_PASSWORD, MIGRUP_CLAVE (eCert), ADMIN_PASSWORD_1/2.
+- Verificado: eCert login OK, IMAP ambas cuentas OK, login app 200.
+- PRODUCCION requiere re-deploy (o configurar secrets en el deploy) para reconectarse.
