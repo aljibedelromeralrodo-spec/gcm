@@ -211,7 +211,7 @@ def enviar_a_firmar_tercero(pdf_bytes, nombre_documento, firmante, comentario=""
         "usuarioId": _CACHE["uid"],
         "comentario": comentario or "",
         "nroDocumentos": 1,
-        "texto": os.environ.get("MIGRUP_CLAVE_CERT", ""),
+        "texto": os.environ.get("MIGRUP_CLAVE_CERT", "") if es_propio else "",
         "documentos": [{
             "doctoBase64": _b64(pdf_bytes),
             "doctoNombre": (nombre_documento or "documento")[:20],
