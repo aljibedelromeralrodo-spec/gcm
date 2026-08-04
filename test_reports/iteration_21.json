@@ -1,0 +1,20 @@
+{
+  "summary": "Iteration 21 - Motor Extracción Enriquecida + Guardar y Aprender. Backend 6/6 pytest PASS (estructura confianza/fuentes, alias /aprobacion-cliente/datos-cliente, 400 en campo inválido y sin valor, ciclo corrección→aprendido con fuente 'aprendido', validación de nombre corto). Frontend 3/3 módulos verificados: Gastos (autofill rut/email con halo verde emerald rgba(52,211,153,0.45), panel visible, msg '✅ Datos validados: no había cambios que aprender.'), Aprobación Cliente (autofill + panel + preview modal abre correctamente + PDFs del cliente visibles + Guardar y Aprender con cambio ejecutivo_interno responde '🧠 1 corrección(es) guardada(s) como Patrón Aprendido…'), Set de Crédito (blur en nombre → autofill rut/email con estilo confianza, panel Guardar y Aprender visible, NO se creó set). Cleanup completo: patrón de Franco/ejecutivo_interno='Tester Iter21 ZZZ' borrado de patrones_aprendidos y quitado de folders.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/tests/test_iter21_aprendizaje.py", "/app/test_reports/pytest/iter21.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "ai_extract.enriquecer_cliente puede tardar 60-90s si consulta IMAP; considerar timeout explícito o job async para mejorar UX del panel (frontend actualmente espera 6-8s, en tests locales respondió <1s porque IMAP no se activó).",
+    "server.py sigue en ~8890 líneas; el endpoint aprendizaje/correccion está bien delegado a ai_extract, pero el archivo global amerita split por dominio.",
+    "guardar_correccion propaga a db.folders con $set global por regex de nombre — si hay 2 clientes con nombres similares podría pisar el folder equivocado; considerar limitar con {} de match más estricto (rut si disponible)."
+  ],
+  "updated_files": ["/app/tests/test_iter21_aprendizaje.py"],
+  "success_rate": {"backend": "100% (6/6)", "frontend": "100%"},
+  "test_credentials": "administrador / 141617575",
+  "seed_data_creation": "Test insertó y BORRÓ 1 patrón aprendizaje (email franco.test.testiter21@example.com) y 1 patrón (ejecutivo_interno='Tester Iter21 ZZZ' de Franco Bahamondes); ejecutivo_interno también quitado de db.folders. DB queda idéntica al estado inicial.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "El endpoint /api/aprendizaje/datos-cliente es sincrónico y en el ambiente de test respondió <1s (no accedió IMAP). En Gastos, el mensaje '✅ Datos validados: no había cambios que aprender.' aparece cuando se hace clic en Guardar y Aprender sin editar campos autofillados. En Aprobación, edición del ejecutivo interno + click en el botón responde '🧠 1 corrección(es) guardada(s)…'. Test file preserva credenciales admin y limpia datos con try/finally.",
+  "rca of the issue": "N/A - todos los tests pasaron"
+}
