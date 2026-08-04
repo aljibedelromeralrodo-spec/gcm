@@ -352,3 +352,8 @@
 - MIGRUP_CLAVE_CERT="" (vacia) es lo correcto para firmas de terceros (error 147 si se usa clave login).
 - UNICO BLOQUEO: saldo eCert de firmas terceros agotado (adicionales 18/18 usadas). Usuario debe comprar firmas en migrup.cl -> AJUSTES.
 - Datos de prueba limpiados (link, set, carpeta).
+
+## 2026-06 — FIRMA VIP VALIDADA EN VIVO ✅
+- Envio real exitoso: HTTP 200, mensaje de exito, 1 firma consumida (16->15), correo de eCert (notificaciones@migrup.cl, asunto Firma Documento) recibido en Gmail.
+- Idempotencia verificada: segundo click devuelve ya_enviada sin consumir saldo.
+- Flujo VIP 100% operativo. Requiere Re-deploy para produccion.
