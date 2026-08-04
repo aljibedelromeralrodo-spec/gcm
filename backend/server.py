@@ -23,10 +23,7 @@ from criterios_data import (
 import credit_engine as ce
 import email_service as mail
 import folders_service as fsvc
-
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+from database import client, db
 
 app = FastAPI(title="Central Mutuos API")
 api = APIRouter(prefix="/api")
@@ -1726,9 +1723,26 @@ async def _regen_combinado_bg(doc):
         logger.warning(f"Regeneración de combinado falló: {e}")
 
 
+@api.post("/clientes/folders/{fid}/codeudor")
+async def folder_agregar_codeudor(fid: str, payload: dict):
+    """Crea la subcarpeta 05_codeudor/<Nombre> dentro de la carpeta del titular."""
+    payload = payload or {}
+    nombre_cod = (payload.get("nombre") or "").strip()
+    if len(nombre_cod) < 3:
+        raise HTTPException(status_code=400, detail="Indica el nombre del codeudor")
+    doc = await _get_folder_doc(fid)
+    sub = f"05_codeudor/{fsvc.safe_name(nombre_cod)}"
+    (fsvc.folder_dir(doc.get("nombre", "")) / sub).mkdir(parents=True, exist_ok=True)
+    await db.folders.update_one({"id": fid}, {
+        "$set": {"codeudor_nombre": nombre_cod},
+        "$push": {"historial": {"fecha": now_iso(), "accion": f"Codeudor agregado: {nombre_cod}"}}})
+    return {"ok": True, "subfolder": sub}
+
+
 @api.post("/clientes/folders/{fid}/upload-file")
 async def folder_upload_file(fid: str, file: UploadFile = File(...), subfolder: str = Form(""),
-                             route_to_codeudor: str = Form(""), categoria: str = Form("")):
+                             route_to_codeudor: str = Form(""), categoria: str = Form(""),
+                             codeudor_nombre: str = Form("")):
     doc = await _get_folder_doc(fid)
     raw = await file.read()
     if not raw:
@@ -1738,10 +1752,11 @@ async def folder_upload_file(fid: str, file: UploadFile = File(...), subfolder: 
         raw, nombre_archivo, _conv = pdfs.convertir_a_pdf(raw, nombre_archivo)
     except ValueError:
         pass  # formato no convertible: se guarda tal cual
-    es_codeudor = str(route_to_codeudor).lower() in ("true", "1", "si", "sí")
+    es_codeudor = str(route_to_codeudor).lower() in ("true", "1", "si", "sí") or bool(codeudor_nombre.strip())
     categoria = (categoria or "").strip().lower()
     if es_codeudor:
-        subfolder = "05_codeudor"
+        cod_nom = codeudor_nombre.strip() or (doc.get("codeudor_nombre") or "").strip()
+        subfolder = f"05_codeudor/{fsvc.safe_name(cod_nom)}" if cod_nom else "05_codeudor"
         if not nombre_archivo.upper().startswith("CODEUDOR_"):
             nombre_archivo = f"CODEUDOR_{nombre_archivo}"
     elif categoria in ("voucher_tasacion", "voucher_gasto_operacional"):
@@ -2635,6 +2650,20 @@ async def seg_process(max_emails: int = 30, dias: int = 31):
         })
         nuevos += 1
     return {"ok": True, "procesados": len(ops), "nuevos": nuevos, "dias": dias}
+
+
+@api.patch("/seguimiento/estado")
+async def seg_corregir_estado(payload: dict):
+    """Corrección manual del estado de un cliente en seguimiento (ej: aprobación mal clasificada)."""
+    payload = payload or {}
+    cliente = (payload.get("cliente") or "").strip()
+    estado = (payload.get("estado") or "").strip().lower()
+    if not cliente or estado not in ("aprobacion", "rechazo", "observacion"):
+        raise HTTPException(status_code=400, detail="Indica cliente y estado válido (aprobacion/rechazo/observacion)")
+    r = await db.seguimiento.update_many(
+        {"cliente": {"$regex": f"^{re.escape(cliente)}$", "$options": "i"}},
+        {"$set": {"estado": estado, "estado_corregido_manual": True}})
+    return {"ok": True, "actualizados": r.modified_count, "estado": estado}
 
 
 @api.get("/reportes/seguimiento/excel")
@@ -3869,6 +3898,68 @@ def _regla_solicitud_ok(item):
 CLAVE_FORZAR_CARPETA = "0586"
 
 
+@api.get("/rescate/pendientes")
+async def rescate_pendientes():
+    """Buzón de Rescate: correos que el sistema no logró clasificar/armar automáticamente."""
+    # Backfill: los descartados históricos de proc_queue también entran al buzón
+    async for it in db.proc_queue.find({"status": "descartado"}).sort("date_iso", -1).limit(100):
+        await db.correos_pendientes.update_one(
+            {"qid": it["id"]},
+            {"$setOnInsert": {
+                "id": str(uuid.uuid4()), "qid": it["id"],
+                "subject": it.get("subject", ""), "sender": it.get("sender", ""),
+                "fecha": it.get("date_iso", ""), "motivo": it.get("descartado_motivo", ""),
+                "cliente_sugerido": (it.get("classification") or {}).get("cliente", ""),
+                "adjuntos": [d.get("filename") for d in
+                             (it.get("classification") or {}).get("documentos") or []],
+                "estado": "pendiente", "creado_en": now_iso()}},
+            upsert=True)
+    docs = await db.correos_pendientes.find({"estado": "pendiente"}).sort("fecha", -1).limit(100).to_list(100)
+    return {"pendientes": [clean(d) for d in docs]}
+
+
+@api.post("/rescate/{pid}/asignar")
+async def rescate_asignar(pid: str, payload: dict):
+    """Asignación manual: elige cliente y tipo de documento; mueve los archivos a la
+    carpeta del cliente y los procesa como si hubieran sido automáticos."""
+    payload = payload or {}
+    cliente = (payload.get("cliente") or "").strip()
+    tipo_doc = (payload.get("tipo_documento") or "").strip().lower()
+    if len(cliente.split()) < 2:
+        raise HTTPException(status_code=400, detail="Indica el nombre completo del cliente (nombre y apellido)")
+    pend = await db.correos_pendientes.find_one({"$or": [{"id": pid}, {"qid": pid}]})
+    if not pend:
+        raise HTTPException(status_code=404, detail="Correo pendiente no encontrado")
+    qid = pend["qid"]
+    item = await db.proc_queue.find_one({"id": qid})
+    if not item:
+        raise HTTPException(status_code=404, detail="El correo original ya no está en la cola")
+    # Renombrar físicamente si el usuario definió el tipo (Simulación o Carta)
+    if tipo_doc in ("simulacion", "carta"):
+        pref = "simulador_" if tipo_doc == "simulacion" else "carta_aprobacion_"
+        cl = item.get("classification") or {}
+        docs_cl = cl.get("documentos") or []
+        src = PROC_DIR / qid
+        for d in docs_cl:
+            fn = d.get("filename") or ""
+            if fn.lower().endswith(".pdf") and not re.search(r"simulad|carta|aprobaci", fn, re.I):
+                nuevo = f"{pref}{fn}"
+                try:
+                    (src / fn).rename(src / nuevo)
+                    d["filename"] = nuevo
+                except Exception:
+                    continue
+        await db.proc_queue.update_one({"id": qid}, {"$set": {"classification.documentos": docs_cl}})
+    await db.proc_queue.update_one({"id": qid}, {"$set": {
+        "classification.cliente": cliente, "status": "clasificado",
+        "descartado_motivo": None, "drive_folder_id": None}})
+    res = await proc_upload_drive(qid, force=True, clave=CLAVE_FORZAR_CARPETA)
+    await db.correos_pendientes.update_one({"qid": qid}, {"$set": {
+        "estado": "resuelto", "cliente_asignado": cliente,
+        "tipo_documento": tipo_doc, "resuelto_en": now_iso()}})
+    return {"ok": True, "cliente": cliente, "resultado": res}
+
+
 @api.post("/procesamiento/reevaluar")
 async def proc_reevaluar(payload: dict):
     """Reevalúa los correos desde una fecha con la REGLA INVIOLABLE:
@@ -3986,11 +4077,13 @@ async def proc_upload_drive(qid: str, force: bool = False, clave: str = ""):
             fn_orig = d["filename"]
             es_cod_arch = es_correo_codeudor or bool(re.search(r"co-?deudor", fn_orig, re.I))
             if es_cod_arch:
-                sub = "05_codeudor"
+                # Subcarpeta con el NOMBRE del codeudor: 05_codeudor/<Nombre>
+                sub = f"05_codeudor/{_safe_name(cod_nombre)}" if cod_nombre else "05_codeudor"
                 fn_dest = fn_orig if fn_orig.upper().startswith("CODEUDOR_") else f"CODEUDOR_{fn_orig}"
             else:
-                sub = fsvc.SUBFOLDER_POR_TIPO.get(_tipo_efectivo(d), "99_otros")
-                fn_dest = fn_orig
+                tipo_ef = _tipo_efectivo(d)
+                sub = fsvc.SUBFOLDER_POR_TIPO.get(tipo_ef, "99_otros")
+                fn_dest = fsvc.nombre_con_prefijo(fn_orig, fsvc.SUBFOLDER_A_CAT.get(sub, ""))
             sd = dest / sub
             sd.mkdir(parents=True, exist_ok=True)
             (sd / fn_dest).write_bytes(p.read_bytes())
@@ -4227,6 +4320,18 @@ async def _run_proc_auto():
                     await db.proc_queue.update_one({"id": it["id"]}, {"$set": {
                         "status": "descartado", "descartado_motivo": he.detail,
                         "descartado_en": now_iso()}})
+                    # BUZÓN DE RESCATE: guardar para clasificación manual
+                    await db.correos_pendientes.update_one(
+                        {"qid": it["id"]},
+                        {"$setOnInsert": {
+                            "id": str(uuid.uuid4()), "qid": it["id"],
+                            "subject": it.get("subject", ""), "sender": it.get("sender", ""),
+                            "fecha": it.get("date_iso", ""), "motivo": he.detail,
+                            "cliente_sugerido": (it.get("classification") or {}).get("cliente", ""),
+                            "adjuntos": [d.get("filename") for d in
+                                         (it.get("classification") or {}).get("documentos") or []],
+                            "estado": "pendiente", "creado_en": now_iso()}},
+                        upsert=True)
                     await db.alertas.insert_one({
                         "id": str(uuid.uuid4()), "tipo": "solicitud_descartada",
                         "cliente": (it.get("classification") or {}).get("cliente", "") or (it.get("subject") or "")[:60],

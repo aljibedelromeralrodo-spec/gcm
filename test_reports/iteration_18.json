@@ -1,0 +1,40 @@
+{
+  "summary": "Iteration 18 — Buzón de rescate, codeudor, seguimiento estado y nomenclatura tras modularización de database.py. Backend: 9/10 tests PASS (1 SKIPPED por diseño). Frontend: TEST 1 (Buzón rescate + modal) PASS, TEST 3 (Seguimiento select de estado, Luis Fonseca='rechazo', edición de otra fila persiste) PASS. TEST 2 (botón Agregar Codeudor en folder detail) FAIL — el botón existe en ClientesModule.js:2219 dentro del ARCHIVOS TOOLBAR del CARD (view='list', línea ~2205), pero NO está en el header/toolbar del DETAIL view (view='detail', líneas 1786-1821) que es donde el usuario lo espera al 'abrir' una carpeta. Modularización OK — regresiones (salud, gastos-operacionales/log, smtp-log, seguimiento/clientes) devuelven 200. Nomenclatura confirmada tanto por API (Melisa Rivera muestra 02_Liquidaciones, 03_Certificado_AFP, 04_CMF) como por UI (YACO SOUBALIOTIS muestra prefijos numéricos en filenames). Rescate: 4 pendientes iniciales incluyendo Luis Fonseca — asignación real ejecutada, LUIS FONSECA folder creada/reusada, pendiente desapareció (verificado por GET). Codeudor: POST /codeudor + upload multipart con codeudor_nombre='Maria Prueba' → archivo aparece en '05_codeudor/Maria Prueba/CODEUDOR_prueba_codeudor.pdf' (cleanup del archivo de prueba no se logró vía delete-file — payload no reconocido; queda 1 PDF residual en Melisa Rivera/05_codeudor/Maria Prueba que main agent puede limpiar).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/clientes/folders/{fid}/delete-file", "issue": "Ninguno de los payloads probados ({nombre,subcarpeta}, {archivo:'ruta/completa'}, ni el snapshot del nodo del árbol) devuelve ok:true para eliminar un archivo dentro de subcarpeta anidada (05_codeudor/Maria Prueba/CODEUDOR_*.pdf). No hay signatura pública documentada. Priority: LOW — solo afecta limpieza de tests."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "ClientesModule (detail view header)", "issue": "El botón 'Agregar Codeudor' (data-testid btn-agregar-codeudor-{fid}) NO está presente en la toolbar del DETAIL view de una carpeta (ClientesModule.js líneas 1786-1821). Solo existe en el ARCHIVOS TOOLBAR dentro del card de la vista LIST (línea 2219). El usuario espera el botón al 'abrir' la carpeta (view='detail'). Reproducción: login → Carpeta Clientes → click 'Abrir' en cualquier carpeta → toolbar muestra Buscar Adjuntos / Subir Archivo / Importar desde correo / Importar a Estudio de Título / Regenerar Combinado / Datos Financieros / Enviar a Mesa / Documento Faltante / Descargar Todo — sin Agregar Codeudor.", "selector": "[data-testid=btn-agregar-codeudor-{fid}]", "priority": "HIGH"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/tests/test_iter18_rescate_codeudor.py",
+    "/app/test_reports/pytest/iter18_results.xml"
+  ],
+  "action_items": [
+    "AGREGAR botón 'Agregar Codeudor' en el header del DETAIL view de ClientesModule.js (junto a los botones 'Buscar Adjuntos' / 'Subir Archivo' / etc, líneas 1786-1821) con data-testid={`btn-agregar-codeudor-${currentFolder.id}`} y onClick={() => agregarCodeudor(currentFolder)}. La función y el testid ya existen en el card de la vista LIST — replicar en detail.",
+    "Documentar la signatura JSON esperada por POST /api/clientes/folders/{fid}/delete-file (o soportar {archivo: 'ruta/subcarpeta/archivo.pdf'}) para permitir limpieza programática.",
+    "Limpiar manualmente el archivo residual: Melisa Rivera → 05_codeudor/Maria Prueba/CODEUDOR_prueba_codeudor.pdf (creado por el test de codeudor)."
+  ],
+  "critical_code_review_comments": [
+    "Duplicación: agregarCodeudor y el botón están inline en el card (view=list). Sugerido extraer a un pequeño componente FolderToolbarActions para reusar en detail view y no duplicar markup.",
+    "El delete-file endpoint carece de contrato documentado (probé 3 payloads, ninguno resultó en ok:true) — considerar añadir docstring en server.py y aceptar path completo relativo a la carpeta.",
+    "Nomenclatura confirmada aplicada retroactivamente: en YACO SOUBALIOTIS y Melisa Rivera todos los archivos muestran prefijos 02_Liquidaciones_*, 03_Certificado_AFP_*, 04_CMF_*. Buen trabajo."
+  ],
+  "updated_files": [
+    "/app/tests/test_iter18_rescate_codeudor.py (nuevo suite pytest)"
+  ],
+  "success_rate": {"backend": "100% (9/9 ejecutados, 1 skipped por diseño porque Luis Fonseca ya se asignó en primera corrida)", "frontend": "66% (2/3 flows PASS — rescate modal y seguimiento select; Agregar Codeudor button ausente en detail view)"},
+  "test_credentials": "administrador / 141617575",
+  "seed_data_creation": "Ejecutada la asignación REAL del pendiente 'Condiciones aprobadas' de Luis Fonseca (backend movió adjuntos a la carpeta LUIS FONSECA existente y marcó el pendiente como resuelto). Creada subcarpeta 05_codeudor/Maria Prueba en Melisa Rivera y subido un PDF de prueba CODEUDOR_prueba_codeudor.pdf — NO se pudo eliminar automáticamente (ver minor issue).",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Para re-ejecutar el flujo completo de rescate desde cero se requiere que el backend re-cargue pendientes (monitoreo automático o /correos/scan). El test 'test_asignar_luis_fonseca' hace pytest.skip si el pendiente ya no está — así se puede re-correr sin efectos secundarios. Test file: /app/tests/test_iter18_rescate_codeudor.py — corre con `pytest tests/test_iter18_rescate_codeudor.py -v -p no:xdist`. MELISA_FID hardcoded = ed93f803-9dee-4da6-9e7f-fef3f5e6f6b9.",
+  "rca_of_the_issue": "Botón 'Agregar Codeudor': E1 lo agregó al ARCHIVOS TOOLBAR dentro del card en la vista LIST (ClientesModule.js:2210-2226) pero olvidó replicarlo en el header de la vista DETAIL (líneas 1786-1821). El data-testid btn-agregar-codeudor-{fid} sí existe en el DOM cuando la vista es list, pero al hacer 'Abrir' se cambia a view='detail' (línea 1780) donde ese botón no está renderizado. Fix: agregar el mismo <button> al div .clientes-detail-actions en el detail view, usando currentFolder.id."
+}

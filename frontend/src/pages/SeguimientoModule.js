@@ -268,9 +268,22 @@ export default function SeguimientoModule() {
                   <td className="seg-email">{c.correo_remitente ? c.correo_remitente.split("<")[0].trim() : "-"}</td>
                   <td className="seg-monto">{c.monto_credito || "-"}</td>
                   <td>
-                    <span className="seg-estado-badge" style={{ color: estadoColor(c.estado), borderColor: estadoColor(c.estado) }}>
-                      {c.estado || "en proceso"}
-                    </span>
+                    <select
+                      data-testid={`seg-estado-select-${i}`}
+                      value={(c.estado || "").toLowerCase().includes("aprob") ? "aprobacion" : (c.estado || "").toLowerCase().includes("rech") ? "rechazo" : "observacion"}
+                      onChange={async (e) => {
+                        try {
+                          await axios.patch(`${API}/api/seguimiento/estado`, { cliente: c.cliente || c.cliente_display || c.id, estado: e.target.value });
+                          fetchClientes();
+                        } catch (err) { alert("Error: " + (err.response?.data?.detail || err.message)); }
+                      }}
+                      style={{ background: "transparent", color: estadoColor(c.estado), border: `1px solid ${estadoColor(c.estado)}`, borderRadius: 14, padding: "0.15rem 0.4rem", fontSize: "0.75rem", fontWeight: 700, cursor: "pointer" }}
+                      title="Corregir estado manualmente"
+                    >
+                      <option value="aprobacion" style={{ color: "#10b981", background: "#0f172a" }}>aprobación</option>
+                      <option value="rechazo" style={{ color: "#ef4444", background: "#0f172a" }}>rechazo</option>
+                      <option value="observacion" style={{ color: "#f59e0b", background: "#0f172a" }}>observación</option>
+                    </select>
                   </td>
                   <td style={{ textAlign: "center" }}>{c.total_correos}</td>
                   <td>

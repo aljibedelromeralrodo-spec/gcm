@@ -55,6 +55,22 @@ MISSING_LABELS = {
 }
 
 
+# NOMENCLATURA POR ORDEN: prefijos numéricos en cada archivo para forzar el orden
+PREFIJO_POR_CAT = {
+    "cedula": "01_Cedula", "liquidacion": "02_Liquidaciones",
+    "afp": "03_Certificado_AFP", "cmf": "04_CMF",
+    "imp_renta": "02_Impuesto_Renta", "boletas": "03_Resumen_Impuestos",
+}
+
+
+def nombre_con_prefijo(filename, cat):
+    """Antepone el prefijo numérico de la categoría si el archivo aún no lo tiene."""
+    pref = PREFIJO_POR_CAT.get(cat)
+    if not pref or re.match(r"^\d{2}_", filename or "") or (filename or "").upper().startswith("CODEUDOR_"):
+        return filename
+    return f"{pref}_{filename}"
+
+
 def safe_name(name):
     return re.sub(r"[^A-Za-z0-9._ -]", "_", (name or "").strip()) or "cliente"
 
@@ -78,7 +94,7 @@ def cat_de_archivo(nombre, subfolder=""):
     sub = (subfolder or "").split("/")[0]
     if es_combinado(nombre) or sub == "00_combinados":
         return "combinado"
-    if sub == "05_codeudor" or (nombre or "").upper().startswith("CODEUDOR_"):
+    if sub.startswith("05_codeudor") or (nombre or "").upper().startswith("CODEUDOR_"):
         return "codeudor"
     if sub in SUBFOLDER_A_CAT:
         return SUBFOLDER_A_CAT[sub]
@@ -119,12 +135,17 @@ def resolver_ruta(nombre, rel_path):
 
 
 def guardar_archivo(nombre_carpeta, filename, raw, subfolder=""):
-    """Guarda bytes en la carpeta. Si subfolder vacío, clasifica por nombre."""
+    """Guarda bytes en la carpeta. Si subfolder vacío, clasifica por nombre.
+    Aplica la nomenclatura por orden (01_Cedula, 02_..., 04_CMF)."""
     fn = safe_name(filename)
-    sub = safe_name(subfolder) if subfolder else ""
-    if not sub:
+    sub = subfolder.strip("/ ") if subfolder else ""
+    if sub:
+        sub = "/".join(safe_name(s) for s in sub.split("/"))
+        cat = SUBFOLDER_A_CAT.get(sub.split("/")[0], "")
+    else:
         cat = cat_de_texto(fn)
         sub = CAT_A_SUBFOLDER.get(cat, "") if cat != "extras" else ""
+    fn = safe_name(nombre_con_prefijo(fn, cat))
     dest = folder_dir(nombre_carpeta) / sub if sub else folder_dir(nombre_carpeta)
     dest.mkdir(parents=True, exist_ok=True)
     (dest / fn).write_bytes(raw)
@@ -168,21 +189,21 @@ def merge_protocol(nombre, client_type="dependiente", include_extras=True, order
 
 
 def merge_codeudor(nombre):
-    """Combina los PDFs del codeudor (05_codeudor) en COMBINADO_CODEUDOR_*.pdf."""
+    """Combina los PDFs del codeudor (05_codeudor y subcarpetas por nombre)."""
     base = folder_dir(nombre)
     sub = base / "05_codeudor"
     if not sub.exists():
         return {"merged_file": "", "files_used": [], "errors": []}
     writer = PdfWriter()
     used, errors = [], []
-    for p in sorted(sub.glob("*.pdf")):
+    for p in sorted(sub.rglob("*.pdf")):
         if es_combinado(p.name):
             continue
         try:
             reader = PdfReader(str(p))
             for pg in reader.pages:
                 writer.add_page(pg)
-            used.append(f"05_codeudor/{p.name}")
+            used.append(p.relative_to(base).as_posix())
         except Exception as e:
             errors.append(f"{p.name}: {str(e)[:120]}")
     merged_name = f"COMBINADO_CODEUDOR_{safe_name(nombre)}.pdf"
@@ -308,7 +329,8 @@ def split_bundled(nombre, rel_path, route_to_codeudor=False, delete_original=Fal
         writer = PdfWriter()
         for pg in g["pages"]:
             writer.add_page(reader.pages[pg - 1])
-        fn = f"{prefix}{g['category']}_{contador[g['category']]}.pdf"
+        base_fn = f"{prefix}{g['category']}_{contador[g['category']]}.pdf"
+        fn = base_fn if prefix else nombre_con_prefijo(base_fn, g["category"])
         sub = CAT_A_SUBFOLDER.get(g["category"], "99_otros")
         dest = folder_dir(nombre) / sub
         dest.mkdir(parents=True, exist_ok=True)

@@ -2217,6 +2217,14 @@ export default function ClientesModule({ onNavigate }) {
                         <i className={`fa ${uploadingFor === f.id ? "fa-spinner fa-spin" : "fa-plus"}`} /> Agregar archivo
                       </button>
                       <button
+                        onClick={() => agregarCodeudor(f)}
+                        data-testid={`btn-agregar-codeudor-${f.id}`}
+                        style={{ background: "rgba(251,146,60,0.15)", border: "1px solid rgba(251,146,60,0.5)", color: "#fdba74", borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontSize: 12 }}
+                        title="Crear subcarpeta del codeudor y subir sus archivos"
+                      >
+                        <i className="fa fa-user-plus" /> Agregar Codeudor
+                      </button>
+                      <button
                         onClick={() => mergeByProtocol(f)}
                         data-testid={`btn-merge-proto-${f.id}`}
                         disabled={mergingProto === f.id}
@@ -3567,3 +3575,4 @@ export default function ClientesModule({ onNavigate }) {
     </div>
   );
 }
+
