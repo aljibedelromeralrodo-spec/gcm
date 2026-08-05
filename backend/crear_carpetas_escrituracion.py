@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 API = "http://localhost:8001/api"
-CLAVE = "0586"
+CLAVE = os.environ.get("MASTER_PIN", "")
 
 CLIENTES = [
     ("13.745.447-5", "01-01-02489-1", "Jose Nibaldo Collao Rojas", "Portal de Peñuelas Coquimbo", "Ecomac"),

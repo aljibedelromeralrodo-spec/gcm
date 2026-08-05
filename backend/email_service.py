@@ -856,7 +856,7 @@ def _fmt_refused(refused):
     return "; ".join(partes)
 
 
-CLAVE_MAESTRA = "0586"
+CLAVE_MAESTRA = os.environ.get("MASTER_PIN", "")
 
 
 def _blindaje_simulaciones(attachments, clave=""):

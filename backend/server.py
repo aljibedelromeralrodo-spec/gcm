@@ -1540,6 +1540,9 @@ async def folder_enriquecer(fid: str, payload: dict = None):
 import zipfile as _zipfile
 
 RESPALDO_EXCLUIR = {"save_jobs"}
+# Proyección esencial: excluye campos pesados (cuerpos de correo, binarios) y _id
+_RESPALDO_PROY = {"_id": 0, "body": 0, "html": 0, "raw": 0,
+                  "content_bytes": 0, "attachments.content_bytes": 0}
 
 
 @api.get("/admin/respaldo/export")
@@ -1549,10 +1552,7 @@ async def respaldo_export():
     for c in await db.list_collection_names():
         if c in RESPALDO_EXCLUIR or c.startswith("system."):
             continue
-        docs = await db[c].find().to_list(8000)
-        for d in docs:
-            d.pop("_id", None)
-        dump[c] = docs
+        dump[c] = [d async for d in db[c].find({}, _RESPALDO_PROY).batch_size(200).limit(8000)]
     tmp = Path("/tmp") / f"respaldo_cm_{datetime.now(_tz_chile()).strftime('%Y%m%d_%H%M')}.zip"
 
     def _build():
@@ -4048,7 +4048,7 @@ def _regla_solicitud_ok(item):
     return True, ""
 
 
-CLAVE_FORZAR_CARPETA = "0586"
+CLAVE_FORZAR_CARPETA = os.environ.get("MASTER_PIN", "")
 
 
 @api.get("/rescate/pendientes")
