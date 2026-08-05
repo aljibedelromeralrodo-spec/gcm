@@ -8679,7 +8679,49 @@ async def _traer_firmado_interno(doc):
     (_set_dir(doc.get("nombre", "")) / "firmados" / f"{stem}_FIRMADO_COMPLETO.pdf").write_bytes(signed)
     await db.set_credito.update_one({"id": doc["id"]}, {"$set": {
         "firmado_recibido_en": now_iso(), "firmado_ecert_id": best["idDocumento"]}})
+    # ACCIÓN POST-FIRMA: despacho inmediato de los formularios divididos (Puente Ethan)
+    try:
+        await _despacho_post_firma(doc)
+    except Exception as e:
+        logging.warning(f"Despacho post-firma {doc.get('nombre')}: {e}")
     return {"estado": best.get("estadoDocumento"), "archivos": guardados}
+
+
+async def _despacho_post_firma(doc):
+    """DESPACHO POST-FIRMA (Puente Ethan): tras dividir el archivo madre firmado,
+    notifica con todos los formularios divididos y su rastro digital.
+    Remitente: cuenta principal (Ethan) → Destinatario: cuenta de trabajo (gerardo.ext)."""
+    nombre_cli = doc.get("nombre", "")
+    dest_dir = _set_dir(nombre_cli) / "firmados"
+    files = sorted(dest_dir.glob("FIRMADO_*.pdf")) if dest_dir.exists() else []
+    if not files:
+        return {"success": False, "error": "sin formularios divididos"}
+    adjuntos = [{"filename": p.name, "content_b64": _b64(p.read_bytes())} for p in files]
+    destinatario = os.environ.get("MAIL2_USER", "")
+    cuerpo = f"""
+    <div style="font-family:Arial,sans-serif;font-size:14px;color:#1a1a1a;max-width:640px">
+      <div style="background:#0a0a0a;padding:18px 22px;border-left:4px solid #D4AF37">
+        <span style="color:#D4AF37;font-size:16px;font-weight:700;letter-spacing:0.06em">💎 CENTRAL MUTUOS</span><br>
+        <span style="color:#e5e5e5;font-size:12px;letter-spacing:0.1em">DOCUMENTACIÓN FIRMADA Y VALIDADA</span>
+      </div>
+      <div style="padding:18px 4px">
+        <p>Gerardo, el proceso de firma de <b>{nombre_cli}</b> ha finalizado con éxito.
+        Se adjuntan los documentos divididos y con rastro digital activo para su gestión.</p>
+        <ul style="font-size:13px;color:#444">{"".join(f"<li>{p.name}</li>" for p in files)}</ul>
+        <p style="font-size:12px;color:#888">Cada formulario incorpora al pie su huella de rastro
+        (archivo madre, ID eCert y SHA-256) verificable en eCert Chile.</p>
+      </div>
+    </div>
+    """
+    res = await asyncio.to_thread(
+        mail.send_mail, destinatario,
+        f"💎 Documentación Firmada y Validada - {nombre_cli}",
+        cuerpo, adjuntos, "principal")
+    await db.set_credito.update_one({"id": doc["id"]}, {"$set": {
+        "despacho_post_firma": {"ok": bool(res.get("success")), "a": destinatario,
+                                "en": now_iso(), "archivos": len(files),
+                                "error": res.get("error")}}})
+    return res
 
 
 async def _enviar_firmados_interno(doc, correos, asunto=None):

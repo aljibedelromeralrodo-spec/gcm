@@ -417,3 +417,11 @@
 - correos_smtp_log ahora registra: size_kb, message_id, in_reply_to, puerto, tls, smtp_code/response detallado.
 - From amigable: MAIL_FROM_NAME="Gerardo Barrera - Central Mutuos".
 - Probado envio real: 250 OK, 0.6 KB, TLS 587, From correcto.
+
+## 2026-08-05 — DESPACHO POST-FIRMA (Puente Ethan)
+- Nueva funcion _despacho_post_firma(doc): tras _set_separar_firmado en _traer_firmado_interno, envia correo con TODOS los formularios divididos (FIRMADO_*.pdf con rastro digital).
+- Remitente: principal (ethangerardobarr@gmail.com) -> Destinatario: MAIL2_USER (gerardo.ext@centralmutuos.cl).
+- Asunto: "💎 Documentacion Firmada y Validada - [Cliente]" + cuerpo profesional negro/oro.
+- Registro en set_credito.despacho_post_firma {ok, a, en, archivos}.
+- PROBADO REAL: 250 OK, 3.1 KB, desde cuenta principal. Datos de prueba limpiados.
+- NOTA PREVIA: loop firmados auto-envio el set de prueba a Daniela/Victoria (04:17) por stem truncado [:20] compartido — datos de prueba eliminados; mejora pendiente: match por idDocumento eCert.
