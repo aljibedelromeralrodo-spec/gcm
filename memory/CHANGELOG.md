@@ -437,3 +437,13 @@
 - ecert_id guardado en firmas[] en los 3 flujos (portal /firmar, enviar-firma-completo, enviar-firma).
 - _traer_firmado_interno: match por idDocumento exacto cuando hay ecert_id (sin fallback a nombre en ese caso); prefijo [:20] solo para envios antiguos sin ID.
 - Probado con doc real finalizado: match exacto 1/1; ID inexistente => 0 candidatos.
+
+## 2026-08-05 — RUT COMO IDENTIFICADOR MAESTRO
+- setcred_create: anti-duplicado por RUT (si existe set con mismo RUT flexible, se reutiliza y completa email). Probado: mismo RUT nombre distinto => mismo id.
+- Portal /firmar: busca el set PRIMERO por RUT exacto del link; nombre solo como respaldo.
+- Carpetas (folders) ya deduplicaban por RUT via _buscar_carpeta_existente.
+
+## 2026-08-05 — PAUSA ADMIN EN DB (deploy-safe)
+- Pausa del motor movida de .env a db.config (pausa_admin). Startup fuerza ON salvo pausa_admin=True. Toggle UI la persiste.
+- MOTOR_247_FORZADO=1 (ya no se usa en codigo). Produccion arranca SIEMPRE sola aunque herede el .env del preview.
+- Preview verificado pausado tras reinicio; ingesta activa.

@@ -102,11 +102,12 @@ async def _task_blindada(coro_fn, nombre):
 async def startup():
     await ensure_seed()
     # Liberar candado obsoleto: ningún procesamiento sobrevive a un reinicio
-    # BLINDAJE 24/7: 'Correo a Mesa' SIEMPRE arranca activado por defecto
-    # (MOTOR_247_FORZADO="0" en .env permite pausar un entorno específico)
-    _forzar = os.environ.get("MOTOR_247_FORZADO", "1") != "0"
+    # BLINDAJE 24/7: 'Correo a Mesa' SIEMPRE arranca activado por defecto, sin clics.
+    # La pausa administrativa (anti-duplicados) vive en la DB de cada entorno (pausa_admin),
+    # así un deploy nunca hereda la pausa del preview.
+    st_previo = await db.config.find_one({"_key": "autocorreo_state"}) or {}
     _set_arranque = {"running": False}
-    if _forzar:
+    if not st_previo.get("pausa_admin"):
         _set_arranque.update({"enabled": True, "periodic_enabled": True})
     await db.config.update_one(
         {"_key": "autocorreo_state"},
@@ -3068,7 +3069,8 @@ async def motor_status():
 @api.post("/autocorreo/periodic")
 async def ac_periodic(payload: dict = None):
     enabled = bool((payload or {}).get("enabled"))
-    await _set_ac_state({"periodic_enabled": enabled})
+    # pausa_admin persiste la decisión aun tras reinicios (el startup la respeta)
+    await _set_ac_state({"periodic_enabled": enabled, "pausa_admin": not enabled})
     return {"periodic_enabled": enabled}
 
 
@@ -8352,6 +8354,16 @@ async def setcred_create(payload: dict):
            "created_at": now_iso(), "firmas": []}
     if not doc["nombre"].strip():
         raise HTTPException(status_code=400, detail="Falta el nombre del cliente")
+    # ANTI-DUPLICADOS POR RUT: si ya existe un set con ese RUT, se reutiliza
+    rut_n = _norm_rut(doc["rut"])
+    if rut_n and len(rut_n) >= 7:
+        rx = _rut_regex_flexible(doc["rut"])
+        previo = await db.set_credito.find_one({"rut": {"$regex": rx, "$options": "i"}}) if rx else None
+        if previo:
+            if doc["email"] and not previo.get("email"):
+                await db.set_credito.update_one({"id": previo["id"]}, {"$set": {"email": doc["email"]}})
+                previo["email"] = doc["email"]
+            return _set_public(previo)
     await db.set_credito.insert_one(dict(doc))
     _set_dir(doc["nombre"]).mkdir(parents=True, exist_ok=True)
     return _set_public(doc)
