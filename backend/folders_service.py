@@ -281,7 +281,7 @@ def _ocr_ia_pagina(pdf_bytes, idx):
         return await chat.send_message(UserMessage(
             text="Transcribe el texto de esta página:",
             file_contents=[ImageContent(image_base64=b64)]))
-    resp = _aio.run(_run())
+    resp = _aio.run(_aio.wait_for(_run(), timeout=60))
     return resp if isinstance(resp, str) else str(resp)
 
 
@@ -298,9 +298,9 @@ def _texto_pagina(reader, idx, pdf_bytes, permitir_ocr=True):
         imgs = convert_from_bytes(pdf_bytes, dpi=150, first_page=idx + 1, last_page=idx + 1)
         if imgs:
             try:
-                t = pytesseract.image_to_string(imgs[0], lang="spa")
+                t = pytesseract.image_to_string(imgs[0], lang="spa", timeout=60)
             except Exception:
-                t = pytesseract.image_to_string(imgs[0])
+                t = pytesseract.image_to_string(imgs[0], timeout=60)
             if (t or "").strip():
                 return t
     except Exception:

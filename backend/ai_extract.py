@@ -6,12 +6,18 @@ import os
 import re
 import json
 import uuid
+import asyncio
 
 
 def _llm_key():
     if os.environ.get("AI_EMERGENCY_STOP") == "1":
         return ""
     return os.environ.get("EMERGENT_LLM_KEY", "")
+
+
+async def _enviar(chat, um):
+    """TIMEOUT ANTI-CONGELAMIENTO: toda llamada LLM se cancela a los 60s."""
+    return await asyncio.wait_for(chat.send_message(um), timeout=60)
 
 TIPOS = ["cedula", "liquidacion", "cotizacion_afp", "certificado_afp",
          "certificado_smf", "boleta_honorarios", "impuesto_renta",
@@ -78,7 +84,7 @@ async def extraer_datos_tasacion(texto):
         )
         chat = LlmChat(api_key=key, session_id=f"tas-{uuid.uuid4()}",
                        system_message=system).with_model("openai", "gpt-5.4-mini")
-        resp = await chat.send_message(UserMessage(text=texto))
+        resp = await _enviar(chat, UserMessage(text=texto))
         raw = resp if isinstance(resp, str) else str(resp)
         mj = re.search(r"\{.*\}", raw, re.S)
         if mj:
@@ -116,7 +122,7 @@ async def extraer_datos_gastos(texto):
         )
         chat = LlmChat(api_key=key, session_id=f"gastos-{uuid.uuid4()}",
                        system_message=system).with_model("openai", "gpt-5.4-mini")
-        resp = await chat.send_message(UserMessage(text=texto))
+        resp = await _enviar(chat, UserMessage(text=texto))
         raw = resp if isinstance(resp, str) else str(resp)
         mj = re.search(r"\{.*\}", raw, re.S)
         if mj:
@@ -167,7 +173,7 @@ async def analizar_flujo_comercial(stats, aprendizajes_previos, notas_usuario):
         }, ensure_ascii=False)
         chat = LlmChat(api_key=key, session_id=f"aprendizaje-{uuid.uuid4()}",
                        system_message=system).with_model("openai", "gpt-5.4-mini")
-        resp = await chat.send_message(UserMessage(text=contexto[:14000]))
+        resp = await _enviar(chat, UserMessage(text=contexto[:14000]))
         raw = resp if isinstance(resp, str) else str(resp)
         mj = re.search(r"\{.*\}", raw, re.S)
         if mj:
@@ -236,7 +242,7 @@ async def clasificar_y_extraer(texto, filename=""):
         )
         chat = LlmChat(api_key=key, session_id=f"extract-{uuid.uuid4()}",
                        system_message=system).with_model("openai", "gpt-5.4-mini")
-        resp = await chat.send_message(UserMessage(text=f"Nombre de archivo: {filename}\n\nTexto:\n{texto}"))
+        resp = await _enviar(chat, UserMessage(text=f"Nombre de archivo: {filename}\n\nTexto:\n{texto}"))
         raw = resp if isinstance(resp, str) else str(resp)
         m = re.search(r"\{.*\}", raw, re.S)
         if m:

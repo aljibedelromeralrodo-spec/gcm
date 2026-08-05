@@ -95,6 +95,11 @@ async def _bunker_loop():
         await asyncio.sleep(300)
 
 
+async def _llm_con_timeout(chat, um, timeout=60):
+    """TIMEOUT ANTI-CONGELAMIENTO: toda llamada LLM se cancela a los 60s (error controlado)."""
+    return await asyncio.wait_for(chat.send_message(um), timeout=timeout)
+
+
 async def _task_blindada(coro_fn, nombre):
     """Supervisor: si un loop de fondo muere, se registra y se reinicia solo."""
     while True:
@@ -734,7 +739,7 @@ async def central_chat(payload: dict):
                   + (f"CONVERSACIÓN PREVIA:\n{hist_txt}" if hist_txt else ""))
         from emergentintegrations.llm.chat import LlmChat, UserMessage
         chat = LlmChat(api_key=key, session_id=session, system_message=system).with_model("openai", "gpt-5.4-mini")
-        resp = await chat.send_message(UserMessage(text=msg))
+        resp = await _llm_con_timeout(chat, UserMessage(text=msg))
     except Exception as e:
         resp = f"Tuve un problema para responder ({str(e)[:80]}). Intenta de nuevo."
     await db.conversaciones.insert_one({
@@ -5077,7 +5082,7 @@ async def _cobro_ai_clasificar(texto, subject=""):
             "inmobiliaria, no una respuesta/coordinación de una tasación ya en curso, no un informe de tasación) "
             "y cliente (nombre del cliente/comprador si se menciona, o '').")
         ).with_model("openai", "gpt-5.4-mini")
-        resp = await chat.send_message(UserMessage(text=f"ASUNTO: {subject}\n\n{(texto or '')[:4000]}"))
+        resp = await _llm_con_timeout(chat, UserMessage(text=f"ASUNTO: {subject}\n\n{(texto or '')[:4000]}"))
         m = re.search(r"\{.*\}", str(resp), re.S)
         if m:
             import json as _json
@@ -5197,7 +5202,7 @@ async def _pago_ai_confirmar(texto, adjuntos=""):
             "(true SOLO si el correo adjunta o confirma explícitamente el pago/voucher/comprobante "
             "de transferencia de la tasación; false si solo envía datos, pregunta o coordina).")
         ).with_model("openai", "gpt-5.4-mini")
-        resp = await chat.send_message(UserMessage(text=f"ADJUNTOS: {adjuntos}\n\n{(texto or '')[:3000]}"))
+        resp = await _llm_con_timeout(chat, UserMessage(text=f"ADJUNTOS: {adjuntos}\n\n{(texto or '')[:3000]}"))
         m = re.search(r"\{.*\}", str(resp), re.S)
         if m:
             import json as _json
@@ -6639,6 +6644,81 @@ async def estudio_log():
     return {"log": [clean(d) for d in docs]}
 
 
+def _pdf_disponible(nombre):
+    """Solo ALERTA si el PDF físico falta — NUNCA rompe la carga de la vista."""
+    try:
+        base = fsvc.folder_dir(nombre or "")
+        return base.exists() and any(True for _ in base.rglob("*.pdf"))
+    except Exception:
+        return False
+
+
+def _ficha_carpeta(d):
+    return {"id": d.get("id"), "nombre": d.get("nombre", ""), "rut": d.get("rut", ""),
+            "pdf_disponible": _pdf_disponible(d.get("nombre", "")),
+            "created_at": d.get("created_at", "")}
+
+
+@api.get("/estudio-titulo/carpetas")
+async def estudio_titulo_carpetas():
+    """RESCATE DE MÓDULOS: fichas SOLO desde MongoDB. Un PDF faltante en disco
+    jamás rompe la vista (solo marca pdf_disponible=false)."""
+    docs = await db.folders.find(
+        {"estudio_titulo_solicitado_at": {"$exists": True, "$ne": None}},
+        {"_id": 0, "id": 1, "nombre": 1, "rut": 1, "created_at": 1,
+         "estudio_titulo_solicitado_at": 1, "estudio_titulo_terminado_at": 1,
+         "estudio_titulo_tipo_vivienda": 1, "estudio_titulo_subject": 1,
+         "estudio_reparos.estado": 1, "estudio_titulo_vendedor": 1}
+    ).sort("estudio_titulo_solicitado_at", -1).limit(200).to_list(200)
+    out = []
+    for d in docs:
+        f = _ficha_carpeta(d)
+        f.update({"solicitado_at": d.get("estudio_titulo_solicitado_at"),
+                  "terminado_at": d.get("estudio_titulo_terminado_at"),
+                  "tipo_vivienda": d.get("estudio_titulo_tipo_vivienda", ""),
+                  "subject": d.get("estudio_titulo_subject", ""),
+                  "reparos_estado": (d.get("estudio_reparos") or {}).get("estado", "sin_reparos"),
+                  "vendedor": d.get("estudio_titulo_vendedor") or {}})
+        out.append(f)
+    return {"carpetas": out, "total": len(out)}
+
+
+@api.get("/escrituracion/carpetas")
+async def escrituracion_carpetas():
+    """RESCATE DE MÓDULOS: fichas de escrituración SOLO desde MongoDB."""
+    docs = await db.folders.find(
+        {"$or": [{"is_escrituracion": True},
+                 {"escrituracion_movida_at": {"$exists": True, "$ne": None}}]},
+        {"_id": 0, "id": 1, "nombre": 1, "rut": 1, "created_at": 1,
+         "escrituracion_movida_at": 1, "is_escrituracion": 1}
+    ).sort("escrituracion_movida_at", -1).limit(200).to_list(200)
+    out = []
+    for d in docs:
+        f = _ficha_carpeta(d)
+        f["movida_at"] = d.get("escrituracion_movida_at")
+        out.append(f)
+    return {"carpetas": out, "total": len(out)}
+
+
+@api.get("/tasacion/carpetas")
+async def tasacion_carpetas():
+    """RESCATE DE MÓDULOS: fichas de tasación SOLO desde MongoDB."""
+    docs = await db.folders.find(
+        {"tasacion_solicitada_at": {"$exists": True, "$ne": None}},
+        {"_id": 0, "id": 1, "nombre": 1, "rut": 1, "created_at": 1,
+         "tasacion_solicitada_at": 1, "tasacion_terminado_at": 1,
+         "tasacion_terminado_origen": 1}
+    ).sort("tasacion_solicitada_at", -1).limit(200).to_list(200)
+    out = []
+    for d in docs:
+        f = _ficha_carpeta(d)
+        f.update({"solicitada_at": d.get("tasacion_solicitada_at"),
+                  "terminado_at": d.get("tasacion_terminado_at"),
+                  "origen_termino": d.get("tasacion_terminado_origen", "")})
+        out.append(f)
+    return {"carpetas": out, "total": len(out)}
+
+
 GUILLERMO_EMAIL_DEFAULT = "contacto@hipotecariogestion.cl"
 
 
@@ -6747,7 +6827,7 @@ async def _reparos_ai_clasificar(texto):
             "'otro' en cualquier otro caso) y reparos (lista de strings, cada reparo u "
             "observación solicitada, texto breve y claro; [] si no aplica).")
         ).with_model("openai", "gpt-5.4-mini")
-        resp = await chat.send_message(UserMessage(text=texto[:5000]))
+        resp = await _llm_con_timeout(chat, UserMessage(text=texto[:5000]))
         m = re.search(r"\{.*\}", str(resp), re.S)
         if m:
             import json as _json
@@ -9199,7 +9279,7 @@ async def migrup_ocr_cedula(file: UploadFile = File(...)):
                 "nombres (string, solo los nombres de pila), aPaterno (apellido paterno), "
                 "aMaterno (apellido materno o ''), rut (RUN formato 12.345.678-9 o ''). "
                 "Si un dato no aparece, usa ''.")).with_model("openai", "gpt-5.4-mini")
-            resp = await chat.send_message(UserMessage(text=texto[:3000]))
+            resp = await _llm_con_timeout(chat, UserMessage(text=texto[:3000]))
             m = re.search(r"\{.*\}", str(resp), re.S)
             if m:
                 import json as _json

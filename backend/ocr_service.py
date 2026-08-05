@@ -28,9 +28,12 @@ def ocr_texto(pdf_bytes, max_pages=4):
         out = []
         for im in imgs:
             try:
-                out.append(pytesseract.image_to_string(im, lang="spa"))
+                out.append(pytesseract.image_to_string(im, lang="spa", timeout=60))
             except Exception:
-                out.append(pytesseract.image_to_string(im))
+                try:
+                    out.append(pytesseract.image_to_string(im, timeout=60))
+                except Exception:
+                    continue
         return "\n".join(out).strip()
     except Exception as e:
         return ""
