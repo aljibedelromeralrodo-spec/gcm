@@ -159,6 +159,8 @@ function UFAmountInput({ value, onChange, uf, testid, dataTestid }) {
 export default function ClientesModule({ onNavigate }) {
   const [view, setView] = useState("list"); // list, detail, emails, ajustes
   const [folders, setFolders] = useState([]);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState("");
   const [currentFolder, setCurrentFolder] = useState(null);
   const [emails, setEmails] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -853,6 +855,20 @@ export default function ClientesModule({ onNavigate }) {
     } catch (err) { console.error("Load folders error:", err); }
   };
 
+  const cloudSync = async () => {
+    setSyncing(true);
+    try {
+      const r = await axios.post(`${API}/api/clientes/cloud-sync`, {}, { timeout: 120000 });
+      const d = r.data;
+      await loadFolders();
+      setSyncMsg(`💎 Sync OK (${d.duracion_seg}s) · Mongo: ${d.mongo} · ${d.archivos_nuevos_descargados} archivo(s) nuevos del Cloud · respaldo ${d.respaldo} · ${d.total_en_bunker} protegidos · ${d.carpetas} carpetas`);
+    } catch (e) {
+      setSyncMsg("⚠ Error de sincronización: " + (e.response?.data?.detail || e.message));
+    }
+    setSyncing(false);
+    setTimeout(() => setSyncMsg(""), 12000);
+  };
+
   const toggleEnvioManual = async (folder) => {
     try {
       await axios.patch(`${API}/api/clientes/folders/${folder.id}/envio-manual`, { enviado: !(folder.envio_manual === true) });
@@ -1491,6 +1507,17 @@ export default function ClientesModule({ onNavigate }) {
                 onChange={e => setSearchQuery(e.target.value)} data-testid="clientes-search" />
             </div>
             <div className="clientes-toolbar-actions">
+              <button className="docs-btn" data-testid="btn-cloud-sync" onClick={cloudSync} disabled={syncing}
+                title="Para sincronizar cambios de diseño o nuevas funciones, use el botón Re-publish de la plataforma"
+                style={{ background: "linear-gradient(135deg, #BF953F, #FCF6BA, #B38728)", color: "#0a0a0a", fontWeight: 800, border: "none", borderRadius: 0, opacity: syncing ? 0.6 : 1 }}>
+                <i className={`fa ${syncing ? "fa-spinner fa-spin" : "fa-gem"}`}></i> {syncing ? "Sincronizando…" : "💎 Sincronizar Datos (Cloud Sync)"}
+              </button>
+              <span data-testid="cloud-sync-status"
+                title="Para sincronizar cambios de diseño o nuevas funciones, use el botón Re-publish de la plataforma"
+                style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: "0.72rem", fontWeight: 700, letterSpacing: "0.5px", color: "#10d98e", border: "1px solid rgba(16,217,142,0.35)", padding: "0.35rem 0.7rem", cursor: "help" }}>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#10d98e", boxShadow: "0 0 6px #10d98e" }}></span>
+                Sincronización: {window.location.hostname.includes("preview") ? "Preview" : "Live"} · Conexión Protegida
+              </span>
               <button className="docs-btn secondary" onClick={loadEmails} data-testid="btn-view-emails">
                 <i className="fa fa-envelope"></i> Ver Correos
               </button>
@@ -1507,6 +1534,12 @@ export default function ClientesModule({ onNavigate }) {
               </button>
             </div>
           </div>
+
+          {syncMsg && (
+            <div data-testid="cloud-sync-msg" style={{ margin: "0.6rem 0 0", padding: "0.55rem 0.9rem", fontSize: "0.8rem", fontWeight: 600, background: syncMsg.startsWith("💎") ? "rgba(212,175,55,0.12)" : "rgba(225,29,72,0.12)", border: `1px solid ${syncMsg.startsWith("💎") ? "rgba(212,175,55,0.4)" : "rgba(225,29,72,0.4)"}`, color: syncMsg.startsWith("💎") ? "#d4af37" : "#ff6b8a" }}>
+              {syncMsg}
+            </div>
+          )}
 
           <div data-testid="folder-tabs" style={{ display: "flex", gap: 8, margin: "0.9rem 0" }}>
             <button data-testid="tab-clientes" onClick={() => setFolderTab("clientes")}

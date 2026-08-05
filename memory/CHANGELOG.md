@@ -500,3 +500,9 @@
 - TIMEOUTS ANTI-CONGELAMIENTO (60s): helper _enviar() en ai_extract.py y _llm_con_timeout() en server.py envuelven TODAS las llamadas LLM con asyncio.wait_for(60s). folders_service._ocr_ia_pagina con wait_for(60). pytesseract con timeout=60 en ocr_service.ocr_texto y folders_service._texto_pagina. Al vencer → error controlado, recursos liberados (callers ya tienen try/except con fallback a reglas).
 - RESCATE DE MÓDULOS (fix 404): creados GET /api/estudio-titulo/carpetas, /api/escrituracion/carpetas y /api/tasacion/carpetas — leen SOLO de MongoDB (folders con estudio_titulo_solicitado_at / is_escrituracion|escrituracion_movida_at / tasacion_solicitada_at). Campo pdf_disponible solo ALERTA si falta el PDF físico, jamás rompe la vista (_pdf_disponible con try/except).
 - VERIFICADO: estudio 0.33s (1 ficha), escrituración 0.20s (9 fichas), tasación 0.12s (1 ficha), panel principal /clientes/folders 0.22s. Todo 200, carga instantánea.
+
+## 2026-06 — PANEL DE CONTROL CLOUD SYNC
+- Botón "💎 Sincronizar Datos (Cloud Sync)" en toolbar de Carpeta Clientes (btn-cloud-sync): POST /api/clientes/cloud-sync → ping Mongo + bunker.restaurar_faltantes() (baja archivos nuevos del GridFS) + sync_en_background() (respaldo daemon). Refresca loadFolders() sin recargar página. Respuesta 0.03-0.3s.
+- Indicador "Sincronización: [Live/Preview] · Conexión Protegida" (detecta por hostname) + tooltip "use el botón Re-publish de la plataforma" en botón e indicador.
+- FIX CRÍTICO: los syncs de fondo ahora usan HILOS DAEMON (bunker.sync_en_background) — antes asyncio.to_thread bloqueaba el hot-reload de uvicorn (el proceso viejo moría y el nuevo no arrancaba → 502). Los restores preservan mtime (os.utime) para no re-subir 550MB tras cada restauración.
+- Verificado por screenshot e2e: login → Carpeta Clientes → click botón → mensaje "Sync OK · Mongo: conectado · 998 protegidos · 44 carpetas".

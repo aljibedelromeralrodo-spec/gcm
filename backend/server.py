@@ -86,10 +86,10 @@ import bunker
 
 
 async def _bunker_loop():
-    """BÚNKER DE ARCHIVOS: espejo disco -> GridFS cada 5 min (persistencia total)."""
+    """BÚNKER DE ARCHIVOS: espejo disco -> GridFS cada 5 min (hilo daemon, no bloquea)."""
     while True:
         try:
-            await asyncio.to_thread(bunker.sync_diff)
+            bunker.sync_en_background()
         except Exception as e:
             logging.warning(f"bunker sync: {e}")
         await asyncio.sleep(300)
@@ -1154,6 +1154,33 @@ async def list_folders_light(q: str = ""):
     query = {"nombre": {"$regex": re.escape(q), "$options": "i"}} if q else {}
     docs = await db.folders.find(query, {"_id": 0, "id": 1, "nombre": 1, "rut": 1}).sort("created_at", -1).to_list(800)
     return {"folders": docs}
+
+
+@api.post("/clientes/cloud-sync")
+async def clientes_cloud_sync():
+    """💎 Cloud Sync: (a) refresca la conexión Mongo, (b) re-escanea el Object Store
+    (GridFS) bajando archivos nuevos, (c) sube/espeja los cambios locales."""
+    t0 = datetime.now(timezone.utc)
+    try:
+        await db.command("ping")
+        mongo_ok = True
+    except Exception:
+        mongo_ok = False
+    nuevos = 0
+    try:
+        nuevos = await asyncio.to_thread(bunker.restaurar_faltantes)
+    except Exception as e:
+        logging.warning(f"cloud-sync restaurar: {e}")
+    # El respaldo disco->GridFS puede tardar: corre en HILO DAEMON (no bloquea nada)
+    bunker.sync_en_background()
+    total = await db.folders.count_documents({})
+    protegidos = await db["bunker.files"].count_documents({})
+    dur = (datetime.now(timezone.utc) - t0).total_seconds()
+    return {"ok": mongo_ok, "mongo": "conectado" if mongo_ok else "error",
+            "archivos_nuevos_descargados": nuevos,
+            "respaldo": "en segundo plano",
+            "total_en_bunker": protegidos,
+            "carpetas": total, "duracion_seg": round(dur, 2)}
 
 
 @api.get("/clientes/folders")
@@ -7739,7 +7766,7 @@ async def aprobacion_eliminar_archivo(ruta: str = "", origen: str = "autocorreo"
     p.unlink()
     if origen == "clientes" and cliente.strip():
         await asyncio.to_thread(_regen_carpeta_cliente, cliente.strip())
-    asyncio.create_task(asyncio.to_thread(bunker.sync_diff))
+    bunker.sync_en_background()
     return {"ok": True, "eliminado": p.name}
 
 
@@ -7775,7 +7802,7 @@ async def aprobacion_upload(cliente: str = Form(...), file: UploadFile = File(..
     dest = STORAGE_DIR / _safe_name(cliente.strip())
     dest.mkdir(parents=True, exist_ok=True)
     (dest / fn).write_bytes(raw)
-    asyncio.create_task(asyncio.to_thread(bunker.sync_diff))
+    bunker.sync_en_background()
     return {"ok": True, "nombre": fn, "tipo": _tipo_pdf_aprobacion(fn),
             "ruta": str((dest / fn).relative_to(STORAGE_DIR)), "origen": "autocorreo"}
 

@@ -32,6 +32,14 @@ def _walk():
                 yield f"{sub}/{p.relative_to(base).as_posix()}", p
 
 
+def _escribir_con_mtime(g, dest):
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_bytes(g.read())
+    mt = (g.metadata or {}).get("mtime")
+    if mt:
+        os.utime(dest, (mt, mt))
+
+
 def restaurar_si_vacio():
     """Al arrancar: si el disco está vacío (pod nuevo/reinicio), restaura TODO desde GridFS."""
     fs, _db = _fs()
@@ -41,14 +49,34 @@ def restaurar_si_vacio():
     n = 0
     for g in fs.find():
         try:
-            dest = ROOT / g.filename
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            dest.write_bytes(g.read())
+            _escribir_con_mtime(g, ROOT / g.filename)
             n += 1
         except Exception as e:
             logging.warning(f"bunker restore {g.filename}: {e}")
     logging.warning(f"🏦 BÚNKER: {n} archivo(s) restaurados desde GridFS al disco")
     return n
+
+
+def restaurar_faltantes():
+    """Cloud Sync: baja del GridFS los archivos que NO están en el disco local
+    (sin exigir disco vacío). Devuelve la cantidad restaurada."""
+    fs, _db = _fs()
+    n = 0
+    for g in fs.find():
+        try:
+            dest = ROOT / g.filename
+            if dest.exists():
+                continue
+            _escribir_con_mtime(g, dest)
+            n += 1
+        except Exception as e:
+            logging.warning(f"bunker faltante {g.filename}: {e}")
+    return n
+
+
+def sync_en_background():
+    """Dispara sync_diff en un hilo daemon: nunca bloquea reloads ni el event loop."""
+    threading.Thread(target=sync_diff, daemon=True).start()
 
 
 def sync_diff():
