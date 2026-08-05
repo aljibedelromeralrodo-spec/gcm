@@ -154,6 +154,18 @@ async def _task_blindada(coro_fn, nombre):
 @app.on_event("startup")
 async def startup():
     await ensure_seed()
+    # OPTIMIZACIÓN: índices en colecciones calientes (listas instantáneas)
+    try:
+        await db.folders.create_index("nombre")
+        await db.folders.create_index("rut")
+        await db.correos_pendientes.create_index([("estado", 1), ("fecha", -1)])
+        await db.seguimiento.create_index([("asunto", 1), ("fecha", 1)])
+        await db.proc_queue.create_index("status")
+        await db["bunker.files"].create_index("filename")
+        await db.ocr_rut_cache.create_index("path")
+        await db.set_credito.create_index("nombre")
+    except Exception as e:
+        logging.warning(f"indices: {e}")
     # BÚNKER DE ARCHIVOS: si el disco está vacío (pod nuevo), restaurar desde GridFS
     try:
         await asyncio.to_thread(bunker.restaurar_si_vacio)
@@ -9844,7 +9856,6 @@ async def root():
 
 
 # ---------------------------------------------------------------------------
-app.include_router(api)
 
 
 @app.middleware("http")
@@ -9855,6 +9866,9 @@ async def security_headers(request, call_next):
     resp.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     resp.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     resp.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    resp.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+    resp.headers["X-Permitted-Cross-Domain-Policies"] = "none"
+    resp.headers["X-DNS-Prefetch-Control"] = "off"
     return resp
 
 
@@ -9893,31 +9907,4 @@ async def root():
     return {"message": "Central Mutuos API", "status": "ok"}
 
 
-# ---------------------------------------------------------------------------
 app.include_router(api)
-
-
-@app.middleware("http")
-async def security_headers(request, call_next):
-    resp = await call_next(request)
-    resp.headers["X-Content-Type-Options"] = "nosniff"
-    resp.headers["X-Frame-Options"] = "SAMEORIGIN"
-    resp.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    resp.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-    resp.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
-    return resp
-
-
-_cors_env = os.environ.get("CORS_ORIGINS", "*")
-app.add_middleware(
-    CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=["*"] if _cors_env == "*" else [o.strip() for o in _cors_env.split(",")],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
-@app.on_event("shutdown")
-async def shutdown():
-    client.close()
