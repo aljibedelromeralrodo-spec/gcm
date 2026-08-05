@@ -100,6 +100,41 @@ async def _llm_con_timeout(chat, um, timeout=60):
     return await asyncio.wait_for(chat.send_message(um), timeout=timeout)
 
 
+async def _rescate_historico_loop():
+    """RESCATE HISTÓRICO: 1ª ejecución escanea 30 días del buzón por LOTES (enviados
+    y recibidos con la mesa); después escaneo preventivo cada 3 días."""
+    await asyncio.sleep(20)
+    while True:
+        try:
+            cfg = await db.config.find_one({"_key": "seguimiento_historico"}) or {}
+            dias = 3 if cfg.get("inicial_done") else 30
+            ops = await asyncio.to_thread(mail.procesar_seguimiento, 500, dias)
+            nuevos = 0
+            for i in range(0, len(ops), 20):
+                for op in ops[i:i + 20]:
+                    exists = await db.seguimiento.find_one(
+                        {"asunto": op["asunto"], "fecha": op["fecha"]})
+                    if exists:
+                        continue
+                    extra = await _info_operacion_cliente(op["cliente"])
+                    await db.seguimiento.insert_one({
+                        "id": str(uuid.uuid4()),
+                        "cliente_id": op["cliente"].lower().replace(" ", "-"),
+                        **op, **extra,
+                        "correo_remitente": op.get("remitente", ""),
+                        "origen": "rescate_historico",
+                        "procesado_en": now_iso()})
+                    nuevos += 1
+                await asyncio.sleep(0.5)
+            await db.config.update_one({"_key": "seguimiento_historico"}, {"$set": {
+                "inicial_done": True, "last_scan": now_iso(),
+                "dias_escaneados": dias, "ops": len(ops), "nuevos": nuevos}}, upsert=True)
+            logging.info(f"📜 Rescate histórico: {dias} días, {len(ops)} ops, {nuevos} nuevas")
+        except Exception as e:
+            logging.warning(f"rescate historico: {e}")
+        await asyncio.sleep(3 * 24 * 3600)
+
+
 async def _task_blindada(coro_fn, nombre):
     """Supervisor: si un loop de fondo muere, se registra y se reinicia solo."""
     while True:
@@ -160,6 +195,7 @@ async def startup():
     asyncio.create_task(_task_blindada(_resumen_cierres_loop, "resumen_cierres"))
     asyncio.create_task(_task_blindada(_setcred_auto_loop, "setcred_auto"))
     asyncio.create_task(_task_blindada(_bunker_loop, "bunker_gridfs"))
+    asyncio.create_task(_task_blindada(_rescate_historico_loop, "rescate_historico"))
 
 
 # ---------------------------------------------------------------------------
@@ -4085,13 +4121,26 @@ async def _rescate_ley_rut(folder_doc, fn, raw, ruts_encontrados, origen="correo
 
 async def _guardar_con_ley_rut(folder_doc, fn, raw, subfolder=""):
     """Guarda el archivo SOLO si su OCR contiene el RUT del dueño o codeudor (match 100%).
-    Sin match -> Buzón de Rescate. Devuelve la ruta relativa o None."""
+    Sin match -> Buzón de Rescate. RUT COMO BRÚJULA: si trae SOLO el RUT del codeudor,
+    va forzado a 05_codeudor/<Nombre> con prefijo CODEUDOR_. Devuelve rel o None."""
     ruts = [folder_doc.get("rut", ""), folder_doc.get("codeudor_rut", "")]
     if any(len(_norm_rut(r or "")) >= 7 for r in ruts):
         ok, encontrados = await asyncio.to_thread(_ley_rut_ok, raw, ruts)
         if not ok:
             await _rescate_ley_rut(folder_doc, fn, raw, encontrados)
             return None
+        rut_t = _norm_rut(folder_doc.get("rut", "") or "")
+        rut_c = _norm_rut(folder_doc.get("codeudor_rut", "") or "")
+        if (len(rut_c) >= 7 and rut_c in encontrados
+                and not (rut_t and rut_t in encontrados)):
+            if not (rut_t and len(rut_t) >= 7):
+                # REGLA IVANA: sin RUT titular NO se vinculan codeudores
+                await _rescate_ley_rut(folder_doc, fn, raw, encontrados)
+                return None
+            cod_nom = (folder_doc.get("codeudor_nombre") or "").strip() or "Codeudor"
+            subfolder = f"05_codeudor/{fsvc.safe_name(cod_nom.title())}"
+            if not fn.upper().startswith("CODEUDOR_"):
+                fn = f"CODEUDOR_{fn}"
     return await asyncio.to_thread(fsvc.guardar_archivo, folder_doc.get("nombre", ""),
                                    fn, raw, subfolder)
 
@@ -4214,6 +4263,21 @@ def _regla_solicitud_ok(item):
 CLAVE_FORZAR_CARPETA = os.environ.get("MASTER_PIN", "")
 
 
+DESTINOS_RESCATE = ("solicitud", "tasacion", "estudio", "otros")
+
+
+def _sugerir_destino(texto):
+    """MODO INTUITIVO: sugiere destino por palabras clave. Solo sugerencia — nada se mueve sin confirmación."""
+    t = _norm_texto(texto or "")
+    if re.search(r"reparo|estudio de titulo|titulos|abogad|escritura", t):
+        return "estudio"
+    if re.search(r"tasacion|tasador|tasar|avaluo", t):
+        return "tasacion"
+    if re.search(r"aprobaci|solicitud|credito|simulaci|hipotec|liquidacion|cedula|renta|cotizacion|afp|cmf", t):
+        return "solicitud"
+    return "otros"
+
+
 @api.get("/rescate/pendientes")
 async def rescate_pendientes():
     """Buzón de Rescate: correos que el sistema no logró clasificar/armar automáticamente."""
@@ -4231,7 +4295,13 @@ async def rescate_pendientes():
                 "estado": "pendiente", "creado_en": now_iso()}},
             upsert=True)
     docs = await db.correos_pendientes.find({"estado": "pendiente"}).sort("fecha", -1).limit(100).to_list(100)
-    return {"pendientes": [clean(d) for d in docs]}
+    out = []
+    for d in docs:
+        c = clean(d)
+        c["sugerencia"] = _sugerir_destino(
+            f"{d.get('subject', '')} {d.get('motivo', '')} {' '.join(d.get('adjuntos') or [])}")
+        out.append(c)
+    return {"pendientes": out}
 
 
 @api.post("/rescate/{pid}/descartar")
@@ -4288,6 +4358,47 @@ async def rescate_asignar(pid: str, payload: dict):
         "estado": "resuelto", "cliente_asignado": cliente,
         "tipo_documento": tipo_doc, "resuelto_en": now_iso()}})
     return {"ok": True, "cliente": cliente, "resultado": res}
+
+
+@api.post("/rescate/{pid}/clasificar")
+async def rescate_clasificar(pid: str, payload: dict):
+    """CENTRO DE MANDO: destino manual exclusivo (solicitud/tasacion/estudio/otros).
+    REGLA INVIOLABLE: nada se mueve hasta esta confirmación."""
+    payload = payload or {}
+    destino = (payload.get("destino") or "").strip().lower()
+    if destino not in DESTINOS_RESCATE:
+        raise HTTPException(status_code=400, detail="Destino inválido")
+    pend = await db.correos_pendientes.find_one({"$or": [{"id": pid}, {"qid": pid}]})
+    if not pend:
+        raise HTTPException(status_code=404, detail="Correo pendiente no encontrado")
+    if destino == "otros":
+        import shutil as _sh
+        qid = pend.get("qid") or ""
+        src = PROC_DIR / qid if qid else None
+        dest = ROOT_DIR / "storage" / "archivo_general" / (qid or pend["id"])
+        movidos = []
+        if src and src.exists():
+            dest.mkdir(parents=True, exist_ok=True)
+            for f in src.iterdir():
+                if f.is_file():
+                    _sh.move(str(f), str(dest / f.name))
+                    movidos.append(f.name)
+        await db.correos_pendientes.update_one({"id": pend["id"]}, {"$set": {
+            "estado": "archivado_otros", "archivado_en": now_iso(), "archivo_general": movidos}})
+        if qid:
+            await db.proc_queue.update_one({"id": qid}, {"$set": {"status": "archivado_otros"}})
+        return {"ok": True, "destino": "otros", "archivados": movidos,
+                "detalle": "Correo archivado en carpeta general — sin ficha de cliente"}
+    cliente = (payload.get("cliente") or "").strip()
+    res = await rescate_asignar(pid, {"cliente": cliente,
+                                      "tipo_documento": payload.get("tipo_documento", "")})
+    if destino in ("tasacion", "estudio"):
+        campo = ("tasacion_solicitada_at" if destino == "tasacion"
+                 else "estudio_titulo_solicitado_at")
+        await db.folders.update_one(
+            {"nombre": {"$regex": f"^{re.escape(cliente)}$", "$options": "i"}},
+            {"$set": {campo: now_iso()}})
+    return {"ok": True, "destino": destino, **(res or {})}
 
 
 @api.post("/procesamiento/reevaluar")
@@ -7796,6 +7907,24 @@ async def aprobacion_upload(cliente: str = Form(...), file: UploadFile = File(..
         raise HTTPException(status_code=422, detail=(
             f"⚠ LEY DEL RUT: el archivo contiene un RUT que NO coincide con el dueño de la "
             f"carpeta ({(fdoc or {}).get('rut', '')}). Vínculo descartado."))
+    # RUT COMO BRÚJULA: si el archivo trae SOLO el RUT del codeudor, va a 05_codeudor
+    if (len(rut_cod) >= 7 and rut_cod in ruts_arch
+            and not (len(rut_dueno) >= 7 and rut_dueno in ruts_arch)):
+        if len(rut_dueno) < 7:
+            raise HTTPException(status_code=422, detail=(
+                "⚠ REGLA IVANA: la carpeta no tiene RUT titular — no se permite vincular "
+                "archivos del codeudor. Configure primero el RUT del titular."))
+        cod_nom = ((fdoc or {}).get("codeudor_nombre") or "Codeudor").strip().title()
+        fn_cod = _safe_name(nombre_f)
+        if not fn_cod.upper().startswith("CODEUDOR_"):
+            fn_cod = f"CODEUDOR_{fn_cod}"
+        rel_cod = await asyncio.to_thread(
+            fsvc.guardar_archivo, (fdoc or {}).get("nombre", cliente.strip()),
+            fn_cod, raw, f"05_codeudor/{_safe_name(cod_nom)}")
+        bunker.sync_en_background()
+        return {"ok": True, "nombre": fn_cod, "tipo": "codeudor",
+                "ruta": rel_cod, "origen": "clientes",
+                "aviso": f"Archivo del CODEUDOR ({cod_nom}) — guardado en 05_codeudor, no se mezcla con el titular"}
     fn = _safe_name(nombre_f)
     if _tipo_pdf_aprobacion(fn) == "otro":
         fn = f"simulador_{fn}"
@@ -8935,15 +9064,33 @@ async def setcred_download(sid: str, file_path: str, inline: bool = False):
 
 
 def _set_combinar(nombre):
-    """Une todos los PDFs del set (excepto el combinado previo) en uno solo."""
+    """Une todos los PDFs del set (excepto el combinado previo) en uno solo.
+    REGLA IVANA: exige RUT titular y excluye PDFs cuyo RUT no sea el del titular."""
     from pypdf import PdfReader, PdfWriter
+    rut_t = ""
+    try:
+        from bunker import _fs as _bfs
+        _f, _dbs = _bfs()
+        _doc = (_dbs.folders.find_one({"nombre": nombre}, {"rut": 1})
+                or _dbs.set_credito.find_one({"nombre": nombre}, {"rut": 1}) or {})
+        rut_t = _norm_rut(_doc.get("rut", "") or "")
+    except Exception:
+        pass
+    if len(rut_t) < 7:
+        return {"combinado": "", "usados": [],
+                "error": "REGLA IVANA: sin RUT titular no hay combinación de PDF. Configure el RUT primero."}
     base = _set_dir(nombre)
     writer = PdfWriter()
     usados = []
+    excluidos_rut = []
     orden = {t: i for i, t in enumerate(SET_DOC_TIPOS)}
     archivos = sorted(_set_archivos(nombre), key=lambda a: (orden.get(a["tipo"], 99), a["nombre"]))
     for a in archivos:
         if a["nombre"].startswith("COMBINADO_SET"):
+            continue
+        ruts_a = fsvc._ruts_personas(fsvc.ruts_de_pdf_cache(base / a["ruta"]))
+        if ruts_a and rut_t not in ruts_a:
+            excluidos_rut.append(a["nombre"])
             continue
         try:
             for pg in PdfReader(str(base / a["ruta"])).pages:
@@ -8952,11 +9099,11 @@ def _set_combinar(nombre):
         except Exception:
             continue
     if not usados:
-        return {"combinado": "", "usados": []}
+        return {"combinado": "", "usados": [], "excluidos_rut": excluidos_rut}
     out = f"COMBINADO_SET_{fsvc.safe_name(nombre)}.pdf"
     with open(base / out, "wb") as f:
         writer.write(f)
-    return {"combinado": out, "usados": usados}
+    return {"combinado": out, "usados": usados, "excluidos_rut": excluidos_rut}
 
 
 def _set_firmados(nombre):
@@ -9589,6 +9736,56 @@ async def portal_consulta_get(rut: str = ""):
 @api.post("/formato/upload")
 async def formato_upload(file: UploadFile = File(None)):
     return {"ok": True, "filename": file.filename if file else None}
+
+
+@api.post("/formato/merge-pdfs")
+async def formato_merge(payload: dict = None):
+    raise HTTPException(status_code=501, detail="Funcion no disponible en esta instancia")
+
+
+@api.post("/formato/split-pdf")
+async def formato_split(payload: dict = None):
+    raise HTTPException(status_code=501, detail="Funcion no disponible en esta instancia")
+
+
+@api.post("/formato/ai-edit")
+async def formato_ai_edit(payload: dict = None):
+    raise HTTPException(status_code=501, detail="Funcion no disponible en esta instancia")
+
+
+@api.get("/")
+async def root():
+    return {"message": "Central Mutuos API", "status": "ok"}
+
+
+# ---------------------------------------------------------------------------
+app.include_router(api)
+
+
+@app.middleware("http")
+async def security_headers(request, call_next):
+    resp = await call_next(request)
+    resp.headers["X-Content-Type-Options"] = "nosniff"
+    resp.headers["X-Frame-Options"] = "SAMEORIGIN"
+    resp.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    resp.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    resp.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    return resp
+
+
+_cors_env = os.environ.get("CORS_ORIGINS", "*")
+app.add_middleware(
+    CORSMiddleware,
+    allow_credentials=True,
+    allow_origins=["*"] if _cors_env == "*" else [o.strip() for o in _cors_env.split(",")],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.on_event("shutdown")
+async def shutdown():
+    client.close()
 
 
 @api.post("/formato/merge-pdfs")

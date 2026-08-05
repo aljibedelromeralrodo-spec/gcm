@@ -515,3 +515,21 @@
 - App.js: lazy imports, 3 entradas sidebar (nav-tasacion/nav-estudio/nav-escritura), MODULE_TITLES, renders.
 - SANEAMIENTO: middleware security_headers en server.py (HSTS, nosniff, X-Frame SAMEORIGIN, Referrer-Policy, Permissions-Policy) — verificado por curl. secureStore.js (cifrado localStorage) y sanitización DOMPurify ya existían. Hook deps: 0 warnings tras fix. Funciones pesadas ya refactorizadas antes (fitz streaming). ESLint standalone sin config (CRA lo corre integrado — compila limpio).
 - Verificado por screenshot e2e: Tasación (1 ficha, 4 semáforos), Estudio (modal hilo OK), Escritura (9 fichas, 9 botones Firma VIP). Estética Maserati intacta.
+
+## 2026-06 — REGLA IVANA + CENTRO DE MANDO + RESCATE HISTÓRICO 30 DÍAS + SANEAMIENTO
+### Regla Ivana (completada)
+- RUT titular Ivana López: 19.203.796-4 configurado; codeudor Freddy Landa (13224068-k).
+- _guardar_con_ley_rut: archivo con SOLO RUT codeudor → forzado a 05_codeudor/<Nombre> + prefijo CODEUDOR_. Sin RUT titular → no se vinculan codeudores (rescate).
+- FILTRO DE COMBINACIÓN: merge_protocol y _set_combinar excluyen PDFs con RUT ajeno al titular (OCR con caché db.ocr_rut_cache path+size+mtime — no repite OCR). Sin RUT titular → combinación BLOQUEADA ("REGLA IVANA").
+- Refinamiento clave: _ruts_personas() ignora RUTs de empresas (>= 50M, empleadores/AFP) para no excluir liquidaciones legítimas.
+- Limpieza: 1 archivo de Freddy movido a 05_codeudor/Freddy Landa/CODEUDOR_*, combinado de Ivana regenerado (14 docs, 0 exclusiones). Upload endpoint testeado: archivo de Freddy → 200 con ruteo a 05_codeudor.
+### Centro de Mando (Por Clasificar)
+- GET /rescate/pendientes ahora incluye "sugerencia" (keywords: reparo→estudio, tasacion→tasacion, aprobaci/solicitud→solicitud, resto→otros).
+- POST /api/rescate/{pid}/clasificar {destino, cliente}: solicitud (asignar clásico), tasacion/estudio (asignar + flag tasacion_solicitada_at/estudio_titulo_solicitado_at → aparece en módulo VIP), otros (mueve adjuntos a storage/archivo_general/<qid>, estado archivado_otros, SIN ficha). Testeado e2e con correo sintético.
+- BuzonRescateModule rediseñado: dropdown 4 destinos (rescate-destino-{i}) preseleccionado con ★ sugerido + botón "Confirmar Destino". NADA se mueve sin confirmación. Verificado por screenshot.
+### Rescate Histórico
+- _rescate_historico_loop: 1ª vez escanea 30 días (headers-only, lotes de 20 + sleep) → db.seguimiento con origen rescate_historico (12 ops cargadas); luego cada 3 días. Config en db.config _key=seguimiento_historico.
+### Saneamiento (3ª pasada, todo verificado)
+- XSS: DOMPurify en todos los dangerouslySetInnerHTML ✅ · localStorage cifrado (secureStore.js) ✅ · 5 cabeceras SSL/seguridad activas ✅ · hooks 0 warnings ✅ · linter CRA integrado compila limpio ✅ · funciones pesadas ya refactorizadas (fitz streaming, caché OCR, timeouts 60s, hilos daemon) ✅.
+### Bug corregido
+- Línea huérfana en server.py (edit corrupto por interrupción) rompía el arranque → eliminada; endpoint clasificar reaplicado.

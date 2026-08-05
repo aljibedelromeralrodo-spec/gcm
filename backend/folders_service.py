@@ -168,8 +168,75 @@ def guardar_archivo(nombre_carpeta, filename, raw, subfolder=""):
     return f"{sub}/{fn}" if sub else fn
 
 
+RUT_RX = re.compile(r"\b\d{1,2}\.?\d{3}\.?\d{3}\s?-\s?[\dkK]\b")
+
+
+def _norm_rut_fs(r):
+    return re.sub(r"[.\-\s]", "", (r or "")).lower()
+
+
+def ruts_de_pdf_cache(path):
+    """RUTs de un PDF con caché Mongo (path+size+mtime): no repite OCR jamás."""
+    from bunker import _fs
+    p = Path(path)
+    try:
+        st = p.stat()
+    except OSError:
+        return set()
+    try:
+        _f, db = _fs()
+        key = {"path": str(p), "size": st.st_size, "mtime": int(st.st_mtime)}
+        hit = db.ocr_rut_cache.find_one(key)
+        if hit is not None:
+            return set(hit.get("ruts") or [])
+    except Exception:
+        db = None
+    import ocr_service
+    try:
+        texto, _m = ocr_service.extraer_texto(p.read_bytes(), p.name)
+    except Exception:
+        texto = ""
+    ruts = sorted({_norm_rut_fs(r) for r in RUT_RX.findall(texto or "")})
+    if db is not None:
+        try:
+            db.ocr_rut_cache.replace_one({"path": str(p)}, {**key, "ruts": ruts}, upsert=True)
+        except Exception:
+            pass
+    return set(ruts)
+
+
+def _ruts_personas(ruts):
+    """Filtra solo RUTs de personas naturales (< 50.000.000). Los RUT de empresas
+    (empleadores, AFP, municipalidades) no cuentan para exclusión."""
+    out = set()
+    for r in ruts:
+        num = re.sub(r"[^0-9]", "", (r or "")[:-1])
+        try:
+            if num and int(num) < 50000000:
+                out.add(r)
+        except ValueError:
+            continue
+    return out
+
+
+def _rut_titular_de(nombre):
+    try:
+        from bunker import _fs
+        _f, db = _fs()
+        d = db.folders.find_one({"nombre": nombre}, {"rut": 1}) or {}
+        return _norm_rut_fs(d.get("rut", ""))
+    except Exception:
+        return ""
+
+
 def merge_protocol(nombre, client_type="dependiente", include_extras=True, order=None):
     base = folder_dir(nombre)
+    # REGLA IVANA: sin RUT titular NO hay combinación de PDF
+    rut_t = _rut_titular_de(nombre)
+    if len(rut_t) < 7:
+        return {"merged_file": "", "files_used": [],
+                "errors": ["REGLA IVANA: la carpeta no tiene RUT titular — combinación bloqueada. Configure el RUT primero."],
+                "client_type": client_type, "protocol_order": order or [], "excluidos_rut": []}
     order = list(order) if order else (required_cats(client_type) + (["extras"] if include_extras else []))
     usable = []
     for a in scan_archivos(nombre):
@@ -186,7 +253,14 @@ def merge_protocol(nombre, client_type="dependiente", include_extras=True, order
     usable.sort(key=lambda t: (t[0], t[2]["ruta"]))
     writer = PdfWriter()
     used, errors = [], []
+    excluidos_rut = []
     for _, cat, a in usable:
+        # FILTRO DE COMBINACIÓN (REGLA IVANA): si el PDF trae RUTs y NINGUNO es el
+        # del titular, queda FUERA del combinado — aunque esté en carpeta normal.
+        ruts_a = _ruts_personas(ruts_de_pdf_cache(base / a["ruta"]))
+        if ruts_a and rut_t not in ruts_a:
+            excluidos_rut.append(a["ruta"])
+            continue
         try:
             reader = PdfReader(str(base / a["ruta"]))
             for pg in reader.pages:
@@ -201,7 +275,7 @@ def merge_protocol(nombre, client_type="dependiente", include_extras=True, order
             writer.write(f)
     return {"merged_file": merged_name if used else "", "files_used": used,
             "errors": errors, "client_type": client_type,
-            "protocol_order": order}
+            "protocol_order": order, "excluidos_rut": excluidos_rut}
 
 
 def merge_codeudor(nombre):

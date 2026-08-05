@@ -15,6 +15,15 @@ export default function BuzonRescateModule() {
   const [tipoDoc, setTipoDoc] = useState("");
   const [folders, setFolders] = useState([]);
   const [procesando, setProcesando] = useState(false);
+  const [destSel, setDestSel] = useState({});
+
+  const DESTINOS = [
+    { value: "solicitud", label: "📋 Solicitud de Crédito → carpeta del cliente" },
+    { value: "tasacion", label: "🏠 Tasación → módulo de Tasación" },
+    { value: "estudio", label: "⚖️ Estudio de Títulos / Reparos → módulo de Títulos" },
+    { value: "otros", label: "📂 Otros → archivo general (sin ficha)" },
+  ];
+  const destinoDe = (p) => destSel[p.id] || p.sugerencia || "solicitud";
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -32,10 +41,26 @@ export default function BuzonRescateModule() {
   useEffect(() => { load(); }, [load]);
 
   const abrirAsignar = (p) => {
-    setAsignando(p);
+    setAsignando({ ...p, destino: destinoDe(p) });
     setClienteInput(p.cliente_sugerido && p.cliente_sugerido.split(" ").length >= 2 ? p.cliente_sugerido : "");
     setTipoDoc("");
     setMsg("");
+  };
+
+  const ejecutarDestino = async (p) => {
+    const destino = destinoDe(p);
+    if (destino === "otros") {
+      if (!window.confirm(`¿Archivar este correo en la carpeta general SIN crear ficha de cliente?\n\n"${p.subject || "(sin asunto)"}"`)) return;
+      setProcesando(true);
+      try {
+        await axios.post(`${API}/api/rescate/${p.id}/clasificar`, { destino: "otros" }, { timeout: 60000 });
+        setMsg("✅ Correo archivado en carpeta general — sin ficha de cliente.");
+        load();
+      } catch (e) { setMsg("Error: " + (e.response?.data?.detail || e.message)); }
+      setProcesando(false);
+      return;
+    }
+    abrirAsignar(p);
   };
 
   const descartar = async (p) => {
@@ -59,10 +84,12 @@ export default function BuzonRescateModule() {
     }
     setProcesando(true);
     try {
-      const r = await axios.post(`${API}/api/rescate/${asignando.id}/asignar`, {
+      const r = await axios.post(`${API}/api/rescate/${asignando.id}/clasificar`, {
+        destino: asignando.destino || "solicitud",
         cliente: clienteInput.trim(), tipo_documento: tipoDoc,
       }, { timeout: 120000 });
-      setMsg(`✅ Correo asignado a "${r.data.cliente}": archivos movidos a su carpeta y procesados.`);
+      const eti = { solicitud: "Solicitud de Crédito", tasacion: "Tasación", estudio: "Estudio de Títulos" }[asignando.destino] || "carpeta";
+      setMsg(`✅ Correo enviado a ${eti} para "${r.data.cliente || clienteInput.trim()}": archivos movidos y procesados.`);
       setAsignando(null);
       load();
     } catch (e) { setMsg("Error: " + (e.response?.data?.detail || e.message)); }
@@ -102,14 +129,23 @@ export default function BuzonRescateModule() {
                 </div>
               )}
             </div>
-            <button onClick={() => abrirAsignar(p)} data-testid={`rescate-asignar-${i}`}
-              style={{ background: "var(--gold)", border: "none", color: "#1a1f2e", borderRadius: 0, padding: "0.55rem 1.1rem", cursor: "pointer", fontWeight: 800, fontSize: "0.85rem" }}>
-              <i className="fa fa-hand-pointer-o" style={{ marginRight: 6 }} />Asignar Manualmente
-            </button>
-            <button onClick={() => descartar(p)} data-testid={`rescate-descartar-${i}`} disabled={procesando}
-              style={{ background: "rgba(225,29,72,0.12)", border: "1px solid rgba(225,29,72,0.55)", color: "#fb7185", borderRadius: 0, padding: "0.55rem 1.1rem", cursor: "pointer", fontWeight: 800, fontSize: "0.85rem" }}>
-              <i className="fa fa-trash-o" style={{ marginRight: 6 }} />Descartar Definitivamente
-            </button>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 300 }}>
+              <select value={destinoDe(p)} onChange={e => setDestSel(prev => ({ ...prev, [p.id]: e.target.value }))}
+                data-testid={`rescate-destino-${i}`}
+                style={{ ...inp, border: "1px solid rgba(212,175,55,0.5)", fontWeight: 700 }}>
+                {DESTINOS.map(d => <option key={d.value} value={d.value}>{d.label}{p.sugerencia === d.value ? " ★ sugerido" : ""}</option>)}
+              </select>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => ejecutarDestino(p)} disabled={procesando} data-testid={`rescate-asignar-${i}`}
+                  style={{ flex: 1, background: "var(--gold)", border: "none", color: "#1a1f2e", borderRadius: 0, padding: "0.55rem 1.1rem", cursor: "pointer", fontWeight: 800, fontSize: "0.85rem" }}>
+                  <i className="fa fa-check" style={{ marginRight: 6 }} />Confirmar Destino
+                </button>
+                <button onClick={() => descartar(p)} data-testid={`rescate-descartar-${i}`} disabled={procesando}
+                  style={{ background: "rgba(225,29,72,0.12)", border: "1px solid rgba(225,29,72,0.55)", color: "#fb7185", borderRadius: 0, padding: "0.55rem 1.1rem", cursor: "pointer", fontWeight: 800, fontSize: "0.85rem" }}>
+                  <i className="fa fa-trash-o" />
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       ))}
@@ -117,7 +153,9 @@ export default function BuzonRescateModule() {
       {asignando && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }} data-testid="rescate-modal">
           <div style={{ background: "rgba(14,14,16,0.92)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", border: "1px solid rgba(212,175,55,0.4)", borderRadius: 0, padding: "1.5rem", width: 480, maxWidth: "92vw" }}>
-            <h3 style={{ margin: "0 0 0.4rem", color: "var(--gold)" }}>Asignar correo a un cliente</h3>
+            <h3 style={{ margin: "0 0 0.4rem", color: "var(--gold)" }}>
+              {{ solicitud: "📋 Solicitud de Crédito", tasacion: "🏠 Enviar a Tasación", estudio: "⚖️ Enviar a Estudio de Títulos" }[asignando.destino] || "Asignar correo"} — elegir cliente
+            </h3>
             <div style={{ fontSize: "0.8rem", opacity: 0.7, marginBottom: "1rem" }}>{asignando.subject}</div>
             <label style={{ fontSize: "0.8rem", display: "block", marginBottom: 4 }}>Nombre del cliente</label>
             <input list="rescate-clientes" style={inp} value={clienteInput} onChange={e => setClienteInput(e.target.value)}
