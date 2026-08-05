@@ -8202,11 +8202,18 @@ async def firma_firmar(token: str):
     pdf_bytes = target.read_bytes()
     posiciones = await asyncio.to_thread(pdfs.posiciones_firma_cliente, pdf_bytes)
     if len(posiciones) > 1:
-        pdf_bytes = await asyncio.to_thread(pdfs.estampar_referencias_firma, pdf_bytes,
+        estampado = await asyncio.to_thread(pdfs.estampar_referencias_firma, pdf_bytes,
                                             posiciones[1:], cliente)
+        del pdf_bytes
+        pdf_bytes = estampado
+        del estampado
+    import gc
+    gc.collect()  # limpiar buffers intermedios antes de la codificación base64
     res = await asyncio.to_thread(
         migrup.enviar_a_firmar_tercero, pdf_bytes, target.stem, firmante,
         "Portal de Firma Única — Central Mutuos", None, False, posiciones[:1] or None)
+    del pdf_bytes
+    gc.collect()
     if not res.get("success"):
         raise HTTPException(status_code=502, detail=f"No fue posible enviar la firma: {str(res.get('error'))[:180]}")
     await db.firma_links.update_one({"token": token}, {"$set": {

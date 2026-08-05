@@ -452,3 +452,10 @@
 - Deployment agent: status pass, findings [] (0 bloqueadores, 0 warnings).
 - Verificado por codigo: match total tokens + vinculo RUT (email_service 581/589), startup 24/7 forzado con pausa_admin en DB, portal 0 refs migrup.cl con 3 llamadas internas enviar_a_firmar_tercero, TLS 587 starttls, modulos importados (sales_engine 27, simulador_engine 28, ai_extract 3427), rastro digital SHA-256 + ID eCert + archivo madre en cada PDF dividido.
 - VEREDICTO: SISTEMA AFINADO Y LISTO PARA PRODUCCION.
+
+## 2026-08-05 — CIRUGIA DE MEMORIA PDF
+- posiciones_firma_cliente: page.flush_cache() + get_textmap.cache_clear() + del words/lineas por pagina (pdfplumber ya no acumula layout).
+- /firma/{token}/firmar: buffers intermedios liberados (del + gc.collect antes y despues de base64).
+- VERIFICADO: set Claudia Zurita 5.5MB combinado -> 10 posiciones -> estampado, RAM pico 218MB, 21.4s, backend sin reinicio.
+- TLS 587 listo (MAIL_SMTP_PORT=587); usuario actualizara el secreto en produccion.
+- Startup: ingesta siempre ON; correo ON por defecto salvo pausa_admin (preview pausado a proposito, produccion ON).

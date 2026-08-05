@@ -190,6 +190,10 @@ def posiciones_firma_cliente(pdf_bytes, rol="titular"):
             try:
                 words = page.extract_words() or []
             except Exception:
+                try:
+                    page.flush_cache()
+                except Exception:
+                    pass
                 continue
             lineas = {}
             for w in words:
@@ -222,6 +226,14 @@ def posiciones_firma_cliente(pdf_bytes, rol="titular"):
                                     "alto_pagina": float(page.height),
                                     "ancho_pagina": float(page.width),
                                     "etiqueta": etiqueta})
+            # CIRUGÍA DE MEMORIA: liberar la página de la RAM apenas se extraen
+            # sus coordenadas (evita que PDFs >5MB acumulen el layout completo)
+            try:
+                page.flush_cache()
+                page.get_textmap.cache_clear()
+            except Exception:
+                pass
+            del words, lineas
     return out
 
 
