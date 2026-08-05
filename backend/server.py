@@ -1146,6 +1146,25 @@ async def list_folders(q: str = ""):
 _PAT_FIRMA_CORREO = re.compile(r"^image\d{1,4}\.(jpe?g|png|gif|bmp)$", re.I)
 
 
+def _extraer_email(remitente):
+    mm = re.search(r"[\w.+-]+@[\w-]+\.[\w.]+", (remitente or "").lower())
+    return mm.group(0) if mm else ""
+
+
+def _remitente_autorizado(remitente, folder):
+    """SEGURIDAD: antes de guardar un PDF, el remitente debe coincidir con el
+    dueño de la carpeta (source_email) o ser una casilla propia del sistema."""
+    remit = _extraer_email(remitente)
+    if not remit:
+        return False
+    propios = {(os.environ.get("MAIL_USER") or "").lower(),
+               (os.environ.get("MAIL2_USER") or "").lower()} - {""}
+    if remit in propios:
+        return True
+    origen = _extraer_email(folder.get("source_email") or "")
+    return not origen or remit == origen
+
+
 def _rut_regex_flexible(rut):
     """'12.345.678-9' -> regex que matchea con o sin puntos/guion."""
     nucleo = re.sub(r"[.\-\s]", "", rut or "")
@@ -1374,10 +1393,12 @@ async def _forzar_folder_run(payload):
         if mids:
             resultados = await asyncio.to_thread(mail.fetch_attachments_by_message_ids, mids)
         else:
-            resultados = await asyncio.to_thread(mail.search_attachments_by_person, nombre or rut)
+            resultados = await asyncio.to_thread(mail.search_attachments_by_person, nombre or rut,
+                                                 40, rut, folder.get("source_email"))
             if rut and nombre:
                 try:
-                    resultados += await asyncio.to_thread(mail.search_attachments_by_person, rut)
+                    resultados += await asyncio.to_thread(mail.search_attachments_by_person, rut,
+                                                          40, rut, folder.get("source_email"))
                 except Exception:
                     pass
         if resultados and not (folder.get("source_email") or "").strip():
@@ -1387,6 +1408,8 @@ async def _forzar_folder_run(payload):
                 folder["source_email"] = remit
         existentes = {a["nombre"].lower() for a in fsvc.scan_archivos(folder["nombre"])}
         for r in resultados:
+            if not _remitente_autorizado(r.get("from"), folder):
+                continue
             for p in r.get("pdfs") or []:
                 fn = fsvc.safe_name(p["filename"])
                 if fn.lower() in existentes or not p.get("content_bytes") or _PAT_FIRMA_CORREO.match(fn):
@@ -1480,10 +1503,12 @@ async def folder_enriquecer(fid: str, payload: dict = None):
     if mids:
         resultados = await asyncio.to_thread(mail.fetch_attachments_by_message_ids, mids)
     else:
-        resultados = await asyncio.to_thread(mail.search_attachments_by_person, nombre)
+        resultados = await asyncio.to_thread(mail.search_attachments_by_person, nombre,
+                                             40, rut, doc.get("source_email"))
         if rut:
             try:
-                resultados += await asyncio.to_thread(mail.search_attachments_by_person, rut)
+                resultados += await asyncio.to_thread(mail.search_attachments_by_person, rut,
+                                                      40, rut, doc.get("source_email"))
             except Exception:
                 pass
     if resultados and not (doc.get("source_email") or "").strip():
@@ -1753,18 +1778,22 @@ async def _regen_combinado_bg(doc):
 
 @api.post("/clientes/folders/{fid}/codeudor")
 async def folder_agregar_codeudor(fid: str, payload: dict):
-    """Crea la subcarpeta 05_codeudor/<Nombre> dentro de la carpeta del titular."""
+    """Crea la subcarpeta 05_codeudor/<Nombre> y vincula el RUT del codeudor (obligatorio)."""
     payload = payload or {}
     nombre_cod = (payload.get("nombre") or "").strip()
+    rut_cod = (payload.get("rut") or "").strip()
     if len(nombre_cod) < 3:
         raise HTTPException(status_code=400, detail="Indica el nombre del codeudor")
+    if len(re.sub(r"[^0-9kK]", "", rut_cod)) < 7:
+        raise HTTPException(status_code=400, detail="El RUT del codeudor es obligatorio (ej: 12.345.678-9)")
     doc = await _get_folder_doc(fid)
     sub = f"05_codeudor/{fsvc.safe_name(nombre_cod)}"
     (fsvc.folder_dir(doc.get("nombre", "")) / sub).mkdir(parents=True, exist_ok=True)
     await db.folders.update_one({"id": fid}, {
-        "$set": {"codeudor_nombre": nombre_cod},
-        "$push": {"historial": {"fecha": now_iso(), "accion": f"Codeudor agregado: {nombre_cod}"}}})
-    return {"ok": True, "subfolder": sub}
+        "$set": {"codeudor_nombre": nombre_cod, "codeudor_rut": rut_cod},
+        "$push": {"historial": {"fecha": now_iso(),
+                                "accion": f"Codeudor vinculado por RUT: {nombre_cod} ({rut_cod})"}}})
+    return {"ok": True, "subfolder": sub, "codeudor_rut": rut_cod}
 
 
 @api.post("/clientes/folders/{fid}/upload-file")
@@ -1888,10 +1917,13 @@ async def save_attachment(payload: dict):
 
 async def _save_all_attachments_job(job_id, doc, person):
     try:
-        correos = await asyncio.to_thread(mail.search_attachments_by_person, person, 40)
+        correos = await asyncio.to_thread(mail.search_attachments_by_person, person, 40,
+                                          doc.get("rut"), doc.get("source_email"))
         existentes = {a["nombre"] for a in fsvc.scan_archivos(doc.get("nombre", ""))}
         total_found, total_saved, saved = 0, 0, []
         for c in correos:
+            if not _remitente_autorizado(c.get("from"), doc):
+                continue
             for pdf in c.get("pdfs", []):
                 total_found += 1
                 raw, nombre_a = pdf["content_bytes"], pdf["filename"]
@@ -4185,6 +4217,18 @@ async def proc_upload_drive(qid: str, force: bool = False, clave: str = ""):
             cod_nombre = cod_nombre or cliente
             cod_rut = cl.get("rut", "")
             existente = titular_doc
+    # MATCH PERFECTO POR RUT: si el RUT clasificado está vinculado como codeudor de un
+    # titular, los archivos van DIRECTO al anexo 05_codeudor — NUNCA carpeta nueva en raíz
+    rut_entrante = (cl.get("rut") or "").strip()
+    if rut_entrante and not es_correo_codeudor:
+        rx_cod = _rut_regex_flexible(rut_entrante)
+        titular_por_rut = (await db.folders.find_one(
+            {"codeudor_rut": {"$regex": rx_cod, "$options": "i"}}) if rx_cod else None)
+        if titular_por_rut and not (existente and existente.get("id") == titular_por_rut.get("id")):
+            es_correo_codeudor = True
+            cod_nombre = titular_por_rut.get("codeudor_nombre") or cliente
+            cod_rut = rut_entrante
+            existente = titular_por_rut
     if existente and existente.get("nombre"):
         cliente = existente["nombre"]
     if not existente and not es_correo_codeudor and not force:
@@ -8188,7 +8232,8 @@ async def firma_og_image(token: str):
     _centrar("Cifrado · Firma Auditada · eCert Chile", 530, _font(15), ORO_OSCURO)
     buf = io.BytesIO()
     img.save(buf, format="PNG")
-    return _RawResponse(content=buf.getvalue(), media_type="image/png")
+    return _RawResponse(content=buf.getvalue(), media_type="image/png",
+                        headers={"Cache-Control": "public, max-age=86400"})
 
 
 # ------------------------------------------------------------------

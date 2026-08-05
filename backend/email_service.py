@@ -491,13 +491,7 @@ def _buscar_ids_persona(m, tokens, original):
                 ids |= set(data[0].split())
         except Exception:
             pass
-    # Siempre revisar además los correos más recientes (caso: correo recién enviado)
-    try:
-        typ, data = m.search(None, "ALL")
-        if typ == "OK" and data and data[0]:
-            ids |= set(data[0].split()[-30:])
-    except Exception:
-        pass
+    # SEGURIDAD: sin búsqueda general de correos recientes — solo coincidencias reales
     return sorted(ids, key=lambda x: int(x))
 
 
@@ -536,15 +530,19 @@ def search_email_headers_by_person(person_name, limit=10):
     return out
 
 
-def search_attachments_by_person(person_name, limit=40):
+def search_attachments_by_person(person_name, limit=40, rut=None, correo_origen=None):
     """Busca correos que mencionen a la persona (SEARCH en servidor) y trae sus adjuntos.
-    Tolerante a acentos: 'González' y 'Gonzalez' se tratan igual."""
+    SEGURIDAD ESTRICTA: exige que TODOS los tokens del nombre coincidan y, si se
+    entrega rut/correo_origen de la carpeta, el correo debe estar vinculado a ellos."""
     name = _sin_acentos(person_name).strip()
     if not name:
         return []
     tokens = [t for t in name.split() if len(t) > 2] or [name]
+    rut_nucleo = re.sub(r"[.\-\s]", "", (rut or "")).lower()
+    mm_origen = re.search(r"[\w.+-]+@[\w-]+\.[\w.]+", (correo_origen or "").lower())
+    origen_mail = mm_origen.group(0) if mm_origen else ""
     CAPTURA_EXT = (".pdf", ".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp")
-    exactos, parciales = [], []
+    exactos = []
     for acc in ACCOUNTS:
         try:
             m = _connect(acc)
@@ -578,18 +576,27 @@ def search_attachments_by_person(person_name, limit=40):
                 info = _parse_full_message(email.message_from_bytes(msgdata[0][1]), with_bytes=True)
                 blob = _sin_acentos(f"{info['subject']} {info['from']} {info['body']}")
                 hits = sum(1 for t in tokens if t in blob)
-                if hits == 0:
+                # ESTRICTO: TODOS los tokens del nombre deben coincidir
+                if hits < len(tokens):
                     continue
+                # VÍNCULO EXCLUSIVO: si la carpeta tiene RUT o correo de origen,
+                # el correo debe contener ese RUT o venir de ese remitente
+                if rut_nucleo or origen_mail:
+                    blob_rut = re.sub(r"[.\-\s]", "", blob)
+                    vinculo_rut = bool(rut_nucleo) and rut_nucleo in blob_rut
+                    vinculo_remit = bool(origen_mail) and origen_mail in _sin_acentos(info["from"])
+                    if not (vinculo_rut or vinculo_remit):
+                        continue
                 pdfs = [{"filename": a["filename"], "content_bytes": a["content_bytes"]}
                         for a in info["attachments"]
                         if (a["filename"] or "").lower().endswith(CAPTURA_EXT) and a.get("content_bytes")]
                 registro = {"from": info["from"], "subject": info["subject"],
                             "date": info["date"], "body": info["body"], "pdfs": pdfs}
-                (exactos if hits == len(tokens) else parciales).append(registro)
+                exactos.append(registro)
             m.logout()
         except Exception:
             continue
-    return exactos if exactos else parciales
+    return exactos
 
 
 def fetch_attachments_by_message_ids(message_ids):

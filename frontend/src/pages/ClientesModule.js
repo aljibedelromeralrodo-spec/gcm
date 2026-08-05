@@ -984,6 +984,32 @@ export default function ClientesModule({ onNavigate }) {
     setSavingAttachment("");
   };
 
+  const [codeudorModal, setCodeudorModal] = useState(null);
+  const [codeudorForm, setCodeudorForm] = useState({ nombre: "", rut: "" });
+
+  const agregarCodeudor = (f) => {
+    setCodeudorForm({ nombre: f?.codeudor_nombre || "", rut: f?.codeudor_rut || "" });
+    setCodeudorModal(f);
+  };
+
+  const guardarCodeudor = async () => {
+    const nombre = codeudorForm.nombre.trim();
+    const rut = codeudorForm.rut.trim();
+    if (nombre.length < 3) { alert("Indica el nombre del codeudor"); return; }
+    if (rut.replace(/[^0-9kK]/g, "").length < 7) { alert("El RUT del codeudor es obligatorio (ej: 12.345.678-9)"); return; }
+    try {
+      await axios.post(`${API}/api/clientes/folders/${codeudorModal.id}/codeudor`, { nombre, rut });
+      setCodeudorModal(null);
+      loadFolders();
+      if (currentFolder?.id === codeudorModal.id) {
+        setCurrentFolder({ ...currentFolder, codeudor_nombre: nombre, codeudor_rut: rut });
+      }
+      alert(`Codeudor vinculado: ${nombre} (${rut}).\nLos documentos que lleguen con este RUT irán directo a la subcarpeta 05_Codeudor.`);
+    } catch (e) {
+      alert(e?.response?.data?.detail || "No se pudo guardar el codeudor");
+    }
+  };
+
   const saveAllAttachments = async () => {
     if (!currentFolder) return;
     const name = prompt("Nombre de la persona para buscar adjuntos:");
@@ -3581,6 +3607,33 @@ export default function ClientesModule({ onNavigate }) {
           </div>
         );
       })()}
+      {codeudorModal && (
+        <div data-testid="codeudor-modal" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.82)", zIndex: 3000, display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(6px)" }}
+          onClick={() => setCodeudorModal(null)}>
+          <div onClick={e => e.stopPropagation()} style={{ width: 420, maxWidth: "92vw", background: "linear-gradient(160deg, rgba(22,22,24,0.98), rgba(8,8,9,0.99))", border: "1px solid rgba(212,175,55,0.45)", borderRadius: 0, padding: "1.6rem 1.7rem", boxShadow: "0 40px 90px -20px rgba(0,0,0,0.95), 0 0 44px -14px rgba(191,149,63,0.4)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: "1.1rem" }}>
+              <i className="fa fa-user-plus" style={{ color: "var(--gold)" }} />
+              <span style={{ fontSize: "0.95rem", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#fff" }}>Agregar Codeudor</span>
+            </div>
+            <div style={{ fontSize: "0.75rem", opacity: 0.65, marginBottom: "1rem" }}>Carpeta titular: <b style={{ color: "var(--gold)" }}>{codeudorModal.nombre}</b></div>
+            <label style={{ fontSize: "0.7rem", letterSpacing: "0.1em", textTransform: "uppercase", opacity: 0.7 }}>Nombre del codeudor</label>
+            <input data-testid="codeudor-nombre-input" value={codeudorForm.nombre} onChange={e => setCodeudorForm(p => ({ ...p, nombre: e.target.value }))}
+              placeholder="Ej: Ángel Mayorga Soto" style={{ width: "100%", margin: "6px 0 14px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 0, color: "#fff", padding: "10px 12px", fontSize: "0.9rem" }} />
+            <label style={{ fontSize: "0.7rem", letterSpacing: "0.1em", textTransform: "uppercase", color: "#e8cf7f", fontWeight: 700 }}>RUT del codeudor (obligatorio)</label>
+            <input data-testid="codeudor-rut-input" value={codeudorForm.rut} onChange={e => setCodeudorForm(p => ({ ...p, rut: e.target.value }))}
+              placeholder="12.345.678-9" style={{ width: "100%", margin: "6px 0 6px", background: "rgba(212,175,55,0.08)", border: "1px solid rgba(212,175,55,0.55)", borderRadius: 0, color: "#f4dc82", fontWeight: 700, letterSpacing: "0.06em", padding: "10px 12px", fontSize: "0.95rem", fontFamily: "'JetBrains Mono', monospace" }} />
+            <div style={{ fontSize: "0.68rem", color: "rgba(232,207,127,0.75)", marginBottom: "1.2rem" }}>
+              <i className="fa fa-link" style={{ marginRight: 5 }} />Todo documento entrante con este RUT irá directo a la subcarpeta 05_Codeudor del titular — sin crear carpetas nuevas.
+            </div>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button data-testid="codeudor-cancelar-btn" onClick={() => setCodeudorModal(null)} style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.25)", color: "#cbd5e1", borderRadius: 0, padding: "9px 16px", cursor: "pointer", fontSize: "0.8rem" }}>Cancelar</button>
+              <button data-testid="codeudor-guardar-btn" onClick={guardarCodeudor} style={{ background: "linear-gradient(135deg, #BF953F, #FCF6BA 45%, #B38728)", border: "none", color: "#141414", fontWeight: 800, borderRadius: 0, padding: "9px 20px", cursor: "pointer", fontSize: "0.8rem", letterSpacing: "0.05em" }}>
+                <i className="fa fa-check" style={{ marginRight: 6 }} />Vincular Codeudor
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -382,3 +382,11 @@
 - Nuevo endpoint GET /api/motor/status (autocorreo + ingesta + destino).
 - Badge discreto en Dashboard: "Motor 24/7: OPERATIVO" (verde) / DETENIDO (rojo). Verificado en preview.
 - Ingesta carpetas ya estaba blindada siempre-activa (config en DB).
+
+## 2026-08-04 — RECONSTRUCCION TECNICA DEFINITIVA (cierre)
+- Blindaje carpetas: all-tokens match, sin busqueda ultimos-30, vinculo RUT/origen, guardian _remitente_autorizado en 3 flujos de guardado. Verificado: RUT ajeno/remitente falso => 0 resultados.
+- Motor 24/7 forzado en startup (enabled+periodic_enabled=True, llave MOTOR_247_FORZADO). Badge dashboard.
+- Firma VIP interna sin migrup.cl. Credenciales exactas: MIGRUP_RUT=141617575, MIGRUP_CLAVE=Rod@0586, MIGRUP_CLAVE_CERT=Rodo0586 (login normaliza via _split_rut).
+- AUTO-PRUEBA TITULAR: es_propio + clave cert ACEPTADA por eCert; bloqueada solo por saldo de firmas propias (comprar en AJUSTES).
+- Codeudor por RUT: modal oro con RUT obligatorio, endpoint valida, match por RUT en ingesta -> anexo 05_codeudor sin carpeta raiz. Probado 400/200 + subcarpeta creada.
+- OG WhatsApp: URLs absolutas + tarjeta 600x600 negro/oro + Cache-Control 24h.
