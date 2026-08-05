@@ -82,6 +82,19 @@ async def get_valor_uf():
     return float(doc["valor_uf"]) if doc else DEFAULT_UF
 
 
+import bunker
+
+
+async def _bunker_loop():
+    """BÚNKER DE ARCHIVOS: espejo disco -> GridFS cada 5 min (persistencia total)."""
+    while True:
+        try:
+            await asyncio.to_thread(bunker.sync_diff)
+        except Exception as e:
+            logging.warning(f"bunker sync: {e}")
+        await asyncio.sleep(300)
+
+
 async def _task_blindada(coro_fn, nombre):
     """Supervisor: si un loop de fondo muere, se registra y se reinicia solo."""
     while True:
@@ -101,6 +114,11 @@ async def _task_blindada(coro_fn, nombre):
 @app.on_event("startup")
 async def startup():
     await ensure_seed()
+    # BÚNKER DE ARCHIVOS: si el disco está vacío (pod nuevo), restaurar desde GridFS
+    try:
+        await asyncio.to_thread(bunker.restaurar_si_vacio)
+    except Exception as e:
+        logging.warning(f"BÚNKER restore falló: {e}")
     # Liberar candado obsoleto: ningún procesamiento sobrevive a un reinicio
     # BLINDAJE 24/7: 'Correo a Mesa' SIEMPRE arranca activado por defecto, sin clics.
     # La pausa administrativa (anti-duplicados) vive en la DB de cada entorno (pausa_admin),
@@ -136,6 +154,7 @@ async def startup():
     asyncio.create_task(_task_blindada(_reporte_correos_loop, "reporte_correos"))
     asyncio.create_task(_task_blindada(_resumen_cierres_loop, "resumen_cierres"))
     asyncio.create_task(_task_blindada(_setcred_auto_loop, "setcred_auto"))
+    asyncio.create_task(_task_blindada(_bunker_loop, "bunker_gridfs"))
 
 
 # ---------------------------------------------------------------------------
@@ -1305,7 +1324,9 @@ async def _correos_importar_run(payload):
                 else:
                     cat = fsvc.cat_de_texto(fn)
                     sub = "07_estudio_titulo" if cat == "estudio_titulo" else ""
-                rel = fsvc.guardar_archivo(folder["nombre"], fn, p["content_bytes"], subfolder=sub)
+                rel = await _guardar_con_ley_rut(folder, fn, p["content_bytes"], sub)
+                if not rel:
+                    continue
                 existentes.add(fn.lower())
                 guardados.append(rel)
     return {"ok": True, "guardados": guardados, "correos": len(resultados)}
@@ -1421,7 +1442,9 @@ async def _forzar_folder_run(payload):
                     continue
                 cat = fsvc.cat_de_texto(fn)
                 sub = "07_estudio_titulo" if cat == "estudio_titulo" else ""
-                rel = fsvc.guardar_archivo(folder["nombre"], fn, p["content_bytes"], subfolder=sub)
+                rel = await _guardar_con_ley_rut(folder, fn, p["content_bytes"], sub)
+                if not rel:
+                    continue
                 existentes.add(fn.lower())
                 imap_bajados.append(rel)
     except Exception:
@@ -1531,11 +1554,13 @@ async def folder_enriquecer(fid: str, payload: dict = None):
             if modo == "estudio":
                 if not mids and cat not in ("estudio_titulo", "extras"):
                     continue
-                rel = fsvc.guardar_archivo(nombre, fn, p["content_bytes"],
-                                           subfolder="07_estudio_titulo")
+                rel = await _guardar_con_ley_rut(doc, fn, p["content_bytes"],
+                                                 subfolder="07_estudio_titulo")
             else:
                 sub = "07_estudio_titulo" if cat == "estudio_titulo" else ""
-                rel = fsvc.guardar_archivo(nombre, fn, p["content_bytes"], subfolder=sub)
+                rel = await _guardar_con_ley_rut(doc, fn, p["content_bytes"], subfolder=sub)
+            if not rel:
+                continue
             existentes.add(fn.lower())
             nuevos.append({"archivo": rel, "asunto": (r.get("subject") or "")[:80]})
     return {"ok": True, "modo": modo, "correos_revisados": len(resultados),
@@ -1938,7 +1963,9 @@ async def _save_all_attachments_job(job_id, doc, person):
                     pass
                 if fsvc.safe_name(nombre_a) in existentes:
                     continue
-                rel = await asyncio.to_thread(fsvc.guardar_archivo, doc.get("nombre", ""), nombre_a, raw, "")
+                rel = await _guardar_con_ley_rut(doc, nombre_a, raw, "")
+                if not rel:
+                    continue
                 existentes.add(fsvc.safe_name(nombre_a))
                 saved.append(rel)
                 total_saved += 1
@@ -3993,6 +4020,50 @@ def _ley_rut_ok(pdf_bytes, ruts_permitidos):
     return bool(encontrados & permitidos), encontrados
 
 
+async def _rescate_ley_rut(folder_doc, fn, raw, ruts_encontrados, origen="correo"):
+    """Archivo entrante SIN match de RUT: va al Buzón de Rescate, nunca a la carpeta."""
+    qid = f"rescate-ley-rut-{uuid.uuid4().hex[:10]}"
+    d = PROC_DIR / qid
+    d.mkdir(parents=True, exist_ok=True)
+    safe = fsvc.safe_name(fn)
+    (d / safe).write_bytes(raw)
+    await db.proc_queue.insert_one({
+        "id": qid, "status": "revisar", "sender": origen,
+        "subject": f"LEY DEL RUT: adjunto sin match para {folder_doc.get('nombre', '')}",
+        "date_iso": now_iso(),
+        "classification": {"cliente": "", "rut": "",
+                           "documentos": [{"filename": safe, "tipo": "otro"}]},
+        "attachments": [safe], "campos": {}})
+    await db.correos_pendientes.insert_one({
+        "id": str(uuid.uuid4()), "qid": qid,
+        "subject": f"Adjunto rechazado por LEY DEL RUT ({safe})",
+        "sender": origen, "fecha": now_iso(),
+        "motivo": (f"LEY DEL RUT: el archivo no contiene el RUT de {folder_doc.get('nombre', '')} "
+                   f"({folder_doc.get('rut', '')}). RUTs detectados: "
+                   f"{', '.join(sorted(ruts_encontrados)) or 'ninguno'}"),
+        "cliente_sugerido": "", "adjuntos": [safe],
+        "estado": "pendiente", "creado_en": now_iso()})
+    await db.alertas.insert_one({
+        "id": str(uuid.uuid4()), "tipo": "ley_del_rut",
+        "cliente": folder_doc.get("nombre", ""),
+        "mensaje": (f"🛡️ LEY DEL RUT: adjunto \"{safe}\" rechazado de la carpeta de "
+                    f"{folder_doc.get('nombre', '')} — enviado al Buzón de Rescate"),
+        "fecha": now_iso(), "leida": False})
+
+
+async def _guardar_con_ley_rut(folder_doc, fn, raw, subfolder=""):
+    """Guarda el archivo SOLO si su OCR contiene el RUT del dueño o codeudor (match 100%).
+    Sin match -> Buzón de Rescate. Devuelve la ruta relativa o None."""
+    ruts = [folder_doc.get("rut", ""), folder_doc.get("codeudor_rut", "")]
+    if any(len(_norm_rut(r or "")) >= 7 for r in ruts):
+        ok, encontrados = await asyncio.to_thread(_ley_rut_ok, raw, ruts)
+        if not ok:
+            await _rescate_ley_rut(folder_doc, fn, raw, encontrados)
+            return None
+    return await asyncio.to_thread(fsvc.guardar_archivo, folder_doc.get("nombre", ""),
+                                   fn, raw, subfolder)
+
+
 async def _buscar_carpeta_existente(cliente, rut=""):
     """Encuentra la carpeta ya existente de la misma persona (por RUT o nombre similar)."""
     rut_n = _norm_rut(rut or "")
@@ -4039,8 +4110,9 @@ async def _buscar_titular_en_texto(texto, excluir_nombre=""):
 
 def _regen_carpeta_cliente(cliente, orden_manual=None):
     """Reconstruye Carpeta_<cliente>.pdf con TODOS los documentos acumulados de
-    todos los correos, en orden de protocolo (prefijos 01_..99_)."""
-    from pypdf import PdfReader, PdfWriter
+    todos los correos, en orden de protocolo (prefijos 01_..99_).
+    MEMORIA LIVIANA: streaming página a página con fitz, liberando RAM por archivo."""
+    import fitz
     dest = CLIENTES_DIR / _safe_name(cliente)
     if not dest.exists():
         return None
@@ -4055,18 +4127,20 @@ def _regen_carpeta_cliente(cliente, orden_manual=None):
         key = (0, manual[p.name], "") if p.name in manual else (1, 0, rel)
         archivos.append((key, p))
     archivos.sort(key=lambda t: t[0])
-    writer = PdfWriter()
+    doc_out = fitz.open()
     for _k, p in archivos:
         try:
-            for pg in PdfReader(str(p)).pages:
-                writer.add_page(pg)
+            src_doc = fitz.open(str(p))
+            doc_out.insert_pdf(src_doc)
+            src_doc.close()
         except Exception:
             continue
-    if len(writer.pages) == 0:
+    if doc_out.page_count == 0:
+        doc_out.close()
         return None
     out = dest / f"Carpeta_{_safe_name(cliente)}.pdf"
-    with open(out, "wb") as f:
-        writer.write(f)
+    doc_out.save(str(out), garbage=3, deflate=True)
+    doc_out.close()
     return out.name
 
 
@@ -4315,14 +4389,22 @@ async def proc_upload_drive(qid: str, force: bool = False, clave: str = ""):
     for d in docs:
         p = src / d["filename"]
         if p.exists():
+            match_solo_codeudor = False
             if existente and any(len(_norm_rut(r or "")) >= 7 for r in ruts_carpeta):
                 ok_rut, ruts_arch = await asyncio.to_thread(_ley_rut_ok, p.read_bytes(), ruts_carpeta)
                 if not ok_rut:
                     rechazados_ley_rut.append(
                         {"filename": d["filename"], "ruts": sorted(ruts_arch)})
                     continue
+                # RUTEO POR RUT: si el archivo trae SOLO el RUT del codeudor,
+                # va directo a la subcarpeta 05_codeudor
+                _rt = _norm_rut(existente.get("rut", "") or "")
+                _rc = _norm_rut(existente.get("codeudor_rut", "") or "")
+                match_solo_codeudor = (len(_rc) >= 7 and _rc in ruts_arch
+                                       and not (_rt and _rt in ruts_arch))
             fn_orig = d["filename"]
-            es_cod_arch = es_correo_codeudor or bool(re.search(r"co-?deudor", fn_orig, re.I))
+            es_cod_arch = (match_solo_codeudor or es_correo_codeudor
+                           or bool(re.search(r"co-?deudor", fn_orig, re.I)))
             if es_cod_arch:
                 # Subcarpeta con el NOMBRE del codeudor: 05_codeudor/<Nombre>
                 sub = f"05_codeudor/{_safe_name(cod_nombre)}" if cod_nombre else "05_codeudor"
@@ -7577,6 +7659,7 @@ async def aprobacion_eliminar_archivo(ruta: str = "", origen: str = "autocorreo"
     p.unlink()
     if origen == "clientes" and cliente.strip():
         await asyncio.to_thread(_regen_carpeta_cliente, cliente.strip())
+    asyncio.create_task(asyncio.to_thread(bunker.sync_diff))
     return {"ok": True, "eliminado": p.name}
 
 
@@ -7612,6 +7695,7 @@ async def aprobacion_upload(cliente: str = Form(...), file: UploadFile = File(..
     dest = STORAGE_DIR / _safe_name(cliente.strip())
     dest.mkdir(parents=True, exist_ok=True)
     (dest / fn).write_bytes(raw)
+    asyncio.create_task(asyncio.to_thread(bunker.sync_diff))
     return {"ok": True, "nombre": fn, "tipo": _tipo_pdf_aprobacion(fn),
             "ruta": str((dest / fn).relative_to(STORAGE_DIR)), "origen": "autocorreo"}
 

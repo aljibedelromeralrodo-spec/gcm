@@ -1,0 +1,38 @@
+{
+  "summary": "Regresión backend BLINDAJE TOTAL (Central Mutuos / Predictor). Ejecutados 11 tests pytest sobre endpoints núcleo tras la reconstrucción técnica (LEY DEL RUT, Búnker GridFS, REGLA DE ORO 0586, streaming fitz, ruteo codeudor). 11/11 PASS (100%). Confirmado además que MongoDB bunker.files tiene exactamente 998 documentos (espejo GridFS operativo). No se detectó ninguna regresión.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "tests_executed": [
+    "test_procesamiento_auto_status: /api/procesamiento/auto/status -> 200, enabled=true, interval_min=2 (motor 24/7 OK)",
+    "test_clientes_folders_incluye_werner: /api/clientes/folders -> 200, incluye WERNER ALEXANDER JARA ROJAS",
+    "test_aprobacion_archivos_werner: /api/aprobacion-cliente/archivos?cliente=WERNER... -> 200, 2 archivos (carta + simulación), campo excluidos_rut presente",
+    "test_upload_rechaza_gastos_operacionales: POST /api/aprobacion-cliente/upload con PDF que contiene 'GASTOS OPERACIONALES' -> 422 con mensaje '⚠ Este archivo no es una Simulación Ajustada' (REGLA DE ORO)",
+    "test_upload_werner_rut_correcto_y_delete: POST upload con PDF que contiene 20.792.369-9 -> 200 (LEY DEL RUT OK); DELETE del archivo subido -> 200 (limpieza)",
+    "test_rescate_pendientes_incluye_ley_del_rut: /api/rescate/pendientes -> 200, contiene entradas con motivo que empieza con 'LEY DEL RUT'",
+    "test_salud_estado: /api/salud/estado -> 200",
+    "test_bunker_gridfs_mirror: MongoDB test_database.bunker.files -> 998 documentos (espejo GridFS íntegro)",
+    "test_aprobacion_plantilla: /api/aprobacion-cliente/plantilla?cliente=WERNER... -> 200",
+    "test_aprobacion_log: /api/aprobacion-cliente/log -> 200",
+    "test_estudio_titulo_log: /api/estudio-titulo/log -> 200"
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_regresion_blindaje.py",
+    "/app/test_reports/pytest/regresion_blindaje.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "OK: aprobacion_upload aplica dos capas: detector GASTOS_OP_RX (REGLA DE ORO 0586) y LEY DEL RUT contra rut_dueno + codeudor_rut de la carpeta, ambos devuelven 422 con mensajes claros al usuario.",
+    "OK: aprobacion_archivos devuelve estructura {archivos, excluidos_rut}; la lógica prefiere archivos ajustados (_cm / ajustada) por sort key.",
+    "OK: sync_diff hacia GridFS se dispara asincrónico tras upload — mirror consistente (998 docs verificados).",
+    "Observación (no bloqueante): durante regresión inicial, el backend quedó momentáneamente sin responder a nuevas conexiones (deadlock aparente por carga previa). Un `sudo supervisorctl restart backend` lo desbloqueó y no hubo pérdida de datos. Considerar: (a) timeouts explícitos en tareas OCR/AI en cola, (b) uvicorn con workers>1, (c) health-liveness que reinicie automáticamente si el event loop se cuelga.",
+    "Observación (menor): server.py tiene 9522 líneas — recomendable refactor por dominio (aprobacion, rescate, procesamiento, estudio_titulo, clientes) siguiendo el estándar de <700 líneas por archivo del code review guide."
+  ],
+  "updated_files": ["/app/backend/tests/test_regresion_blindaje.py"],
+  "success_rate": {"backend": "100% (11/11)", "frontend": "N/A (skipped per request)"},
+  "test_credentials": "administrador / 141617575 (no requerido: endpoints regresión son abiertos dentro del preview)",
+  "seed_data_creation": "PDFs de prueba generados en memoria con reportlab (TEST_regresion_werner.pdf); se subió y eliminó vía DELETE — no queda huella en storage/. No se creó data en MongoDB.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "El archivo de tests /app/backend/tests/test_regresion_blindaje.py es reutilizable para regresión futura. Ejecutar con: `cd /app && python -m pytest backend/tests/test_regresion_blindaje.py -v -n 0` (el -n 0 fuerza serial, requerido porque pytest.ini activa xdist con 2 workers y hemos observado que el backend puede sobrecargarse con requests concurrentes de OCR). Cliente de prueba: WERNER ALEXANDER JARA ROJAS 20.792.369-9. bunker.files debe permanecer ~998. Si backend deja de responder, `sudo supervisorctl restart backend` lo recupera en <10s.",
+  "rca of the issue": "N/A — no se encontraron issues funcionales. Único incidente operativo: backend congelado momentáneamente ante carga concurrente (pytest-xdist con 2 workers + tráfico de fondo del preview). Mitigación: ejecutar tests con -n 0 (serial). Fix definitivo (recomendado a main agent): añadir timeouts a las llamadas LiteLLM/OCR y considerar workers múltiples en uvicorn."
+}

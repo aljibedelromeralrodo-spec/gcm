@@ -540,6 +540,9 @@ def search_attachments_by_person(person_name, limit=40, rut=None, correo_origen=
         return []
     tokens = [t for t in name.split() if len(t) > 2] or [name]
     rut_nucleo = re.sub(r"[.\-\s]", "", (rut or "")).lower()
+    # LEY DEL RUT: sin RUT de carpeta NO se vinculan correos por nombre. Punto.
+    if not rut_nucleo or len(rut_nucleo) < 7:
+        return []
     mm_origen = re.search(r"[\w.+-]+@[\w-]+\.[\w.]+", (correo_origen or "").lower())
     origen_mail = mm_origen.group(0) if mm_origen else ""
     CAPTURA_EXT = (".pdf", ".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp")
@@ -562,14 +565,8 @@ def search_attachments_by_person(person_name, limit=40, rut=None, correo_origen=
                     candidatos.append(num)
                 if len(candidatos) >= 8:
                     break
-            # El SEARCH del servidor ya buscó en el cuerpo: incluir también los que
-            # mencionan a la persona solo en el cuerpo (correos reenviados, etc.)
-            if len(candidatos) < 8:
-                for num in reversed(ids):
-                    if num not in candidatos:
-                        candidatos.append(num)
-                    if len(candidatos) >= 8:
-                        break
+            # LEY DEL RUT: se ELIMINÓ la descarga de correos extra sin match de
+            # cabecera (búsqueda por nombres parciales). Solo candidatos verificados.
             for num in candidatos:
                 typ, msgdata = m.fetch(num, "(BODY.PEEK[])")
                 if not msgdata or not isinstance(msgdata[0], tuple):
@@ -580,14 +577,11 @@ def search_attachments_by_person(person_name, limit=40, rut=None, correo_origen=
                 # ESTRICTO: TODOS los tokens del nombre deben coincidir
                 if hits < len(tokens):
                     continue
-                # VÍNCULO EXCLUSIVO: si la carpeta tiene RUT o correo de origen,
-                # el correo debe contener ese RUT o venir de ese remitente
-                if rut_nucleo or origen_mail:
-                    blob_rut = re.sub(r"[.\-\s]", "", blob)
-                    vinculo_rut = bool(rut_nucleo) and rut_nucleo in blob_rut
-                    vinculo_remit = bool(origen_mail) and origen_mail in _sin_acentos(info["from"])
-                    if not (vinculo_rut or vinculo_remit):
-                        continue
+                # LEY DEL RUT: el correo DEBE contener el RUT de la carpeta.
+                # El remitente ya NO basta como vínculo.
+                blob_rut = re.sub(r"[.\-\s]", "", blob)
+                if rut_nucleo not in blob_rut:
+                    continue
                 pdfs = [{"filename": a["filename"], "content_bytes": a["content_bytes"]}
                         for a in info["attachments"]
                         if (a["filename"] or "").lower().endswith(CAPTURA_EXT) and a.get("content_bytes")]
@@ -865,7 +859,7 @@ def _blindaje_simulaciones(attachments, clave=""):
     de 1 página (sin otros plazos ni gastos operacionales). Se aplica a TODO envío
     (aprobación cliente, autocorreo, etc.). Solo la clave maestra 0586 permite omitirlo.
     Devuelve (attachments_seguros, nombres_ajustados)."""
-    if clave == CLAVE_MAESTRA:
+    if clave and clave == CLAVE_MAESTRA:
         return attachments or [], []
     out, ajustados = [], []
     for att in attachments or []:
@@ -883,6 +877,19 @@ def _blindaje_simulaciones(attachments, clave=""):
                     w.write(buf)
                     att = {**att, "content_b64": base64.b64encode(buf.getvalue()).decode()}
                     ajustados.append(fn)
+                    reader = PdfReader(io.BytesIO(buf.getvalue()))
+                # REGLA DE ORO 0586: si la simulación AÚN contiene 'Gastos
+                # Operacionales', el envío se BLOQUEA (solo la clave 0586 lo permite).
+                try:
+                    texto_p1 = reader.pages[0].extract_text() or ""
+                except Exception:
+                    texto_p1 = ""
+                if re.search(r"gastos?\s+operacionales", texto_p1, re.I):
+                    raise ValueError(
+                        f"REGLA DE ORO 0586: '{fn}' contiene Gastos Operacionales — "
+                        "envío BLOQUEADO. Suba la Simulación Ajustada o use la clave maestra.")
+            except ValueError:
+                raise
             except Exception:
                 pass
         out.append(att)
@@ -966,7 +973,14 @@ def send_mail(to, subject, body_html, attachments=None, desde="secundaria", cc=N
         msg["Message-ID"] = make_msgid(domain=(acc["user"].split("@")[-1] or "centralmutuos.cl"))
     msg["Subject"] = subject
     msg.attach(MIMEText(body_html or "", "html", "utf-8"))
-    attachments, _blindados = _blindaje_simulaciones(attachments, clave_sin_ajuste)
+    try:
+        attachments, _blindados = _blindaje_simulaciones(attachments, clave_sin_ajuste)
+    except ValueError as e:
+        from datetime import datetime, timezone as _tz
+        err = {"success": False, "error": str(e), "smtp_code": None}
+        _log_smtp({"fecha": datetime.now(_tz.utc).isoformat(), "to": str(to),
+                   "subject": subject, "error": str(e), "regla": "oro_0586"})
+        return err
     for att in attachments or []:
         try:
             content = base64.b64decode(att.get("content_b64", ""))

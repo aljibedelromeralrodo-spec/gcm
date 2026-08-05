@@ -475,3 +475,12 @@
 - AI_EMERGENCY_STOP="0" en .env → loops ingesta_carpetas, reparos_estudio, aprendizaje_ia reactivados.
 - Verificado: motor 24/7 corrió ciclo completo sin errores, 0 llamadas LiteLLM en 150s.
 - NOTA DEPLOY: tesseract se instaló vía apt en el preview; si se despliega a producción, verificar que el entorno lo incluya (si no, el limitador de 40/h protege los créditos igualmente).
+
+## 2026-06 — BLINDAJE TOTAL Y TOLERANCIA CERO (Ley del RUT)
+- LEY DEL RUT (Blindaje de Werner): en `proc_upload_drive` cada archivo entrante se escanea con OCR antes de vincularse a carpeta EXISTENTE; si su RUT no coincide con dueño/codeudor → va al Buzón de Rescate + alerta tipo `ley_del_rut`. `_buscar_carpeta_existente` ya NO vincula por nombre cuando el correo trae RUT sin coincidencia (return None).
+- Listado Aprobación (`GET /aprobacion-cliente/archivos`): verifica RUT de los 2 archivos finales; conflictos → `excluidos_rut` (banner rojo en UI) + flag `rut_verificado`.
+- Basurero: `DELETE /api/aprobacion-cliente/archivo` + botón rojo por archivo (data-testid aprobacion-eliminar-{i}).
+- Upload validado: `POST /api/aprobacion-cliente/upload` — rechaza 422 si contiene "Gastos Operacionales" (detector Simulación Ajustada) o si el RUT del PDF no coincide con el dueño. Botón "Subir PDF" (aprobacion-subir-btn).
+- LIMPIEZA IGNACIO: 2 archivos de IGNACIO JOAQUIN EDUARDO TOBAR WERNER (RUT 20.168.743-8) retirados físicamente de carpeta WERNER → Buzón de Rescate (qid rescate-ley-rut-*). Causa raíz: apellido "WERNER" compartido.
+- Testing: backend 100% curl (422/422/200/DELETE), frontend 100% testing agent (iteration_25.json).
+- NOTA: la limpieza de Ignacio se aplicó en PREVIEW; producción requiere redeploy + limpieza propia si aplica.
