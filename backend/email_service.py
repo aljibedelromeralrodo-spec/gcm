@@ -889,10 +889,19 @@ def _blindaje_simulaciones(attachments, clave=""):
 
 
 def _intentar_envio(acc, msg):
-    """Un intento SMTP; devuelve dict con success + smtp_code + smtp_response."""
+    """Un intento SMTP; devuelve dict con success + smtp_code + smtp_response.
+    Usa TLS (STARTTLS) en puerto 587 — estándar aceptado por filtros corporativos."""
     try:
         ctx = ssl.create_default_context()
-        with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=25, context=ctx) as s:
+        if SMTP_PORT == 465:
+            smtp_cliente = smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=25, context=ctx)
+        else:
+            smtp_cliente = smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=25)
+        with smtp_cliente as s:
+            if SMTP_PORT != 465:
+                s.ehlo()
+                s.starttls(context=ctx)
+                s.ehlo()
             s.login(acc["user"], acc["pwd"])
             refused = s.send_message(msg)
         if refused:
@@ -948,6 +957,10 @@ def send_mail(to, subject, body_html, attachments=None, desde="secundaria", cc=N
     for hk, hv in (headers or {}).items():
         if hv:
             msg[hk] = hv
+    # Encabezado real de conversación: Message-ID propio si no vino uno definido
+    if not msg.get("Message-ID"):
+        from email.utils import make_msgid
+        msg["Message-ID"] = make_msgid(domain=(acc["user"].split("@")[-1] or "centralmutuos.cl"))
     msg["Subject"] = subject
     msg.attach(MIMEText(body_html or "", "html", "utf-8"))
     attachments, _blindados = _blindaje_simulaciones(attachments, clave_sin_ajuste)
@@ -981,9 +994,18 @@ def send_mail(to, subject, body_html, attachments=None, desde="secundaria", cc=N
             time.sleep(REINTENTO_ESPERA)
     if not res.get("success") and res.get("error"):
         res["error"] = f"{res['error']} (se reintentó 1 vez tras {REINTENTO_ESPERA}s)"
+    try:
+        size_kb = round(len(msg.as_bytes()) / 1024, 1)
+    except Exception:
+        size_kb = None
     _log_smtp({"to": msg["To"], "cc": msg.get("Cc", ""), "subject": subject,
                "desde": acc["user"], "success": res["success"],
                "smtp_code": res.get("smtp_code"), "smtp_response": res.get("smtp_response", ""),
+               "size_kb": size_kb, "message_id": msg.get("Message-ID", ""),
+               "in_reply_to": msg.get("In-Reply-To", ""),
+               "puerto": SMTP_PORT, "tls": "STARTTLS-587" if SMTP_PORT != 465 else "SSL-465",
                "simulaciones_blindadas": _blindados,
                "error": res.get("error", "")})
+    res["size_kb"] = size_kb
+    res["message_id"] = msg.get("Message-ID", "")
     return res

@@ -410,3 +410,10 @@
 - Huella Message-ID (make_msgid @centralmutuos.cl) enviada como header y guardada en folders.mesa_message_id + mesa_enviados.message_id + proc_queue.autocorreo_message_id. Re-envio prohibido sin clave admin.
 - Destino unico: destino forzado a MESA_EMAIL (aprobaciones@centralmutuos.cl) — se elimino override por payload en ambos flujos.
 - Test carrera simulada: intento 1 pasa, intento 2 bloqueado. NOTA: prueba disparo 1 aviso [FALTA INFORMACION] Roberto Duran a mesa (inofensivo); flag revertido.
+
+## 2026-08-04 — MOTOR DE CORREOS OPTIMIZADO
+- SMTP TLS/STARTTLS puerto 587 (env MAIL_SMTP_PORT=587; codigo adaptativo 465=SSL).
+- Message-ID propio en TODO envio; In-Reply-To/References ya presentes en flujos de respuesta (5026, 6703).
+- correos_smtp_log ahora registra: size_kb, message_id, in_reply_to, puerto, tls, smtp_code/response detallado.
+- From amigable: MAIL_FROM_NAME="Gerardo Barrera - Central Mutuos".
+- Probado envio real: 250 OK, 0.6 KB, TLS 587, From correcto.
