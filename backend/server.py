@@ -102,7 +102,17 @@ async def _task_blindada(coro_fn, nombre):
 async def startup():
     await ensure_seed()
     # Liberar candado obsoleto: ningún procesamiento sobrevive a un reinicio
-    await db.config.update_one({"_key": "autocorreo_state"}, {"$set": {"running": False}})
+    # BLINDAJE 24/7: 'Correo a Mesa' SIEMPRE arranca activado por defecto
+    # (MOTOR_247_FORZADO="0" en .env permite pausar un entorno específico)
+    _forzar = os.environ.get("MOTOR_247_FORZADO", "1") != "0"
+    _set_arranque = {"running": False}
+    if _forzar:
+        _set_arranque.update({"enabled": True, "periodic_enabled": True})
+    await db.config.update_one(
+        {"_key": "autocorreo_state"},
+        {"$set": _set_arranque,
+         "$setOnInsert": {"cutoff_iso": None, "destination": os.environ.get("MAIL2_USER", "")}},
+        upsert=True)
     # BLINDADO 24/7: cada loop se reinicia solo si falla
     asyncio.create_task(_task_blindada(_periodic_mesa_loop, "mesa"))
     asyncio.create_task(_task_blindada(_periodic_proc_loop, "ingesta_carpetas"))
@@ -2837,7 +2847,7 @@ def _safe_name(name):
 async def _ac_state():
     st = await db.config.find_one({"_key": "autocorreo_state"})
     if not st:
-        st = {"_key": "autocorreo_state", "enabled": False, "periodic_enabled": False,
+        st = {"_key": "autocorreo_state", "enabled": True, "periodic_enabled": True,
               "cutoff_iso": None, "destination": os.environ.get("MAIL2_USER", "")}
         await db.config.insert_one(dict(st))
     st.pop("_id", None)
@@ -2983,6 +2993,18 @@ async def ac_toggle(payload: dict = None):
     enabled = bool((payload or {}).get("enabled"))
     await _set_ac_state({"enabled": enabled})
     return {"enabled": enabled}
+
+
+@api.get("/motor/status")
+async def motor_status():
+    """Estado del Motor 24/7 (autocorreo mesa + ingesta de carpetas)."""
+    ac = await _ac_state()
+    pa = await _proc_auto_state()
+    operativo = bool(ac.get("periodic_enabled")) and bool(pa.get("enabled"))
+    return {"operativo": operativo,
+            "correo_a_mesa": bool(ac.get("periodic_enabled")),
+            "ingesta_carpetas": bool(pa.get("enabled")),
+            "destino": ac.get("destination", "")}
 
 
 @api.post("/autocorreo/periodic")

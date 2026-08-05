@@ -375,3 +375,10 @@
 - OG tags portal firma: og:title "Documentacion Oficial VIP - Central Mutuos", og:description personalizada con nombre, og:image URL ABSOLUTA (600x600) + og:url/site_name.
 - og.png redisenada 600x600: negro absoluto, doble marco oro 24K, monograma CM, nombre cliente centrado en oro (fuente LiberationSerif; DejaVu no existe en el pod).
 - Confirmado: 0 redirecciones externas, boton ejecuta firma interna.
+
+## 2026-08-04 — BLINDAJE TOTAL MOTOR 24/7
+- Correo a Mesa arranca SIEMPRE activado por defecto (startup fuerza enabled+periodic_enabled=True; _ac_state default True).
+- Llave MOTOR_247_FORZADO="0" en .env permite pausar un entorno (para evitar duplicados preview vs prod).
+- Nuevo endpoint GET /api/motor/status (autocorreo + ingesta + destino).
+- Badge discreto en Dashboard: "Motor 24/7: OPERATIVO" (verde) / DETENIDO (rojo). Verificado en preview.
+- Ingesta carpetas ya estaba blindada siempre-activa (config en DB).

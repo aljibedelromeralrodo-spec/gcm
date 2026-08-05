@@ -15,6 +15,7 @@ export default function DashboardModule({ valorUF, userName, onNavigate }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshResult, setRefreshResult] = useState(null);
+  const [motor, setMotor] = useState(null);
 
   useEffect(() => {
     // Single batch call for dashboard + email status
@@ -30,6 +31,7 @@ export default function DashboardModule({ valorUF, userName, onNavigate }) {
     // Email summary loaded separately (slower, cached 5min)
     axios.get(`${API_URL}/api/central/email-summary`).then(r => setEmailSummary(r.data)).catch((e) => console.error(e));
     axios.get(`${API_URL}/api/gastos-operacionales/cobros-tasacion`).then(r => setCobrosResumen(r.data)).catch((e) => console.error(e));
+    axios.get(`${API_URL}/api/motor/status`).then(r => setMotor(r.data)).catch(() => {});
   }, []);
 
   const refreshKnowledge = async () => {
@@ -53,6 +55,17 @@ export default function DashboardModule({ valorUF, userName, onNavigate }) {
 
   return (
     <div className="module-content" data-testid="dashboard-module">
+      {motor && (
+        <div data-testid="motor-247-badge" style={{ display: "inline-flex", alignItems: "center", gap: 8,
+          background: "rgba(14,14,16,0.9)", border: `1px solid ${motor.operativo ? "rgba(16,217,142,0.4)" : "rgba(225,29,72,0.4)"}`,
+          borderRadius: 0, padding: "0.35rem 0.9rem", marginBottom: "0.8rem",
+          fontSize: "0.72rem", letterSpacing: "0.12em", textTransform: "uppercase",
+          color: motor.operativo ? "#10d98e" : "#e11d48", fontWeight: 700 }}>
+          <span style={{ width: 7, height: 7, borderRadius: "50%", background: motor.operativo ? "#10d98e" : "#e11d48",
+            boxShadow: motor.operativo ? "0 0 8px rgba(16,217,142,0.8)" : "0 0 8px rgba(225,29,72,0.8)" }} />
+          Motor 24/7: {motor.operativo ? "OPERATIVO" : "DETENIDO"}
+        </div>
+      )}
       <ProactiveAlertsPanel />
       <LearningStatusPanel />
       <AlertasPanel />
