@@ -3212,7 +3212,7 @@ def _procesar_mesa(destino, cutoff_iso, ejecutivos=None, ya_enviados=None):
         if not _mesa_guard_reservar(r["subject"], r["cliente"]):
             continue
         res = mail.send_mail(destino, r["subject"], encabezado + cuerpo_html,
-                             r["adjuntos"], desde="principal")
+                             r["adjuntos"], desde="secundaria")
         estado = "sent" if res.get("success") else "failed"
         if res.get("success"):
             enviados += 1
@@ -8753,7 +8753,7 @@ async def _enviar_firmados_interno(doc, correos, asunto=None):
     asunto = asunto or f"Set de crédito firmado - {nombre}"
     enviados, errores = [], []
     for c in correos:
-        r = await asyncio.to_thread(mail.send_mail, c, asunto, cuerpo, adjuntos, "principal")
+        r = await asyncio.to_thread(mail.send_mail, c, asunto, cuerpo, adjuntos, "secundaria")
         (enviados if r.get("success") else errores).append(c)
     await db.set_credito.update_one({"id": doc["id"]}, {"$push": {"envios_firmado": {
         "a": enviados, "archivos": len(adjuntos), "en": now_iso()}}})
@@ -9049,7 +9049,7 @@ async def proc_enviar_autocorreo(qid: str, payload: dict = None):
         </div>
         """
         res_aviso = await asyncio.to_thread(
-            mail.send_mail, destino, f"[FALTA INFORMACION] {cliente}", aviso, [], "principal")
+            mail.send_mail, destino, f"[FALTA INFORMACION] {cliente}", aviso, [], "secundaria")
         await db.proc_queue.update_one({"id": qid}, {"$set": {
             "status": "revisar", "campos_faltantes": faltan,
             "docs_faltantes": {DOC_LABELS.get(t, t): n for t, n in docs_faltantes.items()}}})
@@ -9124,7 +9124,7 @@ async def proc_enviar_autocorreo(qid: str, payload: dict = None):
     mid = make_msgid(domain="centralmutuos.cl")
     try:
         res = await asyncio.to_thread(mail.send_mail, destino, asunto, cuerpo, adjuntos,
-                                      "principal", None, {"Message-ID": mid})
+                                      "secundaria", None, {"Message-ID": mid})
     except Exception:
         await db.mesa_enviados.delete_one({"key": key_guard})
         raise

@@ -27,6 +27,7 @@ IMAP_HOST = os.environ.get("MAIL_IMAP_HOST", "imap.gmail.com")
 SMTP_HOST = os.environ.get("MAIL_SMTP_HOST", "smtp.gmail.com")
 SMTP_PORT = int(os.environ.get("MAIL_SMTP_PORT", "465"))
 FROM_NAME = os.environ.get("MAIL_FROM_NAME", "Central Mutuos")
+FROM_NAME_SOPORTE = os.environ.get("MAIL_FROM_NAME_SOPORTE", "Soporte Técnico Central Mutuos")
 
 
 def _clean_pwd(p):
@@ -950,7 +951,9 @@ def send_mail(to, subject, body_html, attachments=None, desde="secundaria", cc=N
     if acc is None:
         acc = ACCOUNTS[0]
     msg = MIMEMultipart()
-    msg["From"] = formataddr((FROM_NAME, acc["user"]))
+    # Jerarquía de remitentes: corporativa = rostro comercial; Ethan = soporte interno
+    _nombre_from = FROM_NAME_SOPORTE if acc["user"] == os.environ.get("MAIL_USER", "") else FROM_NAME
+    msg["From"] = formataddr((_nombre_from, acc["user"]))
     msg["To"] = to if isinstance(to, str) else ", ".join(to)
     if cc:
         msg["Cc"] = cc if isinstance(cc, str) else ", ".join(cc)

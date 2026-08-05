@@ -425,3 +425,9 @@
 - Registro en set_credito.despacho_post_firma {ok, a, en, archivos}.
 - PROBADO REAL: 250 OK, 3.1 KB, desde cuenta principal. Datos de prueba limpiados.
 - NOTA PREVIA: loop firmados auto-envio el set de prueba a Daniela/Victoria (04:17) por stem truncado [:20] compartido — datos de prueba eliminados; mejora pendiente: match por idDocumento eCert.
+
+## 2026-08-05 — JERARQUIA DE MOTORES DE ENVIO
+- CORPORATIVA (gerardo.ext, From "Gerardo Barrera - Central Mutuos"): aprobaciones ajustadas (_procesar_mesa), gastos op/cobros, estudio titulos, sets/firmados a ejecutivas, mesa (gestion + falta-info + carpetas), inmobiliarias.
+- ETHAN (principal, From "Soporte Tecnico Central Mutuos" via MAIL_FROM_NAME_SOPORTE): reportes diarios/semanales, avisos internos, despacho post-firma, alertas.
+- Cambiados a secundaria: 3214 autocorreo mesa, 8756 enviar firmados, 9052 falta-info, 9126 gestion mesa.
+- REGLA DE ORO cumplida: ningun cliente recibe correos desde Ethan. Verificado con 2 envios reales 250 OK.
