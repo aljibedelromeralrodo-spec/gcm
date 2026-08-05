@@ -468,3 +468,10 @@
   - ai_extract.py: helper `_llm_key()` devuelve "" con flag activo → todas las funciones IA caen a fallback de reglas/regex.
 - Verificado: 0 llamadas LiteLLM en 90s post-reinicio. API 200 OK en 0.3s.
 - PARA REACTIVAR IA: poner AI_EMERGENCY_STOP="0" + INSTALAR tesseract-ocr y poppler-utils primero (OCR local gratis) para evitar recaída del spam.
+
+## 2026-06 — REACTIVACIÓN SEGURA DE IA
+- Instalado tesseract-ocr 5.3 + idioma español (spa) + poppler-utils → OCR local GRATUITO ahora es la vía principal.
+- El respaldo GPT-visión (_ocr_ia_pagina) solo se usa si tesseract falla, con LIMITADOR ANTI-SPAM: máx 40 llamadas/hora (deque _AI_OCR_CALLS en folders_service.py).
+- AI_EMERGENCY_STOP="0" en .env → loops ingesta_carpetas, reparos_estudio, aprendizaje_ia reactivados.
+- Verificado: motor 24/7 corrió ciclo completo sin errores, 0 llamadas LiteLLM en 150s.
+- NOTA DEPLOY: tesseract se instaló vía apt en el preview; si se despliega a producción, verificar que el entorno lo incluya (si no, el limitador de 40/h protege los créditos igualmente).

@@ -5,8 +5,24 @@ import re
 import uuid
 import base64
 import zipfile
+import time
+from collections import deque
 from pathlib import Path
 from pypdf import PdfReader, PdfWriter
+
+# ANTI-SPAM: máximo de llamadas OCR-IA (GPT visión) por hora en todo el proceso
+_AI_OCR_CALLS = deque()
+_AI_OCR_MAX_HORA = 40
+
+
+def _ai_ocr_permitido():
+    ahora = time.time()
+    while _AI_OCR_CALLS and ahora - _AI_OCR_CALLS[0] > 3600:
+        _AI_OCR_CALLS.popleft()
+    if len(_AI_OCR_CALLS) >= _AI_OCR_MAX_HORA:
+        return False
+    _AI_OCR_CALLS.append(ahora)
+    return True
 
 CLIENTES_DIR = Path(__file__).parent / "storage" / "clientes"
 CLIENTES_DIR.mkdir(parents=True, exist_ok=True)
@@ -243,6 +259,8 @@ def _ocr_ia_pagina(pdf_bytes, idx):
     """Respaldo OCR con IA (visión): renderiza la página con PyMuPDF y transcribe
     con el modelo de visión. Se usa cuando tesseract/poppler no están disponibles."""
     if os.environ.get("AI_EMERGENCY_STOP") == "1":
+        return ""
+    if not _ai_ocr_permitido():
         return ""
     key = os.environ.get("EMERGENT_LLM_KEY", "")
     if not key:
