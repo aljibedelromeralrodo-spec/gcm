@@ -390,3 +390,7 @@
 - AUTO-PRUEBA TITULAR: es_propio + clave cert ACEPTADA por eCert; bloqueada solo por saldo de firmas propias (comprar en AJUSTES).
 - Codeudor por RUT: modal oro con RUT obligatorio, endpoint valida, match por RUT en ingesta -> anexo 05_codeudor sin carpeta raiz. Probado 400/200 + subcarpeta creada.
 - OG WhatsApp: URLs absolutas + tarjeta 600x600 negro/oro + Cache-Control 24h.
+
+## 2026-08-04 — PREVIEW PAUSADO (anti-duplicados)
+- MOTOR_247_FORZADO="0" en backend/.env del preview + periodic_enabled=False. Produccion es el motor oficial 24/7.
+- ⚠️ CRITICO ANTES DE CUALQUIER RE-DEPLOY FUTURO: quitar/poner MOTOR_247_FORZADO="1" en .env para que produccion NO herede la pausa. Avisar al usuario.
