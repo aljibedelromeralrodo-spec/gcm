@@ -28,6 +28,8 @@ export default function AprobacionClienteModule({ onNavigate }) {
   const [intro, setIntro] = useState("");
   const [botonTexto, setBotonTexto] = useState("");
   const [archivos, setArchivos] = useState([]);
+  const [excluidosRut, setExcluidosRut] = useState([]);
+  const [subiendo, setSubiendo] = useState(false);
   const [preview, setPreview] = useState(null);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState("");
@@ -143,6 +145,41 @@ export default function AprobacionClienteModule({ onNavigate }) {
 
   const toggleArchivo = (i) => setArchivos(prev => prev.map((a, j) => j === i ? { ...a, seleccionado: !a.seleccionado } : a));
 
+  const recargarArchivos = async (cliente) => {
+    try {
+      const a = await axios.get(`${API}/api/aprobacion-cliente/archivos`, { params: { cliente } });
+      setArchivos(a.data.archivos || []);
+      setExcluidosRut(a.data.excluidos_rut || []);
+    } catch (_e) { setArchivos([]); }
+  };
+
+  const eliminarArchivo = async (a) => {
+    if (!window.confirm(`¿Eliminar definitivamente "${a.nombre}"? Podrás resubir el PDF correcto al instante.`)) return;
+    setLoading(true); setMsg("");
+    try {
+      await axios.delete(`${API}/api/aprobacion-cliente/archivo`, { params: { ruta: a.ruta, origen: a.origen, cliente: nombre } });
+      setMsg(`✅ Archivo "${a.nombre}" eliminado. Puedes subir el PDF correcto.`);
+      await recargarArchivos(nombre);
+    } catch (e) { setMsg("Error: " + (e.response?.data?.detail || e.message)); }
+    setLoading(false);
+  };
+
+  const subirArchivo = async (e) => {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f || !nombre) { if (!nombre) setMsg("Error: selecciona primero el cliente"); return; }
+    setSubiendo(true); setMsg("");
+    try {
+      const fd = new FormData();
+      fd.append("cliente", nombre);
+      fd.append("file", f);
+      const r = await axios.post(`${API}/api/aprobacion-cliente/upload`, fd);
+      setMsg(`✅ "${r.data.nombre}" subido y validado (RUT verificado, sin gastos operacionales).`);
+      await recargarArchivos(nombre);
+    } catch (err) { setMsg("Error: " + (err.response?.data?.detail || err.message)); }
+    setSubiendo(false);
+  };
+
   const payload = () => ({
     nombre, rut, email_cliente: emailCliente, subject, intro, boton_texto: botonTexto,
     ejecutivo_nombre: ejecutivoNombre, ejecutivo_email: ejecutivoEmail, ejecutivo_interno: ejecutivoInterno,
@@ -224,10 +261,7 @@ export default function AprobacionClienteModule({ onNavigate }) {
             label="Importar documentos desde correo"
             onDone={async () => {
               if (!nombre) return;
-              try {
-                const a = await axios.get(`${API}/api/aprobacion-cliente/archivos`, { params: { cliente: nombre } });
-                setArchivos(a.data.archivos || []);
-              } catch (e) { console.error(e); }
+              await recargarArchivos(nombre);
             }} />
         </div>
         {plantillaPropia && <div style={{ marginTop: "0.6rem", fontSize: "0.8rem", color: "#10d98e" }}><i className="fa fa-bookmark" style={{ marginRight: "0.35rem" }} />Este cliente tiene plantilla propia guardada</div>}
@@ -246,7 +280,19 @@ export default function AprobacionClienteModule({ onNavigate }) {
 
       {/* ADJUNTOS DETECTADOS */}
       <div style={card}>
-        <h3 style={{ margin: "0 0 0.4rem", color: "var(--gold)", fontSize: "1.1rem" }}><i className="fa fa-paperclip" style={{ marginRight: "0.5rem" }} />PDFs del cliente ({seleccionados} seleccionados)</h3>
+        <h3 style={{ margin: "0 0 0.4rem", color: "var(--gold)", fontSize: "1.1rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <span><i className="fa fa-paperclip" style={{ marginRight: "0.5rem" }} />PDFs del cliente ({seleccionados} seleccionados)</span>
+          <label data-testid="aprobacion-subir-btn" style={{ ...btn("var(--gold)", true), display: "inline-flex", alignItems: "center", gap: "0.35rem", opacity: subiendo || !nombre ? 0.5 : 1, cursor: subiendo || !nombre ? "not-allowed" : "pointer" }}>
+            <i className={`fa ${subiendo ? "fa-spinner fa-spin" : "fa-upload"}`} />{subiendo ? "Validando…" : "Subir PDF"}
+            <input type="file" accept=".pdf,application/pdf" style={{ display: "none" }} disabled={subiendo || !nombre} onChange={subirArchivo} data-testid="aprobacion-subir-input" />
+          </label>
+        </h3>
+        {excluidosRut.length > 0 && (
+          <div data-testid="aprobacion-excluidos-rut" style={{ padding: "0.6rem 0.9rem", marginBottom: "0.8rem", background: "rgba(225,29,72,0.12)", border: "1px solid rgba(225,29,72,0.4)", color: "#ff6b8a", fontSize: "0.82rem", fontWeight: 600 }}>
+            🛡️ LEY DEL RUT: {excluidosRut.length} archivo(s) EXCLUIDO(S) por contener un RUT distinto al dueño de la carpeta:
+            {excluidosRut.map((x, i) => <div key={i} style={{ opacity: 0.85, fontWeight: 400, marginTop: "0.2rem" }}>· {x.nombre}</div>)}
+          </div>
+        )}
         <p style={{ fontSize: "0.8rem", opacity: 0.6, margin: "0 0 0.8rem" }}>Al cliente se envían <b>SOLO 2 archivos</b>: la carta de aprobación y la simulación (los mismos del autocorreo). El cliente no verá la palabra "ajustada". Usa "Ver PDF" para confirmar cada archivo antes de enviar.</p>
         {archivos.length === 0 ? (
           <div style={{ opacity: 0.5, fontSize: "0.9rem", padding: "0.5rem 0" }} data-testid="aprobacion-sin-archivos">Seleccioná un cliente para ver su carta de aprobación y simulación.</div>
@@ -264,6 +310,11 @@ export default function AprobacionClienteModule({ onNavigate }) {
               style={{ fontSize: "0.75rem", color: "#d4af37", fontWeight: 700, textDecoration: "none", border: "1px solid #d4af37", borderRadius: 0, padding: "0.15rem 0.55rem" }}>
               <i className="fa fa-eye" style={{ marginRight: "0.3rem" }} />Ver PDF
             </a>
+            <button data-testid={`aprobacion-eliminar-${i}`} onClick={e => { e.preventDefault(); e.stopPropagation(); eliminarArchivo(a); }}
+              title="Eliminar este archivo y resubir el correcto"
+              style={{ background: "transparent", border: "1px solid rgba(225,29,72,0.6)", color: "#ff6b8a", borderRadius: 0, padding: "0.15rem 0.55rem", fontSize: "0.75rem", fontWeight: 700, cursor: "pointer" }}>
+              <i className="fa fa-trash" />
+            </button>
             <span style={{ fontSize: "0.72rem", padding: "0.12rem 0.5rem", borderRadius: "999px", background: a.tipo === "carta_aprobacion" ? "rgba(16,217,142,0.15)" : a.tipo === "simulacion_ajustada" ? "rgba(212,175,55,0.15)" : "rgba(212,175,55,0.2)", color: a.tipo === "carta_aprobacion" ? "#10d98e" : a.tipo === "simulacion_ajustada" ? "var(--gold)" : "#9aa3b5" }}>{a.tipo === "simulacion_ajustada" ? "Simulación" : TIPO_LABEL[a.tipo]}</span>
             <span style={{ fontSize: "0.72rem", opacity: 0.45 }}>{a.origen === "autocorreo" ? "Archivo Autocorreo" : "Carpeta Cliente"}</span>
           </label>

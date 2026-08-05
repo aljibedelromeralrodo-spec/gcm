@@ -3971,6 +3971,28 @@ async def proc_ordenar_docs(qid: str, payload: dict):
             "carpeta_regenerada": bool(regenerado)}
 
 
+RUT_EN_TEXTO_RX = re.compile(r"\b\d{1,2}\.?\d{3}\.?\d{3}\s?-\s?[\dkK]\b")
+
+
+def _ruts_de_pdf(pdf_bytes):
+    """Escaneo OCR: devuelve el set de RUTs normalizados encontrados en el PDF."""
+    try:
+        texto, _m = ocr_service.extraer_texto(pdf_bytes)
+    except Exception:
+        texto = ""
+    return {_norm_rut(r) for r in RUT_EN_TEXTO_RX.findall(texto or "")}
+
+
+def _ley_rut_ok(pdf_bytes, ruts_permitidos):
+    """LEY DEL RUT (Blindaje de Werner): el archivo SOLO se vincula si contiene
+    el RUT del dueño de la carpeta o de su codeudor registrado. Sin excepciones."""
+    permitidos = {_norm_rut(r) for r in ruts_permitidos if r and len(_norm_rut(r)) >= 7}
+    if not permitidos:
+        return True, set()
+    encontrados = _ruts_de_pdf(pdf_bytes)
+    return bool(encontrados & permitidos), encontrados
+
+
 async def _buscar_carpeta_existente(cliente, rut=""):
     """Encuentra la carpeta ya existente de la misma persona (por RUT o nombre similar)."""
     rut_n = _norm_rut(rut or "")
@@ -3979,6 +4001,9 @@ async def _buscar_carpeta_existente(cliente, rut=""):
         for f in folders:
             if _norm_rut(f.get("rut", "")) == rut_n:
                 return f
+        # LEY DEL RUT: el correo trae RUT y NINGUNA carpeta coincide —
+        # PROHIBIDO vincular por parecido de nombres.
+        return None
     cn = [t for t in _norm_texto(cliente or "").split() if len(t) > 2]
     if len(cn) < 2:
         return None
@@ -4282,9 +4307,20 @@ async def proc_upload_drive(qid: str, force: bool = False, clave: str = ""):
         return t
     # Copiar documentos a subcarpetas protocolo (01_cedula, 02_liquidaciones, ...)
     from pypdf import PdfReader, PdfWriter
+    # LEY DEL RUT: al vincular a una carpeta EXISTENTE, cada archivo se escanea con OCR;
+    # si su RUT no coincide 100% con el dueño (o codeudor), el vínculo se descarta.
+    ruts_carpeta = ([existente.get("rut", ""), existente.get("codeudor_rut", "")]
+                    if existente else [])
+    rechazados_ley_rut = []
     for d in docs:
         p = src / d["filename"]
         if p.exists():
+            if existente and any(len(_norm_rut(r or "")) >= 7 for r in ruts_carpeta):
+                ok_rut, ruts_arch = await asyncio.to_thread(_ley_rut_ok, p.read_bytes(), ruts_carpeta)
+                if not ok_rut:
+                    rechazados_ley_rut.append(
+                        {"filename": d["filename"], "ruts": sorted(ruts_arch)})
+                    continue
             fn_orig = d["filename"]
             es_cod_arch = es_correo_codeudor or bool(re.search(r"co-?deudor", fn_orig, re.I))
             if es_cod_arch:
@@ -4303,6 +4339,27 @@ async def proc_upload_drive(qid: str, force: bool = False, clave: str = ""):
                 if viejo.parent != sd or viejo.name != fn_dest:
                     viejo.unlink(missing_ok=True)
             uploaded.append(f"{sub}/{fn_dest}")
+    if rechazados_ley_rut:
+        _nombres_rech = [r["filename"] for r in rechazados_ley_rut]
+        await db.correos_pendientes.update_one(
+            {"qid": qid, "motivo": {"$regex": "^LEY DEL RUT"}},
+            {"$setOnInsert": {
+                "id": str(uuid.uuid4()), "qid": qid,
+                "subject": item.get("subject", ""), "sender": item.get("sender", ""),
+                "fecha": item.get("date_iso", ""),
+                "motivo": (f"LEY DEL RUT: {len(_nombres_rech)} archivo(s) con RUT que NO coincide "
+                           f"con {cliente} ({(existente or {}).get('rut', '')})"),
+                "cliente_sugerido": "",
+                "adjuntos": _nombres_rech,
+                "estado": "pendiente", "creado_en": now_iso()}},
+            upsert=True)
+        await db.alertas.insert_one({
+            "id": str(uuid.uuid4()), "tipo": "ley_del_rut",
+            "cliente": cliente,
+            "mensaje": (f"🛡️ LEY DEL RUT: {len(_nombres_rech)} archivo(s) rechazado(s) de la carpeta "
+                        f"de {cliente} por RUT distinto — enviados al Buzón de Rescate: "
+                        + ", ".join(_nombres_rech[:4])),
+            "fecha": now_iso(), "leida": False})
     hay_codeudor_files = any(u.startswith("05_codeudor/") for u in uploaded)
     if hay_codeudor_files:
         try:
@@ -7301,7 +7358,32 @@ async def aprobacion_archivos(cliente: str = ""):
             elegido = dict(cand[0])
             elegido["seleccionado"] = True
             finales.append(elegido)
-    return {"archivos": finales}
+    # LEY DEL RUT: verificación OCR de los archivos finales contra el RUT del dueño
+    excluidos_rut = []
+    if finales and cliente.strip():
+        fdoc = await db.folders.find_one(
+            {"nombre": {"$regex": f"^{re.escape(cliente.strip())}$", "$options": "i"}})
+        rut_dueno = _norm_rut((fdoc or {}).get("rut", ""))
+        rut_cod = _norm_rut((fdoc or {}).get("codeudor_rut", ""))
+        if len(rut_dueno) >= 7:
+            verificados = []
+            for a in finales:
+                try:
+                    if a["origen"] == "clientes":
+                        pth = fsvc.resolver_ruta(cliente, a["ruta"])
+                    else:
+                        pth = STORAGE_DIR / a["ruta"]
+                    ruts_arch = await asyncio.to_thread(_ruts_de_pdf, pth.read_bytes())
+                except Exception:
+                    ruts_arch = set()
+                if ruts_arch and not (ruts_arch & {rut_dueno, rut_cod}):
+                    excluidos_rut.append({"nombre": a["nombre"], "ruts": sorted(ruts_arch),
+                                          "rut_dueno": (fdoc or {}).get("rut", "")})
+                else:
+                    a["rut_verificado"] = bool(ruts_arch)
+                    verificados.append(a)
+            finales = verificados
+    return {"archivos": finales, "excluidos_rut": excluidos_rut}
 
 
 @api.get("/aprobacion-cliente/plantilla")
@@ -7476,6 +7558,62 @@ async def aprobacion_preview_pdf(ruta: str = "", origen: str = "autocorreo", cli
         raise HTTPException(status_code=404, detail="Archivo no encontrado")
     return FileResponse(str(p), media_type="application/pdf",
                         filename=_nombre_cliente_pdf(p.name))
+
+
+@api.delete("/aprobacion-cliente/archivo")
+async def aprobacion_eliminar_archivo(ruta: str = "", origen: str = "autocorreo", cliente: str = ""):
+    """Basurero: elimina físicamente un PDF erróneo para poder resubir el correcto."""
+    try:
+        if origen == "clientes":
+            p = fsvc.resolver_ruta(cliente, ruta)
+        else:
+            p = (STORAGE_DIR / ruta).resolve()
+            if not str(p).startswith(str(STORAGE_DIR.resolve())):
+                raise HTTPException(status_code=400, detail="Ruta inválida")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Ruta inválida")
+    if not p.exists() or p.suffix.lower() != ".pdf":
+        raise HTTPException(status_code=404, detail="Archivo no encontrado")
+    p.unlink()
+    if origen == "clientes" and cliente.strip():
+        await asyncio.to_thread(_regen_carpeta_cliente, cliente.strip())
+    return {"ok": True, "eliminado": p.name}
+
+
+GASTOS_OP_RX = re.compile(r"gastos?\s+operacionales", re.I)
+
+
+@api.post("/aprobacion-cliente/upload")
+async def aprobacion_upload(cliente: str = Form(...), file: UploadFile = File(...)):
+    """Sube el PDF correcto con DETECTOR de Simulación Ajustada y LEY DEL RUT."""
+    if len((cliente or "").strip()) < 3:
+        raise HTTPException(status_code=400, detail="Selecciona el cliente antes de subir el archivo")
+    raw = await file.read()
+    raw, nombre_f, _conv = pdfs.convertir_a_pdf(raw, file.filename)
+    texto, _m = await asyncio.to_thread(ocr_service.extraer_texto, raw, nombre_f)
+    # DETECTOR DE 'SIMULACIÓN AJUSTADA': si trae tablas de Gastos Operacionales, NO es la simulación
+    if GASTOS_OP_RX.search(texto or ""):
+        raise HTTPException(status_code=422, detail=(
+            "⚠ Este archivo no es una Simulación Ajustada. Contiene tablas de "
+            "Gastos Operacionales. Por favor, suba el documento correcto."))
+    # LEY DEL RUT: el RUT del archivo debe coincidir con el dueño de la carpeta (o codeudor)
+    fdoc = await db.folders.find_one(
+        {"nombre": {"$regex": f"^{re.escape(cliente.strip())}$", "$options": "i"}})
+    rut_dueno = _norm_rut((fdoc or {}).get("rut", ""))
+    rut_cod = _norm_rut((fdoc or {}).get("codeudor_rut", ""))
+    ruts_arch = {_norm_rut(r) for r in RUT_EN_TEXTO_RX.findall(texto or "")}
+    if len(rut_dueno) >= 7 and ruts_arch and not (ruts_arch & {rut_dueno, rut_cod}):
+        raise HTTPException(status_code=422, detail=(
+            f"⚠ LEY DEL RUT: el archivo contiene un RUT que NO coincide con el dueño de la "
+            f"carpeta ({(fdoc or {}).get('rut', '')}). Vínculo descartado."))
+    fn = _safe_name(nombre_f)
+    if _tipo_pdf_aprobacion(fn) == "otro":
+        fn = f"simulador_{fn}"
+    dest = STORAGE_DIR / _safe_name(cliente.strip())
+    dest.mkdir(parents=True, exist_ok=True)
+    (dest / fn).write_bytes(raw)
+    return {"ok": True, "nombre": fn, "tipo": _tipo_pdf_aprobacion(fn),
+            "ruta": str((dest / fn).relative_to(STORAGE_DIR)), "origen": "autocorreo"}
 
 
 @api.get("/aprobacion-cliente/log")
