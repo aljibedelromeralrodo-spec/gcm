@@ -447,3 +447,8 @@
 - Pausa del motor movida de .env a db.config (pausa_admin). Startup fuerza ON salvo pausa_admin=True. Toggle UI la persiste.
 - MOTOR_247_FORZADO=1 (ya no se usa en codigo). Produccion arranca SIEMPRE sola aunque herede el .env del preview.
 - Preview verificado pausado tras reinicio; ingesta activa.
+
+## 2026-08-05 — AUDITORIA ISO FINAL: PASS COMPLETO
+- Deployment agent: status pass, findings [] (0 bloqueadores, 0 warnings).
+- Verificado por codigo: match total tokens + vinculo RUT (email_service 581/589), startup 24/7 forzado con pausa_admin en DB, portal 0 refs migrup.cl con 3 llamadas internas enviar_a_firmar_tercero, TLS 587 starttls, modulos importados (sales_engine 27, simulador_engine 28, ai_extract 3427), rastro digital SHA-256 + ID eCert + archivo madre en cada PDF dividido.
+- VEREDICTO: SISTEMA AFINADO Y LISTO PARA PRODUCCION.
