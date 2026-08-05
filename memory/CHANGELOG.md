@@ -459,3 +459,12 @@
 - VERIFICADO: set Claudia Zurita 5.5MB combinado -> 10 posiciones -> estampado, RAM pico 218MB, 21.4s, backend sin reinicio.
 - TLS 587 listo (MAIL_SMTP_PORT=587); usuario actualizara el secreto en produccion.
 - Startup: ingesta siempre ON; correo ON por defecto salvo pausa_admin (preview pausado a proposito, produccion ON).
+
+## 2026-06 — PROTOCOLO DE EMERGENCIA: Corte de bucle OCR/LiteLLM
+- Causa raíz: tesseract/poppler NO instalados → `_ocr_ia_pagina` (folders_service.py) hacía 1 llamada GPT-visión POR PÁGINA de cada PDF escaneado, disparado por el loop `_periodic_proc_loop` (proc_auto cada 2 min) → spam masivo de créditos.
+- Fix: interruptor global `AI_EMERGENCY_STOP="1"` en backend/.env.
+  - server.py startup: loops `ingesta_carpetas`, `reparos_estudio`, `aprendizaje_ia` NO arrancan con el flag activo. `_run_proc_auto()` retorna skipped.
+  - folders_service._ocr_ia_pagina: retorna "" (sin llamada a GPT).
+  - ai_extract.py: helper `_llm_key()` devuelve "" con flag activo → todas las funciones IA caen a fallback de reglas/regex.
+- Verificado: 0 llamadas LiteLLM en 90s post-reinicio. API 200 OK en 0.3s.
+- PARA REACTIVAR IA: poner AI_EMERGENCY_STOP="0" + INSTALAR tesseract-ocr y poppler-utils primero (OCR local gratis) para evitar recaída del spam.

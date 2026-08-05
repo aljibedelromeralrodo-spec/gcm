@@ -115,21 +115,25 @@ async def startup():
          "$setOnInsert": {"cutoff_iso": None, "destination": os.environ.get("MAIL2_USER", "")}},
         upsert=True)
     # BLINDADO 24/7: cada loop se reinicia solo si falla
+    _ai_stop = os.environ.get("AI_EMERGENCY_STOP") == "1"
+    if _ai_stop:
+        logging.warning("🛑 AI_EMERGENCY_STOP=1: loops de OCR/IA (ingesta, reparos, aprendizaje) DESACTIVADOS")
+    else:
+        asyncio.create_task(_task_blindada(_periodic_proc_loop, "ingesta_carpetas"))
+        asyncio.create_task(_task_blindada(_estudio_reparos_loop, "reparos_estudio"))
+        asyncio.create_task(_task_blindada(_aprendizaje_loop, "aprendizaje_ia"))
     asyncio.create_task(_task_blindada(_periodic_mesa_loop, "mesa"))
-    asyncio.create_task(_task_blindada(_periodic_proc_loop, "ingesta_carpetas"))
     asyncio.create_task(_task_blindada(_daily_report_loop, "reporte_diario"))
     asyncio.create_task(_task_blindada(_uf_auto_loop, "uf"))
     asyncio.create_task(_task_blindada(_firmados_auto_loop, "autocorreo_firmados"))
     asyncio.create_task(_task_blindada(_informes_vip_loop, "informes_vip_lunes"))
     asyncio.create_task(_task_blindada(_tasacion_fecha_loop, "fecha_tasacion"))
-    asyncio.create_task(_task_blindada(_estudio_reparos_loop, "reparos_estudio"))
     asyncio.create_task(_task_blindada(_cobro_tasacion_loop, "cobro_tasacion"))
     # DESACTIVADO (regla del usuario): los faltantes se piden solo manualmente
     # asyncio.create_task(_task_blindada(_faltantes_recordatorio_loop, "recordatorio_faltantes"))
     asyncio.create_task(_task_blindada(_actividades_terminadas_loop, "actividades_terminadas"))
     asyncio.create_task(_task_blindada(_resumen_semanal_loop, "resumen_semanal"))
     asyncio.create_task(_task_blindada(_reporte_correos_loop, "reporte_correos"))
-    asyncio.create_task(_task_blindada(_aprendizaje_loop, "aprendizaje_ia"))
     asyncio.create_task(_task_blindada(_resumen_cierres_loop, "resumen_cierres"))
     asyncio.create_task(_task_blindada(_setcred_auto_loop, "setcred_auto"))
 
@@ -4498,6 +4502,8 @@ async def _crear_alerta_carpeta(folder_doc):
 
 
 async def _run_proc_auto():
+    if os.environ.get("AI_EMERGENCY_STOP") == "1":
+        return {"skipped": True, "motivo": "AI_EMERGENCY_STOP activo"}
     resumen = {"enqueued": 0, "processed": 0, "carpetas": 0, "alertas": 0,
                "descartados": 0, "errors": []}
     await db.config.update_one({"_key": "proc_auto"},

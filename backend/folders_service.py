@@ -242,6 +242,8 @@ def merge_pdfs(nombre, rel_files):
 def _ocr_ia_pagina(pdf_bytes, idx):
     """Respaldo OCR con IA (visión): renderiza la página con PyMuPDF y transcribe
     con el modelo de visión. Se usa cuando tesseract/poppler no están disponibles."""
+    if os.environ.get("AI_EMERGENCY_STOP") == "1":
+        return ""
     key = os.environ.get("EMERGENT_LLM_KEY", "")
     if not key:
         return ""

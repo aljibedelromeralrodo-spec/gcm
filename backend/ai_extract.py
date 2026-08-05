@@ -7,6 +7,12 @@ import re
 import json
 import uuid
 
+
+def _llm_key():
+    if os.environ.get("AI_EMERGENCY_STOP") == "1":
+        return ""
+    return os.environ.get("EMERGENT_LLM_KEY", "")
+
 TIPOS = ["cedula", "liquidacion", "cotizacion_afp", "certificado_afp",
          "certificado_smf", "boleta_honorarios", "impuesto_renta",
          "simulacion", "carta_aprobacion", "otro"]
@@ -52,7 +58,7 @@ async def extraer_datos_tasacion(texto):
     m = re.search(r"rol(?:\s+de\s+aval[uú]o(?:\s+fiscal)?)?\s*(?:n[°º.:]*)?\s*[:\s]\s*([\d]{1,6}\s*-\s*[\dkK]{1,6})", texto, re.I)
     if m:
         base["rol_avaluo"] = m.group(1).replace(" ", "")
-    key = os.environ.get("EMERGENT_LLM_KEY", "")
+    key = _llm_key()
     if not key or len(texto) < 30:
         return base
     try:
@@ -91,7 +97,7 @@ async def extraer_datos_gastos(texto):
     texto = (texto or "")[:14000]
     base = {"email_cliente": _email_regex(texto), "rut": _rut_regex(texto),
             "items": [], "total_gastos_uf": None, "metodo": "reglas"}
-    key = os.environ.get("EMERGENT_LLM_KEY", "")
+    key = _llm_key()
     if not key or len(texto) < 30:
         return base
     try:
@@ -133,7 +139,7 @@ async def analizar_flujo_comercial(stats, aprendizajes_previos, notas_usuario):
     """Analiza el flujo comercial real de Central Mutuos y aprende de él.
     PROHIBIDO inventar métricas: solo usa los datos entregados."""
     base = {"resumen": "", "aprendizajes": [], "cuellos_botella": [], "mejoras": [], "metodo": "sin_ia"}
-    key = os.environ.get("EMERGENT_LLM_KEY", "")
+    key = _llm_key()
     if not key:
         return base
     try:
@@ -182,7 +188,7 @@ async def analizar_flujo_comercial(stats, aprendizajes_previos, notas_usuario):
 async def clasificar_y_extraer(texto, filename=""):
     """Devuelve dict con tipo_documento, nombre_cliente, rut y campos de gestion."""
     texto = (texto or "")[:6000]
-    key = os.environ.get("EMERGENT_LLM_KEY", "")
+    key = _llm_key()
     base = {
         "tipo_documento": _fallback_clasificar(texto, filename),
         "nombre_cliente": "",
