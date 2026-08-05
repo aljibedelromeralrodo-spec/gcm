@@ -6,6 +6,7 @@ import os
 import re
 import json
 import uuid
+import hashlib
 import asyncio
 
 
@@ -195,6 +196,15 @@ async def clasificar_y_extraer(texto, filename=""):
     """Devuelve dict con tipo_documento, nombre_cliente, rut y campos de gestion."""
     texto = (texto or "")[:6000]
     key = _llm_key()
+    cache_id = hashlib.sha256(f"{filename}\n{texto}".encode()).hexdigest()
+    try:
+        from bunker import _fs
+        _f, _dbs = _fs()
+        hit = _dbs.ai_extract_cache.find_one({"_id": cache_id})
+        if hit and hit.get("data"):
+            return dict(hit["data"])
+    except Exception:
+        _dbs = None
     base = {
         "tipo_documento": _fallback_clasificar(texto, filename),
         "nombre_cliente": "",
@@ -256,6 +266,11 @@ async def clasificar_y_extraer(texto, filename=""):
     except Exception as e:
         base["metodo"] = "reglas_fallback"
         base["error"] = str(e)[:200]
+    if base.get("metodo") == "ia" and _dbs is not None:
+        try:
+            _dbs.ai_extract_cache.replace_one({"_id": cache_id}, {"_id": cache_id, "data": base}, upsert=True)
+        except Exception:
+            pass
     return base
 
 

@@ -2,6 +2,7 @@ from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Form, R
 from fastapi.responses import StreamingResponse, JSONResponse, HTMLResponse, FileResponse, RedirectResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
+from starlette.middleware.gzip import GZipMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import io
@@ -1129,9 +1130,10 @@ async def search(q: str = "", limit: int = 15):
 # ---------------------------------------------------------------------------
 # Clientes / Carpetas (archivos físicos en disco + metadata en Mongo)
 # ---------------------------------------------------------------------------
-def _folder_public(doc, con_archivos=False):
+def _folder_public(doc, con_archivos=False, archivos=None):
     d = clean(dict(doc))
-    archivos = fsvc.scan_archivos(d.get("nombre", ""))
+    if archivos is None:
+        archivos = fsvc.scan_archivos(d.get("nombre", ""))
     cats = sorted({fsvc.cat_de_archivo(a["nombre"], a["subfolder"]) for a in archivos} - {"combinado", "codeudor", "estudio_titulo"})
     cr = d.get("credit_request") or {}
     cr["doc_categories"] = cats
@@ -1151,7 +1153,7 @@ def _folder_public(doc, con_archivos=False):
 _PROY_SEG = {"_id": 0, "cliente": 1, "asunto": 1, "estado": 1, "fecha": 1}
 
 
-async def _mesa_respuesta_folder(d, segs=None):
+async def _mesa_respuesta_folder(d, segs=None, archivos=None):
     """Busca la respuesta de mesa (aprobación/rechazo) para esta carpeta en seguimiento.
     REGLA: si la carpeta ya tiene descargada la carta de aprobación o la simulación
     ajustada, se considera APROBADA por mesa de inmediato.
@@ -1170,15 +1172,18 @@ async def _mesa_respuesta_folder(d, segs=None):
                 return "aprobada"
             if est.startswith("rech"):
                 return "rechazada"
-    for a in fsvc.scan_archivos(d.get("nombre", "")):
+    if archivos is None:
+        archivos = fsvc.scan_archivos(d.get("nombre", ""))
+    for a in archivos:
         low = a["nombre"].lower()
         if re.search(r"carta.*aprobaci|aprobaci[oó]n", low) or re.search(r"_cm\.pdf$|ajustad", low):
             return "aprobada"
     return None
 
 
-def _criterios_folder(d):
-    archivos = fsvc.scan_archivos(d.get("nombre", ""))
+def _criterios_folder(d, archivos=None):
+    if archivos is None:
+        archivos = fsvc.scan_archivos(d.get("nombre", ""))
     cats = {fsvc.cat_de_archivo(a["nombre"], a["subfolder"]) for a in archivos} - {"combinado", "codeudor", "estudio_titulo"}
     cr = d.get("credit_request") or {}
     tipo_cliente = cr.get("client_type") or "dependiente"
@@ -1239,10 +1244,11 @@ async def list_folders(q: str = ""):
     segs = await db.seguimiento.find({}, _PROY_SEG).sort("fecha", -1).limit(200).to_list(200)
     out = []
     for d in docs:
-        f = _folder_public(d)
+        archivos = fsvc.scan_archivos(d.get("nombre", ""))
+        f = _folder_public(d, archivos=archivos)
         f["prob_aprobacion"] = _prob_aprobacion_folder(d, stats)
-        f["criterios"] = _criterios_folder(d)
-        f["mesa_respuesta"] = await _mesa_respuesta_folder(d, segs)
+        f["criterios"] = _criterios_folder(d, archivos=archivos)
+        f["mesa_respuesta"] = await _mesa_respuesta_folder(d, segs, archivos=archivos)
         out.append(f)
     return {"folders": out}
 
@@ -8688,7 +8694,7 @@ async def firma_firmar(token: str):
     rx = ".*".join(re.escape(t) for t in toks[:2]) if toks else ""
     doc = await db.set_credito.find_one({"nombre": {"$regex": rx, "$options": "i"}}) if rx else None
     if not doc:
-        raise HTTPException(status_code=400, detail="Su documentación aún no está preparada. Contacte a su ejecutivo.")
+        raise HTTPException(status_code=400, detail="Su documentación aún no está preparada (no existe un Set de Crédito a su nombre). Contacte a su ejecutivo.")
     # RUT REAL: siempre prioriza el de la carpeta/set del cliente (fuente de verdad)
     carpeta = await db.folders.find_one({"nombre": {"$regex": rx, "$options": "i"}},
                                         {"_id": 0, "rut": 1, "email": 1}) if rx else None
@@ -8707,7 +8713,8 @@ async def firma_firmar(token: str):
     }
     res_comb = await asyncio.to_thread(_set_combinar, doc.get("nombre", ""))
     if not res_comb["combinado"]:
-        raise HTTPException(status_code=400, detail="Su documentación aún no está preparada. Contacte a su ejecutivo.")
+        raise HTTPException(status_code=400, detail=res_comb.get("error") or
+                            "Su documentación aún no está preparada (el Set de Crédito no tiene archivos PDF para firmar). Contacte a su ejecutivo.")
     target = _set_dir(doc.get("nombre", "")) / res_comb["combinado"]
     pdf_bytes = target.read_bytes()
     posiciones = await asyncio.to_thread(pdfs.posiciones_firma_cliente, pdf_bytes)
@@ -8933,11 +8940,15 @@ async def _get_set(sid):
 async def setcred_get(sid: str):
     doc = await _get_set(sid)
     nombre = doc.get("nombre", "")
-    if not doc.get("num_documento"):
+    n_arch = len(_set_archivos(nombre))
+    scan_previo = doc.get("num_doc_scan") or {}
+    if not doc.get("num_documento") and scan_previo.get("count") != n_arch:
         num = await asyncio.to_thread(_extraer_num_documento, nombre)
+        sets_fields = {"num_doc_scan": {"count": n_arch, "at": now_iso()}}
         if num:
-            await db.set_credito.update_one({"id": sid}, {"$set": {"num_documento": num}})
+            sets_fields["num_documento"] = num
             doc["num_documento"] = num
+        await db.set_credito.update_one({"id": sid}, {"$set": sets_fields})
     return _set_public(doc)
 
 
@@ -9869,10 +9880,15 @@ async def security_headers(request, call_next):
     resp.headers["Cross-Origin-Opener-Policy"] = "same-origin"
     resp.headers["X-Permitted-Cross-Domain-Policies"] = "none"
     resp.headers["X-DNS-Prefetch-Control"] = "off"
+    if "application/pdf" not in (resp.headers.get("content-type") or ""):
+        resp.headers["Content-Security-Policy"] = (
+            "default-src 'self'; frame-ancestors 'self'; object-src 'none'; base-uri 'self'"
+        )
     return resp
 
 
 _cors_env = os.environ.get("CORS_ORIGINS", "*")
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,

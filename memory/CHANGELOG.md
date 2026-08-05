@@ -556,3 +556,20 @@
 - RUT 14.161.757-5 grabado en set_credito y en folders (id 2e978476, rut previo 83504254).
 - COMBINADO_SET_Gerardo.pdf generado (3.2MB, 10 archivos). Regla Ivana excluyó 5 PDFs con RUT Landa/López (13224068-K, 19203796-4, 25946255-K).
 - HALLAZGO CRÍTICO: no existe carnet de Gerardo (RUT 14.161.757-5) en el sistema. El 01_Cedula_CARNET.pdf pertenece a FREDDY ESTEBAN LANDA IGLESIAS (RUN 13.224.068-K, Nº doc B6J.560.515). num_documento NO grabado (no se falsifica identidad). Usuario debe subir su carnet real.
+
+## Sesión 2026-08-05/06 (Activación Gerardo Barrera + Saneamiento + Fix Firma VIP)
+- MISIÓN GERARDO: 15 PDFs copiados/consolidados de clientes/Gerardo al Set de Crédito.
+- Identidad consolidada: carpeta "Gerardo" fusionada en "Gerardo Barrera" (RUT 14.161.757-5),
+  duplicados eliminados (folder 2e978476 borrado; set c5518eb4 renombrado a "Gerardo Barrera").
+- COMBINADO_SET_Gerardo Barrera.pdf generado (10 docs; 5 excluidos por Regla Ivana: RUTs Landa/López).
+- HALLAZGO CRÍTICO: el único carnet en el sistema pertenece a Freddy Landa (13.224.068-K),
+  NO existe carnet con RUT 14.161.757-5. num_documento NO grabado (no se falsifica identidad).
+- Fix rendimiento: setcred_get ya no re-OCRea el carnet en cada apertura (marker num_doc_scan).
+- Fix Firma VIP: mensajes de error del portal ahora especifican la causa (sin set / set vacío);
+  botón "Link de Firma VIP" bloqueado en frontend si el set tiene 0 archivos.
+- Causa del "documentación no preparada" de Nicolas Saavedra: su set está VACÍO (storage/sets_de_credito/NICOLAS SAAVEDRA).
+- Anti-sangrado LLM: caché Mongo ai_extract_cache (hash SHA-256 de texto+archivo) en clasificar_y_extraer.
+- Saneamiento: CSP header (excepto PDFs), GZipMiddleware, refactor list_folders (1 escaneo de disco
+  por carpeta en vez de 3), eslint.config.mjs flat config creado, lint 0 errores.
+- NOTA OPERATIVA: uvicorn reload queda colgado tras editar server.py/ai_extract.py;
+  requiere `sudo supervisorctl restart backend` tras cada edición de backend.

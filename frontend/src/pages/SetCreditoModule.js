@@ -306,6 +306,10 @@ export default function SetCreditoModule({ onNavigate }) {
             </div>
             <button data-testid="setcred-eliminar" onClick={() => eliminarSet(current.id)} style={btn("#e11d48", true)}><i className="fa fa-trash" /> Eliminar set</button>
             <button data-testid="setcred-link-vip" onClick={async () => {
+              if (!(current.archivos || []).length) {
+                setMsg("⚠ REGLA DEL SET: la Firma VIP exige archivos PDF dentro del Set de Crédito. Este set está en 0 — suba o sincronice los documentos primero.");
+                return;
+              }
               try {
                 const r = await axios.post(`${API}/api/firma/generar-link`, { cliente: current.nombre, rut: current.rut || "", email: current.email || "" });
                 try { await navigator.clipboard.writeText(r.data.url); } catch (_e) { /* clipboard opcional */ }

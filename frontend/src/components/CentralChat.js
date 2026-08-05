@@ -29,7 +29,7 @@ function renderTextWithLinks(text) {
 
 
 async function speakText(text, onEnd) {
-  const clean = text.replace(/[\*\#\_\>\`]/g, "").replace(/\n+/g, ". ").slice(0, 4000);
+  const clean = text.replace(/[*#_>`]/g, "").replace(/\n+/g, ". ").slice(0, 4000);
   if (currentAudio) { currentAudio.pause(); currentAudio = null; }
 
   // Try Martin's chosen voice (OpenAI TTS) first
