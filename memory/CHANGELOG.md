@@ -404,3 +404,9 @@
 ## 2026-08-04 — RESPALDO OPTIMIZADO + PASS FINAL LIMPIO
 - /admin/respaldo/export: proyeccion _RESPALDO_PROY (excluye _id/body/html/raw/binarios) + cursor batch_size(200) + limit(8000). Verificado: 200 OK, 35 colecciones, 497 archivos, 10.5s.
 - Deployment agent: PASS sin findings ni warnings. SISTEMA BLINDADO Y LISTO.
+
+## 2026-08-04 — BLINDAJE ANTI-DUPLICADOS (REGLA DE MESA)
+- Cerrojo atomico (find_one_and_update EN_PROCESO_DE_ENVIO) en 2 flujos a Mesa: /clientes/folders/{fid}/send-email (lock en db.folders con stale 10min) y /procesamiento/queue/{qid}/enviar-autocorreo (reserva en db.mesa_enviados con estado). Segundo intento simultaneo -> 409.
+- Huella Message-ID (make_msgid @centralmutuos.cl) enviada como header y guardada en folders.mesa_message_id + mesa_enviados.message_id + proc_queue.autocorreo_message_id. Re-envio prohibido sin clave admin.
+- Destino unico: destino forzado a MESA_EMAIL (aprobaciones@centralmutuos.cl) — se elimino override por payload en ambos flujos.
+- Test carrera simulada: intento 1 pasa, intento 2 bloqueado. NOTA: prueba disparo 1 aviso [FALTA INFORMACION] Roberto Duran a mesa (inofensivo); flag revertido.

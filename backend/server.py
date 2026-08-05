@@ -2315,6 +2315,10 @@ async def folder_send_email(fid: str, payload: dict):
     doc = await _get_folder_doc(fid)
     payload = payload or {}
     to = (payload.get("to_addr") or "").strip()
+    # DESTINO ÚNICO: las carpetas a Mesa van EXCLUSIVAMENTE a la casilla oficial
+    _destino_mesa = (os.environ.get("MESA_EMAIL") or "").strip()
+    if _destino_mesa:
+        to = _destino_mesa
     if not to or "@" not in to:
         raise HTTPException(status_code=400, detail="Destinatario inválido")
     nombre = doc.get("nombre", "")
@@ -2343,7 +2347,8 @@ async def folder_send_email(fid: str, payload: dict):
                             + ", ".join(missing_labels)
                             + ". Para enviar igual, asumí el envío manual incompleto.")
     # REGLA: a Mesa solo se envía UNA vez en forma directa. Para reenviar se exige la clave.
-    if payload.get("confirm") and doc.get("mesa_enviado_at"):
+    # HUELLA: si ya existe un Message-ID de envío exitoso, el re-envío queda prohibido sin clave.
+    if payload.get("confirm") and (doc.get("mesa_enviado_at") or doc.get("mesa_message_id")):
         if (payload.get("clave") or "") != CLAVE_FORZAR_CARPETA:
             raise HTTPException(status_code=403, detail=(
                 f"Esta carpeta ya se envió a Mesa el "
@@ -2399,14 +2404,35 @@ async def folder_send_email(fid: str, payload: dict):
                 "missing_docs": missing_labels, "docs_completos": not missing_labels,
                 "attachments": attach_names, "sender": sender}
     adjuntos = [{"filename": p.name, "content_b64": _b64(p.read_bytes())} for p in attach_paths]
-    res = await asyncio.to_thread(mail.send_mail, to, subject, cuerpo, adjuntos, "secundaria")
+    # CERROJO ATÓMICO: find_one_and_update marca EN_PROCESO_DE_ENVIO — si otro proceso
+    # intenta enviar al mismo tiempo, el segundo intento se bloquea de inmediato.
+    _stale = (datetime.now(timezone.utc) - timedelta(minutes=10)).isoformat()
+    _lock = await db.folders.find_one_and_update(
+        {"id": fid, "$or": [{"mesa_envio_lock": {"$ne": "EN_PROCESO_DE_ENVIO"}},
+                            {"mesa_envio_lock_at": {"$lt": _stale}}]},
+        {"$set": {"mesa_envio_lock": "EN_PROCESO_DE_ENVIO", "mesa_envio_lock_at": now_iso()}})
+    if _lock is None:
+        raise HTTPException(status_code=409,
+                            detail="Envío a Mesa YA en proceso — intento simultáneo bloqueado por el cerrojo atómico.")
+    from email.utils import make_msgid
+    mid = make_msgid(domain="centralmutuos.cl")
+    try:
+        res = await asyncio.to_thread(mail.send_mail, to, subject, cuerpo, adjuntos,
+                                      "secundaria", None, {"Message-ID": mid})
+    except Exception:
+        await db.folders.update_one({"id": fid}, {"$unset": {"mesa_envio_lock": "", "mesa_envio_lock_at": ""}})
+        raise
     if not res.get("success"):
+        await db.folders.update_one({"id": fid}, {"$unset": {"mesa_envio_lock": "", "mesa_envio_lock_at": ""}})
         raise HTTPException(status_code=502, detail=res.get("error", "Error de envío"))
-    await db.folders.update_one({"id": fid}, {"$inc": {"emails_sent_count": 1},
-                                              "$set": {"last_email_sent_at": now_iso(),
-                                                       "mesa_enviado_at": now_iso()}})
+    # HUELLA DE ENVÍO: Message-ID guardado en la carpeta — prohibe re-envíos de este ciclo
+    await db.folders.update_one({"id": fid}, {
+        "$inc": {"emails_sent_count": 1},
+        "$set": {"last_email_sent_at": now_iso(), "mesa_enviado_at": now_iso(),
+                 "mesa_message_id": mid},
+        "$unset": {"mesa_envio_lock": "", "mesa_envio_lock_at": ""}})
     return {"to": to, "subject": subject, "attachments": attach_names,
-            "sender": res.get("desde", sender)}
+            "message_id": mid, "sender": res.get("desde", sender)}
 
 
 @api.post("/clientes/folders/{fid}/send-missing-docs")
@@ -8958,8 +8984,8 @@ async def proc_enviar_autocorreo(qid: str, payload: dict = None):
     cl = item.get("classification", {})
     campos = item.get("campos", {})
     cliente = cl.get("cliente") or mail._extraer_nombre(item.get("subject", ""), item.get("sender", ""))
-    # El envío de la GESTIÓN (solicitud de crédito) va SIEMPRE a la casilla de Mesa
-    destino = (payload or {}).get("destino") or os.environ.get("MESA_EMAIL", "")
+    # DESTINO ÚNICO: la GESTIÓN (solicitud de crédito) va EXCLUSIVAMENTE a la casilla de Mesa
+    destino = os.environ.get("MESA_EMAIL", "")
     if not destino:
         raise HTTPException(status_code=400, detail="No hay correo destino configurado")
 
@@ -9024,21 +9050,58 @@ async def proc_enviar_autocorreo(qid: str, payload: dict = None):
     # BLINDAJE: reenviar la misma gestión a mesa exige la clave de administrador
     clave = (payload or {}).get("clave") or ""
     key_guard = _norm_texto(asunto)
-    prev = await db.mesa_enviados.find_one({"key": key_guard})
-    if (prev or item.get("autocorreo_enviado")) and clave != CLAVE_FORZAR_CARPETA:
-        fecha_prev = str((prev or {}).get("enviado_at") or item.get("autocorreo_en") or "")[:16].replace("T", " ")
+    autorizado_reenvio = bool(clave) and clave == CLAVE_FORZAR_CARPETA
+    if item.get("autocorreo_enviado") and not autorizado_reenvio:
+        fecha_prev = str(item.get("autocorreo_en") or "")[:16].replace("T", " ")
         raise HTTPException(status_code=403, detail=(
             f"La gestión de {cliente} ya se envió a Mesa{f' el {fecha_prev}' if fecha_prev else ''}. "
             "Para reenviarla debes ingresar la clave de administrador."))
-    res = await asyncio.to_thread(mail.send_mail, destino, asunto, cuerpo, adjuntos, "principal")
+    if autorizado_reenvio:
+        await db.mesa_enviados.delete_one({"key": key_guard})
+    # CERROJO ATÓMICO: find_one_and_update reserva el envío como EN_PROCESO_DE_ENVIO.
+    # Si otro proceso intenta enviar la misma gestión al mismo tiempo, se bloquea al instante.
+    _stale = (datetime.now(timezone.utc) - timedelta(minutes=10)).isoformat()
+    prev = await db.mesa_enviados.find_one_and_update(
+        {"key": key_guard},
+        {"$setOnInsert": {"key": key_guard, "cliente": cliente, "subject": asunto,
+                          "estado": "EN_PROCESO_DE_ENVIO", "enviado_at": now_iso()}},
+        upsert=True)
+    if prev is not None:
+        if prev.get("estado") == "EN_PROCESO_DE_ENVIO" and (prev.get("enviado_at") or "") >= _stale:
+            raise HTTPException(status_code=409,
+                                detail="Envío a Mesa YA en proceso — intento simultáneo bloqueado por el cerrojo atómico.")
+        if prev.get("estado") == "EN_PROCESO_DE_ENVIO":
+            await db.mesa_enviados.update_one({"key": key_guard},
+                                              {"$set": {"estado": "EN_PROCESO_DE_ENVIO", "enviado_at": now_iso()}})
+        else:
+            fecha_prev = str(prev.get("enviado_at") or "")[:16].replace("T", " ")
+            raise HTTPException(status_code=403, detail=(
+                f"La gestión de {cliente} ya se envió a Mesa el {fecha_prev} "
+                "(huella de envío registrada). Para reenviarla debes ingresar la clave de administrador."))
+    from email.utils import make_msgid
+    mid = make_msgid(domain="centralmutuos.cl")
+    try:
+        res = await asyncio.to_thread(mail.send_mail, destino, asunto, cuerpo, adjuntos,
+                                      "principal", None, {"Message-ID": mid})
+    except Exception:
+        await db.mesa_enviados.delete_one({"key": key_guard})
+        raise
     if not res.get("success"):
+        await db.mesa_enviados.delete_one({"key": key_guard})
         raise HTTPException(status_code=502, detail=res.get("error", "Error de envio"))
+    # HUELLA DE ENVÍO: Message-ID registrado — prohibe cualquier re-envío de este ciclo
     await db.mesa_enviados.update_one({"key": key_guard}, {"$set": {
         "key": key_guard, "cliente": cliente, "subject": asunto,
-        "enviado_at": now_iso()}}, upsert=True)
+        "estado": "ENVIADO", "message_id": mid, "enviado_at": now_iso()}}, upsert=True)
     await db.proc_queue.update_one({"id": qid}, {"$set": {"autocorreo_enviado": True,
-                                                          "autocorreo_a": destino, "autocorreo_en": now_iso()}})
-    return {"success": True, "destino": destino, "adjunto": bool(adjuntos)}
+                                                          "autocorreo_a": destino, "autocorreo_en": now_iso(),
+                                                          "autocorreo_message_id": mid}})
+    # Huella también en la carpeta del cliente (si existe)
+    toks = [re.escape(t) for t in _norm_texto(cliente).split() if len(t) > 2][:2]
+    if toks:
+        await db.folders.update_one({"nombre": {"$regex": ".*".join(toks), "$options": "i"}},
+                                    {"$set": {"mesa_message_id": mid, "mesa_enviado_at": now_iso()}})
+    return {"success": True, "destino": destino, "adjunto": bool(adjuntos), "message_id": mid}
 
 
 
