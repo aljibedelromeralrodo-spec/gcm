@@ -431,3 +431,9 @@
 - ETHAN (principal, From "Soporte Tecnico Central Mutuos" via MAIL_FROM_NAME_SOPORTE): reportes diarios/semanales, avisos internos, despacho post-firma, alertas.
 - Cambiados a secundaria: 3214 autocorreo mesa, 8756 enviar firmados, 9052 falta-info, 9126 gestion mesa.
 - REGLA DE ORO cumplida: ningun cliente recibe correos desde Ethan. Verificado con 2 envios reales 250 OK.
+
+## 2026-08-05 — MATCH POR ID ECERT (retorno de firmados blindado)
+- enviar_a_firmar_tercero devuelve ecert_doc_id (extraido de res.documentos).
+- ecert_id guardado en firmas[] en los 3 flujos (portal /firmar, enviar-firma-completo, enviar-firma).
+- _traer_firmado_interno: match por idDocumento exacto cuando hay ecert_id (sin fallback a nombre en ese caso); prefijo [:20] solo para envios antiguos sin ID.
+- Probado con doc real finalizado: match exacto 1/1; ID inexistente => 0 candidatos.

@@ -234,6 +234,13 @@ def enviar_a_firmar_tercero(pdf_bytes, nombre_documento, firmante, comentario=""
             return enviar_a_firmar_tercero(pdf_bytes, nombre_documento, firmante,
                                            comentario, pos, firmar_todas_paginas=False)
         return {"success": False, "error": f"eCert: {msg}", "raw": res}
-    return {"success": True, "raw": {k: v for k, v in (res or {}).items() if k != "documentos"},
+    _docs_res = (res or {}).get("documentos") or []
+    _doc_id = None
+    if isinstance(_docs_res, list) and _docs_res and isinstance(_docs_res[0], dict):
+        d0 = _docs_res[0]
+        _doc_id = (d0.get("idDocumento") or d0.get("documentoId")
+                   or d0.get("doctoId") or d0.get("id"))
+    return {"success": True, "ecert_doc_id": _doc_id,
+            "raw": {k: v for k, v in (res or {}).items() if k != "documentos"},
             "paginas": n_pages, "contacto_id": (contacto or {}).get("contId")}
 

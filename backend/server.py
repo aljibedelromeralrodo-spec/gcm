@@ -8212,6 +8212,7 @@ async def firma_firmar(token: str):
     await db.set_credito.update_one({"id": doc["id"]}, {"$push": {"firmas": {
         "documento": target.name, "firmante": email, "rut": rut,
         "paginas": res.get("paginas"), "estampas": len(posiciones) or 1,
+        "ecert_id": res.get("ecert_doc_id"),
         "portal_vip": True, "enviado_en": now_iso()}}})
     return {"ok": True, "mensaje": _MSG_FIRMA_OK, "paginas": res.get("paginas")}
 
@@ -8861,6 +8862,7 @@ async def setcred_enviar_firma_completo(sid: str, payload: dict):
     await db.set_credito.update_one({"id": sid}, {"$push": {"firmas": {
         "documento": target.name, "firmante": firmante["email"], "rut": firmante["rut"],
         "paginas": res.get("paginas"), "estampas": len(posiciones) or 1,
+        "ecert_id": res.get("ecert_doc_id"),
         "completo": True, "enviado_en": now_iso()}}})
     return {"ok": True, "firmante": firmante["email"], "combinado": res_comb["combinado"],
             "documentos_incluidos": res_comb["usados"], "paginas": res.get("paginas"),
@@ -9004,7 +9006,8 @@ async def setcred_enviar_firma(sid: str, payload: dict):
         raise HTTPException(status_code=502, detail=str(res.get("error") or res.get("raw"))[:250])
     await db.set_credito.update_one({"id": sid}, {"$push": {"firmas": {
         "documento": target.name, "firmante": firmante["email"], "rut": firmante["rut"],
-        "estampas": len(posiciones) or 1, "enviado_en": now_iso()}}})
+        "estampas": len(posiciones) or 1, "ecert_id": res.get("ecert_doc_id"),
+        "enviado_en": now_iso()}}})
     return {"ok": True, "firmante": firmante["email"], "estampas": len(posiciones) or 1,
             "firmas_consumidas": 1, "raw": res.get("raw")}
 
