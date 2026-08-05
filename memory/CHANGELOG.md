@@ -400,3 +400,7 @@
 - Imports modulares OK (ai_extract, sales_engine, simulador_engine, migrup, email, folders, database).
 - MASTER_PIN movido a .env (server.py, email_service.py, crear_carpetas_escrituracion.py). Cero secretos hardcodeados.
 - ⚠️ RECORDAR: MOTOR_247_FORZADO="0" esta en .env preview (pausa anti-duplicados). En produccion configurar MOTOR_247_FORZADO=1 en variables del deploy O activar con 1 clic en Correo a Mesa si el badge dice DETENIDO.
+
+## 2026-08-04 — RESPALDO OPTIMIZADO + PASS FINAL LIMPIO
+- /admin/respaldo/export: proyeccion _RESPALDO_PROY (excluye _id/body/html/raw/binarios) + cursor batch_size(200) + limit(8000). Verificado: 200 OK, 35 colecciones, 497 archivos, 10.5s.
+- Deployment agent: PASS sin findings ni warnings. SISTEMA BLINDADO Y LISTO.
