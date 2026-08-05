@@ -506,3 +506,12 @@
 - Indicador "Sincronización: [Live/Preview] · Conexión Protegida" (detecta por hostname) + tooltip "use el botón Re-publish de la plataforma" en botón e indicador.
 - FIX CRÍTICO: los syncs de fondo ahora usan HILOS DAEMON (bunker.sync_en_background) — antes asyncio.to_thread bloqueaba el hot-reload de uvicorn (el proceso viejo moría y el nuevo no arrancaba → 502). Los restores preservan mtime (os.utime) para no re-subir 550MB tras cada restauración.
 - Verificado por screenshot e2e: login → Carpeta Clientes → click botón → mensaje "Sync OK · Mongo: conectado · 998 protegidos · 44 carpetas".
+
+## 2026-06 — REDISEÑO VIP MÓDULOS + SANEAMIENTO TÉCNICO
+- Creadas 3 vistas doradas nuevas (sidebar: tasacion, estudio, escritura):
+  - TasacionModule.js: fichas desde /api/tasacion/carpetas + SEMÁFORO de confianza verde/naranja (RUT, solicitada, terminada, PDF). Exporta estilos compartidos (vipCard, vipGoldBtn, Semaforo, useCarpetasVIP, VipHeader).
+  - EstudioTituloModule.js: fichas desde /api/estudio-titulo/carpetas + modal "hilo humano" de reparos (GET /estudio-titulo/reparos/{fid}), burbujas numeradas con estado resuelto/pendiente.
+  - EscrituraModule.js: fichas desde /api/escrituracion/carpetas + botón "🖋 GENERAR FIRMA VIP" gradiente oro pulido → sessionStorage cm_prefill_firma + onNavigate('setcredito').
+- App.js: lazy imports, 3 entradas sidebar (nav-tasacion/nav-estudio/nav-escritura), MODULE_TITLES, renders.
+- SANEAMIENTO: middleware security_headers en server.py (HSTS, nosniff, X-Frame SAMEORIGIN, Referrer-Policy, Permissions-Policy) — verificado por curl. secureStore.js (cifrado localStorage) y sanitización DOMPurify ya existían. Hook deps: 0 warnings tras fix. Funciones pesadas ya refactorizadas antes (fitz streaming). ESLint standalone sin config (CRA lo corre integrado — compila limpio).
+- Verificado por screenshot e2e: Tasación (1 ficha, 4 semáforos), Estudio (modal hilo OK), Escritura (9 fichas, 9 botones Firma VIP). Estética Maserati intacta.

@@ -30,11 +30,17 @@ const AprendizajeModule = lazy(() => import("./pages/AprendizajeModule"));
 const SaludModule = lazy(() => import("./pages/SaludModule"));
 const BuzonRescateModule = lazy(() => import("./pages/BuzonRescateModule"));
 const OportunidadesModule = lazy(() => import("./pages/OportunidadesModule"));
+const TasacionModule = lazy(() => import("./pages/TasacionModule"));
+const EstudioTituloModule = lazy(() => import("./pages/EstudioTituloModule"));
+const EscrituraModule = lazy(() => import("./pages/EscrituraModule"));
 const GlobalSearch = lazy(() => import("./components/GlobalSearch"));
 const WelcomeTour = lazy(() => import("./components/WelcomeTour"));
 
 const MODULE_TITLES = {
   dashboard: 'Dashboard',
+  tasacion: 'Tasación',
+  estudio: 'Estudio de Títulos',
+  escritura: 'Escritura',
   simulador: 'Simulador de Capacidad Crediticia',
   historial: 'Historial de Simulaciones',
   calculadora: 'Calculadora de Dividendo',
@@ -142,6 +148,9 @@ function MainApp() {
     { key: 'formato', icon: 'fa-file-pdf-o', label: 'Formato' },
     { key: 'gastos', icon: 'fa-money', label: 'Gastos Operacionales' },
     { key: 'aprobacion', icon: 'fa-trophy', label: 'Aprobación Cliente' },
+    { key: 'tasacion', icon: 'fa-home', label: 'Tasación' },
+    { key: 'estudio', icon: 'fa-balance-scale', label: 'Estudio de Títulos' },
+    { key: 'escritura', icon: 'fa-pencil-square-o', label: 'Escritura' },
     { key: 'cierres', icon: 'fa-handshake-o', label: 'Cierres' },
     ...(user.rol === 'admin' ? [{ key: 'oportunidades', icon: 'fa-diamond', label: 'Centro de Ventas VIP' }] : []),
     { key: 'salud', icon: 'fa-heartbeat', label: 'Panel de Salud' },
@@ -250,6 +259,9 @@ function MainApp() {
         {activeModule === 'rescate' && <BuzonRescateModule />}
         {activeModule === 'aprendizaje' && <AprendizajeModule />}
         {activeModule === 'oportunidades' && <OportunidadesModule />}
+        {activeModule === 'tasacion' && <TasacionModule />}
+        {activeModule === 'estudio' && <EstudioTituloModule />}
+        {activeModule === 'escritura' && <EscrituraModule onNavigate={setActiveModule} />}
         </Suspense>
       </main>
     </div>
