@@ -15,15 +15,24 @@ export default function BuzonRescateModule() {
   const [tipoDoc, setTipoDoc] = useState("");
   const [folders, setFolders] = useState([]);
   const [procesando, setProcesando] = useState(false);
-  const [destSel, setDestSel] = useState({});
+  const [historial, setHistorial] = useState(null);
 
   const DESTINOS = [
-    { value: "solicitud", label: "📋 Solicitud de Crédito → carpeta del cliente" },
-    { value: "tasacion", label: "🏠 Tasación → módulo de Tasación" },
-    { value: "estudio", label: "⚖️ Estudio de Títulos / Reparos → módulo de Títulos" },
-    { value: "otros", label: "📂 Otros → archivo general (sin ficha)" },
+    { value: "solicitud", label: "📋 Solicitud de Crédito", necesitaCliente: true },
+    { value: "tasacion", label: "🏠 Tasación", necesitaCliente: true },
+    { value: "estudio", label: "⚖️ Estudio de Títulos", necesitaCliente: true },
+    { value: "administrativo", label: "💼 Administrativo", necesitaCliente: false },
+    { value: "otros", label: "📂 Otros", necesitaCliente: false },
   ];
-  const destinoDe = (p) => destSel[p.id] || p.sugerencia || "solicitud";
+  const ETIQUETAS = { solicitud: "📋 Solicitud de Crédito", tasacion: "🏠 Tasación", estudio: "⚖️ Estudio de Títulos", administrativo: "💼 Administrativo (Admin_Empresa)", otros: "📂 Otros (archivo general)" };
+
+  const verHistorial = async () => {
+    if (historial) { setHistorial(null); return; }
+    try {
+      const r = await axios.get(`${API}/api/rescate/historial`);
+      setHistorial(r.data.historial || []);
+    } catch (e) { setMsg("Error historial: " + e.message); }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -40,27 +49,31 @@ export default function BuzonRescateModule() {
 
   useEffect(() => { load(); }, [load]);
 
-  const abrirAsignar = (p) => {
-    setAsignando({ ...p, destino: destinoDe(p) });
+  const abrirAsignar = (p, destino) => {
+    setAsignando({ ...p, destino });
     setClienteInput(p.cliente_sugerido && p.cliente_sugerido.split(" ").length >= 2 ? p.cliente_sugerido : "");
     setTipoDoc("");
     setMsg("");
   };
 
-  const ejecutarDestino = async (p) => {
-    const destino = destinoDe(p);
-    if (destino === "otros") {
-      if (!window.confirm(`¿Archivar este correo en la carpeta general SIN crear ficha de cliente?\n\n"${p.subject || "(sin asunto)"}"`)) return;
-      setProcesando(true);
+  const oneClick = async (p, destino) => {
+    const cfg = DESTINOS.find(d => d.value === destino);
+    if (cfg.necesitaCliente) {
+      const cli = (p.cliente_sugerido || "").trim();
+      if (!cli || cli.split(" ").length < 2) { abrirAsignar(p, destino); return; }
+      // ACCIÓN INMEDIATA: desaparece al instante
+      setPendientes(prev => prev.filter(x => x.id !== p.id));
       try {
-        await axios.post(`${API}/api/rescate/${p.id}/clasificar`, { destino: "otros" }, { timeout: 60000 });
-        setMsg("✅ Correo archivado en carpeta general — sin ficha de cliente.");
-        load();
-      } catch (e) { setMsg("Error: " + (e.response?.data?.detail || e.message)); }
-      setProcesando(false);
+        await axios.post(`${API}/api/rescate/${p.id}/clasificar`, { destino, cliente: cli }, { timeout: 120000 });
+        setMsg(`✅ ${ETIQUETAS[destino]} → "${cli}". Correo clasificado.`);
+      } catch (e) { setMsg("Error: " + (e.response?.data?.detail || e.message)); load(); }
       return;
     }
-    abrirAsignar(p);
+    setPendientes(prev => prev.filter(x => x.id !== p.id));
+    try {
+      await axios.post(`${API}/api/rescate/${p.id}/clasificar`, { destino }, { timeout: 60000 });
+      setMsg(`✅ ${ETIQUETAS[destino]}. Correo clasificado.`);
+    } catch (e) { setMsg("Error: " + (e.response?.data?.detail || e.message)); load(); }
   };
 
   const descartar = async (p) => {
@@ -100,21 +113,39 @@ export default function BuzonRescateModule() {
     <div style={{ padding: "1.5rem", color: "var(--white)", maxWidth: 1000 }} data-testid="rescate-module">
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: "0.5rem" }}>
         <h2 style={{ margin: 0, color: "var(--gold)", fontSize: "1.3rem" }}><i className="fa fa-life-ring" style={{ marginRight: 8 }} />Buzón de Rescate — Por Clasificar</h2>
-        <button onClick={load} data-testid="rescate-refresh" style={{ marginLeft: "auto", background: "rgba(255,255,255,0.1)", border: "none", color: "#fff", borderRadius: 0, padding: "0.4rem 0.9rem", cursor: "pointer", fontWeight: 700 }}>
+        <button onClick={verHistorial} data-testid="rescate-historial-btn" style={{ marginLeft: "auto", background: historial ? "linear-gradient(135deg, #BF953F, #FCF6BA, #B38728)" : "rgba(10,10,12,0.9)", border: "1px solid rgba(212,175,55,0.55)", color: historial ? "#0a0a0a" : "#d4af37", borderRadius: 0, padding: "0.4rem 0.9rem", cursor: "pointer", fontWeight: 800 }}>
+          <i className="fa fa-history" style={{ marginRight: 6 }} />{historial ? "Volver a Por Clasificar" : "Historial de Clasificados"}
+        </button>
+        <button onClick={load} data-testid="rescate-refresh" style={{ background: "rgba(255,255,255,0.1)", border: "none", color: "#fff", borderRadius: 0, padding: "0.4rem 0.9rem", cursor: "pointer", fontWeight: 700 }}>
           <i className="fa fa-refresh" style={{ marginRight: 6 }} />Actualizar
         </button>
       </div>
-      <p style={{ fontSize: "0.85rem", opacity: 0.7, marginTop: 0 }}>Correos que el sistema no logró clasificar automáticamente. Asígnalos manualmente y se procesarán como si hubieran sido automáticos.</p>
+      <p style={{ fontSize: "0.85rem", opacity: 0.7, marginTop: 0 }}>Un click en el destino y el correo desaparece de la lista. Los clasificados solo se ven en el Historial.</p>
       {msg && <div data-testid="rescate-msg" style={{ padding: "0.6rem 1rem", borderRadius: 0, background: msg.startsWith("✅") ? "rgba(16,217,142,0.12)" : "rgba(225,29,72,0.12)", border: `1px solid ${msg.startsWith("✅") ? "#10d98e" : "#e11d48"}`, marginBottom: "0.8rem", fontSize: "0.85rem" }}>{msg}</div>}
 
-      {loading && <div style={{ textAlign: "center", padding: "2rem" }}><i className="fa fa-spinner fa-spin" style={{ fontSize: "1.6rem", color: "var(--gold)" }} /></div>}
-      {!loading && pendientes.length === 0 && (
+      {historial && (
+        <div data-testid="rescate-historial">
+          {historial.length === 0 && <div style={{ ...card, textAlign: "center", opacity: 0.6 }}>Sin correos clasificados aún.</div>}
+          {historial.map((h, i) => (
+            <div key={h.id} style={{ ...card, opacity: 0.85 }} data-testid={`rescate-hist-${i}`}>
+              <div style={{ fontWeight: 700, fontSize: "0.9rem" }}>{h.subject || "(sin asunto)"}</div>
+              <div style={{ fontSize: "0.78rem", opacity: 0.65, marginTop: 3 }}>De: {h.sender} · {(h.clasificado_en || h.archivado_en || "").slice(0, 16).replace("T", " ")}</div>
+              <div style={{ marginTop: 6, fontSize: "0.8rem", fontWeight: 800, color: "#d4af37" }}>
+                {ETIQUETAS[h.destino] || h.estado}{h.cliente_final ? ` → ${h.cliente_final}` : ""}{h.cliente ? ` → ${h.cliente}` : ""}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {!historial && loading && <div style={{ textAlign: "center", padding: "2rem" }}><i className="fa fa-spinner fa-spin" style={{ fontSize: "1.6rem", color: "var(--gold)" }} /></div>}
+      {!historial && !loading && pendientes.length === 0 && (
         <div style={{ ...card, textAlign: "center", color: "#10d98e" }} data-testid="rescate-vacio">
           <i className="fa fa-check-circle" style={{ fontSize: "1.6rem" }} /><br />No hay correos pendientes por clasificar. Todo procesado automáticamente.
         </div>
       )}
 
-      {pendientes.map((p, i) => (
+      {!historial && pendientes.map((p, i) => (
         <div key={p.id} style={card} data-testid={`rescate-item-${i}`}>
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
             <div style={{ flex: 1, minWidth: 250 }}>
@@ -129,19 +160,27 @@ export default function BuzonRescateModule() {
                 </div>
               )}
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 300 }}>
-              <select value={destinoDe(p)} onChange={e => setDestSel(prev => ({ ...prev, [p.id]: e.target.value }))}
-                data-testid={`rescate-destino-${i}`}
-                style={{ ...inp, border: "1px solid rgba(212,175,55,0.5)", fontWeight: 700 }}>
-                {DESTINOS.map(d => <option key={d.value} value={d.value}>{d.label}{p.sugerencia === d.value ? " ★ sugerido" : ""}</option>)}
-              </select>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={() => ejecutarDestino(p)} disabled={procesando} data-testid={`rescate-asignar-${i}`}
-                  style={{ flex: 1, background: "var(--gold)", border: "none", color: "#1a1f2e", borderRadius: 0, padding: "0.55rem 1.1rem", cursor: "pointer", fontWeight: 800, fontSize: "0.85rem" }}>
-                  <i className="fa fa-check" style={{ marginRight: 6 }} />Confirmar Destino
-                </button>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 340 }}>
+              <div style={{ fontSize: "0.68rem", letterSpacing: "1.5px", opacity: 0.5, color: "#fff", fontWeight: 700 }}>DESTINO DEFINITIVO — UN CLICK{p.sugerencia ? ` · ★ sugerido: ${(DESTINOS.find(d => d.value === p.sugerencia) || {}).label || ""}` : ""}</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {DESTINOS.map(d => (
+                  <button key={d.value} onClick={() => oneClick(p, d.value)} disabled={procesando}
+                    data-testid={`rescate-dest-${d.value}-${i}`}
+                    title={d.necesitaCliente && !(p.cliente_sugerido || "").trim() ? "Pedirá elegir cliente" : ""}
+                    style={{
+                      background: p.sugerencia === d.value
+                        ? "linear-gradient(135deg, #BF953F, #FCF6BA, #B38728)"
+                        : "rgba(10,10,12,0.9)",
+                      color: p.sugerencia === d.value ? "#0a0a0a" : "#d4af37",
+                      border: "1px solid rgba(212,175,55,0.55)", borderRadius: 0,
+                      padding: "0.5rem 0.8rem", cursor: "pointer", fontWeight: 800, fontSize: "0.78rem",
+                      boxShadow: p.sugerencia === d.value ? "0 0 14px -4px rgba(212,175,55,0.8)" : "none",
+                    }}>
+                    {d.label}{p.sugerencia === d.value ? " ★" : ""}
+                  </button>
+                ))}
                 <button onClick={() => descartar(p)} data-testid={`rescate-descartar-${i}`} disabled={procesando}
-                  style={{ background: "rgba(225,29,72,0.12)", border: "1px solid rgba(225,29,72,0.55)", color: "#fb7185", borderRadius: 0, padding: "0.55rem 1.1rem", cursor: "pointer", fontWeight: 800, fontSize: "0.85rem" }}>
+                  style={{ background: "rgba(225,29,72,0.12)", border: "1px solid rgba(225,29,72,0.55)", color: "#fb7185", borderRadius: 0, padding: "0.5rem 0.8rem", cursor: "pointer", fontWeight: 800, fontSize: "0.78rem" }}>
                   <i className="fa fa-trash-o" />
                 </button>
               </div>

@@ -4263,7 +4263,7 @@ def _regla_solicitud_ok(item):
 CLAVE_FORZAR_CARPETA = os.environ.get("MASTER_PIN", "")
 
 
-DESTINOS_RESCATE = ("solicitud", "tasacion", "estudio", "otros")
+DESTINOS_RESCATE = ("solicitud", "tasacion", "estudio", "administrativo", "otros")
 
 
 def _sugerir_destino(texto):
@@ -4371,6 +4371,28 @@ async def rescate_clasificar(pid: str, payload: dict):
     pend = await db.correos_pendientes.find_one({"$or": [{"id": pid}, {"qid": pid}]})
     if not pend:
         raise HTTPException(status_code=404, detail="Correo pendiente no encontrado")
+    if destino == "administrativo":
+        qid = pend.get("qid") or ""
+        src = PROC_DIR / qid if qid else None
+        guardados = []
+        if src and src.exists():
+            for f in sorted(src.iterdir()):
+                if f.is_file():
+                    rel = await asyncio.to_thread(fsvc.guardar_archivo, "Admin_Empresa",
+                                                  f.name, f.read_bytes(), "99_otros")
+                    guardados.append(rel)
+        await db.folders.update_one(
+            {"nombre": "Admin_Empresa"},
+            {"$setOnInsert": {"id": str(uuid.uuid4()), "nombre": "Admin_Empresa", "rut": "",
+                              "created_at": now_iso(), "archivos": []}}, upsert=True)
+        await db.correos_pendientes.update_one({"id": pend["id"]}, {"$set": {
+            "estado": "procesado_administrativo", "destino": "administrativo",
+            "clasificado_en": now_iso(), "archivos_destino": guardados}})
+        if qid:
+            await db.proc_queue.update_one({"id": qid}, {"$set": {"status": "administrativo"}})
+        bunker.sync_en_background()
+        return {"ok": True, "destino": "administrativo", "archivos": guardados,
+                "detalle": "Correo movido a la carpeta Admin_Empresa"}
     if destino == "otros":
         import shutil as _sh
         qid = pend.get("qid") or ""
@@ -4384,7 +4406,8 @@ async def rescate_clasificar(pid: str, payload: dict):
                     _sh.move(str(f), str(dest / f.name))
                     movidos.append(f.name)
         await db.correos_pendientes.update_one({"id": pend["id"]}, {"$set": {
-            "estado": "archivado_otros", "archivado_en": now_iso(), "archivo_general": movidos}})
+            "estado": "archivado_otros", "destino": "otros", "clasificado_en": now_iso(),
+            "archivado_en": now_iso(), "archivo_general": movidos}})
         if qid:
             await db.proc_queue.update_one({"id": qid}, {"$set": {"status": "archivado_otros"}})
         return {"ok": True, "destino": "otros", "archivados": movidos,
@@ -4398,7 +4421,18 @@ async def rescate_clasificar(pid: str, payload: dict):
         await db.folders.update_one(
             {"nombre": {"$regex": f"^{re.escape(cliente)}$", "$options": "i"}},
             {"$set": {campo: now_iso()}})
+    await db.correos_pendientes.update_one({"id": pend["id"]}, {"$set": {
+        "estado": f"procesado_{destino}", "destino": destino,
+        "cliente_final": cliente, "clasificado_en": now_iso()}})
     return {"ok": True, "destino": destino, **(res or {})}
+
+
+@api.get("/rescate/historial")
+async def rescate_historial():
+    """Historial de correos ya clasificados (no vuelven a 'Por Clasificar')."""
+    docs = await db.correos_pendientes.find(
+        {"estado": {"$ne": "pendiente"}}).sort("clasificado_en", -1).limit(100).to_list(100)
+    return {"historial": [clean(d) for d in docs]}
 
 
 @api.post("/procesamiento/reevaluar")

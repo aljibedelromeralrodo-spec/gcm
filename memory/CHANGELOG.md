@@ -533,3 +533,10 @@
 - XSS: DOMPurify en todos los dangerouslySetInnerHTML ✅ · localStorage cifrado (secureStore.js) ✅ · 5 cabeceras SSL/seguridad activas ✅ · hooks 0 warnings ✅ · linter CRA integrado compila limpio ✅ · funciones pesadas ya refactorizadas (fitz streaming, caché OCR, timeouts 60s, hilos daemon) ✅.
 ### Bug corregido
 - Línea huérfana en server.py (edit corrupto por interrupción) rompía el arranque → eliminada; endpoint clasificar reaplicado.
+
+## 2026-06 — CLASIFICACIÓN ONE-CLICK + HISTORIAL
+- DESTINOS_RESCATE ahora incluye "administrativo" (5 destinos): solicitud, tasacion, estudio, administrativo (→ carpeta Admin_Empresa/99_otros + folders doc sin RUT), otros (archivo general + descarte).
+- rescate_clasificar marca estado procesado_<destino>/archivado_otros + campos destino, cliente_final, clasificado_en → los clasificados NO vuelven a "pendientes".
+- GET /api/rescate/historial: últimos 100 clasificados con destino y fecha.
+- BuzonRescateModule: reemplazado dropdown+confirmar por 5 BOTONES one-click oro/negro (rescate-dest-{destino}-{i}), sugerido resaltado con gradiente + ★. Acción inmediata: el correo desaparece al instante (optimistic removal). Si el destino necesita cliente y no hay sugerido válido → abre modal selector. Botón "Historial de Clasificados" (rescate-historial-btn) alterna la vista.
+- Testeado e2e: administrativo → archivo en Admin_Empresa/99_otros, desaparece de pendientes, aparece en historial. Screenshots verificados (5 botones + historial con 4 items).
