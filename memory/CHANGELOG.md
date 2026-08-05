@@ -484,3 +484,14 @@
 - LIMPIEZA IGNACIO: 2 archivos de IGNACIO JOAQUIN EDUARDO TOBAR WERNER (RUT 20.168.743-8) retirados físicamente de carpeta WERNER → Buzón de Rescate (qid rescate-ley-rut-*). Causa raíz: apellido "WERNER" compartido.
 - Testing: backend 100% curl (422/422/200/DELETE), frontend 100% testing agent (iteration_25.json).
 - NOTA: la limpieza de Ignacio se aplicó en PREVIEW; producción requiere redeploy + limpieza propia si aplica.
+
+## 2026-06 — RECONSTRUCCIÓN TÉCNICA DEFINITIVA + REGLAMENTO INVIOLABLE
+- LEY DEL RUT en email_service.py: search_attachments_by_person devuelve [] sin RUT de carpeta; eliminado el fallback de candidatos sueltos ("últimos correos" sin match de cabecera); el correo DEBE contener el RUT (remitente ya no basta).
+- LEY DEL RUT por archivo: helper _guardar_con_ley_rut + _rescate_ley_rut en server.py aplicado a los 4 puntos de guardado desde correo (importar, forzar carpeta, modo estudio, save-all-attachments). Sin match → Buzón de Rescate + alerta.
+- Ruteo por RUT del codeudor: si el archivo trae SOLO el RUT del codeudor → subcarpeta 05_codeudor.
+- BÚNKER GridFS (bunker.py): espejo storage/{clientes,autocorreo,proc,set_credito} → GridFS colección "bunker". restaurar_si_vacio() al startup (pod nuevo restaura todo), _bunker_loop sync cada 5 min, hooks tras upload/delete de aprobación. Testeado e2e: 998 archivos, restore 527 clientes en 1.7s byte-perfect.
+- REGLA DE ORO 0586 en _blindaje_simulaciones: simulaciones con "Gastos Operacionales" BLOQUEAN el envío (ValueError → send_mail devuelve error controlado + log correos_smtp_log regla oro_0586). Solo clave 0586 lo omite (fix: clave vacía ya no bypassa). 4/4 unit tests.
+- MEMORIA LIVIANA: _regen_carpeta_cliente refactorizada a fitz streaming (insert_pdf + close por archivo, save con garbage=3).
+- INTEGRIDAD: prompt de clasificar_y_extraer reforzado con "PROHIBIDO INVENTAR".
+- Regresión backend: 11/11 PASS (iteration_26.json). Tests reutilizables en /app/backend/tests/test_regresion_blindaje.py (correr con -n 0).
+- PENDIENTE (observación testing): añadir timeouts a llamadas LiteLLM/OCR — el backend se congeló una vez bajo carga concurrente (mitigación: supervisorctl restart).
