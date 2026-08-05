@@ -8,7 +8,7 @@ from pymongo import MongoClient
 import gridfs
 
 ROOT = Path(__file__).parent / "storage"
-SUBDIRS = ("clientes", "autocorreo", "proc", "set_credito")
+SUBDIRS = ("clientes", "autocorreo", "proc", "sets_de_credito", "archivo_general")
 
 _cli = None
 _lock = threading.Lock()

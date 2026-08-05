@@ -540,3 +540,13 @@
 - GET /api/rescate/historial: últimos 100 clasificados con destino y fecha.
 - BuzonRescateModule: reemplazado dropdown+confirmar por 5 BOTONES one-click oro/negro (rescate-dest-{destino}-{i}), sugerido resaltado con gradiente + ★. Acción inmediata: el correo desaparece al instante (optimistic removal). Si el destino necesita cliente y no hay sugerido válido → abre modal selector. Botón "Historial de Clasificados" (rescate-historial-btn) alterna la vista.
 - Testeado e2e: administrativo → archivo en Admin_Empresa/99_otros, desaparece de pendientes, aparece en historial. Screenshots verificados (5 botones + historial con 4 items).
+
+## 2026-06 — BÚNKER DE CIERRE (SET DE CRÉDITO) + VISOR MASERATI
+- ALMACENAMIENTO INDEPENDIENTE: SETCRED_DIR → storage/sets_de_credito (migrado desde set_credito, 29MB). bunker.py SUBDIRS actualizado (sets_de_credito + archivo_general). El set NUNCA mezcla con carpeta del cliente: _set_sync_desde_carpeta DESACTIVADA (retorna []).
+- INGESTA ESPECIALIZADA: ya existía _setcred_auto_loop cada 10 min leyendo evaluacionesmutuos@gmail.com → expedientes directo al set del cliente.
+- IDENTIFICACIÓN DE FORMULARIOS: _set_archivos reconoce por nombre: seguros (desgravamen/seguro/cesant/incendio/sismo), declaracion_salud (dps/salud), solicitud_credito (solicitud/mutuo).
+- _set_archivos_orden(): lista única para COMBINAR y SEPARAR post-firma (mismo orden, sin desalineación); excluye COMBINADO_SET/FIRMADO/firmados/.
+- Combinado Zurita testeado: 9 formularios en orden de protocolo, 0 exclusiones, preview inline HTTP 200 (5.7MB).
+- VISOR MASERATI: botón setcred-preview-combinado → POST /combinar → modal vidrio negro/borde oro (setcred-visor-maserati) con iframe inline del PDF (hoja por hoja con visor nativo del navegador) + lista de orden + excluidos por RUT. Verificado por screenshot.
+- DETECCIÓN DE IDENTIDAD: _extraer_num_documento() busca "Número de documento" en cédulas del set/carpeta al abrir set (setcred_get); se guarda en set doc y se muestra chip verde 🪪 en la ficha (Zurita sin cédula en set → no detectado, correcto).
+- Saneamiento re-verificado (4ª pasada): headers SSL activos, XSS/DOMPurify, secureStore, hooks 0 warnings, compilación limpia.

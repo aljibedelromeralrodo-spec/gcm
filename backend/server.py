@@ -8775,7 +8775,7 @@ async def firma_og_image(token: str):
 # ---------------------------------------------------------------------------
 import migrup_service as migrup
 
-SETCRED_DIR = ROOT_DIR / "storage" / "set_credito"
+SETCRED_DIR = ROOT_DIR / "storage" / "sets_de_credito"
 SETCRED_DIR.mkdir(parents=True, exist_ok=True)
 SET_DOC_TIPOS = ["seguros", "solicitud_credito", "declaracion_salud"]
 SET_DOC_LABELS = {"seguros": "Seguros", "solicitud_credito": "Solicitud de crédito",
@@ -8805,6 +8805,14 @@ def _set_archivos(nombre):
             if low.startswith(t):
                 tipo = t
                 break
+        if tipo == "otro":
+            # IDENTIFICACIÓN DE FORMULARIOS: reconoce los formularios de cierre por contenido del nombre
+            if re.search(r"desgravamen|seguro|cesant|incendio|sismo", low):
+                tipo = "seguros"
+            elif re.search(r"dps|salud", low):
+                tipo = "declaracion_salud"
+            elif re.search(r"solicitud|mutuo", low):
+                tipo = "solicitud_credito"
         out.append({"nombre": p.name, "ruta": rel, "tipo": tipo,
                     "codeudor": es_codeudor, "tamano": p.stat().st_size})
     out.sort(key=lambda a: (a["codeudor"], a["ruta"]))
@@ -8874,6 +8882,34 @@ async def setcred_create(payload: dict):
     return _set_public(doc)
 
 
+def _set_sync_desde_carpeta(nombre):
+    """DESACTIVADO (Búnker de Cierre): el Set de Crédito NUNCA mezcla archivos con la
+    carpeta general del cliente. Los expedientes llegan solo desde evaluacionesmutuos."""
+    return []
+
+
+NUM_DOC_RX = re.compile(
+    r"n[uú]?m?e?r?o?\s*(?:de)?\s*documento[:\s]*([A-Z]?\.?\d[\d\.]{6,12})", re.I)
+
+
+def _extraer_num_documento(nombre):
+    """DETECCIÓN DE IDENTIDAD: busca el Nº de documento del carnet en las cédulas."""
+    candidatos = []
+    for base in (_set_dir(nombre), fsvc.folder_dir(nombre)):
+        if base.exists():
+            candidatos += [p for p in base.rglob("*.pdf")
+                           if re.search(r"cedula|carnet|c\.i\.|identidad", p.name, re.I)]
+    for p in candidatos[:4]:
+        try:
+            texto, _m = ocr_service.extraer_texto(p.read_bytes(), p.name)
+        except Exception:
+            continue
+        m = NUM_DOC_RX.search(texto or "")
+        if m:
+            return m.group(1).replace(".", "")
+    return ""
+
+
 async def _get_set(sid):
     doc = await db.set_credito.find_one({"id": sid})
     if not doc:
@@ -8883,7 +8919,14 @@ async def _get_set(sid):
 
 @api.get("/set-credito/sets/{sid}")
 async def setcred_get(sid: str):
-    return _set_public(await _get_set(sid))
+    doc = await _get_set(sid)
+    nombre = doc.get("nombre", "")
+    if not doc.get("num_documento"):
+        num = await asyncio.to_thread(_extraer_num_documento, nombre)
+        if num:
+            await db.set_credito.update_one({"id": sid}, {"$set": {"num_documento": num}})
+            doc["num_documento"] = num
+    return _set_public(doc)
 
 
 @api.delete("/set-credito/sets/{sid}")
@@ -9097,6 +9140,16 @@ async def setcred_download(sid: str, file_path: str, inline: bool = False):
                         headers={"Content-Disposition": f'{disp}; filename="{target.name}"'})
 
 
+def _set_archivos_orden(nombre):
+    """Lista ordenada del expediente de cierre. El búnker del set es EXCLUSIVO
+    (solo formularios de cierre), así que combina/separa todo menos combinados/firmados."""
+    orden = {t: i for i, t in enumerate(SET_DOC_TIPOS)}
+    archivos = sorted(_set_archivos(nombre), key=lambda a: (orden.get(a["tipo"], 99), a["nombre"]))
+    return [a for a in archivos
+            if not a["nombre"].startswith(("COMBINADO_SET", "FIRMADO"))
+            and "firmados/" not in a.get("ruta", "")]
+
+
 def _set_combinar(nombre):
     """Une todos los PDFs del set (excepto el combinado previo) en uno solo.
     REGLA IVANA: exige RUT titular y excluye PDFs cuyo RUT no sea el del titular."""
@@ -9117,8 +9170,7 @@ def _set_combinar(nombre):
     writer = PdfWriter()
     usados = []
     excluidos_rut = []
-    orden = {t: i for i, t in enumerate(SET_DOC_TIPOS)}
-    archivos = sorted(_set_archivos(nombre), key=lambda a: (orden.get(a["tipo"], 99), a["nombre"]))
+    archivos = _set_archivos_orden(nombre)
     for a in archivos:
         if a["nombre"].startswith("COMBINADO_SET"):
             continue
@@ -9155,8 +9207,7 @@ def _set_separar_firmado(nombre, signed_bytes, ecert_id=""):
     import hashlib
     base = _set_dir(nombre)
     reader = PdfReader(io.BytesIO(signed_bytes))
-    orden = {t: i for i, t in enumerate(SET_DOC_TIPOS)}
-    archivos = sorted(_set_archivos(nombre), key=lambda a: (orden.get(a["tipo"], 99), a["nombre"]))
+    archivos = _set_archivos_orden(nombre)
     dest = base / "firmados"
     dest.mkdir(parents=True, exist_ok=True)
     master = f"COMBINADO_SET_{fsvc.safe_name(nombre)}"[:20] + "_FIRMADO_COMPLETO.pdf"

@@ -19,6 +19,7 @@ export default function SetCreditoModule({ onNavigate }) {
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState("");
   const [firmaModal, setFirmaModal] = useState(null);
+  const [previewCombinado, setPreviewCombinado] = useState(null);
   const [contactoModal, setContactoModal] = useState(null);
   const [ocrLoading, setOcrLoading] = useState(false);
   const [correosEnvio, setCorreosEnvio] = useState("danielagalindo@centralmutuos.cl, victoriavilches@centralmutuos.cl");
@@ -131,6 +132,21 @@ export default function SetCreditoModule({ onNavigate }) {
     nombres: current.nombre, aPaterno: "", aMaterno: "",
     rut: current.rut || "", email: current.email || "", comentario: "",
   });
+
+  const previsualizarCombinado = async () => {
+    if (!current) return;
+    setLoading(true); setMsg("");
+    try {
+      const r = await axios.post(`${API}/api/set-credito/sets/${current.id}/combinar`, {}, { timeout: 120000 });
+      setPreviewCombinado({
+        nombre: r.data.combinado,
+        usados: r.data.usados || [],
+        excluidos: r.data.excluidos_rut || [],
+        url: `${API}/api/set-credito/sets/${current.id}/download/${encodeURIComponent(r.data.combinado)}?inline=true`,
+      });
+    } catch (e) { setMsg("Error: " + (e.response?.data?.detail || e.message)); }
+    setLoading(false);
+  };
 
   const abrirFirmaCompleta = () => setFirmaModal({
     completo: true, doc_nombre: `Set completo de ${current.nombre} (todas las hojas)`,
@@ -282,6 +298,11 @@ export default function SetCreditoModule({ onNavigate }) {
             <div>
               <button data-testid="setcred-volver" onClick={() => setCurrent(null)} style={{ ...btn("rgba(255,255,255,0.1)", true), marginRight: "0.8rem" }}><i className="fa fa-arrow-left" /> Volver</button>
               <b style={{ fontSize: "1.15rem", color: "var(--gold)" }}>{current.nombre}</b> <span style={{ opacity: 0.6 }}>{current.rut} · {current.email || "sin correo"}</span>
+              {current.num_documento && (
+                <span data-testid="setcred-num-doc" style={{ marginLeft: 10, fontSize: "0.75rem", fontWeight: 800, padding: "0.25rem 0.6rem", background: "rgba(16,217,142,0.12)", border: "1px solid rgba(16,217,142,0.4)", color: "#10d98e" }}>
+                  🪪 Nº Documento: {current.num_documento}
+                </span>
+              )}
             </div>
             <button data-testid="setcred-eliminar" onClick={() => eliminarSet(current.id)} style={btn("#e11d48", true)}><i className="fa fa-trash" /> Eliminar set</button>
             <button data-testid="setcred-link-vip" onClick={async () => {
@@ -328,6 +349,10 @@ export default function SetCreditoModule({ onNavigate }) {
               <div style={{ fontSize: "0.88rem" }}>
                 <b style={{ color: "var(--gold)" }}>Firmar todo de una vez</b> — combina los {current.archivos.filter(a => !a.nombre.startsWith("COMBINADO_SET")).length} documentos en un solo PDF. La firma eCert va en la primera etiqueta "Firma cliente" y en las demás queda la marca de Firma Electrónica Avanzada. <span style={{ opacity: 0.7 }}>(consume solo 1 firma de terceros)</span>
               </div>
+              <button data-testid="setcred-preview-combinado" onClick={previsualizarCombinado} disabled={loading}
+                style={{ ...btn("transparent"), border: "1px solid rgba(212,175,55,0.6)", color: "#d4af37", fontWeight: 800 }}>
+                <i className="fa fa-search" style={{ marginRight: "0.4rem" }} />🔍 Previsualizar Combinado
+              </button>
               <button data-testid="setcred-firmar-todo" onClick={abrirFirmaCompleta} disabled={!migrup?.connected || loading} style={btn("var(--gold)")}><i className="fa fa-check-square-o" style={{ marginRight: "0.4rem" }} />Combinar y enviar a firmar todo</button>
             </div>
           )}
@@ -442,6 +467,29 @@ export default function SetCreditoModule({ onNavigate }) {
               <button onClick={() => setFirmaModal(null)} style={btn("rgba(255,255,255,0.15)", true)}>Cancelar</button>
               <button data-testid="firma-enviar" onClick={enviarFirma} disabled={loading} style={btn("var(--gold)", true)}><i className="fa fa-paper-plane" style={{ marginRight: "0.4rem" }} />Enviar a firmar</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {previewCombinado && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)", zIndex: 150, display: "flex", alignItems: "center", justifyContent: "center", padding: "1.5rem" }} onClick={() => setPreviewCombinado(null)}>
+          <div data-testid="setcred-visor-maserati" onClick={e => e.stopPropagation()}
+            style={{ width: "min(1000px, 96vw)", height: "90vh", display: "flex", flexDirection: "column", background: "#0a0a0c", border: "1px solid rgba(212,175,55,0.55)", borderRadius: 0, boxShadow: "0 0 60px -10px rgba(212,175,55,0.35), 0 40px 80px -20px rgba(0,0,0,0.95)" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.9rem 1.2rem", borderBottom: "1px solid rgba(212,175,55,0.3)" }}>
+              <div>
+                <div style={{ color: "#d4af37", fontWeight: 800, fontSize: "1.05rem" }}>🔍 Visor Maserati — {previewCombinado.nombre}</div>
+                <div style={{ color: "#fff", opacity: 0.55, fontSize: "0.75rem", marginTop: 3 }}>
+                  {previewCombinado.usados.length} documento(s) del expediente, en este orden: {previewCombinado.usados.join(" → ")}
+                  {previewCombinado.excluidos.length > 0 && <span style={{ color: "#f59e0b" }}> · ⚠ {previewCombinado.excluidos.length} excluido(s) por RUT ajeno</span>}
+                </div>
+              </div>
+              <button data-testid="setcred-visor-cerrar" onClick={() => setPreviewCombinado(null)}
+                style={{ background: "transparent", border: "1px solid rgba(212,175,55,0.6)", color: "#d4af37", borderRadius: 0, padding: "0.4rem 1rem", cursor: "pointer", fontWeight: 800 }}>
+                Cerrar ✕
+              </button>
+            </div>
+            <iframe title="Previsualización combinado" src={previewCombinado.url}
+              style={{ flex: 1, width: "100%", border: "none", background: "#161618" }} />
           </div>
         </div>
       )}
