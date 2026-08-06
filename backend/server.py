@@ -8847,7 +8847,8 @@ async def firma_firmar(token: str):
     del pdf_bytes
     gc.collect()
     if not res.get("success"):
-        raise HTTPException(status_code=502, detail=f"No fue posible enviar la firma: {str(res.get('error'))[:180]}")
+        # 400 (no 502): los proxies reemplazan los 502 por HTML genérico y ocultan el motivo real
+        raise HTTPException(status_code=400, detail=f"No fue posible enviar la firma: {str(res.get('error'))[:180]}")
     await db.firma_links.update_one({"token": token}, {"$set": {
         "firma_enviada_en": now_iso(), "firma_ecert": res.get("raw") or {}}})
     await db.set_credito.update_one({"id": doc["id"]}, {"$push": {"firmas": {

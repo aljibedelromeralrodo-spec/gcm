@@ -612,3 +612,13 @@
   el estilo del portal; portal verificado en viewport móvil sin enlaces externos.
 - Link real de Gerardo Barrera: /api/firma/c34385901892 (RUT y correo pre-cargados).
 - Carpeta "Test Protocolo Dual" y registros de prueba eliminados tras el testing.
+
+## Sesión 2026-08-06 (Prueba Real de Firma — Gerardo)
+- Disparé la firma real desde el portal móvil: el motor ejecutó TODO el flujo y eCert respondió
+  "No quedan firmas propias" — el RUT de Gerardo (14.161.757-5) es el DUEÑO de la cuenta eCert,
+  por lo que su firma consume firmas PROPIAS (agotadas), no las ~21 de terceros.
+- FIX: firma_firmar ahora devuelve 400 (no 502) porque el proxy/Cloudflare reemplaza los 502 con
+  HTML genérico y ocultaba el motivo real. El portal ya muestra el mensaje exacto de eCert.
+- Semáforo estima propias=1 (adicionales 3 - usadas 2) pero eCert real dice 0 — manda eCert.
+- PENDIENTE USUARIO: comprar firmas propias en migrup.cl → AJUSTES y reintentar el mismo link
+  /api/firma/c34385901892 para ver el mensaje dorado.
