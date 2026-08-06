@@ -303,6 +303,81 @@ def merge_codeudor(nombre):
     return {"merged_file": merged_name if used else "", "files_used": used, "errors": errors}
 
 
+def reclasificar_codeudor(nombre, codeudor_nombre="", codeudor_rut=""):
+    """VERIFICACIÓN DUAL: mueve a 05_codeudor los PDFs del codeudor que quedaron en la
+    raíz u otras subcarpetas del titular (prefijo CODEUDOR_ o RUT exclusivo del codeudor)."""
+    import shutil
+    base = folder_dir(nombre)
+    if not base.exists():
+        return []
+    rut_c = _norm_rut_fs(codeudor_rut)
+    dest = base / "05_codeudor" / (safe_name(codeudor_nombre) if codeudor_nombre else "")
+    movidos = []
+    for p in sorted(base.rglob("*.pdf")):
+        rel = p.relative_to(base).as_posix()
+        if rel.startswith(("05_codeudor/", "00_combinados/", "07_estudio_titulo/")) or es_combinado(p.name):
+            continue
+        es_cod = p.name.upper().startswith("CODEUDOR_")
+        if not es_cod and len(rut_c) >= 7:
+            ruts = _ruts_personas(ruts_de_pdf_cache(p))
+            es_cod = bool(ruts) and ruts == {rut_c}
+        if not es_cod:
+            continue
+        dest.mkdir(parents=True, exist_ok=True)
+        target = dest / (p.name if p.name.upper().startswith("CODEUDOR_") else f"CODEUDOR_{p.name}")
+        if target.exists():
+            p.unlink()
+        else:
+            shutil.move(str(p), str(target))
+        movidos.append(target.relative_to(base).as_posix())
+    return movidos
+
+
+CODEUDOR_MIN_CATS = ("cedula", "liquidacion")
+
+
+def merge_protocolo_codeudor(nombre, codeudor_nombre="", codeudor_rut="", solo_si_minimos=False):
+    """PROTOCOLO DUAL: genera COMBINADO_PROTOCOLO_CODEUDOR_<Nombre>.pdf DENTRO de
+    05_codeudor bajo las mismas reglas del titular. Match por RUT: solo entran
+    documentos cuyo OCR contenga el RUT del codeudor (o sin RUTs de persona)."""
+    base = folder_dir(nombre)
+    sub = base / "05_codeudor"
+    out = {"merged_file": "", "files_used": [], "errors": [], "excluidos_rut": [], "faltan_minimos": []}
+    if not sub.exists():
+        return out
+    rut_c = _norm_rut_fs(codeudor_rut)
+
+    def _cat(p):
+        return cat_de_archivo(re.sub(r"^CODEUDOR_", "", p.name, flags=re.I), "")
+
+    files = [p for p in sorted(sub.rglob("*.pdf")) if not es_combinado(p.name)]
+    cats = {_cat(p) for p in files}
+    out["faltan_minimos"] = [c for c in CODEUDOR_MIN_CATS if c not in cats]
+    if solo_si_minimos and out["faltan_minimos"]:
+        return out
+    orden = {"cedula": 0, "liquidacion": 1, "afp": 2, "cmf": 3, "imp_renta": 4, "boletas": 5}
+    files.sort(key=lambda p: (orden.get(_cat(p), 9), p.name))
+    writer = PdfWriter()
+    for p in files:
+        if len(rut_c) >= 7:
+            ruts = _ruts_personas(ruts_de_pdf_cache(p))
+            if ruts and rut_c not in ruts:
+                out["excluidos_rut"].append(p.name)
+                continue
+        try:
+            for pg in PdfReader(str(p)).pages:
+                writer.add_page(pg)
+            out["files_used"].append(p.relative_to(base).as_posix())
+        except Exception as e:
+            out["errors"].append(f"{p.name}: {str(e)[:120]}")
+    if out["files_used"]:
+        merged_name = f"COMBINADO_PROTOCOLO_CODEUDOR_{safe_name(codeudor_nombre or nombre)}.pdf"
+        with open(sub / merged_name, "wb") as f:
+            writer.write(f)
+        out["merged_file"] = f"05_codeudor/{merged_name}"
+    return out
+
+
 def merge_pdfs(nombre, rel_files):
     from datetime import datetime
     base = folder_dir(nombre)

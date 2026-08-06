@@ -1887,14 +1887,19 @@ async def _regen_combinado_bg(doc):
         cr = doc.get("credit_request") or {}
         await asyncio.to_thread(fsvc.merge_protocol, doc.get("nombre", ""),
                                 cr.get("client_type") or "dependiente", True)
-        await asyncio.to_thread(fsvc.merge_codeudor, doc.get("nombre", ""))
+        # PROTOCOLO DUAL: reclasificar + combinado propio del codeudor (si tiene mínimos)
+        cod_nom = (doc.get("codeudor_nombre") or "").strip()
+        cod_rut = (doc.get("codeudor_rut") or "").strip()
+        await asyncio.to_thread(fsvc.reclasificar_codeudor, nombre, cod_nom, cod_rut)
+        await asyncio.to_thread(fsvc.merge_protocolo_codeudor, nombre, cod_nom, cod_rut, True)
     except Exception as e:
         logger.warning(f"Regeneración de combinado falló: {e}")
 
 
 @api.post("/clientes/folders/{fid}/codeudor")
 async def folder_agregar_codeudor(fid: str, payload: dict):
-    """Crea la subcarpeta 05_codeudor/<Nombre> y vincula el RUT del codeudor (obligatorio)."""
+    """Crea la subcarpeta 05_codeudor/<Nombre> y vincula el RUT del codeudor (obligatorio).
+    Dispara la BÚSQUEDA RETROACTIVA del RUT en todos los buzones (en segundo plano)."""
     payload = payload or {}
     nombre_cod = (payload.get("nombre") or "").strip()
     rut_cod = (payload.get("rut") or "").strip()
@@ -1909,7 +1914,53 @@ async def folder_agregar_codeudor(fid: str, payload: dict):
         "$set": {"codeudor_nombre": nombre_cod, "codeudor_rut": rut_cod},
         "$push": {"historial": {"fecha": now_iso(),
                                 "accion": f"Codeudor vinculado por RUT: {nombre_cod} ({rut_cod})"}}})
-    return {"ok": True, "subfolder": sub, "codeudor_rut": rut_cod}
+    asyncio.create_task(_rescate_codeudor_bg(doc, nombre_cod, rut_cod))
+    return {"ok": True, "subfolder": sub, "codeudor_rut": rut_cod,
+            "busqueda_retroactiva": "iniciada en todos los buzones"}
+
+
+async def _rescate_codeudor_bg(doc, cod_nom, cod_rut):
+    """BÚSQUEDA RETROACTIVA (no bloqueante): rastrea el RUT del codeudor en los buzones,
+    valida cada PDF con Match Total de RUT y lo archiva en 05_codeudor con protocolo de orden."""
+    try:
+        nombre = doc.get("nombre", "")
+        rut_n = re.sub(r"[^0-9kK]", "", cod_rut or "").lower()
+        adjuntos = await asyncio.to_thread(mail.buscar_adjuntos_por_rut, cod_rut, 20)
+        base = fsvc.folder_dir(nombre)
+        sub = f"05_codeudor/{fsvc.safe_name(cod_nom)}"
+        cod_dir = base / "05_codeudor"
+        existentes = {p.name.lower() for p in cod_dir.rglob("*.pdf")} if cod_dir.exists() else set()
+        guardados = []
+        for a in adjuntos:
+            fn, raw = a["filename"], a["content"]
+            try:
+                texto, _m = await asyncio.to_thread(ocr_service.extraer_texto, raw, fn)
+            except Exception:
+                continue
+            ruts_doc = {re.sub(r"[.\-\s]", "", r).lower() for r in fsvc.RUT_RX.findall(texto or "")}
+            # REGLA DE ORO (Match Total): sin el RUT del codeudor en el PDF, no entra
+            if rut_n not in ruts_doc:
+                continue
+            cat = fsvc.cat_de_archivo(fn, "")
+            fn2 = fsvc.nombre_con_prefijo(fn, cat)
+            final = fn2 if fn2.upper().startswith("CODEUDOR_") else f"CODEUDOR_{fn2}"
+            if fsvc.safe_name(final).lower() in existentes:
+                continue
+            rel = await asyncio.to_thread(fsvc.guardar_archivo, nombre, final, raw, sub)
+            existentes.add(fsvc.safe_name(final).lower())
+            guardados.append(rel)
+        if guardados:
+            await asyncio.to_thread(fsvc.merge_protocolo_codeudor, nombre, cod_nom, cod_rut, True)
+        await db.alertas.insert_one({
+            "id": str(uuid.uuid4()), "tipo": "rescate_codeudor",
+            "cliente": nombre, "folder_id": doc.get("id", ""),
+            "mensaje": (f"🔎 Búsqueda retroactiva del codeudor {cod_nom} ({cod_rut}): "
+                        + (f"{len(guardados)} documento(s) rescatado(s) de los buzones y archivados en 05_codeudor."
+                           if guardados else f"sin documentos con ese RUT en los buzones "
+                           f"({len(adjuntos)} adjuntos candidatos revisados).")),
+            "fecha": now_iso(), "leida": False})
+    except Exception as e:
+        logger.warning(f"Búsqueda retroactiva codeudor: {e}")
 
 
 @api.post("/clientes/folders/{fid}/upload-file")
@@ -2474,6 +2525,11 @@ async def folder_send_email(fid: str, payload: dict):
                 "Para reenviarla debes ingresar la clave de administrador."))
     attach_names = []
     attach_paths = []
+    cod_nom = (doc.get("codeudor_nombre") or "").strip()
+    cod_rut = (doc.get("codeudor_rut") or "").strip()
+    if cod_nom:
+        # VERIFICACIÓN DUAL: nada del codeudor puede quedar en la raíz del titular
+        await asyncio.to_thread(fsvc.reclasificar_codeudor, nombre, cod_nom, cod_rut)
     if payload.get("include_merged", True):
         merged = base / f"COMBINADO_PROTOCOLO_{fsvc.safe_name(nombre)}.pdf"
         if not merged.exists():
@@ -2483,7 +2539,14 @@ async def folder_send_email(fid: str, payload: dict):
         if merged.exists():
             attach_paths.append(merged)
             attach_names.append(merged.name)
-    if payload.get("include_codeudor_merged"):
+    # PROTOCOLO DUAL: con codeudor vinculado se adjuntan DOS combinados (titular + codeudor)
+    if cod_nom and payload.get("include_codeudor_merged", True):
+        res_cod = await asyncio.to_thread(fsvc.merge_protocolo_codeudor, nombre, cod_nom, cod_rut)
+        if res_cod["merged_file"]:
+            pc = base / res_cod["merged_file"]
+            attach_paths.append(pc)
+            attach_names.append(pc.name)
+    elif payload.get("include_codeudor_merged"):
         for p in sorted(base.glob("COMBINADO_CODEUDOR*.pdf")):
             attach_paths.append(p)
             attach_names.append(p.name)
@@ -2496,8 +2559,13 @@ async def folder_send_email(fid: str, payload: dict):
         except ValueError:
             continue
     # REGLA: el asunto SIEMPRE lleva el prefijo fijo; lo del usuario se AGREGA, nunca reemplaza.
-    prefijo_subj = (f"Antecedentes crédito hipotecario — {nombre}" + (f" ({rut})" if rut else "")
-                    + (f" — Entrega: {fecha_entrega.capitalize()}" if fecha_entrega else ""))
+    if cod_nom:
+        prefijo_subj = (f"💎 Solicitud de Crédito: {nombre} + Codeudor {cod_nom}"
+                        + (f" ({rut})" if rut else "")
+                        + (f" — Entrega: {fecha_entrega.capitalize()}" if fecha_entrega else ""))
+    else:
+        prefijo_subj = (f"Antecedentes crédito hipotecario — {nombre}" + (f" ({rut})" if rut else "")
+                        + (f" — Entrega: {fecha_entrega.capitalize()}" if fecha_entrega else ""))
     extra_subj = (payload.get("subject_extra") or "").strip()
     subject = payload.get("subject") or (
         prefijo_subj
@@ -7849,6 +7917,21 @@ async def aprobacion_enviar(payload: dict):
         raise HTTPException(status_code=400, detail="Correo del cliente inválido")
     if not rutas:
         raise HTTPException(status_code=400, detail="Debe adjuntar al menos la simulación ajustada o la carta de aprobación")
+    # SINCRONIZACIÓN DE APROBACIÓN (Match Total): el RUT de cada PDF debe coincidir
+    # con el cliente de la ficha — bloquea errores humanos de selección de archivo.
+    rut_ficha = _norm_rut((payload.get("rut") or "").strip())
+    if len(rut_ficha) < 7 and nombre:
+        _fd = await db.folders.find_one({"nombre": {"$regex": re.escape(nombre[:25]), "$options": "i"}},
+                                        {"rut": 1}) or {}
+        rut_ficha = _norm_rut(_fd.get("rut", ""))
+    if len(rut_ficha) >= 7:
+        for p in rutas:
+            ruts_p = await asyncio.to_thread(lambda pp=p: fsvc._ruts_personas(fsvc.ruts_de_pdf_cache(pp)))
+            if ruts_p and rut_ficha not in ruts_p:
+                raise HTTPException(status_code=409, detail=(
+                    f"REGLA DE ORO (Match Total): el adjunto '{p.name}' contiene un RUT de OTRA persona "
+                    f"— no coincide con el cliente de la ficha ({payload.get('rut') or nombre}). "
+                    "Verifique la selección de archivos."))
     adjuntos = []
     for p in rutas:
         raw = p.read_bytes()
@@ -8520,6 +8603,9 @@ async def _informes_vip_loop():
 
 # ------------------------------------------------------------------
 # PORTAL DE FIRMA VIP (Banca Privada — Maserati Style)
+# 🔒 MÓDULO FINALIZADO Y PROTEGIDO (orden del dueño, 2026-08-06):
+#    NO modificar esta sección desde ediciones de otros módulos. El flujo
+#    enviar_a_firmar_tercero + portal /api/firma/{token} es INVIOLABLE.
 # ------------------------------------------------------------------
 from urllib.parse import quote as _urlquote
 from fastapi.responses import Response as _RawResponse
@@ -9911,7 +9997,9 @@ async def security_headers(request, call_next):
     resp.headers["X-DNS-Prefetch-Control"] = "off"
     if "application/pdf" not in (resp.headers.get("content-type") or ""):
         resp.headers["Content-Security-Policy"] = (
-            "default-src 'self'; frame-ancestors 'self'; object-src 'none'; base-uri 'self'"
+            "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+            "font-src https://fonts.gstatic.com data:; script-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data:; frame-ancestors 'self'; object-src 'none'; base-uri 'self'"
         )
     return resp
 
@@ -9930,26 +10018,6 @@ app.add_middleware(
 @app.on_event("shutdown")
 async def shutdown():
     client.close()
-
-
-@api.post("/formato/merge-pdfs")
-async def formato_merge(payload: dict = None):
-    raise HTTPException(status_code=501, detail="Funcion no disponible en esta instancia")
-
-
-@api.post("/formato/split-pdf")
-async def formato_split(payload: dict = None):
-    raise HTTPException(status_code=501, detail="Funcion no disponible en esta instancia")
-
-
-@api.post("/formato/ai-edit")
-async def formato_ai_edit(payload: dict = None):
-    raise HTTPException(status_code=501, detail="Funcion no disponible en esta instancia")
-
-
-@api.get("/")
-async def root():
-    return {"message": "Central Mutuos API", "status": "ok"}
 
 
 app.include_router(api)

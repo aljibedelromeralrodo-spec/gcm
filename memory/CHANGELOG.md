@@ -594,3 +594,21 @@
 - Banner superior persistente testid alerta-saldo-firmas cuando alerta=true, con link "Recargar ahora".
 - VERIFICADO: curl 200 (propias 1, terceros 22, docs 2480, alerta true) + screenshot con banner y tarjeta visibles.
 - Nota: prompt de saneamiento llegó duplicado 4 veces; ya completado (ver entrada anterior).
+
+## Sesión 2026-08-06 (Protocolo Dual + Ley del RUT retroactiva + Motor de Firma blindado)
+- PROTOCOLO DUAL: merge_protocolo_codeudor genera COMBINADO_PROTOCOLO_CODEUDOR_<Nombre>.pdf DENTRO
+  de 05_codeudor con match por RUT (intruso con RUT ajeno excluido — verificado con PDFs de prueba).
+- reclasificar_codeudor: mueve a 05_codeudor los PDFs del codeudor extraviados en la raíz (verificado).
+- Envío a Mesa con codeudor: adjunta 2 combinados + asunto "💎 Solicitud de Crédito: X + Codeudor Y" (verificado).
+- BÚSQUEDA RETROACTIVA: al vincular codeudor por RUT → mail.buscar_adjuntos_por_rut rastrea todos los
+  buzones (X-GM-RAW variantes de formato), valida cada PDF por OCR Match Total y archiva con protocolo
+  de orden. Genera alerta "rescate_codeudor". VERIFICADO E2E con buzón real (1 doc rescatado).
+- SINCRONIZACIÓN DE APROBACIÓN: /aprobacion-cliente/enviar bloquea con 409 si un adjunto contiene RUT
+  de otra persona (Match Total) — verificado con curl.
+- REPARACIÓN CRÍTICA: server.py tenía 3 copias duplicadas del bloque final (una corrupta con
+  SyntaxError). Se dejó UNA copia sana + un solo app.include_router(api).
+- MOTOR DE FIRMA (🔒 FINALIZADO Y PROTEGIDO, ver /app/memory/protected_modules.md):
+  mensaje de éxito ahora DORADO; CSP ajustada (style/script inline + Google Fonts) porque bloqueaba
+  el estilo del portal; portal verificado en viewport móvil sin enlaces externos.
+- Link real de Gerardo Barrera: /api/firma/c34385901892 (RUT y correo pre-cargados).
+- Carpeta "Test Protocolo Dual" y registros de prueba eliminados tras el testing.

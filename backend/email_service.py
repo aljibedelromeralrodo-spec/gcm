@@ -752,6 +752,52 @@ def fetch_emails_from_sender(sender_kw, limit=15):
     return out
 
 
+def buscar_adjuntos_por_rut(rut, limit=20):
+    """BÚSQUEDA RETROACTIVA: rastrea el RUT (todas sus variantes de formato) en todos
+    los buzones y devuelve los adjuntos PDF (bytes) de los correos que lo mencionan."""
+    nucleo = re.sub(r"[^0-9kK]", "", rut or "").lower()
+    if len(nucleo) < 7:
+        return []
+    con_puntos = f"{int(nucleo[:-1]):,}".replace(",", ".") + "-" + nucleo[-1]
+    variantes = {con_puntos, f"{nucleo[:-1]}-{nucleo[-1]}", nucleo}
+    out = []
+    for acc in ACCOUNTS:
+        try:
+            m = _connect(acc)
+            m.select("INBOX", readonly=True)
+            ids = set()
+            for v in variantes:
+                try:
+                    typ, data = m.search(None, "X-GM-RAW", f'"{v}"')
+                    if typ == "OK" and data and data[0]:
+                        ids |= set(data[0].split())
+                        continue
+                except Exception:
+                    pass
+                try:
+                    typ, data = m.search(None, "TEXT", f'"{v}"')
+                    if typ == "OK" and data and data[0]:
+                        ids |= set(data[0].split())
+                except Exception:
+                    pass
+            for num in sorted(ids, key=lambda x: int(x))[-limit:]:
+                try:
+                    typ, msgdata = m.fetch(num, "(BODY.PEEK[])")
+                    if not msgdata or not isinstance(msgdata[0], tuple):
+                        continue
+                    info = _parse_full_message(email.message_from_bytes(msgdata[0][1]), with_bytes=True)
+                    for a in info.get("attachments", []):
+                        if (a.get("filename") or "").lower().endswith(".pdf") and a.get("content_bytes"):
+                            out.append({"filename": a["filename"], "content": a["content_bytes"],
+                                        "subject": info.get("subject", ""), "cuenta": acc["user"]})
+                except Exception:
+                    continue
+            m.logout()
+        except Exception:
+            continue
+    return out
+
+
 def _texto_de_msg(msg, cap=6000):
     """Texto plano del mensaje (fallback: HTML sin tags)."""
     plano, html = "", ""
