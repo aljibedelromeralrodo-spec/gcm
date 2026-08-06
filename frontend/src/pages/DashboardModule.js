@@ -16,6 +16,7 @@ export default function DashboardModule({ valorUF: _valorUF, userName: _userName
   const [refreshing, setRefreshing] = useState(false);
   const [refreshResult, setRefreshResult] = useState(null);
   const [motor, setMotor] = useState(null);
+  const [semaforo, setSemaforo] = useState(null);
 
   useEffect(() => {
     // Single batch call for dashboard + email status
@@ -32,6 +33,7 @@ export default function DashboardModule({ valorUF: _valorUF, userName: _userName
     axios.get(`${API_URL}/api/central/email-summary`).then(r => setEmailSummary(r.data)).catch((e) => console.error(e));
     axios.get(`${API_URL}/api/gastos-operacionales/cobros-tasacion`).then(r => setCobrosResumen(r.data)).catch((e) => console.error(e));
     axios.get(`${API_URL}/api/motor/status`).then(r => setMotor(r.data)).catch(() => {});
+    axios.get(`${API_URL}/api/firma/semaforo`).then(r => setSemaforo(r.data)).catch(() => setSemaforo({ error: true }));
   }, []);
 
   const refreshKnowledge = async () => {
@@ -55,6 +57,22 @@ export default function DashboardModule({ valorUF: _valorUF, userName: _userName
 
   return (
     <div className="module-content" data-testid="dashboard-module">
+      {semaforo?.alerta && (
+        <div data-testid="alerta-saldo-firmas" style={{ background: "linear-gradient(160deg, rgba(70,10,20,0.95), rgba(20,2,6,0.98))",
+          border: "1px solid rgba(225,29,72,0.6)", borderRadius: 0, padding: "0.8rem 1.2rem", marginBottom: "1rem",
+          display: "flex", alignItems: "center", gap: 10, boxShadow: "0 0 30px -10px rgba(225,29,72,0.55)" }}>
+          <i className="fa fa-exclamation-triangle" style={{ color: "#fb7185", fontSize: "1.1rem" }} />
+          <b style={{ color: "#fb7185", letterSpacing: "0.06em" }}>⚠ ATENCIÓN: Saldo de firmas próximo a agotarse</b>
+          <span style={{ opacity: 0.75, fontSize: "0.82rem" }}>
+            (Propias: {semaforo.propias} · Terceros: {semaforo.terceros})
+          </span>
+          <a href="https://www.migrup.cl" target="_blank" rel="noreferrer" data-testid="alerta-recarga-link"
+             style={{ marginLeft: "auto", color: "var(--gold)", fontWeight: 700, fontSize: "0.8rem", textDecoration: "none",
+               border: "1px solid rgba(212,175,55,0.5)", padding: "0.3rem 0.8rem" }}>
+            <i className="fa fa-bolt" style={{ marginRight: 6 }} />Recargar ahora
+          </a>
+        </div>
+      )}
       {motor && (
         <div data-testid="motor-247-badge" style={{ display: "inline-flex", alignItems: "center", gap: 8,
           background: "rgba(14,14,16,0.9)", border: `1px solid ${motor.operativo ? "rgba(16,217,142,0.4)" : "rgba(225,29,72,0.4)"}`,
@@ -67,6 +85,40 @@ export default function DashboardModule({ valorUF: _valorUF, userName: _userName
         </div>
       )}
       <ProactiveAlertsPanel />
+      {semaforo && !semaforo.error && (
+        <div data-testid="boveda-firmas-card" style={{ border: "1px solid transparent", borderRadius: 0, marginBottom: "1rem",
+          backgroundImage: "linear-gradient(115deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.02) 18%, transparent 32%), linear-gradient(160deg, rgba(22,22,24,0.97), rgba(6,6,8,0.99)), linear-gradient(135deg, #BF953F, #FCF6BA, #B38728, #FBF5B7, #AA771C)",
+          backgroundOrigin: "border-box", backgroundClip: "padding-box, padding-box, border-box",
+          boxShadow: "0 35px 70px -20px rgba(0,0,0,0.95), 0 0 45px -14px rgba(191,149,63,0.5)", padding: "1.2rem 1.5rem" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: "1rem" }}>
+            <b style={{ color: "var(--gold)", fontSize: "1.05rem", letterSpacing: "0.08em" }}>💰 Bóveda de Firmas eCert</b>
+            <span style={{ fontSize: "0.7rem", opacity: 0.55, textTransform: "uppercase", letterSpacing: "0.12em" }}>Saldo en vivo · migrup.cl</span>
+            <a href="https://www.migrup.cl" target="_blank" rel="noreferrer" data-testid="boveda-recarga-link"
+               style={{ marginLeft: "auto", color: "#0a0a0a", fontWeight: 800, fontSize: "0.78rem", textDecoration: "none", padding: "0.4rem 1rem",
+                 backgroundImage: "linear-gradient(135deg, #BF953F, #FCF6BA 45%, #B38728, #FBF5B7 80%, #AA771C)",
+                 boxShadow: "0 0 20px -6px rgba(191,149,63,0.7)" }}>
+              <i className="fa fa-diamond" style={{ marginRight: 6 }} />Recarga Rápida
+            </a>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "0.8rem" }}>
+            <div data-testid="boveda-propias" style={{ background: "rgba(255,255,255,0.03)", padding: "0.9rem 1rem", textAlign: "center",
+              border: semaforo.propias === 0 ? "1px solid rgba(225,29,72,0.7)" : "1px solid rgba(212,175,55,0.25)",
+              boxShadow: semaforo.propias === 0 ? "0 0 25px -8px rgba(225,29,72,0.8)" : "none" }}>
+              <div style={{ fontSize: "2rem", fontWeight: 800, color: semaforo.propias === 0 ? "#e11d48" : (semaforo.propias < 5 ? "#fb7185" : "var(--gold)"),
+                textShadow: semaforo.propias === 0 ? "0 0 14px rgba(225,29,72,0.9)" : "none" }}>{semaforo.propias}</div>
+              <div style={{ fontSize: "0.72rem", opacity: 0.75, textTransform: "uppercase", letterSpacing: "0.1em" }}>Firmas Propias</div>
+            </div>
+            <div data-testid="boveda-terceros" style={{ background: "rgba(255,255,255,0.03)", padding: "0.9rem 1rem", textAlign: "center", border: "1px solid rgba(16,217,142,0.35)" }}>
+              <div style={{ fontSize: "2rem", fontWeight: 800, color: "#10d98e", textShadow: "0 0 12px rgba(16,217,142,0.5)" }}>{semaforo.terceros}</div>
+              <div style={{ fontSize: "0.72rem", opacity: 0.75, textTransform: "uppercase", letterSpacing: "0.1em" }}>Firmas de Terceros</div>
+            </div>
+            <div data-testid="boveda-documentos" style={{ background: "rgba(255,255,255,0.03)", padding: "0.9rem 1rem", textAlign: "center", border: "1px solid rgba(212,175,55,0.25)" }}>
+              <div style={{ fontSize: "2rem", fontWeight: 800, color: "#FCF6BA" }}>{semaforo.documentos}</div>
+              <div style={{ fontSize: "0.72rem", opacity: 0.75, textTransform: "uppercase", letterSpacing: "0.1em" }}>Documentos Disponibles</div>
+            </div>
+          </div>
+        </div>
+      )}
       <LearningStatusPanel />
       <AlertasPanel />
       {cobrosResumen?.resumen && (

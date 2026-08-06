@@ -8559,6 +8559,35 @@ async def firma_generar_link(payload: dict, request: Request):
             "whatsapp": f"https://wa.me/?text={_urlquote(texto_wsp)}"}
 
 
+_SEMAFORO_CACHE = {"data": None, "at": 0.0}
+
+
+@api.get("/firma/semaforo")
+async def firma_semaforo(force: bool = False):
+    """💰 Bóveda de Firmas eCert: saldo vivo del plan migrup (TraerSemaforo, caché 5 min)."""
+    import time as _t
+    if not force and _SEMAFORO_CACHE["data"] and _t.time() - _SEMAFORO_CACHE["at"] < 300:
+        return _SEMAFORO_CACHE["data"]
+    try:
+        raw = await asyncio.to_thread(migrup.semaforo)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"eCert no respondió: {str(e)[:150]}")
+    if not isinstance(raw, dict) or raw.get("descripcionError"):
+        raise HTTPException(status_code=502, detail="Respuesta inválida de eCert")
+    propias = raw.get("cantFirmasDisponiblesMias")
+    if propias is None:
+        propias = max((raw.get("firmasAdicionalesMias") or 0) - (raw.get("firmasAdicionalesUsadasMias") or 0), 0)
+    terceros = raw.get("cantFirmasDisponiblesTerceros")
+    if terceros is None:
+        terceros = max((raw.get("firmasAdicionalesTerceros") or 0) - (raw.get("firmasAdicionalesUsadasTerceros") or 0), 0)
+    out = {"ok": True, "propias": int(propias or 0), "terceros": int(terceros or 0),
+           "documentos": int(raw.get("cantDocumentosDisponibles") or 0),
+           "alerta": (propias or 0) < 5 or (terceros or 0) < 5,
+           "consultado_en": now_iso()}
+    _SEMAFORO_CACHE.update({"data": out, "at": _t.time()})
+    return out
+
+
 def _mask_rut(rut):
     r = (rut or "").replace(".", "").replace("-", "")
     return f"•••.{r[-7:-4]}.{r[-4:-1]}-{r[-1]}" if len(r) >= 8 else (rut or "")

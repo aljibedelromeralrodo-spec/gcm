@@ -584,3 +584,13 @@
   setcred_get (marker anti re-OCR), GZipMiddleware (respuestas comprimidas), clasificar_y_extraer (caché LLM).
 - XSS: DOMPurify confirmado en los 10 usos de dangerouslySetInnerHTML. localStorage: secureStore (XOR+base64) confirmado.
 - Smoke test visual OK: login + dashboard con estética Maserati/Oro 24K intacta.
+
+## Sesión 2026-08-06 (Bóveda de Firmas eCert)
+- GET /api/firma/semaforo: llama migrup Dashboard/TraerSemaforo con caché 5 min (parámetro ?force=true).
+  Mapeo: propias = cantFirmasDisponiblesMias ?? (adicionalesMias - usadasMias); terceros = cantFirmasDisponiblesTerceros;
+  documentos = cantDocumentosDisponibles; alerta = propias<5 o terceros<5.
+- Dashboard: tarjeta "💰 Bóveda de Firmas eCert" (testid boveda-firmas-card) con Firmas Propias (rubí si 0,
+  rosado si <5), Terceros (esmeralda), Documentos; botón dorado "Recarga Rápida" → www.migrup.cl (_blank).
+- Banner superior persistente testid alerta-saldo-firmas cuando alerta=true, con link "Recargar ahora".
+- VERIFICADO: curl 200 (propias 1, terceros 22, docs 2480, alerta true) + screenshot con banner y tarjeta visibles.
+- Nota: prompt de saneamiento llegó duplicado 4 veces; ya completado (ver entrada anterior).
