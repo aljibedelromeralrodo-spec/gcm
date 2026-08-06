@@ -889,6 +889,37 @@ def _log_smtp(entry):
     _log_db_insert("correos_smtp_log", entry)
 
 
+def _ultimo_message_id(to):
+    """Último Message-ID enviado con éxito a ese destinatario (para hilos reales)."""
+    try:
+        from pymongo import MongoClient
+        global _log_db_cli
+        if "_log_db_cli" not in globals() or _log_db_cli is None:
+            _log_db_cli = MongoClient(os.environ["MONGO_URL"],
+                                      serverSelectionTimeoutMS=3000)[os.environ["DB_NAME"]]
+        destinatario = (to if isinstance(to, str) else (to[0] if to else "")).strip()
+        doc = _log_db_cli["correos_smtp_log"].find_one(
+            {"to": {"$regex": re.escape(destinatario), "$options": "i"},
+             "success": True, "message_id": {"$nin": [None, ""]}},
+            sort=[("fecha", -1)])
+        return (doc or {}).get("message_id", "")
+    except Exception:
+        return ""
+
+
+def _anti_autoenvio(to):
+    """ANTI-BLOQUEO GMAIL: el auto-envío (misma cuenta → misma cuenta) es la principal
+    causa de bloqueo silencioso. Si el destino es una de nuestras propias cuentas, se
+    redirige al buzón de pruebas corporativo (MAIL_NOTIF_TEST en .env)."""
+    destino_test = (os.environ.get("MAIL_NOTIF_TEST") or "").strip()
+    if not destino_test:
+        return to
+    cuentas = {a["user"].lower() for a in ACCOUNTS}
+    if isinstance(to, str):
+        return destino_test if to.strip().lower() in cuentas else to
+    return [destino_test if (t or "").strip().lower() in cuentas else t for t in to]
+
+
 def _fmt_refused(refused):
     partes = []
     for rcpt, (code, resp) in refused.items():
@@ -996,6 +1027,8 @@ def send_mail(to, subject, body_html, attachments=None, desde="secundaria", cc=N
     attachments: [{filename, content_b64}]. desde: 'secundaria' o 'principal'."""
     if not configured():
         return {"success": False, "error": "Correo no configurado"}
+    # ANTI AUTO-ENVÍO (1ª capa): destino propio → redirigir al buzón de pruebas corporativo
+    to = _anti_autoenvio(to)
     acc = None
     for a in ACCOUNTS:
         if a["rol"] == desde:
@@ -1003,6 +1036,13 @@ def send_mail(to, subject, body_html, attachments=None, desde="secundaria", cc=N
             break
     if acc is None:
         acc = ACCOUNTS[0]
+    # ANTI AUTO-ENVÍO (2ª capa): jamás misma cuenta → misma cuenta; se cambia de emisor
+    _destinos = {(d or "").strip().lower() for d in ([to] if isinstance(to, str) else list(to))}
+    if acc["user"].strip().lower() in _destinos:
+        for _a in ACCOUNTS:
+            if _a["user"].strip().lower() not in _destinos:
+                acc = _a
+                break
     msg = MIMEMultipart()
     # Jerarquía de remitentes: corporativa = rostro comercial; Ethan = soporte interno
     _nombre_from = FROM_NAME_SOPORTE if acc["user"] == os.environ.get("MAIL_USER", "") else FROM_NAME
@@ -1017,6 +1057,13 @@ def send_mail(to, subject, body_html, attachments=None, desde="secundaria", cc=N
     if not msg.get("Message-ID"):
         from email.utils import make_msgid
         msg["Message-ID"] = make_msgid(domain=(acc["user"].split("@")[-1] or "centralmutuos.cl"))
+    # CABECERAS HUMANAS (anti-bloqueo): In-Reply-To + References apuntando al último
+    # correo real enviado a ese destinatario — el mensaje entra como conversación previa.
+    if not msg.get("In-Reply-To"):
+        _prev_mid = _ultimo_message_id(to)
+        if _prev_mid:
+            msg["In-Reply-To"] = _prev_mid
+            msg["References"] = _prev_mid
     msg["Subject"] = subject
     msg.attach(MIMEText(body_html or "", "html", "utf-8"))
     try:

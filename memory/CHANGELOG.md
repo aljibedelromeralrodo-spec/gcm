@@ -622,3 +622,15 @@
 - Semáforo estima propias=1 (adicionales 3 - usadas 2) pero eCert real dice 0 — manda eCert.
 - PENDIENTE USUARIO: comprar firmas propias en migrup.cl → AJUSTES y reintentar el mismo link
   /api/firma/c34385901892 para ver el mensaje dorado.
+
+## Sesión 2026-08-06 (Blindaje de Entregabilidad Anti-Bloqueo Gmail)
+- CABECERAS HUMANAS: send_mail agrega In-Reply-To + References apuntando al último Message-ID
+  real enviado a ese destinatario (colección correos_smtp_log) — cada correo entra como conversación.
+- REMITENTE: MAIL_FROM_NAME="Gerardo Barrera - Central Mutuos" (cuenta corporativa). La cuenta
+  principal (ethan) mantiene FROM_NAME_SOPORTE por jerarquía previa.
+- ANTI AUTO-ENVÍO (2 capas): (1ª) destino que sea cuenta propia → se redirige a MAIL_NOTIF_TEST
+  (gerardo.ext@centralmutuos.cl, en .env, reversible); (2ª) si el emisor coincide con el destino,
+  se cambia de cuenta emisora automáticamente. Jamás misma cuenta → misma cuenta.
+- PUERTO: confirmado 587 + STARTTLS (MAIL_SMTP_PORT=587 en .env; log registra tls=STARTTLS-587).
+- VERIFICADO con 4 envíos reales (250 OK): el #4 salió desde ethan → gerardo.ext con hilo activo.
+- Nota bug: un search_replace del batch se perdió (llamada _anti_autoenvio); re-aplicado y verificado.
