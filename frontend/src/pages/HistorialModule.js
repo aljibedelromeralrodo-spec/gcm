@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import axios from "axios";
 import { API_URL, formatUF } from "../utils/formatters";
 
-export default function HistorialModule({ valorUF, onLoadSimulation }) {
+export default function HistorialModule({ valorUF: _valorUF, onLoadSimulation }) {
   const [simulaciones, setSimulaciones] = useState([]);
 
   useEffect(() => {

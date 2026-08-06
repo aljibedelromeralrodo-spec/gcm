@@ -1,13 +1,13 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
-import { API_URL, formatCurrency } from "../utils/formatters";
+import { API_URL } from "../utils/formatters";
 import IntelligencePanel from "../components/IntelligencePanel";
 import AlertasPanel from "../components/AlertasPanel";
 import ProactiveAlertsPanel from "../components/ProactiveAlertsPanel";
 import LearningStatusPanel from "../components/LearningStatusPanel";
 import GraficosRiesgo from "../components/GraficosRiesgo";
 
-export default function DashboardModule({ valorUF, userName, onNavigate }) {
+export default function DashboardModule({ valorUF: _valorUF, userName: _userName, onNavigate }) {
   const [data, setData] = useState(null);
   const [cobrosResumen, setCobrosResumen] = useState(null);
   const [emailStatus, setEmailStatus] = useState(null);

@@ -197,12 +197,12 @@ export default function ClientesModule({ onNavigate }) {
   const [pedirModal, setPedirModal] = useState(null); // pedir documentos faltantes
   const [missingDocsModal, setMissingDocsModal] = useState(null); // { folder, to, extra, preview, sending }
   const [historialModal, setHistorialModal] = useState(null); // { folder, eventos, loading }
-  const [respaldoModal, setRespaldoModal] = useState(null); // { subiendo, progreso, resultado }
+  const [_respaldoModal, setRespaldoModal] = useState(null); // { subiendo, progreso, resultado }
   const [folderTab, setFolderTab] = useState("clientes"); // clientes | escrituracion
   const [enriching, setEnriching] = useState(null); // `${folderId}${modo}` en progreso
   const [forzarModal, setForzarModal] = useState(null); // {nombre, rut, sug, buscando, forzando, msg}
 
-  const importarRespaldo = async (file) => {
+  const _importarRespaldo = async (file) => {
     if (!file) return;
     const sessionId = `imp-${Date.now()}`;
     const CHUNK = 4 * 1024 * 1024;
@@ -617,7 +617,7 @@ export default function ClientesModule({ onNavigate }) {
     }
   };
 
-  const buscarCorreosEstudio = async (m) => {
+  const _buscarCorreosEstudio = async (m) => {
     setEstudioModal(prev => ({ ...prev, buscandoCorreos: true }));
     try {
       const r = await axios.get(`${API}/api/clientes/forzar/sugerencias`, { params: { q: m.folder.nombre }, timeout: 60000 });

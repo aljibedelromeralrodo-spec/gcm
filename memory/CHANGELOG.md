@@ -573,3 +573,14 @@
   por carpeta en vez de 3), eslint.config.mjs flat config creado, lint 0 errores.
 - NOTA OPERATIVA: uvicorn reload queda colgado tras editar server.py/ai_extract.py;
   requiere `sudo supervisorctl restart backend` tras cada edición de backend.
+
+## Sesión 2026-08-06 (Saneamiento técnico completo — ronda 2)
+- ESLint 9 flat config creado (eslint.config.mjs) + auto-fix ejecutado: 0 errores / 0 warnings finales.
+- 18 unused-vars limpiados en 11 archivos (prefijo _ o eliminación de imports muertos).
+- Hooks: 0 warnings react-hooks/exhaustive-deps (dependencias ya sanas, verificado con plugin activo).
+- Cabeceras verificadas por curl: CSP, HSTS, X-Frame, X-Content-Type, Permissions-Policy, Referrer-Policy (6/6).
+- 5 funciones pesadas refactorizadas: list_folders (3 escaneos de disco → 1 por carpeta),
+  _folder_public/_criterios_folder/_mesa_respuesta_folder (archivos prefetcheados),
+  setcred_get (marker anti re-OCR), GZipMiddleware (respuestas comprimidas), clasificar_y_extraer (caché LLM).
+- XSS: DOMPurify confirmado en los 10 usos de dangerouslySetInnerHTML. localStorage: secureStore (XOR+base64) confirmado.
+- Smoke test visual OK: login + dashboard con estética Maserati/Oro 24K intacta.

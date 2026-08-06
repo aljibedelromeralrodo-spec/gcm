@@ -8,8 +8,7 @@ export default function CierresModule() {
   const [loading, setLoading] = useState(true);
   const [soloEntrega, setSoloEntrega] = useState(true);
   const [verTodos, setVerTodos] = useState(false);
-  const [ventana, setVentana] = useState(null);
-  const [recientes, setRecientes] = useState([]);
+  const [ventana] = useState(null);
   const [msg, setMsg] = useState("");
   const [sending, setSending] = useState(null);
   const [edit, setEdit] = useState(null); // {id, ejecutivo_nombre, ejecutivo_email, proyecto, entrega_inmediata}

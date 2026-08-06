@@ -102,7 +102,7 @@ export default function EmailProcessingModule() {
     setDriveConfigured(!!d.data?.configured);
   };
 
-  const connectDrive = () => {
+  const _connectDrive = () => {
     // Drive uses a DIFFERENT account (personal @gmail) than Gmail (Workspace)
     // because Workspace admin blocks Drive API access. Ensure you're logged in
     // with the personal Gmail before clicking.
@@ -491,7 +491,7 @@ export default function EmailProcessingModule() {
   );
 }
 
-function DetailModal({ item, onClose, onReprocess, onSave, onUploadDrive, onExtractText, onEnviarAutocorreo, onAttachManual, driveConfigured, busy }) {
+function DetailModal({ item, onClose, onReprocess, onSave, onUploadDrive, onExtractText, onEnviarAutocorreo, onAttachManual, driveConfigured: _driveConfigured, busy }) {
   const cl = item.classification || {};
   const campos = item.campos || {};
   const fileRef = useRef(null);

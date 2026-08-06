@@ -1,6 +1,6 @@
 import { formatUF, formatCurrency } from "../utils/formatters";
 
-export default function FichaModal({ resultado, valorUF, onClose, previewRef, onDownloadPDF }) {
+export default function FichaModal({ resultado, valorUF: _valorUF, onClose, previewRef, onDownloadPDF }) {
   return (
     <div className="ficha-overlay" onClick={onClose} data-testid="ficha-modal">
       <div className="ficha-modal" onClick={(e) => e.stopPropagation()}>

@@ -144,7 +144,7 @@ function InfoRow({ label, value }) {
 
 function ProgressSteps({ estado }) {
   const steps = ["en proceso", "documentacion", "tasacion", "escritura", "aprobado"];
-  const labels = ["Inicio", "Docs", "Tasacion", "Escritura", "Aprobado"];
+  const _labels = ["Inicio", "Docs", "Tasacion", "Escritura", "Aprobado"];
   const current = steps.indexOf(estado || "en proceso");
   const rejected = estado === "rechazado";
 

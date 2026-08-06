@@ -5,7 +5,7 @@ import { StatBox, EvalBadge, CentralScorePanel, ScoreHistory } from "./PredICWid
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
 export function PredICResult({ result, onExportPDF, form }) {
-  const viable = result.viable;
+  const _viable = result.viable;
 
   // Determinar escenarios viables
   const esc1Viable = result.eval_escenario_1 === "VIABLE";

@@ -250,7 +250,7 @@ export default function FormatoModule() {
   const removeMergeFile = (id) => setMergeFiles(prev => prev.filter(f => f.id !== id));
 
   const onDragStart = (idx) => setDragIdx(idx);
-  const onDragOver = (e, idx) => { e.preventDefault(); };
+  const onDragOver = (e, _idx) => { e.preventDefault(); };
   const onDrop = (e, dropIdx) => {
     e.preventDefault();
     if (dragIdx === null || dragIdx === dropIdx) return;

@@ -4,7 +4,7 @@ import DOMPurify from "dompurify";
 import ImportarCorreo from "../components/ImportarCorreo";
 import ConversorUF from "../components/ConversorUF";
 import { EmailAutocomplete } from "../components/EmailAutocomplete";
-import { estiloConfianza, PanelAprendizaje } from "../components/CampoAprendizaje";
+import { PanelAprendizaje } from "../components/CampoAprendizaje";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
