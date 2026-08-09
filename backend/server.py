@@ -1641,6 +1641,33 @@ async def folder_toggle_escrituracion(fid: str, payload: dict = None):
     return {"ok": True, "is_escrituracion": activar}
 
 
+@api.post("/clientes/folders/{fid}/enviar-escrituracion")
+async def folder_enviar_escrituracion(fid: str):
+    """FLUJO DE AVANCE: mueve la ficha a Escrituración y la activa en Set de Crédito y Títulos."""
+    doc = await _get_folder_doc(fid)
+    nombre = (doc.get("nombre") or "").strip()
+    rut = (doc.get("rut") or "").strip()
+    upd = {"is_escrituracion": True, "escrituracion_movida_at": now_iso()}
+    if not doc.get("estudio_titulo_solicitado_at"):
+        upd["estudio_titulo_solicitado_at"] = now_iso()
+    await db.folders.update_one({"id": fid}, {"$set": upd})
+    set_doc = None
+    rx = _rut_regex_flexible(rut) if rut else None
+    if rx:
+        set_doc = await db.set_credito.find_one({"rut": {"$regex": rx, "$options": "i"}})
+    if not set_doc:
+        set_doc = await db.set_credito.find_one(
+            {"nombre": {"$regex": f"^{re.escape(nombre)}$", "$options": "i"}})
+    if not set_doc:
+        set_doc = {"id": str(uuid.uuid4()), "nombre": nombre, "rut": rut,
+                   "email": doc.get("email") or doc.get("source_email") or "",
+                   "created_at": now_iso(), "firmas": [], "origen": "enviar_escrituracion"}
+        await db.set_credito.insert_one(dict(set_doc))
+        _set_dir(nombre).mkdir(parents=True, exist_ok=True)
+    return {"ok": True, "set_id": set_doc["id"],
+            "mensaje": f"⚖️ {nombre} enviado a Escrituración — activo en Set de Crédito y Títulos"}
+
+
 @api.post("/clientes/folders/{fid}/enriquecer")
 async def folder_enriquecer(fid: str, payload: dict = None):
     """Busca de nuevo en el correo (asunto, cuerpo y adjuntos) documentos del cliente.
@@ -8500,8 +8527,62 @@ async def oportunidades_click(oid: str, request: Request):
 
 @api.delete("/oportunidades/{oid}")
 async def oportunidades_delete(oid: str):
-    await db.oportunidades.delete_one({"id": oid})
+    await db.prospectos.delete_one({"id": oid})
     return {"ok": True}
+
+
+@api.post("/oportunidades/{oid}/invitacion-vip")
+async def oportunidades_invitacion_vip(oid: str, request: Request):
+    """CAMPAÑA COMERCIAL: invitación Maserati con link al Portal de Captura Autónoma.
+    REGLA DE ORIGEN: sale siempre desde la cuenta corporativa gerardo.ext@centralmutuos.cl."""
+    op = await db.prospectos.find_one({"id": oid})
+    if not op:
+        raise HTTPException(status_code=404, detail="Prospecto no encontrado")
+    to = (op.get("email") or "").strip()
+    if "@" not in to:
+        raise HTTPException(status_code=400, detail="El prospecto no tiene un correo válido")
+    base = _base_url_req(request)
+    link_portal = f"{base}/api/calificar/{oid}"
+    pixel = f"{base}/api/oportunidades/track/{oid}/pixel.gif"
+    msg = sales_engine.mensaje_invitacion_vip(op.get("nombre", ""), op.get("proyecto", ""),
+                                              link_portal, pixel)
+    res = await asyncio.to_thread(mail.send_mail, to, msg["subject"], msg["body"], [], "secundaria")
+    if not res.get("success"):
+        raise HTTPException(status_code=502, detail=res.get("error", "Error de envío SMTP"))
+    await db.prospectos.update_one({"id": oid}, {"$set": {
+        "status": "invitacion_enviada", "invitacion_enviada_en": now_iso(),
+        "link_calificar": link_portal}})
+    return {"ok": True, "to": to,
+            "mensaje": f"📧 Invitación VIP enviada a {to} desde la cuenta corporativa"}
+
+
+@api.post("/prospectos/{pid}/promover")
+async def prospecto_promover(pid: str):
+    """MURO DE VENTA: promoción manual y consciente de un prospecto a Cliente Activo.
+    REGLA DE HIERRO: prohibida cualquier sincronización automática Excel → carpetas."""
+    p = await db.prospectos.find_one({"id": pid})
+    if not p:
+        raise HTTPException(status_code=404, detail="Prospecto no encontrado")
+    if p.get("estado") == "PROMOVIDO":
+        raise HTTPException(status_code=400, detail="Este prospecto ya fue promovido a Cliente Activo")
+    nombre = (p.get("nombre") or "").strip().title()
+    if not nombre:
+        raise HTTPException(status_code=400, detail="El prospecto no tiene nombre")
+    fd = await db.folders.find_one({"nombre": nombre})
+    if not fd:
+        fd = {"id": str(uuid.uuid4()), "nombre": nombre, "rut": p.get("rut") or "",
+              "email": p.get("email") or "", "telefono": p.get("telefono") or "",
+              "proyecto": p.get("proyecto") or "", "archivos": [],
+              "created_at": now_iso(), "origen": "promocion_prospecto"}
+        await db.folders.insert_one(dict(fd))
+    base = fsvc.folder_dir(nombre)
+    for sub in ("01_cedula", "02_liquidaciones", "03_afp", "04_cmf",
+                "05_codeudor", "06_cotizacion", "99_otros"):
+        (base / sub).mkdir(parents=True, exist_ok=True)
+    await db.prospectos.update_one({"id": pid}, {"$set": {
+        "estado": "PROMOVIDO", "promovido_en": now_iso(), "folder_id": fd["id"]}})
+    return {"ok": True, "folder_id": fd["id"], "nombre": nombre,
+            "mensaje": f"📂 {nombre} promovido a Cliente Activo con su estructura de subcarpetas"}
 
 
 # ------------------------------------------------------------------
@@ -10736,6 +10817,14 @@ p.lead{color:#b8b8b8;font-size:0.82rem;line-height:1.65;margin:0.8rem 0 1.2rem;t
 .btn:disabled{opacity:0.45;cursor:not-allowed}
 #msg{display:none;margin-top:1rem;padding:0.9rem 1rem;font-size:0.82rem;font-weight:600;line-height:1.6;text-align:center}
 .foot{color:#5a5a5a;font-size:0.6rem;margin-top:1.4rem;letter-spacing:0.08em;text-align:center}
+.ayuda{display:block;color:#C7B36A;font-size:0.68rem;letter-spacing:0.06em;margin-top:1rem;text-align:center;cursor:pointer;text-decoration:underline;text-underline-offset:4px}
+.ayuda:hover{color:#FCF6BA}
+#salida{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:99;align-items:center;justify-content:center;padding:1.2rem}
+#salida.on{display:flex;animation:fade .3s ease}
+.salcard{max-width:420px;width:100%;background:linear-gradient(165deg,#0d0b06,#050505);border:1px solid #D4AF37;padding:1.8rem 1.4rem;text-align:center}
+.salcard h2{font-family:'Playfair Display',serif;color:#FCF6BA;font-size:1.1rem;margin-bottom:0.6rem}
+.salcard p{color:#b8b8b8;font-size:0.78rem;line-height:1.65;margin-bottom:1rem}
+.salcard input,.salcard select{width:100%;background:#050505;border:1px solid #7a6a2f;color:#FCF6BA;font-family:'Montserrat',sans-serif;font-size:0.95rem;padding:0.7rem 0.9rem;outline:none;margin-bottom:0.6rem;text-align:center}
 </style></head><body>
 <div class="card">
   <div class="brand">CENTRAL MUTUOS</div>
@@ -10760,6 +10849,20 @@ p.lead{color:#b8b8b8;font-size:0.82rem;line-height:1.65;margin:0.8rem 0 1.2rem;t
 
   <div class="paso" id="p1">
     <p class="lead" id="p1titulo"></p>
+    <div class="manual" style="margin:0 0 0.9rem;padding:0.9rem 1rem">
+      <div style="color:#C7B36A;font-size:0.72rem;letter-spacing:0.08em;text-align:center;margin-bottom:0.6rem">DETALLES DE LA PROPIEDAD — ¿CUÁNDO ES LA ENTREGA?</div>
+      <div class="perfil" style="margin-bottom:0.4rem">
+        <div class="pcard" id="entInm" data-testid="captura-entrega-inmediata" style="padding:0.7rem" onclick="setEntrega('inmediata')"><div class="t">🔑 ENTREGA INMEDIATA</div></div>
+        <div class="pcard" id="entFut" data-testid="captura-entrega-futura" style="padding:0.7rem" onclick="setEntrega('futura')"><div class="t">🏗️ ENTREGA FUTURA</div></div>
+      </div>
+      <div id="subEntrega" style="display:none">
+        <div style="color:#C7B36A;font-size:0.68rem;letter-spacing:0.06em;text-align:center;margin:0.5rem 0">¿LA FECHA DE ENTREGA ES EN MÁS DE 6 MESES?</div>
+        <div class="perfil">
+          <div class="pcard" id="ent6Si" data-testid="captura-entrega-6m-si" style="padding:0.55rem" onclick="setEntrega6(true)"><div class="t">SÍ</div></div>
+          <div class="pcard" id="ent6No" data-testid="captura-entrega-6m-no" style="padding:0.55rem" onclick="setEntrega6(false)"><div class="t">NO</div></div>
+        </div>
+      </div>
+    </div>
     <div id="zonas"></div>
     <div class="nav">
       <button class="btn sec" onclick="irPaso(0)">← Atrás</button>
@@ -10768,28 +10871,69 @@ p.lead{color:#b8b8b8;font-size:0.82rem;line-height:1.65;margin:0.8rem 0 1.2rem;t
   </div>
 
   <div class="paso" id="p2">
-    <p class="lead">Último paso: su <b style="color:#F5E7B8">Cotización Inmobiliaria</b> (opcional).<br>Si no la tiene a mano, indíquenos los montos y listo.</p>
+    <p class="lead">Último paso: <b style="color:#F5E7B8">los números de su negocio</b>.</p>
     <div class="drop" id="dropcot">
       <div class="ic">🏠</div>
       <div><div class="t">Cotización Inmobiliaria</div><div class="d" id="dcot">PDF o foto de la cotización del proyecto</div></div>
       <span class="opc">OPCIONAL</span>
       <input type="file" id="fcot" accept="image/*,.pdf">
     </div>
-    <div class="manual" id="manual">
-      <div style="color:#9a8c52;font-size:0.66rem;letter-spacing:0.06em">SIN COTIZACIÓN — INGRESE LOS MONTOS APROXIMADOS:</div>
-      <label>Valor de la propiedad (UF o $)</label>
-      <input id="mValor" data-testid="captura-valor-input" inputmode="numeric" placeholder="Ej: 3.200 UF o $120.000.000">
-      <label>Pie disponible (UF o $)</label>
-      <input id="mPie" data-testid="captura-pie-input" inputmode="numeric" placeholder="Ej: 400 UF o $15.000.000">
+    <div class="manual">
+      <div style="color:#C7B36A;font-size:0.72rem;letter-spacing:0.08em;text-align:center;margin-bottom:0.6rem">¿SU CRÉDITO INCLUYE SUBSIDIO?</div>
+      <div class="perfil" style="margin-bottom:0.4rem">
+        <div class="pcard" id="subSi" data-testid="captura-subsidio-si" style="padding:0.7rem" onclick="setSub(true)">
+          <div class="t">SÍ, CON SUBSIDIO</div></div>
+        <div class="pcard" id="subNo" data-testid="captura-subsidio-no" style="padding:0.7rem" onclick="setSub(false)">
+          <div class="t">NO, SIN SUBSIDIO</div></div>
+      </div>
+      <div id="campos" style="display:none">
+        <label>Monto Propiedad (UF)</label>
+        <input id="mValor" data-testid="captura-valor-input" inputmode="decimal" placeholder="Ej: 3200">
+        <div id="campoSub"><label>Monto Subsidio (UF)</label>
+        <input id="mSub" data-testid="captura-subsidio-input" inputmode="decimal" placeholder="Ej: 500"></div>
+        <div id="campoPie" style="display:none"><label>% de Pie</label>
+        <input id="mPie" data-testid="captura-pie-input" inputmode="decimal" placeholder="Ej: 10"></div>
+        <label>Monto Crédito Solicitado (UF)</label>
+        <input id="mCred" data-testid="captura-credito-input" inputmode="decimal" placeholder="Ej: 2700">
+        <div id="precheck" data-testid="captura-precheck" style="display:none;margin-top:0.9rem;padding:0.7rem 0.9rem;font-size:0.76rem;font-weight:700;line-height:1.5"></div>
+      </div>
     </div>
     <div class="nav">
       <button class="btn sec" onclick="irPaso(1)">← Atrás</button>
-      <button class="btn" id="btnEnviar" data-testid="captura-enviar-btn" onclick="enviar()">🔒 ENVIAR MI EXPEDIENTE</button>
+      <button class="btn" id="btnEnviar" data-testid="captura-enviar-btn" onclick="enviar()" disabled>🔒 ENVIAR MI EXPEDIENTE</button>
     </div>
     <div id="msg" data-testid="captura-msg"></div>
+    <div id="llamada" style="display:none;margin-top:1rem">
+      <button class="btn" id="btnLlamada" data-testid="captura-llamada-btn" onclick="document.getElementById('formLlamada').style.display='block';this.style.display='none'">📞 Solicitar Llamada de un Ejecutivo</button>
+      <div id="formLlamada" class="manual" style="display:none">
+        <label>Número de Teléfono</label>
+        <input id="telLlamada" data-testid="captura-llamada-tel" inputmode="tel" value="__TELEFONO__" placeholder="+56 9 ...">
+        <label>Horario preferido para ser contactado</label>
+        <select id="horLlamada" data-testid="captura-llamada-horario" style="width:100%;background:#050505;border:1px solid #7a6a2f;color:#FCF6BA;font-family:'Montserrat',sans-serif;font-size:0.95rem;padding:0.7rem 0.9rem;outline:none">
+          <option>Mañana</option><option>Tarde</option><option>Tarde-Noche</option>
+        </select>
+        <button class="btn" id="btnConfLlamada" data-testid="captura-llamada-enviar" style="margin-top:0.9rem" onclick="solicitarLlamada()">CONFIRMAR SOLICITUD</button>
+        <div id="msgLlamada" data-testid="captura-llamada-msg" style="display:none;margin-top:0.8rem;padding:0.8rem;font-size:0.8rem;font-weight:700;line-height:1.5"></div>
+      </div>
+    </div>
   </div>
 
+  <a class="ayuda" data-testid="captura-ayuda-link" onclick="abrirSalida()">¿Le parece complejo? Hable directo con un ejecutivo →</a>
   <div class="foot">CONEXIÓN CIFRADA · SUS DOCUMENTOS VIAJAN PROTEGIDOS</div>
+</div>
+
+<div id="salida" data-testid="captura-salida-modal">
+  <div class="salcard">
+    <h2>Antes de irse…</h2>
+    <p>Entendemos que esto puede ser complejo. Si prefiere, <b style="color:#F5E7B8">un ejecutivo VIP</b> puede hacer todo el proceso por usted en una breve llamada, sin costo.</p>
+    <input id="salTel" data-testid="captura-salida-tel" inputmode="tel" value="__TELEFONO__" placeholder="+56 9 ...">
+    <select id="salHor" data-testid="captura-salida-horario">
+      <option>Mañana</option><option>Tarde</option><option>Tarde-Noche</option>
+    </select>
+    <button class="btn" id="btnSalida" data-testid="captura-salida-llamada" style="width:100%" onclick="salidaLlamada()">📞 QUE ME LLAME UN EJECUTIVO</button>
+    <div id="msgSalida" data-testid="captura-salida-msg" style="display:none;margin-top:0.8rem;padding:0.8rem;font-size:0.78rem;font-weight:700;line-height:1.5"></div>
+    <button class="btn sec" data-testid="captura-salida-continuar" style="width:100%;margin-top:0.7rem" onclick="cerrarSalida()">Continuar por mi cuenta →</button>
+  </div>
 </div>
 <script>
 const ZONAS={
@@ -10800,8 +10944,9 @@ const ZONAS={
   {k:'cmf',ic:'🛡️',t:'Informe CMF actualizado',d:'Informe de deudas (cmfchile.cl, gratis)',multi:false,req:true}],
  independiente:[
   {k:'cedula',ic:'🪪',t:'Cédula de Identidad (ambos lados)',d:'Suba las 2 caras (2 fotos o 1 PDF)',multi:true,req:true},
-  {k:'boletas',ic:'🧾',t:'Boletas de Honorarios (últimos 2 años)',d:'Informe anual SII o boletas (puede subir varias)',multi:true,req:true},
-  {k:'f22',ic:'📋',t:'Último Formulario 22 (Impuesto a la Renta)',d:'Declaración anual de renta SII',multi:false,req:true},
+  {k:'f22',ic:'📋',t:'Dos últimos Formularios 22 (Impuesto a la Renta)',d:'Seleccione los 2 PDF del SII juntos',multi:true,req:true,min:2},
+  {k:'boletas_anterior',ic:'🧾',t:'Resumen Boletas de Honorarios — Año anterior completo',d:'Informe anual SII (enero a diciembre)',multi:false,req:true},
+  {k:'boletas_actual',ic:'🧾',t:'Resumen Boletas de Honorarios — Año actual a la fecha',d:'Informe SII del año en curso',multi:false,req:true},
   {k:'cmf',ic:'🛡️',t:'Informe CMF actualizado',d:'Informe de deudas (cmfchile.cl, gratis)',multi:false,req:true}]
 };
 let perfil='',st={};
@@ -10825,8 +10970,20 @@ function montarZonas(){
   });
   check();
 }
-function check(){const falt=ZONAS[perfil].filter(z=>z.req&&!(st[z.k]&&st[z.k].length));
-  document.getElementById('btnP1').disabled=falt.length>0;}
+function check(){const falt=ZONAS[perfil].filter(z=>z.req&&!((st[z.k]&&st[z.k].length>=(z.min||1))));
+  const entOk=entrega==='inmediata'||(entrega==='futura'&&entrega6!==null);
+  document.getElementById('btnP1').disabled=falt.length>0||!entOk;}
+let entrega='',entrega6=null;
+function pintarSel(el,on){el.style.borderColor=on?'#FCF6BA':'#7a6a2f';el.style.background=on?'rgba(212,175,55,0.1)':'transparent';}
+function setEntrega(v){entrega=v;
+  if(v==='inmediata'){entrega6=null;document.getElementById('subEntrega').style.display='none';}
+  else{document.getElementById('subEntrega').style.display='block';}
+  pintarSel(document.getElementById('entInm'),v==='inmediata');
+  pintarSel(document.getElementById('entFut'),v==='futura');check();}
+function setEntrega6(v){entrega6=v;
+  pintarSel(document.getElementById('ent6Si'),v===true);
+  pintarSel(document.getElementById('ent6No'),v===false);check();}
+function entregaValor(){return entrega==='inmediata'?'inmediata':(entrega6?'futura_mas_6m':'futura_menos_6m');}
 function irPaso(n){[0,1,2].forEach(i=>{document.getElementById('p'+i).classList.toggle('activo',i===n);
   document.getElementById('d'+i).classList.toggle('on',i<=n);});}
 (function(){const el=document.getElementById('dropcot'),inp=document.getElementById('fcot');
@@ -10835,22 +10992,62 @@ function irPaso(n){[0,1,2].forEach(i=>{document.getElementById('p'+i).classList.
   el.addEventListener('drop',e=>{if(e.dataTransfer.files.length){inp.files=e.dataTransfer.files;pick()}});
   inp.addEventListener('change',pick);
   function pick(){if(inp.files.length){st.cotizacion=Array.from(inp.files);el.classList.add('listo');
-    document.getElementById('dcot').textContent='✓ '+inp.files[0].name;
-    document.getElementById('manual').style.display='none';}}
+    document.getElementById('dcot').textContent='✓ '+inp.files[0].name;}}
 })();
+let conSub=null,precheckT=null;
+function setSub(v){conSub=v;
+  document.getElementById('subSi').style.borderColor=v?'#FCF6BA':'#7a6a2f';
+  document.getElementById('subSi').style.background=v?'rgba(212,175,55,0.1)':'transparent';
+  document.getElementById('subNo').style.borderColor=!v?'#FCF6BA':'#7a6a2f';
+  document.getElementById('subNo').style.background=!v?'rgba(212,175,55,0.1)':'transparent';
+  document.getElementById('campos').style.display='block';
+  document.getElementById('campoSub').style.display=v?'block':'none';
+  document.getElementById('campoPie').style.display=v?'none':'block';
+  checkMontos();}
+function numUF(id){const v=(document.getElementById(id).value||'').replace(/[^0-9.,]/g,'').replace(/\\./g,'').replace(',','.');
+  return parseFloat(v)||parseFloat((document.getElementById(id).value||'').replace(/[^0-9.]/g,''))||0;}
+['mValor','mSub','mPie','mCred'].forEach(id=>{
+  const el=document.getElementById(id);
+  el.addEventListener('input',()=>{el.value=el.value.replace(/[^0-9.,]/g,'');checkMontos();});
+});
+function checkMontos(){
+  const val=numUF('mValor'),cred=numUF('mCred');
+  const extra=conSub?numUF('mSub'):numUF('mPie');
+  const ok=conSub!==null&&val>0&&cred>0&&extra>0;
+  document.getElementById('btnEnviar').disabled=!ok;
+  clearTimeout(precheckT);
+  if(ok){precheckT=setTimeout(precheck,700);}
+}
+async function precheck(){
+  const p=document.getElementById('precheck');
+  try{
+    const body={con_subsidio:conSub,valor_uf:numUF('mValor'),credito_uf:numUF('mCred'),
+      subsidio_uf:conSub?numUF('mSub'):0,pie_pct:conSub?0:numUF('mPie')};
+    const r=await fetch('/api/calificar/__OID__/precheck',{method:'POST',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const d=await r.json();p.style.display='block';
+    if(d.dentro){p.style.background='#0d1f12';p.style.border='1px solid #16a34a';p.style.color='#8fd9b0';}
+    else{p.style.background='#1a1406';p.style.border='1px solid #d4a017';p.style.color='#e7cf7a';}
+    p.textContent=d.mensaje||'';
+  }catch(e){p.style.display='none';}
+}
 async function enviar(){
   const b=document.getElementById('btnEnviar'),m=document.getElementById('msg');
   b.disabled=true;b.textContent='Enviando de forma segura…';
   const fd=new FormData();fd.append('perfil',perfil);
-  fd.append('valor_propiedad',document.getElementById('mValor').value||'');
-  fd.append('monto_pie',document.getElementById('mPie').value||'');
+  fd.append('entrega',entrega?entregaValor():'');
+  fd.append('con_subsidio',conSub?'1':'0');
+  fd.append('valor_uf',String(numUF('mValor')));
+  fd.append('subsidio_uf',String(conSub?numUF('mSub'):0));
+  fd.append('pie_pct',String(conSub?0:numUF('mPie')));
+  fd.append('credito_uf',String(numUF('mCred')));
   Object.keys(st).forEach(k=>st[k].forEach(f=>fd.append(k,f)));
   try{
     const r=await fetch('/api/calificar/__OID__/subir',{method:'POST',body:fd});
     const d=await r.json();m.style.display='block';
     if(r.ok&&d.ok){m.style.background='#0d1f12';m.style.border='1px solid #16a34a';m.style.color='#8fd9b0';
       m.textContent=d.mensaje||'✅ ¡Expediente recibido! Un ejecutivo VIP lo contactará hoy mismo.';
-      b.style.display='none';}
+      b.style.display='none';expedienteOk=true;}
     else{m.style.background='#1f0d0d';m.style.border='1px solid #b91c1c';m.style.color='#fda4af';
       m.textContent='⚠ '+(d.detail||'No pudimos recibir sus documentos. Intente nuevamente.');
       b.disabled=false;b.textContent='🔒 ENVIAR MI EXPEDIENTE';}
@@ -10858,13 +11055,63 @@ async function enviar(){
     m.style.color='#fda4af';m.textContent='⚠ Error de conexión. Intente nuevamente.';
     b.disabled=false;b.textContent='🔒 ENVIAR MI EXPEDIENTE';}
 }
+async function solicitarLlamada(){
+  const b=document.getElementById('btnConfLlamada'),m=document.getElementById('msgLlamada');
+  b.disabled=true;b.textContent='Enviando…';
+  try{
+    const r=await fetch('/api/calificar/__OID__/solicitar-llamada',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({telefono:document.getElementById('telLlamada').value,
+                           horario:document.getElementById('horLlamada').value})});
+    const d=await r.json();m.style.display='block';
+    if(r.ok&&d.ok){m.style.background='#0d1f12';m.style.border='1px solid #16a34a';m.style.color='#8fd9b0';
+      m.textContent=d.mensaje;b.style.display='none';
+      document.getElementById('telLlamada').disabled=true;document.getElementById('horLlamada').disabled=true;}
+    else{m.style.background='#1f0d0d';m.style.border='1px solid #b91c1c';m.style.color='#fda4af';
+      m.textContent='⚠ '+(d.detail||'No se pudo enviar la solicitud.');
+      b.disabled=false;b.textContent='CONFIRMAR SOLICITUD';}
+  }catch(e){m.style.display='block';m.style.background='#1f0d0d';m.style.border='1px solid #b91c1c';
+    m.style.color='#fda4af';m.textContent='⚠ Error de conexión.';
+    b.disabled=false;b.textContent='CONFIRMAR SOLICITUD';}
+}
+let salidaVista=false,expedienteOk=false;
+function abrirSalida(){document.getElementById('salida').classList.add('on');}
+function cerrarSalida(){document.getElementById('salida').classList.remove('on');}
+document.addEventListener('mouseout',e=>{
+  if(!salidaVista&&!expedienteOk&&e.clientY<=0&&!e.relatedTarget){salidaVista=true;abrirSalida();}
+});
+window.addEventListener('popstate',()=>{
+  if(!salidaVista&&!expedienteOk){salidaVista=true;abrirSalida();history.pushState(null,'',location.href);}
+});
+history.pushState(null,'',location.href);
+async function salidaLlamada(){
+  const b=document.getElementById('btnSalida'),m=document.getElementById('msgSalida');
+  const tel=(document.getElementById('salTel').value||'').trim();
+  if(!tel){m.style.display='block';m.style.background='#1f0d0d';m.style.border='1px solid #b91c1c';
+    m.style.color='#fda4af';m.textContent='⚠ Ingrese su número de teléfono.';return;}
+  b.disabled=true;b.textContent='Enviando…';
+  try{
+    const r=await fetch('/api/calificar/__OID__/solicitar-llamada',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({telefono:tel,horario:document.getElementById('salHor').value})});
+    const d=await r.json();m.style.display='block';
+    if(r.ok&&d.ok){m.style.background='#0d1f12';m.style.border='1px solid #16a34a';m.style.color='#8fd9b0';
+      m.textContent=d.mensaje||'✅ Solicitud recibida. Un ejecutivo lo llamará en el horario indicado.';
+      b.style.display='none';}
+    else{m.style.background='#1f0d0d';m.style.border='1px solid #b91c1c';m.style.color='#fda4af';
+      m.textContent='⚠ '+(d.detail||'No se pudo enviar la solicitud.');
+      b.disabled=false;b.textContent='📞 QUE ME LLAME UN EJECUTIVO';}
+  }catch(e){m.style.display='block';m.style.background='#1f0d0d';m.style.border='1px solid #b91c1c';
+    m.style.color='#fda4af';m.textContent='⚠ Error de conexión.';
+    b.disabled=false;b.textContent='📞 QUE ME LLAME UN EJECUTIVO';}
+}
 </script></body></html>
 """
 
 
 @app.get("/api/calificar/{oid}")
 async def calificar_portal(oid: str):
-    op = await db.oportunidades.find_one({"id": oid})
+    op = await db.prospectos.find_one({"id": oid})
     if not op:
         return HTMLResponse("<h3 style='font-family:sans-serif;color:#333;text-align:center;margin-top:20vh'>Enlace no válido o expirado — Central Mutuos</h3>", status_code=404)
     proyecto = (op.get("proyecto") or "").strip()
@@ -10872,6 +11119,7 @@ async def calificar_portal(oid: str):
             .replace("__PROY_TIT__", f" en {proyecto}" if proyecto else "")
             .replace("__NOMBRE__", (op.get("nombre") or "").split()[0].title() or "")
             .replace("__PROYECTO_LINEA__", f"Proyecto {proyecto}" if proyecto else "Calificación Hipotecaria VIP")
+            .replace("__TELEFONO__", (op.get("telefono") or "").strip())
             .replace("__OID__", oid))
     return HTMLResponse(html)
 
@@ -10879,16 +11127,21 @@ async def calificar_portal(oid: str):
 @app.post("/api/calificar/{oid}/subir")
 async def calificar_subir(oid: str,
                           perfil: str = Form("dependiente"),
-                          valor_propiedad: str = Form(""),
-                          monto_pie: str = Form(""),
+                          con_subsidio: str = Form("0"),
+                          valor_uf: str = Form("0"),
+                          subsidio_uf: str = Form("0"),
+                          pie_pct: str = Form("0"),
+                          credito_uf: str = Form("0"),
+                          entrega: str = Form(""),
                           cedula: List[UploadFile] = File(default=[]),
                           liquidaciones: List[UploadFile] = File(default=[]),
                           afp: List[UploadFile] = File(default=[]),
-                          boletas: List[UploadFile] = File(default=[]),
+                          boletas_anterior: List[UploadFile] = File(default=[]),
+                          boletas_actual: List[UploadFile] = File(default=[]),
                           f22: List[UploadFile] = File(default=[]),
                           cmf: List[UploadFile] = File(default=[]),
                           cotizacion: List[UploadFile] = File(default=[])):
-    op = await db.oportunidades.find_one({"id": oid})
+    op = await db.prospectos.find_one({"id": oid})
     if not op:
         raise HTTPException(status_code=404, detail="Enlace no válido")
     nombre = (op.get("nombre") or "").strip().title()
@@ -10915,7 +11168,8 @@ async def calificar_subir(oid: str,
              if perfil == "dependiente" else
              (("cedula", cedula, "01_cedula"),
               ("f22", f22, "02_impuesto_renta"),
-              ("boletas", boletas, "03_boletas"),
+              ("boletas_anterior", boletas_anterior, "03_boletas"),
+              ("boletas_actual", boletas_actual, "03_boletas"),
               ("cmf", cmf, "04_cmf"),
               ("cotizacion", cotizacion, "06_cotizacion")))
     guardados = {}
@@ -10947,12 +11201,19 @@ async def calificar_subir(oid: str,
     if rut_ocr and not (fd.get("rut") or "").strip():
         rut_fmt = f"{rut_ocr[:-1]}-{rut_ocr[-1]}" if len(rut_ocr) > 1 else rut_ocr
         await db.folders.update_one({"id": fd["id"]}, {"$set": {"rut": rut_fmt}})
-        await db.oportunidades.update_one({"id": oid}, {"$set": {"rut": rut_fmt}})
-    # Montos manuales (sin cotización adjunta)
-    if (valor_propiedad or monto_pie) and not guardados.get("cotizacion"):
+        await db.prospectos.update_one({"id": oid}, {"$set": {"rut": rut_fmt}})
+    # ESCENARIOS FINANCIEROS: guardar los montos directo en la ficha del cliente
+    def _uf(x):
+        try:
+            return float(str(x).replace(",", "."))
+        except ValueError:
+            return 0.0
+    fin = {"con_subsidio": con_subsidio in ("1", "true", "True"),
+           "valor_propiedad_uf": _uf(valor_uf), "subsidio_uf": _uf(subsidio_uf),
+           "pie_pct": _uf(pie_pct), "monto_credito": _uf(credito_uf)}
+    if fin["monto_credito"] or fin["valor_propiedad_uf"]:
         await db.folders.update_one({"id": fd["id"]}, {"$set": {
-            "datos_financieros.valor_propiedad_manual": valor_propiedad.strip(),
-            "datos_financieros.pie_disponible_manual": monto_pie.strip()}})
+            f"datos_financieros.{k}": v for k, v in fin.items()}})
     # Completitud según perfil (3 liquidaciones / 2+ boletas)
     if perfil == "dependiente":
         completa = (len(guardados.get("cedula", [])) >= 1 and len(guardados.get("liquidaciones", [])) >= 3
@@ -10961,14 +11222,24 @@ async def calificar_subir(oid: str,
                                   ("3 Liquidaciones", len(guardados.get("liquidaciones", [])) >= 3),
                                   ("AFP", guardados.get("afp")), ("CMF", guardados.get("cmf"))) if not ok]
     else:
-        completa = (len(guardados.get("cedula", [])) >= 1 and len(guardados.get("boletas", [])) >= 2
-                    and len(guardados.get("f22", [])) >= 1 and len(guardados.get("cmf", [])) >= 1)
+        completa = (len(guardados.get("cedula", [])) >= 1 and len(guardados.get("f22", [])) >= 2
+                    and len(guardados.get("boletas_anterior", [])) >= 1
+                    and len(guardados.get("boletas_actual", [])) >= 1 and len(guardados.get("cmf", [])) >= 1)
         faltan = [t for t, ok in (("Cédula", guardados.get("cedula")),
-                                  ("Boletas (2 años)", len(guardados.get("boletas", [])) >= 2),
-                                  ("Formulario 22", guardados.get("f22")), ("CMF", guardados.get("cmf"))) if not ok]
+                                  ("2 Formularios 22", len(guardados.get("f22", [])) >= 2),
+                                  ("Boletas año anterior", guardados.get("boletas_anterior")),
+                                  ("Boletas año actual", guardados.get("boletas_actual")),
+                                  ("CMF", guardados.get("cmf"))) if not ok]
     total = sum(len(v) for v in guardados.values())
-    await db.oportunidades.update_one({"id": oid}, {"$set": {
-        "estado_interes": "uso_simulador", "captura_autonoma_en": now_iso()}})
+    # CALENDARIO DE CIERRES: fecha de entrega estimada de la propiedad
+    entrega_lbl = {"inmediata": "Inmediata", "futura_mas_6m": "Futura +6 meses",
+                   "futura_menos_6m": "Futura -6 meses"}.get(entrega.strip(), "")
+    upd_prospecto = {"estado_interes": "uso_simulador", "captura_autonoma_en": now_iso()}
+    if entrega_lbl:
+        upd_prospecto["fecha_entrega_estimada"] = entrega_lbl
+        await db.folders.update_one({"id": fd["id"]},
+                                    {"$set": {"fecha_entrega_estimada": entrega_lbl}})
+    await db.prospectos.update_one({"id": oid}, {"$set": upd_prospecto})
     await db.capturas_autonomas.insert_one({
         "id": str(uuid.uuid4()), "oportunidad_id": oid, "cliente": nombre,
         "rut": rut_ocr, "proyecto": op.get("proyecto") or "", "perfil": perfil,
@@ -10976,7 +11247,8 @@ async def calificar_subir(oid: str,
         "archivos": [r for v in guardados.values() for r in v], "creado_en": now_iso()})
     # EXPERIENCIA WHATSAPP: alerta inmediata a Gerardo (no bloquea la respuesta al cliente)
     asunto = (f"🚀 EXPEDIENTE CREADO DESDE WHATSAPP: {nombre} - Perfil "
-              f"{perfil.capitalize()} - Documentación {'Completa' if completa else 'Incompleta'}")
+              f"{perfil.capitalize()} - Documentación {'Completa' if completa else 'Incompleta'}"
+              + (f" - 🚨 ENTREGA: {entrega_lbl}" if entrega_lbl else ""))
 
     async def _avisar():
         try:
@@ -10990,12 +11262,16 @@ async def calificar_subir(oid: str,
               <div style="padding:16px 6px;color:#1a1a1a;font-size:14px">
                 <p><b>{asunto}</b></p>
                 <ul style="font-size:13px;color:#444">
+                  {'<li style="color:#b91c1c"><b>🚨 ENTREGA: ' + entrega_lbl + '</b></li>' if entrega_lbl else ''}
                   <li>Proyecto: {op.get('proyecto') or '—'}</li>
                   <li>RUT (OCR cédula): {rut_ocr or 'no detectado aún'}</li>
                   <li>Total documentos: {total} repartidos en la bóveda (01-06)</li>
                   {filas}
                   {'<li style="color:#b45309"><b>Faltan: ' + ', '.join(faltan) + '</b></li>' if faltan else ''}
-                  {'<li>Montos manuales: propiedad ' + valor_propiedad + ' · pie ' + monto_pie + '</li>' if (valor_propiedad or monto_pie) else ''}
+                  <li><b>Escenario: {'CON subsidio' if fin['con_subsidio'] else 'SIN subsidio'}</b> ·
+                      Propiedad {fin['valor_propiedad_uf']:.0f} UF ·
+                      {('Subsidio ' + format(fin['subsidio_uf'], '.0f') + ' UF') if fin['con_subsidio'] else ('Pie ' + format(fin['pie_pct'], '.1f') + '%')} ·
+                      Crédito solicitado {fin['monto_credito']:.0f} UF</li>
                 </ul>
                 <p style="font-size:13px">La carpeta ya está en Carpeta Clientes, lista para evaluación.</p>
               </div>
@@ -11011,9 +11287,96 @@ async def calificar_subir(oid: str,
             "carpeta": nombre, "perfil": perfil, "completa": completa, "rut_detectado": rut_ocr}
 
 
+@app.post("/api/calificar/{oid}/precheck")
+async def calificar_precheck(oid: str, payload: dict):
+    """VALIDACIÓN INSTANTÁNEA DashAI: chequeo local contra la bodega BTG/Ameris."""
+    op = await db.prospectos.find_one({"id": oid})
+    if not op:
+        raise HTTPException(status_code=404, detail="Enlace no válido")
+    con_sub = bool(payload.get("con_subsidio"))
+    valor = float(payload.get("valor_uf") or 0)
+    credito = float(payload.get("credito_uf") or 0)
+    crit = await asyncio.to_thread(mesa_brain._criterios)
+    btg = (crit.get("btg_pactual") or {}).get("con_subsidio" if con_sub else "sin_subsidio") or {}
+    pol = await asyncio.to_thread(mesa_brain.politicas_maestras)
+    obs = []
+    if valor and credito:
+        ltv = credito / valor
+        ltv_max = float(btg.get("ltv_max") or pol["ltv_maximo_base"])
+        if ltv > ltv_max + 1e-6:
+            obs.append(f"financiamiento {ltv*100:.0f}% (estándar hasta {ltv_max*100:.0f}%)")
+    if not con_sub and credito and credito < mesa_brain.MONTO_MIN_UF_SIN_SUBSIDIO_HARD:
+        obs.append(f"monto mínimo sin subsidio {mesa_brain.MONTO_MIN_UF_SIN_SUBSIDIO_HARD} UF")
+    mmax = float(btg.get("monto_credito_max_uf") or 0)
+    if mmax and credito > mmax:
+        obs.append(f"monto máximo {mmax:.0f} UF")
+    dentro = not obs
+    return {"dentro": dentro,
+            "mensaje": ("✅ Su solicitud está dentro de nuestras políticas de financiamiento."
+                        if dentro else
+                        "ℹ Su solicitud será revisada de forma personalizada por un ejecutivo (" + " · ".join(obs) + ").")}
+
+
+@app.post("/api/calificar/{oid}/solicitar-llamada")
+async def calificar_solicitar_llamada(oid: str, payload: dict, request: Request):
+    """SOLICITUD DE CONTACTO VIP: dispara correo urgente a Gerardo con teléfono y horario."""
+    op = await db.prospectos.find_one({"id": oid})
+    if not op:
+        raise HTTPException(status_code=404, detail="Enlace no válido")
+    telefono = (payload.get("telefono") or "").strip()
+    horario = (payload.get("horario") or "").strip() or "Mañana"
+    motivo = (payload.get("motivo") or "").strip()
+    if len(re.sub(r"[^0-9]", "", telefono)) < 8:
+        raise HTTPException(status_code=400, detail="Ingrese un número de teléfono válido")
+    nombre = (op.get("nombre") or "").strip().title()
+    # VINCULACIÓN: crear ficha aunque no suba papeles, para no perder el rastro
+    fd = await db.folders.find_one({"nombre": nombre})
+    if not fd:
+        await db.folders.insert_one({
+            "id": str(uuid.uuid4()), "nombre": nombre, "rut": op.get("rut") or "",
+            "telefono": telefono, "archivos": [], "created_at": now_iso(),
+            "origen": "solicitud_llamada", "proyecto": op.get("proyecto") or ""})
+        fsvc.folder_dir(nombre).mkdir(parents=True, exist_ok=True)
+    else:
+        await db.folders.update_one({"id": fd["id"]}, {"$set": {"telefono": telefono}})
+    await db.solicitudes_llamada.insert_one({
+        "id": str(uuid.uuid4()), "oportunidad_id": oid, "cliente": nombre,
+        "telefono": telefono, "horario": horario, "motivo": motivo or "post_envio",
+        "creado_en": now_iso()})
+    base = _base_url_req(request)
+    asunto = (f"💎 ALERTA DE CONTACTO: El cliente {nombre} solicita asistencia manual"
+              if motivo == "asistencia" else
+              f"💎 URGENTE: Solicitud de Contacto - {nombre}")
+
+    async def _avisar():
+        try:
+            cuerpo = f"""
+            <div style="font-family:Arial,sans-serif;max-width:600px">
+              <div style="background:#0a0a0a;padding:16px 20px;border-left:4px solid #D4AF37">
+                <span style="color:#D4AF37;font-weight:700;letter-spacing:0.08em">💎 CENTRAL MUTUOS · CONTACTO VIP</span>
+              </div>
+              <div style="padding:16px 6px;color:#1a1a1a;font-size:14px">
+                <p><b>{'El cliente ' + nombre + ' pidió ayuda humana en el portal (no completó la carga).' if motivo == 'asistencia' else 'El cliente ' + nombre + ' solicita ser llamado por un ejecutivo.'}</b></p>
+                <ul style="font-size:14px;color:#333">
+                  <li>📞 Teléfono: <b>{telefono}</b></li>
+                  <li>🕐 Horario preferido: <b>{horario}</b></li>
+                  <li>🏠 Proyecto: {op.get('proyecto') or '—'}</li>
+                  <li>📂 Carpeta en el Maserati: <a href="{base}">{base}</a> → Carpeta Clientes → <b>{nombre}</b></li>
+                </ul>
+              </div>
+            </div>"""
+            await asyncio.to_thread(mail.send_mail, "gerardo.ext@centralmutuos.cl",
+                                    asunto, cuerpo, [], "principal")
+        except Exception as e:
+            logging.warning(f"Solicitud llamada {nombre}: {e}")
+    asyncio.create_task(_avisar())
+    return {"ok": True,
+            "mensaje": f"✅ Solicitud recibida. Un ejecutivo de Central Mutuos lo contactará en el horario {horario}."}
+
+
 @api.post("/oportunidades/{oid}/link-calificar")
 async def oportunidades_link_calificar(oid: str, request: Request):
-    op = await db.oportunidades.find_one({"id": oid})
+    op = await db.prospectos.find_one({"id": oid})
     if not op:
         raise HTTPException(status_code=404, detail="Oportunidad no encontrada")
     base = _base_url_req(request)
@@ -11022,7 +11385,7 @@ async def oportunidades_link_calificar(oid: str, request: Request):
     titulo = f"Asegure su Casa{' en ' + proyecto if proyecto else ''} - Calificación VIP en 1 Minuto"
     texto = (f"🏠 *{titulo}*\n\nHola {(op.get('nombre') or '').split()[0].title()}, soy José Martín de Central Mutuos. "
              f"Suba solo su Cédula y su última Liquidación en este portal privado y su calificación queda lista:\n{url}")
-    await db.oportunidades.update_one({"id": oid}, {"$set": {"link_calificar": url}})
+    await db.prospectos.update_one({"id": oid}, {"$set": {"link_calificar": url}})
     return {"ok": True, "url": url, "titulo": titulo,
             "whatsapp": f"https://wa.me/?text={_urlquote(texto)}"}
 

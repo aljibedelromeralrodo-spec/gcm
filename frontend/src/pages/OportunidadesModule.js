@@ -43,6 +43,27 @@ export default function OportunidadesModule() {
     }
     setBusyId("");
   };
+  const promover = async (op) => {
+    if (!window.confirm(`📂 PROMOCIÓN A CLIENTE ACTIVO\n\n¿Promover a ${op.nombre} a Clientes Activos?\n\nSe creará su estructura de subcarpetas (01_Cédula, 02_Liquidaciones…) y desaparecerá del Centro de Prospección.\n\nREGLA DE HIERRO: este paso es manual y consciente.`)) return;
+    setBusyId(op.id);
+    try {
+      const r = await axios.post(`${API}/api/prospectos/${op.id}/promover`, {}, { timeout: 60000 });
+      setMsg(r.data.mensaje || `📂 ${op.nombre} promovido a Cliente Activo.`);
+      cargar();
+    } catch (e) { setMsg("❌ " + (e?.response?.data?.detail || e.message)); }
+    setBusyId("");
+  };
+
+  const invitar = async (op) => {
+    if (!window.confirm(`📧 INVITACIÓN VIP POR EMAIL\n\n¿Enviar la invitación de Pre-Calificación VIP a ${op.nombre} (${op.email})?\n\nSaldrá desde la cuenta corporativa gerardo.ext@centralmutuos.cl con el link a su portal de captura.`)) return;
+    setBusyId(op.id);
+    try {
+      const r = await axios.post(`${API}/api/oportunidades/${op.id}/invitacion-vip`, {}, { timeout: 120000 });
+      setMsg(r.data.mensaje || `📧 Invitación enviada a ${op.email}.`);
+      cargar();
+    } catch (e) { setMsg("❌ " + (e?.response?.data?.detail || e.message)); }
+    setBusyId("");
+  };
   const fileRef = useRef(null);
 
   const cargar = useCallback(async () => {
@@ -190,7 +211,11 @@ export default function OportunidadesModule() {
                     {(op.aperturas > 0 || op.clics > 0) && <div style={{ fontSize: "0.68rem", color: "#94a3b8", marginTop: 3 }}>{op.aperturas} aperturas · {op.clics} clics</div>}
                   </td>
                   <td style={{ padding: "0.6rem 0.5rem", fontSize: "0.75rem" }}>
-                    {op.status === "enviado"
+                    {op.captura_autonoma_en
+                      ? <span style={{ color: "#34eab9", fontWeight: 700 }}>📥 Inició carga de documentos<div style={{ color: "#94a3b8", fontWeight: 400 }}>{(op.captura_autonoma_en || "").slice(0, 10)}</div></span>
+                      : op.status === "invitacion_enviada"
+                        ? <span style={{ color: "#e7cf7a", fontWeight: 700 }}>📧 Invitación enviada<div style={{ color: "#94a3b8", fontWeight: 400 }}>{(op.invitacion_enviada_en || "").slice(0, 10)}</div></span>
+                        : op.status === "enviado"
                       ? <span style={{ color: "#34eab9", fontWeight: 700 }}>📨 Enviado{bloqueado(op) ? <div style={{ color: "#94a3b8", fontWeight: 400 }}>🔒 hasta {(op.bloqueado_hasta || "").slice(0, 10)}</div> : null}</span>
                       : op.status === "seguimiento_listo"
                         ? <span style={{ color: "#e7cf7a", fontWeight: 700 }}>📬 Seguimiento listo{op.seguimiento_n ? ` #${op.seguimiento_n}` : ""}<div style={{ color: "#94a3b8", fontWeight: 400 }}>Pasaron los 14 días — autoriza el envío</div></span>
@@ -199,6 +224,16 @@ export default function OportunidadesModule() {
                           : <span style={{ color: "#fb7185", fontWeight: 700 }}>Esperando autorización</span>}
                   </td>
                   <td style={{ padding: "0.6rem 0.5rem", textAlign: "right", whiteSpace: "nowrap" }}>
+                    <button data-testid={`op-promover-${i}`} onClick={() => promover(op)} disabled={busyId === op.id}
+                      title="Copia los datos a Clientes Activos y crea la estructura de subcarpetas (paso manual y consciente)"
+                      style={{ ...btn("linear-gradient(135deg, #BF953F, #FCF6BA 45%, #B38728)"), marginRight: 6 }}>
+                      📂 Promover a Cliente Activo
+                    </button>
+                    <button data-testid={`op-invitacion-${i}`} onClick={() => invitar(op)} disabled={busyId === op.id || !op.email}
+                      title={op.email ? `Enviar invitación VIP Maserati a ${op.email} desde gerardo.ext@centralmutuos.cl` : "El prospecto no tiene correo"}
+                      style={{ ...btn("rgba(212,175,55,0.15)", "#e7cf7a"), border: "1px solid rgba(212,175,55,0.4)", marginRight: 6, opacity: !op.email ? 0.35 : 1 }}>
+                      📧 Enviar Invitación por Email
+                    </button>
                     <button data-testid={`op-link-calificar-${i}`} onClick={() => linkCalificar(op)} disabled={busyId === op.id}
                       title="Portal de Captura Autónoma: el prospecto sube Cédula + Liquidación y la carpeta se crea sola"
                       style={{ ...btn("rgba(212,175,55,0.15)", linkCopiado === op.id ? "#8fd9b0" : "#e7cf7a"), border: "1px solid rgba(212,175,55,0.4)", marginRight: 6 }}>

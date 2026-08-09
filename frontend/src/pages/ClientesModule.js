@@ -1412,10 +1412,15 @@ export default function ClientesModule({ onNavigate }) {
   const toggleEscrituracion = async (f) => {
     const activar = !f.is_escrituracion;
     if (!window.confirm(activar
-      ? `¿Mover la carpeta de ${f.nombre} al módulo ESCRITURACIÓN?\n\nSaldrá de Solicitudes de Crédito (se puede devolver cuando quieras).`
+      ? `⚖️ ENVIAR A ESCRITURACIÓN\n\n¿Enviar la ficha de ${f.nombre} a Escrituración?\n\nSe activará también en los módulos Set de Crédito y Títulos, con las reglas de firma vigentes.`
       : `¿Devolver la carpeta de ${f.nombre} a Solicitudes de Crédito?`)) return;
     try {
-      await axios.post(`${API}/api/clientes/folders/${f.id}/escrituracion`, { activar });
+      if (activar) {
+        const r = await axios.post(`${API}/api/clientes/folders/${f.id}/enviar-escrituracion`, {});
+        alert(r.data.mensaje || "⚖️ Ficha enviada a Escrituración");
+      } else {
+        await axios.post(`${API}/api/clientes/folders/${f.id}/escrituracion`, { activar });
+      }
       loadFolders();
     } catch (e) { alert("Error: " + (e.response?.data?.detail || e.message)); }
   };
@@ -1818,9 +1823,9 @@ export default function ClientesModule({ onNavigate }) {
                       <i className={`fa ${enriching === f.id + "credito" ? "fa-spinner fa-spin" : "fa-magic"}`}></i> Enriquecer archivos
                     </button>
                     <button data-testid={`btn-escrituracion-toggle-${f.id}`} onClick={() => toggleEscrituracion(f)}
-                      title={f.is_escrituracion ? "Devolver esta carpeta a Solicitudes de Crédito" : "Mover esta carpeta a la pestaña Escrituración"}
+                      title={f.is_escrituracion ? "Devolver esta carpeta a Solicitudes de Crédito" : "Enviar la ficha a Escrituración y activarla en Set de Crédito y Títulos"}
                       style={modBtn(f.is_escrituracion ? "rgba(148,163,184,0.12)" : "rgba(46,92,230,0.12)", f.is_escrituracion ? "#94a3b8" : "#2e5ce6", enviadoManual ? "#fff" : (f.is_escrituracion ? "#94a3b8" : "#9333ea"))}>
-                      <i className="fa fa-exchange"></i> {f.is_escrituracion ? "Devolver a Clientes" : "Mover a Escrituración"}
+                      <i className="fa fa-exchange"></i> {f.is_escrituracion ? "Devolver a Clientes" : "⚖️ Enviar a Escrituración"}
                     </button>
                     <button data-testid={`btn-historial-${f.id}`} onClick={() => openHistorial(f)}
                       title={`Historial completo de actividades de ${f.nombre}`}
