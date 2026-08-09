@@ -861,3 +861,4 @@
 - Saneamiento verificado: headers completos (HSTS/CSP/COOP/Permissions), DOMPurify en todos los innerHTML, secureStore, ESLint 100% limpio (hooks incluidos).
 - NOTA OPERATIVA: el hot-reload de server.py a veces cuelga uvicorn (502) → sudo supervisorctl restart backend.
 - Prospecto de prueba del usuario: Yerile Barrera id=69bd18cc-ff8a-4118-b0e5-9ec46f3a8210 (status invitacion_enviada) — NO borrar.
+- Forense AUTOMÁTICO al recibir respuesta de MESA: _forense_caso_automatico() se dispara en los 2 puntos de ingesta de seguimiento (rescate histórico + process-emails). Audita el caso al instante con los 5 checks de ultra-precisión, deduplica contra "Errores MESA detectados", suma al contador de nuevos y envía alerta 🚨 a Gerardo (MAIL2_USER). Probado E2E: dedupe OK, caso sintético agregó 3 hallazgos + alerta.

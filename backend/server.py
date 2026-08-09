@@ -132,13 +132,16 @@ async def _rescate_historico_loop():
                     if exists:
                         continue
                     extra = await _info_operacion_cliente(op["cliente"])
-                    await db.seguimiento.insert_one({
+                    doc_seg = {
                         "id": str(uuid.uuid4()),
                         "cliente_id": op["cliente"].lower().replace(" ", "-"),
                         **op, **extra,
                         "correo_remitente": op.get("remitente", ""),
                         "origen": "rescate_historico",
-                        "procesado_en": now_iso()})
+                        "procesado_en": now_iso()}
+                    await db.seguimiento.insert_one(dict(doc_seg))
+                    # CONTRALORÍA AUTOMÁTICA: auditar el caso al instante
+                    asyncio.create_task(_forense_caso_automatico(doc_seg))
                     nuevos += 1
                 await asyncio.sleep(0.5)
             await db.config.update_one({"_key": "seguimiento_historico"}, {"$set": {
@@ -3049,14 +3052,17 @@ async def seg_process(max_emails: int = 30, dias: int = 31):
         if exists:
             continue
         extra = await _info_operacion_cliente(op["cliente"])
-        await db.seguimiento.insert_one({
+        doc_seg = {
             "id": str(uuid.uuid4()),
             "cliente_id": op["cliente"].lower().replace(" ", "-"),
             **op,
             **extra,
             "correo_remitente": op.get("remitente", ""),
             "procesado_en": now_iso(),
-        })
+        }
+        await db.seguimiento.insert_one(dict(doc_seg))
+        # CONTRALORÍA AUTOMÁTICA: auditar el caso al instante
+        asyncio.create_task(_forense_caso_automatico(doc_seg))
         nuevos += 1
     return {"ok": True, "procesados": len(ops), "nuevos": nuevos, "dias": dias}
 
@@ -10678,6 +10684,138 @@ async def _forense_buscar_contexto(cliente, rut_seg):
     return fd, sim
 
 
+async def _forense_auditar_entrada(s, modelo):
+    """Audita UNA respuesta de MESA contra el reglamento de bodega. Devuelve hallazgos."""
+    hallazgos = []
+    cliente = (s.get("cliente") or "").strip()
+    aprobada = s.get("estado") in ("aprobacion", "aprobado")
+    fd, sim = await _forense_buscar_contexto(cliente, s.get("rut"))
+    if not fd:
+        return []
+    cert = await asyncio.to_thread(
+        mesa_brain.auditar_caso, fd, sim, "aprobacion" if aprobada else "rechazo", modelo)
+    rut_cli = fd.get("rut") or s.get("rut") or ""
+    base = {"cliente": cliente or fd.get("nombre", ""), "rut": rut_cli,
+            "fecha_mesa": (s.get("fecha") or "")[:10],
+            "monto_mesa": s.get("monto_credito") or cert.get("monto_uf"),
+            "certificado_id": cert.get("certificado_id")}
+    # 1) RIESGO: aprobación que rompe políticas (violación crítica)
+    df = fd.get("datos_financieros") or {}
+    if aprobada and cert.get("criticas"):
+        hallazgos.append({**base, "categoria": "RIESGO",
+                          "detalle": " · ".join(v["detalle"] for v in cert["criticas"][:3]),
+                          "nota_dashai": "DashAI: la MESA aprobó pese a quiebres CRÍTICOS del reglamento de bodega (BTG/Ameris/Subsidio 02). Cada quiebre listado es una regla dura que invalida la operación ante el inversionista."})
+    # 1b) RIESGO — FUERA DE POLÍTICA: monto aprobado < 2.000 UF sin subsidio
+    try:
+        m_uf = float(s.get("monto_credito") or df.get("monto_credito") or 0)
+    except (TypeError, ValueError):
+        m_uf = 0
+    con_sub = bool(df.get("con_subsidio"))
+    if aprobada and 0 < m_uf < 2000 and not con_sub:
+        hallazgos.append({**base, "categoria": "RIESGO",
+                          "detalle": f"Monto aprobado {m_uf:.0f} UF < 2.000 UF sin subsidio — fuera de política de bodega",
+                          "nota_dashai": "DashAI: el reglamento BTG/Ameris fija un mínimo de 2.000 UF para operaciones sin subsidio. Esta aprobación no es colocable en la bodega y quedará atrapada en cartera propia."})
+    # 1c) RIESGO — REGLA DE LOS 80 AÑOS saltada (edad + plazo al término)
+    try:
+        edad_plazo = float((sim or {}).get("edad_plazo") or 0)
+    except (TypeError, ValueError):
+        edad_plazo = 0
+    if aprobada and edad_plazo > 80:
+        hallazgos.append({**base, "categoria": "RIESGO",
+                          "detalle": f"Edad + plazo al término = {edad_plazo:.0f} años > 80 (Regla de los 80 años saltada)",
+                          "nota_dashai": "DashAI: la Regla de Hierro exige que edad del deudor + plazo del crédito no supere los 80 años al término. La MESA la saltó: riesgo actuarial y de seguro de desgravamen no cubierto."})
+    # 2) PERDIDA: rechazo que según los papeles era viable (antigüedad >= 12 cumplida)
+    docs_ok = not [c for c in _criterios_folder(fd, archivos=await asyncio.to_thread(
+        fsvc.scan_archivos, fd.get("nombre", "")))[:4] if not c["ok"]]
+    antig = df.get("antiguedad_laboral_meses")
+    antig_ok = antig is None or float(antig or 0) >= 12
+    if (not aprobada) and docs_ok and not cert.get("violaciones") and antig_ok:
+        hallazgos.append({**base, "categoria": "PERDIDA",
+                          "detalle": "Rechazo de MESA con expediente completo, antigüedad laboral cumplida y CERO quiebres de reglamento — candidato a rescate",
+                          "nota_dashai": f"DashAI: el cliente cumplía TODOS los requisitos duros del reglamento (documentación completa{', antigüedad ' + format(float(antig), '.0f') + ' meses >= 12' if antig is not None else ''}, sin quiebre de política). El rechazo carece de sustento técnico verificable: negocio perdido rescatable."})
+    # 3) ERROR HUMANO: inconsistencias de renta / antigüedad / monto
+    errores = []
+    renta = await asyncio.to_thread(mesa_brain.recalibrar_renta, sim, fd, {})
+    if renta.get("disponible") and renta.get("renta_declarada") and renta.get("renta_reconocida"):
+        dif = renta["renta_declarada"] - renta["renta_reconocida"]
+        if dif > renta["renta_declarada"] * 0.10:
+            errores.append(f"Renta declarada ${renta['renta_declarada']:,} vs reconocida "
+                           f"${renta['renta_reconocida']:,} (castigos/no imponibles ignorados: ${dif:,})")
+    try:
+        m_seg = float(s.get("monto_credito") or 0)
+        m_fd = float(df.get("monto_credito") or 0)
+        if m_seg and m_fd and abs(m_seg - m_fd) > max(m_fd * 0.05, 1):
+            errores.append(f"Monto MESA {m_seg:.0f} UF ≠ monto carpeta {m_fd:.0f} UF")
+    except (TypeError, ValueError):
+        pass
+    if aprobada and antig is not None and float(antig or 0) < 12:
+        errores.append(f"Antigüedad {antig} meses < 12 (aprobada igual)")
+    if errores:
+        hallazgos.append({**base, "categoria": "ERROR HUMANO", "detalle": " · ".join(errores[:3]),
+                          "nota_dashai": "DashAI: inconsistencia numérica entre los documentos originales y la respuesta de MESA. La suma de liquidaciones/renta reconocida, el monto o la antigüedad no cuadran con lo resuelto — error operativo de la mesa."})
+    return hallazgos
+
+
+async def _forense_caso_automatico(seg):
+    """CONTRALORÍA AUTOMÁTICA: audita el caso AL INSTANTE cuando llega una respuesta
+    de MESA (aprobación o rechazo) y alerta a Gerardo si detecta un error."""
+    try:
+        if seg.get("estado") not in ("aprobacion", "aprobado", "rechazo", "rechazado"):
+            return
+        modelo = await asyncio.to_thread(mesa_brain.modelo_actual)
+        modelo.pop("_id", None)
+        nuevos_h = await _forense_auditar_entrada(seg, modelo)
+        if not nuevos_h:
+            return
+        doc = await db.config.find_one({"_key": "auditoria_forense"}) or {}
+        previos = doc.get("hallazgos") or []
+        claves = {(h.get("cliente"), h.get("fecha_mesa"), h.get("categoria"), h.get("detalle"))
+                  for h in previos}
+        agregados = [h for h in nuevos_h
+                     if (h["cliente"], h["fecha_mesa"], h["categoria"], h["detalle"]) not in claves]
+        if not agregados:
+            return
+        for h in agregados:
+            h["origen"] = "auto_al_recibir"
+            h["detectado_en"] = now_iso()
+        hallazgos = agregados + previos
+        resumen = {"RIESGO": sum(1 for h in hallazgos if h["categoria"] == "RIESGO"),
+                   "PERDIDA": sum(1 for h in hallazgos if h["categoria"] == "PERDIDA"),
+                   "ERROR HUMANO": sum(1 for h in hallazgos if h["categoria"] == "ERROR HUMANO")}
+        await db.config.update_one({"_key": "auditoria_forense"}, {"$set": {
+            "hallazgos": hallazgos, "resumen": resumen,
+            "estado": doc.get("estado") or "completado",
+            "titulo_lista": "Errores MESA detectados",
+            "nuevos_ultimo_barrido": int(doc.get("nuevos_ultimo_barrido") or 0) + len(agregados),
+            "generado_en": now_iso()}}, upsert=True)
+        destinatario = os.environ.get("MAIL2_USER", "")
+        if destinatario:
+            filas = "".join(
+                f"<li style='margin-bottom:10px'><b>[{h['categoria']}]</b> {h['detalle']}"
+                f"<br><i style='color:#666;font-size:12px'>{h.get('nota_dashai', '')}</i></li>"
+                for h in agregados)
+            cuerpo = f"""
+<div style="font-family:Arial,sans-serif;max-width:600px">
+  <div style="background:#0a0a0a;padding:16px 20px;border-left:4px solid #e11d48">
+    <span style="color:#D4AF37;font-weight:700;letter-spacing:0.08em">🔬 CONTRALORÍA AUTOMÁTICA · CENTRAL MUTUOS</span>
+  </div>
+  <div style="padding:16px 6px;color:#1a1a1a;font-size:14px">
+    <p><b>DashAI auditó al instante la respuesta de MESA del caso
+       {agregados[0]['cliente']} ({agregados[0].get('rut') or 'sin RUT'})</b>
+       y detectó {len(agregados)} error(es):</p>
+    <ul style="font-size:13px;color:#333">{filas}</ul>
+    <p style="font-size:13px">El hallazgo ya está registrado en Contraloría → "Errores MESA detectados".</p>
+  </div>
+</div>"""
+            await asyncio.to_thread(
+                mail.send_mail, destinatario,
+                f"🚨 CONTRALORÍA AUTOMÁTICA: {len(agregados)} error(es) MESA — {agregados[0]['cliente']}",
+                cuerpo, [], "secundaria")
+        logging.info(f"🔬 Forense automático: {len(agregados)} hallazgos en {seg.get('cliente')}")
+    except Exception as e:
+        logging.warning(f"forense automático: {e}")
+
+
 async def _forense_job(dias=90):
     desde = (datetime.now(timezone.utc) - timedelta(days=dias)).isoformat()
     q = {"estado": {"$in": ["aprobacion", "aprobado", "rechazo", "rechazado"]},
@@ -10699,72 +10837,8 @@ async def _forense_job(dias=90):
         for s in bloques[dia]:
             revisados += 1
             cliente = (s.get("cliente") or "").strip()
-            aprobada = s.get("estado") in ("aprobacion", "aprobado")
             try:
-                fd, sim = await _forense_buscar_contexto(cliente, s.get("rut"))
-                if not fd:
-                    continue
-                cert = await asyncio.to_thread(
-                    mesa_brain.auditar_caso, fd, sim, "aprobacion" if aprobada else "rechazo", modelo)
-                rut_cli = fd.get("rut") or s.get("rut") or ""
-                base = {"cliente": cliente or fd.get("nombre", ""), "rut": rut_cli,
-                        "fecha_mesa": (s.get("fecha") or "")[:10],
-                        "monto_mesa": s.get("monto_credito") or cert.get("monto_uf"),
-                        "certificado_id": cert.get("certificado_id")}
-                # 1) RIESGO: aprobación que rompe políticas (violación crítica)
-                df = fd.get("datos_financieros") or {}
-                if aprobada and cert.get("criticas"):
-                    hallazgos.append({**base, "categoria": "RIESGO",
-                                      "detalle": " · ".join(v["detalle"] for v in cert["criticas"][:3]),
-                                      "nota_dashai": "DashAI: la MESA aprobó pese a quiebres CRÍTICOS del reglamento de bodega (BTG/Ameris/Subsidio 02). Cada quiebre listado es una regla dura que invalida la operación ante el inversionista."})
-                # 1b) RIESGO — FUERA DE POLÍTICA: monto aprobado < 2.000 UF sin subsidio
-                try:
-                    m_uf = float(s.get("monto_credito") or df.get("monto_credito") or 0)
-                except (TypeError, ValueError):
-                    m_uf = 0
-                con_sub = bool(df.get("con_subsidio"))
-                if aprobada and 0 < m_uf < 2000 and not con_sub:
-                    hallazgos.append({**base, "categoria": "RIESGO",
-                                      "detalle": f"Monto aprobado {m_uf:.0f} UF < 2.000 UF sin subsidio — fuera de política de bodega",
-                                      "nota_dashai": "DashAI: el reglamento BTG/Ameris fija un mínimo de 2.000 UF para operaciones sin subsidio. Esta aprobación no es colocable en la bodega y quedará atrapada en cartera propia."})
-                # 1c) RIESGO — REGLA DE LOS 80 AÑOS saltada (edad + plazo al término)
-                try:
-                    edad_plazo = float((sim or {}).get("edad_plazo") or 0)
-                except (TypeError, ValueError):
-                    edad_plazo = 0
-                if aprobada and edad_plazo > 80:
-                    hallazgos.append({**base, "categoria": "RIESGO",
-                                      "detalle": f"Edad + plazo al término = {edad_plazo:.0f} años > 80 (Regla de los 80 años saltada)",
-                                      "nota_dashai": "DashAI: la Regla de Hierro exige que edad del deudor + plazo del crédito no supere los 80 años al término. La MESA la saltó: riesgo actuarial y de seguro de desgravamen no cubierto."})
-                # 2) PERDIDA: rechazo que según los papeles era viable (antigüedad >= 12 cumplida)
-                docs_ok = not [c for c in _criterios_folder(fd, archivos=await asyncio.to_thread(
-                    fsvc.scan_archivos, fd.get("nombre", "")))[:4] if not c["ok"]]
-                antig = df.get("antiguedad_laboral_meses")
-                antig_ok = antig is None or float(antig or 0) >= 12
-                if (not aprobada) and docs_ok and not cert.get("violaciones") and antig_ok:
-                    hallazgos.append({**base, "categoria": "PERDIDA",
-                                      "detalle": "Rechazo de MESA con expediente completo, antigüedad laboral cumplida y CERO quiebres de reglamento — candidato a rescate",
-                                      "nota_dashai": f"DashAI: el cliente cumplía TODOS los requisitos duros del reglamento (documentación completa{', antigüedad ' + format(float(antig), '.0f') + ' meses >= 12' if antig is not None else ''}, sin quiebre de política). El rechazo carece de sustento técnico verificable: negocio perdido rescatable."})
-                # 3) ERROR HUMANO: inconsistencias de renta / antigüedad / monto
-                errores = []
-                renta = await asyncio.to_thread(mesa_brain.recalibrar_renta, sim, fd, {})
-                if renta.get("disponible") and renta.get("renta_declarada") and renta.get("renta_reconocida"):
-                    dif = renta["renta_declarada"] - renta["renta_reconocida"]
-                    if dif > renta["renta_declarada"] * 0.10:
-                        errores.append(f"Renta declarada ${renta['renta_declarada']:,} vs reconocida "
-                                       f"${renta['renta_reconocida']:,} (castigos/no imponibles ignorados: ${dif:,})")
-                try:
-                    m_seg = float(s.get("monto_credito") or 0)
-                    m_fd = float(df.get("monto_credito") or 0)
-                    if m_seg and m_fd and abs(m_seg - m_fd) > max(m_fd * 0.05, 1):
-                        errores.append(f"Monto MESA {m_seg:.0f} UF ≠ monto carpeta {m_fd:.0f} UF")
-                except (TypeError, ValueError):
-                    pass
-                if aprobada and antig is not None and float(antig or 0) < 12:
-                    errores.append(f"Antigüedad {antig} meses < 12 (aprobada igual)")
-                if errores:
-                    hallazgos.append({**base, "categoria": "ERROR HUMANO", "detalle": " · ".join(errores[:3]),
-                                      "nota_dashai": "DashAI: inconsistencia numérica entre los documentos originales y la respuesta de MESA. La suma de liquidaciones/renta reconocida, el monto o la antigüedad no cuadran con lo resuelto — error operativo de la mesa."})
+                hallazgos.extend(await _forense_auditar_entrada(s, modelo))
             except Exception as e:
                 logging.warning(f"Forense {cliente}: {e}")
             await db.config.update_one({"_key": "auditoria_forense"}, {"$set": {
