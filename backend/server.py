@@ -9008,6 +9008,14 @@ async def firma_firmar(token: str):
         "aMaterno": partes[-1] if len(partes) >= 3 else "",
         "rut": rut, "email": email,
     }
+    # ────────────────────────────────────────────────────────────────────────
+    # MODELO COMBINADO (ECONOMÍA DE SALDO — orden del dueño 2026-08-09):
+    # Todo el Set de Crédito se une en UN ÚNICO PDF (_set_combinar) y se envía a eCert
+    # como una sola transacción de firma. Esto GARANTIZA EL COBRO DE UNA SOLA FIRMA DE
+    # TERCERO POR CADA SET DE CRÉDITO DE CLIENTE (no una firma por documento). Tras firmar,
+    # _set_separar_firmado divide el archivo madre y estampa el rastro visible en cada hoja.
+    # NO cambiar a firma por lote: multiplicaría el consumo de firmas.
+    # ────────────────────────────────────────────────────────────────────────
     res_comb = await asyncio.to_thread(_set_combinar, doc.get("nombre", ""))
     if not res_comb["combinado"]:
         raise HTTPException(status_code=400, detail=res_comb.get("error") or
@@ -9033,11 +9041,13 @@ async def firma_firmar(token: str):
         raise HTTPException(status_code=400, detail=f"No fue posible enviar la firma: {str(res.get('error'))[:180]}")
     await db.firma_links.update_one({"token": token}, {"$set": {
         "firma_enviada_en": now_iso(), "firma_ecert": res.get("raw") or {}}})
-    await db.set_credito.update_one({"id": doc["id"]}, {"$push": {"firmas": {
-        "documento": target.name, "firmante": email, "rut": rut,
-        "paginas": res.get("paginas"), "estampas": len(posiciones) or 1,
-        "ecert_id": res.get("ecert_doc_id"),
-        "portal_vip": True, "enviado_en": now_iso()}}})
+    await db.set_credito.update_one({"id": doc["id"]},
+        {"$unset": {"lote_firma": ""},
+         "$push": {"firmas": {
+            "documento": target.name, "firmante": email, "rut": rut,
+            "paginas": res.get("paginas"), "estampas": len(posiciones) or 1,
+            "ecert_id": res.get("ecert_doc_id"),
+            "portal_vip": True, "enviado_en": now_iso()}}})
     return {"ok": True, "mensaje": _MSG_FIRMA_OK, "paginas": res.get("paginas")}
 
 

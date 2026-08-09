@@ -757,3 +757,16 @@
   - LECCIÓN: para que eCert dispare el correo del código, el contacto de tercero DEBE estar
     creado antes/durante el envío, y el correo del firmante debe ser una casilla legible por
     IMAP (ethangerardobarr@gmail.com) para el autocompletado.
+
+- 2026-08-09 (parte 7) — **Reversión a MODELO COMBINADO (economía de saldo)**:
+  - Orden del dueño: volver al modelo de 1 firma por Set. Revertido firma_firmar del portal
+    a: _set_combinar (une todo el Set en 1 PDF) → enviar_a_firmar_tercero (1 documento) →
+    _set_separar_firmado (divide el madre firmado + estampa rastro visible por hoja).
+  - Eliminadas las adiciones de firma por lote: migrup.enviar_lote_a_firmar_tercero,
+    _firmante_estampas, _set_docs_para_firma, _traer_lote_firmado_interno.
+  - enviar_a_firmar_tercero quedó EXACTAMENTE como el original (nunca se tocó su firma).
+  - Constancia dejada en el código (bloque de comentario en firma_firmar): el modelo
+    combinado GARANTIZA EL COBRO DE UNA SOLA FIRMA DE TERCERO POR SET DE CRÉDITO.
+  - RECORDATORIO legal (parte 6): los divididos FIRMADO_* NO validan solos en eCert; la firma
+    criptográfica válida vive en el archivo madre COMBINADO_..._FIRMADO_COMPLETO.pdf.
+  - Verificado: backend operativo, /api/firma/{token}/estado responde OK.

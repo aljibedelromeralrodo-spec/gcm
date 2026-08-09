@@ -243,4 +243,3 @@ def enviar_a_firmar_tercero(pdf_bytes, nombre_documento, firmante, comentario=""
     return {"success": True, "ecert_doc_id": _doc_id,
             "raw": {k: v for k, v in (res or {}).items() if k != "documentos"},
             "paginas": n_pages, "contacto_id": (contacto or {}).get("contId")}
-
