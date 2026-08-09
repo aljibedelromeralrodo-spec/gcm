@@ -10,6 +10,26 @@ export default function ContraloriaModule() {
   const [loading, setLoading] = useState(true);
   const [cert, setCert] = useState(null);
   const [certLoading, setCertLoading] = useState(false);
+  const [forense, setForense] = useState(null);
+
+  const cargarForense = useCallback(async () => {
+    try {
+      const r = await axios.get(`${API_URL}/api/contraloria/forense`);
+      setForense(r.data);
+    } catch { /* silencioso */ }
+  }, []);
+
+  const lanzarForense = async () => {
+    try {
+      await axios.post(`${API_URL}/api/contraloria/forense/iniciar?dias=90`);
+      setForense({ estado: "en_proceso", progreso: 0, total: 0 });
+      const iv = setInterval(async () => {
+        const r = await axios.get(`${API_URL}/api/contraloria/forense`);
+        setForense(r.data);
+        if (r.data?.estado === "completado") clearInterval(iv);
+      }, 4000);
+    } catch { /* silencioso */ }
+  };
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -20,7 +40,7 @@ export default function ContraloriaModule() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { cargar(); }, [cargar]);
+  useEffect(() => { cargar(); cargarForense(); }, [cargar, cargarForense]);
 
   const abrirCertificado = async (c) => {
     setCert({ loading: true, cliente: c.cliente });
@@ -59,6 +79,64 @@ export default function ContraloriaModule() {
       <div style={{ fontSize: "0.75rem", opacity: 0.6, marginBottom: "1.2rem" }}>
         Modo Espejo: solo se auditan expedientes con documentación COMPLETA (Cédula, Liquidaciones, AFP y CMF).
         Los incompletos quedan como "Recibido de MESA" — sin análisis, sin falsos positivos.
+      </div>
+
+      {/* 🔬 PANEL DE MANDO — AUDITORÍA FORENSE 90 DÍAS */}
+      <div data-testid="forense-panel" style={{ border: "1px solid rgba(212,175,55,0.35)", background: "linear-gradient(160deg, #0d0b06, #050505)", padding: "1.2rem 1.4rem", marginBottom: "1.6rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <div style={{ flex: 1, minWidth: 240 }}>
+            <div style={{ color: ORO, fontSize: "0.72rem", letterSpacing: "0.18em", textTransform: "uppercase" }}>🔬 Auditoría Forense · 90 Días</div>
+            <div style={{ color: "#9a8c52", fontSize: "0.72rem", marginTop: 3 }}>
+              Minería histórica de aprobaciones@centralmutuos.cl · triangulación contra documentos reales · bloques diarios en segundo plano
+            </div>
+          </div>
+          {forense?.estado === "en_proceso" && (
+            <span style={{ color: "#C7B36A", fontSize: "0.78rem" }}><i className="fa fa-cog fa-spin" /> Procesando {forense.progreso || 0}/{forense.total || "…"}</span>
+          )}
+          {forense?.estado === "completado" && (
+            <span style={{ color: "#8fd9b0", fontSize: "0.72rem" }}>✓ Completada {(forense.generado_en || "").slice(0, 16).replace("T", " ")} · {forense.progreso} casos</span>
+          )}
+          <button data-testid="forense-lanzar-btn" onClick={lanzarForense} disabled={forense?.estado === "en_proceso"}
+            style={{ background: "linear-gradient(135deg, #BF953F, #FCF6BA, #AA771C)", color: "#0a0a0a", border: "none",
+              fontWeight: 800, fontSize: "0.72rem", letterSpacing: "0.08em", padding: "0.55rem 1.2rem", cursor: "pointer",
+              opacity: forense?.estado === "en_proceso" ? 0.5 : 1 }}>
+            {forense?.estado === "completado" ? "RE-EJECUTAR MINERÍA" : "LANZAR MINERÍA 90 DÍAS"}
+          </button>
+        </div>
+        {forense?.estado === "completado" && (
+          <div style={{ marginTop: "1.1rem" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: "1rem" }}>
+              {[["RIESGO", "Aprobaciones que rompen políticas", RUBI],
+                ["PERDIDA", "Rechazos viables — rescatar", "#f59e0b"],
+                ["ERROR HUMANO", "Inconsistencias renta/antigüedad", "#93c5fd"]].map(([cat, desc, color]) => (
+                <div key={cat} data-testid={`forense-cat-${cat.toLowerCase().replace(" ", "-")}`}
+                  style={{ border: `1px solid ${color}44`, padding: "0.7rem 0.9rem" }}>
+                  <div style={{ color, fontWeight: 800, fontSize: "1.3rem" }}>{(forense.resumen || {})[cat] ?? 0}</div>
+                  <div style={{ color, fontSize: "0.68rem", fontWeight: 700, letterSpacing: "0.08em" }}>{cat}</div>
+                  <div style={{ color: "#8a8a8a", fontSize: "0.65rem", marginTop: 2 }}>{desc}</div>
+                </div>
+              ))}
+            </div>
+            {(forense.hallazgos || []).length === 0 && (
+              <div style={{ color: "#8fd9b0", fontSize: "0.78rem" }}>✓ Sin fallos de control detectados en el período.</div>
+            )}
+            {(forense.hallazgos || []).map((h, k) => (
+              <div key={k} data-testid={`forense-hallazgo-${k}`} style={{ display: "flex", gap: 10, alignItems: "baseline",
+                padding: "0.5rem 0", borderTop: "1px solid rgba(255,255,255,0.06)", fontSize: "0.78rem", flexWrap: "wrap" }}>
+                <span style={{ fontWeight: 800, fontSize: "0.65rem", letterSpacing: "0.06em", padding: "0.15rem 0.55rem", whiteSpace: "nowrap",
+                  color: "#0a0a0a",
+                  background: h.categoria === "RIESGO" ? "linear-gradient(135deg,#e11d48,#fb7185)"
+                    : h.categoria === "PERDIDA" ? "linear-gradient(135deg,#d97706,#fbbf24)" : "linear-gradient(135deg,#60a5fa,#bfdbfe)" }}>
+                  {h.categoria}
+                </span>
+                <b style={{ color: "#f8fafc" }}>{h.cliente}</b>
+                <span style={{ color: "#9a8c52", fontFamily: "monospace", fontSize: "0.72rem" }}>{h.rut || "sin RUT"}</span>
+                <span style={{ color: "#6b6b6b", fontSize: "0.68rem" }}>{h.fecha_mesa}</span>
+                <span style={{ color: "#cbd5e1", flexBasis: "100%", fontSize: "0.74rem" }}>{h.detalle}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div data-testid="contraloria-modelo" style={{ display: "flex", flexWrap: "wrap", gap: "0.8rem", marginBottom: "1.2rem" }}>

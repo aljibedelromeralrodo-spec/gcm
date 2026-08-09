@@ -807,3 +807,20 @@
   - CORS: bloque CORSMiddleware MOVIDO a líneas 32-43 (justo tras app=FastAPI) — antes
     estaba al final del archivo (funcional pero invisible para el scanner). Preflight 204 ✔.
   - deployment_agent: **PASS** — 0 bloqueantes. Sistema listo para desplegar a Live.
+
+- 2026-08-09 (parte 10) — **Auditoría Forense de Contraloría (90 Días)**:
+  - Motor _forense_job(dias) en server.py: minería sobre db.seguimiento (respuestas MESA
+    últimos 90d, 47 casos), triangulación por cliente (folder+sim+auditar_caso), procesado
+    en BLOQUES DIARIOS con asyncio.sleep(1) entre bloques (segundo plano, matemática local,
+    cero créditos LLM). Progreso persistido en db.config _key=auditoria_forense.
+  - Clasificación de FALLOS DE CONTROL: RIESGO (aprobación con violación crítica),
+    PERDIDA (rechazo con expediente completo y 0 quiebres → rescatable), ERROR HUMANO
+    (renta declarada vs reconocida >10% dif, monto MESA ≠ monto carpeta, antigüedad <12m aprobada).
+  - Endpoints: POST /api/contraloria/forense/iniciar?dias=90 · GET /api/contraloria/forense.
+  - Panel de Mando en ContraloriaModule.js: tarjetas RIESGO/PERDIDA/ERROR HUMANO, botón
+    "LANZAR MINERÍA 90 DÍAS" con progreso en vivo, hallazgos con nombre+RUT+fecha+detalle.
+    data-testid: forense-panel, forense-lanzar-btn, forense-cat-*, forense-hallazgo-*.
+  - Ejecutada real: 47 revisados → 1 RIESGO (Cristian Pavez, 2.000 UF+carga) y 1 ERROR
+    HUMANO (renta $2.210.000 vs reconocida $1.880.000). Verificado con curl + screenshot.
+  - Nota honesta: "renta considerada por MESA" no viene en los correos minados (seguimiento
+    guarda cliente/estado/asunto/monto); la comparación de renta usa la ficha recalibrada.

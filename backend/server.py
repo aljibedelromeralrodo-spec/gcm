@@ -10566,4 +10566,121 @@ async def contraloria_certificado(cliente: str = "", rut: str = ""):
     return cert
 
 
+# ══════════════════════════════════════════════════════════════════════════
+# 🔬 AUDITORÍA FORENSE DE CONTRALORÍA (90 DÍAS) — minería histórica en bloques
+# diarios (segundo plano, matemática local, cero consumo de créditos LLM).
+# ══════════════════════════════════════════════════════════════════════════
+async def _forense_buscar_contexto(cliente, rut_seg):
+    fd = None
+    rut_f = re.sub(r"[^0-9kK]", "", (rut_seg or "")).lower()
+    if rut_f:
+        fd = await db.folders.find_one({"rut": {"$regex": rut_f[:8], "$options": "i"}})
+    if not fd and cliente:
+        fd = await db.folders.find_one({"nombre": {"$regex": re.escape(cliente[:25]), "$options": "i"}})
+    sim = None
+    rut_b = re.sub(r"[^0-9kK]", "", ((fd or {}).get("rut") or rut_seg or "")).lower()
+    if rut_b:
+        sim = await db.simulaciones.find_one({"rut": {"$regex": rut_b[:8], "$options": "i"}},
+                                             sort=[("timestamp", -1)])
+    if not sim and cliente:
+        sim = await db.simulaciones.find_one(
+            {"nombre_completo": {"$regex": re.escape(cliente[:20]), "$options": "i"}},
+            sort=[("timestamp", -1)])
+    return fd, sim
+
+
+async def _forense_job(dias=90):
+    desde = (datetime.now(timezone.utc) - timedelta(days=dias)).isoformat()
+    q = {"estado": {"$in": ["aprobacion", "aprobado", "rechazo", "rechazado"]},
+         "fecha": {"$gte": desde}}
+    entradas = await db.seguimiento.find(q).sort("fecha", 1).to_list(1000)
+    modelo = await asyncio.to_thread(mesa_brain.modelo_actual)
+    modelo.pop("_id", None)
+    # Bloques diarios para proteger la estabilidad del servidor
+    bloques = {}
+    for s in entradas:
+        bloques.setdefault((s.get("fecha") or "")[:10], []).append(s)
+    hallazgos = []
+    revisados = 0
+    total = len(entradas)
+    for dia in sorted(bloques):
+        for s in bloques[dia]:
+            revisados += 1
+            cliente = (s.get("cliente") or "").strip()
+            aprobada = s.get("estado") in ("aprobacion", "aprobado")
+            try:
+                fd, sim = await _forense_buscar_contexto(cliente, s.get("rut"))
+                if not fd:
+                    continue
+                cert = await asyncio.to_thread(
+                    mesa_brain.auditar_caso, fd, sim, "aprobacion" if aprobada else "rechazo", modelo)
+                rut_cli = fd.get("rut") or s.get("rut") or ""
+                base = {"cliente": cliente or fd.get("nombre", ""), "rut": rut_cli,
+                        "fecha_mesa": (s.get("fecha") or "")[:10],
+                        "monto_mesa": s.get("monto_credito") or cert.get("monto_uf"),
+                        "certificado_id": cert.get("certificado_id")}
+                # 1) RIESGO: aprobación que rompe políticas (violación crítica)
+                if aprobada and cert.get("criticas"):
+                    hallazgos.append({**base, "categoria": "RIESGO",
+                                      "detalle": " · ".join(v["detalle"] for v in cert["criticas"][:3])})
+                # 2) PERDIDA: rechazo que según los papeles era viable
+                docs_ok = not [c for c in _criterios_folder(fd, archivos=await asyncio.to_thread(
+                    fsvc.scan_archivos, fd.get("nombre", "")))[:4] if not c["ok"]]
+                if (not aprobada) and docs_ok and not cert.get("violaciones"):
+                    hallazgos.append({**base, "categoria": "PERDIDA",
+                                      "detalle": "Rechazo de MESA con expediente completo y CERO quiebres de reglamento — candidato a rescate"})
+                # 3) ERROR HUMANO: inconsistencias de renta / antigüedad / monto
+                errores = []
+                df = fd.get("datos_financieros") or {}
+                renta = await asyncio.to_thread(mesa_brain.recalibrar_renta, sim, fd, {})
+                if renta.get("disponible") and renta.get("renta_declarada") and renta.get("renta_reconocida"):
+                    dif = renta["renta_declarada"] - renta["renta_reconocida"]
+                    if dif > renta["renta_declarada"] * 0.10:
+                        errores.append(f"Renta declarada ${renta['renta_declarada']:,} vs reconocida "
+                                       f"${renta['renta_reconocida']:,} (castigos/no imponibles ignorados: ${dif:,})")
+                try:
+                    m_seg = float(s.get("monto_credito") or 0)
+                    m_fd = float(df.get("monto_credito") or 0)
+                    if m_seg and m_fd and abs(m_seg - m_fd) > max(m_fd * 0.05, 1):
+                        errores.append(f"Monto MESA {m_seg:.0f} UF ≠ monto carpeta {m_fd:.0f} UF")
+                except (TypeError, ValueError):
+                    pass
+                antig = df.get("antiguedad_laboral_meses")
+                if aprobada and antig is not None and float(antig or 0) < 12:
+                    errores.append(f"Antigüedad {antig} meses < 12 (aprobada igual)")
+                if errores:
+                    hallazgos.append({**base, "categoria": "ERROR HUMANO", "detalle": " · ".join(errores[:3])})
+            except Exception as e:
+                logging.warning(f"Forense {cliente}: {e}")
+            await db.config.update_one({"_key": "auditoria_forense"}, {"$set": {
+                "estado": "en_proceso", "progreso": revisados, "total": total}}, upsert=True)
+        await asyncio.sleep(1)  # respiro entre bloques diarios
+    resumen = {"RIESGO": sum(1 for h in hallazgos if h["categoria"] == "RIESGO"),
+               "PERDIDA": sum(1 for h in hallazgos if h["categoria"] == "PERDIDA"),
+               "ERROR HUMANO": sum(1 for h in hallazgos if h["categoria"] == "ERROR HUMANO")}
+    await db.config.update_one({"_key": "auditoria_forense"}, {"$set": {
+        "estado": "completado", "progreso": revisados, "total": total,
+        "periodo_dias": dias, "hallazgos": hallazgos, "resumen": resumen,
+        "generado_en": now_iso()}}, upsert=True)
+    logging.info(f"🔬 Forense 90d: {revisados} revisados, {len(hallazgos)} hallazgos {resumen}")
+
+
+@api.post("/contraloria/forense/iniciar")
+async def forense_iniciar(dias: int = 90):
+    doc = await db.config.find_one({"_key": "auditoria_forense"})
+    if doc and doc.get("estado") == "en_proceso":
+        return {"ok": True, "mensaje": "Auditoría forense ya en proceso", "progreso": doc.get("progreso")}
+    await db.config.update_one({"_key": "auditoria_forense"}, {"$set": {
+        "estado": "en_proceso", "progreso": 0, "total": 0, "hallazgos": [],
+        "iniciado_en": now_iso()}}, upsert=True)
+    asyncio.create_task(_forense_job(dias))
+    return {"ok": True, "mensaje": f"Auditoría forense de {dias} días lanzada en segundo plano"}
+
+
+@api.get("/contraloria/forense")
+async def forense_estado():
+    doc = await db.config.find_one({"_key": "auditoria_forense"}, {"_id": 0})
+    return doc or {"estado": "sin_ejecutar"}
+
+
 app.include_router(api)
