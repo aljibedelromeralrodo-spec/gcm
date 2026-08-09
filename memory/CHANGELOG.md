@@ -789,3 +789,21 @@
     sin subsidio APROBADO por MESA → RIESGO DE FALSO POSITIVO. Falla la regla de 2.000 UF +
     div/renta 32%>30% + carga 42%>40% + plazo incoherente. Verificado end-to-end (curl+screenshot).
   - Fix: folder['archivos'] puede ser lista de strings → auditar_caso robusto (isinstance dict).
+
+- 2026-08-09 (parte 9) — **Reglas de Hierro + Consolidación de Madurez + CORS**:
+  - ⚔️ Políticas Maestras grabadas en db.config criterios.politicas_maestras (bloqueadas):
+    antigüedad ≥12m, edad término ≤80, morosidad NO, carga ≤40%, LTV ≤90%.
+  - mesa_brain: politicas_maestras(), evaluar_politicas_generales(), quiebres_hierro_folder().
+    Wired en _prob_aprobacion_folder (quiebre → 0% "NO VIABLE - POLÍTICA GENERAL") y en
+    auditar_caso (sección 0 ⚔️, quiebres = violaciones CRÍTICAS → RIESGO DE FALSO POSITIVO).
+    Test sintético: 81 años + moroso + LTV 95% + carga 45% + antigüedad 6m → 5 quiebres. ✔
+  - Oportunidades: GET /api/oportunidades evalúa cada prospecto con simulación bajo las
+    Reglas de Hierro (edad/LTV reglamento) → campo politica_general + badge rojo en UI.
+    (0 oportunidades en preview; los miles del Excel viven en producción.)
+  - Dashboard: alerta "🚨 HALLAZGO DE CONTRALORÍA" (data-testid alerta-hallazgo-contraloria)
+    cuando hay riesgo_falso_positivo o bajo_auditoria. Verificada con Cristian Pavez. ✔
+  - Saneamiento re-verificado: CSP/HSTS/XFO/nosniff OK, DOMPurify activo, secureStore.js
+    cifrando localStorage, ESLint (react-hooks 5.2.0) 0 errores/0 warnings.
+  - CORS: bloque CORSMiddleware MOVIDO a líneas 32-43 (justo tras app=FastAPI) — antes
+    estaba al final del archivo (funcional pero invisible para el scanner). Preflight 204 ✔.
+  - deployment_agent: **PASS** — 0 bloqueantes. Sistema listo para desplegar a Live.
