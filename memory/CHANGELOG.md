@@ -693,3 +693,11 @@
   - ⚠️ QUIRK ENTORNO: el hot-reload de uvicorn (WatchFiles) se queda COLGADO al editar
     server.py (proceso viejo termina, el nuevo no arranca). SIEMPRE hacer
     `sudo supervisorctl restart backend` tras editar server.py.
+
+- 2026-08-09 (parte 2) — **Activación final Escena Yerile**:
+  - Ficha set_credito Yerile Barrera: num_documento=533900692, rut=15.546.666-9,
+    email=ethangerardobarr@gmail.com (correo de prueba de Gerardo — requerido por
+    /api/firma/{token}/firmar para los códigos eCert; cambiar si se usa otro).
+  - Link portal: /api/firma/41e006750bd5 verificado (HTTP 200, tarjeta VIP renderiza con
+    titular + RUT enmascarado). Combinado maestro con 7 formularios listo. Firma no enviada
+    aún (firma_enviada_en=None) — queda 1 disparo disponible al presionar "Firmar Documentación".
