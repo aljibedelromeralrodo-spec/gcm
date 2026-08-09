@@ -8,6 +8,8 @@ const ORO = "var(--gold, #D4AF37)";
 export default function ContraloriaModule() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [cert, setCert] = useState(null);
+  const [certLoading, setCertLoading] = useState(false);
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -20,6 +22,19 @@ export default function ContraloriaModule() {
 
   useEffect(() => { cargar(); }, [cargar]);
 
+  const abrirCertificado = async (c) => {
+    setCert({ loading: true, cliente: c.cliente });
+    setCertLoading(true);
+    try {
+      const r = await axios.get(`${API_URL}/api/contraloria/certificado`, {
+        params: { cliente: c.cliente, rut: c.rut || "" } });
+      setCert(r.data);
+    } catch (e) {
+      setCert({ error: (e?.response?.data?.detail) || "No se pudo generar el certificado" });
+    }
+    setCertLoading(false);
+  };
+
   const calibrar = async () => {
     setLoading(true);
     try { await axios.post(`${API_URL}/api/mesa-brain/calibrar`); await cargar(); }
@@ -30,6 +45,7 @@ export default function ContraloriaModule() {
   const v60 = m.ventana_60 || {};
   const casos = data?.casos || [];
   const inconsistencias = casos.filter(c => c.estado_auditoria === "BAJO AUDITORÍA").length;
+  const falsosPos = casos.filter(c => c.estado_auditoria === "RIESGO DE FALSO POSITIVO").length;
   const recibidos = casos.filter(c => c.estado_auditoria === "RECIBIDO DE MESA").length;
 
   return (
@@ -52,6 +68,7 @@ export default function ContraloriaModule() {
           { lbl: "Aprobadas 60d", val: v60.aprobadas ?? m.aprobadas ?? "—", color: ORO },
           { lbl: "Rechazadas 60d", val: v60.rechazadas ?? m.rechazadas ?? "—", color: RUBI },
           { lbl: "Bajo Auditoría", val: inconsistencias, color: inconsistencias ? RUBI : ORO },
+          { lbl: "Riesgo Falso Positivo", val: falsosPos, color: falsosPos ? RUBI : ORO },
           { lbl: "Recibido de MESA", val: recibidos, color: "#9ca3af" },
         ].map((s, i) => (
           <div key={i} style={{ minWidth: 150, background: "rgba(255,255,255,0.03)", padding: "0.7rem 1rem",
@@ -113,14 +130,20 @@ export default function ContraloriaModule() {
             {!loading && casos.length === 0 && <tr><td colSpan={6} style={{ padding: "1.5rem", textAlign: "center", opacity: 0.6 }}>
               Sin respuestas de MESA en la ventana de auditoría.</td></tr>}
             {!loading && casos.map((c, i) => {
-              const audit = c.estado_auditoria === "BAJO AUDITORÍA";
+              const riesgo = c.estado_auditoria === "RIESGO DE FALSO POSITIVO";
+              const audit = c.estado_auditoria === "BAJO AUDITORÍA" || riesgo;
               const recibido = c.estado_auditoria === "RECIBIDO DE MESA";
               return (
-                <tr key={i} data-testid={`contraloria-fila-${i}`} style={{ borderBottom: "1px solid rgba(255,255,255,0.05)",
-                  background: audit ? "rgba(225,29,72,0.07)" : "transparent",
+                <tr key={i} data-testid={`contraloria-fila-${i}`}
+                  onClick={() => !recibido && abrirCertificado(c)}
+                  style={{ borderBottom: "1px solid rgba(255,255,255,0.05)",
+                  cursor: recibido ? "default" : "pointer",
+                  background: riesgo ? "rgba(225,29,72,0.13)" : audit ? "rgba(225,29,72,0.07)" : "transparent",
                   opacity: recibido ? 0.65 : 1 }}>
                   <td style={{ padding: "0.6rem 0.9rem", opacity: 0.7, whiteSpace: "nowrap" }}>{(c.fecha || "").slice(0, 10)}</td>
-                  <td style={{ padding: "0.6rem 0.9rem", fontWeight: 600 }}>{c.cliente}</td>
+                  <td style={{ padding: "0.6rem 0.9rem", fontWeight: 600 }}>{c.cliente}
+                    {!recibido && <i className="fa fa-certificate" style={{ marginLeft: 8, color: ORO, fontSize: "0.7rem", opacity: 0.7 }} title="Ver Certificado de Auditoría Interna" />}
+                  </td>
                   <td style={{ padding: "0.6rem 0.9rem" }}>
                     <span style={{ color: c.respuesta_mesa === "aprobacion" ? "#10d98e" : RUBI, fontWeight: 700, textTransform: "uppercase", fontSize: "0.7rem" }}>
                       {c.respuesta_mesa === "aprobacion" ? "Aprobada" : "Rechazada"}
@@ -129,7 +152,7 @@ export default function ContraloriaModule() {
                   <td style={{ padding: "0.6rem 0.9rem" }} title={(c.factores || []).join("\n")}>
                     {recibido
                       ? <span style={{ fontStyle: "italic", opacity: 0.8 }}>Documentación incompleta — auditoría no aplicada</span>
-                      : (c.prob_dashai != null ? `Probabilidad de Aprobación MESA: ${c.prob_dashai}%` : "sin carpeta")}
+                      : (c.veredicto_dashai || (c.prob_dashai != null ? `Probabilidad de Aprobación MESA: ${c.prob_dashai}%` : "sin carpeta"))}
                   </td>
                   <td style={{ padding: "0.6rem 0.9rem", color: recibido ? "#9ca3af" : "#fda4af", fontSize: "0.72rem" }}>
                     {recibido
@@ -138,13 +161,13 @@ export default function ContraloriaModule() {
                   </td>
                   <td style={{ padding: "0.6rem 0.9rem" }}>
                     <span data-testid={`contraloria-estado-${i}`} style={{ fontWeight: 800, fontSize: "0.68rem", letterSpacing: "0.08em",
-                      padding: "0.2rem 0.7rem",
+                      padding: "0.2rem 0.7rem", whiteSpace: "nowrap",
                       color: audit ? "#fff" : recibido ? "#d1d5db" : "#0a0a0a",
                       background: audit ? "linear-gradient(135deg, #9f1239, #e11d48)"
                         : recibido ? "rgba(255,255,255,0.08)"
                         : "linear-gradient(135deg, #BF953F, #FCF6BA, #AA771C)",
                       border: recibido ? "1px solid rgba(255,255,255,0.2)" : "none",
-                      boxShadow: audit ? "0 0 18px -6px rgba(225,29,72,0.8)" : "none" }}>
+                      boxShadow: riesgo ? "0 0 22px -4px rgba(225,29,72,0.95)" : audit ? "0 0 18px -6px rgba(225,29,72,0.8)" : "none" }}>
                       {c.estado_auditoria}
                     </span>
                   </td>
@@ -154,6 +177,74 @@ export default function ContraloriaModule() {
           </tbody>
         </table>
       </div>
+
+      {cert && (
+        <div data-testid="contraloria-cert-modal" onClick={() => setCert(null)}
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 999,
+            display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "3rem 1rem", overflow: "auto" }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: "#0a0a0a", border: `1px solid ${ORO}`,
+            maxWidth: 760, width: "100%", boxShadow: "0 30px 80px -20px rgba(0,0,0,0.9)" }}>
+            <div style={{ background: "linear-gradient(135deg,#0a0a0a,#1a160c)", borderBottom: `1px solid ${ORO}`, padding: "1.3rem 1.6rem" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start" }}>
+                <div>
+                  <div style={{ color: ORO, fontSize: "0.7rem", letterSpacing: "0.2em", textTransform: "uppercase" }}>Certificado de Auditoría Interna</div>
+                  <div style={{ color: "#FCF6BA", fontSize: "1.3rem", fontWeight: 700, fontFamily: "'Playfair Display',serif", marginTop: 4 }}>{cert.cliente}</div>
+                  {cert.certificado_id && <div style={{ color: "#9a8c52", fontSize: "0.7rem", fontFamily: "monospace", marginTop: 2 }}>{cert.certificado_id} · {cert.rut}</div>}
+                </div>
+                <button data-testid="cert-cerrar" onClick={() => setCert(null)} style={{ background: "transparent", border: `1px solid ${ORO}`, color: ORO, padding: "0.3rem 0.7rem", cursor: "pointer" }}>✕</button>
+              </div>
+            </div>
+            <div style={{ padding: "1.4rem 1.6rem" }}>
+              {certLoading && <div style={{ color: "#C7B36A", textAlign: "center", padding: "2rem" }}><i className="fa fa-cog fa-spin" /> Ejecutando auditoría 360°…</div>}
+              {cert.error && <div style={{ color: "#fda4af", padding: "1rem" }}>{cert.error}</div>}
+              {!certLoading && cert.estado_auditoria && (
+                <>
+                  <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center", marginBottom: "1.2rem",
+                    padding: "0.9rem 1.1rem",
+                    background: cert.estado_auditoria === "RIESGO DE FALSO POSITIVO" ? "rgba(225,29,72,0.15)" : "rgba(212,175,55,0.08)",
+                    border: `1px solid ${cert.estado_auditoria === "RIESGO DE FALSO POSITIVO" ? "rgba(225,29,72,0.5)" : "rgba(212,175,55,0.35)"}` }}>
+                    <span style={{ fontWeight: 800, letterSpacing: "0.06em",
+                      color: cert.estado_auditoria === "RIESGO DE FALSO POSITIVO" ? "#fecaca" : ORO }}>
+                      {cert.estado_auditoria === "RIESGO DE FALSO POSITIVO" ? "🚨 " : "🛡 "}{cert.estado_auditoria}
+                    </span>
+                    <span style={{ color: "#e5e5e5", fontSize: "0.82rem" }}>Veredicto DashAI: <b>{cert.veredicto_dashai}</b></span>
+                    <span style={{ color: "#9ca3af", fontSize: "0.75rem" }}>MESA: {cert.respuesta_mesa === "aprobacion" ? "Aprobó" : "Rechazó"} · {cert.monto_uf ? `${cert.monto_uf} UF` : ""} · {cert.con_subsidio ? "con subsidio" : "sin subsidio"}</span>
+                  </div>
+
+                  {(cert.politica_saltada || []).length > 0 && (
+                    <div style={{ marginBottom: "1.2rem", border: "1px solid rgba(225,29,72,0.4)", background: "rgba(30,6,12,0.6)", padding: "0.9rem 1.1rem" }}>
+                      <b style={{ color: "#fda4af", fontSize: "0.78rem", letterSpacing: "0.06em" }}>POLÍTICAS QUE LA MESA SE ESTÁ SALTANDO</b>
+                      <ul style={{ margin: "0.6rem 0 0", paddingLeft: 18, color: "#fecaca", fontSize: "0.78rem", lineHeight: 1.7 }}>
+                        {cert.politica_saltada.map((p, k) => <li key={k}>{p}</li>)}
+                      </ul>
+                    </div>
+                  )}
+
+                  {(cert.secciones || []).map((sec, si) => (
+                    <div key={si} style={{ marginBottom: "1.2rem" }}>
+                      <div style={{ color: ORO, fontSize: "0.75rem", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "0.5rem", borderBottom: "1px solid rgba(212,175,55,0.2)", paddingBottom: 4 }}>{sec.titulo}</div>
+                      {(sec.items || []).map((it, ii) => (
+                        <div key={ii} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "0.35rem 0", borderBottom: "1px solid rgba(255,255,255,0.04)", fontSize: "0.78rem" }}>
+                          <span style={{ color: "#d1d5db", flex: 1 }}>
+                            {it.ok === false ? "❌ " : it.ok === true ? "✅ " : "• "}{it.regla}
+                          </span>
+                          <span style={{ color: it.ok === false ? "#fda4af" : "#e5e5e5", fontFamily: "monospace", textAlign: "right" }}>
+                            {it.real}{it.esperado && it.ok !== null ? ` (${it.esperado})` : ""}
+                          </span>
+                        </div>
+                      ))}
+                      {sec.nota && <div style={{ color: "#9a8c52", fontSize: "0.72rem", marginTop: 6, fontStyle: "italic" }}>{sec.nota}</div>}
+                    </div>
+                  ))}
+                  <div style={{ color: "#6b6b6b", fontSize: "0.68rem", textAlign: "right", marginTop: "1rem" }}>
+                    Generado por DashAI · Contraloría Suprema · {(cert.generado_en || "").slice(0, 16).replace("T", " ")}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

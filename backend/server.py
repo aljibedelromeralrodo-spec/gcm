@@ -9614,20 +9614,32 @@ async def _despacho_post_firma(doc):
     files = sorted(dest_dir.glob("FIRMADO_*.pdf")) if dest_dir.exists() else []
     if not files:
         return {"success": False, "error": "sin formularios divididos"}
-    adjuntos = [{"filename": p.name, "content_b64": _b64(p.read_bytes())} for p in files]
+    masters = sorted(dest_dir.glob("*_FIRMADO_COMPLETO.pdf"))
+    master_filename = f"✅ DOCUMENTO FIRMADO VALIDO - {fsvc.safe_name(nombre_cli)}.pdf"
+    adjuntos = []
+    for p in masters:
+        adjuntos.append({"filename": master_filename, "content_b64": _b64(p.read_bytes())})
+    for p in files:
+        adjuntos.append({"filename": f"EXTRACTO (lectura) - {p.name}", "content_b64": _b64(p.read_bytes())})
     destinatario = os.environ.get("MAIL2_USER", "")
     cuerpo = f"""
-    <div style="font-family:Arial,sans-serif;font-size:14px;color:#1a1a1a;max-width:640px">
+    <div style="font-family:Arial,sans-serif;font-size:14px;color:#1a1a1a;max-width:660px">
       <div style="background:#0a0a0a;padding:18px 22px;border-left:4px solid #D4AF37">
         <span style="color:#D4AF37;font-size:16px;font-weight:700;letter-spacing:0.06em">💎 CENTRAL MUTUOS</span><br>
         <span style="color:#e5e5e5;font-size:12px;letter-spacing:0.1em">DOCUMENTACIÓN FIRMADA Y VALIDADA</span>
       </div>
       <div style="padding:18px 4px">
-        <p>Gerardo, el proceso de firma de <b>{nombre_cli}</b> ha finalizado con éxito.
-        Se adjuntan los documentos divididos y con rastro digital activo para su gestión.</p>
-        <ul style="font-size:13px;color:#444">{"".join(f"<li>{p.name}</li>" for p in files)}</ul>
-        <p style="font-size:12px;color:#888">Cada formulario incorpora al pie su huella de rastro
-        (archivo madre, ID eCert y SHA-256) verificable en eCert Chile.</p>
+        <p>Gerardo, el proceso de firma de <b>{nombre_cli}</b> ha finalizado con éxito.</p>
+        <div style="background:#F0FDF4;border:1px solid #16a34a;border-radius:10px;padding:14px 16px;margin:16px 0">
+          <div style="color:#15803d;font-weight:800;font-size:14px;margin-bottom:6px">✅ DOCUMENTO LEGAL VÁLIDO (el que se entrega al banco)</div>
+          <div style="font-size:13px;color:#166534"><b>{master_filename if masters else 'COMBINADO_FIRMADO_COMPLETO.pdf'}</b></div>
+          <div style="font-size:12px;color:#3f6212;margin-top:6px">Único archivo con la firma criptográfica verificable en eCert. Contiene el set completo firmado.</div>
+        </div>
+        <div style="background:#FFFBEB;border:1px solid #d4a017;border-radius:10px;padding:14px 16px;margin:16px 0">
+          <div style="color:#92400e;font-weight:800;font-size:14px;margin-bottom:6px">📑 Copias de lectura — {len(files)} extracto(s) (NO validan solas)</div>
+          <ul style="font-size:12px;color:#78350f;margin:0;padding-left:18px">{"".join(f"<li>{p.name}</li>" for p in files)}</ul>
+          <div style="font-size:12px;color:#78350f;margin-top:6px">Cada extracto lleva al pie su rastro (archivo madre, ID eCert y SHA-256).</div>
+        </div>
       </div>
     </div>
     """
@@ -9653,22 +9665,48 @@ async def _enviar_firmados_interno(doc, correos, asunto=None):
     if not files:
         raise ValueError("Primero trae el set firmado desde eCert")
     masters = sorted(dest_dir.glob("*_FIRMADO_COMPLETO.pdf"))
-    adjuntos = [{"filename": p.name, "content_b64": _b64(p.read_bytes())}
-                for p in files + masters]
     nombre = doc.get("nombre", "")
+    # ENTREGA AL BANCO: el ARCHIVO MADRE va PRIMERO y con nombre inequívoco (documento legal
+    # válido y verificable en eCert). Los extractos van después, marcados como copias de lectura.
+    master_filename = f"✅ DOCUMENTO FIRMADO VALIDO - {fsvc.safe_name(nombre)}.pdf"
+    adjuntos = []
+    for p in masters:
+        adjuntos.append({"filename": master_filename, "content_b64": _b64(p.read_bytes())})
+    for p in files:
+        adjuntos.append({"filename": f"EXTRACTO (lectura) - {p.name}", "content_b64": _b64(p.read_bytes())})
+    master_nombre_mostrar = master_filename if masters else "COMBINADO_FIRMADO_COMPLETO.pdf"
     cuerpo = f"""
-    <div style="font-family:Arial,sans-serif;font-size:14px;color:#222">
-      <h2 style="color:#6c5ce7;margin:0 0 8px">Set de crédito firmado — {nombre}</h2>
-      <p>Se adjunta el set de crédito de <b>{nombre}</b>{(' (RUT ' + doc.get('rut') + ')') if doc.get('rut') else ''},
-      firmado electrónicamente vía eCert Chile, separado documento por documento ({len(files)} archivos).</p>
-      <ul>{"".join(f"<li>{p.name}</li>" for p in files)}</ul>
-      <p><b>Verificación:</b> cada extracto lleva al pie su rastro de firma (archivo madre, ID eCert y huella
-      SHA-256). La firma electrónica avanzada se verifica en la página de eCert con el archivo madre adjunto
-      ({masters[0].name if masters else 'COMBINADO_FIRMADO_COMPLETO.pdf'}), que contiene el set completo firmado.</p>
-      <p style="color:#888;font-size:12px">Central Mutuos - Con Creces</p>
+    <div style="font-family:Arial,sans-serif;font-size:14px;color:#1a1a1a;max-width:660px">
+      <div style="background:#0a0a0a;padding:18px 22px;border-left:4px solid #D4AF37">
+        <span style="color:#D4AF37;font-size:16px;font-weight:700;letter-spacing:0.06em">💎 CENTRAL MUTUOS · CON CRECES</span><br>
+        <span style="color:#e5e5e5;font-size:12px;letter-spacing:0.1em">SET DE CRÉDITO FIRMADO ELECTRÓNICAMENTE — {nombre.upper()}{(' · RUT ' + doc.get('rut')) if doc.get('rut') else ''}</span>
+      </div>
+      <div style="padding:18px 4px">
+        <p>Se adjunta el Set de Crédito de <b>{nombre}</b>, firmado mediante Firma Electrónica Avanzada
+        vía e-CertChile (Ley 19.799).</p>
+
+        <div style="background:#F0FDF4;border:1px solid #16a34a;border-radius:10px;padding:14px 16px;margin:16px 0">
+          <div style="color:#15803d;font-weight:800;font-size:14px;margin-bottom:6px">✅ DOCUMENTO LEGAL VÁLIDO (verifíquelo en eCert)</div>
+          <div style="font-size:13px;color:#166534"><b>{master_nombre_mostrar}</b></div>
+          <div style="font-size:12px;color:#3f6212;margin-top:6px">Este es el ÚNICO archivo con la firma criptográfica
+          verificable. Contiene el set completo firmado. Súbalo al validador de eCert
+          (<span style="color:#166534">plataformafirma.ecertchile.cl</span>) para comprobar la firma.</div>
+        </div>
+
+        <div style="background:#FFFBEB;border:1px solid #d4a017;border-radius:10px;padding:14px 16px;margin:16px 0">
+          <div style="color:#92400e;font-weight:800;font-size:14px;margin-bottom:6px">📑 COPIAS DE LECTURA — {len(files)} extracto(s) (NO validan por separado)</div>
+          <div style="font-size:12px;color:#78350f;margin-bottom:8px">Se incluyen solo por comodidad de lectura,
+          separadas documento por documento. Al partir un PDF firmado la firma digital ya NO es verificable en
+          cada parte; cada extracto lleva al pie su rastro (archivo madre, ID eCert y huella SHA-256).
+          <b>Para validez legal, use siempre el DOCUMENTO LEGAL VÁLIDO de arriba.</b></div>
+          <ul style="font-size:12px;color:#78350f;margin:0;padding-left:18px">{"".join(f"<li>{p.name}</li>" for p in files)}</ul>
+        </div>
+
+        <p style="color:#888;font-size:12px">Central Mutuos — Con Creces</p>
+      </div>
     </div>
     """
-    asunto = asunto or f"Set de crédito firmado - {nombre}"
+    asunto = asunto or f"Set de crédito firmado (documento válido + extractos) - {nombre}"
     enviados, errores = [], []
     for c in correos:
         r = await asyncio.to_thread(mail.send_mail, c, asunto, cuerpo, adjuntos, "secundaria")
@@ -10446,11 +10484,6 @@ async def contraloria_casos(dias: int = 60):
             prob = await asyncio.to_thread(_prob_aprobacion_folder, fd, stats)
             caso["prob_dashai"] = prob.get("porcentaje")
             caso["factores"] = prob.get("factores", [])
-            fallas = [f for f in caso["factores"]
-                      if re.search(r"faltan documentos|falta informe CMF|m[ií]nimo 2\.000|REGLA DURA|NO VIABLE", f, re.I)]
-            caso["criterios_fallidos"] = [re.sub(r"^[-+\d%:⛔🔴 ]+", "", f) for f in fallas]
-            # REGLAMENTO MAESTRO: validar ratios exactos BTG/AMERIS contra la última simulación
-            crit = stats.get("criterios") or {}
             sim = None
             rut_f = re.sub(r"[^0-9kK]", "", (fd.get("rut") or "")).lower()
             if rut_f:
@@ -10460,30 +10493,54 @@ async def contraloria_casos(dias: int = 60):
                 sim = await db.simulaciones.find_one(
                     {"nombre_completo": {"$regex": re.escape(cliente[:20]), "$options": "i"}},
                     sort=[("timestamp", -1)])
-            if sim:
-                con_sub_s = bool((fd.get("datos_financieros") or {}).get("con_subsidio"))
-                btg = (crit.get("btg_pactual") or {}).get("con_subsidio" if con_sub_s else "sin_subsidio") or {}
-                ltv = float(sim.get("ltv") or 0)
-                ltv_max = float(btg.get("ltv_max") or (0.80 if con_sub_s else 0.90))
-                if ltv and ltv > ltv_max:
-                    caso["criterios_fallidos"].append(
-                        f"LTV {round(ltv*100)}% supera máximo {round(ltv_max*100)}% (BTG {'con' if con_sub_s else 'sin'} subsidio)")
-                divr = float(sim.get("div_renta_conjunta" if sim.get("tiene_codeudor") else "div_renta_individual") or 0)
-                div_max = float(btg.get("div_renta_max") or btg.get("div_renta_max_sin_codeudor") or 0.30)
-                if divr and divr > div_max:
-                    caso["criterios_fallidos"].append(
-                        f"Dividendo/Renta {round(divr*100,1)}% supera máximo {round(div_max*100)}% (Reglamento BTG)")
-            if caso["respuesta_mesa"] == "aprobacion" and caso["criterios_fallidos"]:
-                caso["estado_auditoria"] = "BAJO AUDITORÍA"
-        if caso["estado_auditoria"] == "BAJO AUDITORÍA" and s.get("id"):
+            # AUDITORÍA 360° (Contraloría Suprema): reglas de bodega + aprendizaje + renta + plazos
+            cert = await asyncio.to_thread(
+                mesa_brain.auditar_caso, fd, sim, caso["respuesta_mesa"], modelo)
+            caso["estado_auditoria"] = cert["estado_auditoria"]
+            caso["veredicto_dashai"] = cert["veredicto_dashai"]
+            caso["criterios_fallidos"] = [v["detalle"] for v in cert["violaciones"]]
+            caso["politica_saltada"] = cert["politica_saltada"]
+            caso["certificado_id"] = cert["certificado_id"]
+        if caso["estado_auditoria"] in ("BAJO AUDITORÍA", "RIESGO DE FALSO POSITIVO") and s.get("id"):
             await db.seguimiento.update_one({"id": s["id"]},
-                                            {"$set": {"estado_auditoria": "BAJO AUDITORÍA"}})
+                                            {"$set": {"estado_auditoria": caso["estado_auditoria"]}})
         casos.append(caso)
-    _rank = {"BAJO AUDITORÍA": 0, "VALIDADO": 1, "RECIBIDO DE MESA": 2}
-    casos.sort(key=lambda c: (_rank.get(c["estado_auditoria"], 3), c["fecha"]))
+    _rank = {"RIESGO DE FALSO POSITIVO": 0, "BAJO AUDITORÍA": 1, "VALIDADO": 2, "RECIBIDO DE MESA": 3}
+    casos.sort(key=lambda c: (_rank.get(c["estado_auditoria"], 4), c["fecha"]))
     return {"modelo": modelo, "casos": casos,
+            "riesgo_falso_positivo": sum(1 for c in casos if c["estado_auditoria"] == "RIESGO DE FALSO POSITIVO"),
             "bajo_auditoria": sum(1 for c in casos if c["estado_auditoria"] == "BAJO AUDITORÍA"),
             "recibidos": sum(1 for c in casos if c["estado_auditoria"] == "RECIBIDO DE MESA")}
+
+
+@api.get("/contraloria/certificado")
+async def contraloria_certificado(cliente: str = "", rut: str = ""):
+    """CERTIFICADO DE AUDITORÍA INTERNA — auditoría 360° profunda de un cliente."""
+    modelo = await asyncio.to_thread(mesa_brain.modelo_actual)
+    modelo.pop("_id", None)
+    fd = None
+    if rut:
+        rut_f = re.sub(r"[^0-9kK]", "", rut).lower()
+        fd = await db.folders.find_one({"rut": {"$regex": rut_f[:8], "$options": "i"}})
+    if not fd and cliente:
+        fd = await db.folders.find_one({"nombre": {"$regex": re.escape(cliente[:25]), "$options": "i"}})
+    if not fd:
+        raise HTTPException(status_code=404, detail="No se encontró la carpeta del cliente")
+    sim = None
+    rut_f = re.sub(r"[^0-9kK]", "", (fd.get("rut") or "")).lower()
+    if rut_f:
+        sim = await db.simulaciones.find_one({"rut": {"$regex": rut_f[:8], "$options": "i"}}, sort=[("timestamp", -1)])
+    if not sim:
+        sim = await db.simulaciones.find_one(
+            {"nombre_completo": {"$regex": re.escape((fd.get("nombre") or "")[:20]), "$options": "i"}},
+            sort=[("timestamp", -1)])
+    seg = await db.seguimiento.find_one(
+        {"cliente": {"$regex": re.escape((fd.get("nombre") or "")[:20]), "$options": "i"},
+         "estado": {"$in": ["aprobacion", "aprobado", "rechazo", "rechazado"]}}, sort=[("fecha", -1)])
+    resp = "aprobacion" if (seg or {}).get("estado") in ("aprobacion", "aprobado") else "rechazo"
+    cert = await asyncio.to_thread(mesa_brain.auditar_caso, fd, sim, resp, modelo)
+    cert["fecha_mesa"] = (seg or {}).get("fecha", "")
+    return cert
 
 
 app.include_router(api)

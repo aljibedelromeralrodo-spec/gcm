@@ -770,3 +770,22 @@
   - RECORDATORIO legal (parte 6): los divididos FIRMADO_* NO validan solos en eCert; la firma
     criptográfica válida vive en el archivo madre COMBINADO_..._FIRMADO_COMPLETO.pdf.
   - Verificado: backend operativo, /api/firma/{token}/estado responde OK.
+
+- 2026-08-09 (parte 8) — **Contraloría Suprema: Auditoría 360° + Certificado Interno**:
+  - Nuevo motor mesa_brain.auditar_caso(folder, sim, respuesta_mesa, modelo): audita cada
+    aprobación MESA cruzando (1) Reglas de Bodega BTG/Ameris (LTV, div/renta, carga, edad+plazo<80,
+    rango monto) incl. REGLA INVIOLABLE 2.000 UF sin subsidio (MONTO_MIN_UF_SIN_SUBSIDIO_HARD);
+    (2) Recalibración de renta (recalibrar_renta): castigos −15% variable / −20% honorarios y
+    descarte de horas extra + no imponibles; (3) Lógica de Aprendizaje: CMF ausente, bono variable
+    alto vs renta fija, patrones del modelo; (4) Integridad de Plazos (plazo vs carga/capacidad).
+  - Detección de sesgo: si MESA aprueba con violación crítica → estado "RIESGO DE FALSO POSITIVO"
+    + lista "política_saltada". Genera Certificado de Auditoría Interna (certificado_id CAI-...).
+  - Endpoints: GET /api/contraloria/certificado?cliente=&rut= (certificado completo);
+    /api/contraloria/casos ahora usa auditar_caso (nuevos contadores riesgo_falso_positivo).
+  - Frontend ContraloriaModule.js: tarjeta "Riesgo Falso Positivo", filas clickeables →
+    modal Certificado (secciones ✅/❌, políticas saltadas, recalibración). data-testid
+    contraloria-cert-modal / cert-cerrar.
+  - CASO CRISTIAN PAVEZ (sembrado demo, RUT 16.845.321-0, folder+sim+seguimiento): 1.800 UF
+    sin subsidio APROBADO por MESA → RIESGO DE FALSO POSITIVO. Falla la regla de 2.000 UF +
+    div/renta 32%>30% + carga 42%>40% + plazo incoherente. Verificado end-to-end (curl+screenshot).
+  - Fix: folder['archivos'] puede ser lista de strings → auditar_caso robusto (isinstance dict).

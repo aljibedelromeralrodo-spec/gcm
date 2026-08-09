@@ -131,3 +131,206 @@ def modelo_actual(max_age_horas=24):
         except Exception:
             return m
     return calibrar()
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 🏛 CONTRALORÍA SUPREMA — Auditoría 360° (Reglas de Bodega + Aprendizaje)
+# ══════════════════════════════════════════════════════════════════════════
+# Regla inviolable del dueño: SIN SUBSIDIO el crédito mínimo es 2.000 UF.
+MONTO_MIN_UF_SIN_SUBSIDIO_HARD = 2000
+
+
+def _num(x, d=0.0):
+    try:
+        return float(x)
+    except Exception:
+        return d
+
+
+def _criterios():
+    return _db().config.find_one({"_key": "criterios"}) or {}
+
+
+def recalibrar_renta(sim, folder, castigos):
+    """RECALIBRACIÓN DE INGRESOS — aplica los castigos del reglamento sobre la renta y
+    descarta horas extra / asignaciones no imponibles. Devuelve dict con detalle y notas.
+    Degrada con nota honesta si no hay desglose de renta en los documentos."""
+    df = (folder or {}).get("datos_financieros") or {}
+    cr = (folder or {}).get("credit_request") or {}
+    renta_fija = _num(df.get("renta_liquida") or df.get("renta_fija") or cr.get("renta_liquida"))
+    renta_variable = _num(df.get("renta_variable") or df.get("bonos_variables"))
+    honorarios = _num(df.get("honorarios") or df.get("renta_honorarios"))
+    horas_extra = _num(df.get("horas_extra"))
+    no_imponibles = _num(df.get("asignaciones_no_imponibles") or df.get("movilizacion_colacion"))
+    castigo_var = _num((castigos or {}).get("renta_variable_castigo"), 0.15)
+    castigo_hon = _num((castigos or {}).get("honorarios_castigo"), 0.20)
+    if not (renta_fija or renta_variable or honorarios):
+        return {"disponible": False,
+                "nota": ("No hay desglose de renta líquida en la ficha/documentos parseados. "
+                         "Cargue las liquidaciones para recalibrar la renta con castigos reglamentarios."),
+                "renta_reconocida": None, "descartado": [], "castigos": []}
+    detalle_castigos = []
+    renta_var_castigada = renta_variable * (1 - castigo_var)
+    if renta_variable:
+        detalle_castigos.append(f"Renta variable ${int(renta_variable):,} castigada −{int(castigo_var*100)}% → ${int(renta_var_castigada):,}")
+    honorarios_castigados = honorarios * (1 - castigo_hon)
+    if honorarios:
+        detalle_castigos.append(f"Honorarios ${int(honorarios):,} castigados −{int(castigo_hon*100)}% → ${int(honorarios_castigados):,}")
+    descartado = []
+    if horas_extra:
+        descartado.append(f"Horas extra ${int(horas_extra):,} (no imponible reglamentario)")
+    if no_imponibles:
+        descartado.append(f"Asignaciones no imponibles ${int(no_imponibles):,}")
+    renta_reconocida = renta_fija + renta_var_castigada + honorarios_castigados
+    return {"disponible": True, "renta_reconocida": round(renta_reconocida),
+            "renta_declarada": round(renta_fija + renta_variable + honorarios + horas_extra + no_imponibles),
+            "castigos": detalle_castigos, "descartado": descartado,
+            "nota": "Renta líquida recalibrada según reglamento (castigos + descarte de no imponibles)."}
+
+
+def auditar_caso(folder, sim, respuesta_mesa, modelo=None):
+    """AUDITORÍA 360° de una decisión de la MESA. Devuelve un Certificado de Auditoría Interna
+    con secciones (Reglas de Bodega, Recalibración de Ingresos, Aprendizaje, Integridad de Plazos),
+    lista de violaciones y veredicto/estado. Detecta RIESGO DE FALSO POSITIVO."""
+    from datetime import datetime, timezone
+    crit = _criterios()
+    modelo = modelo or {}
+    folder = folder or {}
+    sim = sim or {}
+    df = folder.get("datos_financieros") or {}
+    con_subsidio = bool(df.get("con_subsidio"))
+    btg = (crit.get("btg_pactual") or {}).get("con_subsidio" if con_subsidio else "sin_subsidio") or {}
+    castigos = (crit.get("btg_pactual") or {}).get("castigos_renta") or {}
+
+    monto = _num(df.get("monto_credito") or sim.get("credito_solicitado_uf") or sim.get("credito_maximo_uf"))
+    ltv = _num(sim.get("ltv"))
+    tiene_cod = bool(sim.get("tiene_codeudor"))
+    divr = _num(sim.get("div_renta_conjunta") if tiene_cod else sim.get("div_renta_individual"))
+    carga = _num(sim.get("carga_fin_conjunta") if tiene_cod else sim.get("carga_fin_individual"))
+    edad_plazo = _num(sim.get("edad_plazo"))
+    plazo = _num(sim.get("plazo_anos"))
+
+    violaciones = []
+    secciones = []
+
+    # ── 1. REGLAS DE BODEGA (BTG/Ameris) ──────────────────────────────────
+    reglas = []
+
+    def _chk(nombre, real, cmp_ok, esperado, critico=False):
+        reglas.append({"regla": nombre, "real": real, "esperado": esperado, "ok": cmp_ok})
+        if not cmp_ok:
+            violaciones.append({"regla": nombre, "detalle": f"{nombre}: {real} (límite {esperado})",
+                                "critico": critico})
+
+    # Regla dura 2.000 UF sin subsidio (INVIOLABLE)
+    if not con_subsidio and monto:
+        ok = monto >= MONTO_MIN_UF_SIN_SUBSIDIO_HARD
+        _chk("Monto mínimo SIN subsidio (regla inviolable 2.000 UF)",
+             f"{monto:.0f} UF", ok, f"≥ {MONTO_MIN_UF_SIN_SUBSIDIO_HARD} UF", critico=True)
+
+    ltv_max = _num(btg.get("ltv_max"), 0.9 if not con_subsidio else 0.8)
+    if ltv:
+        _chk("LTV / Financiamiento", f"{ltv*100:.0f}%", ltv <= ltv_max + 1e-6, f"≤ {ltv_max*100:.0f}%")
+    div_max = _num(btg.get("div_renta_max_sin_codeudor") or btg.get("div_renta_max"), 0.30)
+    if tiene_cod:
+        div_max = _num(btg.get("div_renta_max_con_codeudor_conjunto") or btg.get("div_renta_max") or div_max, div_max)
+    if divr:
+        _chk("Dividendo / Renta", f"{divr*100:.1f}%", divr <= div_max + 1e-6, f"≤ {div_max*100:.0f}%")
+    carga_max = _num(btg.get("carga_financiera_max") or btg.get("carga_financiera_max_sin_codeudor") or btg.get("carga_fin_max"), 0.40)
+    if carga:
+        _chk("Carga financiera", f"{carga*100:.1f}%", carga <= carga_max + 1e-6, f"≤ {carga_max*100:.0f}%")
+    edad_plazo_max = _num(btg.get("edad_plazo_max") or btg.get("edad_termino_max"), 80)
+    if edad_plazo:
+        _chk("Edad + Plazo al término", f"{edad_plazo:.0f} años", edad_plazo <= edad_plazo_max, f"< {edad_plazo_max:.0f}")
+    mmin = _num(btg.get("monto_credito_min_uf"))
+    mmax = _num(btg.get("monto_credito_max_uf"))
+    if monto and mmax:
+        _chk("Monto crédito en rango bodega", f"{monto:.0f} UF",
+             (monto >= mmin if mmin else True) and monto <= mmax, f"{mmin:.0f}–{mmax:.0f} UF")
+    secciones.append({"titulo": "Reglas de Bodega · BTG/Ameris", "items": reglas})
+
+    # ── 2. RECALIBRACIÓN DE INGRESOS ──────────────────────────────────────
+    renta = recalibrar_renta(sim, folder, castigos)
+    items_renta = []
+    if renta["disponible"]:
+        items_renta.append({"regla": "Renta líquida reconocida (post castigos)",
+                            "real": f"${renta['renta_reconocida']:,}", "esperado": "vs. declarada", "ok": True})
+        for c in renta["castigos"]:
+            items_renta.append({"regla": "Castigo aplicado", "real": c, "esperado": "reglamento", "ok": True})
+        for d in renta["descartado"]:
+            items_renta.append({"regla": "Descartado del cálculo", "real": d, "esperado": "no imponible", "ok": True})
+    else:
+        items_renta.append({"regla": "Recalibración de renta", "real": renta["nota"], "esperado": "liquidaciones", "ok": None})
+    secciones.append({"titulo": "Recalibración de Ingresos (castigos −15% variable / −20% honorarios)",
+                      "items": items_renta, "nota": renta["nota"]})
+
+    # ── 3. LÓGICA DE APRENDIZAJE (patrones de rechazo históricos) ─────────
+    aprendizaje = []
+    # CMF: deudas no declaradas
+    cmf_declara = df.get("deudas_cmf") if df.get("deudas_cmf") is not None else None
+    tiene_cmf_doc = any("cmf" in ((a.get("subfolder", "") + a.get("nombre", "")) if isinstance(a, dict) else str(a)).lower()
+                        for a in (folder.get("archivos") or []))
+    if not tiene_cmf_doc:
+        aprendizaje.append({"regla": "Informe CMF presente", "real": "No detectado", "esperado": "obligatorio", "ok": False})
+        violaciones.append({"regla": "Informe CMF", "detalle": "Sin informe CMF: no se puede validar deuda no declarada (patrón histórico de rechazo)", "critico": False})
+    # Bono variable vs renta fija (patrón aprendido)
+    df_var = _num(df.get("renta_variable") or df.get("bonos_variables"))
+    df_fija = _num(df.get("renta_liquida") or df.get("renta_fija"))
+    if df_var and df_fija and df_var > df_fija * 0.4:
+        aprendizaje.append({"regla": "Composición renta (variable vs fija)",
+                            "real": f"variable {df_var/ (df_fija+df_var)*100:.0f}% del total", "esperado": "predominio de renta fija", "ok": False})
+        violaciones.append({"regla": "Renta variable alta", "detalle": "Alta proporción de bono variable sobre renta fija (patrón histórico de rechazo)", "critico": False})
+    # patrones del modelo aprendido
+    for mo in (modelo.get("motivos_rechazo") or [])[:5]:
+        aprendizaje.append({"regla": "Patrón histórico detectado", "real": f"{mo.get('motivo')} ({mo.get('casos')} casos)", "esperado": "referencia", "ok": None})
+    secciones.append({"titulo": "Lógica de Aprendizaje · Dinámicas Detectadas", "items": aprendizaje})
+
+    # ── 4. INTEGRIDAD DE PLAZOS ───────────────────────────────────────────
+    plazos = []
+    if edad_plazo:
+        plazos.append({"regla": "Edad + Plazo < 80", "real": f"{edad_plazo:.0f}", "esperado": "< 80", "ok": edad_plazo < 80})
+    plazo_max = _num(btg.get("plazo_max_anos"), 30)
+    if plazo:
+        coherente_carga = (carga <= carga_max + 1e-6) if carga else None
+        plazos.append({"regla": "Plazo dentro de política", "real": f"{plazo:.0f} años", "esperado": f"≤ {plazo_max:.0f} años", "ok": plazo <= plazo_max})
+        plazos.append({"regla": "Plazo coherente con capacidad de ahorro/carga",
+                       "real": f"carga {carga*100:.1f}%" if carga else "sin dato de carga",
+                       "esperado": f"carga ≤ {carga_max*100:.0f}%", "ok": coherente_carga})
+        if coherente_carga is False:
+            violaciones.append({"regla": "Plazo vs carga", "detalle": "El plazo otorgado no es coherente: la carga financiera supera el máximo (riesgo de sobreendeudamiento)", "critico": False})
+    secciones.append({"titulo": "Integridad de Plazos", "items": plazos})
+
+    # ── VEREDICTO Y DETECCIÓN DE SESGO MESA ───────────────────────────────
+    criticas = [v for v in violaciones if v.get("critico")]
+    n_viol = len(violaciones)
+    aprobada = respuesta_mesa in ("aprobacion", "aprobado")
+    if aprobada and criticas:
+        estado = "RIESGO DE FALSO POSITIVO"
+        veredicto = "INVIABLE según reglamento"
+    elif aprobada and n_viol >= 2:
+        estado = "BAJO AUDITORÍA"
+        veredicto = "Aprobación con desviaciones"
+    elif not aprobada:
+        estado = "VALIDADO"
+        veredicto = "Rechazo consistente con reglamento" if n_viol else "Rechazo (sin desviaciones detectadas)"
+    else:
+        estado = "VALIDADO"
+        veredicto = "Aprobación consistente con reglamento"
+
+    politica_saltada = [v["detalle"] for v in violaciones]
+
+    return {
+        "cliente": folder.get("nombre") or sim.get("nombre_completo") or "",
+        "rut": folder.get("rut") or sim.get("rut") or "",
+        "respuesta_mesa": "aprobacion" if aprobada else "rechazo",
+        "con_subsidio": con_subsidio,
+        "monto_uf": round(monto) if monto else None,
+        "estado_auditoria": estado,
+        "veredicto_dashai": veredicto,
+        "secciones": secciones,
+        "violaciones": violaciones,
+        "criticas": criticas,
+        "politica_saltada": politica_saltada,
+        "certificado_id": f"CAI-{(folder.get('rut') or sim.get('rut') or 'SN').replace('.','').replace('-','')[:9]}-{datetime.now(timezone.utc).strftime('%Y%m%d')}",
+        "generado_en": datetime.now(timezone.utc).isoformat(),
+    }
