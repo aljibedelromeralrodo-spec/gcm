@@ -10261,8 +10261,8 @@ async def mesa_brain_modelo():
 
 
 @api.get("/contraloria/casos")
-async def contraloria_casos(dias: int = 180):
-    """AUDITOR INDEPENDIENTE: valida cada respuesta de la MESA contra el modelo local.
+async def contraloria_casos(dias: int = 60):
+    """AUDITOR INDEPENDIENTE — Regla de Oro: los últimos 60 días de respuestas de la MESA.
     Aprobación de MESA sin criterios mínimos (renta, CMF, 2.000 UF) → BAJO AUDITORÍA."""
     modelo = await asyncio.to_thread(mesa_brain.modelo_actual)
     modelo.pop("_id", None)

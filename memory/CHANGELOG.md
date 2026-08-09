@@ -644,3 +644,35 @@
   bajo Aprendizaje IA, estilo oro/carbono. Verificada con screenshot.
 - Nota: badge "MOTOR 24/7: DETENIDO" = interruptor correo_a_mesa apagado por config del
   usuario (ingesta_carpetas sigue activa). No es una falla.
+
+## Sesión 2026-08-09 (Cerebro Predictivo + Contraloría + Panel 0586 + Reglamento Maestro)
+- mesa_brain.py: modelo local (180 días, sin créditos): base de aprobación, motivos de rechazo
+  minados, recalibración automática si el modelo tiene >24h (aprendizaje continuo).
+- Endpoints: POST /api/mesa-brain/calibrar, GET /api/mesa-brain/modelo, GET /api/contraloria/casos.
+- Pestaña '🔍 Contraloría' (ContraloriaModule.js): tabla Aprobaciones vs. Realidad; aprobaciones de
+  MESA que rompen criterios (docs faltantes, CMF, 2.000 UF, LTV>máx, DIV/renta>máx) → BAJO AUDITORÍA
+  (rubí); validados en oro. Marca estado_auditoria en seguimiento.
+- Oportunidades: prob_mesa + objetivo_whatsapp (>=85% badge dorado 🎯), orden descendente.
+- Panel Criterios editable (CriteriosModule.js reescrito): 'Configuración de Escenarios' BTG/Ameris,
+  inputs numéricos, botón dorado Guardar → modal clave. Clave errónea = 403 + alerta seguridad +
+  cambios descartados; 0586 = guardado con prioridad suprema (manual_override en db.config criterios).
+- Reglamento Maestro soldado: _stats_mesa entrega criterios+valor_uf; _prob_aprobacion_folder marca
+  NO VIABLE (0%) si renta < renta_min_uf (30 UF BTG sin subsidio); castigos 15%/20% ya existían en
+  credit_engine (verificado). Contraloría valida LTV y DIV/renta exactos por última simulación.
+- BUGS REPARADOS EN SESIÓN: (1) fragmento duplicado al final de server.py (SyntaxError) tras edición
+  — recortado; (2) babel RangeError por componente JSX recursivo en CriteriosModule → función plana.
+- TESTING: iteration_27.json — frontend 100%, 0 bugs, sin regresiones. Criterios restaurados tras test.
+
+## Sesión 2026-08-09 (Calibración Prioritaria 60 días)
+- mesa_brain._analisis_60: ventana_60 (base, apro/rech 60d), cruce con reglamento BTG/Ameris de
+  db.config criterios: aprobaciones sobre LTV/DIV máximos → "Ajuste de Mercado sugerido";
+  base 60d << 180d → alerta de MESA más estricta. Tendencia: categoría dominante de rechazos
+  ("La MESA está priorizando X sobre Y").
+- Contraloría: default dias=60 (Regla de Oro), tarjetas Regla de Oro 60d + base 180d,
+  bloque tendencia (testid contraloria-tendencia) y ajustes (contraloria-ajustes).
+- Dashboard: nota "DashAI: Tendencia últimos 60 días..." (testid dashai-tendencia).
+- BUGS: colisión de batch en mesa_brain.py (edición perdida, reaplicada) y cola duplicada en
+  ContraloriaModule.js (recortada + bloques reinsertados). LECCIÓN: no editar el mismo archivo
+  con 2 search_replace en un mismo batch paralelo.
+- VERIFICADO: calibrar → base 60d 97.8%, 45/1, tendencia "renta mínima sobre carga financiera";
+  screenshot Contraloría + Dashboard OK.

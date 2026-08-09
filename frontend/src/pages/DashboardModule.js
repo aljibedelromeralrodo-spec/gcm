@@ -18,6 +18,7 @@ export default function DashboardModule({ valorUF: _valorUF, userName: _userName
   const [motor, setMotor] = useState(null);
   const [semaforo, setSemaforo] = useState(null);
   const [docsJob, setDocsJob] = useState(null);
+  const [tendencia, setTendencia] = useState("");
 
   const generarDocsDataset = async () => {
     try {
@@ -50,6 +51,7 @@ export default function DashboardModule({ valorUF: _valorUF, userName: _userName
     axios.get(`${API_URL}/api/motor/status`).then(r => setMotor(r.data)).catch(() => {});
     axios.get(`${API_URL}/api/firma/semaforo`).then(r => setSemaforo(r.data)).catch(() => setSemaforo({ error: true }));
     axios.get(`${API_URL}/api/dashai/dataset-documentos/estado`).then(r => setDocsJob(r.data)).catch(() => {});
+    axios.get(`${API_URL}/api/mesa-brain/modelo`).then(r => setTendencia(r.data?.tendencia || "")).catch(() => {});
   }, []);
 
   const refreshKnowledge = async () => {
@@ -178,6 +180,14 @@ export default function DashboardModule({ valorUF: _valorUF, userName: _userName
               <i className="fa fa-cogs" style={{ marginRight: 6 }} />Generar Docs
             </button>
           )}
+        </div>
+      )}
+      {tendencia && (
+        <div data-testid="dashai-tendencia" style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: "1rem",
+          border: "1px solid rgba(212,175,55,0.3)", background: "rgba(30,26,12,0.6)",
+          padding: "0.55rem 1.2rem", color: "#F5E7B8", fontSize: "0.78rem" }}>
+          <i className="fa fa-line-chart" style={{ color: "var(--gold)" }} />
+          <span><b style={{ color: "var(--gold)" }}>DashAI:</b> {tendencia}</span>
         </div>
       )}
       <AlertasPanel />

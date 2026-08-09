@@ -27,6 +27,7 @@ export default function ContraloriaModule() {
   };
 
   const m = data?.modelo || {};
+  const v60 = m.ventana_60 || {};
   const casos = data?.casos || [];
   const inconsistencias = casos.filter(c => c.estado_auditoria === "BAJO AUDITORÍA").length;
 
@@ -44,9 +45,10 @@ export default function ContraloriaModule() {
 
       <div data-testid="contraloria-modelo" style={{ display: "flex", flexWrap: "wrap", gap: "0.8rem", marginBottom: "1.2rem" }}>
         {[
-          { lbl: "Base MESA (180d)", val: m.base != null ? `${Math.round(m.base * 100)}%` : "—", color: ORO },
-          { lbl: "Aprobadas", val: m.aprobadas ?? "—", color: ORO },
-          { lbl: "Rechazadas", val: m.rechazadas ?? "—", color: RUBI },
+          { lbl: "Regla de Oro (60d)", val: v60.base != null ? `${Math.round(v60.base * 100)}%` : "—", color: ORO },
+          { lbl: "Base histórica (180d)", val: m.base != null ? `${Math.round(m.base * 100)}%` : "—", color: ORO },
+          { lbl: "Aprobadas 60d", val: v60.aprobadas ?? m.aprobadas ?? "—", color: ORO },
+          { lbl: "Rechazadas 60d", val: v60.rechazadas ?? m.rechazadas ?? "—", color: RUBI },
           { lbl: "Bajo Auditoría", val: inconsistencias, color: inconsistencias ? RUBI : ORO },
         ].map((s, i) => (
           <div key={i} style={{ minWidth: 150, background: "rgba(255,255,255,0.03)", padding: "0.7rem 1rem",
@@ -64,6 +66,21 @@ export default function ContraloriaModule() {
         </button>
       </div>
 
+      {m.tendencia && (
+        <div data-testid="contraloria-tendencia" style={{ marginBottom: "1rem", padding: "0.7rem 1.1rem",
+          border: "1px solid rgba(212,175,55,0.4)", background: "rgba(30,26,12,0.7)", color: "#F5E7B8", fontSize: "0.8rem" }}>
+          <i className="fa fa-line-chart" style={{ marginRight: 8, color: ORO }} />{m.tendencia}
+        </div>
+      )}
+      {(m.ajustes_mercado || []).length > 0 && (
+        <div data-testid="contraloria-ajustes" style={{ marginBottom: "1.2rem", border: "1px solid rgba(212,175,55,0.35)",
+          background: "rgba(18,18,20,0.9)", padding: "0.8rem 1.1rem" }}>
+          <b style={{ color: ORO, fontSize: "0.78rem", letterSpacing: "0.08em" }}>⚡ AJUSTES DE MERCADO SUGERIDOS (60 días)</b>
+          {m.ajustes_mercado.map((a, i) => (
+            <div key={i} style={{ fontSize: "0.75rem", color: "#F5E7B8", marginTop: 6, opacity: 0.85 }}>• {a}</div>
+          ))}
+        </div>
+      )}
       {(m.motivos_rechazo || []).length > 0 && (
         <div style={{ marginBottom: "1.2rem", border: "1px solid rgba(225,29,72,0.3)", background: "rgba(30,6,12,0.5)", padding: "0.8rem 1.1rem" }}>
           <b style={{ color: RUBI, fontSize: "0.78rem", letterSpacing: "0.08em" }}>MOTIVOS DE RECHAZO DETECTADOS (minería local)</b>
