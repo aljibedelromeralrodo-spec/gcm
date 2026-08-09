@@ -253,7 +253,7 @@ export default function SetCreditoModule({ onNavigate }) {
       <div data-testid="migrup-status" style={{ ...card, display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap", marginBottom: "1rem", padding: "0.9rem 1.3rem" }}>
         <i className="fa fa-pencil-square-o" style={{ color: "var(--gold)", fontSize: "1.3rem" }} />
         <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 700 }}>Firma electrónica migrup / eCert{migrup?.user ? ` — ${migrup.user.nombres} ${migrup.user.apellido}` : ""}</div>
+          <div style={{ fontWeight: 700 }}>Firma electrónica migrup / eCert{migrup?.user ? ` — ${migrup.user.alias || `${migrup.user.nombres} ${migrup.user.apellido}`}` : ""}</div>
           <div style={{ fontSize: "0.82rem", opacity: 0.7 }}>
             {migrup?.connected
               ? `Conectado · ${migrup.firmas_terceros_disponibles ?? "—"} firmas de terceros disponibles`

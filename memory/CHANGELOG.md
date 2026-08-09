@@ -711,3 +711,17 @@
     (_MSG_FIRMA_OK + fallback JS). Verificado con curl tras restart.
   - Nota: la API de eCert no acepta Nº de documento en la orden (solo rut+dv+email del
     contacto); el 533.900.692 queda registrado en la ficha para la validación del cliente.
+
+- 2026-08-09 (parte 4) — **Reset de Identidad Corporativa (eCert Sync)**:
+  - db.firma_links: borrado link de prueba "Gerardo Barrera" (token c34385901892).
+    Link de Yerile (41e006750bd5) intacto. db.config sin referencias a Gerardo Nicolás.
+  - Re-escaneo migrup (login force): el ALIAS de la cuenta ahora es "Central Mutuos"
+    (nombres del certificado legal siguen siendo del titular — eso lo fija eCert).
+  - UI Set de Crédito: header muestra alias corporativo (user.alias || nombres+apellido).
+  - Plantillas portal VIP + wa.me: ya decían "Central Mutuos" (verificado, sin cambios).
+  - Ingeniería inversa firma (opción b del usuario, PENDIENTE): correo eCert real capturado
+    en casilla principal → link firmante es https://www.migrup.cl/third/inicio?Token={guid}.
+    El GUID del token NO viene en la respuesta de ProcesoFirmaDocumentos; hay que analizar
+    la SPA /third/inicio (endpoints third-party de ApiGatewayGrup) cuando llegue el correo
+    de la prueba de Yerile. La casilla MAIL_USER (ethangerardobarr@gmail.com) ES el correo
+    firmante de Yerile → el sistema PUEDE leer ese correo automáticamente vía IMAP.
