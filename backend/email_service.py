@@ -1119,3 +1119,65 @@ def send_mail(to, subject, body_html, attachments=None, desde="secundaria", cc=N
     res["size_kb"] = size_kb
     res["message_id"] = msg.get("Message-ID", "")
     return res
+
+
+def leer_codigo_ecert(doc_prefix="", desde_minutos=1440):
+    """PORTAL VIP — lee el correo de eCert/Grup (notificaciones@migrup.cl) y extrae:
+    - codigo: la clave de 6 dígitos para VER los documentos en Grup
+    - url_firma: el link https://www.migrup.cl/third/inicio?Token=... (SPA de firma)
+    - documento: nombre del documento
+    Busca en el buzón principal (el firmante). Devuelve el más reciente que calce con doc_prefix.
+    """
+    pref = (doc_prefix or "").strip().lower()[:20]
+    limite = time.time() - desde_minutos * 60
+    encontrados = []
+    for acc in ACCOUNTS:
+        try:
+            m = _connect(acc)
+            m.select("INBOX", readonly=True)
+            try:
+                typ, data = m.search(None, "X-GM-RAW", "from:migrup.cl")
+                if typ != "OK":
+                    raise Exception("gm-raw")
+            except Exception:
+                typ, data = m.search(None, "FROM", '"migrup"')
+            ids = data[0].split() if data and data[0] else []
+            for num in reversed(ids[-25:]):
+                typ, md = m.fetch(num, "(RFC822)")
+                if not md or not isinstance(md[0], tuple):
+                    continue
+                msg = email.message_from_bytes(md[0][1])
+                fecha_raw = msg.get("Date")
+                try:
+                    ts = parsedate_to_datetime(fecha_raw).timestamp() if fecha_raw else 0
+                except Exception:
+                    ts = 0
+                if ts and ts < limite:
+                    continue
+                html = ""
+                for part in msg.walk():
+                    if part.get_content_type() in ("text/html", "text/plain"):
+                        try:
+                            html += part.get_payload(decode=True).decode(
+                                part.get_content_charset() or "utf-8", "ignore")
+                        except Exception:
+                            pass
+                texto = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", html))
+                doc_m = re.search(r"Documento:\s*([^\s]+(?:\s+[^\s]+){0,4})", texto)
+                doc_nombre = (doc_m.group(1).strip() if doc_m else "")
+                if pref and pref not in doc_nombre.lower() and pref not in texto.lower():
+                    continue
+                url_m = re.search(r"https://www\.migrup\.cl/third/inicio\?Token=[0-9a-fA-F\-]+", html)
+                cod_m = re.search(r"ver los documentos en Grup\s*(\d{4,8})", texto)
+                if not cod_m:
+                    cod_m = re.search(r"\b(\d{6})\b", texto)
+                encontrados.append({
+                    "codigo": cod_m.group(1) if cod_m else "",
+                    "url_firma": url_m.group(0) if url_m else "",
+                    "documento": doc_nombre, "fecha": ts,
+                    "cuenta": acc["user"]})
+            m.logout()
+        except Exception:
+            continue
+    encontrados.sort(key=lambda e: e.get("fecha") or 0, reverse=True)
+    return encontrados[0] if encontrados else None

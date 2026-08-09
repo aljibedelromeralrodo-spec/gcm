@@ -8804,6 +8804,27 @@ async def firma_portal(token: str, request: Request):
     </div>
     <button class="btn" id="btnFirmar" data-testid="portal-firma-btn">🖋 Firmar Documentación</button>
     <div id="msgFirma" data-testid="portal-firma-msg" style="display:none;margin-top:1.5rem;padding:1rem 1.2rem;border-radius:14px;font-size:0.85rem;line-height:1.6;font-weight:600"></div>
+    <div id="asistente" data-testid="portal-firma-asistente" style="display:none;margin-top:1.6rem;text-align:left">
+      <div style="background:#0a0a0a;border:1px solid #D4AF37;border-radius:16px;padding:1.4rem 1.5rem;color:#F5E7B8">
+        <div style="font-size:0.7rem;letter-spacing:0.18em;text-transform:uppercase;color:#D4AF37;margin-bottom:0.7rem">Paso final · Validación</div>
+        <div style="font-size:0.85rem;line-height:1.6;margin-bottom:1rem">Ingrese la <b>clave de acceso</b> que Central Mutuos le envió a su correo para abrir su documentación en la plataforma de firma segura.</div>
+        <label style="font-size:0.72rem;letter-spacing:0.12em;text-transform:uppercase;color:#C7B36A;display:block;margin-bottom:0.5rem">Código de validación</label>
+        <input id="codigoInput" data-testid="portal-firma-codigo-input" maxlength="8" inputmode="numeric" autocomplete="one-time-code"
+               placeholder="Ingrese el código de validación recibido en su correo"
+               style="width:100%;background:#050505;border:1px solid #7a6a2f;border-radius:12px;color:#FCF6BA;font-family:'Montserrat',monospace;
+                      font-size:1.4rem;letter-spacing:0.35em;text-align:center;padding:0.9rem 1rem;outline:none" />
+        <div id="codigoHint" style="font-size:0.72rem;color:#9a8c52;margin-top:0.6rem;min-height:1em"></div>
+        <a id="btnContinuar" data-testid="portal-firma-continuar" target="_blank" rel="noopener"
+           style="display:none;margin-top:1.1rem;text-align:center;background:linear-gradient(135deg,#BF953F,#FCF6BA,#AA771C);color:#0a0a0a;
+                  font-weight:800;font-size:0.9rem;letter-spacing:0.06em;padding:0.95rem 1.4rem;border-radius:999px;text-decoration:none">
+           🔒 Continuar a la Firma Segura</a>
+        <div style="border-top:1px solid rgba(212,175,55,0.25);margin:1.2rem 0 0.9rem"></div>
+        <button id="btnYaFirme" data-testid="portal-firma-yafirme"
+                style="width:100%;background:transparent;border:1px solid #7a6a2f;color:#F5E7B8;font-weight:700;font-size:0.82rem;
+                       padding:0.8rem 1rem;border-radius:999px;cursor:pointer">✅ Ya firmé — Verificar y resguardar</button>
+        <div id="verifMsg" data-testid="portal-firma-verif-msg" style="display:none;margin-top:0.9rem;font-size:0.82rem;line-height:1.5"></div>
+      </div>
+    </div>
     <p class="nota">Proceso certificado por eCert Chile · Firma Electrónica Avanzada Ley 19.799<br>
     Sus datos ya fueron transmitidos de forma segura: no necesita iniciar sesión en ningún sitio externo.</p>
   </div>
@@ -8811,6 +8832,35 @@ async def firma_portal(token: str, request: Request):
 <script>
 const btnF = document.getElementById('btnFirmar');
 const msgF = document.getElementById('msgFirma');
+const asis = document.getElementById('asistente');
+const codIn = document.getElementById('codigoInput');
+const codHint = document.getElementById('codigoHint');
+const btnCont = document.getElementById('btnContinuar');
+const btnYa = document.getElementById('btnYaFirme');
+const verifMsg = document.getElementById('verifMsg');
+let _pollEstado = null;
+
+async function cargarEstado() {{
+  try {{
+    const r = await fetch('/api/firma/{token}/estado');
+    const d = await r.json();
+    if (d.codigo) {{
+      if (!codIn.value) codIn.value = d.codigo;
+      codHint.textContent = '✓ Clave detectada automáticamente desde su correo';
+      codHint.style.color = '#8fd9b0';
+    }} else {{
+      codHint.textContent = 'Aún no recibimos su correo. Escríbala apenas llegue o espere unos segundos.';
+    }}
+    if (d.url_firma) {{ btnCont.href = d.url_firma; btnCont.style.display = 'block'; }}
+    if (d.firmado) {{
+      verifMsg.style.display = 'block';
+      verifMsg.style.color = '#8fd9b0';
+      verifMsg.textContent = '✅ eCert confirma que su documentación ya fue firmada.';
+      if (_pollEstado) {{ clearInterval(_pollEstado); _pollEstado = null; }}
+    }}
+  }} catch(e) {{}}
+}}
+
 btnF.addEventListener('click', async () => {{
   btnF.disabled = true; btnF.style.opacity = 0.65; btnF.textContent = 'Enviando documentación segura…';
   fetch('/api/firma/{token}/click', {{method:'POST'}}).catch(()=>{{}});
@@ -8822,6 +8872,9 @@ btnF.addEventListener('click', async () => {{
       msgF.style.background = '#F0FDF4'; msgF.style.border = '1px solid #BBF7D0'; msgF.style.color = '#15803D';
       msgF.textContent = d.mensaje || '✅ Documentación enviada a eCert. Revise su correo para el código final de validación';
       btnF.style.display = 'none';
+      asis.style.display = 'block';
+      cargarEstado();
+      _pollEstado = setInterval(cargarEstado, 6000);
     }} else {{
       msgF.style.background = '#FEF2F2'; msgF.style.border = '1px solid #FECACA'; msgF.style.color = '#B91C1C';
       msgF.textContent = '⚠ ' + ((d && d.detail) || 'No fue posible enviar la firma en este momento. Contacte a su ejecutivo.');
@@ -8834,6 +8887,27 @@ btnF.addEventListener('click', async () => {{
     btnF.disabled = false; btnF.style.opacity = 1; btnF.textContent = '🖋 Firmar Documentación';
   }}
 }});
+
+btnYa.addEventListener('click', async () => {{
+  btnYa.disabled = true; btnYa.style.opacity = 0.6; btnYa.textContent = 'Verificando con eCert…';
+  verifMsg.style.display = 'block'; verifMsg.style.color = '#C7B36A'; verifMsg.textContent = 'Consultando el estado de su firma…';
+  try {{
+    const r = await fetch('/api/firma/{token}/verificar-firmado', {{method:'POST'}});
+    const d = await r.json();
+    if (d.ok && d.firmado) {{
+      verifMsg.style.color = '#8fd9b0';
+      verifMsg.textContent = d.mensaje || '✅ ¡Firma confirmada y resguardada!';
+      if (_pollEstado) {{ clearInterval(_pollEstado); _pollEstado = null; }}
+    }} else {{
+      verifMsg.style.color = '#e0b0b0';
+      verifMsg.textContent = 'ℹ ' + (d.mensaje || 'Aún no detectamos su firma. Complete el proceso en la plataforma segura y vuelva a intentar.');
+      btnYa.disabled = false; btnYa.style.opacity = 1; btnYa.textContent = '✅ Ya firmé — Verificar y resguardar';
+    }}
+  }} catch(e) {{
+    verifMsg.style.color = '#e0b0b0'; verifMsg.textContent = '⚠ Error de conexión. Intente nuevamente.';
+    btnYa.disabled = false; btnYa.style.opacity = 1; btnYa.textContent = '✅ Ya firmé — Verificar y resguardar';
+  }}
+}});
 </script>
 </body></html>"""
     return HTMLResponse(html)
@@ -8844,6 +8918,60 @@ async def firma_click(token: str):
     await db.firma_links.update_one({"token": token}, {"$inc": {"clicks_firma": 1},
                                                        "$set": {"ultimo_click": now_iso()}})
     return {"ok": True}
+
+
+@api.get("/firma/{token}/estado")
+async def firma_estado(token: str):
+    """PORTAL VIP — Asistente de Firma: lee del correo eCert (IMAP) el código de acceso
+    de 6 dígitos y el link seguro de firma (Clave Única). Consulta también el estado del
+    documento en eCert para saber si el cliente YA firmó."""
+    link = await db.firma_links.find_one({"token": token})
+    if not link:
+        raise HTTPException(status_code=404, detail="Enlace no válido o expirado")
+    cliente = link.get("cliente", "")
+    prefix = f"COMBINADO_SET_{cliente[:14]}"
+    info = await asyncio.to_thread(mail.leer_codigo_ecert, prefix, 1440)
+    estado_ecert = None
+    firmado = False
+    primer_nombre = (cliente.split() or [""])[0]
+    try:
+        docs = await asyncio.to_thread(migrup.listar_documentos, f"COMBINADO_SET_{primer_nombre}"[:20], 0, 1, 10)
+        items = (docs or {}).get("paginatedList") or (docs or {}).get("items") or []
+        cand = [d for d in items if _norm_texto(primer_nombre) in _norm_texto(d.get("nombre") or "")]
+        cand.sort(key=lambda d: d.get("fechaCreacion") or "", reverse=True)
+        if cand:
+            estado_ecert = cand[0].get("estadoDocumento")
+            firmado = (estado_ecert or "").lower() == "finalizado"
+    except Exception as e:
+        logging.warning(f"firma_estado eCert {cliente}: {e}")
+    return {"ok": True, "enviada": bool(link.get("firma_enviada_en")),
+            "codigo": (info or {}).get("codigo") or "",
+            "url_firma": (info or {}).get("url_firma") or "",
+            "codigo_disponible": bool((info or {}).get("codigo")),
+            "estado_ecert": estado_ecert, "firmado": firmado}
+
+
+@api.post("/firma/{token}/verificar-firmado")
+async def firma_verificar_firmado(token: str):
+    """PORTAL VIP — cuando el cliente confirma que ya firmó: descarga el firmado de eCert,
+    lo separa al Búnker y notifica a Gerardo. Todo dentro del portal Central Mutuos."""
+    link = await db.firma_links.find_one({"token": token})
+    if not link:
+        raise HTTPException(status_code=404, detail="Enlace no válido o expirado")
+    cliente = link.get("cliente", "")
+    toks = [t for t in _norm_texto(cliente).split() if len(t) > 2]
+    rx = ".*".join(re.escape(t) for t in toks[:2]) if toks else ""
+    doc = await db.set_credito.find_one({"nombre": {"$regex": rx, "$options": "i"}}) if rx else None
+    if not doc:
+        raise HTTPException(status_code=400, detail="No se encontró su expediente. Contacte a su ejecutivo.")
+    try:
+        res = await _traer_firmado_interno(doc)
+    except ValueError as e:
+        return {"ok": False, "firmado": False, "mensaje": str(e)}
+    await db.firma_links.update_one({"token": token}, {"$set": {"firmado_confirmado_en": now_iso()}})
+    return {"ok": True, "firmado": True,
+            "mensaje": "✅ ¡Firma confirmada! Su documentación firmada ya fue resguardada.",
+            "archivos": len(res.get("archivos") or [])}
 
 
 _MSG_FIRMA_OK = "✅ Documentación enviada a eCert. Revise su correo para el código final de validación"

@@ -725,3 +725,22 @@
     la SPA /third/inicio (endpoints third-party de ApiGatewayGrup) cuando llegue el correo
     de la prueba de Yerile. La casilla MAIL_USER (ethangerardobarr@gmail.com) ES el correo
     firmante de Yerile → el sistema PUEDE leer ese correo automáticamente vía IMAP.
+
+- 2026-08-09 (parte 5) — **Cierre Interno Firma: Asistente de Validación en portal VIP**:
+  - Prueba real Yerile ejecutada: doc enviado a eCert (ecert_id cb88b03a..., estado
+    "Finalizado", 9 estampas, consumió 1 firma tercero).
+  - HALLAZGO CLAVE (ingeniería inversa del correo eCert real, casilla principal):
+    el correo trae un CÓDIGO de 6 dígitos ("clave para VER los documentos en Grup", ej 263365)
+    + link SPA https://www.migrup.cl/third/inicio?Token={guid}. La FIRMA LEGAL exige
+    Clave Única del Estado en la SPA de eCert — NO existe endpoint para finalizarla desde
+    nuestro servidor (limitación legal FEA, no técnica). No se puede hacer bypass total.
+  - IMPLEMENTADO (opción a+b, honesto y real):
+    * email_service.leer_codigo_ecert(prefijo): lee IMAP notificaciones@migrup.cl, extrae
+      código 6 dígitos + url third/inicio. VERIFICADO: devuelve 263365 del correo Prueba.
+    * GET /api/firma/{token}/estado: código+url auto-leídos del correo + estado eCert (firmado?).
+    * POST /api/firma/{token}/verificar-firmado: descarga firmado, separa al Búnker, notifica.
+    * Portal VIP: tras "Firmar", muestra tarjeta negra/oro "PASO FINAL · VALIDACIÓN" con
+      campo de código dorado (auto-relleno vía polling cada 6s), botón "Continuar a la Firma
+      Segura" (abre SPA eCert con el token) y botón "Ya firmé — Verificar y resguardar".
+      NOTA: para RUT reales con Clave Única el correo llega y el código/URL se autocompletan;
+      con el RUT de prueba de Yerile no llega correo (código vacío, esperado).
