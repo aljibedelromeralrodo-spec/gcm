@@ -701,3 +701,13 @@
   - Link portal: /api/firma/41e006750bd5 verificado (HTTP 200, tarjeta VIP renderiza con
     titular + RUT enmascarado). Combinado maestro con 7 formularios listo. Firma no enviada
     aún (firma_enviada_en=None) — queda 1 disparo disponible al presionar "Firmar Documentación".
+
+- 2026-08-09 (parte 3) — **Simplificación firma (bypass externo)**:
+  - Auditoría confirmó que el portal /api/firma/{token} YA cumplía: botón = fetch interno
+    a /firmar → migrup.enviar_a_firmar_tercero (server-side, llaves de empresa), RUT
+    auto-inyectado, sin campos visibles, sin redirección a migrup.cl.
+  - Único cambio: mensaje de éxito exacto pedido por el dueño →
+    "✅ Documentación enviada a eCert. Revise su correo para el código final de validación"
+    (_MSG_FIRMA_OK + fallback JS). Verificado con curl tras restart.
+  - Nota: la API de eCert no acepta Nº de documento en la orden (solo rut+dv+email del
+    contacto); el 533.900.692 queda registrado en la ficha para la validación del cliente.

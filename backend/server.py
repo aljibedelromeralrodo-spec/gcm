@@ -8820,7 +8820,7 @@ btnF.addEventListener('click', async () => {{
     msgF.style.display = 'block';
     if (r.ok && d.ok) {{
       msgF.style.background = '#F0FDF4'; msgF.style.border = '1px solid #BBF7D0'; msgF.style.color = '#15803D';
-      msgF.textContent = d.mensaje || '✅ Documentación enviada. Revise su correo para los códigos de validación';
+      msgF.textContent = d.mensaje || '✅ Documentación enviada a eCert. Revise su correo para el código final de validación';
       btnF.style.display = 'none';
     }} else {{
       msgF.style.background = '#FEF2F2'; msgF.style.border = '1px solid #FECACA'; msgF.style.color = '#B91C1C';
@@ -8846,7 +8846,7 @@ async def firma_click(token: str):
     return {"ok": True}
 
 
-_MSG_FIRMA_OK = "✅ Documentación enviada. Revise su correo para los códigos de validación"
+_MSG_FIRMA_OK = "✅ Documentación enviada a eCert. Revise su correo para el código final de validación"
 
 
 @api.post("/firma/{token}/firmar")
