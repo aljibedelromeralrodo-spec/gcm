@@ -634,3 +634,13 @@
 - PUERTO: confirmado 587 + STARTTLS (MAIL_SMTP_PORT=587 en .env; log registra tls=STARTTLS-587).
 - VERIFICADO con 4 envíos reales (250 OK): el #4 salió desde ethan → gerardo.ext con hilo activo.
 - Nota bug: un search_replace del batch se perdió (llamada _anti_autoenvio); re-aplicado y verificado.
+
+## Sesión 2026-08-09 (Integración DashAI — Exportador de Dataset)
+- Decisión de management: se descartó el "trabajador local" (frágil, requiere PC 24/7).
+  El valor real de DashAI = entrenar modelos predictivos locales con la cartera.
+- GET /api/dashai/dataset: CSV con 25 columnas (features de simulaciones + predic_history,
+  cruce con mesa_enviados por RUT, target_aprobada). Verificado: 20 filas, headers correctos.
+- Dashboard: tarjeta "📊 Dataset para DashAI" (testid dashai-export-card / dashai-export-btn)
+  bajo Aprendizaje IA, estilo oro/carbono. Verificada con screenshot.
+- Nota: badge "MOTOR 24/7: DETENIDO" = interruptor correo_a_mesa apagado por config del
+  usuario (ingesta_carpetas sigue activa). No es una falla.

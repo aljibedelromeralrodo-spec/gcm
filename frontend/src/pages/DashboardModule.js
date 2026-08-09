@@ -120,6 +120,25 @@ export default function DashboardModule({ valorUF: _valorUF, userName: _userName
         </div>
       )}
       <LearningStatusPanel />
+      {semaforo && !semaforo.error && (
+        <div data-testid="dashai-export-card" style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: "1rem",
+          border: "1px solid rgba(212,175,55,0.35)", background: "linear-gradient(160deg, rgba(18,18,20,0.97), rgba(6,6,8,0.99))",
+          padding: "0.7rem 1.2rem" }}>
+          <i className="fa fa-flask" style={{ color: "var(--gold)" }} />
+          <div style={{ flex: 1 }}>
+            <b style={{ color: "var(--gold)", fontSize: "0.85rem", letterSpacing: "0.06em" }}>📊 Dataset para DashAI</b>
+            <div style={{ fontSize: "0.72rem", opacity: 0.65 }}>
+              Exporta tu cartera en CSV para entrenar tu modelo de aprobación en tu computador — sin gasto de nube
+            </div>
+          </div>
+          <button data-testid="dashai-export-btn"
+            onClick={() => window.open(`${API_URL}/api/dashai/dataset`, "_blank")}
+            style={{ background: "transparent", color: "var(--gold)", border: "1px solid rgba(212,175,55,0.55)",
+              padding: "0.45rem 1.1rem", cursor: "pointer", fontWeight: 700, fontSize: "0.78rem", letterSpacing: "0.06em" }}>
+            <i className="fa fa-download" style={{ marginRight: 6 }} />Descargar CSV
+          </button>
+        </div>
+      )}
       <AlertasPanel />
       {cobrosResumen?.resumen && (
         <div data-testid="panel-cobros-tasacion" style={{ background: "rgba(14,14,16,0.9)", border: "1px solid rgba(212,175,55,0.25)", borderRadius: 0, padding: "1rem 1.3rem", marginBottom: "1rem" }}>

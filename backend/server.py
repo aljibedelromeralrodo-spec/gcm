@@ -10021,4 +10021,70 @@ async def shutdown():
     client.close()
 
 
+@api.get("/dashai/dataset")
+async def dashai_dataset():
+    """📊 Dataset para DashAI: CSV limpio de la cartera (features + target) para
+    entrenar modelos de aprobación de crédito en forma local, sin gasto de nube."""
+    import csv as _csv
+    import io as _io
+    cols = ["fecha", "rut", "nombre", "tipo_deudor", "tiene_codeudor", "plazo_anos",
+            "tasa_anual", "valor_uf", "valor_propiedad_uf", "credito_solicitado_uf",
+            "credito_maximo_uf", "capacidad_credito_uf", "dividendo_credito_uf", "ltv",
+            "pie_requerido_uf", "carga_fin_individual", "carga_fin_conjunta",
+            "div_renta_individual", "div_renta_conjunta", "edad_plazo",
+            "eval_ameris", "eval_btg", "credito_viable", "enviado_a_mesa",
+            "target_aprobada"]
+    mesa_ruts = set()
+    async for m in db.mesa_enviados.find({}, {"rut": 1, "nombre": 1}):
+        r = re.sub(r"[^0-9kK]", "", (m.get("rut") or "")).lower()
+        if r:
+            mesa_ruts.add(r)
+    buf = _io.StringIO()
+    w = _csv.DictWriter(buf, fieldnames=cols, extrasaction="ignore")
+    w.writeheader()
+    n = 0
+    async for s in db.simulaciones.find({}, {"_id": 0}).sort("timestamp", 1):
+        rut_n = re.sub(r"[^0-9kK]", "", (s.get("rut") or "")).lower()
+        w.writerow({
+            "fecha": str(s.get("timestamp", ""))[:10], "rut": s.get("rut", ""),
+            "nombre": s.get("nombre_completo", ""),
+            "tipo_deudor": s.get("tipo_deudor_texto", ""),
+            "tiene_codeudor": 1 if s.get("tiene_codeudor") else 0,
+            "plazo_anos": s.get("plazo_anos"), "tasa_anual": s.get("tasa_anual"),
+            "valor_uf": s.get("valor_uf"), "valor_propiedad_uf": s.get("valor_propiedad_uf"),
+            "credito_solicitado_uf": s.get("credito_solicitado_uf"),
+            "credito_maximo_uf": s.get("credito_maximo_uf"),
+            "capacidad_credito_uf": s.get("capacidad_credito_uf"),
+            "dividendo_credito_uf": s.get("dividendo_credito_uf"),
+            "ltv": s.get("ltv"), "pie_requerido_uf": s.get("pie_requerido_uf"),
+            "carga_fin_individual": s.get("carga_fin_individual"),
+            "carga_fin_conjunta": s.get("carga_fin_conjunta"),
+            "div_renta_individual": s.get("div_renta_individual"),
+            "div_renta_conjunta": s.get("div_renta_conjunta"),
+            "edad_plazo": s.get("edad_plazo"),
+            "eval_ameris": s.get("eval_ameris", ""), "eval_btg": s.get("eval_btg", ""),
+            "credito_viable": 1 if s.get("credito_viable") else 0,
+            "enviado_a_mesa": 1 if rut_n in mesa_ruts else 0,
+            "target_aprobada": 1 if s.get("precalificacion_aprobada") else 0})
+        n += 1
+    async for p in db.predic_history.find({}, {"_id": 0}).sort("timestamp", 1):
+        w.writerow({
+            "fecha": str(p.get("timestamp", ""))[:10], "rut": "",
+            "nombre": p.get("nombre_cliente", ""), "tipo_deudor": "predic",
+            "tiene_codeudor": 0,
+            "valor_propiedad_uf": p.get("valor_propiedad_clp"),
+            "credito_maximo_uf": p.get("monto_aprobado_uf"),
+            "div_renta_individual": p.get("renta"),
+            "eval_ameris": p.get("risk_level", ""), "eval_btg": p.get("score"),
+            "credito_viable": 1 if p.get("viable") else 0,
+            "enviado_a_mesa": 0,
+            "target_aprobada": 1 if p.get("viable") else 0})
+        n += 1
+    from fastapi.responses import Response as _Resp
+    fname = f"dataset_dashai_central_mutuos_{datetime.now(timezone.utc).strftime('%Y%m%d')}.csv"
+    return _Resp(content=buf.getvalue(), media_type="text/csv",
+                 headers={"Content-Disposition": f'attachment; filename="{fname}"',
+                          "X-Filas": str(n)})
+
+
 app.include_router(api)
