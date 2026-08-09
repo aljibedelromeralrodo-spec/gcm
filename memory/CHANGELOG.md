@@ -744,3 +744,16 @@
       Segura" (abre SPA eCert con el token) y botón "Ya firmé — Verificar y resguardar".
       NOTA: para RUT reales con Clave Única el correo llega y el código/URL se autocompletan;
       con el RUT de prueba de Yerile no llega correo (código vacío, esperado).
+
+- 2026-08-09 (parte 6) — **Prueba RUT real EXITOSA (autocompletado del código)**:
+  - Causa raíz del envío mudo anterior de Yerile: el contacto eCert NO se había creado
+    (buscar_contacto_por_rut=None) → eCert no mandó correo. Tras asegurar_contacto
+    (contId c3823709...) y RE-ENVIAR (reset firma_enviada_en + POST /firmar), eCert SÍ
+    envió el correo del código.
+  - RESULTADO VERIFICADO end-to-end: GET /estado devolvió codigo=868495 +
+    url_firma=third/inicio?Token=12f9e597... + estado_ecert="Por Firmar Otros". El portal
+    autocompletó "8 6 8 4 9 5" con "✓ Clave detectada automáticamente desde su correo" y
+    activó el botón dorado "Continuar a la Firma Segura". Screenshot confirmado.
+  - LECCIÓN: para que eCert dispare el correo del código, el contacto de tercero DEBE estar
+    creado antes/durante el envío, y el correo del firmante debe ser una casilla legible por
+    IMAP (ethangerardobarr@gmail.com) para el autocompletado.
