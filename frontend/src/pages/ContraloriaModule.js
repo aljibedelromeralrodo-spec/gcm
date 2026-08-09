@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
+import DOMPurify from "dompurify";
 import { API_URL } from "../utils/formatters";
 
 const RUBI = "#e11d48";
@@ -11,6 +12,36 @@ export default function ContraloriaModule() {
   const [cert, setCert] = useState(null);
   const [certLoading, setCertLoading] = useState(false);
   const [forense, setForense] = useState(null);
+  const [reclamos, setReclamos] = useState(null);
+  const [reclamoBusy, setReclamoBusy] = useState(false);
+  const [reclamoOpen, setReclamoOpen] = useState(-1);
+
+  const cargarReclamos = useCallback(async () => {
+    try {
+      const r = await axios.get(`${API_URL}/api/contraloria/forense/reclamaciones`);
+      setReclamos(r.data);
+    } catch { /* silencioso */ }
+  }, []);
+
+  const generarReclamos = async () => {
+    setReclamoBusy(true);
+    try {
+      const r = await axios.post(`${API_URL}/api/contraloria/forense/reclamaciones`);
+      setReclamos(r.data);
+    } catch (e) { alert(e?.response?.data?.detail || "No se pudieron generar las reclamaciones"); }
+    setReclamoBusy(false);
+  };
+
+  const enviarReclamo = async (idx, cliente) => {
+    if (!window.confirm(`🔐 AUTORIZACIÓN DE GERARDO\n\n¿Enviar la reclamación formal del caso ${cliente} a aprobaciones@centralmutuos.cl?`)) return;
+    setReclamoBusy(true);
+    try {
+      const r = await axios.post(`${API_URL}/api/contraloria/forense/reclamaciones/${idx}/enviar`, {}, { timeout: 120000 });
+      alert(r.data.mensaje);
+      cargarReclamos();
+    } catch (e) { alert("❌ " + (e?.response?.data?.detail || e.message)); }
+    setReclamoBusy(false);
+  };
 
   const cargarForense = useCallback(async () => {
     try {
@@ -40,7 +71,7 @@ export default function ContraloriaModule() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { cargar(); cargarForense(); }, [cargar, cargarForense]);
+  useEffect(() => { cargar(); cargarForense(); cargarReclamos(); }, [cargar, cargarForense, cargarReclamos]);
 
   const abrirCertificado = async (c) => {
     setCert({ loading: true, cliente: c.cliente });
@@ -85,22 +116,24 @@ export default function ContraloriaModule() {
       <div data-testid="forense-panel" style={{ border: "1px solid rgba(212,175,55,0.35)", background: "linear-gradient(160deg, #0d0b06, #050505)", padding: "1.2rem 1.4rem", marginBottom: "1.6rem" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <div style={{ flex: 1, minWidth: 240 }}>
-            <div style={{ color: ORO, fontSize: "0.72rem", letterSpacing: "0.18em", textTransform: "uppercase" }}>🔬 Auditoría Forense · 90 Días</div>
+            <div style={{ color: ORO, fontSize: "0.72rem", letterSpacing: "0.18em", textTransform: "uppercase" }}>🔬 Auditoría Forense · Ultra-Precisión {forense?.periodo_dias || 60} Días</div>
             <div style={{ color: "#9a8c52", fontSize: "0.72rem", marginTop: 3 }}>
-              Minería histórica de aprobaciones@centralmutuos.cl · triangulación contra documentos reales · bloques diarios en segundo plano
+              Minería de aprobaciones@centralmutuos.cl · triangulación contra reglamento de bodega (BTG/Ameris/Subsidio 02) · lotes diarios en segundo plano
             </div>
           </div>
           {forense?.estado === "en_proceso" && (
             <span style={{ color: "#C7B36A", fontSize: "0.78rem" }}><i className="fa fa-cog fa-spin" /> Procesando {forense.progreso || 0}/{forense.total || "…"}</span>
           )}
           {forense?.estado === "completado" && (
-            <span style={{ color: "#8fd9b0", fontSize: "0.72rem" }}>✓ Completada {(forense.generado_en || "").slice(0, 16).replace("T", " ")} · {forense.progreso} casos</span>
+            <span style={{ color: "#8fd9b0", fontSize: "0.72rem" }}>✓ Completada {(forense.generado_en || "").slice(0, 16).replace("T", " ")} · {forense.progreso} casos
+              {forense.nuevos_ultimo_barrido != null && <b style={{ color: "#FCF6BA", marginLeft: 8 }}>· {forense.nuevos_ultimo_barrido} errores NUEVOS</b>}
+            </span>
           )}
-          <button data-testid="forense-lanzar-btn" onClick={lanzarForense} disabled={forense?.estado === "en_proceso"}
+          <button data-testid="forense-lanzar-btn" onClick={() => lanzarForense(60)} disabled={forense?.estado === "en_proceso"}
             style={{ background: "linear-gradient(135deg, #BF953F, #FCF6BA, #AA771C)", color: "#0a0a0a", border: "none",
               fontWeight: 800, fontSize: "0.72rem", letterSpacing: "0.08em", padding: "0.55rem 1.2rem", cursor: "pointer",
               opacity: forense?.estado === "en_proceso" ? 0.5 : 1 }}>
-            {forense?.estado === "completado" ? "RE-EJECUTAR MINERÍA" : "LANZAR MINERÍA 90 DÍAS"}
+            {forense?.estado === "completado" ? "RE-EJECUTAR MINERÍA 60D" : "LANZAR MINERÍA 60 DÍAS"}
           </button>
         </div>
         {forense?.estado === "completado" && (
@@ -120,6 +153,11 @@ export default function ContraloriaModule() {
             {(forense.hallazgos || []).length === 0 && (
               <div style={{ color: "#8fd9b0", fontSize: "0.78rem" }}>✓ Sin fallos de control detectados en el período.</div>
             )}
+            {(forense.hallazgos || []).length > 0 && (
+              <div data-testid="forense-titulo-lista" style={{ color: ORO, fontSize: "0.72rem", letterSpacing: "0.14em", textTransform: "uppercase", fontWeight: 800, marginBottom: 4 }}>
+                ⚠ Errores MESA detectados ({(forense.hallazgos || []).length})
+              </div>
+            )}
             {(forense.hallazgos || []).map((h, k) => (
               <div key={k} data-testid={`forense-hallazgo-${k}`} style={{ display: "flex", gap: 10, alignItems: "baseline",
                 padding: "0.5rem 0", borderTop: "1px solid rgba(255,255,255,0.06)", fontSize: "0.78rem", flexWrap: "wrap" }}>
@@ -133,8 +171,44 @@ export default function ContraloriaModule() {
                 <span style={{ color: "#9a8c52", fontFamily: "monospace", fontSize: "0.72rem" }}>{h.rut || "sin RUT"}</span>
                 <span style={{ color: "#6b6b6b", fontSize: "0.68rem" }}>{h.fecha_mesa}</span>
                 <span style={{ color: "#cbd5e1", flexBasis: "100%", fontSize: "0.74rem" }}>{h.detalle}</span>
+                {h.nota_dashai && <span style={{ color: "#9a8c52", flexBasis: "100%", fontSize: "0.7rem", fontStyle: "italic", borderLeft: `2px solid ${ORO}`, paddingLeft: 8 }}>{h.nota_dashai}</span>}
               </div>
             ))}
+            {((forense.resumen || {}).PERDIDA || 0) > 0 && (
+              <div data-testid="forense-reclamaciones-panel" style={{ marginTop: "1.2rem", border: "1px solid rgba(217,119,6,0.45)", background: "rgba(30,20,6,0.5)", padding: "0.9rem 1.1rem" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                  <b style={{ color: "#fbbf24", fontSize: "0.76rem", letterSpacing: "0.08em" }}>📨 MODO RECLAMACIÓN — Rescate de casos PERDIDA</b>
+                  <button data-testid="reclamos-generar-btn" onClick={generarReclamos} disabled={reclamoBusy}
+                    style={{ marginLeft: "auto", background: "linear-gradient(135deg,#d97706,#fbbf24)", color: "#0a0a0a", border: "none",
+                      fontWeight: 800, fontSize: "0.68rem", letterSpacing: "0.06em", padding: "0.45rem 1rem", cursor: "pointer" }}>
+                    {reclamoBusy ? "…" : "PREPARAR BORRADORES (TOP 5)"}
+                  </button>
+                </div>
+                {(reclamos?.borradores || []).map((b, i) => (
+                  <div key={i} data-testid={`reclamo-${i}`} style={{ borderTop: "1px solid rgba(255,255,255,0.07)", padding: "0.55rem 0", fontSize: "0.76rem" }}>
+                    <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                      <b style={{ color: "#f8fafc" }}>{b.cliente}</b>
+                      <span style={{ color: "#9a8c52", fontFamily: "monospace", fontSize: "0.7rem" }}>{b.rut || ""}</span>
+                      <span style={{ color: "#6b6b6b", fontSize: "0.68rem" }}>{b.fecha_mesa}</span>
+                      {b.enviado && <span style={{ color: "#8fd9b0", fontSize: "0.68rem", fontWeight: 700 }}>✓ Enviada {(b.enviado_en || "").slice(0, 10)}</span>}
+                      <button data-testid={`reclamo-ver-${i}`} onClick={() => setReclamoOpen(reclamoOpen === i ? -1 : i)}
+                        style={{ marginLeft: "auto", background: "transparent", color: "#C7B36A", border: "1px solid rgba(212,175,55,0.4)", padding: "0.25rem 0.7rem", cursor: "pointer", fontSize: "0.66rem", fontWeight: 700 }}>
+                        {reclamoOpen === i ? "OCULTAR" : "VER BORRADOR"}
+                      </button>
+                      <button data-testid={`reclamo-enviar-${i}`} onClick={() => enviarReclamo(i, b.cliente)} disabled={reclamoBusy || b.enviado}
+                        style={{ background: "linear-gradient(135deg, #BF953F, #FCF6BA, #AA771C)", color: "#0a0a0a", border: "none",
+                          fontWeight: 800, fontSize: "0.66rem", padding: "0.3rem 0.8rem", cursor: "pointer", opacity: b.enviado ? 0.35 : 1 }}>
+                        🔐 ENVIAR A MESA
+                      </button>
+                    </div>
+                    {reclamoOpen === i && (
+                      <div style={{ marginTop: 8, background: "#fff", padding: "0.9rem", maxHeight: "40vh", overflow: "auto" }}
+                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(b.body) }} />
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

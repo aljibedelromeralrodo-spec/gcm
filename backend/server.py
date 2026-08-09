@@ -217,6 +217,7 @@ async def startup():
     # DESACTIVADO (regla del usuario): los faltantes se piden solo manualmente
     # asyncio.create_task(_task_blindada(_faltantes_recordatorio_loop, "recordatorio_faltantes"))
     asyncio.create_task(_task_blindada(_actividades_terminadas_loop, "actividades_terminadas"))
+    asyncio.create_task(_task_blindada(_dashai_perpetuo_loop, "dashai_perpetuo"))
     asyncio.create_task(_task_blindada(_resumen_semanal_loop, "resumen_semanal"))
     asyncio.create_task(_task_blindada(_reporte_correos_loop, "reporte_correos"))
     asyncio.create_task(_task_blindada(_resumen_cierres_loop, "resumen_cierres"))
@@ -8434,6 +8435,43 @@ async def oportunidades_upload(file: UploadFile = File(...)):
     return {"ok": True, **res, "total_archivo": len(prospectos)}
 
 
+async def _puntuar_prospecto(op, modelo, base_pct):
+    """Score DashAI de un prospecto (compartido por endpoint y sync perpetuo)."""
+    prob = base_pct
+    rut_n = re.sub(r"[^0-9kK]", "", (op.get("rut") or "")).lower()
+    sim = None
+    if rut_n:
+        sim = await db.simulaciones.find_one(
+            {"rut": {"$regex": rut_n[:8], "$options": "i"}}, sort=[("timestamp", -1)])
+    if not sim and op.get("nombre"):
+        sim = await db.simulaciones.find_one(
+            {"nombre_completo": {"$regex": re.escape(op["nombre"][:20]), "$options": "i"}},
+            sort=[("timestamp", -1)])
+    sim_eval = sim or op.get("simulacion")
+    if sim_eval:
+        if sim_eval.get("precalificacion_aprobada"):
+            prob = min(97, base_pct + 15)
+        elif sim_eval.get("credito_viable"):
+            prob = min(92, base_pct + 8)
+        else:
+            prob = max(10, base_pct - 35)
+        # ⚔️ REGLAS DE HIERRO + reglamento Con Subsidio 02 (edad/LTV):
+        # cualquier quiebre → viabilidad 0% y NO VIABLE - POLÍTICA GENERAL
+        quiebres = await asyncio.to_thread(
+            mesa_brain.evaluar_politicas_generales, {"datos_financieros": {}}, sim_eval)
+        if quiebres:
+            prob = 0
+            op["politica_general"] = "NO VIABLE - POLÍTICA GENERAL"
+            op["quiebres_politica"] = [q["detalle"] for q in quiebres]
+        else:
+            op["politica_general"] = "CUMPLE REGLAMENTO"
+    else:
+        op["politica_general"] = "SIN SIMULACIÓN"
+    op["prob_mesa"] = prob
+    op["objetivo_whatsapp"] = prob >= 85
+    return prob
+
+
 @api.get("/oportunidades")
 async def oportunidades_list(request: Request):
     try:
@@ -8446,38 +8484,7 @@ async def oportunidades_list(request: Request):
         modelo = await asyncio.to_thread(mesa_brain.modelo_actual)
         base_pct = round((modelo.get("base") or 0.85) * 100)
         for op in ops:
-            prob = base_pct
-            rut_n = re.sub(r"[^0-9kK]", "", (op.get("rut") or "")).lower()
-            sim = None
-            if rut_n:
-                sim = await db.simulaciones.find_one(
-                    {"rut": {"$regex": rut_n[:8], "$options": "i"}}, sort=[("timestamp", -1)])
-            if not sim and op.get("nombre"):
-                sim = await db.simulaciones.find_one(
-                    {"nombre_completo": {"$regex": re.escape(op["nombre"][:20]), "$options": "i"}},
-                    sort=[("timestamp", -1)])
-            sim_eval = sim or op.get("simulacion")
-            if sim_eval:
-                if sim_eval.get("precalificacion_aprobada"):
-                    prob = min(97, base_pct + 15)
-                elif sim_eval.get("credito_viable"):
-                    prob = min(92, base_pct + 8)
-                else:
-                    prob = max(10, base_pct - 35)
-                # ⚔️ REGLAS DE HIERRO + reglamento Con Subsidio 02 (edad/LTV):
-                # cualquier quiebre → viabilidad 0% y NO VIABLE - POLÍTICA GENERAL
-                quiebres = await asyncio.to_thread(
-                    mesa_brain.evaluar_politicas_generales, {"datos_financieros": {}}, sim_eval)
-                if quiebres:
-                    prob = 0
-                    op["politica_general"] = "NO VIABLE - POLÍTICA GENERAL"
-                    op["quiebres_politica"] = [q["detalle"] for q in quiebres]
-                else:
-                    op["politica_general"] = "CUMPLE REGLAMENTO"
-            else:
-                op["politica_general"] = "SIN SIMULACIÓN"
-            op["prob_mesa"] = prob
-            op["objetivo_whatsapp"] = prob >= 85
+            await _puntuar_prospecto(op, modelo, base_pct)
         ops.sort(key=lambda o: -(o.get("prob_mesa") or 0))
     except Exception:
         pass
@@ -10678,6 +10685,9 @@ async def _forense_job(dias=90):
     entradas = await db.seguimiento.find(q).sort("fecha", 1).to_list(1000)
     modelo = await asyncio.to_thread(mesa_brain.modelo_actual)
     modelo.pop("_id", None)
+    prev_doc = await db.config.find_one({"_key": "auditoria_forense"}) or {}
+    prev_keys = {(h.get("cliente"), h.get("fecha_mesa"), h.get("categoria"))
+                 for h in (prev_doc.get("hallazgos_previos") or [])}
     # Bloques diarios para proteger la estabilidad del servidor
     bloques = {}
     for s in entradas:
@@ -10702,18 +10712,41 @@ async def _forense_job(dias=90):
                         "monto_mesa": s.get("monto_credito") or cert.get("monto_uf"),
                         "certificado_id": cert.get("certificado_id")}
                 # 1) RIESGO: aprobación que rompe políticas (violación crítica)
+                df = fd.get("datos_financieros") or {}
                 if aprobada and cert.get("criticas"):
                     hallazgos.append({**base, "categoria": "RIESGO",
-                                      "detalle": " · ".join(v["detalle"] for v in cert["criticas"][:3])})
-                # 2) PERDIDA: rechazo que según los papeles era viable
+                                      "detalle": " · ".join(v["detalle"] for v in cert["criticas"][:3]),
+                                      "nota_dashai": "DashAI: la MESA aprobó pese a quiebres CRÍTICOS del reglamento de bodega (BTG/Ameris/Subsidio 02). Cada quiebre listado es una regla dura que invalida la operación ante el inversionista."})
+                # 1b) RIESGO — FUERA DE POLÍTICA: monto aprobado < 2.000 UF sin subsidio
+                try:
+                    m_uf = float(s.get("monto_credito") or df.get("monto_credito") or 0)
+                except (TypeError, ValueError):
+                    m_uf = 0
+                con_sub = bool(df.get("con_subsidio"))
+                if aprobada and 0 < m_uf < 2000 and not con_sub:
+                    hallazgos.append({**base, "categoria": "RIESGO",
+                                      "detalle": f"Monto aprobado {m_uf:.0f} UF < 2.000 UF sin subsidio — fuera de política de bodega",
+                                      "nota_dashai": "DashAI: el reglamento BTG/Ameris fija un mínimo de 2.000 UF para operaciones sin subsidio. Esta aprobación no es colocable en la bodega y quedará atrapada en cartera propia."})
+                # 1c) RIESGO — REGLA DE LOS 80 AÑOS saltada (edad + plazo al término)
+                try:
+                    edad_plazo = float((sim or {}).get("edad_plazo") or 0)
+                except (TypeError, ValueError):
+                    edad_plazo = 0
+                if aprobada and edad_plazo > 80:
+                    hallazgos.append({**base, "categoria": "RIESGO",
+                                      "detalle": f"Edad + plazo al término = {edad_plazo:.0f} años > 80 (Regla de los 80 años saltada)",
+                                      "nota_dashai": "DashAI: la Regla de Hierro exige que edad del deudor + plazo del crédito no supere los 80 años al término. La MESA la saltó: riesgo actuarial y de seguro de desgravamen no cubierto."})
+                # 2) PERDIDA: rechazo que según los papeles era viable (antigüedad >= 12 cumplida)
                 docs_ok = not [c for c in _criterios_folder(fd, archivos=await asyncio.to_thread(
                     fsvc.scan_archivos, fd.get("nombre", "")))[:4] if not c["ok"]]
-                if (not aprobada) and docs_ok and not cert.get("violaciones"):
+                antig = df.get("antiguedad_laboral_meses")
+                antig_ok = antig is None or float(antig or 0) >= 12
+                if (not aprobada) and docs_ok and not cert.get("violaciones") and antig_ok:
                     hallazgos.append({**base, "categoria": "PERDIDA",
-                                      "detalle": "Rechazo de MESA con expediente completo y CERO quiebres de reglamento — candidato a rescate"})
+                                      "detalle": "Rechazo de MESA con expediente completo, antigüedad laboral cumplida y CERO quiebres de reglamento — candidato a rescate",
+                                      "nota_dashai": f"DashAI: el cliente cumplía TODOS los requisitos duros del reglamento (documentación completa{', antigüedad ' + format(float(antig), '.0f') + ' meses >= 12' if antig is not None else ''}, sin quiebre de política). El rechazo carece de sustento técnico verificable: negocio perdido rescatable."})
                 # 3) ERROR HUMANO: inconsistencias de renta / antigüedad / monto
                 errores = []
-                df = fd.get("datos_financieros") or {}
                 renta = await asyncio.to_thread(mesa_brain.recalibrar_renta, sim, fd, {})
                 if renta.get("disponible") and renta.get("renta_declarada") and renta.get("renta_reconocida"):
                     dif = renta["renta_declarada"] - renta["renta_reconocida"]
@@ -10727,11 +10760,11 @@ async def _forense_job(dias=90):
                         errores.append(f"Monto MESA {m_seg:.0f} UF ≠ monto carpeta {m_fd:.0f} UF")
                 except (TypeError, ValueError):
                     pass
-                antig = df.get("antiguedad_laboral_meses")
                 if aprobada and antig is not None and float(antig or 0) < 12:
                     errores.append(f"Antigüedad {antig} meses < 12 (aprobada igual)")
                 if errores:
-                    hallazgos.append({**base, "categoria": "ERROR HUMANO", "detalle": " · ".join(errores[:3])})
+                    hallazgos.append({**base, "categoria": "ERROR HUMANO", "detalle": " · ".join(errores[:3]),
+                                      "nota_dashai": "DashAI: inconsistencia numérica entre los documentos originales y la respuesta de MESA. La suma de liquidaciones/renta reconocida, el monto o la antigüedad no cuadran con lo resuelto — error operativo de la mesa."})
             except Exception as e:
                 logging.warning(f"Forense {cliente}: {e}")
             await db.config.update_one({"_key": "auditoria_forense"}, {"$set": {
@@ -10740,11 +10773,14 @@ async def _forense_job(dias=90):
     resumen = {"RIESGO": sum(1 for h in hallazgos if h["categoria"] == "RIESGO"),
                "PERDIDA": sum(1 for h in hallazgos if h["categoria"] == "PERDIDA"),
                "ERROR HUMANO": sum(1 for h in hallazgos if h["categoria"] == "ERROR HUMANO")}
+    nuevos = sum(1 for h in hallazgos
+                 if (h["cliente"], h["fecha_mesa"], h["categoria"]) not in prev_keys)
     await db.config.update_one({"_key": "auditoria_forense"}, {"$set": {
         "estado": "completado", "progreso": revisados, "total": total,
         "periodo_dias": dias, "hallazgos": hallazgos, "resumen": resumen,
+        "titulo_lista": "Errores MESA detectados", "nuevos_ultimo_barrido": nuevos,
         "generado_en": now_iso()}}, upsert=True)
-    logging.info(f"🔬 Forense 90d: {revisados} revisados, {len(hallazgos)} hallazgos {resumen}")
+    logging.info(f"🔬 Forense {dias}d: {revisados} revisados, {len(hallazgos)} hallazgos ({nuevos} nuevos) {resumen}")
 
 
 @api.post("/contraloria/forense/iniciar")
@@ -10754,6 +10790,7 @@ async def forense_iniciar(dias: int = 90):
         return {"ok": True, "mensaje": "Auditoría forense ya en proceso", "progreso": doc.get("progreso")}
     await db.config.update_one({"_key": "auditoria_forense"}, {"$set": {
         "estado": "en_proceso", "progreso": 0, "total": 0, "hallazgos": [],
+        "hallazgos_previos": (doc or {}).get("hallazgos") or [],
         "iniciado_en": now_iso()}}, upsert=True)
     asyncio.create_task(_forense_job(dias))
     return {"ok": True, "mensaje": f"Auditoría forense de {dias} días lanzada en segundo plano"}
@@ -10762,7 +10799,195 @@ async def forense_iniciar(dias: int = 90):
 @api.get("/contraloria/forense")
 async def forense_estado():
     doc = await db.config.find_one({"_key": "auditoria_forense"}, {"_id": 0})
+    if doc:
+        doc.pop("hallazgos_previos", None)
     return doc or {"estado": "sin_ejecutar"}
+
+
+def _borrador_reclamacion(h):
+    """MODO RECLAMACIÓN: borrador Oro/Carbono para rescatar un caso PERDIDA."""
+    cliente = h.get("cliente") or "Cliente"
+    rut = h.get("rut") or "RUT en expediente"
+    fecha = h.get("fecha_mesa") or ""
+    monto = h.get("monto_mesa")
+    monto_txt = f"{float(monto):,.0f} UF".replace(",", ".") if monto else "según expediente"
+    subject = f"RECLAMACIÓN FORMAL — Solicitud de Reevaluación: {cliente} ({rut})"
+    body = f"""
+<div style="font-family:Georgia,'Times New Roman',serif;max-width:600px;margin:0 auto">
+  <div style="background:#0a0a0a;padding:20px 26px;border-left:4px solid #D4AF37">
+    <span style="color:#D4AF37;font-weight:700;letter-spacing:0.1em">CENTRAL MUTUOS · CONTRALORÍA</span>
+  </div>
+  <div style="padding:22px 8px;color:#1a1a1a;font-size:14px;line-height:1.75">
+    <p>Estimados señores de la MESA,</p>
+    <p>Por medio de la presente solicito formalmente la <b>reevaluación</b> del caso
+       <b>{cliente}</b> (RUT {rut}), resuelto con rechazo el {fecha or 'período auditado'},
+       por un monto de crédito de <b>{monto_txt}</b>.</p>
+    <p>La auditoría forense independiente de DashAI (Contraloría Central Mutuos) determinó que
+       el expediente cumplía <b>todos los requisitos duros del reglamento de bodega
+       (BTG/Ameris/Subsidio 02)</b> al momento de la resolución:</p>
+    <ul style="font-size:13px;color:#333">
+      <li>Documentación completa (Cédula, Liquidaciones, AFP y CMF verificados).</li>
+      <li>Antigüedad laboral igual o superior a 12 meses.</li>
+      <li>Cero quiebres de política detectados en la triangulación documental.</li>
+    </ul>
+    <p><b>Nota técnica DashAI:</b> {h.get('nota_dashai') or h.get('detalle') or ''}</p>
+    <p>Agradeceré confirmar la reapertura del caso o, en su defecto, remitir el fundamento
+       técnico específico del rechazo para nuestro registro de contraloría.</p>
+    <p style="margin-top:24px">Atentamente,<br><b>Gerardo Barrera</b><br>
+       <span style="color:#666;font-size:12px">Dirección Comercial · Central Mutuos</span></p>
+  </div>
+</div>"""
+    return {"subject": subject, "body": body}
+
+
+@api.post("/contraloria/forense/reclamaciones")
+async def forense_reclamaciones_generar():
+    doc = await db.config.find_one({"_key": "auditoria_forense"}) or {}
+    perdidas = [h for h in (doc.get("hallazgos") or []) if h.get("categoria") == "PERDIDA"][:5]
+    if not perdidas:
+        raise HTTPException(status_code=404, detail="No hay hallazgos PERDIDA en la última minería forense")
+    borradores = []
+    for i, h in enumerate(perdidas):
+        b = _borrador_reclamacion(h)
+        borradores.append({"idx": i, "cliente": h.get("cliente"), "rut": h.get("rut"),
+                           "fecha_mesa": h.get("fecha_mesa"), "subject": b["subject"],
+                           "body": b["body"], "enviado": False})
+    await db.config.update_one({"_key": "forense_reclamaciones"}, {"$set": {
+        "borradores": borradores, "generado_en": now_iso()}}, upsert=True)
+    return {"ok": True, "total": len(borradores), "borradores": borradores}
+
+
+@api.get("/contraloria/forense/reclamaciones")
+async def forense_reclamaciones_list():
+    doc = await db.config.find_one({"_key": "forense_reclamaciones"}, {"_id": 0})
+    return doc or {"borradores": []}
+
+
+@api.post("/contraloria/forense/reclamaciones/{idx}/enviar")
+async def forense_reclamacion_enviar(idx: int):
+    """CANDADO: el envío a MESA solo ocurre cuando Gerardo presiona el botón."""
+    doc = await db.config.find_one({"_key": "forense_reclamaciones"}) or {}
+    bs = doc.get("borradores") or []
+    if idx < 0 or idx >= len(bs):
+        raise HTTPException(status_code=404, detail="Borrador de reclamación no encontrado")
+    b = bs[idx]
+    res = await asyncio.to_thread(mail.send_mail, "aprobaciones@centralmutuos.cl",
+                                  b["subject"], b["body"], [], "secundaria")
+    if not res.get("success"):
+        raise HTTPException(status_code=502, detail=res.get("error", "Error de envío SMTP"))
+    bs[idx]["enviado"] = True
+    bs[idx]["enviado_en"] = now_iso()
+    await db.config.update_one({"_key": "forense_reclamaciones"}, {"$set": {"borradores": bs}})
+    return {"ok": True, "mensaje": f"Reclamación de {b['cliente']} enviada a aprobaciones@centralmutuos.cl"}
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 🧠 CEREBRO DASHAI — Aprendizaje Perpetuo y Sincronización Autónoma
+# Hilo de baja prioridad: recalibra criterios y sincroniza scores cada 60 min;
+# vigila cada 5 min si llegó correo de MESA o documento nuevo (disparo inmediato).
+# ══════════════════════════════════════════════════════════════════════════
+async def _dashai_sync(motivo="programada"):
+    modelo = await asyncio.to_thread(mesa_brain.calibrar)
+    modelo.pop("_id", None)
+    base_pct = round((modelo.get("base") or 0.85) * 100)
+    # Último patrón aprendido (minería local de motivos de rechazo)
+    patron = ""
+    motivos = modelo.get("motivos_rechazo") or []
+    if motivos:
+        top = motivos[0]
+        patron = f"Aprendido: Rechazo por {top.get('motivo')} ({top.get('casos')} caso(s) en 60 días)"
+    # Sincronizar scores de viabilidad → prospectos (Centro de Ventas VIP)
+    ops = await db.prospectos.find({"estado": {"$ne": "PROMOVIDO"}}).to_list(500)
+    sync_prospectos = 0
+    for op in ops:
+        try:
+            prob = await _puntuar_prospecto(op, modelo, base_pct)
+            await db.prospectos.update_one({"id": op["id"]}, {"$set": {
+                "prob_mesa": prob, "politica_general": op.get("politica_general"),
+                "dashai_sync_en": now_iso()}})
+            sync_prospectos += 1
+        except Exception:
+            pass
+        await asyncio.sleep(0.05)  # baja prioridad: nunca frenar el portal VIP
+    # Sincronizar clientes activos (quiebres de Reglas de Hierro por carpeta)
+    folders = await db.folders.find({"is_escrituracion": {"$ne": True}}).limit(200).to_list(200)
+    sync_folders = 0
+    for fd in folders:
+        try:
+            quiebres = await asyncio.to_thread(mesa_brain.quiebres_hierro_folder, fd)
+            score = 0 if quiebres else base_pct
+            await db.folders.update_one({"id": fd["id"]}, {"$set": {
+                "dashai_score": score,
+                "dashai_quiebres": [q.get("detalle") for q in (quiebres or [])][:3],
+                "dashai_sync_en": now_iso()}})
+            sync_folders += 1
+        except Exception:
+            pass
+        await asyncio.sleep(0.05)
+    evento = {"id": str(uuid.uuid4()), "motivo": motivo, "fecha": now_iso(),
+              "nivel_calibracion": base_pct, "patron": patron,
+              "prospectos_sync": sync_prospectos, "folders_sync": sync_folders}
+    await db.dashai_eventos.insert_one(dict(evento))
+    await db.config.update_one({"_key": "dashai_perpetuo"}, {"$set": {
+        "ultima_sync": now_iso(), "ultimo_motivo": motivo,
+        "nivel_calibracion": base_pct, "ultimo_patron": patron,
+        "prospectos_sync": sync_prospectos, "folders_sync": sync_folders}}, upsert=True)
+    logging.info(f"🧠 DashAI sync ({motivo}): {sync_prospectos} prospectos, {sync_folders} carpetas, calibración {base_pct}%")
+    return evento
+
+
+async def _dashai_perpetuo_loop():
+    """APRENDIZAJE PERPETUO: full sync cada 60 min; vigilancia cada 5 min de
+    correos de MESA (seguimiento) y documentos nuevos (capturas) → disparo inmediato."""
+    await asyncio.sleep(90)
+    ultimo_full = datetime.now(timezone.utc) - timedelta(hours=2)
+    marca = now_iso()
+    while True:
+        try:
+            ahora = datetime.now(timezone.utc)
+            nuevo_seg = await db.seguimiento.find_one({"fecha": {"$gt": marca}})
+            nueva_cap = await db.capturas_autonomas.find_one({"creado_en": {"$gt": marca}})
+            if nuevo_seg or nueva_cap:
+                marca = now_iso()
+                await _dashai_sync("disparo_inmediato" + ("_mesa" if nuevo_seg else "_documento"))
+                ultimo_full = ahora
+            elif (ahora - ultimo_full).total_seconds() >= 3600:
+                await _dashai_sync("programada_60min")
+                ultimo_full = ahora
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logging.warning(f"DashAI perpetuo: {e}")
+        await asyncio.sleep(300)
+
+
+@api.get("/dashai/estado")
+async def dashai_estado():
+    cfg = await db.config.find_one({"_key": "dashai_perpetuo"}, {"_id": 0}) or {}
+    modelo = await asyncio.to_thread(mesa_brain.modelo_actual)
+    modelo.pop("_id", None)
+    v60 = modelo.get("ventana_60") or {}
+    eventos = await db.dashai_eventos.find({}, {"_id": 0}).sort("fecha", -1).limit(12).to_list(12)
+    return {"nivel_calibracion": cfg.get("nivel_calibracion") or round((modelo.get("base") or 0.85) * 100),
+            "calibrado_en": modelo.get("calibrado_en"),
+            "ultimo_patron": cfg.get("ultimo_patron") or "",
+            "ultima_sync": cfg.get("ultima_sync"),
+            "ultimo_motivo": cfg.get("ultimo_motivo"),
+            "prospectos_sync": cfg.get("prospectos_sync", 0),
+            "folders_sync": cfg.get("folders_sync", 0),
+            "ventana_60": {"base": v60.get("base"), "aprobadas": v60.get("aprobadas"),
+                           "rechazadas": v60.get("rechazadas")},
+            "base_historica": modelo.get("base"),
+            "motivos_rechazo": (modelo.get("motivos_rechazo") or [])[:6],
+            "ajustes_mercado": (modelo.get("ajustes_mercado") or [])[:4],
+            "tendencia": modelo.get("tendencia") or "",
+            "eventos": eventos, "perpetuo_activo": True}
+
+
+@api.post("/dashai/sync")
+async def dashai_sync_manual():
+    evento = await _dashai_sync("manual")
+    return {"ok": True, "mensaje": "🧠 DashAI recalibrado y sincronizado", **{k: v for k, v in evento.items() if k != "id"}}
 
 
 # ══════════════════════════════════════════════════════════════════════════

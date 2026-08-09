@@ -847,3 +847,17 @@
     montos manuales guardados. Screenshots wizard pasos 1 y 2 OK.
   - PENDIENTE (backlog previo): Rescate PERDIDA "Reenviar a MESA", forense programada lunes,
     aviso automático hallazgos forenses, exportar informe forense PDF.
+
+## 2026-06 (sesión fork) — Segregación, Campaña, Forense 60d y Cerebro DashAI
+- Salida Humana en Portal: modal exit-intent + link "¿Le parece complejo?" en /api/calificar/{oid} (verificado screenshot + testing agent).
+- Segregación Total de Prospectos: colección db.prospectos (renombrada desde oportunidades), botón "📂 Promover a Cliente Activo" (POST /api/prospectos/{id}/promover) crea carpeta + subcarpetas 01-99 y marca PROMOVIDO (desaparece de la vista). Sin sync automática Excel→carpetas.
+- Flujo de Avance: "⚖️ Enviar a Escrituración" (POST /api/clientes/folders/{fid}/enviar-escrituracion) activa Set de Crédito + Títulos + Escrituración.
+- Campaña Comercial: "📧 Enviar Invitación por Email" con plantilla Maserati (POST /api/oportunidades/{id}/invitacion-vip), remitente gerardo.ext@centralmutuos.cl, tracking Enviado/Abierto/Inició carga. Caso Yerile ejecutado (SMTP aceptado, link wa.me entregado).
+- Calendario de Cierres: selector Entrega Inmediata/Futura + sub-pregunta 6 meses en portal → fecha_entrega_estimada + alerta "🚨 ENTREGA:" a Gerardo.
+- Regla 6 liquidaciones: portal exige min:6, completitud >= 6, mensaje WhatsApp actualizado.
+- Testing agent iteration_28: 100% PASS (7/7 backend + todos los flujos frontend).
+- Auditoría Forense 60 días (ultra-precisión): checks nuevos (monto <2.000 UF sin subsidio, regla 80 años, renta mal sumada, rechazo injustificado con antigüedad ok), nota_dashai por hallazgo, título "Errores MESA detectados", contador de errores NUEVOS vs barrido anterior. Modo Reclamación: borradores top-5 PERDIDA + envío con candado a aprobaciones@centralmutuos.cl. Resultado del barrido: 3 hallazgos (2 RIESGO + 1 ERROR HUMANO, caso Cristian Pavez), 0 PERDIDA, 0 nuevos.
+- Cerebro DashAI (pestaña 🧠): gauge de calibración (98%), último patrón aprendido, bitácora, sync manual + loop perpetuo (full cada 60 min, vigilancia cada 5 min de correos MESA/documentos → disparo inmediato), scores persistidos en db.prospectos (prob_mesa) y db.folders (dashai_score). Endpoints GET /api/dashai/estado, POST /api/dashai/sync.
+- Saneamiento verificado: headers completos (HSTS/CSP/COOP/Permissions), DOMPurify en todos los innerHTML, secureStore, ESLint 100% limpio (hooks incluidos).
+- NOTA OPERATIVA: el hot-reload de server.py a veces cuelga uvicorn (502) → sudo supervisorctl restart backend.
+- Prospecto de prueba del usuario: Yerile Barrera id=69bd18cc-ff8a-4118-b0e5-9ec46f3a8210 (status invitacion_enviada) — NO borrar.

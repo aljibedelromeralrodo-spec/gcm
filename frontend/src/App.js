@@ -34,6 +34,7 @@ const TasacionModule = lazy(() => import("./pages/TasacionModule"));
 const EstudioTituloModule = lazy(() => import("./pages/EstudioTituloModule"));
 const EscrituraModule = lazy(() => import("./pages/EscrituraModule"));
 const ContraloriaModule = lazy(() => import("./pages/ContraloriaModule"));
+const CerebroDashAIModule = lazy(() => import("./pages/CerebroDashAIModule"));
 const GlobalSearch = lazy(() => import("./components/GlobalSearch"));
 const WelcomeTour = lazy(() => import("./components/WelcomeTour"));
 
@@ -154,6 +155,7 @@ function MainApp() {
     { key: 'estudio', icon: 'fa-balance-scale', label: 'Estudio de Títulos' },
     { key: 'escritura', icon: 'fa-pencil-square-o', label: 'Escritura' },
     { key: 'contraloria', icon: 'fa-search', label: 'Contraloría' },
+    { key: 'dashai', icon: 'fa-lightbulb-o', label: '🧠 Cerebro DashAI' },
     { key: 'cierres', icon: 'fa-handshake-o', label: 'Cierres' },
     ...(user.rol === 'admin' ? [{ key: 'oportunidades', icon: 'fa-diamond', label: 'Centro de Ventas VIP' }] : []),
     { key: 'salud', icon: 'fa-heartbeat', label: 'Panel de Salud' },
@@ -266,6 +268,7 @@ function MainApp() {
         {activeModule === 'estudio' && <EstudioTituloModule />}
         {activeModule === 'escritura' && <EscrituraModule onNavigate={setActiveModule} />}
         {activeModule === 'contraloria' && <ContraloriaModule />}
+        {activeModule === 'dashai' && <CerebroDashAIModule />}
         </Suspense>
       </main>
     </div>
