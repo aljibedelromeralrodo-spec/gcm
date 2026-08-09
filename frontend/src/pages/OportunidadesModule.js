@@ -157,6 +157,13 @@ export default function OportunidadesModule() {
                         {op.prob_mesa >= 85 ? "🎯 " : ""}Probabilidad de Aprobación MESA: {op.prob_mesa}%
                       </span>
                     )}
+                    {op.politica_general === "NO VIABLE - POLÍTICA GENERAL" && (
+                      <span data-testid={`op-politica-${i}`} title={(op.quiebres_politica || []).join("\n")}
+                        style={{ marginLeft: 8, fontSize: "0.66rem", fontWeight: 800, color: "#fff",
+                        background: "linear-gradient(135deg, #9f1239, #e11d48)", padding: "0.12rem 0.55rem", whiteSpace: "nowrap" }}>
+                        ⛔ NO VIABLE · POLÍTICA GENERAL
+                      </span>
+                    )}
                     {op.expediente_vip && <span style={{ marginLeft: 8, color: "var(--gold)", fontSize: "0.72rem", fontWeight: 700 }}>✦ EXPEDIENTE VIP</span>}
                     {op.proyecto && <div style={{ fontSize: "0.72rem", color: "#94a3b8" }}>{op.proyecto}</div>}
                   </td>

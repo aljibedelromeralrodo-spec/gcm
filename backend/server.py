@@ -3823,6 +3823,15 @@ def _prob_aprobacion(item, stats):
 
 def _prob_aprobacion_folder(doc, stats):
     """% de posibilidades de aprobación de una CARPETA de cliente, calibrado con mesa."""
+    # ⚔️ REGLAS DE HIERRO (Políticas Maestras): cualquier quiebre → viabilidad 0% inmediata.
+    # La IA NO puede ponderar ni ignorar estas 5 reglas generales (orden del dueño).
+    quiebres_hierro = mesa_brain.quiebres_hierro_folder(doc)
+    if quiebres_hierro:
+        factores_h = ["⛔ 0%: NO VIABLE - POLÍTICA GENERAL (Regla de Hierro quebrada)"]
+        factores_h += [f"⛔ {q['detalle']}" for q in quiebres_hierro]
+        return {"porcentaje": 0, "factores": factores_h,
+                "alerta_critica": "NO VIABLE - POLÍTICA GENERAL: " +
+                                  "; ".join(q["regla"] for q in quiebres_hierro)}
     prob = stats["base"] * 100.0
     factores = [f"Base mesa: {round(stats['base']*100)}% ({stats['aprobadas']} aprobadas / {stats['rechazadas']} rechazadas)"]
     archivos = fsvc.scan_archivos(doc.get("nombre", ""))
@@ -8407,13 +8416,26 @@ async def oportunidades_list(request: Request):
                 sim = await db.simulaciones.find_one(
                     {"nombre_completo": {"$regex": re.escape(op["nombre"][:20]), "$options": "i"}},
                     sort=[("timestamp", -1)])
-            if sim:
-                if sim.get("precalificacion_aprobada"):
+            sim_eval = sim or op.get("simulacion")
+            if sim_eval:
+                if sim_eval.get("precalificacion_aprobada"):
                     prob = min(97, base_pct + 15)
-                elif sim.get("credito_viable"):
+                elif sim_eval.get("credito_viable"):
                     prob = min(92, base_pct + 8)
                 else:
                     prob = max(10, base_pct - 35)
+                # ⚔️ REGLAS DE HIERRO + reglamento Con Subsidio 02 (edad/LTV):
+                # cualquier quiebre → viabilidad 0% y NO VIABLE - POLÍTICA GENERAL
+                quiebres = await asyncio.to_thread(
+                    mesa_brain.evaluar_politicas_generales, {"datos_financieros": {}}, sim_eval)
+                if quiebres:
+                    prob = 0
+                    op["politica_general"] = "NO VIABLE - POLÍTICA GENERAL"
+                    op["quiebres_politica"] = [q["detalle"] for q in quiebres]
+                else:
+                    op["politica_general"] = "CUMPLE REGLAMENTO"
+            else:
+                op["politica_general"] = "SIN SIMULACIÓN"
             op["prob_mesa"] = prob
             op["objetivo_whatsapp"] = prob >= 85
         ops.sort(key=lambda o: -(o.get("prob_mesa") or 0))

@@ -19,6 +19,7 @@ export default function DashboardModule({ valorUF: _valorUF, userName: _userName
   const [semaforo, setSemaforo] = useState(null);
   const [docsJob, setDocsJob] = useState(null);
   const [tendencia, setTendencia] = useState("");
+  const [hallazgos, setHallazgos] = useState(null);
 
   const generarDocsDataset = async () => {
     try {
@@ -52,6 +53,7 @@ export default function DashboardModule({ valorUF: _valorUF, userName: _userName
     axios.get(`${API_URL}/api/firma/semaforo`).then(r => setSemaforo(r.data)).catch(() => setSemaforo({ error: true }));
     axios.get(`${API_URL}/api/dashai/dataset-documentos/estado`).then(r => setDocsJob(r.data)).catch(() => {});
     axios.get(`${API_URL}/api/mesa-brain/modelo`).then(r => setTendencia(r.data?.tendencia || "")).catch(() => {});
+    axios.get(`${API_URL}/api/contraloria/casos`).then(r => setHallazgos(r.data)).catch(() => {});
   }, []);
 
   const refreshKnowledge = async () => {
@@ -75,6 +77,25 @@ export default function DashboardModule({ valorUF: _valorUF, userName: _userName
 
   return (
     <div className="module-content" data-testid="dashboard-module">
+      {hallazgos && ((hallazgos.riesgo_falso_positivo || 0) + (hallazgos.bajo_auditoria || 0)) > 0 && (
+        <div data-testid="alerta-hallazgo-contraloria" style={{ background: "linear-gradient(160deg, rgba(70,10,20,0.97), rgba(20,2,6,0.99))",
+          border: "1px solid rgba(225,29,72,0.75)", borderRadius: 0, padding: "0.9rem 1.2rem", marginBottom: "1rem",
+          display: "flex", alignItems: "center", gap: 10, boxShadow: "0 0 40px -8px rgba(225,29,72,0.7)" }}>
+          <i className="fa fa-gavel" style={{ color: "#fb7185", fontSize: "1.2rem" }} />
+          <div>
+            <b style={{ color: "#fecaca", letterSpacing: "0.06em" }}>🚨 HALLAZGO DE CONTRALORÍA — DashAI detectó inconsistencias de la MESA</b>
+            <div style={{ opacity: 0.85, fontSize: "0.8rem", color: "#fda4af", marginTop: 2 }}>
+              {(hallazgos.riesgo_falso_positivo || 0) > 0 && <span>{hallazgos.riesgo_falso_positivo} caso(s) con RIESGO DE FALSO POSITIVO · </span>}
+              {(hallazgos.bajo_auditoria || 0) > 0 && <span>{hallazgos.bajo_auditoria} bajo auditoría · </span>}
+              {(hallazgos.casos || []).filter(c => c.estado_auditoria === "RIESGO DE FALSO POSITIVO").slice(0, 3).map(c => c.cliente).join(", ")}
+            </div>
+          </div>
+          <span style={{ marginLeft: "auto", color: "var(--gold)", fontWeight: 700, fontSize: "0.78rem",
+            border: "1px solid rgba(212,175,55,0.5)", padding: "0.3rem 0.8rem", whiteSpace: "nowrap" }}>
+            Revisar en Contraloría →
+          </span>
+        </div>
+      )}
       {semaforo?.alerta && (
         <div data-testid="alerta-saldo-firmas" style={{ background: "linear-gradient(160deg, rgba(70,10,20,0.95), rgba(20,2,6,0.98))",
           border: "1px solid rgba(225,29,72,0.6)", borderRadius: 0, padding: "0.8rem 1.2rem", marginBottom: "1rem",

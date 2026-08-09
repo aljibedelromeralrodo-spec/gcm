@@ -213,6 +213,29 @@ def auditar_caso(folder, sim, respuesta_mesa, modelo=None):
     violaciones = []
     secciones = []
 
+    # ── 0. ⚔️ REGLAS DE HIERRO (Políticas Maestras — BLOQUEADAS) ──────────
+    pol = politicas_maestras()
+    quiebres_hierro = evaluar_politicas_generales(folder, sim)
+    quebradas = {q["regla"] for q in quiebres_hierro}
+    items_hierro = [
+        {"regla": "Antigüedad laboral mínima", "real": "quiebre detectado" if "Antigüedad laboral" in quebradas else "cumple/sin dato",
+         "esperado": f"≥ {pol['antiguedad_minima_meses']} meses", "ok": "Antigüedad laboral" not in quebradas},
+        {"regla": "Edad máxima al término del crédito", "real": "quiebre detectado" if "Edad máxima crédito" in quebradas else "cumple/sin dato",
+         "esperado": f"≤ {pol['edad_maxima_credito']} años", "ok": "Edad máxima crédito" not in quebradas},
+        {"regla": "Morosidad", "real": "MOROSO" if "Morosidad" in quebradas else "sin morosidad detectada",
+         "esperado": "NO permitida", "ok": "Morosidad" not in quebradas},
+        {"regla": "Carga financiera máxima", "real": "quiebre detectado" if "Carga financiera" in quebradas else "cumple/sin dato",
+         "esperado": f"≤ {pol['carga_financiera_maxima']*100:.0f}%", "ok": "Carga financiera" not in quebradas},
+        {"regla": "LTV máximo base", "real": "quiebre detectado" if "LTV máximo" in quebradas else "cumple/sin dato",
+         "esperado": f"≤ {pol['ltv_maximo_base']*100:.0f}%", "ok": "LTV máximo" not in quebradas},
+    ]
+    for q in quiebres_hierro:
+        violaciones.append({"regla": f"⚔️ REGLA DE HIERRO · {q['regla']}",
+                            "detalle": f"POLÍTICA GENERAL QUEBRADA: {q['detalle']}", "critico": True})
+    secciones.append({"titulo": "⚔️ Reglas de Hierro · Políticas Maestras (bloqueadas)",
+                      "items": items_hierro,
+                      "nota": "Cualquier quiebre = NO VIABLE - POLÍTICA GENERAL (viabilidad 0%). La IA no puede ponderarlas."})
+
     # ── 1. REGLAS DE BODEGA (BTG/Ameris) ──────────────────────────────────
     reglas = []
 
@@ -334,3 +357,86 @@ def auditar_caso(folder, sim, respuesta_mesa, modelo=None):
         "certificado_id": f"CAI-{(folder.get('rut') or sim.get('rut') or 'SN').replace('.','').replace('-','')[:9]}-{datetime.now(timezone.utc).strftime('%Y%m%d')}",
         "generado_en": datetime.now(timezone.utc).isoformat(),
     }
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# ⚔️ REGLAS DE HIERRO — Políticas Maestras Generales (BLOQUEADAS, la IA no
+# puede ignorarlas ni ponderarlas: cualquier quiebre = 0% viabilidad).
+# ══════════════════════════════════════════════════════════════════════════
+POLITICAS_MAESTRAS_DEFAULT = {
+    "antiguedad_minima_meses": 12,
+    "edad_maxima_credito": 80,
+    "morosidad_permitida": False,
+    "carga_financiera_maxima": 0.40,
+    "ltv_maximo_base": 0.90,
+}
+
+
+def politicas_maestras():
+    crit = _criterios()
+    pol = dict(POLITICAS_MAESTRAS_DEFAULT)
+    pol.update({k: v for k, v in (crit.get("politicas_maestras") or {}).items()
+                if k in POLITICAS_MAESTRAS_DEFAULT and v is not None})
+    return pol
+
+
+def evaluar_politicas_generales(folder, sim=None):
+    """Evalúa las 5 Reglas de Hierro. Devuelve lista de quiebres (vacía = cumple).
+    Cada quiebre: {"regla", "detalle"}. Solo evalúa reglas con dato disponible."""
+    pol = politicas_maestras()
+    folder = folder or {}
+    sim = sim or {}
+    df = folder.get("datos_financieros") or {}
+    cr = folder.get("credit_request") or {}
+    quiebres = []
+    # 1. Antigüedad laboral mínima
+    antig = _num(df.get("antiguedad_laboral_meses") or df.get("antiguedad_meses")
+                 or cr.get("antiguedad_laboral_meses"), -1)
+    if antig >= 0 and antig < _num(pol["antiguedad_minima_meses"], 12):
+        quiebres.append({"regla": "Antigüedad laboral",
+                         "detalle": f"Antigüedad {antig:.0f} meses < mínimo {pol['antiguedad_minima_meses']} meses"})
+    # 2. Edad máxima al término del crédito
+    edad_term = _num(sim.get("edad_plazo") or df.get("edad_termino_credito"))
+    if edad_term and edad_term > _num(pol["edad_maxima_credito"], 80):
+        quiebres.append({"regla": "Edad máxima crédito",
+                         "detalle": f"Edad al término {edad_term:.0f} años > máximo {pol['edad_maxima_credito']} años"})
+    # 3. Morosidad no permitida
+    moroso = df.get("morosidad") or df.get("moroso") or sim.get("morosidad") or cr.get("morosidad")
+    if (not pol["morosidad_permitida"]) and bool(moroso):
+        quiebres.append({"regla": "Morosidad",
+                         "detalle": "Cliente registra morosidad vigente (política general: morosidad NO permitida)"})
+    # 4. Carga financiera máxima
+    carga = _num(sim.get("carga_fin_conjunta") if sim.get("tiene_codeudor") else sim.get("carga_fin_individual"))
+    if not carga:
+        carga = _num(df.get("carga_financiera"))
+    cmax = _num(pol["carga_financiera_maxima"], 0.40)
+    if carga and carga > cmax + 1e-6:
+        quiebres.append({"regla": "Carga financiera",
+                         "detalle": f"Carga financiera {carga*100:.1f}% > máximo {cmax*100:.0f}%"})
+    # 5. LTV máximo base
+    ltv = _num(sim.get("ltv") or df.get("ltv"))
+    lmax = _num(pol["ltv_maximo_base"], 0.90)
+    if ltv and ltv > lmax + 1e-6:
+        quiebres.append({"regla": "LTV máximo",
+                         "detalle": f"LTV {ltv*100:.1f}% > máximo base {lmax*100:.0f}%"})
+    return quiebres
+
+
+def quiebres_hierro_folder(folder):
+    """Busca la última simulación del cliente y evalúa las Reglas de Hierro (sync)."""
+    import re as _re
+    folder = folder or {}
+    sim = None
+    try:
+        d = _db()
+        rut_f = _re.sub(r"[^0-9kK]", "", (folder.get("rut") or "")).lower()
+        if rut_f:
+            sim = d.simulaciones.find_one({"rut": {"$regex": rut_f[:8], "$options": "i"}},
+                                          sort=[("timestamp", -1)])
+        if not sim and folder.get("nombre"):
+            sim = d.simulaciones.find_one(
+                {"nombre_completo": {"$regex": _re.escape(folder["nombre"][:20]), "$options": "i"}},
+                sort=[("timestamp", -1)])
+    except Exception:
+        pass
+    return evaluar_politicas_generales(folder, sim)
