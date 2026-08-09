@@ -676,3 +676,20 @@
   con 2 search_replace en un mismo batch paralelo.
 - VERIFICADO: calibrar → base 60d 97.8%, 45/1, tendencia "renta mínima sobre carga financiera";
   screenshot Contraloría + Dashboard OK.
+
+- 2026-08-09 — **Modo Contralor Exclusivo (Modo Espejo) + Escena Yerile**:
+  - Contraloría solo audita expedientes con documentación COMPLETA (Cédula, Liquidaciones,
+    AFP, CMF — vía _criterios_folder). Incompletos o sin carpeta → estado "RECIBIDO DE MESA"
+    persistido en db.seguimiento (permanente: aunque completen docs después, NO se re-audita,
+    decisión explícita del usuario). Endpoint /api/contraloria/casos devuelve docs_faltantes
+    y contador "recibidos". UI: fila gris + "Documentación incompleta — auditoría no aplicada".
+    Verificado: 46 casos → 43 recibidos, 0 falsos positivos.
+  - **Escena prueba real Gerardo (Caso Yerile)**: carpeta db.folders + ficha set_credito
+    "Yerile Barrera" RUT 15.546.666-9 (set id 0ac95f5e-3f55-467f-8ee4-20d48993b95f).
+    Set poblado con 7 formularios de cierre reales sin RUT ajeno (REGLA IVANA pasa:
+    combinado OK, 0 excluidos). Link portal firma: /api/firma/41e006750bd5 + link wa.me
+    generado. Firmas de terceros disponibles: 21 (túnel enviar_a_firmar_tercero intacto).
+    Al subir el carnet, GET set dispara _extraer_num_documento (OCR) automáticamente.
+  - ⚠️ QUIRK ENTORNO: el hot-reload de uvicorn (WatchFiles) se queda COLGADO al editar
+    server.py (proceso viejo termina, el nuevo no arranca). SIEMPRE hacer
+    `sudo supervisorctl restart backend` tras editar server.py.

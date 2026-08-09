@@ -30,6 +30,7 @@ export default function ContraloriaModule() {
   const v60 = m.ventana_60 || {};
   const casos = data?.casos || [];
   const inconsistencias = casos.filter(c => c.estado_auditoria === "BAJO AUDITORÍA").length;
+  const recibidos = casos.filter(c => c.estado_auditoria === "RECIBIDO DE MESA").length;
 
   return (
     <div className="module-content" data-testid="contraloria-module">
@@ -40,7 +41,8 @@ export default function ContraloriaModule() {
         </span>
       </div>
       <div style={{ fontSize: "0.75rem", opacity: 0.6, marginBottom: "1.2rem" }}>
-        Cada respuesta de la MESA se valida contra el Modelo Predictivo local (calibración {m.ventana_dias || 180} días, sin costo de nube).
+        Modo Espejo: solo se auditan expedientes con documentación COMPLETA (Cédula, Liquidaciones, AFP y CMF).
+        Los incompletos quedan como "Recibido de MESA" — sin análisis, sin falsos positivos.
       </div>
 
       <div data-testid="contraloria-modelo" style={{ display: "flex", flexWrap: "wrap", gap: "0.8rem", marginBottom: "1.2rem" }}>
@@ -50,6 +52,7 @@ export default function ContraloriaModule() {
           { lbl: "Aprobadas 60d", val: v60.aprobadas ?? m.aprobadas ?? "—", color: ORO },
           { lbl: "Rechazadas 60d", val: v60.rechazadas ?? m.rechazadas ?? "—", color: RUBI },
           { lbl: "Bajo Auditoría", val: inconsistencias, color: inconsistencias ? RUBI : ORO },
+          { lbl: "Recibido de MESA", val: recibidos, color: "#9ca3af" },
         ].map((s, i) => (
           <div key={i} style={{ minWidth: 150, background: "rgba(255,255,255,0.03)", padding: "0.7rem 1rem",
             border: `1px solid ${s.color === RUBI && s.val !== 0 && s.val !== "—" ? "rgba(225,29,72,0.45)" : "rgba(212,175,55,0.3)"}`, textAlign: "center" }}>
@@ -111,9 +114,11 @@ export default function ContraloriaModule() {
               Sin respuestas de MESA en la ventana de auditoría.</td></tr>}
             {!loading && casos.map((c, i) => {
               const audit = c.estado_auditoria === "BAJO AUDITORÍA";
+              const recibido = c.estado_auditoria === "RECIBIDO DE MESA";
               return (
                 <tr key={i} data-testid={`contraloria-fila-${i}`} style={{ borderBottom: "1px solid rgba(255,255,255,0.05)",
-                  background: audit ? "rgba(225,29,72,0.07)" : "transparent" }}>
+                  background: audit ? "rgba(225,29,72,0.07)" : "transparent",
+                  opacity: recibido ? 0.65 : 1 }}>
                   <td style={{ padding: "0.6rem 0.9rem", opacity: 0.7, whiteSpace: "nowrap" }}>{(c.fecha || "").slice(0, 10)}</td>
                   <td style={{ padding: "0.6rem 0.9rem", fontWeight: 600 }}>{c.cliente}</td>
                   <td style={{ padding: "0.6rem 0.9rem" }}>
@@ -122,16 +127,23 @@ export default function ContraloriaModule() {
                     </span>
                   </td>
                   <td style={{ padding: "0.6rem 0.9rem" }} title={(c.factores || []).join("\n")}>
-                    {c.prob_dashai != null ? `Probabilidad de Aprobación MESA: ${c.prob_dashai}%` : "sin carpeta"}
+                    {recibido
+                      ? <span style={{ fontStyle: "italic", opacity: 0.8 }}>Documentación incompleta — auditoría no aplicada</span>
+                      : (c.prob_dashai != null ? `Probabilidad de Aprobación MESA: ${c.prob_dashai}%` : "sin carpeta")}
                   </td>
-                  <td style={{ padding: "0.6rem 0.9rem", color: "#fda4af", fontSize: "0.72rem" }}>
-                    {(c.criterios_fallidos || []).join(" · ") || "—"}
+                  <td style={{ padding: "0.6rem 0.9rem", color: recibido ? "#9ca3af" : "#fda4af", fontSize: "0.72rem" }}>
+                    {recibido
+                      ? ((c.docs_faltantes || []).length ? `Faltan: ${c.docs_faltantes.join(" · ")}` : "—")
+                      : ((c.criterios_fallidos || []).join(" · ") || "—")}
                   </td>
                   <td style={{ padding: "0.6rem 0.9rem" }}>
                     <span data-testid={`contraloria-estado-${i}`} style={{ fontWeight: 800, fontSize: "0.68rem", letterSpacing: "0.08em",
                       padding: "0.2rem 0.7rem",
-                      color: audit ? "#fff" : "#0a0a0a",
-                      background: audit ? "linear-gradient(135deg, #9f1239, #e11d48)" : "linear-gradient(135deg, #BF953F, #FCF6BA, #AA771C)",
+                      color: audit ? "#fff" : recibido ? "#d1d5db" : "#0a0a0a",
+                      background: audit ? "linear-gradient(135deg, #9f1239, #e11d48)"
+                        : recibido ? "rgba(255,255,255,0.08)"
+                        : "linear-gradient(135deg, #BF953F, #FCF6BA, #AA771C)",
+                      border: recibido ? "1px solid rgba(255,255,255,0.2)" : "none",
                       boxShadow: audit ? "0 0 18px -6px rgba(225,29,72,0.8)" : "none" }}>
                       {c.estado_auditoria}
                     </span>

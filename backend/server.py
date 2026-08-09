@@ -10277,11 +10277,33 @@ async def contraloria_casos(dias: int = 60):
         caso = {"fecha": s.get("fecha", ""), "cliente": cliente,
                 "respuesta_mesa": "aprobacion" if s.get("estado") in ("aprobacion", "aprobado") else "rechazo",
                 "prob_dashai": None, "factores": [], "criterios_fallidos": [],
-                "estado_auditoria": "VALIDADO"}
+                "docs_faltantes": [], "estado_auditoria": "VALIDADO"}
+        # MODO ESPEJO: una vez marcado como RECIBIDO DE MESA, queda así para siempre
+        if s.get("estado_auditoria") == "RECIBIDO DE MESA":
+            caso["estado_auditoria"] = "RECIBIDO DE MESA"
+            caso["docs_faltantes"] = s.get("docs_faltantes") or []
+            casos.append(caso)
+            continue
         fd = None
         if cliente:
             fd = await db.folders.find_one(
                 {"nombre": {"$regex": re.escape(cliente[:25]), "$options": "i"}})
+        # MODO CONTRALOR EXCLUSIVO: solo se auditan expedientes con documentación COMPLETA
+        docs_falt = []
+        if fd:
+            archivos = await asyncio.to_thread(fsvc.scan_archivos, fd.get("nombre", ""))
+            docs_falt = [c["nombre"] for c in _criterios_folder(fd, archivos=archivos)[:4] if not c["ok"]]
+        else:
+            docs_falt = ["Carpeta no encontrada"]
+        if docs_falt:
+            caso["estado_auditoria"] = "RECIBIDO DE MESA"
+            caso["docs_faltantes"] = docs_falt
+            if s.get("id"):
+                await db.seguimiento.update_one(
+                    {"id": s["id"]},
+                    {"$set": {"estado_auditoria": "RECIBIDO DE MESA", "docs_faltantes": docs_falt}})
+            casos.append(caso)
+            continue
         if fd:
             prob = await asyncio.to_thread(_prob_aprobacion_folder, fd, stats)
             caso["prob_dashai"] = prob.get("porcentaje")
@@ -10319,9 +10341,11 @@ async def contraloria_casos(dias: int = 60):
             await db.seguimiento.update_one({"id": s["id"]},
                                             {"$set": {"estado_auditoria": "BAJO AUDITORÍA"}})
         casos.append(caso)
-    casos.sort(key=lambda c: (c["estado_auditoria"] != "BAJO AUDITORÍA", c["fecha"]), reverse=False)
+    _rank = {"BAJO AUDITORÍA": 0, "VALIDADO": 1, "RECIBIDO DE MESA": 2}
+    casos.sort(key=lambda c: (_rank.get(c["estado_auditoria"], 3), c["fecha"]))
     return {"modelo": modelo, "casos": casos,
-            "bajo_auditoria": sum(1 for c in casos if c["estado_auditoria"] == "BAJO AUDITORÍA")}
+            "bajo_auditoria": sum(1 for c in casos if c["estado_auditoria"] == "BAJO AUDITORÍA"),
+            "recibidos": sum(1 for c in casos if c["estado_auditoria"] == "RECIBIDO DE MESA")}
 
 
 app.include_router(api)
