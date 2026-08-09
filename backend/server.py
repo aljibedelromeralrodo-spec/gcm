@@ -1,4 +1,5 @@
 from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Form, Request, Query
+from typing import List
 from fastapi.responses import StreamingResponse, JSONResponse, HTMLResponse, FileResponse, RedirectResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -10681,6 +10682,356 @@ async def forense_iniciar(dias: int = 90):
 async def forense_estado():
     doc = await db.config.find_one({"_key": "auditoria_forense"}, {"_id": 0})
     return doc or {"estado": "sin_ejecutar"}
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 🧲 PORTAL DE CAPTURA AUTÓNOMA (WHATSAPP INTAKE) — Imán de Créditos
+# Ruta pública /api/calificar/{oid}: el prospecto sube Cédula + Liquidación,
+# el sistema crea la carpeta, OCR del RUT y notifica a Gerardo al instante.
+# ══════════════════════════════════════════════════════════════════════════
+_CALIFICAR_HTML = """<!DOCTYPE html>
+<html lang="es"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Asegure su Casa__PROY_TIT__ - Calificación VIP en 1 Minuto</title>
+<meta property="og:title" content="Asegure su Casa__PROY_TIT__ - Calificación VIP en 1 Minuto">
+<meta property="og:description" content="Central Mutuos · Banca Hipotecaria Privada. Suba sus documentos desde su celular y obtenga su precalificación VIP.">
+<meta property="og:site_name" content="Central Mutuos">
+<meta property="og:type" content="website">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;800&family=Montserrat:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#000;color:#e5e5e5;font-family:'Montserrat',sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:1.2rem}
+.card{max-width:560px;width:100%;background:linear-gradient(165deg,#0d0b06,#050505);border:1px solid #D4AF37;padding:2rem 1.6rem;text-align:center}
+.brand{color:#D4AF37;font-family:'Playfair Display',serif;font-size:1.4rem;letter-spacing:0.22em}
+.sub{color:#9a8c52;font-size:0.6rem;letter-spacing:0.3em;margin-top:4px;text-transform:uppercase}
+h1{font-family:'Playfair Display',serif;color:#FCF6BA;font-size:1.25rem;margin:1.3rem 0 0.3rem}
+.proy{color:#D4AF37;font-size:0.75rem;letter-spacing:0.12em;text-transform:uppercase}
+.dots{display:flex;justify-content:center;gap:8px;margin:1.2rem 0}
+.dot{width:26px;height:4px;background:#33290f;transition:background .3s}
+.dot.on{background:linear-gradient(90deg,#BF953F,#FCF6BA)}
+.paso{display:none;text-align:left}
+.paso.activo{display:block;animation:fade .35s ease}
+@keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+p.lead{color:#b8b8b8;font-size:0.82rem;line-height:1.65;margin:0.8rem 0 1.2rem;text-align:center}
+.perfil{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.pcard{border:1.5px solid #7a6a2f;padding:1.4rem 0.9rem;cursor:pointer;text-align:center;transition:border-color .2s,background .2s}
+.pcard:hover{border-color:#FCF6BA;background:rgba(212,175,55,0.06)}
+.pcard .ic{font-size:1.8rem}.pcard .t{color:#F5E7B8;font-weight:800;font-size:0.86rem;margin-top:8px;letter-spacing:0.05em}
+.pcard .d{color:#8a8a8a;font-size:0.66rem;margin-top:4px;line-height:1.5}
+.drop{border:1.5px dashed #7a6a2f;padding:0.9rem;margin-bottom:0.7rem;cursor:pointer;transition:border-color .2s,background .2s;position:relative;display:flex;align-items:center;gap:12px;text-align:left}
+.drop:hover,.drop.over{border-color:#FCF6BA;background:rgba(212,175,55,0.06)}
+.drop .ic{font-size:1.25rem}
+.drop .t{color:#F5E7B8;font-weight:700;font-size:0.78rem;letter-spacing:0.04em}
+.drop .d{color:#8a8a8a;font-size:0.64rem;margin-top:2px}
+.drop.listo{border-style:solid;border-color:#16a34a;background:rgba(22,163,74,0.08)}
+.drop.listo .t{color:#8fd9b0}
+.drop input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.opc{color:#9a8c52;font-size:0.6rem;font-weight:800;letter-spacing:0.1em;border:1px solid #7a6a2f;padding:0.1rem 0.45rem;margin-left:auto;white-space:nowrap}
+.manual{border:1px solid #33290f;padding:1rem;margin-top:0.8rem}
+.manual label{display:block;color:#C7B36A;font-size:0.66rem;letter-spacing:0.1em;text-transform:uppercase;margin:0.7rem 0 0.3rem}
+.manual input{width:100%;background:#050505;border:1px solid #7a6a2f;color:#FCF6BA;font-family:'Montserrat',sans-serif;font-size:1rem;padding:0.7rem 0.9rem;outline:none}
+.nav{display:flex;gap:10px;margin-top:1.3rem}
+.btn{flex:1;border:none;background:linear-gradient(135deg,#BF953F,#FCF6BA,#AA771C);color:#0a0a0a;font-weight:800;font-size:0.84rem;letter-spacing:0.07em;padding:0.9rem;cursor:pointer;font-family:'Montserrat',sans-serif}
+.btn.sec{background:transparent;border:1px solid #7a6a2f;color:#C7B36A;flex:0 0 auto;padding:0.9rem 1.2rem}
+.btn:disabled{opacity:0.45;cursor:not-allowed}
+#msg{display:none;margin-top:1rem;padding:0.9rem 1rem;font-size:0.82rem;font-weight:600;line-height:1.6;text-align:center}
+.foot{color:#5a5a5a;font-size:0.6rem;margin-top:1.4rem;letter-spacing:0.08em;text-align:center}
+</style></head><body>
+<div class="card">
+  <div class="brand">CENTRAL MUTUOS</div>
+  <div class="sub">Banca Hipotecaria Privada · Con Creces</div>
+  <h1>Bienvenido(a) __NOMBRE__</h1>
+  <div class="proy" style="text-align:center">__PROYECTO_LINEA__</div>
+  <div class="dots"><div class="dot on" id="d0"></div><div class="dot" id="d1"></div><div class="dot" id="d2"></div></div>
+
+  <div class="paso activo" id="p0">
+    <p class="lead">Para preparar su <b style="color:#F5E7B8">Calificación VIP</b>, cuéntenos:<br>¿Es usted trabajador <b>Dependiente</b> o <b>Independiente</b>?</p>
+    <div class="perfil">
+      <div class="pcard" data-testid="captura-perfil-dependiente" onclick="setPerfil('dependiente')">
+        <div class="ic">💼</div><div class="t">DEPENDIENTE</div>
+        <div class="d">Trabajo con contrato y liquidaciones de sueldo</div>
+      </div>
+      <div class="pcard" data-testid="captura-perfil-independiente" onclick="setPerfil('independiente')">
+        <div class="ic">📈</div><div class="t">INDEPENDIENTE</div>
+        <div class="d">Boletas de honorarios / declaración de renta</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="paso" id="p1">
+    <p class="lead" id="p1titulo"></p>
+    <div id="zonas"></div>
+    <div class="nav">
+      <button class="btn sec" onclick="irPaso(0)">← Atrás</button>
+      <button class="btn" id="btnP1" data-testid="captura-continuar-btn" onclick="irPaso(2)" disabled>CONTINUAR →</button>
+    </div>
+  </div>
+
+  <div class="paso" id="p2">
+    <p class="lead">Último paso: su <b style="color:#F5E7B8">Cotización Inmobiliaria</b> (opcional).<br>Si no la tiene a mano, indíquenos los montos y listo.</p>
+    <div class="drop" id="dropcot">
+      <div class="ic">🏠</div>
+      <div><div class="t">Cotización Inmobiliaria</div><div class="d" id="dcot">PDF o foto de la cotización del proyecto</div></div>
+      <span class="opc">OPCIONAL</span>
+      <input type="file" id="fcot" accept="image/*,.pdf">
+    </div>
+    <div class="manual" id="manual">
+      <div style="color:#9a8c52;font-size:0.66rem;letter-spacing:0.06em">SIN COTIZACIÓN — INGRESE LOS MONTOS APROXIMADOS:</div>
+      <label>Valor de la propiedad (UF o $)</label>
+      <input id="mValor" data-testid="captura-valor-input" inputmode="numeric" placeholder="Ej: 3.200 UF o $120.000.000">
+      <label>Pie disponible (UF o $)</label>
+      <input id="mPie" data-testid="captura-pie-input" inputmode="numeric" placeholder="Ej: 400 UF o $15.000.000">
+    </div>
+    <div class="nav">
+      <button class="btn sec" onclick="irPaso(1)">← Atrás</button>
+      <button class="btn" id="btnEnviar" data-testid="captura-enviar-btn" onclick="enviar()">🔒 ENVIAR MI EXPEDIENTE</button>
+    </div>
+    <div id="msg" data-testid="captura-msg"></div>
+  </div>
+
+  <div class="foot">CONEXIÓN CIFRADA · SUS DOCUMENTOS VIAJAN PROTEGIDOS</div>
+</div>
+<script>
+const ZONAS={
+ dependiente:[
+  {k:'cedula',ic:'🪪',t:'Cédula de Identidad (ambos lados)',d:'Suba las 2 caras (2 fotos o 1 PDF)',multi:true,req:true},
+  {k:'liquidaciones',ic:'📄',t:'3 últimas Liquidaciones de Sueldo',d:'Seleccione los 3 archivos juntos',multi:true,req:true},
+  {k:'afp',ic:'🏦',t:'Certificado de Cotizaciones AFP',d:'Últimos 12 meses (PDF de su AFP)',multi:false,req:true},
+  {k:'cmf',ic:'🛡️',t:'Informe CMF actualizado',d:'Informe de deudas (cmfchile.cl, gratis)',multi:false,req:true}],
+ independiente:[
+  {k:'cedula',ic:'🪪',t:'Cédula de Identidad (ambos lados)',d:'Suba las 2 caras (2 fotos o 1 PDF)',multi:true,req:true},
+  {k:'boletas',ic:'🧾',t:'Boletas de Honorarios (últimos 2 años)',d:'Informe anual SII o boletas (puede subir varias)',multi:true,req:true},
+  {k:'f22',ic:'📋',t:'Último Formulario 22 (Impuesto a la Renta)',d:'Declaración anual de renta SII',multi:false,req:true},
+  {k:'cmf',ic:'🛡️',t:'Informe CMF actualizado',d:'Informe de deudas (cmfchile.cl, gratis)',multi:false,req:true}]
+};
+let perfil='',st={};
+function setPerfil(p){perfil=p;st={};montarZonas();irPaso(1);}
+function montarZonas(){
+  document.getElementById('p1titulo').innerHTML='Perfil <b style="color:#F5E7B8">'+(perfil==='dependiente'?'DEPENDIENTE 💼':'INDEPENDIENTE 📈')+'</b> — suba sus documentos:';
+  const cont=document.getElementById('zonas');cont.innerHTML='';
+  ZONAS[perfil].forEach(z=>{
+    const el=document.createElement('div');el.className='drop';el.id='drop'+z.k;
+    el.setAttribute('data-testid','captura-drop-'+z.k);
+    el.innerHTML='<div class="ic">'+z.ic+'</div><div><div class="t">'+z.t+'</div><div class="d" id="d'+z.k+'">'+z.d+'</div></div>'+
+      '<input type="file" id="f'+z.k+'" accept="image/*,.pdf" '+(z.multi?'multiple':'')+'>';
+    cont.appendChild(el);
+    const inp=el.querySelector('input');
+    ['dragover','dragenter'].forEach(ev=>el.addEventListener(ev,e=>{e.preventDefault();el.classList.add('over')}));
+    ['dragleave','drop'].forEach(ev=>el.addEventListener(ev,e=>{e.preventDefault();el.classList.remove('over')}));
+    el.addEventListener('drop',e=>{if(e.dataTransfer.files.length){inp.files=e.dataTransfer.files;pick()}});
+    inp.addEventListener('change',pick);
+    function pick(){if(inp.files.length){st[z.k]=Array.from(inp.files);el.classList.add('listo');
+      document.getElementById('d'+z.k).textContent='✓ '+inp.files.length+' archivo(s): '+Array.from(inp.files).map(f=>f.name).join(', ').slice(0,70);check()}}
+  });
+  check();
+}
+function check(){const falt=ZONAS[perfil].filter(z=>z.req&&!(st[z.k]&&st[z.k].length));
+  document.getElementById('btnP1').disabled=falt.length>0;}
+function irPaso(n){[0,1,2].forEach(i=>{document.getElementById('p'+i).classList.toggle('activo',i===n);
+  document.getElementById('d'+i).classList.toggle('on',i<=n);});}
+(function(){const el=document.getElementById('dropcot'),inp=document.getElementById('fcot');
+  ['dragover','dragenter'].forEach(ev=>el.addEventListener(ev,e=>{e.preventDefault();el.classList.add('over')}));
+  ['dragleave','drop'].forEach(ev=>el.addEventListener(ev,e=>{e.preventDefault();el.classList.remove('over')}));
+  el.addEventListener('drop',e=>{if(e.dataTransfer.files.length){inp.files=e.dataTransfer.files;pick()}});
+  inp.addEventListener('change',pick);
+  function pick(){if(inp.files.length){st.cotizacion=Array.from(inp.files);el.classList.add('listo');
+    document.getElementById('dcot').textContent='✓ '+inp.files[0].name;
+    document.getElementById('manual').style.display='none';}}
+})();
+async function enviar(){
+  const b=document.getElementById('btnEnviar'),m=document.getElementById('msg');
+  b.disabled=true;b.textContent='Enviando de forma segura…';
+  const fd=new FormData();fd.append('perfil',perfil);
+  fd.append('valor_propiedad',document.getElementById('mValor').value||'');
+  fd.append('monto_pie',document.getElementById('mPie').value||'');
+  Object.keys(st).forEach(k=>st[k].forEach(f=>fd.append(k,f)));
+  try{
+    const r=await fetch('/api/calificar/__OID__/subir',{method:'POST',body:fd});
+    const d=await r.json();m.style.display='block';
+    if(r.ok&&d.ok){m.style.background='#0d1f12';m.style.border='1px solid #16a34a';m.style.color='#8fd9b0';
+      m.textContent=d.mensaje||'✅ ¡Expediente recibido! Un ejecutivo VIP lo contactará hoy mismo.';
+      b.style.display='none';}
+    else{m.style.background='#1f0d0d';m.style.border='1px solid #b91c1c';m.style.color='#fda4af';
+      m.textContent='⚠ '+(d.detail||'No pudimos recibir sus documentos. Intente nuevamente.');
+      b.disabled=false;b.textContent='🔒 ENVIAR MI EXPEDIENTE';}
+  }catch(e){m.style.display='block';m.style.background='#1f0d0d';m.style.border='1px solid #b91c1c';
+    m.style.color='#fda4af';m.textContent='⚠ Error de conexión. Intente nuevamente.';
+    b.disabled=false;b.textContent='🔒 ENVIAR MI EXPEDIENTE';}
+}
+</script></body></html>
+"""
+
+
+@app.get("/api/calificar/{oid}")
+async def calificar_portal(oid: str):
+    op = await db.oportunidades.find_one({"id": oid})
+    if not op:
+        return HTMLResponse("<h3 style='font-family:sans-serif;color:#333;text-align:center;margin-top:20vh'>Enlace no válido o expirado — Central Mutuos</h3>", status_code=404)
+    proyecto = (op.get("proyecto") or "").strip()
+    html = (_CALIFICAR_HTML
+            .replace("__PROY_TIT__", f" en {proyecto}" if proyecto else "")
+            .replace("__NOMBRE__", (op.get("nombre") or "").split()[0].title() or "")
+            .replace("__PROYECTO_LINEA__", f"Proyecto {proyecto}" if proyecto else "Calificación Hipotecaria VIP")
+            .replace("__OID__", oid))
+    return HTMLResponse(html)
+
+
+@app.post("/api/calificar/{oid}/subir")
+async def calificar_subir(oid: str,
+                          perfil: str = Form("dependiente"),
+                          valor_propiedad: str = Form(""),
+                          monto_pie: str = Form(""),
+                          cedula: List[UploadFile] = File(default=[]),
+                          liquidaciones: List[UploadFile] = File(default=[]),
+                          afp: List[UploadFile] = File(default=[]),
+                          boletas: List[UploadFile] = File(default=[]),
+                          f22: List[UploadFile] = File(default=[]),
+                          cmf: List[UploadFile] = File(default=[]),
+                          cotizacion: List[UploadFile] = File(default=[])):
+    op = await db.oportunidades.find_one({"id": oid})
+    if not op:
+        raise HTTPException(status_code=404, detail="Enlace no válido")
+    nombre = (op.get("nombre") or "").strip().title()
+    if not nombre:
+        raise HTTPException(status_code=400, detail="Prospecto sin nombre")
+    perfil = "independiente" if perfil.strip().lower().startswith("indep") else "dependiente"
+    # AUTOMATIZACIÓN DE BÓVEDA: carpeta principal + reparto en subcarpetas 01-06
+    fd = await db.folders.find_one({"nombre": nombre})
+    if not fd:
+        fd = {"id": str(uuid.uuid4()), "nombre": nombre, "rut": op.get("rut") or "",
+              "archivos": [], "created_at": now_iso(), "origen": "captura_autonoma",
+              "proyecto": op.get("proyecto") or "",
+              "credit_request": {"client_type": perfil}}
+        await db.folders.insert_one(dict(fd))
+        fsvc.folder_dir(nombre).mkdir(parents=True, exist_ok=True)
+    else:
+        await db.folders.update_one({"id": fd["id"]},
+                                    {"$set": {"credit_request.client_type": perfil}})
+    rutas = ((("cedula", cedula, "01_cedula"),
+              ("liquidaciones", liquidaciones, "02_liquidaciones"),
+              ("afp", afp, "03_afp"),
+              ("cmf", cmf, "04_cmf"),
+              ("cotizacion", cotizacion, "06_cotizacion"))
+             if perfil == "dependiente" else
+             (("cedula", cedula, "01_cedula"),
+              ("f22", f22, "02_impuesto_renta"),
+              ("boletas", boletas, "03_boletas"),
+              ("cmf", cmf, "04_cmf"),
+              ("cotizacion", cotizacion, "06_cotizacion")))
+    guardados = {}
+    rut_ocr = ""
+    for key, files, sub in rutas:
+        for up in files or []:
+            raw = await up.read()
+            if not raw:
+                continue
+            fn = up.filename or f"{sub}.pdf"
+            try:
+                raw, fn, _ = pdfs.convertir_a_pdf(raw, fn)
+            except ValueError:
+                pass
+            rel = await asyncio.to_thread(fsvc.guardar_archivo, nombre, fn, raw, sub)
+            guardados.setdefault(key, []).append(rel)
+            if sub == "01_cedula" and not rut_ocr:
+                try:
+                    ruta = fsvc.folder_dir(nombre) / rel
+                    personas = fsvc._ruts_personas(
+                        await asyncio.to_thread(fsvc.ruts_de_pdf_cache, ruta))
+                    if personas:
+                        rut_ocr = sorted(personas)[0]
+                except Exception as e:
+                    logging.warning(f"OCR RUT captura {nombre}: {e}")
+    if not guardados:
+        raise HTTPException(status_code=400, detail="No se recibió ningún archivo válido")
+    # LEY DEL RUT: el RUT de la cédula (OCR) manda si la carpeta no tiene uno
+    if rut_ocr and not (fd.get("rut") or "").strip():
+        rut_fmt = f"{rut_ocr[:-1]}-{rut_ocr[-1]}" if len(rut_ocr) > 1 else rut_ocr
+        await db.folders.update_one({"id": fd["id"]}, {"$set": {"rut": rut_fmt}})
+        await db.oportunidades.update_one({"id": oid}, {"$set": {"rut": rut_fmt}})
+    # Montos manuales (sin cotización adjunta)
+    if (valor_propiedad or monto_pie) and not guardados.get("cotizacion"):
+        await db.folders.update_one({"id": fd["id"]}, {"$set": {
+            "datos_financieros.valor_propiedad_manual": valor_propiedad.strip(),
+            "datos_financieros.pie_disponible_manual": monto_pie.strip()}})
+    # Completitud según perfil (3 liquidaciones / 2+ boletas)
+    if perfil == "dependiente":
+        completa = (len(guardados.get("cedula", [])) >= 1 and len(guardados.get("liquidaciones", [])) >= 3
+                    and len(guardados.get("afp", [])) >= 1 and len(guardados.get("cmf", [])) >= 1)
+        faltan = [t for t, ok in (("Cédula", guardados.get("cedula")),
+                                  ("3 Liquidaciones", len(guardados.get("liquidaciones", [])) >= 3),
+                                  ("AFP", guardados.get("afp")), ("CMF", guardados.get("cmf"))) if not ok]
+    else:
+        completa = (len(guardados.get("cedula", [])) >= 1 and len(guardados.get("boletas", [])) >= 2
+                    and len(guardados.get("f22", [])) >= 1 and len(guardados.get("cmf", [])) >= 1)
+        faltan = [t for t, ok in (("Cédula", guardados.get("cedula")),
+                                  ("Boletas (2 años)", len(guardados.get("boletas", [])) >= 2),
+                                  ("Formulario 22", guardados.get("f22")), ("CMF", guardados.get("cmf"))) if not ok]
+    total = sum(len(v) for v in guardados.values())
+    await db.oportunidades.update_one({"id": oid}, {"$set": {
+        "estado_interes": "uso_simulador", "captura_autonoma_en": now_iso()}})
+    await db.capturas_autonomas.insert_one({
+        "id": str(uuid.uuid4()), "oportunidad_id": oid, "cliente": nombre,
+        "rut": rut_ocr, "proyecto": op.get("proyecto") or "", "perfil": perfil,
+        "completa": completa, "faltan": faltan,
+        "archivos": [r for v in guardados.values() for r in v], "creado_en": now_iso()})
+    # EXPERIENCIA WHATSAPP: alerta inmediata a Gerardo (no bloquea la respuesta al cliente)
+    asunto = (f"🚀 EXPEDIENTE CREADO DESDE WHATSAPP: {nombre} - Perfil "
+              f"{perfil.capitalize()} - Documentación {'Completa' if completa else 'Incompleta'}")
+
+    async def _avisar():
+        try:
+            destinatario = os.environ.get("MAIL2_USER", "")
+            filas = "".join(f"<li>{k}: {len(v)} archivo(s)</li>" for k, v in guardados.items())
+            cuerpo = f"""
+            <div style="font-family:Arial,sans-serif;max-width:600px">
+              <div style="background:#0a0a0a;padding:16px 20px;border-left:4px solid #D4AF37">
+                <span style="color:#D4AF37;font-weight:700;letter-spacing:0.08em">💎 CENTRAL MUTUOS · IMÁN DE CRÉDITOS</span>
+              </div>
+              <div style="padding:16px 6px;color:#1a1a1a;font-size:14px">
+                <p><b>{asunto}</b></p>
+                <ul style="font-size:13px;color:#444">
+                  <li>Proyecto: {op.get('proyecto') or '—'}</li>
+                  <li>RUT (OCR cédula): {rut_ocr or 'no detectado aún'}</li>
+                  <li>Total documentos: {total} repartidos en la bóveda (01-06)</li>
+                  {filas}
+                  {'<li style="color:#b45309"><b>Faltan: ' + ', '.join(faltan) + '</b></li>' if faltan else ''}
+                  {'<li>Montos manuales: propiedad ' + valor_propiedad + ' · pie ' + monto_pie + '</li>' if (valor_propiedad or monto_pie) else ''}
+                </ul>
+                <p style="font-size:13px">La carpeta ya está en Carpeta Clientes, lista para evaluación.</p>
+              </div>
+            </div>"""
+            await asyncio.to_thread(mail.send_mail, destinatario, asunto, cuerpo, [], "principal")
+        except Exception as e:
+            logging.warning(f"Aviso captura {nombre}: {e}")
+    asyncio.create_task(_avisar())
+    return {"ok": True,
+            "mensaje": ("✅ ¡Expediente COMPLETO recibido! Su carpeta VIP fue creada y un ejecutivo lo contactará hoy mismo."
+                        if completa else
+                        "✅ ¡Documentos recibidos! Su carpeta VIP fue creada. Un ejecutivo lo contactará para completar lo que falte."),
+            "carpeta": nombre, "perfil": perfil, "completa": completa, "rut_detectado": rut_ocr}
+
+
+@api.post("/oportunidades/{oid}/link-calificar")
+async def oportunidades_link_calificar(oid: str, request: Request):
+    op = await db.oportunidades.find_one({"id": oid})
+    if not op:
+        raise HTTPException(status_code=404, detail="Oportunidad no encontrada")
+    base = _base_url_req(request)
+    url = f"{base}/api/calificar/{oid}"
+    proyecto = (op.get("proyecto") or "").strip()
+    titulo = f"Asegure su Casa{' en ' + proyecto if proyecto else ''} - Calificación VIP en 1 Minuto"
+    texto = (f"🏠 *{titulo}*\n\nHola {(op.get('nombre') or '').split()[0].title()}, soy José Martín de Central Mutuos. "
+             f"Suba solo su Cédula y su última Liquidación en este portal privado y su calificación queda lista:\n{url}")
+    await db.oportunidades.update_one({"id": oid}, {"$set": {"link_calificar": url}})
+    return {"ok": True, "url": url, "titulo": titulo,
+            "whatsapp": f"https://wa.me/?text={_urlquote(texto)}"}
+
+
+@api.get("/capturas/recientes")
+async def calificar_recientes():
+    desde = (datetime.now(timezone.utc) - timedelta(hours=48)).isoformat()
+    caps = await db.capturas_autonomas.find({"creado_en": {"$gte": desde}}, {"_id": 0}).sort("creado_en", -1).to_list(20)
+    return {"capturas": caps}
 
 
 app.include_router(api)

@@ -28,6 +28,21 @@ export default function OportunidadesModule() {
   const [msg, setMsg] = useState("");
   const [preview, setPreview] = useState(null);
   const [busyId, setBusyId] = useState("");
+  const [linkCopiado, setLinkCopiado] = useState("");
+
+  const linkCalificar = async (op) => {
+    setBusyId(op.id);
+    try {
+      const r = await axios.post(`${API}/api/oportunidades/${op.id}/link-calificar`, {}, { timeout: 30000 });
+      try { await navigator.clipboard.writeText(r.data.whatsapp); } catch { /* clipboard opcional */ }
+      setLinkCopiado(op.id);
+      setMsg(`🧲 Link de Calificación VIP copiado (WhatsApp) — ${r.data.titulo}`);
+      setTimeout(() => setLinkCopiado(""), 4000);
+    } catch (e) {
+      setMsg("Error generando el link: " + (e?.response?.data?.detail || e.message));
+    }
+    setBusyId("");
+  };
   const fileRef = useRef(null);
 
   const cargar = useCallback(async () => {
@@ -184,6 +199,11 @@ export default function OportunidadesModule() {
                           : <span style={{ color: "#fb7185", fontWeight: 700 }}>Esperando autorización</span>}
                   </td>
                   <td style={{ padding: "0.6rem 0.5rem", textAlign: "right", whiteSpace: "nowrap" }}>
+                    <button data-testid={`op-link-calificar-${i}`} onClick={() => linkCalificar(op)} disabled={busyId === op.id}
+                      title="Portal de Captura Autónoma: el prospecto sube Cédula + Liquidación y la carpeta se crea sola"
+                      style={{ ...btn("rgba(212,175,55,0.15)", linkCopiado === op.id ? "#8fd9b0" : "#e7cf7a"), border: "1px solid rgba(212,175,55,0.4)", marginRight: 6 }}>
+                      {linkCopiado === op.id ? "✓ Copiado" : "🧲 Link VIP"}
+                    </button>
                     <button data-testid={`op-preparar-${i}`} onClick={() => preparar(op)} disabled={busyId === op.id}
                       style={{ ...btn("rgba(212,175,55,0.15)", "#e7cf7a"), border: "1px solid rgba(212,175,55,0.4)", marginRight: 6 }}>
                       {busyId === op.id ? "…" : (op.borrador ? "Ver borrador" : "Preparar borrador")}

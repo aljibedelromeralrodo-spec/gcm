@@ -824,3 +824,26 @@
     HUMANO (renta $2.210.000 vs reconocida $1.880.000). Verificado con curl + screenshot.
   - Nota honesta: "renta considerada por MESA" no viene en los correos minados (seguimiento
     guarda cliente/estado/asunto/monto); la comparación de renta usa la ficha recalibrada.
+
+- 2026-08-09 (parte 11) — **Portal de Captura Autónoma EXHAUSTIVO (WhatsApp Intake)**:
+  - Portal público GET /api/calificar/{oid} (registrado en `app`, NO en router api) reescrito
+    como wizard 3 pasos Maserati: (1) selector Dependiente/Independiente, (2) zonas drag&drop
+    por perfil [dep: cédula ambos lados, 3 liquidaciones, AFP 12m, CMF · indep: cédula,
+    boletas 2 años, F22, CMF], (3) cotización inmobiliaria OPCIONAL con fallback de montos
+    manuales (valor propiedad + pie). OG meta "Asegure su Casa en {Proyecto} - Calificación
+    VIP en 1 Minuto" para la tarjeta WhatsApp.
+  - POST /api/calificar/{oid}/subir v2: multipart multi-archivo (List[UploadFile] — se agregó
+    `from typing import List` línea 2), reparto automático bóveda: 01_cedula, 02_liquidaciones
+    / 02_impuesto_renta, 03_afp / 03_boletas, 04_cmf, 06_cotizacion. OCR RUT de la cédula
+    (Ley del RUT), montos manuales → datos_financieros.*_manual, client_type según perfil.
+  - Completitud: dep = cédula+3 liq+AFP+CMF · indep = cédula+2 boletas+F22+CMF. Alerta correo
+    a Gerardo: "🚀 EXPEDIENTE CREADO DESDE WHATSAPP: {nombre} - Perfil {tipo} - Documentación
+    {Completa/Incompleta}" con desglose y faltantes.
+  - Botón "🧲 Link VIP" en Centro de Ventas (copia link wa.me) + banner dorado Dashboard
+    (GET /api/capturas/recientes — OJO: renombrado desde /calificar/recientes por colisión
+    con /api/calificar/{oid}).
+  - Test E2E real: prospecto test-intake-0001 (Marcela Fuentes/Parque Los Nogales) →
+    carga dependiente completa → carpeta con subcarpetas correctas, completa=true,
+    montos manuales guardados. Screenshots wizard pasos 1 y 2 OK.
+  - PENDIENTE (backlog previo): Rescate PERDIDA "Reenviar a MESA", forense programada lunes,
+    aviso automático hallazgos forenses, exportar informe forense PDF.

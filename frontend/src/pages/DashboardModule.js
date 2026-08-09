@@ -20,6 +20,7 @@ export default function DashboardModule({ valorUF: _valorUF, userName: _userName
   const [docsJob, setDocsJob] = useState(null);
   const [tendencia, setTendencia] = useState("");
   const [hallazgos, setHallazgos] = useState(null);
+  const [capturas, setCapturas] = useState([]);
 
   const generarDocsDataset = async () => {
     try {
@@ -54,6 +55,7 @@ export default function DashboardModule({ valorUF: _valorUF, userName: _userName
     axios.get(`${API_URL}/api/dashai/dataset-documentos/estado`).then(r => setDocsJob(r.data)).catch(() => {});
     axios.get(`${API_URL}/api/mesa-brain/modelo`).then(r => setTendencia(r.data?.tendencia || "")).catch(() => {});
     axios.get(`${API_URL}/api/contraloria/casos`).then(r => setHallazgos(r.data)).catch(() => {});
+    axios.get(`${API_URL}/api/capturas/recientes`).then(r => setCapturas(r.data?.capturas || [])).catch(() => {});
   }, []);
 
   const refreshKnowledge = async () => {
@@ -77,6 +79,21 @@ export default function DashboardModule({ valorUF: _valorUF, userName: _userName
 
   return (
     <div className="module-content" data-testid="dashboard-module">
+      {capturas.length > 0 && (
+        <div data-testid="alerta-captura-autonoma" style={{ background: "linear-gradient(160deg, rgba(45,35,8,0.95), rgba(12,9,2,0.98))",
+          border: "1px solid rgba(212,175,55,0.7)", borderRadius: 0, padding: "0.9rem 1.2rem", marginBottom: "1rem",
+          display: "flex", alignItems: "center", gap: 10, boxShadow: "0 0 35px -10px rgba(212,175,55,0.6)" }}>
+          <i className="fa fa-rocket" style={{ color: "var(--gold)", fontSize: "1.1rem" }} />
+          <div>
+            <b style={{ color: "#FCF6BA", letterSpacing: "0.06em" }}>🚀 NUEVA CARPETA AUTÓNOMA CREADA: {capturas[0].cliente}</b>
+            <div style={{ opacity: 0.8, fontSize: "0.78rem", color: "#C7B36A", marginTop: 2 }}>
+              {capturas.length > 1 && `+${capturas.length - 1} captura(s) más · `}
+              El prospecto subió su Cédula y Liquidación desde el link de WhatsApp — carpeta lista en Carpeta Clientes
+              {capturas[0].proyecto ? ` · Proyecto ${capturas[0].proyecto}` : ""}
+            </div>
+          </div>
+        </div>
+      )}
       {hallazgos && ((hallazgos.riesgo_falso_positivo || 0) + (hallazgos.bajo_auditoria || 0)) > 0 && (
         <div data-testid="alerta-hallazgo-contraloria" style={{ background: "linear-gradient(160deg, rgba(70,10,20,0.97), rgba(20,2,6,0.99))",
           border: "1px solid rgba(225,29,72,0.75)", borderRadius: 0, padding: "0.9rem 1.2rem", marginBottom: "1rem",
