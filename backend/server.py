@@ -10939,7 +10939,7 @@ p.lead{color:#b8b8b8;font-size:0.82rem;line-height:1.65;margin:0.8rem 0 1.2rem;t
 const ZONAS={
  dependiente:[
   {k:'cedula',ic:'🪪',t:'Cédula de Identidad (ambos lados)',d:'Suba las 2 caras (2 fotos o 1 PDF)',multi:true,req:true},
-  {k:'liquidaciones',ic:'📄',t:'3 últimas Liquidaciones de Sueldo',d:'Seleccione los 3 archivos juntos',multi:true,req:true},
+  {k:'liquidaciones',ic:'📄',t:'6 últimas Liquidaciones de Sueldo',d:'Seleccione los 6 archivos juntos',multi:true,req:true,min:6},
   {k:'afp',ic:'🏦',t:'Certificado de Cotizaciones AFP',d:'Últimos 12 meses (PDF de su AFP)',multi:false,req:true},
   {k:'cmf',ic:'🛡️',t:'Informe CMF actualizado',d:'Informe de deudas (cmfchile.cl, gratis)',multi:false,req:true}],
  independiente:[
@@ -11214,12 +11214,12 @@ async def calificar_subir(oid: str,
     if fin["monto_credito"] or fin["valor_propiedad_uf"]:
         await db.folders.update_one({"id": fd["id"]}, {"$set": {
             f"datos_financieros.{k}": v for k, v in fin.items()}})
-    # Completitud según perfil (3 liquidaciones / 2+ boletas)
+    # Completitud según perfil (6 liquidaciones / 2+ boletas)
     if perfil == "dependiente":
-        completa = (len(guardados.get("cedula", [])) >= 1 and len(guardados.get("liquidaciones", [])) >= 3
+        completa = (len(guardados.get("cedula", [])) >= 1 and len(guardados.get("liquidaciones", [])) >= 6
                     and len(guardados.get("afp", [])) >= 1 and len(guardados.get("cmf", [])) >= 1)
         faltan = [t for t, ok in (("Cédula", guardados.get("cedula")),
-                                  ("3 Liquidaciones", len(guardados.get("liquidaciones", [])) >= 3),
+                                  ("6 Liquidaciones", len(guardados.get("liquidaciones", [])) >= 6),
                                   ("AFP", guardados.get("afp")), ("CMF", guardados.get("cmf"))) if not ok]
     else:
         completa = (len(guardados.get("cedula", [])) >= 1 and len(guardados.get("f22", [])) >= 2
@@ -11384,7 +11384,7 @@ async def oportunidades_link_calificar(oid: str, request: Request):
     proyecto = (op.get("proyecto") or "").strip()
     titulo = f"Asegure su Casa{' en ' + proyecto if proyecto else ''} - Calificación VIP en 1 Minuto"
     texto = (f"🏠 *{titulo}*\n\nHola {(op.get('nombre') or '').split()[0].title()}, soy José Martín de Central Mutuos. "
-             f"Suba solo su Cédula y su última Liquidación en este portal privado y su calificación queda lista:\n{url}")
+             f"Suba su Cédula y sus últimas 6 Liquidaciones de Sueldo en este portal privado y su calificación queda lista:\n{url}")
     await db.prospectos.update_one({"id": oid}, {"$set": {"link_calificar": url}})
     return {"ok": True, "url": url, "titulo": titulo,
             "whatsapp": f"https://wa.me/?text={_urlquote(texto)}"}
