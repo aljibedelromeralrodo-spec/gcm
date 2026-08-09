@@ -1,0 +1,23 @@
+{
+  "summary": "Frontend testing of 3 new features (Contraloría, Criterios editable + modal 0586, Oportunidades) + regression on dashboard cards. Ejecutado con Playwright contra la URL pública. Todos los data-testid solicitados existen y se comportan según spec. Sin bugs encontrados.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "CriteriosModule.js: al guardar con clave errónea se llama cargar() (bien) pero también se hace un update local previo del estado; el flujo actual funciona porque el catch dispara cargar() que refresca desde backend. OK.",
+    "ContraloriaModule.js: el catch de calibrar solo hace setLoading(false); no muestra feedback al usuario si /api/mesa-brain/calibrar falla. Enhancement (no bloqueante)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped por instrucción)", "frontend": "100%"},
+  "test_credentials": "administrador / 141617575 · Clave criterios: 0586",
+  "seed_data_creation": "Ninguna. Se editó un campo BTG (con_subsidio.monto_credito_min_uf: 500 → 501) para probar guardado con 0586 y luego se restauró a 500 con un segundo guardado 0586. Estado final del criterio: igual al original.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Verificados: login, cierre tour, sidebar Contraloría (46 casos: 14 BAJO AUDITORÍA rubí + 32 VALIDADO oro), botón Recalibrar sin errores, Criterios editable (27 inputs BTG detectados), modal clave: 1111 → 🚨 'Clave incorrecta — los cambios fueron descartados' + campo revertido a valor original, 0586 → ✅ 'Reglas manuales activas: prioridad absoluta sobre patrones aprendidos'. Oportunidades carga sin crash aún estando vacía. Dashboard sigue mostrando boveda-firmas-card y dashai-export-card. No hay regresiones detectadas.",
+  "rca of the issue": "N/A - todos los flujos probados pasaron."
+}

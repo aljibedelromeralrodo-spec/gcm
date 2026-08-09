@@ -26,6 +26,7 @@ import email_service as mail
 import folders_service as fsvc
 from database import client, db
 import sales_engine
+import mesa_brain
 import simulador_engine
 
 app = FastAPI(title="Central Mutuos API")
@@ -352,6 +353,29 @@ async def set_uf(payload: dict):
 @api.get("/admin/criterios")
 async def get_criterios():
     return await get_config("criterios", DEFAULT_CRITERIOS)
+
+
+@api.post("/admin/criterios")
+async def guardar_criterios(payload: dict):
+    """BÓVEDA DE REGLAS (KEY 0586): guarda criterios manuales con PRIORIDAD SUPREMA.
+    Clave incorrecta → cambios descartados + alerta de seguridad."""
+    clave = str(payload.get("clave") or "")
+    if clave != os.environ.get("MASTER_PIN", ""):
+        await db.alertas.insert_one({
+            "id": str(uuid.uuid4()), "tipo": "seguridad",
+            "mensaje": "🚨 Intento de modificación de criterios de la MESA con clave incorrecta — cambios descartados.",
+            "fecha": now_iso(), "leida": False})
+        raise HTTPException(status_code=403, detail="Clave incorrecta — los cambios fueron descartados y se emitió una alerta de seguridad.")
+    criterios = payload.get("criterios") or {}
+    if not isinstance(criterios, dict) or "btg_pactual" not in criterios:
+        raise HTTPException(status_code=400, detail="Estructura de criterios inválida")
+    criterios["_key"] = "criterios"
+    criterios["updated_at"] = now_iso()
+    criterios["manual_override"] = True
+    criterios["prioridad"] = "suprema"
+    await db.config.replace_one({"_key": "criterios"}, criterios, upsert=True)
+    return {"ok": True, "prioridad": "suprema",
+            "nota": "Reglas manuales activas: prioridad absoluta sobre patrones aprendidos."}
 
 
 @api.get("/inmobiliaria/config/tasas")
@@ -3746,7 +3770,10 @@ async def _stats_mesa():
     rech = await db.seguimiento.count_documents({"estado": {"$in": ["rechazo", "rechazado"]}})
     total = apro + rech
     base = (apro / total) if total else 0.85
-    return {"aprobadas": apro, "rechazadas": rech, "base": base}
+    criterios = await get_config("criterios", DEFAULT_CRITERIOS)
+    valor_uf = await get_valor_uf()
+    return {"aprobadas": apro, "rechazadas": rech, "base": base,
+            "criterios": criterios, "valor_uf": valor_uf}
 
 
 def _prob_aprobacion(item, stats):
@@ -8365,6 +8392,33 @@ async def oportunidades_list(request: Request):
     except Exception:
         pass
     ops = await sales_engine.listar()
+    # PRIORIZACIÓN COMERCIAL: score del Cerebro Predictivo (>=85% = objetivo WhatsApp)
+    try:
+        modelo = await asyncio.to_thread(mesa_brain.modelo_actual)
+        base_pct = round((modelo.get("base") or 0.85) * 100)
+        for op in ops:
+            prob = base_pct
+            rut_n = re.sub(r"[^0-9kK]", "", (op.get("rut") or "")).lower()
+            sim = None
+            if rut_n:
+                sim = await db.simulaciones.find_one(
+                    {"rut": {"$regex": rut_n[:8], "$options": "i"}}, sort=[("timestamp", -1)])
+            if not sim and op.get("nombre"):
+                sim = await db.simulaciones.find_one(
+                    {"nombre_completo": {"$regex": re.escape(op["nombre"][:20]), "$options": "i"}},
+                    sort=[("timestamp", -1)])
+            if sim:
+                if sim.get("precalificacion_aprobada"):
+                    prob = min(97, base_pct + 15)
+                elif sim.get("credito_viable"):
+                    prob = min(92, base_pct + 8)
+                else:
+                    prob = max(10, base_pct - 35)
+            op["prob_mesa"] = prob
+            op["objetivo_whatsapp"] = prob >= 85
+        ops.sort(key=lambda o: -(o.get("prob_mesa") or 0))
+    except Exception:
+        pass
     return {"oportunidades": ops, "resumen": sales_engine.nota_diaria(ops)}
 
 
@@ -10085,6 +10139,189 @@ async def dashai_dataset():
     return _Resp(content=buf.getvalue(), media_type="text/csv",
                  headers={"Content-Disposition": f'attachment; filename="{fname}"',
                           "X-Filas": str(n)})
+
+
+@api.get("/dashai/dataset-mesa")
+async def dashai_dataset_mesa():
+    """🧠 Puente MongoDB→DashAI: historial de aprobaciones y envíos a MESA en CSV."""
+    import csv as _csv
+    import io as _io
+    buf = _io.StringIO()
+    w = _csv.DictWriter(buf, fieldnames=["fecha", "evento", "cliente", "rut", "detalle"],
+                        extrasaction="ignore")
+    w.writeheader()
+    n = 0
+    async for m in db.mesa_enviados.find({}, {"_id": 0}).sort("enviado_at", 1):
+        w.writerow({"fecha": str(m.get("enviado_at", ""))[:19], "evento": "enviado_a_mesa",
+                    "cliente": m.get("cliente", ""), "rut": "",
+                    "detalle": (m.get("subject") or "")[:150]})
+        n += 1
+    async for a in db.aprobacion_log.find({}, {"_id": 0}).sort("enviado_en", 1):
+        w.writerow({"fecha": str(a.get("enviado_en", ""))[:19], "evento": "aprobacion_enviada",
+                    "cliente": a.get("nombre", ""), "rut": a.get("rut", ""),
+                    "detalle": ", ".join(a.get("adjuntos") or [])[:150]})
+        n += 1
+    from fastapi.responses import Response as _Resp
+    fname = f"dataset_mesa_dashai_{datetime.now(timezone.utc).strftime('%Y%m%d')}.csv"
+    return _Resp(content=buf.getvalue(), media_type="text/csv",
+                 headers={"Content-Disposition": f'attachment; filename="{fname}"',
+                          "X-Filas": str(n)})
+
+
+_DASHAI_DOCS_CSV = ROOT_DIR / "storage" / "exports" / "dataset_documentos_dashai.csv"
+
+
+def _dashai_docs_build():
+    """Corre en HILO SEPARADO (no congela la interfaz Maserati). Construye el dataset
+    de clasificación de documentos: texto extraído + categoría real (subcarpeta)."""
+    import csv as _csv
+    from pymongo import MongoClient
+    import pdf_service as _pdfs
+    import ocr_service as _ocr
+    dbs = MongoClient(os.environ["MONGO_URL"])[os.environ["DB_NAME"]]
+
+    def _prog(**kw):
+        dbs.config.update_one({"_key": "dashai_docs_job"}, {"$set": kw}, upsert=True)
+
+    try:
+        base = ROOT_DIR / "storage" / "clientes"
+        pdfs_all = [p for p in sorted(base.rglob("*.pdf"))
+                    if not p.name.startswith(("Carpeta_", "COMBINADO"))]
+        _prog(status="corriendo", total=len(pdfs_all), progreso=0, inicio=now_iso(), error="")
+        _DASHAI_DOCS_CSV.parent.mkdir(parents=True, exist_ok=True)
+        ocr_usados, OCR_MAX = 0, 150
+        with open(_DASHAI_DOCS_CSV, "w", newline="", encoding="utf-8") as f:
+            w = _csv.DictWriter(f, fieldnames=["texto", "categoria", "cliente", "archivo"])
+            w.writeheader()
+            for i, p in enumerate(pdfs_all):
+                try:
+                    rel = p.relative_to(base)
+                    cliente = rel.parts[0]
+                    sub = rel.parts[1] if len(rel.parts) > 2 else ""
+                    cat = fsvc.cat_de_archivo(re.sub(r"^CODEUDOR_", "", p.name, flags=re.I), sub)
+                    raw = p.read_bytes()
+                    texto = (_pdfs.leer_texto(raw, max_pages=2) or "").strip()
+                    if len(texto) < 50 and ocr_usados < OCR_MAX:
+                        ocr_usados += 1
+                        texto = (_ocr.extraer_texto(raw, p.name)[0] or "").strip()
+                    texto = re.sub(r"\s+", " ", texto)[:3000]
+                    if len(texto) >= 30 and cat:
+                        w.writerow({"texto": texto, "categoria": cat,
+                                    "cliente": cliente, "archivo": p.name})
+                except Exception:
+                    pass
+                if i % 10 == 0:
+                    _prog(progreso=i + 1)
+        _prog(status="listo", progreso=len(pdfs_all), fin=now_iso(), ocr_usados=ocr_usados)
+    except Exception as e:
+        _prog(status="error", error=str(e)[:200])
+
+
+@api.post("/dashai/dataset-documentos/generar")
+async def dashai_docs_generar():
+    job = await db.config.find_one({"_key": "dashai_docs_job"}) or {}
+    if job.get("status") == "corriendo":
+        return {"ok": True, "status": "corriendo", "nota": "ya hay una generación en curso"}
+    await db.config.update_one({"_key": "dashai_docs_job"},
+                               {"$set": {"status": "corriendo", "progreso": 0}}, upsert=True)
+    asyncio.create_task(asyncio.to_thread(_dashai_docs_build))
+    return {"ok": True, "status": "corriendo"}
+
+
+@api.get("/dashai/dataset-documentos/estado")
+async def dashai_docs_estado():
+    job = await db.config.find_one({"_key": "dashai_docs_job"}, {"_id": 0}) or {}
+    job["descargable"] = _DASHAI_DOCS_CSV.exists()
+    return job
+
+
+@api.get("/dashai/dataset-documentos")
+async def dashai_docs_descargar():
+    if not _DASHAI_DOCS_CSV.exists():
+        raise HTTPException(status_code=404, detail="Dataset aún no generado. Use el botón Generar primero.")
+    return FileResponse(str(_DASHAI_DOCS_CSV), media_type="text/csv",
+                        filename="dataset_documentos_dashai.csv")
+
+
+# ------------------------------------------------------------------
+# 🧠 CEREBRO PREDICTIVO DASHAI + 🔍 MÓDULO CONTRALOR (100% local, sin créditos)
+# ------------------------------------------------------------------
+@api.post("/mesa-brain/calibrar")
+async def mesa_brain_calibrar():
+    modelo = await asyncio.to_thread(mesa_brain.calibrar)
+    modelo.pop("_id", None)
+    return {"ok": True, "modelo": modelo}
+
+
+@api.get("/mesa-brain/modelo")
+async def mesa_brain_modelo():
+    m = await asyncio.to_thread(mesa_brain.modelo_actual)
+    m.pop("_id", None)
+    return m
+
+
+@api.get("/contraloria/casos")
+async def contraloria_casos(dias: int = 180):
+    """AUDITOR INDEPENDIENTE: valida cada respuesta de la MESA contra el modelo local.
+    Aprobación de MESA sin criterios mínimos (renta, CMF, 2.000 UF) → BAJO AUDITORÍA."""
+    modelo = await asyncio.to_thread(mesa_brain.modelo_actual)
+    modelo.pop("_id", None)
+    stats = await _stats_mesa()
+    desde = (datetime.now(timezone.utc) - timedelta(days=dias)).isoformat()
+    casos = []
+    cursor = db.seguimiento.find(
+        {"estado": {"$in": ["aprobacion", "aprobado", "rechazo", "rechazado"]},
+         "fecha": {"$gte": desde}}, {"_id": 0}).sort("fecha", -1).limit(200)
+    async for s in cursor:
+        cliente = (s.get("cliente") or "").strip()
+        caso = {"fecha": s.get("fecha", ""), "cliente": cliente,
+                "respuesta_mesa": "aprobacion" if s.get("estado") in ("aprobacion", "aprobado") else "rechazo",
+                "prob_dashai": None, "factores": [], "criterios_fallidos": [],
+                "estado_auditoria": "VALIDADO"}
+        fd = None
+        if cliente:
+            fd = await db.folders.find_one(
+                {"nombre": {"$regex": re.escape(cliente[:25]), "$options": "i"}})
+        if fd:
+            prob = await asyncio.to_thread(_prob_aprobacion_folder, fd, stats)
+            caso["prob_dashai"] = prob.get("porcentaje")
+            caso["factores"] = prob.get("factores", [])
+            fallas = [f for f in caso["factores"]
+                      if re.search(r"faltan documentos|falta informe CMF|m[ií]nimo 2\.000|REGLA DURA|NO VIABLE", f, re.I)]
+            caso["criterios_fallidos"] = [re.sub(r"^[-+\d%:⛔🔴 ]+", "", f) for f in fallas]
+            # REGLAMENTO MAESTRO: validar ratios exactos BTG/AMERIS contra la última simulación
+            crit = stats.get("criterios") or {}
+            sim = None
+            rut_f = re.sub(r"[^0-9kK]", "", (fd.get("rut") or "")).lower()
+            if rut_f:
+                sim = await db.simulaciones.find_one(
+                    {"rut": {"$regex": rut_f[:8], "$options": "i"}}, sort=[("timestamp", -1)])
+            if not sim and cliente:
+                sim = await db.simulaciones.find_one(
+                    {"nombre_completo": {"$regex": re.escape(cliente[:20]), "$options": "i"}},
+                    sort=[("timestamp", -1)])
+            if sim:
+                con_sub_s = bool((fd.get("datos_financieros") or {}).get("con_subsidio"))
+                btg = (crit.get("btg_pactual") or {}).get("con_subsidio" if con_sub_s else "sin_subsidio") or {}
+                ltv = float(sim.get("ltv") or 0)
+                ltv_max = float(btg.get("ltv_max") or (0.80 if con_sub_s else 0.90))
+                if ltv and ltv > ltv_max:
+                    caso["criterios_fallidos"].append(
+                        f"LTV {round(ltv*100)}% supera máximo {round(ltv_max*100)}% (BTG {'con' if con_sub_s else 'sin'} subsidio)")
+                divr = float(sim.get("div_renta_conjunta" if sim.get("tiene_codeudor") else "div_renta_individual") or 0)
+                div_max = float(btg.get("div_renta_max") or btg.get("div_renta_max_sin_codeudor") or 0.30)
+                if divr and divr > div_max:
+                    caso["criterios_fallidos"].append(
+                        f"Dividendo/Renta {round(divr*100,1)}% supera máximo {round(div_max*100)}% (Reglamento BTG)")
+            if caso["respuesta_mesa"] == "aprobacion" and caso["criterios_fallidos"]:
+                caso["estado_auditoria"] = "BAJO AUDITORÍA"
+        if caso["estado_auditoria"] == "BAJO AUDITORÍA" and s.get("id"):
+            await db.seguimiento.update_one({"id": s["id"]},
+                                            {"$set": {"estado_auditoria": "BAJO AUDITORÍA"}})
+        casos.append(caso)
+    casos.sort(key=lambda c: (c["estado_auditoria"] != "BAJO AUDITORÍA", c["fecha"]), reverse=False)
+    return {"modelo": modelo, "casos": casos,
+            "bajo_auditoria": sum(1 for c in casos if c["estado_auditoria"] == "BAJO AUDITORÍA")}
 
 
 app.include_router(api)

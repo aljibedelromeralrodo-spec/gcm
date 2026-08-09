@@ -17,6 +17,21 @@ export default function DashboardModule({ valorUF: _valorUF, userName: _userName
   const [refreshResult, setRefreshResult] = useState(null);
   const [motor, setMotor] = useState(null);
   const [semaforo, setSemaforo] = useState(null);
+  const [docsJob, setDocsJob] = useState(null);
+
+  const generarDocsDataset = async () => {
+    try {
+      await axios.post(`${API_URL}/api/dashai/dataset-documentos/generar`);
+      const poll = setInterval(async () => {
+        try {
+          const r = await axios.get(`${API_URL}/api/dashai/dataset-documentos/estado`);
+          setDocsJob(r.data);
+          if (r.data.status !== "corriendo") clearInterval(poll);
+        } catch { clearInterval(poll); }
+      }, 3000);
+      setDocsJob({ status: "corriendo", progreso: 0 });
+    } catch { /* silencioso */ }
+  };
 
   useEffect(() => {
     // Single batch call for dashboard + email status
@@ -34,6 +49,7 @@ export default function DashboardModule({ valorUF: _valorUF, userName: _userName
     axios.get(`${API_URL}/api/gastos-operacionales/cobros-tasacion`).then(r => setCobrosResumen(r.data)).catch((e) => console.error(e));
     axios.get(`${API_URL}/api/motor/status`).then(r => setMotor(r.data)).catch(() => {});
     axios.get(`${API_URL}/api/firma/semaforo`).then(r => setSemaforo(r.data)).catch(() => setSemaforo({ error: true }));
+    axios.get(`${API_URL}/api/dashai/dataset-documentos/estado`).then(r => setDocsJob(r.data)).catch(() => {});
   }, []);
 
   const refreshKnowledge = async () => {
@@ -135,8 +151,33 @@ export default function DashboardModule({ valorUF: _valorUF, userName: _userName
             onClick={() => window.open(`${API_URL}/api/dashai/dataset`, "_blank")}
             style={{ background: "transparent", color: "var(--gold)", border: "1px solid rgba(212,175,55,0.55)",
               padding: "0.45rem 1.1rem", cursor: "pointer", fontWeight: 700, fontSize: "0.78rem", letterSpacing: "0.06em" }}>
-            <i className="fa fa-download" style={{ marginRight: 6 }} />Descargar CSV
+            <i className="fa fa-download" style={{ marginRight: 6 }} />Cartera CSV
           </button>
+          <button data-testid="dashai-mesa-btn"
+            onClick={() => window.open(`${API_URL}/api/dashai/dataset-mesa`, "_blank")}
+            style={{ background: "transparent", color: "var(--gold)", border: "1px solid rgba(212,175,55,0.55)",
+              padding: "0.45rem 1.1rem", cursor: "pointer", fontWeight: 700, fontSize: "0.78rem", letterSpacing: "0.06em" }}>
+            <i className="fa fa-balance-scale" style={{ marginRight: 6 }} />Historial MESA
+          </button>
+          {docsJob?.status === "corriendo" ? (
+            <span data-testid="dashai-docs-progreso" style={{ color: "var(--gold)", fontSize: "0.75rem", fontWeight: 700 }}>
+              <i className="fa fa-cog fa-spin" style={{ marginRight: 6 }} />
+              Extrayendo {docsJob.progreso || 0}/{docsJob.total || "…"}
+            </span>
+          ) : docsJob?.status === "listo" || docsJob?.descargable ? (
+            <button data-testid="dashai-docs-descargar-btn"
+              onClick={() => window.open(`${API_URL}/api/dashai/dataset-documentos`, "_blank")}
+              style={{ background: "linear-gradient(135deg, #BF953F, #FCF6BA 50%, #AA771C)", color: "#0a0a0a",
+                border: "none", padding: "0.45rem 1.1rem", cursor: "pointer", fontWeight: 800, fontSize: "0.78rem" }}>
+              <i className="fa fa-file-text" style={{ marginRight: 6 }} />Docs Entrenamiento
+            </button>
+          ) : (
+            <button data-testid="dashai-docs-generar-btn" onClick={generarDocsDataset}
+              style={{ background: "transparent", color: "var(--gold)", border: "1px solid rgba(212,175,55,0.55)",
+                padding: "0.45rem 1.1rem", cursor: "pointer", fontWeight: 700, fontSize: "0.78rem", letterSpacing: "0.06em" }}>
+              <i className="fa fa-cogs" style={{ marginRight: 6 }} />Generar Docs
+            </button>
+          )}
         </div>
       )}
       <AlertasPanel />

@@ -2,181 +2,173 @@ import { useState, useEffect } from "react";
 import axios from "axios";
 import { API_URL } from "../utils/formatters";
 
-const COLORS = { bg: "#0a0e17", card: "#111827", border: "#232326", text: "#e2e8f0", textMuted: "#94a3b8", accent: "#6c5ce7", green: "#00b894", red: "#e17055", orange: "#f39c12" };
+const ORO = "var(--gold, #D4AF37)";
+const LABELS = {
+  btg_pactual: "BTG Pactual", ameris: "Ameris (Packard)", parametros_generales: "Parámetros Generales",
+  con_subsidio: "Con Subsidio", sin_subsidio: "Sin Subsidio", castigos_renta: "Castigos de Renta",
+};
+const OCULTOS = ["version", "updated_at", "manual_override", "prioridad", "_key", "_id"];
 
-const S = {
-  page: { padding: "1.5rem", color: COLORS.text, maxWidth: "1200px", margin: "0 auto" },
-  card: { background: COLORS.card, borderRadius: "0px", border: `1px solid ${COLORS.border}`, padding: "1.25rem", marginBottom: "1rem" },
-  badge: (color) => ({ display: "inline-block", padding: "2px 8px", borderRadius: "0px", fontSize: "0.72rem", fontWeight: 600, background: `${color}20`, color }),
-  header: { fontSize: "1.1rem", fontWeight: 700, color: COLORS.accent, marginBottom: "0.75rem" },
-  subheader: { fontSize: "0.85rem", fontWeight: 700, color: COLORS.text, marginBottom: "0.5rem" },
-  row: { display: "flex", justifyContent: "space-between", padding: "0.3rem 0", borderBottom: `1px solid ${COLORS.border}22`, fontSize: "0.78rem" },
-  label: { color: COLORS.textMuted },
-  value: { fontWeight: 600, color: COLORS.text },
+function nombreCampo(k) {
+  return LABELS[k] || k.replace(/_/g, " ").replace(/\buf\b/gi, "UF").replace(/\bltv\b/gi, "LTV")
+    .replace(/^./, c => c.toUpperCase());
+}
+
+const filaStyle = {
+  display: "flex", justifyContent: "space-between", alignItems: "center",
+  padding: "0.3rem 0", borderBottom: "1px solid rgba(255,255,255,0.05)", gap: 10,
+};
+const inputStyle = {
+  width: 110, background: "rgba(255,255,255,0.05)", color: ORO, fontWeight: 700,
+  border: "1px solid rgba(212,175,55,0.35)", padding: "0.25rem 0.5rem", textAlign: "right",
+  fontFamily: "'JetBrains Mono', monospace", fontSize: "0.78rem",
 };
 
-function CriteriaRow({ label, value, unit = "", highlight }) {
-  return (
-    <div style={S.row}>
-      <span style={S.label}>{label}</span>
-      <span style={{ ...S.value, color: highlight ? COLORS.green : COLORS.text }}>{value}{unit && ` ${unit}`}</span>
-    </div>
-  );
+function renderCampos(nodo, path, onChange) {
+  const items = [];
+  for (const [k, v] of Object.entries(nodo)) {
+    if (k.startsWith("_") || OCULTOS.includes(k)) continue;
+    const p = [...path, k];
+    const pid = p.join(".");
+    if (typeof v === "number") {
+      items.push(
+        <div key={pid} style={filaStyle}>
+          <span style={{ fontSize: "0.75rem", opacity: 0.75 }}>{nombreCampo(k)}</span>
+          <input data-testid={`criterio-${pid}`} type="number" step="any" value={v}
+            onChange={e => onChange(p, e.target.value === "" ? 0 : Number(e.target.value))}
+            style={inputStyle} />
+        </div>
+      );
+    } else if (typeof v === "string" && ["Si", "No", "Sí"].includes(v)) {
+      items.push(
+        <div key={pid} style={filaStyle}>
+          <span style={{ fontSize: "0.75rem", opacity: 0.75 }}>{nombreCampo(k)}</span>
+          <select data-testid={`criterio-${pid}`} value={v} onChange={e => onChange(p, e.target.value)}
+            style={{ background: "rgba(255,255,255,0.05)", color: ORO, fontWeight: 700,
+              border: "1px solid rgba(212,175,55,0.35)", padding: "0.25rem 0.5rem" }}>
+            <option value="Si">Sí</option>
+            <option value="No">No</option>
+          </select>
+        </div>
+      );
+    } else if (v && typeof v === "object" && !Array.isArray(v)) {
+      items.push(
+        <div key={`${pid}-h`} style={{ fontSize: "0.7rem", fontWeight: 800, color: ORO,
+          textTransform: "uppercase", letterSpacing: "0.1em", margin: "0.7rem 0 0.2rem" }}>
+          {nombreCampo(k)}
+        </div>
+      );
+      items.push(...renderCampos(v, p, onChange));
+    }
+  }
+  return items;
 }
 
 export default function CriteriosModule() {
   const [criteria, setCriteria] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [modal, setModal] = useState(false);
+  const [clave, setClave] = useState("");
+  const [msg, setMsg] = useState("");
+  const [dirty, setDirty] = useState(false);
 
-  useEffect(() => {
-    axios.get(`${API_URL}/api/admin/criterios`).then(r => {
-      setCriteria(r.data);
-      setLoading(false);
-    }).catch(() => setLoading(false));
-  }, []);
+  const cargar = () => axios.get(`${API_URL}/api/admin/criterios`)
+    .then(r => { setCriteria(r.data); setDirty(false); }).catch(() => {});
+  useEffect(() => { cargar(); }, []);
 
-  if (loading) return <div style={S.page}>Cargando criterios...</div>;
-  if (!criteria) return <div style={S.page}>No hay criterios configurados</div>;
+  const onChange = (path, val) => {
+    setCriteria(prev => {
+      const next = JSON.parse(JSON.stringify(prev));
+      let n = next;
+      for (const k of path.slice(0, -1)) n = n[k];
+      n[path[path.length - 1]] = val;
+      return next;
+    });
+    setDirty(true);
+  };
 
-  const btg = criteria.btg_pactual || {};
-  const ameris = criteria.ameris || {};
-  const general = criteria.parametros_generales || {};
+  const guardar = async () => {
+    try {
+      const r = await axios.post(`${API_URL}/api/admin/criterios`, { clave, criterios: criteria });
+      setMsg(`✅ ${r.data.nota}`);
+      setModal(false); setClave(""); setDirty(false);
+      cargar();
+    } catch (e) {
+      setMsg(`🚨 ${e.response?.data?.detail || "Error al guardar"}`);
+      setModal(false); setClave("");
+      cargar();
+    }
+  };
+
+  if (!criteria) return <div className="module-content">Cargando bóveda de reglas…</div>;
 
   return (
-    <div style={S.page} data-testid="criterios-module">
-      <div style={{ marginBottom: "1rem" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.3rem" }}>
-          <i className="fa fa-shield" style={{ fontSize: "1.2rem", color: COLORS.accent }}></i>
-          <h2 style={{ fontSize: "1.2rem", fontWeight: 700, color: COLORS.text, margin: 0 }}>Regla de Oro - Criterios de Evaluacion</h2>
-        </div>
-        <p style={{ fontSize: "0.75rem", color: COLORS.textMuted, margin: 0 }}>
-          Version: {criteria.version} | Estos criterios son la fuente de verdad del evaluador crediticio
-        </p>
+    <div className="module-content" data-testid="criterios-module">
+      <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: "0.3rem" }}>
+        <h2 style={{ color: ORO, letterSpacing: "0.08em", margin: 0 }}>⚙ CONFIGURACIÓN DE ESCENARIOS</h2>
+        <span style={{ fontSize: "0.7rem", opacity: 0.55, textTransform: "uppercase", letterSpacing: "0.12em" }}>
+          Ajuste de Algoritmo · Bóveda de Reglas MESA
+        </span>
       </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
-        {/* BTG CON SUBSIDIO */}
-        <div style={S.card}>
-          <div style={S.header}><i className="fa fa-bank" style={{ marginRight: "0.4rem" }}></i>BTG Pactual - Con Subsidio</div>
-          {btg.con_subsidio && <>
-            <CriteriaRow label="Monto credito" value={`${btg.con_subsidio.monto_credito_min_uf} - ${btg.con_subsidio.monto_credito_max_uf}`} unit="UF" />
-            <CriteriaRow label="LTV maximo" value={`${(btg.con_subsidio.ltv_max * 100).toFixed(0)}%`} />
-            <CriteriaRow label="DIV/Renta maximo" value={`${(btg.con_subsidio.div_renta_max * 100).toFixed(0)}%`} />
-            <CriteriaRow label="Carga Financiera sin codeudor" value={`${(btg.con_subsidio.carga_financiera_max_sin_codeudor * 100).toFixed(0)}%`} />
-            <CriteriaRow label="Carga Financiera con codeudor" value={`${(btg.con_subsidio.carga_financiera_max_con_codeudor * 100).toFixed(0)}%`} />
-            <CriteriaRow label="Edad termino maximo" value={btg.con_subsidio.edad_termino_max} unit="anos" />
-            <CriteriaRow label="Antiguedad laboral minima" value={btg.con_subsidio.antiguedad_laboral_min_meses} unit="meses" />
-            <CriteriaRow label="Morosidad permitida" value={btg.con_subsidio.morosidad_permitida} />
-          </>}
-        </div>
-
-        {/* BTG SIN SUBSIDIO */}
-        <div style={S.card}>
-          <div style={S.header}><i className="fa fa-bank" style={{ marginRight: "0.4rem" }}></i>BTG Pactual - Sin Subsidio</div>
-          {btg.sin_subsidio && <>
-            <CriteriaRow label="Renta minima" value={btg.sin_subsidio.renta_min_uf} unit="UF" />
-            <CriteriaRow label="Monto credito" value={`${btg.sin_subsidio.monto_credito_min_uf} - ${btg.sin_subsidio.monto_credito_max_uf}`} unit="UF" />
-            <CriteriaRow label="Valor propiedad" value={`${btg.sin_subsidio.valor_propiedad_min_uf} - ${btg.sin_subsidio.valor_propiedad_max_uf}`} unit="UF" />
-            <CriteriaRow label="Plazo" value={`${btg.sin_subsidio.plazo_min_anos} - ${btg.sin_subsidio.plazo_max_anos}`} unit="anos" />
-            <CriteriaRow label="Edad titular" value={`${btg.sin_subsidio.edad_min} - ${btg.sin_subsidio.edad_max}`} unit="anos" />
-            <CriteriaRow label="Edad + Plazo maximo" value={btg.sin_subsidio.edad_plazo_max} />
-            <CriteriaRow label="LTV maximo" value={`${(btg.sin_subsidio.ltv_max * 100).toFixed(0)}%`} />
-            <CriteriaRow label="DIV/Renta sin codeudor" value={`${(btg.sin_subsidio.div_renta_max_sin_codeudor * 100).toFixed(0)}%`} />
-            <CriteriaRow label="DIV/Renta con codeudor (conjunto)" value={`${(btg.sin_subsidio.div_renta_max_con_codeudor_conjunto * 100).toFixed(0)}%`} />
-            <CriteriaRow label="DIV/Renta titular con codeudor" value={`${(btg.sin_subsidio.div_renta_max_titular_con_codeudor * 100).toFixed(0)}%`} />
-            <CriteriaRow label="Carga financiera maxima" value={`${(btg.sin_subsidio.carga_financiera_max * 100).toFixed(0)}%`} />
-            <CriteriaRow label="Antiguedad laboral minima" value={btg.sin_subsidio.antiguedad_laboral_min_meses} unit="meses" />
-          </>}
-        </div>
-
-        {/* BTG CASTIGOS */}
-        <div style={S.card}>
-          <div style={{ ...S.header, color: COLORS.orange }}><i className="fa fa-exclamation-triangle" style={{ marginRight: "0.4rem" }}></i>BTG - Castigos de Renta</div>
-          {btg.castigos_renta && <>
-            <CriteriaRow label="Renta variable (comisiones, bonos)" value={`-${(btg.castigos_renta.renta_variable_castigo * 100).toFixed(0)}%`} highlight />
-            <CriteriaRow label="Honorarios independientes" value={`-${(btg.castigos_renta.honorarios_castigo * 100).toFixed(0)}%`} highlight />
-            <div style={{ marginTop: "0.5rem" }}>
-              <span style={{ fontSize: "0.72rem", color: COLORS.red, fontWeight: 600 }}>No se consideran:</span>
-              <div style={{ fontSize: "0.7rem", color: COLORS.textMuted, marginTop: "0.2rem" }}>
-                {btg.castigos_renta.no_considera?.join(", ")}
-              </div>
-            </div>
-          </>}
-        </div>
-
-        {/* AMERIS CON SUBSIDIO */}
-        <div style={S.card}>
-          <div style={S.header}><i className="fa fa-institution" style={{ marginRight: "0.4rem" }}></i>AMERIS - Con Subsidio (unico perfil)</div>
-          {ameris.con_subsidio && <>
-            <CriteriaRow label="Monto credito minimo" value={ameris.con_subsidio.monto_credito_min_uf} unit="UF" />
-            <CriteriaRow label="LTV maximo base" value={`${(ameris.con_subsidio.ltv_max_base * 100).toFixed(0)}%`} />
-            <CriteriaRow label="Antiguedad laboral minima" value={ameris.con_subsidio.antiguedad_laboral_min_meses} unit="meses" />
-            <div style={{ ...S.subheader, marginTop: "0.75rem" }}>Politicas por Edad Final (Edad + Plazo)</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "0.3rem", marginBottom: "0.5rem" }}>
-              <span style={{ fontSize: "0.65rem", color: COLORS.textMuted, fontWeight: 700 }}>Edad Final</span>
-              <span style={{ fontSize: "0.65rem", color: COLORS.textMuted, fontWeight: 700 }}>LTV Max</span>
-              <span style={{ fontSize: "0.65rem", color: COLORS.textMuted, fontWeight: 700 }}>DIV/Renta</span>
-              <span style={{ fontSize: "0.65rem", color: COLORS.textMuted, fontWeight: 700 }}>Carga Fin</span>
-            </div>
-            {ameris.con_subsidio.politicas_edad_final?.map((p, i) => (
-              <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "0.3rem", padding: "0.2rem 0", borderBottom: `1px solid ${COLORS.border}22`, fontSize: "0.72rem" }}>
-                <span style={{ color: COLORS.text, fontWeight: 600 }}>Hasta {p.edad_final_max}</span>
-                <span style={{ color: COLORS.green }}>{(p.ltv_max * 100).toFixed(0)}%</span>
-                <span style={{ color: COLORS.accent }}>{(p.div_renta_max * 100).toFixed(0)}%</span>
-                <span style={{ color: COLORS.orange }}>{(p.carga_fin_max * 100).toFixed(0)}%</span>
-              </div>
-            ))}
-            <div style={{ marginTop: "0.5rem" }}>
-              <div style={S.subheader}>DIV/Renta - Sin Codeudor</div>
-              <CriteriaRow label="Titular hasta 40 anos" value={`${(ameris.con_subsidio.div_renta_sin_codeudor?.edad_max_40 * 100).toFixed(0)}%`} />
-              <CriteriaRow label="Titular mayor 40 anos" value={`${(ameris.con_subsidio.div_renta_sin_codeudor?.edad_mayor_40 * 100).toFixed(0)}%`} />
-            </div>
-            <div style={{ marginTop: "0.5rem" }}>
-              <div style={S.subheader}>DIV/Renta - Con Codeudor Tipo 1/2</div>
-              <CriteriaRow label="LTV hasta 75%" value={`${(ameris.con_subsidio.div_renta_con_codeudor_tipo_1_2?.ltv_max_75 * 100).toFixed(0)}%`} />
-              <CriteriaRow label="LTV mayor 75%" value={`${(ameris.con_subsidio.div_renta_con_codeudor_tipo_1_2?.ltv_mayor_75 * 100).toFixed(0)}%`} />
-            </div>
-            <div style={{ marginTop: "0.5rem" }}>
-              <div style={S.subheader}>Carga Financiera</div>
-              <CriteriaRow label="Sin codeudor" value={`${(ameris.con_subsidio.carga_sin_codeudor_max * 100).toFixed(0)}%`} />
-              <CriteriaRow label="Con codeudor Tipo 1/2 (conjunto)" value={`${(ameris.con_subsidio.carga_con_codeudor_tipo_1_2_max * 100).toFixed(0)}%`} />
-              <CriteriaRow label="Con codeudor Tipo 3 (conjunto)" value={`${(ameris.con_subsidio.carga_con_codeudor_tipo_3_max_conjunto * 100).toFixed(0)}%`} />
-              <CriteriaRow label="Con codeudor Tipo 3 (titular individual)" value={`${(ameris.con_subsidio.carga_con_codeudor_tipo_3_max_titular * 100).toFixed(0)}%`} />
-            </div>
-          </>}
-        </div>
+      <div style={{ fontSize: "0.74rem", opacity: 0.6, marginBottom: "1rem" }}>
+        {criteria.manual_override
+          ? "🔐 Reglas manuales ACTIVAS — prioridad suprema sobre los patrones aprendidos del historial."
+          : "Criterios por defecto. Al guardar con la clave maestra, tus reglas toman prioridad absoluta."}
       </div>
-
-      {/* PARAMETROS GENERALES */}
-      <div style={S.card}>
-        <div style={{ ...S.header, color: COLORS.green }}><i className="fa fa-check-circle" style={{ marginRight: "0.4rem" }}></i>Parametros Generales Compartidos</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
-          <div>
-            <div style={S.subheader}>Con Subsidio</div>
-            {general.con_subsidio && <>
-              <CriteriaRow label="Carga financiera maxima" value={`${(general.con_subsidio.carga_fin_max * 100).toFixed(0)}%`} />
-              <CriteriaRow label="Antiguedad minima" value={general.con_subsidio.antiguedad_min_meses} unit="meses" />
-              <CriteriaRow label="Edad maxima termino" value={general.con_subsidio.edad_max_termino} unit="anos" />
-              <CriteriaRow label="LTV maximo" value={`${(general.con_subsidio.ltv_max * 100).toFixed(0)}%`} />
-              <CriteriaRow label="Morosidad permitida" value={general.con_subsidio.morosidad} />
-            </>}
+      {msg && (
+        <div data-testid="criterios-msg" style={{ marginBottom: "1rem", padding: "0.7rem 1rem",
+          border: `1px solid ${msg.startsWith("✅") ? "rgba(212,175,55,0.5)" : "rgba(225,29,72,0.5)"}`,
+          color: msg.startsWith("✅") ? "#F5E7B8" : "#fda4af",
+          background: msg.startsWith("✅") ? "rgba(30,26,12,0.9)" : "rgba(40,6,14,0.9)" }}>{msg}</div>
+      )}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: "1rem" }}>
+        {["btg_pactual", "ameris", "parametros_generales"].map(sec => criteria[sec] && (
+          <div key={sec} style={{ background: "linear-gradient(160deg, rgba(18,18,20,0.97), rgba(6,6,8,0.99))",
+            border: "1px solid rgba(212,175,55,0.3)", padding: "1rem 1.2rem" }}>
+            <div style={{ fontWeight: 800, color: ORO, letterSpacing: "0.08em", marginBottom: "0.5rem" }}>
+              <i className="fa fa-bank" style={{ marginRight: 8 }} />{nombreCampo(sec)}
+            </div>
+            {renderCampos(criteria[sec], [sec], onChange)}
           </div>
-          <div>
-            <div style={S.subheader}>Sin Subsidio</div>
-            {general.sin_subsidio && <>
-              <CriteriaRow label="Carga financiera maxima" value={`${(general.sin_subsidio.carga_fin_max * 100).toFixed(0)}%`} />
-              <CriteriaRow label="Antiguedad minima" value={general.sin_subsidio.antiguedad_min_meses} unit="meses" />
-              <CriteriaRow label="Edad maxima termino" value={general.sin_subsidio.edad_max_termino} unit="anos" />
-              <CriteriaRow label="LTV maximo" value={`${(general.sin_subsidio.ltv_max * 100).toFixed(0)}%`} />
-              <CriteriaRow label="Morosidad permitida" value={general.sin_subsidio.morosidad} />
-            </>}
-          </div>
-        </div>
+        ))}
+      </div>
+      <div style={{ position: "sticky", bottom: 0, marginTop: "1.2rem", textAlign: "right" }}>
+        <button data-testid="criterios-guardar-btn" disabled={!dirty} onClick={() => { setMsg(""); setModal(true); }}
+          style={{ padding: "0.7rem 2rem", fontWeight: 800, fontSize: "0.85rem", letterSpacing: "0.08em",
+            cursor: dirty ? "pointer" : "not-allowed", border: "none", color: "#0a0a0a",
+            backgroundImage: "linear-gradient(135deg, #BF953F, #FCF6BA 45%, #B38728, #FBF5B7 80%, #AA771C)",
+            boxShadow: dirty ? "0 0 30px -8px rgba(212,175,55,0.8)" : "none", opacity: dirty ? 1 : 0.45 }}>
+          <i className="fa fa-diamond" style={{ marginRight: 8 }} />Guardar Cambios
+        </button>
       </div>
 
-      {criteria.updated_at && (
-        <div style={{ textAlign: "right", fontSize: "0.7rem", color: COLORS.textMuted }}>
-          Ultima actualizacion: {new Date(criteria.updated_at).toLocaleString("es-CL")}
+      {modal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 1000,
+          display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div data-testid="criterios-modal-clave" style={{ width: 360, background: "linear-gradient(160deg, #141416, #060608)",
+            border: "1px solid rgba(212,175,55,0.5)", padding: "1.5rem", boxShadow: "0 0 60px -15px rgba(212,175,55,0.5)" }}>
+            <div style={{ color: ORO, fontWeight: 800, letterSpacing: "0.1em", marginBottom: 6 }}>
+              🔐 BLOQUEO DE SEGURIDAD
+            </div>
+            <div style={{ fontSize: "0.75rem", opacity: 0.7, marginBottom: 12 }}>
+              Ingrese la clave maestra para aplicar los cambios al algoritmo de la MESA. Clave incorrecta = cambios descartados + alerta.
+            </div>
+            <input data-testid="criterios-clave-input" type="password" value={clave} autoFocus
+              onChange={e => setClave(e.target.value)} placeholder="Clave maestra"
+              onKeyDown={e => e.key === "Enter" && guardar()}
+              style={{ width: "100%", background: "rgba(255,255,255,0.06)", color: ORO, fontWeight: 800,
+                border: "1px solid rgba(212,175,55,0.4)", padding: "0.6rem 0.8rem", letterSpacing: "0.4em",
+                textAlign: "center", fontSize: "1.1rem", marginBottom: 14, boxSizing: "border-box" }} />
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button data-testid="criterios-modal-cancelar" onClick={() => { setModal(false); setClave(""); }}
+                style={{ background: "transparent", color: "#94a3b8", border: "1px solid rgba(255,255,255,0.15)",
+                  padding: "0.5rem 1.1rem", cursor: "pointer", fontSize: "0.78rem" }}>Cancelar</button>
+              <button data-testid="criterios-modal-confirmar" onClick={guardar}
+                style={{ border: "none", color: "#0a0a0a", fontWeight: 800, padding: "0.5rem 1.4rem", cursor: "pointer",
+                  backgroundImage: "linear-gradient(135deg, #BF953F, #FCF6BA 50%, #AA771C)", fontSize: "0.78rem" }}>
+                Validar y Guardar
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

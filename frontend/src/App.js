@@ -33,6 +33,7 @@ const OportunidadesModule = lazy(() => import("./pages/OportunidadesModule"));
 const TasacionModule = lazy(() => import("./pages/TasacionModule"));
 const EstudioTituloModule = lazy(() => import("./pages/EstudioTituloModule"));
 const EscrituraModule = lazy(() => import("./pages/EscrituraModule"));
+const ContraloriaModule = lazy(() => import("./pages/ContraloriaModule"));
 const GlobalSearch = lazy(() => import("./components/GlobalSearch"));
 const WelcomeTour = lazy(() => import("./components/WelcomeTour"));
 
@@ -41,6 +42,7 @@ const MODULE_TITLES = {
   tasacion: 'Tasación',
   estudio: 'Estudio de Títulos',
   escritura: 'Escritura',
+  contraloria: 'Contraloría',
   simulador: 'Simulador de Capacidad Crediticia',
   historial: 'Historial de Simulaciones',
   calculadora: 'Calculadora de Dividendo',
@@ -151,6 +153,7 @@ function MainApp() {
     { key: 'tasacion', icon: 'fa-home', label: 'Tasación' },
     { key: 'estudio', icon: 'fa-balance-scale', label: 'Estudio de Títulos' },
     { key: 'escritura', icon: 'fa-pencil-square-o', label: 'Escritura' },
+    { key: 'contraloria', icon: 'fa-search', label: 'Contraloría' },
     { key: 'cierres', icon: 'fa-handshake-o', label: 'Cierres' },
     ...(user.rol === 'admin' ? [{ key: 'oportunidades', icon: 'fa-diamond', label: 'Centro de Ventas VIP' }] : []),
     { key: 'salud', icon: 'fa-heartbeat', label: 'Panel de Salud' },
@@ -262,6 +265,7 @@ function MainApp() {
         {activeModule === 'tasacion' && <TasacionModule />}
         {activeModule === 'estudio' && <EstudioTituloModule />}
         {activeModule === 'escritura' && <EscrituraModule onNavigate={setActiveModule} />}
+        {activeModule === 'contraloria' && <ContraloriaModule />}
         </Suspense>
       </main>
     </div>

@@ -149,6 +149,14 @@ export default function OportunidadesModule() {
                 <tr key={op.id} data-testid={`op-row-${i}`}>
                   <td style={{ padding: "0.6rem 0.5rem" }}>
                     <b style={{ color: "#f8fafc" }}>{op.nombre}</b>
+                    {typeof op.prob_mesa === "number" && (
+                      <span data-testid={`op-prob-mesa-${i}`} style={{ marginLeft: 8, fontSize: "0.68rem", fontWeight: 800,
+                        color: op.prob_mesa >= 85 ? "#0a0a0a" : "var(--gold)",
+                        background: op.prob_mesa >= 85 ? "linear-gradient(135deg, #BF953F, #FCF6BA, #AA771C)" : "transparent",
+                        border: "1px solid rgba(212,175,55,0.5)", padding: "0.12rem 0.55rem", whiteSpace: "nowrap" }}>
+                        {op.prob_mesa >= 85 ? "🎯 " : ""}Probabilidad de Aprobación MESA: {op.prob_mesa}%
+                      </span>
+                    )}
                     {op.expediente_vip && <span style={{ marginLeft: 8, color: "var(--gold)", fontSize: "0.72rem", fontWeight: 700 }}>✦ EXPEDIENTE VIP</span>}
                     {op.proyecto && <div style={{ fontSize: "0.72rem", color: "#94a3b8" }}>{op.proyecto}</div>}
                   </td>
