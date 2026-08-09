@@ -30,6 +30,18 @@ import mesa_brain
 import simulador_engine
 
 app = FastAPI(title="Central Mutuos API")
+
+# BLINDAJE DE COMUNICACIÓN (CORS): orígenes desde variables de entorno (Preview y Live).
+_cors_env = os.environ.get("CORS_ORIGINS", "*")
+app.add_middleware(
+    CORSMiddleware,
+    allow_credentials=True,
+    allow_origins=["*"] if _cors_env == "*" else [o.strip() for o in _cors_env.split(",")],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
 api = APIRouter(prefix="/api")
 
 logging.basicConfig(level=logging.INFO)
@@ -10255,17 +10267,6 @@ async def security_headers(request, call_next):
             "img-src 'self' data:; frame-ancestors 'self'; object-src 'none'; base-uri 'self'"
         )
     return resp
-
-
-_cors_env = os.environ.get("CORS_ORIGINS", "*")
-app.add_middleware(GZipMiddleware, minimum_size=1000)
-app.add_middleware(
-    CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=["*"] if _cors_env == "*" else [o.strip() for o in _cors_env.split(",")],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 
 @app.on_event("shutdown")
