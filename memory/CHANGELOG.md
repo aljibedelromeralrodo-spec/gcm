@@ -895,3 +895,8 @@
 - PROTOCOLO DE RECUPERACIÓN: /app/backend/emergency_restore.py (INACTIVO, manual): dry-run por defecto, --ejecutar restaura los 933 archivos desde la nube. Dry-run verificado contra manifiesto real.
 - E2E verificado: roundtrip put/get OK, primer espejado completo 933/933, estado SINCRONIZADO, 0 errores, card visible en Dashboard.
 - Usa EMERGENT_LLM_KEY existente en backend/.env; INTEGRATION_PROXY_URL con fallback a integrations.emergentagent.com.
+
+## Sesión 2026-08-10 (parte 3 — Rescate de Pérdidas)
+- POST /api/contraloria/forense/reenviar-mesa {cliente, fecha_mesa, forzar?}: reenvía hallazgo PERDIDA a MESA_EMAIL (fallback aprobaciones@centralmutuos.cl) reutilizando _borrador_reclamacion + Carpeta_<cliente>.pdf adjunta si existe. Marca reenviado_mesa/reenviado_en en el hallazgo (candado 403 anti-duplicado; forzar=true lo salta).
+- UI: botón oro "📨 REENVIAR A MESA" por fila PERDIDA en Lista B de AuditoriaForenseModule (testid af-reenviar-mesa-btn-{k}); si ya fue reenviado muestra badge verde "✓ REENVIADO fecha" (af-reenviado-badge-{k}). Confirm + reintento con forzar ante 403.
+- Verificado con casos sintéticos (luego eliminados): 400 sin cliente, 404 inexistente, 403 candado, render de botón y badge en UI. Envío SMTP real NO disparado en pruebas (usa mail.send_mail ya probado en reclamaciones).

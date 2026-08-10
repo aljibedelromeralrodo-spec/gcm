@@ -11224,6 +11224,46 @@ async def forense_reclamacion_enviar(idx: int):
     return {"ok": True, "mensaje": f"Reclamación de {b['cliente']} enviada a aprobaciones@centralmutuos.cl"}
 
 
+@api.post("/contraloria/forense/reenviar-mesa")
+async def forense_reenviar_mesa(payload: dict):
+    """RESCATE DE PÉRDIDAS: reenvía a MESA un hallazgo PERDIDA con 1 clic,
+    adjuntando la carpeta del cliente. Candado anti-duplicado por hallazgo."""
+    cliente = (payload.get("cliente") or "").strip()
+    fecha_mesa = (payload.get("fecha_mesa") or "").strip()
+    if not cliente:
+        raise HTTPException(status_code=400, detail="Falta el cliente del hallazgo")
+    doc = await db.config.find_one({"_key": "auditoria_forense"}) or {}
+    hallazgos = doc.get("hallazgos") or []
+    idx = next((i for i, h in enumerate(hallazgos)
+                if h.get("categoria") == "PERDIDA" and h.get("cliente") == cliente
+                and (not fecha_mesa or h.get("fecha_mesa") == fecha_mesa)), None)
+    if idx is None:
+        raise HTTPException(status_code=404, detail=f"No hay hallazgo PERDIDA para {cliente}")
+    h = hallazgos[idx]
+    if h.get("reenviado_mesa") and not payload.get("forzar"):
+        fecha_prev = str(h.get("reenviado_en") or "")[:16].replace("T", " ")
+        raise HTTPException(status_code=403, detail=(
+            f"El caso {cliente} ya fue reenviado a MESA el {fecha_prev}. "
+            "Use forzar para repetir el envío."))
+    b = _borrador_reclamacion(h)
+    adjuntos = []
+    merged = CLIENTES_DIR / _safe_name(cliente) / f"Carpeta_{_safe_name(cliente)}.pdf"
+    if merged.exists():
+        adjuntos.append({"filename": merged.name, "content_b64": _b64(merged.read_bytes())})
+    destino = (os.environ.get("MESA_EMAIL") or "").strip() or "aprobaciones@centralmutuos.cl"
+    res = await asyncio.to_thread(mail.send_mail, destino, b["subject"], b["body"],
+                                  adjuntos, "secundaria")
+    if not res.get("success"):
+        raise HTTPException(status_code=502, detail=res.get("error", "Error de envío SMTP"))
+    hallazgos[idx]["reenviado_mesa"] = True
+    hallazgos[idx]["reenviado_en"] = now_iso()
+    await db.config.update_one({"_key": "auditoria_forense"},
+                               {"$set": {"hallazgos": hallazgos}})
+    return {"ok": True, "carpeta_adjunta": bool(adjuntos),
+            "mensaje": f"📨 Caso {cliente} reenviado a MESA ({destino})"
+                       f"{' con carpeta adjunta' if adjuntos else ' (sin carpeta PDF disponible)'}"}
+
+
 @api.get("/contraloria/forense/descargar")
 async def forense_descargar(lista: str = "A"):
     """Lista A: aprobaciones cuestionables (RIESGO + ERROR HUMANO).

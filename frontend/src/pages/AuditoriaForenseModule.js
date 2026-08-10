@@ -76,6 +76,28 @@ export default function AuditoriaForenseModule() {
     } catch (e) { alert("❌ " + (e?.response?.data?.detail || e.message)); }
   };
 
+  const reenviarMesa = async (h) => {
+    if (!window.confirm(`📨 RESCATE DE PÉRDIDAS\n\n¿Reenviar el caso de ${h.cliente} a MESA para reevaluación?\nSe adjuntará la carpeta del cliente si existe.`)) return;
+    try {
+      const r = await axios.post(`${API_URL}/api/contraloria/forense/reenviar-mesa`,
+        { cliente: h.cliente, fecha_mesa: h.fecha_mesa });
+      alert(r.data.mensaje);
+      cargar();
+    } catch (e) {
+      const det = e?.response?.data?.detail || e.message;
+      if (e?.response?.status === 403 && window.confirm(`⚠ ${det}\n\n¿Forzar un nuevo envío?`)) {
+        try {
+          const r2 = await axios.post(`${API_URL}/api/contraloria/forense/reenviar-mesa`,
+            { cliente: h.cliente, fecha_mesa: h.fecha_mesa, forzar: true });
+          alert(r2.data.mensaje);
+          cargar();
+        } catch (e2) { alert("❌ " + (e2?.response?.data?.detail || e2.message)); }
+      } else if (e?.response?.status !== 403) {
+        alert("❌ " + det);
+      }
+    }
+  };
+
   const FilaHallazgo = ({ h, k }) => (
     <div key={k} style={{ display: "flex", gap: 10, alignItems: "baseline", padding: "0.5rem 0",
       borderTop: "1px solid rgba(255,255,255,0.06)", fontSize: "0.78rem", flexWrap: "wrap" }}>
@@ -83,6 +105,17 @@ export default function AuditoriaForenseModule() {
       <b style={{ color: "#f8fafc" }}>{h.cliente}</b>
       <span style={{ color: "#9a8c52", fontFamily: "monospace", fontSize: "0.72rem" }}>{h.rut || "sin RUT"}</span>
       <span style={{ color: "#6b6b6b", fontSize: "0.68rem" }}>{h.fecha_mesa}</span>
+      {h.categoria === "PERDIDA" && (
+        h.reenviado_mesa
+          ? <span data-testid={`af-reenviado-badge-${k}`} style={{ marginLeft: "auto", color: "#8fd9b0", fontSize: "0.66rem", fontWeight: 700,
+              border: "1px solid rgba(16,217,142,0.4)", padding: "0.2rem 0.6rem", whiteSpace: "nowrap" }}>
+              ✓ REENVIADO {(h.reenviado_en || "").slice(0, 10)}
+            </span>
+          : <button data-testid={`af-reenviar-mesa-btn-${k}`} onClick={() => reenviarMesa(h)}
+              style={{ ...btnOro, marginLeft: "auto", fontSize: "0.64rem", padding: "0.35rem 0.85rem", whiteSpace: "nowrap" }}>
+              📨 REENVIAR A MESA
+            </button>
+      )}
       <span style={{ color: "#cbd5e1", flexBasis: "100%", fontSize: "0.74rem" }}>{h.detalle}</span>
       {h.nota_dashai && <span style={{ color: "#9a8c52", flexBasis: "100%", fontSize: "0.7rem", fontStyle: "italic", borderLeft: `2px solid ${ORO}`, paddingLeft: 8 }}>{h.nota_dashai}</span>}
     </div>
