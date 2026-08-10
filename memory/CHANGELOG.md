@@ -876,3 +876,4 @@
 - Test Yerile re-enviado: email SMTP OK 2 veces; wa.me directo a +56948652419 generado.
 - LECCIÓN: server.py y credit_engine.py sufrieron duplicación de contenido al final del archivo (truncados y reparados). Verificar tail del archivo tras ediciones masivas.
 - App DESPLEGADA en producción: https://risk-assess-17.emergent.host (cambios requieren redeploy del usuario).
+- 🚀 Motor de Despacho Masivo: módulo "Despacho Veloz" (sidebar), GET /api/despacho/cola (sin límite de registros, excluye PROMOVIDO/entregados/sin teléfono) + POST /api/despacho/{oid}/disparar (wa.me al teléfono del cliente con mensaje Maserati + link VIP público + @CentralMutuos, marca ENTREGADO, contadores en vivo). UI terminal de mando: botón gigante oro 24K, contador Despachados/Pendientes, cursor auto-avanza. E2E verificado (destino, link público, handle, sin localhost). Yerile devuelta a cola tras test.

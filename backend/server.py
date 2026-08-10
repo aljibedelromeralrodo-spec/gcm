@@ -11197,6 +11197,52 @@ async def forense_backfill_estado():
 
 
 # ══════════════════════════════════════════════════════════════════════════
+# 🚀 MOTOR DE DESPACHO MASIVO INFINITO — Cola de Campaña
+# ══════════════════════════════════════════════════════════════════════════
+@api.get("/despacho/cola")
+async def despacho_cola():
+    q = {"estado": {"$ne": "PROMOVIDO"}, "despacho_entregado": {"$ne": True}}
+    todos = await db.prospectos.find(q, {"_id": 0}).sort("creado_en", -1).to_list(10000)
+    pendientes = [p for p in todos if len(re.sub(r"[^0-9]", "", p.get("telefono") or "")) >= 8]
+    sin_tel = len(todos) - len(pendientes)
+    despachados = await db.prospectos.count_documents({"despacho_entregado": True})
+    return {"pendientes": pendientes, "total_pendientes": len(pendientes),
+            "despachados": despachados, "sin_telefono": sin_tel}
+
+
+@api.post("/despacho/{oid}/disparar")
+async def despacho_disparar(oid: str, request: Request):
+    """DISPARO RÁPIDO: genera el wa.me Maserati (link VIP público + @CentralMutuos),
+    marca ENTREGADO y devuelve los contadores actualizados."""
+    from urllib.parse import quote
+    op = await db.prospectos.find_one({"id": oid})
+    if not op:
+        raise HTTPException(status_code=404, detail="Prospecto no encontrado")
+    tel = re.sub(r"[^0-9]", "", op.get("telefono") or "")
+    if len(tel) < 8:
+        raise HTTPException(status_code=400, detail="El prospecto no tiene teléfono válido")
+    if not tel.startswith("56"):
+        tel = "56" + tel.lstrip("0")
+    base = _base_url_req(request)
+    url = f"{base}/api/calificar/{oid}"
+    primer = (op.get("nombre") or "").split()[0].title() if op.get("nombre") else "Cliente"
+    texto = (f"🏠 *Asegure su Casa - Calificación VIP en 1 Minuto*\n\n"
+             f"Hola {primer}, soy José Martín de Central Mutuos. Suba su Cédula y sus últimas "
+             f"6 Liquidaciones de Sueldo en este portal privado y su calificación queda lista:\n{url}"
+             f"\n\nAtentamente, el equipo de @CentralMutuos")
+    wa = f"https://wa.me/{tel}?text={quote(texto)}"
+    await db.prospectos.update_one({"id": oid}, {"$set": {
+        "despacho_entregado": True, "despacho_entregado_en": now_iso(),
+        "status": "entregado", "link_calificar": url}})
+    despachados = await db.prospectos.count_documents({"despacho_entregado": True})
+    q = {"estado": {"$ne": "PROMOVIDO"}, "despacho_entregado": {"$ne": True}}
+    resto = await db.prospectos.find(q, {"telefono": 1}).to_list(10000)
+    pendientes = sum(1 for p in resto if len(re.sub(r"[^0-9]", "", p.get("telefono") or "")) >= 8)
+    return {"ok": True, "whatsapp": wa, "cliente": op.get("nombre"),
+            "despachados": despachados, "pendientes": pendientes}
+
+
+# ══════════════════════════════════════════════════════════════════════════
 # 🧠 CEREBRO DASHAI — Aprendizaje Perpetuo y Sincronización Autónoma
 # Hilo de baja prioridad: recalibra criterios y sincroniza scores cada 60 min;
 # vigila cada 5 min si llegó correo de MESA o documento nuevo (disparo inmediato).

@@ -36,6 +36,7 @@ const EscrituraModule = lazy(() => import("./pages/EscrituraModule"));
 const ContraloriaModule = lazy(() => import("./pages/ContraloriaModule"));
 const CerebroDashAIModule = lazy(() => import("./pages/CerebroDashAIModule"));
 const AuditoriaForenseModule = lazy(() => import("./pages/AuditoriaForenseModule"));
+const DespachoModule = lazy(() => import("./pages/DespachoModule"));
 const GlobalSearch = lazy(() => import("./components/GlobalSearch"));
 const WelcomeTour = lazy(() => import("./components/WelcomeTour"));
 
@@ -45,6 +46,9 @@ const MODULE_TITLES = {
   estudio: 'Estudio de Títulos',
   escritura: 'Escritura',
   contraloria: 'Contraloría',
+  dashai: '🧠 Cerebro DashAI',
+  auditoria: '📋 Auditoría Forense',
+  despacho: '🚀 Despacho Veloz',
   simulador: 'Simulador de Capacidad Crediticia',
   historial: 'Historial de Simulaciones',
   calculadora: 'Calculadora de Dividendo',
@@ -159,6 +163,7 @@ function MainApp() {
     { key: 'contraloria', icon: 'fa-search', label: 'Contraloría' },
     { key: 'dashai', icon: 'fa-lightbulb-o', label: '🧠 Cerebro DashAI' },
     { key: 'auditoria', icon: 'fa-balance-scale', label: '📋 Auditoría Forense' },
+    { key: 'despacho', icon: 'fa-rocket', label: '🚀 Despacho Veloz' },
     { key: 'cierres', icon: 'fa-handshake-o', label: 'Cierres' },
     ...(user.rol === 'admin' ? [{ key: 'oportunidades', icon: 'fa-diamond', label: 'Centro de Ventas VIP' }] : []),
     { key: 'salud', icon: 'fa-heartbeat', label: 'Panel de Salud' },
@@ -279,6 +284,7 @@ function MainApp() {
         {activeModule === 'contraloria' && <ContraloriaModule />}
         {activeModule === 'dashai' && <CerebroDashAIModule />}
         {activeModule === 'auditoria' && <AuditoriaForenseModule />}
+        {activeModule === 'despacho' && <DespachoModule />}
         </Suspense>
       </main>
     </div>
