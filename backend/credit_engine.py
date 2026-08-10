@@ -59,6 +59,100 @@ def cuota_prestamo(monto: float, annual_rate: float, plazo_anos: int) -> dict:
     }
 
 
+def _n(v):
+    try:
+        return float(str(v).replace(".", "").replace(",", ".")) if isinstance(v, str) else float(v or 0)
+    except (ValueError, TypeError):
+        return 0.0
+
+
+def techo_hipotecario(df, criterios, tasas, uf_valor, plazo=25, cuota_cmf_clp=None):
+    """MOTOR DE CÁLCULO INVERSO (Techo Hipotecario).
+
+    A partir de la renta líquida depurada (con castigos de la Constitución DashAI),
+    el tope de Carga Financiera y las deudas CMF, calcula el crédito MÁXIMO en UF
+    que la MESA aprobaría, para los escenarios BTG Pactual y Ameris.
+    """
+    df = df or {}
+    criterios = criterios or {}
+    tasas = tasas or {}
+    uf_valor = float(uf_valor or 39000)
+
+    renta_fija = _n(df.get("renta_liquida"))
+    renta_var = _n(df.get("renta_variable"))
+    renta_hon = _n(df.get("honorarios"))
+    con_sub = bool(df.get("con_subsidio"))
+    cmf = _n(cuota_cmf_clp if cuota_cmf_clp is not None
+             else df.get("cuota_deudas") or df.get("deuda_cmf_cuota") or df.get("cuota_cmf") or 0)
+
+    # Castigos de renta desde la Constitución (Ley del RUT / BTG)
+    cast = (criterios.get("btg_pactual") or {}).get("castigos_renta") or {}
+    c_var = float(cast.get("renta_variable_castigo") or 0.15)
+    c_hon = float(cast.get("honorarios_castigo") or 0.20)
+    renta_dep = renta_fija + renta_var * (1 - c_var) + renta_hon * (1 - c_hon)
+
+    tasa = float(tasas.get("tasa_subsidio_mayor_2000") if con_sub
+                 else tasas.get("tasa_sin_subsidio") or 0.06) or 0.06
+
+    def _escenario(nombre, carga_max, div_renta_max):
+        # Carga: (dividendo + deudas)/renta ≤ carga_max  →  div ≤ renta*carga_max - deudas
+        div_por_carga = renta_dep * carga_max - cmf
+        # Dividendo/renta ≤ div_renta_max (el nuevo dividendo solo)
+        div_por_dr = renta_dep * div_renta_max
+        binding = "Carga Financiera" if div_por_carga <= div_por_dr else "Dividendo/Renta"
+        div_max_clp = max(0.0, min(div_por_carga, div_por_dr))
+        div_max_uf = div_max_clp / uf_valor if uf_valor > 0 else 0.0
+        credito_uf = capacidad_desde_dividendo(div_max_uf, tasa, plazo)
+        return {
+            "banco": nombre,
+            "credito_maximo_uf": round(credito_uf, 1),
+            "dividendo_maximo_clp": round(div_max_clp),
+            "dividendo_maximo_uf": round(div_max_uf, 2),
+            "carga_max_pct": round(carga_max * 100, 1),
+            "div_renta_max_pct": round(div_renta_max * 100, 1),
+            "restriccion_activa": binding,
+        }
+
+    btg = criterios.get("btg_pactual") or {}
+    btg_seg = btg.get("con_subsidio" if con_sub else "sin_subsidio") or {}
+    btg_carga = float(btg_seg.get("carga_financiera_max")
+                      or btg_seg.get("carga_financiera_max_sin_codeudor") or 0.40)
+    btg_dr = float(btg_seg.get("div_renta_max")
+                   or btg_seg.get("div_renta_max_sin_codeudor") or 0.30)
+
+    am = (criterios.get("ameris") or {}).get("con_subsidio") or {}
+    am_carga = float(am.get("carga_sin_codeudor_max") or 0.35)
+    am_dr = float((am.get("div_renta_sin_codeudor") or {}).get("edad_max_40") or 0.30)
+
+    escenarios = [
+        _escenario("BTG Pactual", btg_carga, btg_dr),
+        _escenario("Ameris", am_carga, am_dr),
+    ]
+    mejor = max(escenarios, key=lambda e: e["credito_maximo_uf"]) if escenarios else None
+
+    return {
+        "renta_liquida_depurada_clp": round(renta_dep),
+        "renta_liquida_depurada_uf": round(renta_dep / uf_valor, 2) if uf_valor > 0 else 0,
+        "componentes_renta": {
+            "renta_liquida_fija": round(renta_fija),
+            "renta_variable_castigada": round(renta_var * (1 - c_var)),
+            "honorarios_castigados": round(renta_hon * (1 - c_hon)),
+            "castigo_variable_pct": round(c_var * 100),
+            "castigo_honorarios_pct": round(c_hon * 100),
+        },
+        "deuda_cmf_cuota_clp": round(cmf),
+        "con_subsidio": con_sub,
+        "tasa_anual_pct": round(tasa * 100, 2),
+        "plazo_anos": plazo,
+        "uf_valor": round(uf_valor),
+        "escenarios": escenarios,
+        "mejor_escenario": mejor,
+        "datos_suficientes": renta_dep > 0,
+    }
+
+
+
+
 def tipo_deudor_texto(t: int, tiene_codeudor: bool) -> str:
     base = {
         1: "Tipo 1 - Dependiente Renta Fija",

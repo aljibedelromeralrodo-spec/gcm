@@ -255,6 +255,7 @@ Idioma del usuario: **Español** (responder siempre en español).
     con el selector de archivos del módulo Clientes).
 
 ## Backlog priorizado
+- ✅ HECHO: Techo Hipotecario (motor inverso BTG/Ameris) 2026-08-10.
 - 2026-07-28 (parte 5) — **Módulo Set de Crédito + Firma electrónica (migrup/eCert)**:
   - Correcciones pedidas: "Con Creces Asesorías" → "Central Mutuos - Con Creces" en todos los
     correos/PDFs; detección de aprobación cliente ahora solo pre-selecciona la simulación
@@ -281,6 +282,7 @@ Idioma del usuario: **Español** (responder siempre en español).
     nombres de campos). La API es interna de migrup y podría cambiar.
 
 ## Backlog priorizado
+- ✅ HECHO: Techo Hipotecario (motor inverso BTG/Ameris) 2026-08-10.
 - **P1**: Reporte 2 — cruce de solicitudes vs enviadas a mesa usando RUT real del OCR
   (pendiente, pedido del usuario en sesiones previas).
 - **P2**: Integración real de WhatsApp (hoy mock).
@@ -722,6 +724,7 @@ requieren re-deploy para llegar a producción.
 - Reportes internos auto-enviados desde Gmail principal (fin de bloqueos "Se bloqueó tu mensaje").
 
 ## Backlog priorizado
+- ✅ HECHO: Techo Hipotecario (motor inverso BTG/Ameris) 2026-08-10.
 - P0: Confirmar con usuario el RUT correcto de DILIMAR CEDEÑO (carpeta dice 67422911, CMF dice 26.545.507-7).
 - P1: Alertas WhatsApp VIP a Gerardo cuando viabilidad >= 75%.
 - P1: Informe Semanal Ventas (José Martín, lunes).

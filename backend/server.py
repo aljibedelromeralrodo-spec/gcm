@@ -2272,6 +2272,23 @@ async def folder_fin_get(fid: str):
     return {"datos_financieros": doc.get("datos_financieros") or {}}
 
 
+@api.post("/clientes/folders/{fid}/techo-hipotecario")
+async def folder_techo_hipotecario(fid: str, payload: dict = None):
+    """TECHO HIPOTECARIO: crédito máximo (UF) que la MESA aprobaría por escenario
+    (BTG Pactual y Ameris), vía simulación inversa sobre los documentos reales."""
+    payload = payload or {}
+    doc = await _get_folder_doc(fid)
+    df = doc.get("datos_financieros") or {}
+    criterios = await db.config.find_one({"_key": "criterios"}) or {}
+    tasas = await db.config.find_one({"_key": "tasas"}) or {}
+    uf = await get_valor_uf()
+    plazo = int(payload.get("plazo_anos") or 25)
+    cmf = payload.get("cuota_cmf_clp")
+    res = await asyncio.to_thread(ce.techo_hipotecario, df, criterios, tasas, uf, plazo, cmf)
+    res["cliente"] = doc.get("nombre")
+    return res
+
+
 @api.patch("/clientes/folders/{fid}/datos-financieros")
 async def folder_fin_patch(fid: str, payload: dict):
     doc = await _get_folder_doc(fid)

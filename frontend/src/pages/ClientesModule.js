@@ -162,6 +162,8 @@ export default function ClientesModule({ onNavigate }) {
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState("");
   const [currentFolder, setCurrentFolder] = useState(null);
+  const [techo, setTecho] = useState(null);
+  const [techoBusy, setTechoBusy] = useState(false);
   const [emails, setEmails] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
@@ -763,6 +765,18 @@ export default function ClientesModule({ onNavigate }) {
     } catch (e) {
       alert("Error reseteando: " + (e.response?.data?.detail || e.message));
     }
+  };
+
+  const calcularTecho = async (folder) => {
+    setTechoBusy(true);
+    try {
+      const r = await axios.post(`${API}/api/clientes/folders/${folder.id}/techo-hipotecario`,
+        { plazo_anos: 25 }, { timeout: 60000 });
+      setTecho(r.data);
+    } catch (e) {
+      alert("❌ " + (e?.response?.data?.detail || e.message));
+    }
+    setTechoBusy(false);
   };
 
   const openFinPanel = async (folder) => {
@@ -1872,6 +1886,10 @@ export default function ClientesModule({ onNavigate }) {
                 style={{ background: "rgba(212,175,55,0.15)", border: "1px solid #d4af37", color: "#b8942e" }}>
                 <i className="fa fa-dollar"></i> Datos Financieros
               </button>
+              <button className="docs-btn secondary shimmer-oro" onClick={() => calcularTecho(currentFolder)} disabled={techoBusy} data-testid="btn-techo-hipotecario"
+                style={{ backgroundImage: "linear-gradient(135deg, #BF953F, #FCF6BA 45%, #B38728, #FBF5B7 80%, #AA771C)", border: "none", color: "#0a0a0a", fontWeight: 800 }}>
+                <i className={`fa ${techoBusy ? "fa-spinner fa-spin" : "fa-bar-chart"}`}></i> {techoBusy ? "Calculando…" : "Calcular Alcance Máximo"}
+              </button>
               <button className="docs-btn secondary shimmer-oro" onClick={() => openEmailModal(currentFolder)} data-testid="btn-send-autocorreo-detail"
                 style={{ background: "#10c98a", border: "1px solid #0e9f6e", color: "#fff", fontWeight: 600 }}>
                 <i className="fa fa-paper-plane"></i> Enviar a Mesa
@@ -1894,6 +1912,54 @@ export default function ClientesModule({ onNavigate }) {
             </div>
           </div>
 
+          {techo && (
+            <div data-testid="techo-modal" onClick={() => setTecho(null)}
+              style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.82)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
+              <div onClick={e => e.stopPropagation()} style={{ background: "#0a0a0a", border: "1px solid rgba(212,175,55,0.4)", width: "min(680px, 96vw)", maxHeight: "90vh", overflow: "auto", padding: "1.6rem 1.8rem" }}>
+                <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
+                  <b style={{ color: "#d4af37", fontSize: "1.05rem", letterSpacing: "0.04em" }}>📊 Techo Hipotecario — {techo.cliente}</b>
+                  <button data-testid="techo-cerrar" onClick={() => setTecho(null)} style={{ marginLeft: "auto", background: "transparent", border: "none", color: "#94a3b8", fontSize: "1.3rem", cursor: "pointer" }}>✕</button>
+                </div>
+                {!techo.datos_suficientes ? (
+                  <div style={{ color: "#fb7185", fontSize: "0.85rem", padding: "1rem 0", lineHeight: 1.6 }}>
+                    ⚠️ No hay renta líquida cargada en los Datos Financieros de esta carpeta. Ejecute la extracción OCR de las liquidaciones o ingrese la renta manualmente para calcular el alcance máximo.
+                  </div>
+                ) : (
+                  <>
+                    <div style={{ color: "#9a8c52", fontSize: "0.72rem", marginBottom: 14, lineHeight: 1.6 }}>
+                      Renta líquida depurada: <b style={{ color: "#e7cf7a" }}>${techo.renta_liquida_depurada_clp.toLocaleString("es-CL")}</b> ·
+                      castigos: variable −{techo.componentes_renta.castigo_variable_pct}%, honorarios −{techo.componentes_renta.castigo_honorarios_pct}% ·
+                      deuda CMF: ${techo.deuda_cmf_cuota_clp.toLocaleString("es-CL")}/mes · tasa {techo.tasa_anual_pct}% · plazo {techo.plazo_anos} años
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+                      {techo.escenarios.map((e, i) => {
+                        const esMejor = techo.mejor_escenario && e.banco === techo.mejor_escenario.banco && e.credito_maximo_uf === techo.mejor_escenario.credito_maximo_uf;
+                        return (
+                          <div key={i} data-testid={`techo-escenario-${e.banco.split(" ")[0].toLowerCase()}`}
+                            style={{ border: `1px solid ${esMejor ? "rgba(212,175,55,0.6)" : "rgba(255,255,255,0.12)"}`, padding: "1rem 1.1rem", background: esMejor ? "rgba(212,175,55,0.05)" : "transparent" }}>
+                            <div style={{ color: "#cbd5e1", fontSize: "0.72rem", letterSpacing: "0.1em", textTransform: "uppercase" }}>{e.banco}</div>
+                            <div className={esMejor ? "shimmer-oro" : ""} style={{ marginTop: 8, padding: "0.5rem 0.7rem", display: "inline-block",
+                              backgroundImage: "linear-gradient(135deg, #BF953F, #FCF6BA 45%, #B38728, #FBF5B7 80%, #AA771C)",
+                              color: "#0a0a0a", fontWeight: 900, fontSize: "1.35rem", letterSpacing: "-0.01em" }}>
+                              {e.credito_maximo_uf.toLocaleString("es-CL")} UF
+                            </div>
+                            <div style={{ color: "#94a3b8", fontSize: "0.72rem", marginTop: 8, lineHeight: 1.7 }}>
+                              Dividendo máx: ${e.dividendo_maximo_clp.toLocaleString("es-CL")}<br />
+                              Carga máx {e.carga_max_pct}% · Div/Renta {e.div_renta_max_pct}%<br />
+                              <span style={{ color: "#e7cf7a" }}>Tope activo: {e.restriccion_activa}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div style={{ color: "#6b6b6b", fontSize: "0.68rem", marginTop: 14, lineHeight: 1.6 }}>
+                      Simulación inversa DashAI sobre los documentos reales, según los topes vigentes de la Constitución. Referencial: la MESA confirma el monto final.
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
           {finOpenId === currentFolder.id && (
             <div data-testid={`fin-detail-panel`} style={{ background: "rgba(212,175,55,0.08)", border: "1px solid #d4af37", borderRadius: 0, padding: "0.9rem", marginBottom: "0.8rem" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.6rem" }}>
