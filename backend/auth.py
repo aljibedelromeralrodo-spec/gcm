@@ -83,6 +83,10 @@ class AuthMiddleware(BaseHTTPMiddleware):
         auth = request.headers.get("Authorization", "")
         token = auth[7:].strip() if auth.startswith("Bearer ") else ""
         if not token:
+            # Descargas/vistas abiertas con window.open o <a href>: el navegador no
+            # envía el header, pero sí la cookie de sesión (o el query param t).
+            token = request.cookies.get("cm_token", "") or request.query_params.get("t", "")
+        if not token:
             return JSONResponse({"detail": "No autenticado — token requerido"}, status_code=401)
         try:
             claims = decode_token(token)

@@ -6,7 +6,12 @@ axios.interceptors.request.use((config) => {
   const terminal = secureGet("token", false);
   const predic = secureGet("predic_auth");
   const token = terminal || (predic && predic.token);
-  if (token) config.headers.Authorization = `Bearer ${token}`;
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+    // Cookie de sesión: permite abrir archivos con window.open / <a href> (el
+    // navegador no envía headers en esos casos, pero sí la cookie).
+    document.cookie = `cm_token=${token}; path=/; SameSite=Lax; Secure`;
+  }
   return config;
 });
 
@@ -19,6 +24,7 @@ axios.interceptors.response.use(
       secureRemove("token");
       secureRemove("user");
       secureRemove("predic_auth");
+      document.cookie = "cm_token=; path=/; Max-Age=0";
       window.location.reload();
     }
     return Promise.reject(err);
