@@ -1317,6 +1317,9 @@ async def list_folders(q: str = ""):
     docs = await db.folders.find(query).sort("created_at", -1).limit(200).to_list(200)
     stats = await _stats_mesa()
     segs = await db.seguimiento.find({}, _PROY_SEG).sort("fecha", -1).limit(200).to_list(200)
+    criterios_cfg = await db.config.find_one({"_key": "criterios"}) or {}
+    tasas_cfg = await db.config.find_one({"_key": "tasas"}) or {}
+    uf_val = await get_valor_uf()
     out = []
     for d in docs:
         archivos = fsvc.scan_archivos(d.get("nombre", ""))
@@ -1324,6 +1327,17 @@ async def list_folders(q: str = ""):
         f["prob_aprobacion"] = _prob_aprobacion_folder(d, stats)
         f["criterios"] = _criterios_folder(d, archivos=archivos)
         f["mesa_respuesta"] = await _mesa_respuesta_folder(d, segs, archivos=archivos)
+        # TECHO HIPOTECARIO en tarjeta: máximo crédito UF (mejor escenario, cálculo puro)
+        df_t = d.get("datos_financieros") or {}
+        if _num_limpio(df_t.get("renta_liquida")):
+            try:
+                t = ce.techo_hipotecario(df_t, criterios_cfg, tasas_cfg, uf_val, 25)
+                mejor = t.get("mejor_escenario") or {}
+                if mejor.get("credito_maximo_uf"):
+                    f["techo_uf"] = mejor["credito_maximo_uf"]
+                    f["techo_banco"] = mejor.get("banco", "")
+            except Exception:
+                pass
         out.append(f)
     return {"folders": out}
 

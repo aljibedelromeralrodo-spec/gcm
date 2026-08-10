@@ -1728,6 +1728,13 @@ export default function ClientesModule({ onNavigate }) {
                           {f.prob_aprobacion.porcentaje}%
                         </span>
                         <span style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, opacity: 0.85, color: enviadoManual ? "#fff" : undefined }}>aprobación</span>
+                        {f.techo_uf != null && (
+                          <span data-testid={`techo-max-${f.id}`}
+                            title={`Techo Hipotecario (máximo crédito posible) — mejor escenario: ${f.techo_banco || ""}`}
+                            style={{ fontSize: 10, fontWeight: 900, marginTop: 3, whiteSpace: "nowrap", color: enviadoManual ? "#fff" : "#d4af37" }}>
+                            ▲ Techo {Math.round(f.techo_uf).toLocaleString("es-CL")} UF
+                          </span>
+                        )}
                       </div>
                       <div data-testid={`mesa-criterios-${f.id}`}
                         style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minWidth: 92, padding: "6px 10px", borderRadius: 0,

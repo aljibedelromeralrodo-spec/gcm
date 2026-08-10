@@ -746,9 +746,16 @@ requieren re-deploy para llegar a producción.
 - ⚠️ Hot reload de uvicorn se cuelga con los hilos daemon del búnker: usar
   `sudo supervisorctl restart backend` tras editar server.py.
 
+## Techo en tarjeta de cliente (2026-06 fork, pedido del usuario)
+- GET /api/clientes/folders ahora incluye `techo_uf` y `techo_banco` por carpeta
+  (ce.techo_hipotecario con datos_financieros.renta_liquida; cálculo puro, sin LLM).
+- ClientesModule.js: bajo el % de aprobación se muestra "▲ Techo X.XXX UF" en dorado
+  (testid `techo-max-{id}`). Verificado con Dilimar Cedeño: 95% + Techo 4.815 UF (BTG).
+
 ## Backlog priorizado
 - ✅ HECHO: Techo Hipotecario (motor inverso BTG/Ameris) 2026-08-10.
 - ✅ HECHO: OCR Renta Masivo / backfill datos_financieros + Espejo entrenado (2026-06 fork).
+- ✅ HECHO: Techo visible bajo el % de aprobación en la tarjeta de cada cliente (2026-06 fork).
 - P0: Confirmar con usuario el RUT correcto de DILIMAR CEDEÑO (carpeta dice 67422911, CMF dice 26.545.507-7).
 - P1: Alertas WhatsApp VIP a Gerardo cuando viabilidad >= 75%.
 - P1: Informe Semanal Ventas (José Martín, lunes).
