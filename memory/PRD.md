@@ -723,8 +723,32 @@ requieren re-deploy para llegar a producción.
 - BLINDAJE INVIOLABLE en send_mail: ninguna simulación sale con >1 página (bypass solo con clave 0586).
 - Reportes internos auto-enviados desde Gmail principal (fin de bloqueos "Se bloqueó tu mensaje").
 
+## Sesión 2026-06 (fork) — OCR Renta Masivo (backfill Espejo MESA)
+- POST /api/admin/backfill-ocr (job en background) + GET /api/admin/backfill-ocr (progreso en db.config _key=ocr_renta_backfill).
+- Job `_ocr_renta_backfill_job` (server.py): recorre TODAS las carpetas y puebla datos_financieros
+  (renta_liquida, renta_codeudor, deuda_cmf_total, credito_interno_pav, antiguedad_laboral_meses,
+  edad, con_subsidio, monto_credito). REGLA DEL DUEÑO: el OCR SOBRESCRIBE lo existente (solo con
+  valores encontrados; nunca borra con null).
+- 3 FUENTES en cascada: (1) PDFs de la carpeta (liquidacion+cmf; fallback simuladores/cartas de
+  aprobación/combinado), (2) adjuntos de correos procesados (proc_queue.attachments_bytes_dir),
+  (3) buzón IMAP (solo si la renta sigue faltando).
+- Extractor IA nuevo: ai_extract.extraer_datos_financieros (gpt-5.4-mini, PROHIBIDO inventar,
+  convierte miles CMF→pesos) + fallback regex.
+- Al terminar re-entrena el Espejo con minar_limites_mesa(280).
+- RESULTADO: 54/67 carpetas enriquecidas (renta: 1→32, deuda_cmf: 0→28, monto: 47), Espejo
+  listo=True, n=3 casos únicos, precisión 90%, 6 segmentos, sin "Datos insuficientes".
+- LÍMITE DE DATOS (no de código): 28 aprobaciones de MESA no tienen carpeta digital y ~12
+  carpetas no tienen NINGÚN documento de renta digital (ni disco, ni proc_queue, ni IMAP).
+  El Espejo se seguirá calibrando solo a medida que entren carpetas completas.
+- ⚠️ RECURRENTE (3ª vez): el fork desinstala poppler-utils/tesseract → OCR devuelve vacío en
+  silencio. Reinstalado con apt (poppler-utils, tesseract-ocr, tesseract-ocr-spa). SIEMPRE
+  verificar `which tesseract pdftoppm` al inicio de un fork.
+- ⚠️ Hot reload de uvicorn se cuelga con los hilos daemon del búnker: usar
+  `sudo supervisorctl restart backend` tras editar server.py.
+
 ## Backlog priorizado
 - ✅ HECHO: Techo Hipotecario (motor inverso BTG/Ameris) 2026-08-10.
+- ✅ HECHO: OCR Renta Masivo / backfill datos_financieros + Espejo entrenado (2026-06 fork).
 - P0: Confirmar con usuario el RUT correcto de DILIMAR CEDEÑO (carpeta dice 67422911, CMF dice 26.545.507-7).
 - P1: Alertas WhatsApp VIP a Gerardo cuando viabilidad >= 75%.
 - P1: Informe Semanal Ventas (José Martín, lunes).

@@ -940,3 +940,10 @@
 - server.py: minar_limites_mesa(280 días) triangula seguimiento aprobaciones ↔ carpeta (renta) ↔ simulación (monto), extrae codeudor_tipo (ninguno/familiar por apellido común o parentesco/tercero), renta_codeudor, edad_bucket (<40/40_59/60+), endeudamiento 2%, dedupe por cliente+RUT. Persiste db.limites_reales_mesa + config.espejo_mesa_modelo. Loop 24h _espejo_mesa_loop (MODO ESPEJO PERMANENTE). Endpoints: GET /api/dashai/espejo-mesa, POST /api/dashai/espejo-mesa/minar.
 - Techo Hipotecario: DOBLE PANEL "Criterio Teórico (Bodega)" vs "Veredicto Algoritmo Espejo MESA" (precisión estimada + segmento + sugerir codeudor). testids: techo-doble-panel, techo-espejo-mesa, techo-sugerir-codeudor.
 - ESTADO DE DATOS (honesto): solo 1 caso completo triangulado hoy (Cristian Pavez, renta $1.2M → 1800 UF) porque la mayoría de carpetas no tienen renta_liquida en datos_financieros. El Espejo responde "en calibración" con n<2 (correcto). La precisión del 100% se alcanzará al acumular aprobaciones con renta+monto — depende de poblar datos_financieros (OCR liquidaciones) y de que MESA registre montos.
+
+## 2026-06 (fork) — OCR Renta Masivo
+- Nuevo endpoint POST/GET /api/admin/backfill-ocr + job _ocr_renta_backfill_job (server.py).
+- ai_extract.extraer_datos_financieros: extracción IA de renta/deuda CMF/PAV/edad/subsidio/monto.
+- 3 fuentes: carpeta en disco → adjuntos proc_queue → buzón IMAP. OCR sobrescribe (regla del dueño).
+- Reinstalados poppler-utils + tesseract-ocr(-spa) (3ª recaída post-fork; OCR fallaba en silencio).
+- Resultado: 54/67 carpetas con datos_financieros, Espejo MESA listo=True (3 casos, 90% precisión).

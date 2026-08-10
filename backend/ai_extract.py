@@ -142,6 +142,80 @@ async def extraer_datos_gastos(texto):
     return base
 
 
+def _regex_financieros(texto):
+    """Fallback sin LLM: renta líquida y deuda CMF por regex."""
+    out = {}
+    t = texto or ""
+    m = re.search(r"(?:renta\s+l[ií]quida|sueldo\s+l[ií]quido|l[ií]quido\s+a\s+pagar|alcance\s+l[ií]quido|l[ií]quido\s+a\s+recibir)[^\d]{0,30}\$?\s*([\d.]{6,12})", t, re.I)
+    if m:
+        try:
+            v = float(m.group(1).replace(".", ""))
+            if v > 100000:
+                out["renta_liquida"] = v
+        except ValueError:
+            pass
+    if re.search(r"subsidio|ds\s?19\b|ds\s?49\b", t, re.I):
+        out["con_subsidio"] = True
+    return out
+
+
+async def extraer_datos_financieros(texto, cliente=""):
+    """OCR RENTA MASIVO: extrae métricas financieras estructuradas desde el texto
+    OCR de liquidaciones + informe CMF de UN cliente. PROHIBIDO inventar."""
+    from datetime import date
+    texto = (texto or "")[:24000]
+    base = dict(_regex_financieros(texto))
+    base["metodo"] = "reglas"
+    key = _llm_key()
+    if not key or len(texto) < 60:
+        return base
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        system = (
+            "Eres analista experto en créditos hipotecarios chilenos. Recibes texto OCR de "
+            "documentos de UN cliente: liquidaciones de sueldo, Informe de Deudas de la CMF "
+            "(Comisión para el Mercado Financiero), simulaciones de crédito y/o cartas de "
+            "aprobación. "
+            f"Fecha de hoy: {date.today().isoformat()}. "
+            "Responde SOLO un JSON válido con estas claves: "
+            "renta_liquida (renta/sueldo líquido MENSUAL en pesos chilenos CLP, número o null; "
+            "si hay varias liquidaciones usa el promedio), "
+            "renta_codeudor (renta líquida mensual del codeudor si hay liquidaciones de una "
+            "segunda persona, CLP o null), "
+            "deuda_cmf_total (deuda DIRECTA total del informe CMF en PESOS: vigente + mora + "
+            "castigada; OJO: el informe CMF reporta en MILES de pesos, multiplica por 1000; "
+            "número o null), "
+            "credito_interno_pav (saldo de créditos de consumo/PAV si se detalla, CLP o null), "
+            "antiguedad_laboral_meses (meses de antigüedad laboral si aparece fecha de ingreso, "
+            "número o null), "
+            "edad (edad en años calculada desde la fecha de nacimiento si aparece, número o null), "
+            "con_subsidio (true si se menciona subsidio habitacional DS19/DS49/DS01, si no null), "
+            "monto_credito (monto del crédito hipotecario en UF si aparece en carta de "
+            "aprobación o simulación, número o null). "
+            "REGLA INVIOLABLE — PROHIBIDO INVENTAR: si un dato no aparece literalmente en el "
+            "texto usa null. No estimes ni rellenes."
+        )
+        chat = LlmChat(api_key=key, session_id=f"finx-{uuid.uuid4()}",
+                       system_message=system).with_model("openai", "gpt-5.4-mini")
+        resp = await _enviar(chat, UserMessage(text=f"Cliente: {cliente}\n\n{texto}"))
+        raw = resp if isinstance(resp, str) else str(resp)
+        mj = re.search(r"\{.*\}", raw, re.S)
+        if mj:
+            data = json.loads(mj.group(0))
+            for k in ("renta_liquida", "renta_codeudor", "deuda_cmf_total",
+                      "credito_interno_pav", "antiguedad_laboral_meses", "edad",
+                      "monto_credito"):
+                v = data.get(k)
+                if isinstance(v, (int, float)) and v > 0:
+                    base[k] = round(float(v), 1)
+            if isinstance(data.get("con_subsidio"), bool):
+                base["con_subsidio"] = data["con_subsidio"]
+            base["metodo"] = "ia"
+    except Exception as e:
+        base["error"] = str(e)[:200]
+    return base
+
+
 async def analizar_flujo_comercial(stats, aprendizajes_previos, notas_usuario):
     """Analiza el flujo comercial real de Central Mutuos y aprende de él.
     PROHIBIDO inventar métricas: solo usa los datos entregados."""

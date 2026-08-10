@@ -11643,6 +11643,203 @@ async def forense_backfill_estado():
 
 
 # ══════════════════════════════════════════════════════════════════════════
+# 🧠 OCR RENTA MASIVO — Backfill de datos_financieros para el Espejo MESA
+# ══════════════════════════════════════════════════════════════════════════
+_OCR_BACKFILL_CAMPOS = ("renta_liquida", "renta_codeudor", "deuda_cmf_total",
+                        "credito_interno_pav", "antiguedad_laboral_meses",
+                        "edad", "con_subsidio", "monto_credito")
+
+
+def _ocr_pdfs_folder(nombre):
+    """Selecciona los PDFs relevantes de la carpeta: liquidaciones + CMF,
+    con fallback al combinado si el protocolo no tiene esas categorías."""
+    import ocr_service as _ocr
+    por_cat = {"liquidacion": [], "cmf": [], "combinado": [], "extras": []}
+    for a in fsvc.scan_archivos(nombre):
+        if not a["nombre"].lower().endswith(".pdf"):
+            continue
+        cat = fsvc.cat_de_archivo(a["nombre"], a["subfolder"])
+        if cat in por_cat and len(por_cat[cat]) < 4:
+            por_cat[cat].append(a["ruta"])
+    rutas = por_cat["liquidacion"][:2] + por_cat["cmf"][:2]
+    if not rutas:
+        # Fallback: simuladores / cartas de aprobación / combinado (también traen renta y monto)
+        rel_re = re.compile(r"aprobaci|simulad|carta", re.I)
+        extras = sorted(por_cat["extras"], key=lambda r: not rel_re.search(r))[:3]
+        rutas = extras + por_cat["combinado"][:1]
+    partes = []
+    for rel in rutas:
+        try:
+            raw = fsvc.resolver_ruta(nombre, rel).read_bytes()
+            txt, _met = _ocr.extraer_texto(raw, rel, force_ocr=False)
+            if txt and txt.strip():
+                partes.append(f"=== DOCUMENTO: {rel} ===\n{txt.strip()[:9000]}")
+        except Exception:
+            pass
+    return "\n\n".join(partes), len(rutas)
+
+
+_OCR_ADJ_RE = re.compile(r"liquidaci|sueldo|renta|informe_?deudas|cmf|remuneraci|haberes", re.I)
+
+
+def _ocr_adjuntos_paths(paths):
+    """OCR de adjuntos de correo (rutas absolutas)."""
+    import ocr_service as _ocr
+    partes = []
+    for p in paths:
+        try:
+            txt, _met = _ocr.extraer_texto(p.read_bytes(), p.name, force_ocr=False)
+            if txt and txt.strip():
+                partes.append(f"=== ADJUNTO CORREO: {p.name} ===\n{txt.strip()[:9000]}")
+        except Exception:
+            pass
+    return "\n\n".join(partes)
+
+
+async def _ocr_adjuntos_correo(nombre):
+    """FUENTE 2: adjuntos reales de los correos procesados del cliente (proc_queue)."""
+    from pathlib import Path
+    toks = [t for t in re.sub(r"[^a-záéíóúñ ]", "", (nombre or "").lower()).split() if len(t) > 2]
+    if not toks:
+        return "", 0
+    rx = ".*".join(re.escape(t) for t in toks[:2])
+    paths, vistos = [], set()
+    async for it in db.proc_queue.find({"$or": [
+            {"cliente": {"$regex": rx, "$options": "i"}},
+            {"classification.cliente": {"$regex": rx, "$options": "i"}},
+            {"subject": {"$regex": rx, "$options": "i"}}]},
+            {"attachments_bytes_dir": 1}).limit(6):
+        d = it.get("attachments_bytes_dir")
+        if not d:
+            continue
+        for p in sorted(Path(d).glob("*.pdf")):
+            if p.name.lower() in vistos or not _OCR_ADJ_RE.search(p.name):
+                continue
+            vistos.add(p.name.lower())
+            paths.append(p)
+            if len(paths) >= 3:
+                break
+        if len(paths) >= 3:
+            break
+    if not paths:
+        return "", 0
+    return await asyncio.to_thread(_ocr_adjuntos_paths, paths), len(paths)
+
+
+async def _ocr_adjuntos_imap(nombre):
+    """FUENTE 3: adjuntos del buzón IMAP (solo si la renta sigue faltando)."""
+    import ocr_service as _ocr
+    try:
+        headers = await asyncio.to_thread(mail.search_email_headers_by_person, nombre, 6)
+        mids = [h.get("message_id") for h in headers if h.get("message_id")][:4]
+        if not mids:
+            return "", 0
+        msgs = await asyncio.to_thread(mail.fetch_attachments_by_message_ids, mids)
+        partes, n = [], 0
+        for m_ in msgs:
+            for a in m_.get("pdfs") or []:
+                fn = a.get("filename") or ""
+                if not fn.lower().endswith(".pdf") or not _OCR_ADJ_RE.search(fn):
+                    continue
+                txt, _met = await asyncio.to_thread(_ocr.extraer_texto, a["content_bytes"], fn)
+                if txt and txt.strip():
+                    partes.append(f"=== ADJUNTO BUZÓN: {fn} ===\n{txt.strip()[:9000]}")
+                    n += 1
+                if n >= 3:
+                    break
+            if n >= 3:
+                break
+        return "\n\n".join(partes), n
+    except Exception:
+        return "", 0
+
+
+async def _ocr_renta_backfill_job():
+    """Recorre TODAS las carpetas, OCR de liquidaciones + informe CMF, extrae
+    métricas con IA y SOBRESCRIBE datos_financieros (regla del dueño: manda el OCR).
+    Al terminar re-entrena el Algoritmo Espejo MESA."""
+    folders = await db.folders.find({}, {"id": 1, "nombre": 1, "datos_financieros": 1}).to_list(2000)
+    total, procesadas, enriquecidas, sin_docs, errores = len(folders), 0, 0, 0, 0
+    detalle = []
+
+    async def _progreso(estado="en_proceso", extra=None):
+        doc = {"estado": estado, "progreso": procesadas, "total": total,
+               "enriquecidas": enriquecidas, "sin_documentos": sin_docs,
+               "errores": errores, "detalle": detalle[-80:], "actualizado_en": now_iso()}
+        if extra:
+            doc.update(extra)
+        await db.config.update_one({"_key": "ocr_renta_backfill"}, {"$set": doc}, upsert=True)
+
+    for f in folders:
+        procesadas += 1
+        nombre = (f.get("nombre") or "").strip()
+        try:
+            texto, n_pdfs = await asyncio.to_thread(_ocr_pdfs_folder, nombre)
+            texto_mail, n_adj = await _ocr_adjuntos_correo(nombre)
+            if texto_mail:
+                texto = (texto + "\n\n" + texto_mail).strip()
+                n_pdfs += n_adj
+            if not texto:
+                texto, n_pdfs = await _ocr_adjuntos_imap(nombre)
+            if not texto:
+                sin_docs += 1
+                detalle.append({"cliente": nombre, "resultado": "sin_documentos"})
+                await _progreso()
+                continue
+            datos = await ai_extract.extraer_datos_financieros(texto, nombre)
+            if not datos.get("renta_liquida"):
+                texto_imap, n_imap = await _ocr_adjuntos_imap(nombre)
+                if texto_imap:
+                    n_pdfs += n_imap
+                    d2 = await ai_extract.extraer_datos_financieros(
+                        (texto + "\n\n" + texto_imap)[-24000:], nombre)
+                    datos = {**datos, **{k: v for k, v in d2.items() if v not in (None, "", 0)}}
+            upd = {f"datos_financieros.{k}": datos[k] for k in _OCR_BACKFILL_CAMPOS
+                   if datos.get(k) not in (None, "", 0)}
+            if upd:
+                upd["datos_financieros_ocr_fecha"] = now_iso()
+                upd["datos_financieros_ocr_metodo"] = datos.get("metodo", "")
+                await db.folders.update_one({"id": f["id"]}, {"$set": upd})
+                enriquecidas += 1
+                detalle.append({"cliente": nombre, "resultado": "enriquecida",
+                                "pdfs": n_pdfs, "metodo": datos.get("metodo"),
+                                "campos": sorted(k.split(".")[1] for k in upd
+                                                 if k.startswith("datos_financieros."))})
+            else:
+                detalle.append({"cliente": nombre, "resultado": "sin_datos_detectables",
+                                "pdfs": n_pdfs})
+        except Exception as e:
+            errores += 1
+            detalle.append({"cliente": nombre, "resultado": "error", "error": str(e)[:150]})
+            logging.warning(f"ocr backfill {nombre}: {e}")
+        await _progreso()
+        await asyncio.sleep(0.3)
+    # RE-ENTRENAMIENTO ESPEJO MESA con los datos recién estructurados
+    espejo = {}
+    try:
+        espejo = await minar_limites_mesa(280)
+    except Exception as e:
+        espejo = {"error": str(e)[:200]}
+    await _progreso("completado", {"espejo": espejo, "generado_en": now_iso()})
+    logging.info(f"🧠 OCR Renta Masivo: {procesadas} carpetas, {enriquecidas} enriquecidas, espejo={espejo}")
+
+
+@api.post("/admin/backfill-ocr")
+async def ocr_backfill_iniciar():
+    doc = await db.config.find_one({"_key": "ocr_renta_backfill"})
+    if doc and doc.get("estado") == "en_proceso":
+        return {"ok": True, "mensaje": "OCR Renta Masivo ya en proceso",
+                "progreso": doc.get("progreso"), "total": doc.get("total")}
+    asyncio.create_task(_ocr_renta_backfill_job())
+    return {"ok": True, "mensaje": "🧠 OCR Renta Masivo lanzado — extracción de liquidaciones + CMF de todas las carpetas"}
+
+
+@api.get("/admin/backfill-ocr")
+async def ocr_backfill_estado():
+    return await db.config.find_one({"_key": "ocr_renta_backfill"}, {"_id": 0}) or {"estado": "sin_ejecutar"}
+
+
+# ══════════════════════════════════════════════════════════════════════════
 # 🚀 MOTOR DE DESPACHO MASIVO INFINITO — Cola de Campaña
 # ══════════════════════════════════════════════════════════════════════════
 @api.get("/despacho/cola")
