@@ -189,7 +189,7 @@ function MainApp() {
       )}
       <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`} data-testid="sidebar">
         <div className="sidebar-brand">
-          <h2 className="sidebar-title">Gestión Central Mutuos</h2>
+          <h2 className="sidebar-title">Central Mutuos</h2>
           <p className="sidebar-sub">Con Creces</p>
         </div>
         <nav className="sidebar-nav">

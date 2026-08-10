@@ -53,13 +53,13 @@ def parsear_excel(raw_bytes):
 def mensaje_jose_martin(nombre, proyecto="", link_simulador="", pixel_url=""):
     """Borrador con la voz de José Martín Benavente. Asunto con formato obligatorio."""
     primer = (nombre or "").split()[0].title() or "amigo(a)"
-    subject = f"Propuesta Exclusiva de Central Mutuos para {nombre.title()}"
+    subject = "Central Mutuos: Precalificación Crédito Hipotecario"
     ref_proyecto = f" para su futuro hogar en <b>{proyecto}</b>" if proyecto else ""
     body = f"""
 <div style="font-family:Georgia,'Times New Roman',serif;width:100%;max-width:600px;margin:0 auto;color:#0f172a">
   <div style="background:#0f172a;padding:26px 30px;border-radius:14px 14px 0 0">
     <div style="color:#e2e8f0;font-size:20px;font-weight:700;letter-spacing:0.18em">CENTRAL MUTUOS</div>
-    <div style="color:#94a3b8;font-size:11px;letter-spacing:0.12em;margin-top:4px">BANCA HIPOTECARIA PRIVADA</div>
+    <div style="color:#94a3b8;font-size:11px;letter-spacing:0.12em;margin-top:4px">PRECALIFICACIÓN CRÉDITO HIPOTECARIO</div>
   </div>
   <div style="background:#ffffff;border:1px solid #e2e8f0;border-top:none;padding:30px;border-radius:0 0 14px 14px">
     <p style="font-size:16px">Hola {primer}, ¡un gusto saludarte! 👋</p>
@@ -76,7 +76,7 @@ def mensaje_jose_martin(nombre, proyecto="", link_simulador="", pixel_url=""):
     <p style="line-height:1.75;color:#334155">Cualquier duda me escribes no más, que para eso estoy.
     Con Gerardo y todo el equipo vamos a dejar tu crédito <i>impecable</i>. ¡Vamos con todo! 💪</p>
     <p style="color:#0f172a;font-weight:700;margin-top:26px">José Martín Benavente<br>
-    <span style="font-weight:400;color:#64748b;font-size:12px">Asesor Comercial VIP · Gestión Central Mutuos</span></p>
+    <span style="font-weight:400;color:#64748b;font-size:12px">Asesor Comercial VIP · Central Mutuos</span></p>
   </div>
   <img src="{pixel_url}" width="1" height="1" alt="" style="display:block">
 </div>"""
@@ -86,7 +86,7 @@ def mensaje_jose_martin(nombre, proyecto="", link_simulador="", pixel_url=""):
 def mensaje_seguimiento(nombre, proyecto="", link_simulador="", pixel_url="", interes="nuevo"):
     """Correo de seguimiento a los 14 días, con gancho según el interés detectado."""
     primer = (nombre or "").split()[0].title() or "amigo(a)"
-    subject = f"¿Seguimos con tu crédito, {primer}? — Central Mutuos"
+    subject = "Central Mutuos: Precalificación Crédito Hipotecario"
     if interes == "uso_simulador":
         gancho = f"Vi que usaste mi simulador VIP — ¡bien ahí, {primer}! 🎯 El siguiente paso es simple: me mandas tus documentos y yo me encargo de todo el resto con Gerardo."
     elif interes == "hizo_clic":
@@ -100,7 +100,7 @@ def mensaje_seguimiento(nombre, proyecto="", link_simulador="", pixel_url="", in
 <div style="font-family:Georgia,'Times New Roman',serif;max-width:560px;margin:0 auto;color:#0f172a">
   <div style="background:#0f172a;padding:26px 30px;border-radius:14px 14px 0 0">
     <div style="color:#e2e8f0;font-size:20px;font-weight:700;letter-spacing:0.18em">CENTRAL MUTUOS</div>
-    <div style="color:#94a3b8;font-size:11px;letter-spacing:0.12em;margin-top:4px">BANCA HIPOTECARIA PRIVADA</div>
+    <div style="color:#94a3b8;font-size:11px;letter-spacing:0.12em;margin-top:4px">PRECALIFICACIÓN CRÉDITO HIPOTECARIO</div>
   </div>
   <div style="background:#ffffff;border:1px solid #e2e8f0;border-top:none;padding:30px;border-radius:0 0 14px 14px">
     <p style="font-size:16px">Hola {primer}, ¡José Martín de nuevo por acá! 👋</p>
@@ -115,7 +115,7 @@ def mensaje_seguimiento(nombre, proyecto="", link_simulador="", pixel_url="", in
     <p style="line-height:1.75;color:#334155">Y si prefieres, me respondes este correo y coordinamos una llamada.
     Para eso estoy, de verdad. ¡Un abrazo! 💪</p>
     <p style="color:#0f172a;font-weight:700;margin-top:26px">José Martín Benavente<br>
-    <span style="font-weight:400;color:#64748b;font-size:12px">Asesor Comercial VIP · Gestión Central Mutuos</span></p>
+    <span style="font-weight:400;color:#64748b;font-size:12px">Asesor Comercial VIP · Central Mutuos</span></p>
   </div>
   <img src="{pixel_url}" width="1" height="1" alt="" style="display:block">
 </div>"""
@@ -126,7 +126,7 @@ def mensaje_invitacion_vip(nombre, proyecto="", link_portal="", pixel_url=""):
     """PLANTILLA MASERATI: Negro Carbono, bordes Oro 24K, logo metálico Central Mutuos."""
     primer = (nombre or "").title() or "Cliente"
     proy = (proyecto or "").strip()
-    subject = f"Invitación VIP — Pre-Calificación Reservada para {primer}"
+    subject = "Central Mutuos: Precalificación Crédito Hipotecario"
     ref_proy = f' para su proyecto <b style="color:#FCF6BA">{proy}</b>' if proy else ""
     body = f"""
 <div style="background:#000000;padding:34px 14px;font-family:Georgia,'Times New Roman',serif">
@@ -136,7 +136,7 @@ def mensaje_invitacion_vip(nombre, proyecto="", link_portal="", pixel_url=""):
       <div style="font-size:24px;font-weight:700;letter-spacing:0.24em;color:#D4AF37;
                   text-shadow:0 1px 0 #FCF6BA">CENTRAL MUTUOS</div>
       <div style="color:#9a8c52;font-size:10px;letter-spacing:0.32em;margin-top:6px">
-        BANCA HIPOTECARIA PRIVADA · CON CRECES</div>
+        PRECALIFICACIÓN CRÉDITO HIPOTECARIO</div>
     </div>
     <div style="padding:36px 34px;color:#e5e5e5">
       <p style="font-size:17px;color:#FCF6BA;margin:0 0 18px">Estimado(a) {primer},</p>
@@ -159,7 +159,7 @@ def mensaje_invitacion_vip(nombre, proyecto="", link_portal="", pixel_url=""):
     <div style="border-top:1px solid #33290f;padding:18px 34px;text-align:center">
       <div style="color:#D4AF37;font-size:12px;font-weight:700">Gerardo Barrera</div>
       <div style="color:#6b6b6b;font-size:10.5px;letter-spacing:0.1em;margin-top:3px">
-        DIRECCIÓN COMERCIAL · GESTIÓN CENTRAL MUTUOS</div>
+        DIRECCIÓN COMERCIAL · CENTRAL MUTUOS</div>
     </div>
   </div>
   <img src="{pixel_url}" width="1" height="1" alt="" style="display:block">
