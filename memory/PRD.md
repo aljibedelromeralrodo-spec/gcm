@@ -752,6 +752,20 @@ requieren re-deploy para llegar a producción.
 - ClientesModule.js: bajo el % de aprobación se muestra "▲ Techo X.XXX UF" en dorado
   (testid `techo-max-{id}`). Verificado con Dilimar Cedeño: 95% + Techo 4.815 UF (BTG).
 
+## Corrección Regla MESA del Techo + cookie de sesión (2026-06 fork)
+- credit_engine.techo_hipotecario: el nivel Dividendo/Renta ahora INCLUYE el endeudamiento
+  presente → div_max = renta*div_renta_max − cuota_deudas (regla dictada por el dueño:
+  "cuota teórica prorrateada a 48 + dividendo futuro deben cumplir el nivel div/renta").
+  Dilimar Cedeño: techo bajó de 4.815 → 3.307,5 UF (renta $4,12M real Boetsch, deuda CMF $19,09M real).
+- ai_extract.extraer_datos_financieros: renta = promedio mensual de (líquido + ANTICIPOS)
+  sobre los meses disponibles (política 6 meses). Backfill re-ejecutado: 55/67 carpetas, 0 errores,
+  Espejo re-entrenado (4 casos, 84%).
+- FIX 401 en archivos: auth.py acepta token vía cookie `cm_token` o query `?t=` (window.open
+  y <a href> no envían headers); axiosSetup.js sincroniza/limpia la cookie. Verificado curl:
+  sin token 401, con cookie 200 application/pdf.
+- ⚠️ PENDIENTE P0 (usuario aún no confirma): corregir RUT de la carpeta DILIMAR CEDEÑO
+  (dice 67422911; el real es 26.545.507-7 según su informe CMF con nombre completo).
+
 ## Backlog priorizado
 - ✅ HECHO: Techo Hipotecario (motor inverso BTG/Ameris) 2026-08-10.
 - ✅ HECHO: OCR Renta Masivo / backfill datos_financieros + Espejo entrenado (2026-06 fork).

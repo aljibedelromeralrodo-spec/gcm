@@ -157,11 +157,13 @@ def techo_hipotecario(df, criterios, tasas, uf_valor, plazo=25, cuota_cmf_clp=No
                  else tasas.get("tasa_sin_subsidio") or 0.06) or 0.06
 
     def _escenario(nombre, carga_max, div_renta_max):
-        # Carga: (dividendo + deudas)/renta ≤ carga_max  →  div ≤ renta*carga_max - deudas
+        # REGLA MESA (orden del dueño): el dividendo futuro + el endeudamiento presente
+        # (cuota teórica de deudas prorrateada a 48) deben cumplir AMBOS niveles sobre renta.
+        # Carga: (dividendo + deudas)/renta ≤ carga_max
         div_por_carga = renta_dep * carga_max - cmf
-        # Dividendo/renta ≤ div_renta_max (el nuevo dividendo solo)
-        div_por_dr = renta_dep * div_renta_max
-        binding = "Carga Financiera" if div_por_carga <= div_por_dr else "Dividendo/Renta"
+        # Dividendo/renta: (dividendo + deudas)/renta ≤ div_renta_max
+        div_por_dr = renta_dep * div_renta_max - cmf
+        binding = "Carga Financiera" if div_por_carga <= div_por_dr else "Dividendo/Renta + deudas"
         div_max_clp = max(0.0, min(div_por_carga, div_por_dr))
         div_max_uf = div_max_clp / uf_valor if uf_valor > 0 else 0.0
         credito_uf = capacidad_desde_dividendo(div_max_uf, tasa, plazo)
