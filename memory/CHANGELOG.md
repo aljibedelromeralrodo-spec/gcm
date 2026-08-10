@@ -862,3 +862,17 @@
 - NOTA OPERATIVA: el hot-reload de server.py a veces cuelga uvicorn (502) → sudo supervisorctl restart backend.
 - Prospecto de prueba del usuario: Yerile Barrera id=69bd18cc-ff8a-4118-b0e5-9ec46f3a8210 (status invitacion_enviada) — NO borrar.
 - Forense AUTOMÁTICO al recibir respuesta de MESA: _forense_caso_automatico() se dispara en los 2 puntos de ingesta de seguimiento (rescate histórico + process-emails). Audita el caso al instante con los 5 checks de ultra-precisión, deduplica contra "Errores MESA detectados", suma al contador de nuevos y envía alerta 🚨 a Gerardo (MAIL2_USER). Probado E2E: dedupe OK, caso sintético agregó 3 hallazgos + alerta.
+
+## 2026-06 (continuación) — Ley Suprema, Radar 280d, UF SII, WhatsApp Meta, Anclaje
+- Ley de Jerarquía Suprema: mesa_brain.enchufe_dashai() como Constitución; gate 503 en simular-credito, ia/predict, inmobiliaria/predict, simulador viabilidad, set-credito, forense iniciar/buscar. Umbrales (carga, LTV, edad+plazo, antigüedad, 2000 UF) inyectados desde la Bóveda a credit_engine y simulador_engine. Clave 0586 protege la Constitución (403 sin clave, verificado).
+- Módulo 📋 Auditoría Forense (sidebar): barrido 280d (resultado: 4 RIESGO, 2 ERROR HUMANO, 28 NO AUDITABLE, 0 PERDIDA, 31 nuevos), Listas A/B CSV descargables con nota de trazabilidad "DashAI v1.X", buscador por RUT/nombre (auditoría instantánea), Rellenado de Datos por lotes (regex sin LLM, 47 casos).
+- NO AUDITABLE: fin del salto silencioso — casos sin expediente aparecen en el reporte (sin alertar por email).
+- Bóveda sincronizada: monto_minimo_uf=2000; fusión CHRISTIAN PASTEN → Cristian Pavez (3 archivos movidos, seguimiento re-vinculado).
+- UF oficial SII: loop 60 min, UF de Referencia en DashAI, recalibración masiva al cambiar, topbar "Fuente: SII.cl · Actualizado HH:MM".
+- Responsividad Maserati: _blindaje_responsivo en send_mail (mini-render PC+móvil, master 650px/40px, imágenes fluidas, corrige anchos fijos >600px), media queries táctiles en portal (margen 20px, botones 52px), regla inamovible en dashai_reglas_estilo.
+- Identidad @CentralMutuos: footer dorado "Oficina Digital: @CentralMutuos" en TODOS los emails (choke point send_mail), "@CentralMutuos · Marca Registrada" en portales captura y firma, firma "Atentamente, el equipo de @CentralMutuos" en textos WhatsApp.
+- Motor WhatsApp Meta Cloud API: whatsapp_service.py (v25.0), número certificado +56 9 2899 5453, endpoints /api/oportunidades/{id}/whatsapp-vip y /api/whatsapp/estado, botón "📱 WhatsApp Oficial" en Ventas. PENDIENTE: usuario debe pegar META_ACCESS_TOKEN, META_PHONE_NUMBER_ID, META_WABA_ID en backend/.env.
+- Anclaje Total de links: _base_url_req usa REACT_APP_BACKEND_URL/PUBLIC_BASE_URL (backend/.env: PUBLIC_BASE_URL=https://risk-assess-17.emergent.host) — verificado sin localhost.
+- Test Yerile re-enviado: email SMTP OK 2 veces; wa.me directo a +56948652419 generado.
+- LECCIÓN: server.py y credit_engine.py sufrieron duplicación de contenido al final del archivo (truncados y reparados). Verificar tail del archivo tras ediciones masivas.
+- App DESPLEGADA en producción: https://risk-assess-17.emergent.host (cambios requieren redeploy del usuario).

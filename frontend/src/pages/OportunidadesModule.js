@@ -64,6 +64,16 @@ export default function OportunidadesModule() {
     } catch (e) { setMsg("❌ " + (e?.response?.data?.detail || e.message)); }
     setBusyId("");
   };
+  const whatsappOficial = async (op) => {
+    if (!window.confirm(`📱 WHATSAPP OFICIAL (Meta API)\n\n¿Enviar la Tarjeta VIP a ${op.nombre} (${op.telefono}) desde el número certificado +56 9 2899 5453?`)) return;
+    setBusyId(op.id);
+    try {
+      const r = await axios.post(`${API}/api/oportunidades/${op.id}/whatsapp-vip`, {}, { timeout: 60000 });
+      setMsg(r.data.mensaje || "📱 WhatsApp enviado.");
+      cargar();
+    } catch (e) { setMsg("❌ " + (e?.response?.data?.detail || e.message)); }
+    setBusyId("");
+  };
   const fileRef = useRef(null);
 
   const cargar = useCallback(async () => {
@@ -228,6 +238,11 @@ export default function OportunidadesModule() {
                       title="Copia los datos a Clientes Activos y crea la estructura de subcarpetas (paso manual y consciente)"
                       style={{ ...btn("linear-gradient(135deg, #BF953F, #FCF6BA 45%, #B38728)"), marginRight: 6 }}>
                       📂 Promover a Cliente Activo
+                    </button>
+                    <button data-testid={`op-whatsapp-${i}`} onClick={() => whatsappOficial(op)} disabled={busyId === op.id || !op.telefono}
+                      title={op.telefono ? `Enviar por la API oficial de Meta desde +56 9 2899 5453 a ${op.telefono}` : "El prospecto no tiene teléfono"}
+                      style={{ ...btn("rgba(16,217,142,0.14)", "#34eab9"), border: "1px solid rgba(16,217,142,0.35)", marginRight: 6, opacity: !op.telefono ? 0.35 : 1 }}>
+                      📱 WhatsApp Oficial
                     </button>
                     <button data-testid={`op-invitacion-${i}`} onClick={() => invitar(op)} disabled={busyId === op.id || !op.email}
                       title={op.email ? `Enviar invitación VIP Maserati a ${op.email} desde gerardo.ext@centralmutuos.cl` : "El prospecto no tiene correo"}

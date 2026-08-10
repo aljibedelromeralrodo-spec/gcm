@@ -1068,11 +1068,23 @@ def _blindaje_responsivo(html):
     # BLINDAJE PC: contenedor maestro 650px centrado + aire ejecutivo (padding 40px)
     # y tipografía fluida (15px PC / 14px móvil con margen lateral de seguridad 20px)
     if "mw-master" not in html:
+        firma_marca = ("" if "OFICINA DIGITAL" in html else
+                       '<div style="text-align:center;margin-top:28px;padding-top:16px;'
+                       'border-top:1px solid rgba(212,175,55,0.35)">'
+                       '<span style="display:inline-block;width:20px;height:20px;line-height:20px;'
+                       'border-radius:50%;background:linear-gradient(135deg,#BF953F,#FCF6BA,#AA771C);'
+                       'color:#0a0a0a;font-weight:bold;font-size:12px;text-align:center;'
+                       'vertical-align:middle">✆</span>'
+                       '<span style="font-family:\'Inter\',Arial,sans-serif;font-variant:small-caps;'
+                       'letter-spacing:0.18em;font-size:11px;font-weight:600;'
+                       'background:linear-gradient(135deg,#BF953F,#FCF6BA,#B38728);'
+                       '-webkit-background-clip:text;background-clip:text;color:#B38728;'
+                       'vertical-align:middle;margin-left:8px">OFICINA DIGITAL: @CENTRALMUTUOS</span></div>')
         html = ('<style>@media only screen and (max-width:600px){'
                 '.mw-master{padding:24px 20px !important;font-size:14px !important}}</style>'
                 '<div class="mw-master" style="width:100%;max-width:650px;margin:0 auto;'
                 'padding:40px 32px;box-sizing:border-box;font-size:15px">'
-                + html + "</div>")
+                + html + firma_marca + "</div>")
         problemas.append("contenedor maestro 650px aplicado (render PC + móvil verificado)")
     if problemas:
         logging.info(f"📱🖥 Blindaje responsivo Maserati: {len(problemas)} corrección(es) aplicadas")

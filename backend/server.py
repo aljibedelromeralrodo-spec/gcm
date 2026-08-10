@@ -8445,6 +8445,11 @@ async function crearCarpeta() {
 # ------------------------------------------------------------------
 
 def _base_url_req(request: Request):
+    """ANCLAJE TOTAL: REACT_APP_BACKEND_URL/PUBLIC_BASE_URL como única fuente de verdad.
+    Prohibido localhost/IPs internas en links de clientes."""
+    pub = (os.environ.get("REACT_APP_BACKEND_URL") or os.environ.get("PUBLIC_BASE_URL") or "").strip().rstrip("/")
+    if pub:
+        return pub
     proto = request.headers.get("x-forwarded-proto", "https")
     host = request.headers.get("x-forwarded-host") or request.headers.get("host", "")
     return f"{proto}://{host}"
@@ -8589,6 +8594,42 @@ async def oportunidades_invitacion_vip(oid: str, request: Request):
         "link_calificar": link_portal}})
     return {"ok": True, "to": to,
             "mensaje": f"📧 Invitación VIP enviada a {to} desde la cuenta corporativa"}
+
+
+@api.post("/oportunidades/{oid}/whatsapp-vip")
+async def oportunidades_whatsapp_vip(oid: str, request: Request):
+    """MOTOR WHATSAPP CERTIFICADO: envía la invitación desde el número oficial
+    +56 9 2899 5453 ('Central Mutuos - Gestión Hipotecaria') vía Meta Cloud API."""
+    import whatsapp_service as wsp
+    op = await db.prospectos.find_one({"id": oid})
+    if not op:
+        raise HTTPException(status_code=404, detail="Prospecto no encontrado")
+    tel = (op.get("telefono") or "").strip()
+    if len(re.sub(r"[^0-9]", "", tel)) < 8:
+        raise HTTPException(status_code=400, detail="El prospecto no tiene un teléfono válido")
+    base = _base_url_req(request)
+    url = f"{base}/api/calificar/{oid}"
+    primer = (op.get("nombre") or "").split()[0].title() if op.get("nombre") else "Cliente"
+    texto = (f"🏠 *Asegure su Casa - Calificación VIP en 1 Minuto*\n\n"
+             f"Hola {primer}, le saluda *Central Mutuos - Gestión Hipotecaria*. "
+             f"Suba su Cédula y sus últimas 6 Liquidaciones de Sueldo en este portal privado "
+             f"y su calificación queda lista:\n{url}"
+             f"\n\nAtentamente, el equipo de @CentralMutuos")
+    res = await asyncio.to_thread(wsp.enviar_texto, tel, texto)
+    if not res.get("success"):
+        raise HTTPException(status_code=502, detail=res.get("error"))
+    await db.prospectos.update_one({"id": oid}, {"$set": {
+        "whatsapp_enviado_en": now_iso(), "whatsapp_message_id": res.get("message_id"),
+        "link_calificar": url}})
+    return {"ok": True, "message_id": res.get("message_id"),
+            "mensaje": f"📱 WhatsApp aceptado por Meta desde {wsp.NUMERO_CERTIFICADO} → {res.get('to')}"}
+
+
+@api.get("/whatsapp/estado")
+async def whatsapp_estado():
+    import whatsapp_service as wsp
+    return {"configurado": wsp.configurado(), "numero_certificado": wsp.NUMERO_CERTIFICADO,
+            "nombre_visible": wsp.NOMBRE_VISIBLE}
 
 
 @api.post("/prospectos/{pid}/promover")
@@ -8942,6 +8983,7 @@ async def firma_portal(token: str, request: Request):
 </style></head>
 <body>
   <div class="marca">Central Mutuos · Banca Hipotecaria Privada</div>
+  <div style="text-align:center;margin-top:0.5rem;font-family:'Inter',sans-serif;font-variant:small-caps;letter-spacing:0.22em;font-size:0.62rem;font-weight:600;background:linear-gradient(135deg,#BF953F,#FCF6BA,#B38728);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent">@CentralMutuos · Marca Registrada</div>
   <div class="card" data-testid="portal-firma-card">
     <div class="sello">🖋</div>
     <h1>Bienvenido a su Firma de<br>Escritura Avanzada,<br><b>{nombre}</b></h1>
@@ -11063,6 +11105,97 @@ async def forense_buscar(q: str = ""):
             "nota_trazabilidad": f"Análisis ejecutado bajo los criterios permanentes de DashAI v1.{crit_ver}"}
 
 
+def _regex_datos_financieros(texto):
+    """RELLENADO DE DATOS: extracción por regex (cero gasto de créditos LLM)."""
+    out = {}
+    t = texto or ""
+    m = re.search(r"(?:monto|cr[eé]dito)[^\d]{0,25}([\d.,]{3,12})\s*(?:uf|u\.f)", t, re.I)
+    if m:
+        try:
+            out["monto_credito"] = float(m.group(1).replace(".", "").replace(",", "."))
+        except ValueError:
+            pass
+    m = re.search(r"(?:renta\s+l[ií]quida|sueldo\s+l[ií]quido|l[ií]quido\s+a\s+pagar|alcance\s+l[ií]quido)[^\d]{0,30}\$?\s*([\d.]{6,12})", t, re.I)
+    if m:
+        try:
+            v = float(m.group(1).replace(".", ""))
+            if v > 100000:
+                out["renta_liquida"] = v
+        except ValueError:
+            pass
+    if re.search(r"subsidio|ds\s?19\b|ds\s?49\b|ds\s?0?1\b", t, re.I):
+        out["con_subsidio"] = True
+    return out
+
+
+async def _forense_backfill_job(dias=280):
+    """RELLENADO DE DATOS por lotes: extrae monto/renta/subsidio de los PDFs
+    de carpetas vinculadas a decisiones de MESA (modular, sin LLM)."""
+    import ocr_service as _ocr
+    desde = (datetime.now(timezone.utc) - timedelta(days=dias)).isoformat()
+    entradas = await db.seguimiento.find(
+        {"estado": {"$in": ["aprobacion", "aprobado", "rechazo", "rechazado"]},
+         "fecha": {"$gte": desde}}).to_list(2000)
+    vistos, procesadas, rellenadas = set(), 0, 0
+    total = len(entradas)
+    for s in entradas:
+        procesadas += 1
+        cliente = (s.get("cliente") or "").strip()
+        if not cliente or cliente.lower() in vistos:
+            continue
+        vistos.add(cliente.lower())
+        try:
+            fd, sim = await _forense_buscar_contexto(cliente, s.get("rut"))
+            if not fd:
+                continue
+            df = fd.get("datos_financieros") or {}
+            upd = {}
+            if not df.get("monto_credito") and s.get("monto_credito"):
+                upd["datos_financieros.monto_credito"] = s.get("monto_credito")
+            if not df.get("renta_liquida") or df.get("con_subsidio") is None or not df.get("monto_credito"):
+                base_dir = fsvc.folder_dir(fd.get("nombre", ""))
+                pdfs = sorted(base_dir.rglob("*.pdf"))[:6] if base_dir.exists() else []
+                texto = ""
+                for pth in pdfs:
+                    try:
+                        raw = pth.read_bytes()
+                        texto += "\n" + (await asyncio.to_thread(_ocr.extraer_texto, raw, pth.name) or "")
+                    except Exception:
+                        pass
+                    if len(texto) > 20000:
+                        break
+                for k, v in _regex_datos_financieros(texto).items():
+                    if df.get(k) in (None, "", 0):
+                        upd[f"datos_financieros.{k}"] = v
+            if upd:
+                await db.folders.update_one({"id": fd["id"]}, {"$set": upd})
+                rellenadas += 1
+        except Exception as e:
+            logging.warning(f"backfill {cliente}: {e}")
+        await db.config.update_one({"_key": "forense_backfill"}, {"$set": {
+            "estado": "en_proceso", "progreso": procesadas, "total": total}}, upsert=True)
+        await asyncio.sleep(0.4)
+    await db.config.update_one({"_key": "forense_backfill"}, {"$set": {
+        "estado": "completado", "progreso": procesadas, "total": total,
+        "fichas_rellenadas": rellenadas, "generado_en": now_iso()}}, upsert=True)
+    logging.info(f"🤖 Rellenado de Datos: {procesadas} casos, {rellenadas} fichas actualizadas")
+
+
+@api.post("/contraloria/forense/backfill")
+async def forense_backfill_iniciar(dias: int = 280):
+    await _constitucion_dashai()
+    doc = await db.config.find_one({"_key": "forense_backfill"})
+    if doc and doc.get("estado") == "en_proceso":
+        return {"ok": True, "mensaje": "Rellenado de Datos ya en proceso", "progreso": doc.get("progreso")}
+    asyncio.create_task(_forense_backfill_job(dias))
+    return {"ok": True, "mensaje": f"🤖 Rellenado de Datos lanzado ({dias} días) — extracción por lotes sin gasto de créditos"}
+
+
+@api.get("/contraloria/forense/backfill")
+async def forense_backfill_estado():
+    return await db.config.find_one({"_key": "forense_backfill"}, {"_id": 0}) or {"estado": "sin_ejecutar"}
+
+
 # ══════════════════════════════════════════════════════════════════════════
 # 🧠 CEREBRO DASHAI — Aprendizaje Perpetuo y Sincronización Autónoma
 # Hilo de baja prioridad: recalibra criterios y sincroniza scores cada 60 min;
@@ -11384,6 +11517,7 @@ p.lead{color:#b8b8b8;font-size:0.82rem;line-height:1.65;margin:0.8rem 0 1.2rem;t
 
   <a class="ayuda" data-testid="captura-ayuda-link" onclick="abrirSalida()">¿Le parece complejo? Hable directo con un ejecutivo →</a>
   <div class="foot">CONEXIÓN CIFRADA · SUS DOCUMENTOS VIAJAN PROTEGIDOS</div>
+  <div style="text-align:center;margin-top:0.7rem;font-family:'Inter','Montserrat',sans-serif;font-variant:small-caps;letter-spacing:0.22em;font-size:0.62rem;font-weight:600;background:linear-gradient(135deg,#BF953F,#FCF6BA,#B38728);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent">@CentralMutuos · Marca Registrada</div>
 </div>
 
 <div id="salida" data-testid="captura-salida-modal">
@@ -11848,7 +11982,8 @@ async def oportunidades_link_calificar(oid: str, request: Request):
     proyecto = (op.get("proyecto") or "").strip()
     titulo = f"Asegure su Casa{' en ' + proyecto if proyecto else ''} - Calificación VIP en 1 Minuto"
     texto = (f"🏠 *{titulo}*\n\nHola {(op.get('nombre') or '').split()[0].title()}, soy José Martín de Central Mutuos. "
-             f"Suba su Cédula y sus últimas 6 Liquidaciones de Sueldo en este portal privado y su calificación queda lista:\n{url}")
+             f"Suba su Cédula y sus últimas 6 Liquidaciones de Sueldo en este portal privado y su calificación queda lista:\n{url}"
+             f"\n\nAtentamente, el equipo de @CentralMutuos")
     await db.prospectos.update_one({"id": oid}, {"$set": {"link_calificar": url}})
     return {"ok": True, "url": url, "titulo": titulo,
             "whatsapp": f"https://wa.me/?text={_urlquote(texto)}"}
