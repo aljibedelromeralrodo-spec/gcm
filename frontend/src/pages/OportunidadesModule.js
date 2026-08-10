@@ -65,11 +65,12 @@ export default function OportunidadesModule() {
     setBusyId("");
   };
   const whatsappOficial = async (op) => {
-    if (!window.confirm(`📱 WHATSAPP OFICIAL (Meta API)\n\n¿Enviar la Tarjeta VIP a ${op.nombre} (${op.telefono}) desde el número certificado +56 9 2899 5453?`)) return;
+    if (!window.confirm(`🚀 VÍA RÁPIDA WHATSAPP (wa.me)\n\n¿Abrir el WhatsApp de ${op.nombre} (${op.telefono}) con la Tarjeta VIP Maserati lista para enviar?`)) return;
     setBusyId(op.id);
     try {
       const r = await axios.post(`${API}/api/oportunidades/${op.id}/whatsapp-vip`, {}, { timeout: 60000 });
-      setMsg(r.data.mensaje || "📱 WhatsApp enviado.");
+      if (r.data.whatsapp) window.open(r.data.whatsapp, "_blank");
+      setMsg(r.data.mensaje || "🚀 WhatsApp abierto por Vía Rápida.");
       cargar();
     } catch (e) { setMsg("❌ " + (e?.response?.data?.detail || e.message)); }
     setBusyId("");
@@ -240,9 +241,9 @@ export default function OportunidadesModule() {
                       📂 Promover a Cliente Activo
                     </button>
                     <button data-testid={`op-whatsapp-${i}`} onClick={() => whatsappOficial(op)} disabled={busyId === op.id || !op.telefono}
-                      title={op.telefono ? `Enviar por la API oficial de Meta desde +56 9 2899 5453 a ${op.telefono}` : "El prospecto no tiene teléfono"}
+                      title={op.telefono ? `Vía Rápida wa.me: abre el WhatsApp de ${op.telefono} con el link VIP listo (sin API Meta)` : "El prospecto no tiene teléfono"}
                       style={{ ...btn("rgba(16,217,142,0.14)", "#34eab9"), border: "1px solid rgba(16,217,142,0.35)", marginRight: 6, opacity: !op.telefono ? 0.35 : 1 }}>
-                      📱 WhatsApp Oficial
+                      🚀 WhatsApp Vía Rápida
                     </button>
                     <button data-testid={`op-invitacion-${i}`} onClick={() => invitar(op)} disabled={busyId === op.id || !op.email}
                       title={op.email ? `Enviar invitación VIP Maserati a ${op.email} desde gerardo.ext@centralmutuos.cl` : "El prospecto no tiene correo"}

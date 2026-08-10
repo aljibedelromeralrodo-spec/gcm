@@ -28,7 +28,7 @@ export default function LoginPage({ onLogin }) {
     <div className="login-bg" data-testid="login-page">
       <div className="login-card">
         <div className="login-header">
-          <h1 className="login-title">Central Mutuos</h1>
+          <h1 className="login-title">Gestión Central Mutuos</h1>
           <p className="login-subtitle">Plataforma de Gestión Crediticia</p>
         </div>
         <form onSubmit={handleSubmit} className="login-form">
@@ -45,7 +45,7 @@ export default function LoginPage({ onLogin }) {
             {loading ? "Verificando..." : "Ingresar"}
           </button>
         </form>
-        <p className="login-footer">Con Creces</p>
+        <p className="login-footer">Gestión Central Mutuos · Con Creces</p>
       </div>
     </div>
   );

@@ -76,7 +76,7 @@ def mensaje_jose_martin(nombre, proyecto="", link_simulador="", pixel_url=""):
     <p style="line-height:1.75;color:#334155">Cualquier duda me escribes no más, que para eso estoy.
     Con Gerardo y todo el equipo vamos a dejar tu crédito <i>impecable</i>. ¡Vamos con todo! 💪</p>
     <p style="color:#0f172a;font-weight:700;margin-top:26px">José Martín Benavente<br>
-    <span style="font-weight:400;color:#64748b;font-size:12px">Asesor Comercial VIP · Central Mutuos</span></p>
+    <span style="font-weight:400;color:#64748b;font-size:12px">Asesor Comercial VIP · Gestión Central Mutuos</span></p>
   </div>
   <img src="{pixel_url}" width="1" height="1" alt="" style="display:block">
 </div>"""
@@ -115,7 +115,7 @@ def mensaje_seguimiento(nombre, proyecto="", link_simulador="", pixel_url="", in
     <p style="line-height:1.75;color:#334155">Y si prefieres, me respondes este correo y coordinamos una llamada.
     Para eso estoy, de verdad. ¡Un abrazo! 💪</p>
     <p style="color:#0f172a;font-weight:700;margin-top:26px">José Martín Benavente<br>
-    <span style="font-weight:400;color:#64748b;font-size:12px">Asesor Comercial VIP · Central Mutuos</span></p>
+    <span style="font-weight:400;color:#64748b;font-size:12px">Asesor Comercial VIP · Gestión Central Mutuos</span></p>
   </div>
   <img src="{pixel_url}" width="1" height="1" alt="" style="display:block">
 </div>"""
@@ -159,7 +159,7 @@ def mensaje_invitacion_vip(nombre, proyecto="", link_portal="", pixel_url=""):
     <div style="border-top:1px solid #33290f;padding:18px 34px;text-align:center">
       <div style="color:#D4AF37;font-size:12px;font-weight:700">Gerardo Barrera</div>
       <div style="color:#6b6b6b;font-size:10.5px;letter-spacing:0.1em;margin-top:3px">
-        DIRECCIÓN COMERCIAL · CENTRAL MUTUOS</div>
+        DIRECCIÓN COMERCIAL · GESTIÓN CENTRAL MUTUOS</div>
     </div>
   </div>
   <img src="{pixel_url}" width="1" height="1" alt="" style="display:block">

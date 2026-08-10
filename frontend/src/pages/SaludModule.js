@@ -47,6 +47,10 @@ export default function SaludModule() {
     <div style={{ padding: "1.5rem", color: "var(--white)", maxWidth: 1100 }} data-testid="salud-module">
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: "1.2rem" }}>
         <h2 style={{ margin: 0, color: "var(--gold)", fontSize: "1.3rem" }}><i className="fa fa-heartbeat" style={{ marginRight: 8 }} />Panel de Salud — Flujo 24/7</h2>
+        <span data-testid="salud-motor-whatsapp" style={{ fontSize: "0.7rem", fontWeight: 800, letterSpacing: "0.08em", color: "#34eab9",
+          border: "1px solid rgba(16,217,142,0.4)", padding: "0.3rem 0.8rem", whiteSpace: "nowrap" }}>
+          🚀 Motor WhatsApp: {data.motor_whatsapp || "VÍA RÁPIDA ACTIVA (Sin API Meta)"}
+        </span>
         <button onClick={load} data-testid="salud-refresh" style={{ marginLeft: "auto", background: "rgba(255,255,255,0.1)", border: "none", color: "#fff", borderRadius: 0, padding: "0.4rem 0.9rem", cursor: "pointer", fontWeight: 700 }}>
           <i className="fa fa-refresh" style={{ marginRight: 6 }} />Actualizar
         </button>

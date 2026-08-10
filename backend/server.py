@@ -2670,7 +2670,7 @@ async def folder_send_email(fid: str, payload: dict):
       {fin_html}
       {f'<p style="margin-top:10px">{(payload.get("body_extra") or "").strip()}</p>' if (payload.get("body_extra") or "").strip() else ''}
       <p style="margin-top:12px">Se adjunta la carpeta con los antecedentes del cliente.</p>
-      <p style="color:#888;font-size:12px">Central Mutuos - Con Creces</p>
+      <p style="color:#888;font-size:12px">Gestión Central Mutuos</p>
     </div>
     """
     sender = _sender_por_rol("secundaria")
@@ -2732,7 +2732,7 @@ async def folder_send_missing_docs(fid: str, payload: dict = None):
       <p>Para continuar con la evaluación del crédito de <b>{nombre}</b> necesitamos los siguientes documentos:</p>
       <ul>{lista if lista else '<li>Sin faltantes detectados</li>'}</ul>
       {f'<p>{extra}</p>' if extra else ''}
-      <p style="color:#888;font-size:12px">Central Mutuos - Con Creces</p>
+      <p style="color:#888;font-size:12px">Gestión Central Mutuos</p>
     </div>
     """
     sender = _sender_por_rol("secundaria")
@@ -2901,6 +2901,7 @@ async def salud_estado():
             "ultimas": [{"nombre": f.get("nombre"), "fecha": f.get("created_at"),
                          "origen": f.get("origen", "correo")} for f in ult_carpetas],
         },
+        "motor_whatsapp": "VÍA RÁPIDA ACTIVA (Sin API Meta)",
         "hora_servidor": ahora.isoformat(),
     }
 
@@ -5305,7 +5306,7 @@ async def _enviar_reporte_diario():
       {_tabla_reporte_html(datos['recibidas'])}
       <h3 style="color:#1a1f2e;margin:16px 0 6px">📤 Enviadas efectivamente a mesa ({len(datos['enviadas'])})</h3>
       {_tabla_reporte_html(datos['enviadas'], con_envio=True)}
-      <p style="color:#888;font-size:12px;margin-top:18px">Central Mutuos - Con Creces · Reporte automático de las {int((await _reporte_diario_state()).get('hora') or 10)}:00</p>
+      <p style="color:#888;font-size:12px;margin-top:18px">Gestión Central Mutuos · Reporte automático de las {int((await _reporte_diario_state()).get('hora') or 10)}:00</p>
     </div>
     """
     asunto = f"[Reporte Diario] Solicitudes y envíos a mesa — {fecha_txt}"
@@ -7964,7 +7965,7 @@ def _aprobacion_html(payload):
     <div style="background:#eef0f5;padding:30px 12px;font-family:Georgia,'Times New Roman',serif">
       <div style="max-width:640px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 6px 24px rgba(16,24,40,0.12)">
         <div style="background:#1a1f2e;padding:40px 32px;text-align:center;border-bottom:4px solid #d4af37">
-          <div style="color:#9aa3b5;font-size:12px;letter-spacing:4px;margin-bottom:10px">CENTRAL MUTUOS · CON CRECES</div>
+          <div style="color:#9aa3b5;font-size:12px;letter-spacing:4px;margin-bottom:10px">GESTIÓN CENTRAL MUTUOS</div>
           <div style="color:#d4af37;font-size:34px;font-weight:700;letter-spacing:1px;line-height:1.2">¡FELICITACIONES!</div>
           <div style="color:#ffffff;font-size:17px;margin-top:10px">Su crédito hipotecario ha sido <b style="color:#d4af37">APROBADO</b></div>
         </div>
@@ -8602,38 +8603,38 @@ async def oportunidades_invitacion_vip(oid: str, request: Request):
 
 @api.post("/oportunidades/{oid}/whatsapp-vip")
 async def oportunidades_whatsapp_vip(oid: str, request: Request):
-    """MOTOR WHATSAPP CERTIFICADO: envía la invitación desde el número oficial
-    +56 9 2899 5453 ('Central Mutuos - Gestión Hipotecaria') vía Meta Cloud API."""
-    import whatsapp_service as wsp
+    """VÍA RÁPIDA (REGLA DE HIERRO): motor wa.me sin API Meta. Genera el link VIP
+    Maserati público y el link de WhatsApp del cliente para abrir la ventana."""
     op = await db.prospectos.find_one({"id": oid})
     if not op:
         raise HTTPException(status_code=404, detail="Prospecto no encontrado")
-    tel = (op.get("telefono") or "").strip()
-    if len(re.sub(r"[^0-9]", "", tel)) < 8:
+    tel = re.sub(r"[^0-9]", "", (op.get("telefono") or "").strip())
+    if len(tel) < 8:
         raise HTTPException(status_code=400, detail="El prospecto no tiene un teléfono válido")
+    if not tel.startswith("56"):
+        tel = "56" + tel.lstrip("0")
     base = _base_url_req(request)
     url = f"{base}/api/calificar/{oid}"
     primer = (op.get("nombre") or "").split()[0].title() if op.get("nombre") else "Cliente"
     texto = (f"🏠 *Asegure su Casa - Calificación VIP en 1 Minuto*\n\n"
-             f"Hola {primer}, le saluda *Central Mutuos - Gestión Hipotecaria*. "
+             f"Hola {primer}, le saluda *Gestión Central Mutuos*. "
              f"Suba su Cédula y sus últimas 6 Liquidaciones de Sueldo en este portal privado "
              f"y su calificación queda lista:\n{url}"
              f"\n\nAtentamente, el equipo de @CentralMutuos")
-    res = await asyncio.to_thread(wsp.enviar_texto, tel, texto)
-    if not res.get("success"):
-        raise HTTPException(status_code=502, detail=res.get("error"))
+    wa_url = f"https://wa.me/{tel}?text={_urlquote(texto)}"
     await db.prospectos.update_one({"id": oid}, {"$set": {
-        "whatsapp_enviado_en": now_iso(), "whatsapp_message_id": res.get("message_id"),
+        "whatsapp_enviado_en": now_iso(), "whatsapp_motor": "via_rapida_wame",
         "link_calificar": url}})
-    return {"ok": True, "message_id": res.get("message_id"),
-            "mensaje": f"📱 WhatsApp aceptado por Meta desde {wsp.NUMERO_CERTIFICADO} → {res.get('to')}"}
+    return {"ok": True, "whatsapp": wa_url, "url": url,
+            "mensaje": f"🚀 VÍA RÁPIDA: abriendo WhatsApp de {primer} (+{tel}) con la Tarjeta VIP lista"}
 
 
 @api.get("/whatsapp/estado")
 async def whatsapp_estado():
-    import whatsapp_service as wsp
-    return {"configurado": wsp.configurado(), "numero_certificado": wsp.NUMERO_CERTIFICADO,
-            "nombre_visible": wsp.NOMBRE_VISIBLE}
+    """REGLA DE HIERRO: prohibido solicitar credenciales Meta. Motor único: wa.me."""
+    return {"configurado": True, "modo": "VÍA RÁPIDA ACTIVA (Sin API Meta)",
+            "motor": "Despachador Masivo Secuencial vía wa.me",
+            "identidad": "@CentralMutuos"}
 
 
 @api.post("/prospectos/{pid}/promover")
@@ -8805,7 +8806,7 @@ async def informe_vip_enviar(fid: str, payload: dict):
               f"<h2 style='font-weight:600'>Estimado(a) {nombre.split()[0]},</h2>"
               f"<p style='color:#475569;line-height:1.7'>Adjuntamos su <b>Informe VIP de Estatus</b> "
               f"con el estado actualizado de su operación hipotecaria.</p>"
-              f"<p style='color:#94a3b8;font-size:12px'>Central Mutuos · Banca Hipotecaria Privada</p></div>")
+              f"<p style='color:#94a3b8;font-size:12px'>Gestión Central Mutuos · Banca Hipotecaria Privada</p></div>")
     res = await asyncio.to_thread(mail.send_mail, to, f"Informe VIP de Estatus — {nombre}", cuerpo,
                                   [{"filename": f"Informe_VIP_{fsvc.safe_name(nombre)}.pdf",
                                     "content_b64": _b64(pdf)}], "secundaria")
@@ -8952,7 +8953,7 @@ async def firma_portal(token: str, request: Request):
 <meta property="og:image:height" content="600">
 <meta property="og:url" content="{og_url}">
 <meta property="og:type" content="website">
-<meta property="og:site_name" content="Central Mutuos · Banca Hipotecaria Privada">
+<meta property="og:site_name" content="Gestión Central Mutuos · Banca Hipotecaria Privada">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="{og_img}">
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Montserrat:wght@400;500;600&display=swap" rel="stylesheet">
@@ -8986,7 +8987,7 @@ async def firma_portal(token: str, request: Request):
                 display:inline-flex; align-items:center; justify-content:center; font-size:0.7rem; flex-shrink:0; }}
 </style></head>
 <body>
-  <div class="marca">Central Mutuos · Banca Hipotecaria Privada</div>
+  <div class="marca">Gestión Central Mutuos · Banca Hipotecaria Privada</div>
   <div style="text-align:center;margin-top:0.5rem;font-family:'Inter',sans-serif;font-variant:small-caps;letter-spacing:0.22em;font-size:0.62rem;font-weight:600;background:linear-gradient(135deg,#BF953F,#FCF6BA,#B38728);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent">@CentralMutuos · Marca Registrada</div>
   <div class="card" data-testid="portal-firma-card">
     <div class="sello">🖋</div>
@@ -9878,7 +9879,7 @@ async def _enviar_firmados_interno(doc, correos, asunto=None):
     cuerpo = f"""
     <div style="font-family:Arial,sans-serif;font-size:14px;color:#1a1a1a;max-width:660px">
       <div style="background:#0a0a0a;padding:18px 22px;border-left:4px solid #D4AF37">
-        <span style="color:#D4AF37;font-size:16px;font-weight:700;letter-spacing:0.06em">💎 CENTRAL MUTUOS · CON CRECES</span><br>
+        <span style="color:#D4AF37;font-size:16px;font-weight:700;letter-spacing:0.06em">💎 GESTIÓN CENTRAL MUTUOS</span><br>
         <span style="color:#e5e5e5;font-size:12px;letter-spacing:0.1em">SET DE CRÉDITO FIRMADO ELECTRÓNICAMENTE — {nombre.upper()}{(' · RUT ' + doc.get('rut')) if doc.get('rut') else ''}</span>
       </div>
       <div style="padding:18px 4px">
@@ -10203,7 +10204,7 @@ async def proc_enviar_autocorreo(qid: str, payload: dict = None):
           {f'<b>Campos por completar:</b><ul>{lista_campos}</ul>' if lista_campos else ''}
           {f'<b>Documentos faltantes:</b><ul>{lista_docs}</ul>' if lista_docs else ''}
           <p>Complete la informacion a mano en el modulo <b>Procesamiento Correo</b> y vuelva a enviar.</p>
-          <p style="color:#888;font-size:12px">Central Mutuos - Con Creces</p>
+          <p style="color:#888;font-size:12px">Gestión Central Mutuos</p>
         </div>
         """
         res_aviso = await asyncio.to_thread(
@@ -10243,7 +10244,7 @@ async def proc_enviar_autocorreo(qid: str, payload: dict = None):
         <tr><td style="padding:4px 12px 4px 0"><b>Credito a solicitar</b></td><td>{_fmt_uf(campos.get('monto_credito_solicitar_uf'))}</td></tr>
       </table>
       <p style="margin-top:12px">Se adjunta el PDF agrupado de la carpeta del cliente para su envio a mesa.</p>
-      <p style="color:#888;font-size:12px">Central Mutuos - Con Creces</p>
+      <p style="color:#888;font-size:12px">Gestión Central Mutuos</p>
     </div>
     """
     asunto = f"[Gestion] {cliente} - {campos.get('proyecto_inmobiliario') or 'Credito Hipotecario'}"
@@ -10898,7 +10899,7 @@ async def _forense_caso_automatico(seg):
             cuerpo = f"""
 <div style="font-family:Arial,sans-serif;width:100%;max-width:600px">
   <div style="background:#0a0a0a;padding:16px 20px;border-left:4px solid #e11d48">
-    <span style="color:#D4AF37;font-weight:700;letter-spacing:0.08em">🔬 CONTRALORÍA AUTOMÁTICA · CENTRAL MUTUOS</span>
+    <span style="color:#D4AF37;font-weight:700;letter-spacing:0.08em">🔬 CONTRALORÍA AUTOMÁTICA · GESTIÓN CENTRAL MUTUOS</span>
   </div>
   <div style="padding:16px 6px;color:#1a1a1a;font-size:14px">
     <p><b>DashAI auditó al instante la respuesta de MESA del caso
@@ -11158,7 +11159,7 @@ def _borrador_reclamacion(h):
     body = f"""
 <div style="font-family:Georgia,'Times New Roman',serif;width:100%;max-width:600px;margin:0 auto">
   <div style="background:#0a0a0a;padding:20px 26px;border-left:4px solid #D4AF37">
-    <span style="color:#D4AF37;font-weight:700;letter-spacing:0.1em">CENTRAL MUTUOS · CONTRALORÍA</span>
+    <span style="color:#D4AF37;font-weight:700;letter-spacing:0.1em">GESTIÓN CENTRAL MUTUOS · CONTRALORÍA</span>
   </div>
   <div style="padding:22px 8px;color:#1a1a1a;font-size:14px;line-height:1.75">
     <p>Estimados señores de la MESA,</p>
@@ -11631,7 +11632,7 @@ _CALIFICAR_HTML = """<!DOCTYPE html>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Asegure su Casa__PROY_TIT__ - Calificación VIP en 1 Minuto</title>
 <meta property="og:title" content="Asegure su Casa__PROY_TIT__ - Calificación VIP en 1 Minuto">
-<meta property="og:description" content="Central Mutuos · Banca Hipotecaria Privada. Suba sus documentos desde su celular y obtenga su precalificación VIP.">
+<meta property="og:description" content="Gestión Central Mutuos · Banca Hipotecaria Privada. Suba sus documentos desde su celular y obtenga su precalificación VIP.">
 <meta property="og:site_name" content="Central Mutuos">
 <meta property="og:type" content="website">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;800&family=Montserrat:wght@400;600;800&display=swap" rel="stylesheet">
@@ -12123,7 +12124,7 @@ async def calificar_subir(oid: str,
             cuerpo = f"""
             <div style="font-family:Arial,sans-serif;width:100%;max-width:600px">
               <div style="background:#0a0a0a;padding:16px 20px;border-left:4px solid #D4AF37">
-                <span style="color:#D4AF37;font-weight:700;letter-spacing:0.08em">💎 CENTRAL MUTUOS · IMÁN DE CRÉDITOS</span>
+                <span style="color:#D4AF37;font-weight:700;letter-spacing:0.08em">💎 GESTIÓN CENTRAL MUTUOS · IMÁN DE CRÉDITOS</span>
               </div>
               <div style="padding:16px 6px;color:#1a1a1a;font-size:14px">
                 <p><b>{asunto}</b></p>
@@ -12219,7 +12220,7 @@ async def calificar_solicitar_llamada(oid: str, payload: dict, request: Request)
             cuerpo = f"""
             <div style="font-family:Arial,sans-serif;width:100%;max-width:600px">
               <div style="background:#0a0a0a;padding:16px 20px;border-left:4px solid #D4AF37">
-                <span style="color:#D4AF37;font-weight:700;letter-spacing:0.08em">💎 CENTRAL MUTUOS · CONTACTO VIP</span>
+                <span style="color:#D4AF37;font-weight:700;letter-spacing:0.08em">💎 GESTIÓN CENTRAL MUTUOS · CONTACTO VIP</span>
               </div>
               <div style="padding:16px 6px;color:#1a1a1a;font-size:14px">
                 <p><b>{'El cliente ' + nombre + ' pidió ayuda humana en el portal (no completó la carga).' if motivo == 'asistencia' else 'El cliente ' + nombre + ' solicita ser llamado por un ejecutivo.'}</b></p>
