@@ -80,6 +80,28 @@ def extraer_texto_aprobacion(pdf_bytes):
 
 IMG_EXT = (".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp", ".heic")
 
+# PROTOCOLO 01-06 (REGLA INAMOVIBLE): toda imagen convertida a PDF recibe
+# OBLIGATORIAMENTE un prefijo numérico de jerarquía antes de cualquier otra acción.
+PREFIJOS_PROTOCOLO_IMG = [
+    ("02_Liquidaciones", r"liquidaci|sueldo|remuneraci|haberes"),
+    ("02_Impuesto_Renta", r"impuesto|renta|formulario 22|f22"),
+    ("03_Certificado_AFP", r"afp|cotizaci|previred|afiliaci"),
+    ("03_Resumen_Impuestos", r"boleta|honorario"),
+    ("04_CMF", r"\bcmf\b|\bsmf\b|informe[_ ]?de[_ ]?deudas?|deuda"),
+]
+
+
+def prefijo_protocolo_imagen(base):
+    """Imagen convertida = 01_Cedula_ por defecto (carnet), salvo que el
+    nombre delate otra categoría del protocolo. Si ya trae prefijo, se respeta."""
+    if re.match(r"^\d{2}_", base or ""):
+        return base
+    low = (base or "").lower()
+    for pref, pat in PREFIJOS_PROTOCOLO_IMG:
+        if re.search(pat, low):
+            return f"{pref}_{base}"
+    return f"01_Cedula_{base}"
+
 
 def convertir_a_pdf(raw_bytes, filename):
     """Convierte un archivo a PDF si no lo es.
@@ -95,17 +117,18 @@ def convertir_a_pdf(raw_bytes, filename):
         return raw_bytes, fn, False
     base = fn.rsplit(".", 1)[0]
     if low.endswith(IMG_EXT):
+        nuevo = prefijo_protocolo_imagen(base) + ".pdf"
         try:
             import img2pdf
             pdf = img2pdf.convert(raw_bytes)
-            return pdf, base + ".pdf", True
+            return pdf, nuevo, True
         except Exception:
             # Fallback PIL (convierte modos no soportados, ej. RGBA)
             from PIL import Image
             im = Image.open(io.BytesIO(raw_bytes)).convert("RGB")
             buf = io.BytesIO()
             im.save(buf, format="PDF")
-            return buf.getvalue(), base + ".pdf", True
+            return buf.getvalue(), nuevo, True
     if low.endswith((".txt", ".csv")):
         from reportlab.lib.pagesizes import A4
         from reportlab.pdfgen import canvas

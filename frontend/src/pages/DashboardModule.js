@@ -21,6 +21,7 @@ export default function DashboardModule({ valorUF: _valorUF, userName: _userName
   const [tendencia, setTendencia] = useState("");
   const [hallazgos, setHallazgos] = useState(null);
   const [capturas, setCapturas] = useState([]);
+  const [seguridad, setSeguridad] = useState(null);
 
   const generarDocsDataset = async () => {
     try {
@@ -56,6 +57,7 @@ export default function DashboardModule({ valorUF: _valorUF, userName: _userName
     axios.get(`${API_URL}/api/mesa-brain/modelo`).then(r => setTendencia(r.data?.tendencia || "")).catch(() => {});
     axios.get(`${API_URL}/api/contraloria/casos`).then(r => setHallazgos(r.data)).catch(() => {});
     axios.get(`${API_URL}/api/capturas/recientes`).then(r => setCapturas(r.data?.capturas || [])).catch(() => {});
+    axios.get(`${API_URL}/api/seguridad/respaldo`).then(r => setSeguridad(r.data)).catch(() => {});
   }, []);
 
   const refreshKnowledge = async () => {
@@ -141,6 +143,23 @@ export default function DashboardModule({ valorUF: _valorUF, userName: _userName
         </div>
       )}
       <ProactiveAlertsPanel />
+      {seguridad && (
+        <div data-testid="seguridad-datos-card" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
+          background: "rgba(14,14,16,0.9)", border: `1px solid ${seguridad.estado === "SINCRONIZADO" ? "rgba(16,217,142,0.35)" : "rgba(212,175,55,0.35)"}`,
+          borderRadius: 0, padding: "0.7rem 1.1rem", marginBottom: "1rem" }}>
+          <b style={{ color: "var(--gold)", fontSize: "0.82rem", letterSpacing: "0.08em" }}>🛡️ Seguridad de Datos</b>
+          <span data-testid="seguridad-estado" style={{ fontSize: "0.74rem", fontWeight: 800, letterSpacing: "0.08em",
+            color: seguridad.estado === "SINCRONIZADO" ? "#10d98e" : "#e7cf7a" }}>
+            Estado del Respaldo: {seguridad.estado || "INICIANDO"}
+          </span>
+          <span data-testid="seguridad-ultima-copia" style={{ fontSize: "0.72rem", opacity: 0.7 }}>
+            Última copia en nube: {seguridad.ultima_copia ? seguridad.ultima_copia.slice(0, 16).replace("T", " ") : "pendiente"}
+          </span>
+          <span style={{ fontSize: "0.68rem", opacity: 0.5, marginLeft: "auto", textTransform: "uppercase", letterSpacing: "0.1em" }}>
+            {seguridad.objetos || 0} archivos espejados · Búnker Cloud pasivo
+          </span>
+        </div>
+      )}
       {semaforo && !semaforo.error && (
         <div data-testid="boveda-firmas-card" style={{ border: "1px solid transparent", borderRadius: 0, marginBottom: "1rem",
           backgroundImage: "linear-gradient(115deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.02) 18%, transparent 32%), linear-gradient(160deg, rgba(22,22,24,0.97), rgba(6,6,8,0.99)), linear-gradient(135deg, #BF953F, #FCF6BA, #B38728, #FBF5B7, #AA771C)",

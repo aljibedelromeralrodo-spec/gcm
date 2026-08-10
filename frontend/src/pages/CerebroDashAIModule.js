@@ -39,6 +39,12 @@ export default function CerebroDashAIModule() {
   const [d, setD] = useState(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
+  const [dataset, setDataset] = useState(null);
+  const [busyDs, setBusyDs] = useState(false);
+
+  useEffect(() => {
+    axios.get(`${API_URL}/api/dashai/dataset/status`).then(r => setDataset(r.data)).catch(() => {});
+  }, []);
 
   const cargar = useCallback(async () => {
     try {
@@ -156,6 +162,42 @@ export default function CerebroDashAIModule() {
           ))}
         </div>
       )}
+
+      <div style={{ ...panel, marginBottom: "1.2rem", borderColor: "rgba(14,165,233,0.4)" }} data-testid="dashai-boveda-dataset">
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <div style={{ flex: 1, minWidth: 240 }}>
+            <div style={{ color: "#a5f3fc", fontSize: "0.7rem", letterSpacing: "0.18em", textTransform: "uppercase" }}>📊 Bóveda de DashAI · Dataset Comercial</div>
+            <div style={{ color: "#9a8c52", fontSize: "0.72rem", marginTop: 4 }}>
+              Auto-exportación diaria 23:59 · RUT hasheado como llave única · 100% anonimizado · MESA + finanzas + forense
+            </div>
+            <div data-testid="dashai-dataset-status" style={{ color: "#cbd5e1", fontSize: "0.74rem", marginTop: 6 }}>
+              {dataset?.generado_en
+                ? <>✓ Última exportación: {(dataset.generado_en || "").slice(0, 16).replace("T", " ")} · {dataset.total} casos · {dataset.nuevos_ultimo} nuevos</>
+                : "Aún sin exportaciones — la primera se genera hoy a las 23:59 o al presionar EXPORTAR AHORA."}
+            </div>
+          </div>
+          <button data-testid="dashai-dataset-exportar-btn" disabled={busyDs}
+            onClick={async () => {
+              setBusyDs(true);
+              try {
+                const r = await axios.post(`${API_URL}/api/dashai/dataset/exportar-ahora`, {}, { timeout: 180000 });
+                setDataset(d0 => ({ ...(d0 || {}), ...r.data, nuevos_ultimo: r.data.nuevos }));
+                setMsg(`📊 Dataset DashAI actualizado con ${r.data.nuevos} nuevos casos (${r.data.total} totales)`);
+              } catch (e) { setMsg("❌ " + (e?.response?.data?.detail || e.message)); }
+              setBusyDs(false);
+            }}
+            style={{ background: "rgba(14,165,233,0.15)", color: "#a5f3fc", border: "1px solid rgba(14,165,233,0.45)",
+              fontWeight: 800, fontSize: "0.7rem", letterSpacing: "0.08em", padding: "0.6rem 1.1rem", cursor: "pointer" }}>
+            {busyDs ? "EXPORTANDO…" : "⚡ EXPORTAR AHORA"}
+          </button>
+          <button data-testid="dashai-dataset-descargar-btn"
+            onClick={() => window.open(`${API_URL}/api/dashai/dataset/descargar`, "_blank")}
+            style={{ background: "linear-gradient(135deg, #BF953F, #FCF6BA 45%, #B38728)", color: "#0a0a0a",
+              border: "none", fontWeight: 800, fontSize: "0.7rem", letterSpacing: "0.08em", padding: "0.6rem 1.1rem", cursor: "pointer" }}>
+            <i className="fa fa-download" style={{ marginRight: 6 }} />CSV
+          </button>
+        </div>
+      </div>
 
       <div style={panel} data-testid="dashai-eventos">
         <div style={{ color: "#7da2e8", fontSize: "0.7rem", letterSpacing: "0.18em", textTransform: "uppercase", marginBottom: 10 }}>Bitácora de Aprendizaje Perpetuo</div>

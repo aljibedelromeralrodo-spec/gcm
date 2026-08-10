@@ -19,8 +19,9 @@ const Badge = ({ cat }) => (
     whiteSpace: "nowrap", color: "#0a0a0a",
     background: cat === "RIESGO" ? "linear-gradient(135deg,#e11d48,#fb7185)"
       : cat === "PERDIDA" ? "linear-gradient(135deg,#d97706,#fbbf24)"
-        : cat === "NO AUDITABLE" ? "linear-gradient(135deg,#64748b,#cbd5e1)" : "linear-gradient(135deg,#60a5fa,#bfdbfe)" }}>
-    {cat}
+        : cat === "APROBACIÓN VERIFICADA POR EMAIL" ? "linear-gradient(135deg,#0ea5e9,#a5f3fc)"
+          : cat === "NO AUDITABLE" ? "linear-gradient(135deg,#64748b,#cbd5e1)" : "linear-gradient(135deg,#60a5fa,#bfdbfe)" }}>
+    {cat === "APROBACIÓN VERIFICADA POR EMAIL" ? "💎 VERIFICADA POR EMAIL" : cat}
   </span>
 );
 
@@ -64,6 +65,7 @@ export default function AuditoriaForenseModule() {
   const hallazgos = forense?.hallazgos || [];
   const listaA = hallazgos.filter(h => h.categoria === "RIESGO" || h.categoria === "ERROR HUMANO");
   const listaB = hallazgos.filter(h => h.categoria === "PERDIDA");
+  const verificadosEmail = hallazgos.filter(h => h.categoria === "APROBACIÓN VERIFICADA POR EMAIL");
   const noAuditables = hallazgos.filter(h => h.categoria === "NO AUDITABLE");
 
   const rellenar = async () => {
@@ -177,6 +179,14 @@ export default function AuditoriaForenseModule() {
             </div>
             {listaB.length === 0 && <div style={{ color: "#9a8c52", fontSize: "0.78rem" }}>Sin rechazos rescatables detectados en el período.</div>}
             {listaB.map((h, k) => <FilaHallazgo h={h} k={k} key={k} />)}
+          </div>
+          <div style={panel} data-testid="af-verificados-email">
+            <b style={{ color: "#a5f3fc", fontSize: "0.78rem", letterSpacing: "0.08em" }}>💎 APROBACIONES VERIFICADAS POR EMAIL ({verificadosEmail.length})</b>
+            <div style={{ color: "#9a8c52", fontSize: "0.7rem", marginTop: 4 }}>
+              Negocios confirmados por el correo de MESA (asunto, fecha y estado) aunque no exista carpeta digital.
+            </div>
+            {verificadosEmail.length === 0 && <div style={{ color: "#8fd9b0", fontSize: "0.78rem", marginTop: 6 }}>Sin casos verificados solo por email en el período.</div>}
+            {verificadosEmail.map((h, k) => <FilaHallazgo h={h} k={k} key={k} />)}
           </div>
           <div style={panel} data-testid="af-no-auditables">
             <b style={{ color: "#cbd5e1", fontSize: "0.78rem", letterSpacing: "0.08em" }}>⚠️ NO AUDITABLES — SIN EXPEDIENTE DIGITAL ({noAuditables.length})</b>

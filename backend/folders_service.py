@@ -79,6 +79,15 @@ PREFIJO_POR_CAT = {
 }
 
 
+def orden_numerico(nombre, subfolder=""):
+    """SORT NUMÉRICO (REGLA INAMOVIBLE): jerarquía por prefijo 01..99 del archivo
+    o, en su defecto, de la subcarpeta protocolo. Sin prefijo = 99 (al final)."""
+    m = re.match(r"^(\d{2})_", nombre or "")
+    if not m:
+        m = re.match(r"^(\d{2})_", (subfolder or "").split("/")[0])
+    return int(m.group(1)) if m else 99
+
+
 def nombre_con_prefijo(filename, cat):
     """Antepone el prefijo numérico de la categoría si el archivo aún no lo tiene."""
     pref = PREFIJO_POR_CAT.get(cat)
@@ -250,7 +259,8 @@ def merge_protocol(nombre, client_type="dependiente", include_extras=True, order
                 continue
             cat = "extras"
         usable.append((order.index(cat), cat, a))
-    usable.sort(key=lambda t: (t[0], t[2]["ruta"]))
+    # SORT NUMÉRICO: los prefijos 01..06 mandan; el orden de llegada no importa
+    usable.sort(key=lambda t: (orden_numerico(t[2]["nombre"], t[2]["subfolder"]), t[0], t[2]["ruta"]))
     writer = PdfWriter()
     used, errors = [], []
     excluidos_rut = []
@@ -356,7 +366,8 @@ def merge_protocolo_codeudor(nombre, codeudor_nombre="", codeudor_rut="", solo_s
     if solo_si_minimos and out["faltan_minimos"]:
         return out
     orden = {"cedula": 0, "liquidacion": 1, "afp": 2, "cmf": 3, "imp_renta": 4, "boletas": 5}
-    files.sort(key=lambda p: (orden.get(_cat(p), 9), p.name))
+    files.sort(key=lambda p: (orden_numerico(re.sub(r"^CODEUDOR_", "", p.name, flags=re.I)),
+                              orden.get(_cat(p), 9), p.name))
     writer = PdfWriter()
     for p in files:
         if len(rut_c) >= 7:

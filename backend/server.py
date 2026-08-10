@@ -28,6 +28,7 @@ import folders_service as fsvc
 from database import client, db
 import sales_engine
 import mesa_brain
+import cloud_bunker
 import simulador_engine
 
 app = FastAPI(title="Central Mutuos API")
@@ -227,6 +228,7 @@ async def startup():
     asyncio.create_task(_task_blindada(_setcred_auto_loop, "setcred_auto"))
     asyncio.create_task(_task_blindada(_bunker_loop, "bunker_gridfs"))
     asyncio.create_task(_task_blindada(_rescate_historico_loop, "rescate_historico"))
+    asyncio.create_task(_task_blindada(_dashai_dataset_loop, "dashai_dataset_2359"))
 
 
 # ---------------------------------------------------------------------------
@@ -4393,7 +4395,9 @@ def _regen_carpeta_cliente(cliente, orden_manual=None):
         if p.name.startswith(("Carpeta_", "COMBINADO_")) or rel0.startswith("05_codeudor/"):
             continue
         rel = rel0
-        key = (0, manual[p.name], "") if p.name in manual else (1, 0, rel)
+        # SORT NUMÉRICO (REGLA INAMOVIBLE): jerarquía 01..06 por prefijo, no orden de llegada
+        key = ((0, manual[p.name], 0, "") if p.name in manual
+               else (1, fsvc.orden_numerico(p.name, rel0), 0, rel))
         archivos.append((key, p))
     archivos.sort(key=lambda t: t[0])
     doc_out = fitz.open()
@@ -9669,7 +9673,9 @@ def _set_archivos_orden(nombre):
     """Lista ordenada del expediente de cierre. El búnker del set es EXCLUSIVO
     (solo formularios de cierre), así que combina/separa todo menos combinados/firmados."""
     orden = {t: i for i, t in enumerate(SET_DOC_TIPOS)}
-    archivos = sorted(_set_archivos(nombre), key=lambda a: (orden.get(a["tipo"], 99), a["nombre"]))
+    # SORT NUMÉRICO (REGLA INAMOVIBLE): el prefijo 01..06 manda sobre el orden de llegada
+    archivos = sorted(_set_archivos(nombre),
+                      key=lambda a: (fsvc.orden_numerico(a["nombre"]), orden.get(a["tipo"], 99), a["nombre"]))
     return [a for a in archivos
             if not a["nombre"].startswith(("COMBINADO_SET", "FIRMADO"))
             and "firmados/" not in a.get("ruta", "")]
@@ -10757,10 +10763,21 @@ async def _forense_auditar_entrada(s, modelo):
     aprobada = s.get("estado") in ("aprobacion", "aprobado")
     fd, sim = await _forense_buscar_contexto(cliente, s.get("rut"))
     if not fd:
-        # FIN DEL SALTO SILENCIOSO: los casos sin expediente aparecen en el reporte
-        return [{"cliente": cliente or "(sin nombre)", "rut": s.get("rut") or "",
-                 "fecha_mesa": (s.get("fecha") or "")[:10],
-                 "monto_mesa": s.get("monto_credito"), "certificado_id": None,
+        base_sin = {"cliente": cliente or "(sin nombre)", "rut": s.get("rut") or "",
+                    "fecha_mesa": (s.get("fecha") or "")[:10],
+                    "monto_mesa": s.get("monto_credito"), "certificado_id": None}
+        asunto = (s.get("asunto") or "").strip()
+        # AUDITORÍA BASADA EN EMAIL: si el correo de MESA existe, el negocio existió.
+        if asunto:
+            estado_txt = "APROBADO" if aprobada else "RECHAZADO"
+            return [{**base_sin,
+                     "categoria": "APROBACIÓN VERIFICADA POR EMAIL",
+                     "asunto_mesa": asunto, "estado_mesa": estado_txt,
+                     "detalle": (f"💎 Negocio confirmado por correo de MESA — Asunto: «{asunto}» · "
+                                 f"Fecha: {(s.get('fecha') or '')[:10] or 's/f'} · Estado: {estado_txt}"),
+                     "nota_dashai": "DashAI: no hay carpeta digital, pero el correo de MESA prueba que la operación existió y fue resuelta. Cree la carpeta si desea la auditoría 360° de LTV, carga y renta."}]
+        # FIN DEL SALTO SILENCIOSO: los casos sin expediente NI correo aparecen en el reporte
+        return [{**base_sin,
                  "categoria": "NO AUDITABLE",
                  "detalle": "⚠️ NO AUDITABLE - Sin expediente digital (decisión de MESA sin carpeta ni simulación vinculada)",
                  "nota_dashai": "DashAI: la decisión de MESA existe en el correo, pero no hay expediente digital para triangular LTV, carga ni renta. Ejecute el Rellenado de Datos o cree la carpeta para auditar este caso."}]
@@ -10861,6 +10878,7 @@ async def _forense_caso_automatico(seg):
         resumen = {"RIESGO": sum(1 for h in hallazgos if h["categoria"] == "RIESGO"),
                    "PERDIDA": sum(1 for h in hallazgos if h["categoria"] == "PERDIDA"),
                    "ERROR HUMANO": sum(1 for h in hallazgos if h["categoria"] == "ERROR HUMANO"),
+                   "VERIFICADO EMAIL": sum(1 for h in hallazgos if h["categoria"] == "APROBACIÓN VERIFICADA POR EMAIL"),
                    "NO AUDITABLE": sum(1 for h in hallazgos if h["categoria"] == "NO AUDITABLE")}
         await db.config.update_one({"_key": "auditoria_forense"}, {"$set": {
             "hallazgos": hallazgos, "resumen": resumen,
@@ -10869,7 +10887,8 @@ async def _forense_caso_automatico(seg):
             "nuevos_ultimo_barrido": int(doc.get("nuevos_ultimo_barrido") or 0) + len(agregados),
             "generado_en": now_iso()}}, upsert=True)
         destinatario = os.environ.get("MAIL2_USER", "")
-        con_errores = [h for h in agregados if h["categoria"] != "NO AUDITABLE"]
+        con_errores = [h for h in agregados
+                       if h["categoria"] not in ("NO AUDITABLE", "APROBACIÓN VERIFICADA POR EMAIL")]
         if destinatario and con_errores:
             agregados = con_errores
             filas = "".join(
@@ -10929,6 +10948,7 @@ async def _forense_job(dias=90):
     resumen = {"RIESGO": sum(1 for h in hallazgos if h["categoria"] == "RIESGO"),
                "PERDIDA": sum(1 for h in hallazgos if h["categoria"] == "PERDIDA"),
                "ERROR HUMANO": sum(1 for h in hallazgos if h["categoria"] == "ERROR HUMANO"),
+               "VERIFICADO EMAIL": sum(1 for h in hallazgos if h["categoria"] == "APROBACIÓN VERIFICADA POR EMAIL"),
                "NO AUDITABLE": sum(1 for h in hallazgos if h["categoria"] == "NO AUDITABLE")}
     nuevos = sum(1 for h in hallazgos
                  if (h["cliente"], h["fecha_mesa"], h["categoria"]) not in prev_keys)
@@ -10941,6 +10961,168 @@ async def _forense_job(dias=90):
         "nota_trazabilidad": f"Análisis ejecutado bajo los criterios permanentes de DashAI v1.{crit_ver}",
         "generado_en": now_iso()}}, upsert=True)
     logging.info(f"🔬 Forense {dias}d: {revisados} revisados, {len(hallazgos)} hallazgos ({nuevos} nuevos) {resumen}")
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 📊 AUTO-EXPORTACIÓN DASHAI — dataset comercial diario (23:59 hora Chile)
+# Bóveda local: storage/boveda_dashai/dataset_dashai.csv · RUT hasheado = llave
+# única (sin duplicados) · datos anonimizados (sin nombres ni contactos).
+# ══════════════════════════════════════════════════════════════════════════
+BOVEDA_DASHAI_DIR = Path(__file__).parent / "storage" / "boveda_dashai"
+DATASET_DASHAI = BOVEDA_DASHAI_DIR / "dataset_dashai.csv"
+DATASET_CAMPOS = ["rut_llave", "fecha_mesa", "decision_mesa", "monto_credito_uf",
+                  "renta_liquida", "carga_financiera", "ltv", "con_subsidio",
+                  "tiene_codeudor", "auditoria_categorias", "auditoria_inconsistencias",
+                  "criterios_version"]
+
+
+def _rut_llave(rut, cliente=""):
+    """ANONIMIZACIÓN: SHA-256 del RUT normalizado (o del nombre si no hay RUT)."""
+    import hashlib
+    bruto = re.sub(r"[^0-9kK]", "", rut or "").lower()
+    if not bruto:
+        bruto = re.sub(r"\s+", "", (cliente or "").lower())
+    if not bruto:
+        return ""
+    return hashlib.sha256(bruto.encode()).hexdigest()[:16]
+
+
+async def _dashai_dataset_generar():
+    """DATOS MAESTROS: historial MESA + finanzas de carpetas + veredicto forense."""
+    entradas = await db.seguimiento.find(
+        {"estado": {"$in": ["aprobacion", "aprobado", "rechazo", "rechazado"]}}
+    ).sort("fecha", 1).to_list(5000)
+    fdoc = await db.config.find_one({"_key": "auditoria_forense"}) or {}
+    forense_por_cliente = {}
+    for h in (fdoc.get("hallazgos") or []):
+        forense_por_cliente.setdefault((h.get("cliente") or "").strip().lower(), []).append(h)
+    crit_ver = await asyncio.to_thread(mesa_brain.criterios_version)
+    filas = {}
+    for s in entradas:
+        cliente = (s.get("cliente") or "").strip()
+        fd, sim = await _forense_buscar_contexto(cliente, s.get("rut"))
+        llave = _rut_llave((fd or {}).get("rut") or s.get("rut"), cliente)
+        if not llave:
+            continue
+        df = (fd or {}).get("datos_financieros") or {}
+        sim = sim or {}
+        tiene_cod = bool(sim.get("tiene_codeudor"))
+        hs = forense_por_cliente.get(cliente.lower(), [])
+        # LLAVE ÚNICA POR RUT: al iterar por fecha ascendente queda la decisión más reciente
+        filas[llave] = {
+            "rut_llave": llave,
+            "fecha_mesa": (s.get("fecha") or "")[:10],
+            "decision_mesa": "APROBADO" if s.get("estado") in ("aprobacion", "aprobado") else "RECHAZADO",
+            "monto_credito_uf": df.get("monto_credito") or s.get("monto_credito")
+            or sim.get("credito_solicitado_uf") or "",
+            "renta_liquida": df.get("renta_liquida") or df.get("renta_fija") or "",
+            "carga_financiera": (sim.get("carga_fin_conjunta") if tiene_cod
+                                 else sim.get("carga_fin_individual")) or "",
+            "ltv": sim.get("ltv") or "",
+            "con_subsidio": "SI" if df.get("con_subsidio") else "NO",
+            "tiene_codeudor": "SI" if tiene_cod else "NO",
+            "auditoria_categorias": " | ".join(sorted({h.get("categoria") or "" for h in hs} - {""})),
+            "auditoria_inconsistencias": sum(1 for h in hs if h.get("categoria")
+                                             in ("RIESGO", "PERDIDA", "ERROR HUMANO")),
+            "criterios_version": f"v1.{crit_ver}",
+        }
+    prev = await db.config.find_one({"_key": "dashai_dataset"}) or {}
+    nuevos = len(set(filas) - set(prev.get("llaves") or []))
+    import csv
+    BOVEDA_DASHAI_DIR.mkdir(parents=True, exist_ok=True)
+    with open(DATASET_DASHAI, "w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=DATASET_CAMPOS)
+        w.writeheader()
+        for fila in filas.values():
+            w.writerow(fila)
+    await db.config.update_one({"_key": "dashai_dataset"}, {"$set": {
+        "llaves": sorted(filas), "total": len(filas), "nuevos_ultimo": nuevos,
+        "archivo": str(DATASET_DASHAI), "generado_en": now_iso()}}, upsert=True)
+    # NOTIFICACIÓN DE ÉXITO: visible en el dashboard a la mañana siguiente
+    await db.alertas.insert_one({
+        "id": str(uuid.uuid4()), "tipo": "dashai_dataset", "cliente": "",
+        "mensaje": f"📊 Dataset DashAI actualizado con {nuevos} nuevos casos "
+                   f"({len(filas)} totales · anonimizado · Bóveda de DashAI)",
+        "fecha": now_iso(), "leida": False})
+    logging.info(f"📊 Dataset DashAI: {len(filas)} filas, {nuevos} nuevos → {DATASET_DASHAI}")
+    return {"total": len(filas), "nuevos": nuevos, "archivo": DATASET_DASHAI.name,
+            "generado_en": now_iso()}
+
+
+async def _dashai_dataset_loop():
+    """EXPORTACIÓN PROGRAMADA: todos los días a las 23:59 (hora Chile)."""
+    while True:
+        try:
+            await asyncio.sleep(30)
+            ahora = datetime.now(_tz_chile())
+            hoy = ahora.strftime("%Y-%m-%d")
+            st = await db.config.find_one({"_key": "dashai_dataset"}) or {}
+            if (ahora.hour, ahora.minute) >= (23, 59) and st.get("last_export_date") != hoy:
+                await db.config.update_one({"_key": "dashai_dataset"},
+                                           {"$set": {"last_export_date": hoy}}, upsert=True)
+                await _dashai_dataset_generar()
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logging.warning(f"dashai dataset loop: {e}")
+
+
+@api.get("/dashai/dataset/status")
+async def dashai_dataset_status():
+    st = await db.config.find_one({"_key": "dashai_dataset"}) or {}
+    st.pop("_id", None)
+    st.pop("llaves", None)
+    st["existe_csv"] = DATASET_DASHAI.exists()
+    st["programacion"] = "Diaria a las 23:59 (hora Chile)"
+    return st
+
+
+@api.post("/dashai/dataset/exportar-ahora")
+async def dashai_dataset_exportar_ahora():
+    return await _dashai_dataset_generar()
+
+
+@api.get("/dashai/dataset/descargar")
+async def dashai_dataset_descargar():
+    if not DATASET_DASHAI.exists():
+        raise HTTPException(status_code=404,
+                            detail="Aún no se genera el dataset. Exporte ahora o espere a las 23:59.")
+    return FileResponse(str(DATASET_DASHAI), media_type="text/csv",
+                        filename="dataset_dashai.csv")
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 🛡️ BÚNKER DE RESPALDO CLOUD — espejo pasivo en Emergent Object Store.
+# La operación diaria sigue en disco local; la nube es solo un seguro.
+# Recuperación total: /app/backend/emergency_restore.py (script inactivo).
+# ══════════════════════════════════════════════════════════════════════════
+async def _cloud_bunker_loop():
+    """RESPALDO SILENCIOSO: escaneo espejo cada 5 minutos, en thread aparte."""
+    await asyncio.sleep(90)  # deja levantar el resto del sistema primero
+    while True:
+        try:
+            await asyncio.to_thread(cloud_bunker.escanear_y_respaldar)
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logging.warning(f"cloud bunker loop: {e}")
+        await asyncio.sleep(300)
+
+
+@api.get("/seguridad/respaldo")
+async def seguridad_respaldo_status():
+    st = await db.config.find_one({"_key": "cloud_bunker"}) or {}
+    st.pop("_id", None)
+    st.pop("dashai_hash", None)
+    st.setdefault("estado", "INICIANDO")
+    st["modo"] = "Respaldo Silencioso (espejo pasivo cada 5 min)"
+    return st
+
+
+@api.post("/seguridad/respaldo/ahora")
+async def seguridad_respaldo_ahora():
+    res = await asyncio.to_thread(cloud_bunker.escanear_y_respaldar)
+    return res
 
 
 @api.post("/contraloria/forense/iniciar")

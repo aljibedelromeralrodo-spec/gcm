@@ -722,6 +722,12 @@ requieren re-deploy para llegar a producción.
 - Reportes internos auto-enviados desde Gmail principal (fin de bloqueos "Se bloqueó tu mensaje").
 
 ## Backlog priorizado
+- P0: Confirmar con usuario el RUT correcto de DILIMAR CEDEÑO (carpeta dice 67422911, CMF dice 26.545.507-7).
+- P0: Credenciales Meta WhatsApp Cloud API (META_ACCESS_TOKEN, META_PHONE_NUMBER_ID) pendientes del usuario.
+- P1: Alertas WhatsApp VIP a Gerardo cuando viabilidad >= 75%.
+- P1: Informe Semanal Ventas (José Martín, lunes).
+- P2: Panel del Búnker en Salud (archivos GridFS + último respaldo).
+- P2: Botón "Reenviar a MESA" para hallazgos PERDIDA en Contraloría.
 - P1: Panel de "Correos Descartados" con rescate a 1 clic (crear carpeta desde correo descartado).
 - P1: Vista/alerta de errores SMTP en la UI (ya existe GET /api/correos/smtp-log?solo_errores=true).
 - P2: Afinar detección automática de transferencias cuando el usuario comparta un comprobante bancario real.
