@@ -59,6 +59,63 @@ def cuota_prestamo(monto: float, annual_rate: float, plazo_anos: int) -> dict:
     }
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# ESTÁNDAR DE ORO DASHAI — Depuración de endeudamiento (Fórmula 2%)
+# Cuota teórica de deudas = 2% mensual del total reportado (proyección 48 meses).
+# Se aplica al 100% de la deuda CMF y al saldo de Crédito Interno (PAV).
+# ═══════════════════════════════════════════════════════════════════════════
+CF_PCT_MENSUAL = 0.02      # 2% mensual
+CF_PROYECCION_MESES = 48   # proyección de amortización teórica
+CF_TOPE_CARGA = 0.40       # Carga Financiera máxima sobre renta líquida depurada
+
+
+def cuota_teorica(deuda_total_clp, pct=CF_PCT_MENSUAL):
+    """Valor Cuota Teórico = 2% mensual del total de la deuda (CLP)."""
+    return max(0.0, float(deuda_total_clp or 0)) * float(pct or CF_PCT_MENSUAL)
+
+
+def endeudamiento_mensual(df, uf_valor, pct=CF_PCT_MENSUAL):
+    """Endeudamiento mensual teórico (CLP) según el estándar de oro DashAI.
+
+    Suma el 100% de la deuda CMF + saldo PAV y aplica el 2% mensual.
+    Convierte montos en UF a CLP con la UF del día (fuente SII) antes del %.
+    """
+    df = df or {}
+    uf_valor = float(uf_valor or 39000)
+
+    def _monto(clp_keys, uf_keys):
+        for k in clp_keys:
+            if df.get(k) not in (None, "", 0, "0"):
+                return _n(df.get(k))
+        for k in uf_keys:
+            if df.get(k) not in (None, "", 0, "0"):
+                return _n(df.get(k)) * uf_valor
+        return 0.0
+
+    deuda_cmf = _monto(
+        ["deuda_cmf_total", "deuda_cmf", "deudas_cmf_total", "monto_deuda_cmf", "deuda_total_cmf"],
+        ["deuda_cmf_uf", "deuda_cmf_total_uf"])
+    pav_saldo = _monto(
+        ["credito_interno_pav", "pav_saldo", "credito_pav", "saldo_pav"],
+        ["pav_saldo_uf", "credito_pav_uf"])
+
+    cuota_cmf = cuota_teorica(deuda_cmf, pct)
+    cuota_pav = cuota_teorica(pav_saldo, pct)
+    # Compatibilidad: si no hay totales pero sí una cuota directa histórica, úsala.
+    if cuota_cmf == 0 and df.get("cuota_deudas"):
+        cuota_cmf = _n(df.get("cuota_deudas"))
+    return {
+        "deuda_cmf_total_clp": round(deuda_cmf),
+        "pav_saldo_clp": round(pav_saldo),
+        "cuota_teorica_cmf_clp": round(cuota_cmf),
+        "cuota_teorica_pav_clp": round(cuota_pav),
+        "endeudamiento_mensual_clp": round(cuota_cmf + cuota_pav),
+        "pct_mensual": float(pct or CF_PCT_MENSUAL),
+        "proyeccion_meses": CF_PROYECCION_MESES,
+    }
+
+
+
 def _n(v):
     try:
         return float(str(v).replace(".", "").replace(",", ".")) if isinstance(v, str) else float(v or 0)
@@ -82,8 +139,13 @@ def techo_hipotecario(df, criterios, tasas, uf_valor, plazo=25, cuota_cmf_clp=No
     renta_var = _n(df.get("renta_variable"))
     renta_hon = _n(df.get("honorarios"))
     con_sub = bool(df.get("con_subsidio"))
-    cmf = _n(cuota_cmf_clp if cuota_cmf_clp is not None
-             else df.get("cuota_deudas") or df.get("deuda_cmf_cuota") or df.get("cuota_cmf") or 0)
+    # ESTÁNDAR DE ORO: endeudamiento = 2% mensual sobre deuda CMF total + saldo PAV
+    endeud = endeudamiento_mensual(df, uf_valor)
+    if cuota_cmf_clp is not None:
+        # override manual del operador (ya es una cuota, no un total)
+        endeud["cuota_teorica_cmf_clp"] = round(_n(cuota_cmf_clp))
+        endeud["endeudamiento_mensual_clp"] = round(_n(cuota_cmf_clp) + endeud["cuota_teorica_pav_clp"])
+    cmf = float(endeud["endeudamiento_mensual_clp"])
 
     # Castigos de renta desde la Constitución (Ley del RUT / BTG)
     cast = (criterios.get("btg_pactual") or {}).get("castigos_renta") or {}
@@ -129,6 +191,10 @@ def techo_hipotecario(df, criterios, tasas, uf_valor, plazo=25, cuota_cmf_clp=No
         _escenario("Ameris", am_carga, am_dr),
     ]
     mejor = max(escenarios, key=lambda e: e["credito_maximo_uf"]) if escenarios else None
+    # VALIDACIÓN DE CARGA: el endeudamiento actual (sin nuevo dividendo) ya no debe
+    # consumir por sí solo el tope de 40% de la renta líquida depurada.
+    carga_actual_pct = round((cmf / renta_dep * 100), 1) if renta_dep > 0 else 0
+    alerta_carga = (renta_dep > 0 and cmf > renta_dep * CF_TOPE_CARGA)
 
     return {
         "renta_liquida_depurada_clp": round(renta_dep),
@@ -140,7 +206,10 @@ def techo_hipotecario(df, criterios, tasas, uf_valor, plazo=25, cuota_cmf_clp=No
             "castigo_variable_pct": round(c_var * 100),
             "castigo_honorarios_pct": round(c_hon * 100),
         },
+        "endeudamiento": endeud,
         "deuda_cmf_cuota_clp": round(cmf),
+        "carga_actual_pct": carga_actual_pct,
+        "alerta_carga_excedida": alerta_carga,
         "con_subsidio": con_sub,
         "tasa_anual_pct": round(tasa * 100, 2),
         "plazo_anos": plazo,
@@ -172,6 +241,10 @@ def simular_credito(d: dict) -> dict:
     plazo = int(d.get("plazo_anos") or 25)
     tasa = float(d.get("tasa_anual") or 0.0635)
     carga = float(d.get("carga_financiera") or 0)
+    # ESTÁNDAR DE ORO: si vienen totales CMF/PAV, la carga usa la cuota teórica 2%
+    _endeud = endeudamiento_mensual(d, valor_uf)
+    if _endeud["endeudamiento_mensual_clp"] > 0:
+        carga = float(_endeud["endeudamiento_mensual_clp"])
     ahorro = float(d.get("ahorro_uf") or 0)
     subsidio = float(d.get("subsidio_uf") or 0)
     edad_t = int(d.get("edad_cliente") or 0)
@@ -308,6 +381,8 @@ def simular_credito(d: dict) -> dict:
         "eval_ameris": eval_ameris,
         "eval_ameris_razones": eval_ameris_razones,
         "razones_rechazo": razones_rechazo,
+        "endeudamiento": _endeud,
+        "alerta_carga_40": bool(carga_fin_conjunta > CF_TOPE_CARGA),
     }
 
 
@@ -328,6 +403,10 @@ def predict_inmobiliaria(d: dict, tasas: dict, seguros: dict, valor_uf: float) -
     renta_var = float(d.get("renta_variable") or 0)
     renta_hon = float(d.get("renta_honorarios") or 0)
     cuota_deudas = float(d.get("cuota_deudas") or 0)
+    # ESTÁNDAR DE ORO: cuota teórica 2% sobre deuda CMF total + saldo PAV
+    _endeud_pi = endeudamiento_mensual(d, valor_uf)
+    if _endeud_pi["endeudamiento_mensual_clp"] > 0:
+        cuota_deudas = float(_endeud_pi["endeudamiento_mensual_clp"])
     edad = int(d.get("edad_cliente") or 35)
     tipo_deudor = int(d.get("tipo_deudor") or 1)
     tipo_codeudor = int(d.get("tipo_codeudor") or 0)

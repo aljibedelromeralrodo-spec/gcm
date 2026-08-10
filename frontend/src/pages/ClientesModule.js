@@ -1929,8 +1929,21 @@ export default function ClientesModule({ onNavigate }) {
                     <div style={{ color: "#9a8c52", fontSize: "0.72rem", marginBottom: 14, lineHeight: 1.6 }}>
                       Renta líquida depurada: <b style={{ color: "#e7cf7a" }}>${techo.renta_liquida_depurada_clp.toLocaleString("es-CL")}</b> ·
                       castigos: variable −{techo.componentes_renta.castigo_variable_pct}%, honorarios −{techo.componentes_renta.castigo_honorarios_pct}% ·
-                      deuda CMF: ${techo.deuda_cmf_cuota_clp.toLocaleString("es-CL")}/mes · tasa {techo.tasa_anual_pct}% · plazo {techo.plazo_anos} años
+                      tasa {techo.tasa_anual_pct}% · plazo {techo.plazo_anos} años
                     </div>
+                    {techo.endeudamiento && (
+                      <div style={{ border: "1px solid rgba(255,255,255,0.12)", padding: "0.7rem 0.9rem", marginBottom: 14, fontSize: "0.72rem", color: "#94a3b8", lineHeight: 1.7 }}>
+                        <b style={{ color: "#cbd5e1" }}>Endeudamiento teórico (fórmula 2% mensual · 48 meses)</b><br />
+                        Deuda CMF ${techo.endeudamiento.deuda_cmf_total_clp.toLocaleString("es-CL")} → cuota ${techo.endeudamiento.cuota_teorica_cmf_clp.toLocaleString("es-CL")}/mes ·
+                        Crédito interno PAV ${techo.endeudamiento.pav_saldo_clp.toLocaleString("es-CL")} → cuota ${techo.endeudamiento.cuota_teorica_pav_clp.toLocaleString("es-CL")}/mes<br />
+                        <b style={{ color: "#e7cf7a" }}>Endeudamiento mensual total: ${techo.endeudamiento.endeudamiento_mensual_clp.toLocaleString("es-CL")}</b> ({techo.carga_actual_pct}% de la renta)
+                      </div>
+                    )}
+                    {techo.alerta_carga_excedida && (
+                      <div data-testid="techo-alerta-carga" style={{ background: "rgba(225,29,72,0.12)", border: "1px solid rgba(225,29,72,0.5)", color: "#fb7185", padding: "0.6rem 0.9rem", marginBottom: 14, fontSize: "0.74rem", fontWeight: 700 }}>
+                        🚨 Las deudas actuales ya superan el 40% de la renta líquida depurada — sin margen para un nuevo dividendo.
+                      </div>
+                    )}
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
                       {techo.escenarios.map((e, i) => {
                         const esMejor = techo.mejor_escenario && e.banco === techo.mejor_escenario.banco && e.credito_maximo_uf === techo.mejor_escenario.credito_maximo_uf;
