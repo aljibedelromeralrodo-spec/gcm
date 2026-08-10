@@ -47,6 +47,28 @@ body { font-family: 'Inter', sans-serif; background: var(--bg-dark); color: var(
 .login-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
 .login-footer { text-align: center; padding: 1.25rem 2.5rem 2rem; color: var(--text-muted); font-size: 0.9rem; letter-spacing: 1px; }
 
+/* ✨ EFECTO SHIMMER — haz de luz diagonal sobre oro pulido (lingote Maserati) */
+@keyframes shimmerSweep {
+  0%   { transform: translateX(-180%) skewX(-22deg); }
+  55%  { transform: translateX(240%)  skewX(-22deg); }
+  100% { transform: translateX(240%)  skewX(-22deg); }
+}
+.shimmer-oro { position: relative; overflow: hidden; isolation: isolate; }
+.shimmer-oro::after {
+  content: ""; position: absolute; top: -10%; left: 0; height: 120%; width: 38%;
+  background: linear-gradient(105deg,
+    rgba(255,255,255,0) 0%,
+    rgba(255,255,255,0.12) 38%,
+    rgba(255,255,255,0.60) 50%,
+    rgba(255,255,255,0.12) 62%,
+    rgba(255,255,255,0) 100%);
+  transform: translateX(-180%) skewX(-22deg);
+  animation: shimmerSweep 3s ease-in-out infinite;
+  pointer-events: none; z-index: 1;
+}
+.shimmer-oro:disabled::after { animation: none; opacity: 0; }
+@media (prefers-reduced-motion: reduce) { .shimmer-oro::after { animation: none; } }
+
 /* ===== DASHBOARD LAYOUT ===== */
 .dashboard-layout { display: flex; min-height: 100vh; }
 

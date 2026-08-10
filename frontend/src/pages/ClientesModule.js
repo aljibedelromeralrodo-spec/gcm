@@ -1872,7 +1872,7 @@ export default function ClientesModule({ onNavigate }) {
                 style={{ background: "rgba(212,175,55,0.15)", border: "1px solid #d4af37", color: "#b8942e" }}>
                 <i className="fa fa-dollar"></i> Datos Financieros
               </button>
-              <button className="docs-btn secondary" onClick={() => openEmailModal(currentFolder)} data-testid="btn-send-autocorreo-detail"
+              <button className="docs-btn secondary shimmer-oro" onClick={() => openEmailModal(currentFolder)} data-testid="btn-send-autocorreo-detail"
                 style={{ background: "#10c98a", border: "1px solid #0e9f6e", color: "#fff", fontWeight: 600 }}>
                 <i className="fa fa-paper-plane"></i> Enviar a Mesa
               </button>

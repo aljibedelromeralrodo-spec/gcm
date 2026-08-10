@@ -8,6 +8,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import io
 import re
+import html
 import uuid
 import json
 import asyncio
@@ -33,12 +34,17 @@ import simulador_engine
 
 app = FastAPI(title="Central Mutuos API")
 
-# BLINDAJE DE COMUNICACIÓN (CORS): orígenes desde variables de entorno (Preview y Live).
-_cors_env = os.environ.get("CORS_ORIGINS", "*")
+import auth as _auth
+
+# BÚNKER DE SEGURIDAD (SEC-001/002): autenticación global de todas las rutas /api.
+app.add_middleware(_auth.AuthMiddleware)
+# BLINDAJE DE COMUNICACIÓN (CORS): orígenes explícitos desde variables de entorno.
+_cors_env = os.environ.get("CORS_ORIGINS", "")
+_cors_origins = [o.strip() for o in _cors_env.split(",") if o.strip()] or ["http://localhost:3000"]
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=["*"] if _cors_env == "*" else [o.strip() for o in _cors_env.split(",")],
+    allow_origins=_cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -245,11 +251,13 @@ async def auth_login(payload: dict):
     })
     if not user:
         raise HTTPException(status_code=401, detail="Credenciales invalidas")
+    rol = user.get("rol", "ejecutivo")
     return {
-        "token": str(uuid.uuid4()),
+        "token": _auth.create_token(user["codigo"], rol=rol, scope="terminal",
+                                    extra={"nombre": user.get("nombre", codigo)}),
         "codigo": user["codigo"],
         "nombre": user.get("nombre", codigo),
-        "rol": user.get("rol", "ejecutivo"),
+        "rol": rol,
     }
 
 
@@ -260,11 +268,14 @@ async def inmo_login(payload: dict):
     if not usuario or not password:
         return {"ok": False, "error": "Ingrese usuario y clave"}
     # Accept the platform admin credential or any seeded inmo user
+    inmo = payload.get("inmobiliaria") or "Inmobiliaria Demo"
     return {
         "ok": True,
+        "token": _auth.create_token(usuario, rol="ejecutivo", scope="inmobiliaria",
+                                    extra={"inmobiliaria": inmo}),
         "usuario": usuario,
         "nombre": usuario.capitalize(),
-        "inmobiliaria": payload.get("inmobiliaria") or "Inmobiliaria Demo",
+        "inmobiliaria": inmo,
         "rol": "ejecutivo",
     }
 
@@ -1175,13 +1186,13 @@ async def search(q: str = "", limit: int = 15):
     results = []
     if len(q) >= 2:
         sims = await db.simulaciones.find(
-            {"nombre_completo": {"$regex": q, "$options": "i"}}
+            {"nombre_completo": {"$regex": re.escape(q), "$options": "i"}}
         ).limit(limit).to_list(limit)
         for s in sims:
             results.append({"tipo": "simulacion", "nombre": s.get("nombre_completo", "-"),
                             "detalle": f"{s.get('capacidad_credito_uf', 0)} UF", "modulo": "historial"})
         folders = await db.folders.find(
-            {"nombre": {"$regex": q, "$options": "i"}}
+            {"nombre": {"$regex": re.escape(q), "$options": "i"}}
         ).limit(limit).to_list(limit)
         for f in folders:
             results.append({"tipo": "cliente", "nombre": f.get("nombre", "-"),
@@ -3015,7 +3026,7 @@ async def contactos_emails(q: str = ""):
 
 @api.get("/seguimiento/clientes")
 async def seg_clientes(q: str = ""):
-    query = {"cliente": {"$regex": q, "$options": "i"}} if q else {}
+    query = {"cliente": {"$regex": re.escape(q), "$options": "i"}} if q else {}
     docs = await db.seguimiento.find(query).sort("fecha", -1).limit(500).to_list(500)
     # agrupar por cliente
     por_cliente = {}
@@ -8978,6 +8989,18 @@ async def firma_portal(token: str, request: Request):
           border-radius:999px; cursor:pointer; box-shadow:0 10px 30px rgba(15,23,42,0.30);
           transition:transform .18s ease, box-shadow .18s ease; text-decoration:none; }}
   .btn:hover {{ transform:translateY(-2px); box-shadow:0 16px 40px rgba(15,23,42,0.38); }}
+  /* ✨ SHIMMER — lingote de oro Maserati recibiendo un destello de luz */
+  #btnFirmar {{ background:linear-gradient(135deg,#BF953F,#FCF6BA 45%,#B38728,#FBF5B7 80%,#AA771C);
+                color:#0a0a0a; font-weight:800; position:relative; overflow:hidden;
+                box-shadow:0 10px 30px rgba(170,119,28,0.35); }}
+  #btnFirmar::after {{ content:""; position:absolute; top:-10%; left:0; height:120%; width:38%;
+    background:linear-gradient(105deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.14) 38%,
+      rgba(255,255,255,0.62) 50%, rgba(255,255,255,0.14) 62%, rgba(255,255,255,0) 100%);
+    transform:translateX(-180%) skewX(-22deg); animation:shimmerSweep 3s ease-in-out infinite;
+    pointer-events:none; }}
+  @keyframes shimmerSweep {{ 0% {{ transform:translateX(-180%) skewX(-22deg); }}
+    55% {{ transform:translateX(240%) skewX(-22deg); }}
+    100% {{ transform:translateX(240%) skewX(-22deg); }} }}
   .nota {{ font-size:0.72rem; color:#9CA3AF; margin-top:1.6rem; line-height:1.6; }}
   .badge {{ position:fixed; bottom:18px; right:22px; display:flex; align-items:center; gap:0.5rem;
             background:#fff; border:1px solid #E2E8F0; border-radius:999px; padding:0.45rem 1rem;
@@ -9380,7 +9403,7 @@ def _set_public(doc):
 
 @api.get("/set-credito/sets")
 async def setcred_list(q: str = ""):
-    query = {"nombre": {"$regex": q, "$options": "i"}} if q else {}
+    query = {"nombre": {"$regex": re.escape(q), "$options": "i"}} if q else {}
     docs = await db.set_credito.find(query).sort("created_at", -1).limit(200).to_list(200)
     return {"sets": [_set_public(d) for d in docs], "doc_tipos": SET_DOC_LABELS}
 
@@ -9650,7 +9673,7 @@ async def setcred_delete_file(sid: str, payload: dict):
     rel = (payload.get("file_path", "") or "").strip()
     base = _set_dir(doc.get("nombre", "")).resolve()
     target = (base / rel).resolve()
-    if not str(target).startswith(str(base)):
+    if not target.is_relative_to(base):
         raise HTTPException(status_code=400, detail="Ruta inválida")
     if not target.exists():
         raise HTTPException(status_code=404, detail="Archivo no encontrado")
@@ -9663,7 +9686,7 @@ async def setcred_download(sid: str, file_path: str, inline: bool = False):
     doc = await _get_set(sid)
     base = _set_dir(doc.get("nombre", "")).resolve()
     target = (base / file_path).resolve()
-    if not str(target).startswith(str(base)) or not target.exists():
+    if not target.is_relative_to(base) or not target.exists():
         raise HTTPException(status_code=404, detail="Archivo no encontrado")
     disp = "inline" if inline else "attachment"
     return FileResponse(str(target), media_type="application/pdf",
@@ -10134,7 +10157,7 @@ async def setcred_enviar_firma(sid: str, payload: dict):
     doc = await _get_set(sid)
     base = _set_dir(doc.get("nombre", "")).resolve()
     target = (base / (payload.get("file_path", "") or "")).resolve()
-    if not str(target).startswith(str(base)) or not target.exists():
+    if not target.is_relative_to(base) or not target.exists():
         raise HTTPException(status_code=404, detail="Documento no encontrado")
     firmante = {
         "nombres": payload.get("nombres") or doc.get("nombre", ""),
@@ -11982,13 +12005,17 @@ async def calificar_portal(oid: str):
     if not op:
         return HTMLResponse("<h3 style='font-family:sans-serif;color:#333;text-align:center;margin-top:20vh'>Enlace no válido o expirado — Central Mutuos</h3>", status_code=404)
     proyecto = (op.get("proyecto") or "").strip()
-    html = (_CALIFICAR_HTML
-            .replace("__PROY_TIT__", f" en {proyecto}" if proyecto else "")
-            .replace("__NOMBRE__", (op.get("nombre") or "").split()[0].title() or "")
-            .replace("__PROYECTO_LINEA__", f"Proyecto {proyecto}" if proyecto else "Calificación Hipotecaria VIP")
-            .replace("__TELEFONO__", (op.get("telefono") or "").strip())
-            .replace("__OID__", oid))
-    return HTMLResponse(html)
+    # SEC-004: todo dato del prospecto se escapa antes de inyectarse en el HTML
+    _e = html.escape
+    _nombre = _e((op.get("nombre") or "").split()[0].title() or "")
+    _proy = _e(proyecto)
+    html_portal = (_CALIFICAR_HTML
+            .replace("__PROY_TIT__", f" en {_proy}" if _proy else "")
+            .replace("__NOMBRE__", _nombre)
+            .replace("__PROYECTO_LINEA__", f"Proyecto {_proy}" if _proy else "Calificación Hipotecaria VIP")
+            .replace("__TELEFONO__", _e((op.get("telefono") or "").strip()))
+            .replace("__OID__", _e(oid)))
+    return HTMLResponse(html_portal)
 
 
 @app.post("/api/calificar/{oid}/subir")
@@ -12041,11 +12068,15 @@ async def calificar_subir(oid: str,
               ("cotizacion", cotizacion, "06_cotizacion")))
     guardados = {}
     rut_ocr = ""
+    MAX_UPLOAD = 10 * 1024 * 1024  # SEC-004: límite de 10MB por archivo
     for key, files, sub in rutas:
         for up in files or []:
             raw = await up.read()
             if not raw:
                 continue
+            if len(raw) > MAX_UPLOAD:
+                raise HTTPException(status_code=413,
+                                    detail=f"El archivo '{up.filename or sub}' supera el límite de 10MB")
             fn = up.filename or f"{sub}.pdf"
             try:
                 raw, fn, _ = pdfs.convertir_a_pdf(raw, fn)
@@ -12263,6 +12294,10 @@ async def calificar_recientes():
     desde = (datetime.now(timezone.utc) - timedelta(hours=48)).isoformat()
     caps = await db.capturas_autonomas.find({"creado_en": {"$gte": desde}}, {"_id": 0}).sort("creado_en", -1).to_list(20)
     return {"capturas": caps}
+
+
+app.include_router(api)
+
 
 
 app.include_router(api)

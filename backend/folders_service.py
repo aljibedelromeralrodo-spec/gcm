@@ -154,7 +154,7 @@ def resolver_ruta(nombre, rel_path):
     """Resuelve una ruta relativa dentro de la carpeta, prevenir path traversal."""
     base = folder_dir(nombre).resolve()
     target = (base / rel_path).resolve()
-    if not str(target).startswith(str(base)):
+    if not target.is_relative_to(base):
         raise ValueError("Ruta inválida")
     return target
 

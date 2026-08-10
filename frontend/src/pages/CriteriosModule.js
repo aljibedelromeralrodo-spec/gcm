@@ -132,7 +132,7 @@ export default function CriteriosModule() {
         ))}
       </div>
       <div style={{ position: "sticky", bottom: 0, marginTop: "1.2rem", textAlign: "right" }}>
-        <button data-testid="criterios-guardar-btn" disabled={!dirty} onClick={() => { setMsg(""); setModal(true); }}
+        <button data-testid="criterios-guardar-btn" className="shimmer-oro" disabled={!dirty} onClick={() => { setMsg(""); setModal(true); }}
           style={{ padding: "0.7rem 2rem", fontWeight: 800, fontSize: "0.85rem", letterSpacing: "0.08em",
             cursor: dirty ? "pointer" : "not-allowed", border: "none", color: "#0a0a0a",
             backgroundImage: "linear-gradient(135deg, #BF953F, #FCF6BA 45%, #B38728, #FBF5B7 80%, #AA771C)",

@@ -259,7 +259,7 @@ export default function OportunidadesModule() {
                       style={{ ...btn("rgba(212,175,55,0.15)", "#e7cf7a"), border: "1px solid rgba(212,175,55,0.4)", marginRight: 6 }}>
                       {busyId === op.id ? "…" : (op.borrador ? "Ver borrador" : "Preparar borrador")}
                     </button>
-                    <button data-testid={`op-autorizar-${i}`} onClick={() => autorizar(op)}
+                    <button data-testid={`op-autorizar-${i}`} className="shimmer-oro" onClick={() => autorizar(op)}
                       disabled={busyId === op.id || !op.borrador || !op.email || bloqueado(op)}
                       title={bloqueado(op) ? `Bloqueado hasta ${(op.bloqueado_hasta || "").slice(0, 10)}` : ""}
                       style={{ ...btn("linear-gradient(135deg, #BF953F, #FCF6BA 45%, #B38728)"), marginRight: 6, opacity: (!op.borrador || !op.email || bloqueado(op)) ? 0.35 : 1 }}>
@@ -288,7 +288,7 @@ export default function OportunidadesModule() {
             <div style={{ background: "#fff", padding: "1rem", maxHeight: "50vh", overflow: "auto" }} dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(preview.body) }} />
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 12 }}>
               <button onClick={() => setPreview(null)} style={{ ...btn("transparent", "#94a3b8"), border: "1px solid #444" }}>Cerrar</button>
-              <button data-testid="op-preview-autorizar" onClick={() => autorizar({ id: preview.id, nombre: preview.nombre, email: preview.to })}
+              <button data-testid="op-preview-autorizar" className="shimmer-oro" onClick={() => autorizar({ id: preview.id, nombre: preview.nombre, email: preview.to })}
                 disabled={!preview.to || preview.bloqueado} style={{ ...btn("linear-gradient(135deg, #BF953F, #FCF6BA 45%, #B38728)"), opacity: (!preview.to || preview.bloqueado) ? 0.35 : 1 }}>
                 🔐 Autorizar Envío
               </button>
