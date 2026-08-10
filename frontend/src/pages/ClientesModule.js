@@ -1944,6 +1944,38 @@ export default function ClientesModule({ onNavigate }) {
                         🚨 Las deudas actuales ya superan el 40% de la renta líquida depurada — sin margen para un nuevo dividendo.
                       </div>
                     )}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }} data-testid="techo-doble-panel">
+                      <div style={{ border: "1px solid rgba(255,255,255,0.15)", padding: "0.9rem 1rem" }}>
+                        <div style={{ color: "#94a3b8", fontSize: "0.68rem", letterSpacing: "0.12em", textTransform: "uppercase" }}>Criterio Teórico (Bodega)</div>
+                        <div style={{ color: "#e7cf7a", fontWeight: 900, fontSize: "1.2rem", marginTop: 6 }}>
+                          {(techo.teorico_uf || 0).toLocaleString("es-CL")} UF
+                        </div>
+                        <div style={{ color: "#6b6b6b", fontSize: "0.68rem", marginTop: 4 }}>Reglas BTG/Ameris de la Constitución</div>
+                      </div>
+                      <div data-testid="techo-espejo-mesa" style={{ border: "1px solid rgba(14,165,233,0.45)", padding: "0.9rem 1rem", background: "rgba(14,165,233,0.05)" }}>
+                        <div style={{ color: "#a5f3fc", fontSize: "0.68rem", letterSpacing: "0.12em", textTransform: "uppercase" }}>Veredicto Algoritmo Espejo MESA</div>
+                        {techo.espejo_mesa?.disponible ? (
+                          <>
+                            <div style={{ color: "#a5f3fc", fontWeight: 900, fontSize: "1.2rem", marginTop: 6 }}>
+                              {techo.espejo_mesa.monto_uf.toLocaleString("es-CL")} UF
+                            </div>
+                            <div style={{ color: "#6b6b6b", fontSize: "0.68rem", marginTop: 4 }}>
+                              Precisión estimada: {techo.espejo_mesa.precision_pct}% · {techo.espejo_mesa.n} casos del segmento
+                              {techo.espejo_mesa.segmento ? ` «${techo.espejo_mesa.segmento}»` : ""} · ventana 280 días
+                            </div>
+                          </>
+                        ) : (
+                          <div style={{ color: "#94a3b8", fontSize: "0.72rem", marginTop: 8, lineHeight: 1.5 }}>
+                            🧠 {techo.espejo_mesa?.nota || "Espejo en calibración — se entrena cada 24h con las aprobaciones reales."}
+                          </div>
+                        )}
+                        {techo.espejo_mesa?.sugerir_codeudor && (
+                          <div data-testid="techo-sugerir-codeudor" style={{ color: "#e7cf7a", fontSize: "0.7rem", marginTop: 6, fontWeight: 700 }}>
+                            💡 DashAI: para esta renta la MESA suele exigir <u>Incorporar Codeudor</u>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
                       {techo.escenarios.map((e, i) => {
                         const esMejor = techo.mejor_escenario && e.banco === techo.mejor_escenario.banco && e.credito_maximo_uf === techo.mejor_escenario.credito_maximo_uf;

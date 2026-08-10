@@ -815,3 +815,120 @@ def comparar_competidores(d: dict, seguros: dict, valor_uf: float) -> dict:
             "conclusion": "Elige la opcion que mejor se ajuste a tu presupuesto mensual.",
         },
     }
+
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ALGORITMO ESPEJO MESA — Ingeniería inversa por regresión sobre el
+# comportamiento real de los evaluadores (no reglas fijas). Se re-entrena
+# cada 24h para reflejar el "humor" del mercado.
+# ═══════════════════════════════════════════════════════════════════════════
+def _regresion_lineal(xs, ys):
+    """Mínimos cuadrados: y = a*x + b. Devuelve (a, b, r2)."""
+    n = len(xs)
+    if n < 2:
+        return 0.0, (ys[0] if ys else 0.0), 0.0
+    sx, sy = sum(xs), sum(ys)
+    sxy = sum(x * y for x, y in zip(xs, ys))
+    sxx = sum(x * x for x in xs)
+    den = n * sxx - sx * sx
+    if den == 0:
+        return 0.0, sy / n, 0.0
+    a = (n * sxy - sx * sy) / den
+    b = (sy - a * sx) / n
+    my = sy / n
+    ss_tot = sum((y - my) ** 2 for y in ys)
+    ss_res = sum((y - (a * x + b)) ** 2 for x, y in zip(xs, ys))
+    r2 = (1 - ss_res / ss_tot) if ss_tot > 0 else 1.0
+    return a, b, max(0.0, min(1.0, r2))
+
+
+def entrenar_espejo_mesa(casos):
+    """RECONSTRUCCIÓN COMPLETA DEL ALGORITMO MESA (regresión segmentada jerárquica).
+
+    Variable base: renta disponible = (renta titular + renta codeudor) −
+    (cuota CMF 2% + crédito interno PAV). Se entrena UNA regresión por cada
+    combinación de criterios (tipo de codeudor × subsidio × tramo de edad) y
+    en cascada hacia segmentos más generales cuando falta muestra. Así el
+    Espejo captura los cortes silenciosos de la MESA por cada ápice de criterio.
+    """
+    casos = [c for c in (casos or [])
+             if c.get("renta_disponible_clp", c.get("renta_liquida_clp", 0)) > 0
+             and c.get("tope_uf", 0) > 0]
+    n = len(casos)
+
+    def _x(c):
+        return float(c.get("renta_disponible_clp") or c.get("renta_liquida_clp")) / 1_000_000
+
+    def _niveles(c):
+        cod = c.get("codeudor_tipo") or ("con_codeudor" if c.get("con_codeudor") else "ninguno")
+        sub = "sub" if c.get("con_subsidio") else "nosub"
+        edad = c.get("edad_bucket") or "s/i"
+        return [f"{cod}|{sub}|{edad}", f"{cod}|{sub}", f"{cod}", "GLOBAL"]
+
+    def _entrenar(grupo):
+        xs = [_x(c) for c in grupo]
+        ys = [float(c["tope_uf"]) for c in grupo]
+        a, b, r2 = _regresion_lineal(xs, ys)
+        errs = [abs((a * x + b) - y) / y for x, y in zip(xs, ys) if y > 0]
+        mape = (sum(errs) / len(errs)) if errs else 0.0
+        return {"a": round(a, 4), "b": round(b, 2), "r2": round(r2, 3), "n": len(grupo),
+                "mape_pct": round(mape * 100, 1),
+                "precision_pct": round(max(0.0, min(1.0, 1 - mape)) * 100)}
+
+    segmentos = {}
+    for c in casos:
+        for seg in _niveles(c):
+            segmentos.setdefault(seg, []).append(c)
+    modelo_segs = {seg: _entrenar(grupo) for seg, grupo in segmentos.items()}
+    glob = modelo_segs.get("GLOBAL") or {"precision_pct": 0, "n": 0}
+    return {
+        "n": n, "listo": n >= 2,
+        "segmentos": modelo_segs,
+        "dimensiones": ["codeudor_tipo (ninguno/familiar/tercero)", "con_subsidio",
+                        "edad_bucket (<40 / 40_59 / 60+)",
+                        "renta_disponible = renta conjunta − (CMF 2% + PAV)"],
+        "precision_pct": glob.get("precision_pct", 0),
+        "r2": glob.get("r2", 0), "mape_pct": glob.get("mape_pct"),
+        "cobertura_segmentos": len([s for s in modelo_segs if s != "GLOBAL"]),
+        "nota": None if n >= 2 else
+        "Datos insuficientes: el Espejo se calibra al acumular aprobaciones con renta y monto.",
+    }
+
+
+def simular_como_mesa(features, modelo):
+    """Veredicto del Algoritmo Espejo: busca el segmento MÁS específico que
+    coincida con los criterios del cliente (codeudor/subsidio/edad) y con
+    muestra suficiente; si no, cae en cascada a segmentos más generales."""
+    modelo = modelo or {}
+    segs = modelo.get("segmentos") or {}
+    if not modelo.get("listo") or not segs:
+        return {"disponible": False, "precision_pct": modelo.get("precision_pct", 0),
+                "n": modelo.get("n", 0),
+                "nota": modelo.get("nota") or "Espejo en calibración (re-entrena cada 24h)"}
+    f = features or {}
+    renta_total = _n(f.get("renta_liquida_clp")) + _n(f.get("renta_codeudor_clp"))
+    renta_disp = max(0.0, renta_total - _n(f.get("endeudamiento_mensual_clp")))
+    if renta_disp <= 0:
+        return {"disponible": False, "nota": "Sin renta disponible para proyectar el Espejo"}
+    cod = f.get("codeudor_tipo") or ("con_codeudor" if f.get("con_codeudor") else "ninguno")
+    sub = "sub" if f.get("con_subsidio") else "nosub"
+    edad = f.get("edad_bucket") or ("60+" if f.get("edad_mayor_60") else "s/i")
+    cascada = [f"{cod}|{sub}|{edad}", f"{cod}|{sub}", f"{cod}", "GLOBAL"]
+    elegido, seg_id = None, "GLOBAL"
+    for sid in cascada:
+        s = segs.get(sid)
+        if s and s["n"] >= (3 if sid != "GLOBAL" else 2):
+            elegido, seg_id = s, sid
+            break
+    if not elegido:
+        elegido, seg_id = segs.get("GLOBAL"), "GLOBAL"
+    if not elegido:
+        return {"disponible": False, "nota": "Espejo sin segmento entrenado"}
+    x = renta_disp / 1_000_000
+    monto = max(0.0, elegido["a"] * x + elegido["b"])
+    return {"disponible": True, "monto_uf": round(monto, 1),
+            "precision_pct": elegido.get("precision_pct", 0),
+            "n": elegido.get("n", 0), "segmento": seg_id,
+            "renta_disponible_clp": round(renta_disp),
+            "r2": elegido.get("r2"), "n_total_modelo": modelo.get("n", 0)}

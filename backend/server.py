@@ -235,6 +235,8 @@ async def startup():
     asyncio.create_task(_task_blindada(_bunker_loop, "bunker_gridfs"))
     asyncio.create_task(_task_blindada(_rescate_historico_loop, "rescate_historico"))
     asyncio.create_task(_task_blindada(_dashai_dataset_loop, "dashai_dataset_2359"))
+    asyncio.create_task(_task_blindada(_cloud_bunker_loop, "cloud_bunker_espejo"))
+    asyncio.create_task(_task_blindada(_espejo_mesa_loop, "espejo_mesa_24h"))
 
 
 # ---------------------------------------------------------------------------
@@ -2286,6 +2288,30 @@ async def folder_techo_hipotecario(fid: str, payload: dict = None):
     cmf = payload.get("cuota_cmf_clp")
     res = await asyncio.to_thread(ce.techo_hipotecario, df, criterios, tasas, uf, plazo, cmf)
     res["cliente"] = doc.get("nombre")
+    # DOBLE PANEL: Criterio Teórico (Bodega) vs Veredicto Algoritmo Espejo MESA
+    modelo = await db.config.find_one({"_key": "espejo_mesa_modelo"}) or {}
+    renta_ref = res.get("componentes_renta", {}).get("renta_liquida_fija") or 0
+    _edad = int(_num_limpio(df.get("edad")))
+    _cod_nombre = (doc.get("codeudor_nombre") or "").strip()
+    features = {
+        "renta_liquida_clp": renta_ref,
+        "renta_codeudor_clp": _num_limpio(df.get("renta_codeudor")),
+        "endeudamiento_mensual_clp": (res.get("endeudamiento") or {}).get("endeudamiento_mensual_clp", 0),
+        "con_subsidio": bool(df.get("con_subsidio")),
+        "con_codeudor": bool(_cod_nombre),
+        "codeudor_tipo": ("ninguno" if not _cod_nombre else
+                          ("familiar" if set((doc.get("nombre") or "").lower().split()[1:])
+                           & set(_cod_nombre.lower().split()[1:]) else "tercero")),
+        "edad_bucket": "s/i" if _edad <= 0 else ("<40" if _edad < 40 else ("40_59" if _edad < 60 else "60+")),
+        "edad_mayor_60": _edad >= 60,
+    }
+    espejo = await asyncio.to_thread(ce.simular_como_mesa, features, modelo)
+    exp = _estimar_tope_mesa(renta_ref, modelo)
+    if exp and exp.get("sugerir_codeudor"):
+        espejo["sugerir_codeudor"] = True
+    res["espejo_mesa"] = espejo
+    res["experiencia_mesa"] = exp
+    res["teorico_uf"] = (res.get("mejor_escenario") or {}).get("credito_maximo_uf")
     return res
 
 
@@ -10794,6 +10820,163 @@ async def _forense_buscar_contexto(cliente, rut_seg):
             {"nombre_completo": {"$regex": re.escape(cliente[:20]), "$options": "i"}},
             sort=[("timestamp", -1)])
     return fd, sim
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# MINERÍA DE LÍMITES + ALGORITMO ESPEJO MESA (ingeniería inversa, 280 días)
+# Triangula renta↔tope UF de aprobaciones reales, guarda db.limites_reales_mesa
+# y re-entrena el Espejo (regresión) en config.espejo_mesa_modelo cada 24h.
+# ═══════════════════════════════════════════════════════════════════════════
+def _num_limpio(v):
+    try:
+        if isinstance(v, str):
+            v = re.sub(r"[^\d.,]", "", v).replace(".", "").replace(",", ".")
+        return float(v or 0)
+    except (ValueError, TypeError):
+        return 0.0
+
+
+def _monto_uf_desde(*fuentes, uf=39000):
+    for v in fuentes:
+        n = _num_limpio(v)
+        if n > 0:
+            return round(n / uf, 1) if n > 100000 else round(n, 1)  # >100k = CLP → UF
+    return 0.0
+
+
+async def minar_limites_mesa(dias=280):
+    """Analiza las aprobaciones de los últimos N días y triangula renta↔tope UF,
+    luego re-entrena el Algoritmo Espejo MESA por regresión."""
+    uf = await get_valor_uf()
+    corte = (datetime.now(timezone.utc) - timedelta(days=dias)).isoformat()
+    entradas = await db.seguimiento.find(
+        {"estado": {"$in": ["aprobacion", "aprobado"]}, "fecha": {"$gte": corte}}
+    ).sort("fecha", -1).to_list(2000)
+    if not entradas:
+        entradas = await db.seguimiento.find(
+            {"estado": {"$in": ["aprobacion", "aprobado"]}}).sort("fecha", -1).to_list(60)
+    frase_re = re.compile(r"m[aá]ximo cr[eé]dito posible|posible solamente|tope|m[aá]ximo", re.I)
+    cod_re = re.compile(r"codeudor|aval|segundo titular", re.I)
+    casos = []
+    for s in entradas:
+        cliente = (s.get("cliente") or "").strip()
+        fd, sim = await _forense_buscar_contexto(cliente, s.get("rut"))
+        df = (fd or {}).get("datos_financieros") or {}
+        renta = _num_limpio(df.get("renta_liquida") or df.get("renta_fija"))
+        monto_uf = _monto_uf_desde(
+            s.get("monto_credito"), df.get("monto_credito"),
+            (sim or {}).get("credito_maximo_uf"), (sim or {}).get("credito_solicitado_uf"),
+            (sim or {}).get("capacidad_credito_uf"), uf=uf)
+        if renta <= 0 or monto_uf <= 0:
+            continue
+        asunto = (s.get("asunto") or "")
+        con_cod = bool(cod_re.search(asunto) or (fd or {}).get("codeudor_nombre")
+                       or (sim or {}).get("tiene_codeudor"))
+        # TIPO DE CODEUDOR: familiar (apellido común o parentesco) vs tercera persona
+        cod_nombre = ((fd or {}).get("codeudor_nombre") or "").strip().lower()
+        parentesco_re = re.compile(r"c[oó]nyuge|esposa|esposo|hij[oa]|madre|padre|herman[oa]|familiar", re.I)
+        if not con_cod:
+            cod_tipo = "ninguno"
+        elif parentesco_re.search(asunto) or parentesco_re.search(str((fd or {}).get("codeudor_parentesco") or "")):
+            cod_tipo = "familiar"
+        elif cod_nombre and cliente:
+            ap_tit = set(cliente.lower().split()[1:])
+            ap_cod = set(cod_nombre.split()[1:])
+            cod_tipo = "familiar" if (ap_tit & ap_cod) else "tercero"
+        else:
+            cod_tipo = "tercero"
+        renta_cod = _num_limpio(df.get("renta_codeudor") or (sim or {}).get("renta_codeudor"))
+        edad = int(_num_limpio(df.get("edad") or (sim or {}).get("edad_cliente")))
+        edad_bucket = "s/i" if edad <= 0 else ("<40" if edad < 40 else ("40_59" if edad < 60 else "60+"))
+        endeud = ce.endeudamiento_mensual(df, uf)["endeudamiento_mensual_clp"]
+        casos.append({
+            "id": str(uuid.uuid4()), "cliente": cliente,
+            "rut": (fd or {}).get("rut") or s.get("rut") or "",
+            "renta_liquida_clp": round(renta), "renta_codeudor_clp": round(renta_cod),
+            "renta_disponible_clp": round(max(0, renta + renta_cod - endeud)),
+            "endeudamiento_mensual_clp": round(endeud),
+            "tope_uf": monto_uf,
+            "con_codeudor": con_cod, "codeudor_tipo": cod_tipo,
+            "con_subsidio": bool(df.get("con_subsidio")),
+            "edad": edad or None, "edad_bucket": edad_bucket,
+            "edad_mayor_60": edad >= 60,
+            "mencion_tope": bool(frase_re.search(asunto)),
+            "fecha_mesa": (s.get("fecha") or "")[:10], "asunto": asunto[:140],
+            "minado_en": now_iso(),
+        })
+    # Deduplicación: un caso por cliente (se conserva el más reciente)
+    vistos, unicos = set(), []
+    for c in casos:
+        k = (c["cliente"].lower(), c["rut"])
+        if k in vistos:
+            continue
+        vistos.add(k)
+        unicos.append(c)
+    casos = unicos
+    await db.limites_reales_mesa.delete_many({})
+    if casos:
+        await db.limites_reales_mesa.insert_many([dict(c) for c in casos])
+    modelo = await asyncio.to_thread(ce.entrenar_espejo_mesa, casos)
+    modelo["ventana_dias"] = dias
+    modelo["actualizado_en"] = now_iso()
+    modelo["uf_ref"] = round(uf)
+    modelo["casos"] = sorted(
+        [{"renta_liquida_clp": c["renta_liquida_clp"],
+          "renta_disponible_clp": c["renta_disponible_clp"], "tope_uf": c["tope_uf"],
+          "con_codeudor": c["con_codeudor"], "codeudor_tipo": c["codeudor_tipo"],
+          "con_subsidio": c["con_subsidio"], "edad_bucket": c["edad_bucket"]}
+         for c in casos],
+        key=lambda c: c["renta_liquida_clp"])
+    rangos_cod = [c["renta_liquida_clp"] for c in casos if c["con_codeudor"]]
+    modelo["codeudor_renta_min"] = min(rangos_cod) if rangos_cod else None
+    modelo["codeudor_renta_max"] = max(rangos_cod) if rangos_cod else None
+    await db.config.update_one({"_key": "espejo_mesa_modelo"}, {"$set": modelo}, upsert=True)
+    return {"minados": len(casos), "precision_pct": modelo.get("precision_pct", 0),
+            "listo": modelo.get("listo", False), "con_codeudor": len(rangos_cod)}
+
+
+def _estimar_tope_mesa(renta_clp, modelo):
+    """Tope UF empírico por vecindad de casos reales (para el panel de experiencia)."""
+    casos = (modelo or {}).get("casos") or []
+    renta_clp = _num_limpio(renta_clp)
+    if not casos or renta_clp <= 0:
+        return None
+    cercanos = [c for c in casos if 0.75 * renta_clp <= c["renta_liquida_clp"] <= 1.25 * renta_clp]
+    if not cercanos:
+        cercanos = sorted(casos, key=lambda c: abs(c["renta_liquida_clp"] - renta_clp))[:3]
+    topes = [c["tope_uf"] for c in cercanos]
+    n_cod = sum(1 for c in cercanos if c["con_codeudor"])
+    return {"tope_real_uf": round(sum(topes) / len(topes), 1) if topes else 0,
+            "muestra_n": len(cercanos),
+            "sugerir_codeudor": bool(cercanos and n_cod / len(cercanos) >= 0.5)}
+
+
+async def _espejo_mesa_loop():
+    """MODO ESPEJO PERMANENTE: re-entrena el algoritmo cada 24 horas."""
+    await asyncio.sleep(120)
+    while True:
+        try:
+            await minar_limites_mesa(280)
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logging.warning(f"espejo mesa loop: {e}")
+        await asyncio.sleep(86400)
+
+
+@api.get("/dashai/espejo-mesa")
+async def espejo_mesa_status():
+    m = await db.config.find_one({"_key": "espejo_mesa_modelo"}) or {}
+    m.pop("_id", None)
+    casos = await db.limites_reales_mesa.find({}, {"_id": 0}).sort("renta_liquida_clp", 1).to_list(300)
+    return {"modelo": m, "casos": casos}
+
+
+@api.post("/dashai/espejo-mesa/minar")
+async def espejo_mesa_minar(payload: dict = None):
+    dias = int((payload or {}).get("dias") or 280)
+    return await minar_limites_mesa(dias)
+
 
 
 async def _forense_auditar_entrada(s, modelo):
