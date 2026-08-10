@@ -56,7 +56,7 @@ def mensaje_jose_martin(nombre, proyecto="", link_simulador="", pixel_url=""):
     subject = f"Propuesta Exclusiva de Central Mutuos para {nombre.title()}"
     ref_proyecto = f" para su futuro hogar en <b>{proyecto}</b>" if proyecto else ""
     body = f"""
-<div style="font-family:Georgia,'Times New Roman',serif;max-width:560px;margin:0 auto;color:#0f172a">
+<div style="font-family:Georgia,'Times New Roman',serif;width:100%;max-width:600px;margin:0 auto;color:#0f172a">
   <div style="background:#0f172a;padding:26px 30px;border-radius:14px 14px 0 0">
     <div style="color:#e2e8f0;font-size:20px;font-weight:700;letter-spacing:0.18em">CENTRAL MUTUOS</div>
     <div style="color:#94a3b8;font-size:11px;letter-spacing:0.12em;margin-top:4px">BANCA HIPOTECARIA PRIVADA</div>
@@ -130,7 +130,7 @@ def mensaje_invitacion_vip(nombre, proyecto="", link_portal="", pixel_url=""):
     ref_proy = f' para su proyecto <b style="color:#FCF6BA">{proy}</b>' if proy else ""
     body = f"""
 <div style="background:#000000;padding:34px 14px;font-family:Georgia,'Times New Roman',serif">
-  <div style="max-width:560px;margin:0 auto;background:#050505;border:1px solid #D4AF37">
+  <div style="width:100%;max-width:600px;margin:0 auto;background:#050505;border:1px solid #D4AF37">
     <div style="border-bottom:1px solid #7a6a2f;padding:30px 34px;text-align:center;
                 background:linear-gradient(165deg,#0d0b06,#050505)">
       <div style="font-size:24px;font-weight:700;letter-spacing:0.24em;color:#D4AF37;

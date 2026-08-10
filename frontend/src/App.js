@@ -35,6 +35,7 @@ const EstudioTituloModule = lazy(() => import("./pages/EstudioTituloModule"));
 const EscrituraModule = lazy(() => import("./pages/EscrituraModule"));
 const ContraloriaModule = lazy(() => import("./pages/ContraloriaModule"));
 const CerebroDashAIModule = lazy(() => import("./pages/CerebroDashAIModule"));
+const AuditoriaForenseModule = lazy(() => import("./pages/AuditoriaForenseModule"));
 const GlobalSearch = lazy(() => import("./components/GlobalSearch"));
 const WelcomeTour = lazy(() => import("./components/WelcomeTour"));
 
@@ -74,6 +75,7 @@ function MainApp() {
   const [user, setUser] = useState(null);
   const [activeModule, setActiveModule] = useState("dashboard");
   const [valorUF, setValorUF] = useState(39842);
+  const [ufMeta, setUfMeta] = useState(null);
   const [loadedSimulation, setLoadedSimulation] = useState(null);
   const [whatsappStatus, setWhatsappStatus] = useState(null);
   const [emailNotif, setEmailNotif] = useState(0);
@@ -112,7 +114,7 @@ function MainApp() {
 
   useEffect(() => {
     if (!user) return;
-    axios.get(`${API_URL}/api/valor-uf`).then(r => setValorUF(r.data.valor_uf)).catch((e) => console.error(e));
+    axios.get(`${API_URL}/api/valor-uf`).then(r => { setValorUF(r.data.valor_uf); setUfMeta(r.data); }).catch((e) => console.error(e));
     axios.get(`${API_URL}/api/whatsapp/status`).then(r => setWhatsappStatus(r.data)).catch((e) => console.error(e));
     axios.get(`${API_URL}/api/central/email-summary`).then(r => setEmailNotif(r.data?.total || 0)).catch((e) => console.error(e));
     const fetchAlerts = () => {
@@ -156,6 +158,7 @@ function MainApp() {
     { key: 'escritura', icon: 'fa-pencil-square-o', label: 'Escritura' },
     { key: 'contraloria', icon: 'fa-search', label: 'Contraloría' },
     { key: 'dashai', icon: 'fa-lightbulb-o', label: '🧠 Cerebro DashAI' },
+    { key: 'auditoria', icon: 'fa-balance-scale', label: '📋 Auditoría Forense' },
     { key: 'cierres', icon: 'fa-handshake-o', label: 'Cierres' },
     ...(user.rol === 'admin' ? [{ key: 'oportunidades', icon: 'fa-diamond', label: 'Centro de Ventas VIP' }] : []),
     { key: 'salud', icon: 'fa-heartbeat', label: 'Panel de Salud' },
@@ -210,7 +213,13 @@ function MainApp() {
           </button>
           <div>
             <h1 className="topbar-title">{MODULE_TITLES[activeModule] || 'Dashboard'}</h1>
-            <p className="topbar-uf">UF: {formatCurrency(valorUF)}</p>
+            <p className="topbar-uf" data-testid="topbar-uf">UF: {formatCurrency(valorUF)}
+              {ufMeta?.fuente === "sii.cl" && (
+                <span style={{ display: "block", fontSize: "0.58rem", opacity: 0.65, letterSpacing: "0.04em" }}>
+                  Fuente: SII.cl · Actualizado: {(ufMeta.actualizado || "").slice(11, 16) || "—"}
+                </span>
+              )}
+            </p>
           </div>
           <div className="topbar-right">
             <div className="global-search-wrap">
@@ -269,6 +278,7 @@ function MainApp() {
         {activeModule === 'escritura' && <EscrituraModule onNavigate={setActiveModule} />}
         {activeModule === 'contraloria' && <ContraloriaModule />}
         {activeModule === 'dashai' && <CerebroDashAIModule />}
+        {activeModule === 'auditoria' && <AuditoriaForenseModule />}
         </Suspense>
       </main>
     </div>

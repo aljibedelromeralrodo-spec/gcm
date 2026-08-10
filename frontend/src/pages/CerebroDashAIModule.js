@@ -124,6 +124,23 @@ export default function CerebroDashAIModule() {
         </div>
       </div>
 
+      {(d?.reglas_estilo || []).length > 0 && (
+        <div style={{ ...panel, marginBottom: "1.2rem", borderColor: "rgba(212,175,55,0.55)" }} data-testid="dashai-reglas-estilo">
+          <div style={{ color: ORO, fontSize: "0.7rem", letterSpacing: "0.18em", textTransform: "uppercase", marginBottom: 10 }}>⚖️ Constitución DashAI · Ley de Jerarquía Suprema</div>
+          <div data-testid="dashai-constitucion" style={{ display: "flex", gap: 12, alignItems: "baseline", fontSize: "0.8rem", padding: "0.4rem 0", borderBottom: "1px solid rgba(255,255,255,0.06)", marginBottom: 6 }}>
+            <span style={{ fontWeight: 800, color: "#0a0a0a", background: "linear-gradient(135deg,#e11d48,#fb7185)", padding: "0.15rem 0.6rem", fontSize: "0.66rem", whiteSpace: "nowrap" }}>LEY MADRE · CLAVE 0586</span>
+            <span style={{ color: "#e2e8f0", lineHeight: 1.65 }}>DashAI (Bóveda de Criterios) es la ÚNICA fuente de verdad: viabilidad, forense, Set de Crédito y Simulador consultan sus parámetros antes de cada decisión. Sin conexión a la Constitución, las decisiones se bloquean.</span>
+          </div>
+          <div style={{ color: ORO, fontSize: "0.68rem", letterSpacing: "0.14em", textTransform: "uppercase", margin: "8px 0 4px" }}>📐 Reglas de Estilo Inamovibles</div>
+          {d.reglas_estilo.map((r, i) => (
+            <div key={i} data-testid={`dashai-regla-${r.n}`} style={{ display: "flex", gap: 12, alignItems: "baseline", fontSize: "0.8rem", padding: "0.4rem 0" }}>
+              <span style={{ fontWeight: 800, color: "#0a0a0a", background: "linear-gradient(135deg,#BF953F,#FCF6BA)", padding: "0.15rem 0.6rem", fontSize: "0.66rem", whiteSpace: "nowrap" }}>REGLA #{r.n}{r.inamovible ? " · INAMOVIBLE" : ""}</span>
+              <span style={{ color: "#e2e8f0", lineHeight: 1.65 }}>{r.regla}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
       {(d?.motivos_rechazo || []).length > 0 && (
         <div style={{ ...panel, marginBottom: "1.2rem" }} data-testid="dashai-motivos">
           <div style={{ color: ORO, fontSize: "0.7rem", letterSpacing: "0.18em", textTransform: "uppercase", marginBottom: 10 }}>Patrones de Rechazo Detectados (minería local)</div>

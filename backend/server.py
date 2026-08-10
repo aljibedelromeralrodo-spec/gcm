@@ -272,7 +272,10 @@ async def inmo_login(payload: dict):
 # ---------------------------------------------------------------------------
 @api.get("/valor-uf")
 async def valor_uf():
-    return {"valor_uf": await get_valor_uf(), "fecha": now_iso()}
+    cfg = await db.config.find_one({"_key": "uf"}) or {}
+    return {"valor_uf": await get_valor_uf(), "fecha": now_iso(),
+            "fuente": cfg.get("uf_source", "local"),
+            "actualizado": cfg.get("uf_updated_at", ""), "dia_uf": cfg.get("uf_day", "")}
 
 
 def _uf_desde_mindicador():
@@ -332,7 +335,7 @@ async def _actualizar_uf():
 
 
 async def _uf_auto_loop():
-    """Mantiene la UF siempre actualizada (revisa cada 6 horas)."""
+    """SINCRONIZACIÓN OFICIAL SII: refresca la UF cada 60 minutos."""
     await asyncio.sleep(10)
     while True:
         try:
@@ -341,7 +344,7 @@ async def _uf_auto_loop():
             break
         except Exception as e:
             logger.warning(f"Actualización automática de UF falló: {e}")
-        await asyncio.sleep(6 * 3600)
+        await asyncio.sleep(3600)
 
 
 @api.get("/clientes/uf-actual")
@@ -390,9 +393,13 @@ async def guardar_criterios(payload: dict):
     criterios["updated_at"] = now_iso()
     criterios["manual_override"] = True
     criterios["prioridad"] = "suprema"
+    prev = await db.config.find_one({"_key": "criterios"}) or {}
+    criterios["version"] = mesa_brain._version_num(prev.get("version")) + 1
     await db.config.replace_one({"_key": "criterios"}, criterios, upsert=True)
-    return {"ok": True, "prioridad": "suprema",
-            "nota": "Reglas manuales activas: prioridad absoluta sobre patrones aprendidos."}
+    return {"ok": True, "prioridad": "suprema", "version": criterios["version"],
+            "nota": (f"Reglas manuales activas (Bóveda DashAI v1.{criterios['version']}): "
+                     "prioridad absoluta sobre patrones aprendidos. La Auditoría Forense "
+                     "usará estos criterios en su próximo barrido (re-evaluación con un clic).")}
 
 
 @api.get("/inmobiliaria/config/tasas")
@@ -417,7 +424,14 @@ async def get_seguros():
 # ---------------------------------------------------------------------------
 @api.post("/simular-credito")
 async def simular_credito(payload: dict):
+    cons = await _constitucion_dashai()
+    u = cons["umbrales"]
+    payload.setdefault("umbral_btg_div_renta", u["div_renta_max_btg"])
+    payload.setdefault("umbral_btg_carga_fin", u["carga_maxima"])
+    payload.setdefault("umbral_btg_ltv", u["ltv_maximo"])
+    payload.setdefault("umbral_btg_edad_plazo", u["edad_plazo_max"])
     result = ce.simular_credito(payload)
+    result["constitucion_dashai"] = cons["version"]
     record = {
         **result,
         "id": str(uuid.uuid4()),
@@ -498,7 +512,10 @@ async def simulacion_pdf(payload: dict):
 # ---------------------------------------------------------------------------
 @api.post("/ia/predict")
 async def ia_predict(payload: dict):
-    return ce.ia_predict(payload)
+    cons = await _constitucion_dashai()
+    out = ce.ia_predict(payload)
+    out["constitucion_dashai"] = cons["version"]
+    return out
 
 
 @api.get("/ia/insights")
@@ -543,7 +560,9 @@ async def inmo_predict(payload: dict):
     tasas = await get_config("tasas", DEFAULT_TASAS)
     seguros = await get_config("seguros", DEFAULT_SEGUROS)
     valor = await get_valor_uf()
-    result = ce.predict_inmobiliaria(payload, tasas, seguros, valor)
+    cons = await _constitucion_dashai()
+    result = ce.predict_inmobiliaria(payload, tasas, seguros, valor, umbrales=cons["umbrales"])
+    result["constitucion_dashai"] = cons["version"]
     # persist for score-history / mi-dashboard
     await db.predic_history.insert_one({
         "id": str(uuid.uuid4()),
@@ -8190,12 +8209,15 @@ async def martin_simular(payload: dict):
     """CEREBRO DE VIABILIDAD: usa los criterios reales de la MESA (calibración) + reglas duras."""
     p = payload or {}
     stats = await _stats_mesa()
+    cons = await _constitucion_dashai()
     try:
         uf_hoy = await get_valor_uf()
     except Exception:
         uf_hoy = 39000
     try:
-        res = simulador_engine.calcular_viabilidad(p, base_mesa=stats.get("base", 0.85), uf_hoy=uf_hoy)
+        res = simulador_engine.calcular_viabilidad(p, base_mesa=stats.get("base", 0.85),
+                                                   uf_hoy=uf_hoy, umbrales=cons["umbrales"])
+        res["constitucion_dashai"] = cons["version"]
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     if p.get("op"):
@@ -9318,6 +9340,7 @@ async def setcred_list(q: str = ""):
 
 @api.post("/set-credito/sets")
 async def setcred_create(payload: dict):
+    await _constitucion_dashai()
     doc = {"id": str(uuid.uuid4()), "nombre": payload.get("nombre", ""),
            "rut": payload.get("rut", ""), "email": payload.get("email", ""),
            "created_at": now_iso(), "firmas": []}
@@ -10685,20 +10708,34 @@ async def _forense_buscar_contexto(cliente, rut_seg):
 
 
 async def _forense_auditar_entrada(s, modelo):
-    """Audita UNA respuesta de MESA contra el reglamento de bodega. Devuelve hallazgos."""
+    """Audita UNA respuesta de MESA. REGLA PERMANENTE: la Bóveda de Criterios DashAI
+    es el ÚNICO juez — todos los umbrales se leen de db.config criterios (cero hardcode)."""
     hallazgos = []
     cliente = (s.get("cliente") or "").strip()
     aprobada = s.get("estado") in ("aprobacion", "aprobado")
     fd, sim = await _forense_buscar_contexto(cliente, s.get("rut"))
     if not fd:
-        return []
+        # FIN DEL SALTO SILENCIOSO: los casos sin expediente aparecen en el reporte
+        return [{"cliente": cliente or "(sin nombre)", "rut": s.get("rut") or "",
+                 "fecha_mesa": (s.get("fecha") or "")[:10],
+                 "monto_mesa": s.get("monto_credito"), "certificado_id": None,
+                 "categoria": "NO AUDITABLE",
+                 "detalle": "⚠️ NO AUDITABLE - Sin expediente digital (decisión de MESA sin carpeta ni simulación vinculada)",
+                 "nota_dashai": "DashAI: la decisión de MESA existe en el correo, pero no hay expediente digital para triangular LTV, carga ni renta. Ejecute el Rellenado de Datos o cree la carpeta para auditar este caso."}]
+    # SINCRONIZACIÓN DE BÓVEDA (obligatoria antes de cualquier juicio)
+    pol = await asyncio.to_thread(mesa_brain.politicas_maestras)
+    min_uf = await asyncio.to_thread(mesa_brain.monto_minimo_sin_subsidio)
+    crit_ver = await asyncio.to_thread(mesa_brain.criterios_version)
+    edad_max = float(pol.get("edad_maxima_credito") or 80)
+    antig_min = float(pol.get("antiguedad_minima_meses") or 12)
     cert = await asyncio.to_thread(
         mesa_brain.auditar_caso, fd, sim, "aprobacion" if aprobada else "rechazo", modelo)
     rut_cli = fd.get("rut") or s.get("rut") or ""
     base = {"cliente": cliente or fd.get("nombre", ""), "rut": rut_cli,
             "fecha_mesa": (s.get("fecha") or "")[:10],
             "monto_mesa": s.get("monto_credito") or cert.get("monto_uf"),
-            "certificado_id": cert.get("certificado_id")}
+            "certificado_id": cert.get("certificado_id"),
+            "criterios_version": f"v1.{crit_ver}"}
     # 1) RIESGO: aprobación que rompe políticas (violación crítica)
     df = fd.get("datos_financieros") or {}
     if aprobada and cert.get("criticas"):
@@ -10711,28 +10748,28 @@ async def _forense_auditar_entrada(s, modelo):
     except (TypeError, ValueError):
         m_uf = 0
     con_sub = bool(df.get("con_subsidio"))
-    if aprobada and 0 < m_uf < 2000 and not con_sub:
+    if aprobada and 0 < m_uf < min_uf and not con_sub:
         hallazgos.append({**base, "categoria": "RIESGO",
-                          "detalle": f"Monto aprobado {m_uf:.0f} UF < 2.000 UF sin subsidio — fuera de política de bodega",
-                          "nota_dashai": "DashAI: el reglamento BTG/Ameris fija un mínimo de 2.000 UF para operaciones sin subsidio. Esta aprobación no es colocable en la bodega y quedará atrapada en cartera propia."})
+                          "detalle": f"Monto aprobado {m_uf:.0f} UF < {min_uf:.0f} UF sin subsidio — fuera de política de bodega",
+                          "nota_dashai": f"DashAI (Bóveda v1.{crit_ver}): el reglamento vigente fija un mínimo de {min_uf:.0f} UF para operaciones sin subsidio. Esta aprobación no es colocable en la bodega y quedará atrapada en cartera propia."})
     # 1c) RIESGO — REGLA DE LOS 80 AÑOS saltada (edad + plazo al término)
     try:
         edad_plazo = float((sim or {}).get("edad_plazo") or 0)
     except (TypeError, ValueError):
         edad_plazo = 0
-    if aprobada and edad_plazo > 80:
+    if aprobada and edad_plazo > edad_max:
         hallazgos.append({**base, "categoria": "RIESGO",
-                          "detalle": f"Edad + plazo al término = {edad_plazo:.0f} años > 80 (Regla de los 80 años saltada)",
-                          "nota_dashai": "DashAI: la Regla de Hierro exige que edad del deudor + plazo del crédito no supere los 80 años al término. La MESA la saltó: riesgo actuarial y de seguro de desgravamen no cubierto."})
+                          "detalle": f"Edad + plazo al término = {edad_plazo:.0f} años > {edad_max:.0f} (Regla de edad de la Bóveda saltada)",
+                          "nota_dashai": f"DashAI (Bóveda v1.{crit_ver}): la regla vigente exige que edad del deudor + plazo del crédito no supere los {edad_max:.0f} años al término. La MESA la saltó: riesgo actuarial y de seguro de desgravamen no cubierto."})
     # 2) PERDIDA: rechazo que según los papeles era viable (antigüedad >= 12 cumplida)
     docs_ok = not [c for c in _criterios_folder(fd, archivos=await asyncio.to_thread(
         fsvc.scan_archivos, fd.get("nombre", "")))[:4] if not c["ok"]]
     antig = df.get("antiguedad_laboral_meses")
-    antig_ok = antig is None or float(antig or 0) >= 12
+    antig_ok = antig is None or float(antig or 0) >= antig_min
     if (not aprobada) and docs_ok and not cert.get("violaciones") and antig_ok:
         hallazgos.append({**base, "categoria": "PERDIDA",
                           "detalle": "Rechazo de MESA con expediente completo, antigüedad laboral cumplida y CERO quiebres de reglamento — candidato a rescate",
-                          "nota_dashai": f"DashAI: el cliente cumplía TODOS los requisitos duros del reglamento (documentación completa{', antigüedad ' + format(float(antig), '.0f') + ' meses >= 12' if antig is not None else ''}, sin quiebre de política). El rechazo carece de sustento técnico verificable: negocio perdido rescatable."})
+                          "nota_dashai": f"DashAI (Bóveda v1.{crit_ver}): el cliente cumplía TODOS los requisitos vigentes de la Bóveda (documentación completa{', antigüedad ' + format(float(antig), '.0f') + f' meses >= {antig_min:.0f}' if antig is not None else ''}, sin quiebre de política). El rechazo carece de sustento técnico verificable: negocio perdido rescatable."})
     # 3) ERROR HUMANO: inconsistencias de renta / antigüedad / monto
     errores = []
     renta = await asyncio.to_thread(mesa_brain.recalibrar_renta, sim, fd, {})
@@ -10781,7 +10818,8 @@ async def _forense_caso_automatico(seg):
         hallazgos = agregados + previos
         resumen = {"RIESGO": sum(1 for h in hallazgos if h["categoria"] == "RIESGO"),
                    "PERDIDA": sum(1 for h in hallazgos if h["categoria"] == "PERDIDA"),
-                   "ERROR HUMANO": sum(1 for h in hallazgos if h["categoria"] == "ERROR HUMANO")}
+                   "ERROR HUMANO": sum(1 for h in hallazgos if h["categoria"] == "ERROR HUMANO"),
+                   "NO AUDITABLE": sum(1 for h in hallazgos if h["categoria"] == "NO AUDITABLE")}
         await db.config.update_one({"_key": "auditoria_forense"}, {"$set": {
             "hallazgos": hallazgos, "resumen": resumen,
             "estado": doc.get("estado") or "completado",
@@ -10789,13 +10827,15 @@ async def _forense_caso_automatico(seg):
             "nuevos_ultimo_barrido": int(doc.get("nuevos_ultimo_barrido") or 0) + len(agregados),
             "generado_en": now_iso()}}, upsert=True)
         destinatario = os.environ.get("MAIL2_USER", "")
-        if destinatario:
+        con_errores = [h for h in agregados if h["categoria"] != "NO AUDITABLE"]
+        if destinatario and con_errores:
+            agregados = con_errores
             filas = "".join(
                 f"<li style='margin-bottom:10px'><b>[{h['categoria']}]</b> {h['detalle']}"
                 f"<br><i style='color:#666;font-size:12px'>{h.get('nota_dashai', '')}</i></li>"
                 for h in agregados)
             cuerpo = f"""
-<div style="font-family:Arial,sans-serif;max-width:600px">
+<div style="font-family:Arial,sans-serif;width:100%;max-width:600px">
   <div style="background:#0a0a0a;padding:16px 20px;border-left:4px solid #e11d48">
     <span style="color:#D4AF37;font-weight:700;letter-spacing:0.08em">🔬 CONTRALORÍA AUTOMÁTICA · CENTRAL MUTUOS</span>
   </div>
@@ -10846,19 +10886,24 @@ async def _forense_job(dias=90):
         await asyncio.sleep(1)  # respiro entre bloques diarios
     resumen = {"RIESGO": sum(1 for h in hallazgos if h["categoria"] == "RIESGO"),
                "PERDIDA": sum(1 for h in hallazgos if h["categoria"] == "PERDIDA"),
-               "ERROR HUMANO": sum(1 for h in hallazgos if h["categoria"] == "ERROR HUMANO")}
+               "ERROR HUMANO": sum(1 for h in hallazgos if h["categoria"] == "ERROR HUMANO"),
+               "NO AUDITABLE": sum(1 for h in hallazgos if h["categoria"] == "NO AUDITABLE")}
     nuevos = sum(1 for h in hallazgos
                  if (h["cliente"], h["fecha_mesa"], h["categoria"]) not in prev_keys)
+    crit_ver = await asyncio.to_thread(mesa_brain.criterios_version)
     await db.config.update_one({"_key": "auditoria_forense"}, {"$set": {
         "estado": "completado", "progreso": revisados, "total": total,
         "periodo_dias": dias, "hallazgos": hallazgos, "resumen": resumen,
         "titulo_lista": "Errores MESA detectados", "nuevos_ultimo_barrido": nuevos,
+        "criterios_version": f"v1.{crit_ver}",
+        "nota_trazabilidad": f"Análisis ejecutado bajo los criterios permanentes de DashAI v1.{crit_ver}",
         "generado_en": now_iso()}}, upsert=True)
     logging.info(f"🔬 Forense {dias}d: {revisados} revisados, {len(hallazgos)} hallazgos ({nuevos} nuevos) {resumen}")
 
 
 @api.post("/contraloria/forense/iniciar")
 async def forense_iniciar(dias: int = 90):
+    await _constitucion_dashai()
     doc = await db.config.find_one({"_key": "auditoria_forense"})
     if doc and doc.get("estado") == "en_proceso":
         return {"ok": True, "mensaje": "Auditoría forense ya en proceso", "progreso": doc.get("progreso")}
@@ -10887,7 +10932,7 @@ def _borrador_reclamacion(h):
     monto_txt = f"{float(monto):,.0f} UF".replace(",", ".") if monto else "según expediente"
     subject = f"RECLAMACIÓN FORMAL — Solicitud de Reevaluación: {cliente} ({rut})"
     body = f"""
-<div style="font-family:Georgia,'Times New Roman',serif;max-width:600px;margin:0 auto">
+<div style="font-family:Georgia,'Times New Roman',serif;width:100%;max-width:600px;margin:0 auto">
   <div style="background:#0a0a0a;padding:20px 26px;border-left:4px solid #D4AF37">
     <span style="color:#D4AF37;font-weight:700;letter-spacing:0.1em">CENTRAL MUTUOS · CONTRALORÍA</span>
   </div>
@@ -10953,6 +10998,69 @@ async def forense_reclamacion_enviar(idx: int):
     bs[idx]["enviado_en"] = now_iso()
     await db.config.update_one({"_key": "forense_reclamaciones"}, {"$set": {"borradores": bs}})
     return {"ok": True, "mensaje": f"Reclamación de {b['cliente']} enviada a aprobaciones@centralmutuos.cl"}
+
+
+@api.get("/contraloria/forense/descargar")
+async def forense_descargar(lista: str = "A"):
+    """Lista A: aprobaciones cuestionables (RIESGO + ERROR HUMANO).
+    Lista B: oportunidades rescatables (PERDIDA). Descarga CSV."""
+    doc = await db.config.find_one({"_key": "auditoria_forense"}) or {}
+    hallazgos = doc.get("hallazgos") or []
+    if lista.upper() == "A":
+        rows = [h for h in hallazgos if h.get("categoria") in ("RIESGO", "ERROR HUMANO")]
+        nombre_archivo = "Lista_A_Aprobaciones_Cuestionables.csv"
+    else:
+        rows = [h for h in hallazgos if h.get("categoria") == "PERDIDA"]
+        nombre_archivo = "Lista_B_Oportunidades_Rescatables.csv"
+    import csv as _csv
+    buf = io.StringIO()
+    w = _csv.writer(buf)
+    w.writerow([doc.get("nota_trazabilidad") or "Análisis ejecutado bajo los criterios permanentes de DashAI"])
+    w.writerow(["Categoria", "Cliente", "RUT", "Fecha MESA", "Monto UF", "Detalle", "Nota DashAI"])
+    for h in rows:
+        w.writerow([h.get("categoria"), h.get("cliente"), h.get("rut"), h.get("fecha_mesa"),
+                    h.get("monto_mesa"), h.get("detalle"), h.get("nota_dashai", "")])
+    data = "\ufeff" + buf.getvalue()
+    return _RawResponse(content=data.encode("utf-8"), media_type="text/csv",
+                        headers={"Content-Disposition": f'attachment; filename="{nombre_archivo}"'})
+
+
+@api.get("/contraloria/forense/buscar")
+async def forense_buscar(q: str = ""):
+    """BÚSQUEDA RÁPIDA: audita al instante todos los casos de MESA de un RUT o nombre."""
+    await _constitucion_dashai()
+    q = (q or "").strip()
+    if len(q) < 3:
+        raise HTTPException(status_code=400, detail="Ingresa un RUT o nombre (mínimo 3 caracteres)")
+    rut_n = re.sub(r"[^0-9kK]", "", q).lower()
+    filtros = [{"cliente": {"$regex": re.escape(q), "$options": "i"}}]
+    if len(rut_n) >= 7:
+        filtros.append({"rut": {"$regex": rut_n[:8], "$options": "i"}})
+        fd = await db.folders.find_one({"rut": {"$regex": rut_n[:8], "$options": "i"}})
+        if fd and fd.get("nombre"):
+            filtros.append({"cliente": {"$regex": re.escape(fd["nombre"][:25]), "$options": "i"}})
+    entradas = await db.seguimiento.find(
+        {"$or": filtros, "estado": {"$in": ["aprobacion", "aprobado", "rechazo", "rechazado"]}}
+    ).sort("fecha", -1).limit(20).to_list(20)
+    if not entradas:
+        return {"casos": [], "total": 0, "mensaje": f"Sin decisiones de MESA registradas para '{q}'"}
+    modelo = await asyncio.to_thread(mesa_brain.modelo_actual)
+    modelo.pop("_id", None)
+    casos = []
+    for s in entradas:
+        try:
+            hallazgos = await _forense_auditar_entrada(s, modelo)
+        except Exception:
+            hallazgos = []
+        casos.append({"cliente": s.get("cliente"), "rut": s.get("rut", ""),
+                      "fecha": (s.get("fecha") or "")[:10],
+                      "respuesta_mesa": "Aprobada" if s.get("estado") in ("aprobacion", "aprobado") else "Rechazada",
+                      "monto": s.get("monto_credito"),
+                      "hallazgos": hallazgos,
+                      "veredicto": "⚠ CON ERRORES" if hallazgos else "✓ DECISIÓN CORRECTA"})
+    crit_ver = await asyncio.to_thread(mesa_brain.criterios_version)
+    return {"casos": casos, "total": len(casos),
+            "nota_trazabilidad": f"Análisis ejecutado bajo los criterios permanentes de DashAI v1.{crit_ver}"}
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -11035,9 +11143,56 @@ async def _dashai_perpetuo_loop():
         await asyncio.sleep(300)
 
 
+async def _constitucion_dashai():
+    """LEY DE JERARQUÍA SUPREMA (protegida por clave 0586): enchufe obligatorio.
+    Si la Constitución DashAI no responde → 503 y decisiones bloqueadas."""
+    try:
+        return await asyncio.to_thread(mesa_brain.enchufe_dashai)
+    except mesa_brain.ConstitucionError as e:
+        raise HTTPException(status_code=503, detail=(
+            f"⚖️ LEY DE JERARQUÍA SUPREMA: {e}. Toda decisión queda bloqueada "
+            "hasta restaurar la conexión con la Constitución DashAI."))
+
+
+LEY_JERARQUIA_SUPREMA = ("DashAI (Bóveda de Criterios) es la ÚNICA fuente de verdad del sistema. "
+                         "Prohibido ejecutar cálculos de viabilidad, auditoría forense o validación "
+                         "de MESA sin consultar primero sus parámetros activos. Si DashAI no está "
+                         "disponible, el sistema bloquea toda decisión hasta restaurar la conexión. "
+                         "Esta jerarquía es el cimiento del programa y solo puede alterarse con la clave maestra.")
+
+
+@api.get("/dashai/constitucion")
+async def dashai_constitucion_get():
+    doc = await db.config.find_one({"_key": "dashai_constitucion"}, {"_id": 0})
+    if not doc:
+        doc = {"ley": LEY_JERARQUIA_SUPREMA, "protegida_por": "clave 0586",
+               "inamovible": True, "creada_en": now_iso()}
+        await db.config.update_one({"_key": "dashai_constitucion"}, {"$set": doc}, upsert=True)
+    return doc
+
+
+@api.post("/dashai/constitucion")
+async def dashai_constitucion_set(payload: dict):
+    if str(payload.get("clave") or "") != os.environ.get("MASTER_PIN", ""):
+        raise HTTPException(status_code=403, detail="⚖️ REGLA PERPETUA: la Constitución DashAI solo puede alterarse con la clave 0586.")
+    await db.config.update_one({"_key": "dashai_constitucion"}, {"$set": {
+        "ley": payload.get("ley") or LEY_JERARQUIA_SUPREMA,
+        "actualizada_en": now_iso()}}, upsert=True)
+    return {"ok": True}
+
+
 @api.get("/dashai/estado")
 async def dashai_estado():
     cfg = await db.config.find_one({"_key": "dashai_perpetuo"}, {"_id": 0}) or {}
+    # REGLA MASERATI #1 (inamovible): se auto-siembra si no existe
+    reglas_doc = await db.config.find_one({"_key": "dashai_reglas_estilo"}, {"_id": 0})
+    if not reglas_doc:
+        reglas_doc = {"reglas": [{
+            "n": 1, "inamovible": True,
+            "regla": "Toda comunicación y portal de Central Mutuos debe ser 100% responsivo y adaptativo: emails con tablas max-width 600px y anchos porcentuales (prohibido el ancho fijo), imágenes con height:auto y max-width:100%, botones y campos táctiles adaptados al teléfono, margen de seguridad lateral de 20px, y mini-render móvil obligatorio antes de cada envío.",
+            "creada_en": now_iso()}]}
+        await db.config.update_one({"_key": "dashai_reglas_estilo"},
+                                   {"$set": reglas_doc}, upsert=True)
     modelo = await asyncio.to_thread(mesa_brain.modelo_actual)
     modelo.pop("_id", None)
     v60 = modelo.get("ventana_60") or {}
@@ -11055,7 +11210,8 @@ async def dashai_estado():
             "motivos_rechazo": (modelo.get("motivos_rechazo") or [])[:6],
             "ajustes_mercado": (modelo.get("ajustes_mercado") or [])[:4],
             "tendencia": modelo.get("tendencia") or "",
-            "eventos": eventos, "perpetuo_activo": True}
+            "eventos": eventos, "perpetuo_activo": True,
+            "reglas_estilo": reglas_doc.get("reglas", [])}
 
 
 @api.post("/dashai/sync")
@@ -11116,6 +11272,15 @@ p.lead{color:#b8b8b8;font-size:0.82rem;line-height:1.65;margin:0.8rem 0 1.2rem;t
 .btn:disabled{opacity:0.45;cursor:not-allowed}
 #msg{display:none;margin-top:1rem;padding:0.9rem 1rem;font-size:0.82rem;font-weight:600;line-height:1.6;text-align:center}
 .foot{color:#5a5a5a;font-size:0.6rem;margin-top:1.4rem;letter-spacing:0.08em;text-align:center}
+@media (max-width:600px){
+ body{padding:20px}
+ .card{padding:1.6rem 1.1rem}
+ .btn{padding:1.15rem 0.9rem;font-size:0.95rem;min-height:52px}
+ .btn.sec{padding:1.15rem 1rem}
+ .manual input,.manual select,.salcard input,.salcard select{padding:1rem 0.9rem;font-size:1.05rem;min-height:52px}
+ .pcard{padding:1.15rem 0.7rem}
+ .drop{padding:1.1rem 0.8rem;min-height:60px}
+}
 .ayuda{display:block;color:#C7B36A;font-size:0.68rem;letter-spacing:0.06em;margin-top:1rem;text-align:center;cursor:pointer;text-decoration:underline;text-underline-offset:4px}
 .ayuda:hover{color:#FCF6BA}
 #salida{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:99;align-items:center;justify-content:center;padding:1.2rem}
@@ -11554,7 +11719,7 @@ async def calificar_subir(oid: str,
             destinatario = os.environ.get("MAIL2_USER", "")
             filas = "".join(f"<li>{k}: {len(v)} archivo(s)</li>" for k, v in guardados.items())
             cuerpo = f"""
-            <div style="font-family:Arial,sans-serif;max-width:600px">
+            <div style="font-family:Arial,sans-serif;width:100%;max-width:600px">
               <div style="background:#0a0a0a;padding:16px 20px;border-left:4px solid #D4AF37">
                 <span style="color:#D4AF37;font-weight:700;letter-spacing:0.08em">💎 CENTRAL MUTUOS · IMÁN DE CRÉDITOS</span>
               </div>
@@ -11650,7 +11815,7 @@ async def calificar_solicitar_llamada(oid: str, payload: dict, request: Request)
     async def _avisar():
         try:
             cuerpo = f"""
-            <div style="font-family:Arial,sans-serif;max-width:600px">
+            <div style="font-family:Arial,sans-serif;width:100%;max-width:600px">
               <div style="background:#0a0a0a;padding:16px 20px;border-left:4px solid #D4AF37">
                 <span style="color:#D4AF37;font-weight:700;letter-spacing:0.08em">💎 CENTRAL MUTUOS · CONTACTO VIP</span>
               </div>

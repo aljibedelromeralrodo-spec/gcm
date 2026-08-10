@@ -151,6 +151,60 @@ def _criterios():
     return _db().config.find_one({"_key": "criterios"}) or {}
 
 
+def monto_minimo_sin_subsidio():
+    """BÓVEDA DE CRITERIOS: monto mínimo sin subsidio editable; fallback regla dura."""
+    crit = _criterios()
+    v = _num(((crit.get("btg_pactual") or {}).get("sin_subsidio") or {}).get("monto_minimo_uf"))
+    return v or MONTO_MIN_UF_SIN_SUBSIDIO_HARD
+
+
+def _version_num(v):
+    try:
+        return int(float(v or 1))
+    except (TypeError, ValueError):
+        return 1
+
+
+def criterios_version():
+    """Versión de la Bóveda de Criterios DashAI (se incrementa en cada edición)."""
+    return _version_num(_criterios().get("version"))
+
+
+class ConstitucionError(RuntimeError):
+    """DashAI (Bóveda de Criterios) no disponible → decisiones bloqueadas."""
+
+
+def enchufe_dashai():
+    """LEY DE JERARQUÍA SUPREMA (protegida por clave 0586): enchufe obligatorio a la
+    Constitución DashAI. ÚNICA fuente de verdad para umbrales de decisión.
+    Si la Bóveda es inaccesible, lanza ConstitucionError y el sistema debe bloquear."""
+    try:
+        crit = _criterios()
+        pol = politicas_maestras()
+        min_uf = monto_minimo_sin_subsidio()
+    except Exception as e:
+        raise ConstitucionError(f"Bóveda de Criterios DashAI inaccesible ({e})")
+    if not pol:
+        raise ConstitucionError("Bóveda de Criterios DashAI vacía")
+    btg_sin = (crit.get("btg_pactual") or {}).get("sin_subsidio") or {}
+    btg_con = (crit.get("btg_pactual") or {}).get("con_subsidio") or {}
+    am = (crit.get("ameris") or {}).get("sin_subsidio") or (crit.get("ameris") or {})
+    return {
+        "version": f"v1.{_version_num(crit.get('version'))}",
+        "criterios": crit, "politicas": pol,
+        "umbrales": {
+            "carga_maxima": _num(pol.get("carga_financiera_maxima"), 0.40),
+            "ltv_maximo": _num(pol.get("ltv_maximo_base"), 0.80),
+            "ltv_maximo_sin_subsidio": _num(btg_sin.get("ltv_maximo"), 0.90),
+            "edad_plazo_max": _num(pol.get("edad_maxima_credito"), 80),
+            "antiguedad_min_meses": _num(pol.get("antiguedad_minima_meses"), 12),
+            "monto_min_uf_sin_subsidio": min_uf,
+            "div_renta_max_btg": _num(btg_con.get("div_renta_maximo") or btg_sin.get("div_renta_maximo"), 0.35),
+            "div_renta_max_ameris": _num(am.get("div_renta_maximo") if isinstance(am, dict) else None, 0.30),
+        },
+    }
+
+
 def recalibrar_renta(sim, folder, castigos):
     """RECALIBRACIÓN DE INGRESOS — aplica los castigos del reglamento sobre la renta y
     descarta horas extra / asignaciones no imponibles. Devuelve dict con detalle y notas.

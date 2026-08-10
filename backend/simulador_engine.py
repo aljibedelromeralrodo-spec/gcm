@@ -10,8 +10,14 @@ def _num(v):
         return 0.0
 
 
-def calcular_viabilidad(payload, base_mesa=0.85, uf_hoy=39000):
-    """base_mesa: fracción 0-1 calibrada con respuestas reales de la mesa."""
+def calcular_viabilidad(payload, base_mesa=0.85, uf_hoy=39000, umbrales=None):
+    """base_mesa: fracción 0-1 calibrada con respuestas reales de la mesa.
+    umbrales: dictados por la Constitución DashAI (Ley de Jerarquía Suprema)."""
+    u = umbrales or {}
+    min_uf = float(u.get("monto_min_uf_sin_subsidio") or 2000)
+    carga_max = float(u.get("carga_maxima") or 0.40)
+    ltv_opt = float(u.get("ltv_maximo") or 0.80)
+    ltv_lim = float(u.get("ltv_maximo_sin_subsidio") or 0.90)
     valor, monto = _num(payload.get("valor_propiedad")), _num(payload.get("monto_credito"))
     renta, deudas = _num(payload.get("renta")), _num(payload.get("deudas"))
     con_sub = bool(payload.get("con_subsidio"))
@@ -20,14 +26,14 @@ def calcular_viabilidad(payload, base_mesa=0.85, uf_hoy=39000):
     base = float(base_mesa) * 100.0
     prob, factores = base, [f"Base calibrada con la mesa: {round(base)}%"]
     alerta = ""
-    if monto < 2000 and not con_sub:
-        alerta = "ALERTA: No cumple criterio mínimo de 2.000 UF sin subsidio. Avisar a jefatura."
+    if monto < min_uf and not con_sub:
+        alerta = f"ALERTA: No cumple criterio mínimo de {min_uf:,.0f} UF sin subsidio. Avisar a jefatura."
         factores.append(f"🔴 {alerta}")
     ltv = monto / valor if valor else 1
-    if ltv <= 0.8:
+    if ltv <= ltv_opt:
         prob += 8
         factores.append(f"+8%: financiamiento del {round(ltv*100)}% (pie sano)")
-    elif ltv <= 0.9:
+    elif ltv <= ltv_lim:
         prob += 2
         factores.append(f"+2%: financiamiento del {round(ltv*100)}%")
     else:
@@ -45,12 +51,12 @@ def calcular_viabilidad(payload, base_mesa=0.85, uf_hoy=39000):
         if carga <= 0.28:
             prob += 12
             factores.append(f"+12%: carga financiera {round(carga*100)}% de la renta (excelente)")
-        elif carga <= 0.40:
+        elif carga <= carga_max:
             prob += 3
             factores.append(f"+3%: carga financiera {round(carga*100)}% (aceptable)")
         else:
             prob -= 18
-            factores.append(f"-18%: carga financiera {round(carga*100)}% (sobre el 40% la mesa rechaza)")
+            factores.append(f"-18%: carga financiera {round(carga*100)}% (sobre el {round(carga_max*100)}% la mesa rechaza)")
     else:
         prob -= 5
         factores.append("-5%: sin renta informada la mesa no puede medir capacidad de pago")

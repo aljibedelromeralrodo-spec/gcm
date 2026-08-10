@@ -164,7 +164,8 @@ export default function ContraloriaModule() {
                 <span style={{ fontWeight: 800, fontSize: "0.65rem", letterSpacing: "0.06em", padding: "0.15rem 0.55rem", whiteSpace: "nowrap",
                   color: "#0a0a0a",
                   background: h.categoria === "RIESGO" ? "linear-gradient(135deg,#e11d48,#fb7185)"
-                    : h.categoria === "PERDIDA" ? "linear-gradient(135deg,#d97706,#fbbf24)" : "linear-gradient(135deg,#60a5fa,#bfdbfe)" }}>
+                    : h.categoria === "PERDIDA" ? "linear-gradient(135deg,#d97706,#fbbf24)"
+                      : h.categoria === "NO AUDITABLE" ? "linear-gradient(135deg,#64748b,#cbd5e1)" : "linear-gradient(135deg,#60a5fa,#bfdbfe)" }}>
                   {h.categoria}
                 </span>
                 <b style={{ color: "#f8fafc" }}>{h.cliente}</b>

@@ -220,8 +220,8 @@ def simular_credito(d: dict) -> dict:
 # ---------------------------------------------------------------------------
 # inmobiliaria/predict  (Central PREDIC)
 # ---------------------------------------------------------------------------
-def _plazo_maximo(edad: int) -> int:
-    return max(1, min(40, 80 - edad))
+def _plazo_maximo(edad: int, edad_max: float = 80) -> int:
+    return max(1, min(40, int(edad_max) - edad))
 
 
 def predict_inmobiliaria(d: dict, tasas: dict, seguros: dict, valor_uf: float) -> dict:
@@ -254,13 +254,13 @@ def predict_inmobiliaria(d: dict, tasas: dict, seguros: dict, valor_uf: float) -
     # Tasa
     if modo == "subsidio":
         tasa = tasas["tasa_subsidio_mayor_2000"] if monto_credito > 2000 else tasas["tasa_subsidio_menor_2000"]
-        ltv_max = 0.80
+        ltv_max = float(u.get("ltv_maximo") or 0.80)
     else:
         tasa = tasas["tasa_sin_subsidio"]
-        ltv_max = 0.90
+        ltv_max = float(u.get("ltv_maximo_sin_subsidio") or 0.90)
     tasa_aplicada = round(tasa * 100, 2)
 
-    plazo_max = _plazo_maximo(max(edad, edad_codeudor) if tiene_codeudor else edad)
+    plazo_max = _plazo_maximo(max(edad, edad_codeudor) if tiene_codeudor else edad, u_edad)
     plazo = plazo_in if plazo_in > 0 else min(30, plazo_max)
     plazo = min(plazo, plazo_max)
     plazo_alternativo = max(10, plazo - 5) if plazo - 5 >= 10 else min(plazo_max, plazo + 5)

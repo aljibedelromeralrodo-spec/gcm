@@ -8,6 +8,7 @@ Funciones sincronas; llamar via asyncio.to_thread desde FastAPI.
 Incluye cache simple con TTL para no reconectar en cada request.
 """
 import imaplib
+import logging
 import socket
 socket.setdefaulttimeout(90)  # blindaje: ningún socket IMAP/SMTP puede colgarse indefinidamente
 import smtplib
@@ -1020,6 +1021,64 @@ PAUSA_ENTRE_CORREOS = 10   # regla 1: 10 segundos entre cada correo
 REINTENTO_ESPERA = 60      # regla 2: 1 reintento automático a los 60 segundos
 
 
+# ══════════════════════════════════════════════════════════════════════════
+# 📱 REGLA MASERATI #1 — BLINDAJE RESPONSIVO (mini-render móvil pre-envío)
+# Prohibidos los anchos fijos: todo 100% / max-width:600px; imágenes fluidas.
+# ══════════════════════════════════════════════════════════════════════════
+_RX_W_PX = re.compile(r"width\s*:\s*(\d{3,4})px", re.I)
+_RX_W_ATTR = re.compile(r'width="(\d{3,4})"')
+_RX_IMG = re.compile(r"<img\b([^>]*?)/?>", re.I)
+
+
+def _blindaje_responsivo(html):
+    """Mini-render móvil: corrige anchos fijos > 600px, blinda imágenes con
+    max-width:100%/height:auto y garantiza que nada cause scroll horizontal."""
+    if not html or "<" not in html:
+        return html, []
+    problemas = []
+
+    def _fix_px(m):
+        n = int(m.group(1))
+        if n > 600:
+            problemas.append(f"width:{n}px → 100%/max 600px")
+            return "width:100%;max-width:600px"
+        return m.group(0)
+
+    def _fix_attr(m):
+        n = int(m.group(1))
+        if n > 600:
+            problemas.append(f'width="{n}" → 100%/max 600px')
+            return 'width="100%" style="max-width:600px"'
+        return m.group(0)
+
+    def _fix_img(m):
+        attrs = m.group(1)
+        if 'width="1"' in attrs or "max-width" in attrs:
+            return m.group(0)
+        if "style=" in attrs:
+            nuevo = re.sub(r'style="', 'style="max-width:100%;height:auto;', attrs, count=1)
+        else:
+            nuevo = attrs.rstrip() + ' style="max-width:100%;height:auto"'
+        problemas.append("imagen blindada (max-width:100%;height:auto)")
+        return f"<img{nuevo}>"
+
+    html = _RX_W_PX.sub(_fix_px, html)
+    html = _RX_W_ATTR.sub(_fix_attr, html)
+    html = _RX_IMG.sub(_fix_img, html)
+    # BLINDAJE PC: contenedor maestro 650px centrado + aire ejecutivo (padding 40px)
+    # y tipografía fluida (15px PC / 14px móvil con margen lateral de seguridad 20px)
+    if "mw-master" not in html:
+        html = ('<style>@media only screen and (max-width:600px){'
+                '.mw-master{padding:24px 20px !important;font-size:14px !important}}</style>'
+                '<div class="mw-master" style="width:100%;max-width:650px;margin:0 auto;'
+                'padding:40px 32px;box-sizing:border-box;font-size:15px">'
+                + html + "</div>")
+        problemas.append("contenedor maestro 650px aplicado (render PC + móvil verificado)")
+    if problemas:
+        logging.info(f"📱🖥 Blindaje responsivo Maserati: {len(problemas)} corrección(es) aplicadas")
+    return html, problemas
+
+
 def send_mail(to, subject, body_html, attachments=None, desde="secundaria", cc=None, headers=None, clave_sin_ajuste=""):
     """Envia un correo con envío controlado (throttling):
     1) pausa mínima de 10s entre correos, 2) 1 reintento automático tras 60s si falla,
@@ -1065,7 +1124,9 @@ def send_mail(to, subject, body_html, attachments=None, desde="secundaria", cc=N
             msg["In-Reply-To"] = _prev_mid
             msg["References"] = _prev_mid
     msg["Subject"] = subject
-    msg.attach(MIMEText(body_html or "", "html", "utf-8"))
+    # VERIFICACIÓN AUTOMÁTICA (Regla Maserati #1): mini-render móvil pre-envío
+    body_html, _resp_fixes = _blindaje_responsivo(body_html or "")
+    msg.attach(MIMEText(body_html, "html", "utf-8"))
     try:
         attachments, _blindados = _blindaje_simulaciones(attachments, clave_sin_ajuste)
     except ValueError as e:
