@@ -218,6 +218,33 @@ async def extraer_datos_financieros(texto, cliente=""):
     return base
 
 
+async def extraer_datos_compromiso(texto, cliente=""):
+    """Prellenado del Editor de Compromisos: partes, inmueble y precio desde OCR."""
+    key = _llm_key()
+    if not key or len(texto or "") < 80:
+        return {}
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        system = (
+            "Eres abogado inmobiliario chileno. Del texto OCR de documentos de una operación "
+            "de compraventa extrae SOLO un JSON válido con: "
+            "comprador {nombre, rut, nacionalidad, profesion, estado_civil, domicilio}, "
+            "vendedor {nombre, rut, nacionalidad, profesion, estado_civil, domicilio}, "
+            "propiedad {direccion, comuna, rol_avaluo, fojas, numero, anio, cbr}, "
+            "precio {valor_total_clp, pie_clp, credito_clp} (números en pesos chilenos). "
+            "El comprador suele ser el cliente del crédito; el vendedor es la contraparte. "
+            "PROHIBIDO inventar: usa \"\" (o 0 en montos) cuando el dato no aparezca literalmente."
+        )
+        chat = LlmChat(api_key=key, session_id=f"comp-{uuid.uuid4()}",
+                       system_message=system).with_model("openai", "gpt-5.4-mini")
+        resp = await _enviar(chat, UserMessage(text=f"Cliente comprador: {cliente}\n\n{(texto or '')[:20000]}"))
+        raw = resp if isinstance(resp, str) else str(resp)
+        m = re.search(r"\{.*\}", raw, re.S)
+        return json.loads(m.group(0)) if m else {}
+    except Exception:
+        return {}
+
+
 async def analizar_flujo_comercial(stats, aprendizajes_previos, notas_usuario):
     """Analiza el flujo comercial real de Central Mutuos y aprende de él.
     PROHIBIDO inventar métricas: solo usa los datos entregados."""

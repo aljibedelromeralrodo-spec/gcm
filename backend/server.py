@@ -1,6 +1,6 @@
 from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Form, Request, Query
 from typing import List
-from fastapi.responses import StreamingResponse, JSONResponse, HTMLResponse, FileResponse, RedirectResponse
+from fastapi.responses import StreamingResponse, JSONResponse, HTMLResponse, FileResponse, RedirectResponse, Response
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
@@ -24,6 +24,8 @@ from criterios_data import (
     DEFAULT_CRITERIOS, DEFAULT_TASAS, DEFAULT_SEGUROS, DEFAULT_UF, now_iso,
 )
 import credit_engine as ce
+import bcrypt
+import functools
 import email_service as mail
 import folders_service as fsvc
 from database import client, db
@@ -79,6 +81,10 @@ async def ensure_seed():
             {"$set": u, "$setOnInsert": {"created": now_iso()}},
             upsert=True,
         )
+    # MANDO SUPREMO: René Osa (rol maestro, Nivel 1). Crea su clave en el primer ingreso.
+    if not await db.users.find_one({"codigo": "rene"}):
+        await db.users.insert_one({"codigo": "rene", "nombre": "René Osa", "rol": "maestro",
+                                   "requiere_crear_clave": True, "created": now_iso()})
     # Seed config
     if await db.config.count_documents({"_key": "tasas"}) == 0:
         await db.config.insert_one({"_key": "tasas", **DEFAULT_TASAS})
@@ -149,6 +155,8 @@ async def _rescate_historico_loop():
                     await db.seguimiento.insert_one(dict(doc_seg))
                     # CONTRALORÍA AUTOMÁTICA: auditar el caso al instante
                     asyncio.create_task(_forense_caso_automatico(doc_seg))
+                    # AUTOCORREO CLIENTE FINAL: felicitación directa si es aprobación
+                    asyncio.create_task(_autocorreo_cliente_aprobado(doc_seg))
                     nuevos += 1
                 await asyncio.sleep(0.5)
             await db.config.update_one({"_key": "seguimiento_historico"}, {"$set": {
@@ -242,25 +250,58 @@ async def startup():
 # ---------------------------------------------------------------------------
 # Auth
 # ---------------------------------------------------------------------------
+def _token_usuario(user):
+    rol = user.get("rol", "ejecutivo")
+    return {
+        "token": _auth.create_token(user["codigo"], rol=rol, scope="terminal",
+                                    extra={"nombre": user.get("nombre", user["codigo"])}),
+        "codigo": user["codigo"],
+        "nombre": user.get("nombre", user["codigo"]),
+        "rol": rol,
+    }
+
+
 @api.post("/auth/login")
 async def auth_login(payload: dict):
     codigo = (payload.get("rut") or payload.get("codigo") or "").strip()
     password = (payload.get("password") or "").strip()
     # Busqueda tolerante a mayusculas/minusculas y espacios en el codigo
     user = await db.users.find_one({
-        "codigo": {"$regex": f"^{re.escape(codigo)}$", "$options": "i"},
-        "password": password,
-    })
+        "codigo": {"$regex": f"^{re.escape(codigo)}$", "$options": "i"}})
     if not user:
         raise HTTPException(status_code=401, detail="Credenciales invalidas")
-    rol = user.get("rol", "ejecutivo")
-    return {
-        "token": _auth.create_token(user["codigo"], rol=rol, scope="terminal",
-                                    extra={"nombre": user.get("nombre", codigo)}),
-        "codigo": user["codigo"],
-        "nombre": user.get("nombre", codigo),
-        "rol": rol,
-    }
+    if user.get("clave_hash"):
+        if not password or not bcrypt.checkpw(password.encode(), user["clave_hash"].encode()):
+            raise HTTPException(status_code=401, detail="Credenciales invalidas")
+    elif user.get("requiere_crear_clave"):
+        # Primer ingreso del Administrador Maestro: debe crear su propia clave
+        return {"requiere_crear_clave": True, "codigo": user["codigo"],
+                "nombre": user.get("nombre", codigo)}
+    elif user.get("password") != password or not password:
+        raise HTTPException(status_code=401, detail="Credenciales invalidas")
+    return _token_usuario(user)
+
+
+@api.post("/auth/crear-clave")
+async def auth_crear_clave(payload: dict):
+    """Primer ingreso del Administrador Maestro: crea su propia clave (bcrypt)."""
+    codigo = (payload.get("codigo") or "").strip()
+    clave = (payload.get("clave") or "").strip()
+    user = await db.users.find_one({"codigo": {"$regex": f"^{re.escape(codigo)}$", "$options": "i"}})
+    if not user or not user.get("requiere_crear_clave") or user.get("clave_hash"):
+        raise HTTPException(status_code=403, detail="Este usuario no tiene creación de clave pendiente")
+    if len(clave) < 8:
+        raise HTTPException(status_code=400, detail="La clave debe tener al menos 8 caracteres")
+    h = bcrypt.hashpw(clave.encode(), bcrypt.gensalt()).decode()
+    await db.users.update_one({"codigo": user["codigo"]},
+                              {"$set": {"clave_hash": h},
+                               "$unset": {"requiere_crear_clave": "", "password": ""}})
+    await db.alertas.insert_one({
+        "id": str(uuid.uuid4()), "tipo": "seguridad",
+        "mensaje": f"🔐 {user.get('nombre', codigo)} creó su clave maestra — Mando Supremo activo.",
+        "fecha": now_iso(), "leida": False})
+    user["clave_hash"] = h
+    return _token_usuario(user)
 
 
 @api.post("/inmobiliaria/auth/login")
@@ -385,22 +426,63 @@ async def set_uf(payload: dict):
     return {"valor": v, "valor_uf": v}
 
 
+def _solo_maestro(request: Request):
+    """MANDO SUPREMO: acceso Nivel 1 exclusivo del Administrador Maestro René Osa."""
+    claims = getattr(request.state, "user", None) or {}
+    if claims.get("rol") != "maestro":
+        raise HTTPException(status_code=403,
+                            detail="Acceso exclusivo del Administrador Maestro René Osa — la Bóveda está en modo solo lectura para el resto del equipo")
+    return claims
+
+
+async def _validar_clave_rene(clave):
+    """Validación digital: cada cambio de la Bóveda exige la clave de René Osa."""
+    u = await db.users.find_one({"rol": "maestro"})
+    if not u or not u.get("clave_hash"):
+        raise HTTPException(status_code=403,
+                            detail="René Osa aún no crea su clave maestra (primer ingreso pendiente)")
+    if not clave or not bcrypt.checkpw(str(clave).encode(), u["clave_hash"].encode()):
+        await db.alertas.insert_one({
+            "id": str(uuid.uuid4()), "tipo": "seguridad",
+            "mensaje": "🚨 Validación digital fallida en la Bóveda de Criterios (clave de René Osa incorrecta) — cambios descartados.",
+            "fecha": now_iso(), "leida": False})
+        raise HTTPException(status_code=403,
+                            detail="Clave de René Osa incorrecta — cambios descartados y alerta de seguridad emitida")
+    return u
+
+
+def _diff_criterios(prev, nuevo, path=""):
+    """Lista de cambios hoja a hoja para el historial de auditoría."""
+    cambios = []
+    prev = prev or {}
+    for k, v in (nuevo or {}).items():
+        if k.startswith("_") or k in ("version", "updated_at", "manual_override", "prioridad"):
+            continue
+        p = f"{path}.{k}" if path else k
+        if isinstance(v, dict):
+            cambios += _diff_criterios(prev.get(k) or {}, v, p)
+        elif prev.get(k) != v and not isinstance(v, list):
+            cambios.append({"campo": p, "antes": prev.get(k), "despues": v})
+    return cambios
+
+
 @api.get("/admin/criterios")
 async def get_criterios():
     return await get_config("criterios", DEFAULT_CRITERIOS)
 
 
+@api.get("/admin/criterios/auditoria")
+async def criterios_auditoria():
+    docs = await db.criterios_auditoria.find({}, {"_id": 0}).sort("fecha", -1).limit(60).to_list(60)
+    return {"historial": docs}
+
+
 @api.post("/admin/criterios")
-async def guardar_criterios(payload: dict):
-    """BÓVEDA DE REGLAS (KEY 0586): guarda criterios manuales con PRIORIDAD SUPREMA.
-    Clave incorrecta → cambios descartados + alerta de seguridad."""
-    clave = str(payload.get("clave") or "")
-    if clave != os.environ.get("MASTER_PIN", ""):
-        await db.alertas.insert_one({
-            "id": str(uuid.uuid4()), "tipo": "seguridad",
-            "mensaje": "🚨 Intento de modificación de criterios de la MESA con clave incorrecta — cambios descartados.",
-            "fecha": now_iso(), "leida": False})
-        raise HTTPException(status_code=403, detail="Clave incorrecta — los cambios fueron descartados y se emitió una alerta de seguridad.")
+async def guardar_criterios(payload: dict, request: Request):
+    """MANDO SUPREMO — BÓVEDA DE CRITERIOS: propiedad exclusiva de René Osa (rol maestro).
+    Cada cambio exige su validación digital (su clave) y queda en el historial de auditoría."""
+    claims = _solo_maestro(request)
+    await _validar_clave_rene(str(payload.get("clave") or ""))
     criterios = payload.get("criterios") or {}
     if not isinstance(criterios, dict) or "btg_pactual" not in criterios:
         raise HTTPException(status_code=400, detail="Estructura de criterios inválida")
@@ -410,11 +492,21 @@ async def guardar_criterios(payload: dict):
     criterios["prioridad"] = "suprema"
     prev = await db.config.find_one({"_key": "criterios"}) or {}
     criterios["version"] = mesa_brain._version_num(prev.get("version")) + 1
+    if prev.get("reglas_supervisadas"):
+        criterios.setdefault("reglas_supervisadas", prev["reglas_supervisadas"])
     await db.config.replace_one({"_key": "criterios"}, criterios, upsert=True)
+    fecha_txt = datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M")
+    cambios = _diff_criterios(prev, criterios)
+    await db.criterios_auditoria.insert_one({
+        "id": str(uuid.uuid4()), "fecha": now_iso(),
+        "usuario": claims.get("nombre") or "René Osa",
+        "version": criterios["version"],
+        "detalle": f"Política modificada por René Osa el {fecha_txt} (UTC)",
+        "cambios": cambios[:40]})
     return {"ok": True, "prioridad": "suprema", "version": criterios["version"],
-            "nota": (f"Reglas manuales activas (Bóveda DashAI v1.{criterios['version']}): "
-                     "prioridad absoluta sobre patrones aprendidos. La Auditoría Forense "
-                     "usará estos criterios en su próximo barrido (re-evaluación con un clic).")}
+            "nota": (f"Política modificada por René Osa el {fecha_txt} — Criterios Maestros "
+                     f"v1.{criterios['version']} con prioridad absoluta. "
+                     f"{len(cambios)} campo(s) modificado(s), registrados en el historial de auditoría.")}
 
 
 @api.get("/inmobiliaria/config/tasas")
@@ -3153,6 +3245,8 @@ async def seg_process(max_emails: int = 30, dias: int = 31):
         await db.seguimiento.insert_one(dict(doc_seg))
         # CONTRALORÍA AUTOMÁTICA: auditar el caso al instante
         asyncio.create_task(_forense_caso_automatico(doc_seg))
+        # AUTOCORREO CLIENTE FINAL: felicitación directa si es aprobación
+        asyncio.create_task(_autocorreo_cliente_aprobado(doc_seg))
         nuevos += 1
     return {"ok": True, "procesados": len(ops), "nuevos": nuevos, "dias": dias}
 
@@ -6267,7 +6361,54 @@ async def _aprendizaje_ejecutar():
         stats, [p.get("resumen", "") for p in previos], [n.get("texto", "") for n in notas])
     doc = {"id": str(uuid.uuid4()), "fecha": now_iso(), "stats": stats, **resultado}
     await db.aprendizaje_ia.insert_one(dict(doc))
+    # COLA DE SUPERVISIÓN DE RENÉ: ningún patrón se vuelve regla oficial sin su aprobación
+    import hashlib as _hl
+    for tipo, items in (("aprendizaje", resultado.get("aprendizajes") or []),
+                        ("mejora", resultado.get("mejoras") or [])):
+        for it in items:
+            texto = (it if isinstance(it, str)
+                     else f"{it.get('titulo', '')}: {it.get('detalle', '')}").strip(" :")
+            if len(texto) < 10:
+                continue
+            pid = _hl.sha256(texto.lower().encode()).hexdigest()[:24]
+            await db.patrones_supervision.update_one(
+                {"id": pid},
+                {"$setOnInsert": {"id": pid, "tipo": tipo, "texto": texto[:500],
+                                  "estado": "pendiente", "detectado_en": now_iso()}},
+                upsert=True)
     return doc
+
+
+@api.get("/admin/supervision")
+async def supervision_lista():
+    pend = await db.patrones_supervision.find({"estado": "pendiente"}, {"_id": 0}).sort("detectado_en", -1).to_list(100)
+    res = await db.patrones_supervision.find({"estado": {"$ne": "pendiente"}}, {"_id": 0}).sort("resuelto_en", -1).limit(20).to_list(20)
+    return {"pendientes": pend, "resueltos": res}
+
+
+@api.post("/admin/supervision/{pid}/resolver")
+async def supervision_resolver(pid: str, payload: dict, request: Request):
+    """Solo René Osa aprueba o rechaza patrones detectados (validación digital)."""
+    _solo_maestro(request)
+    await _validar_clave_rene(str((payload or {}).get("clave") or ""))
+    accion = (payload or {}).get("accion")
+    if accion not in ("aprobar", "rechazar"):
+        raise HTTPException(status_code=400, detail="Acción inválida: use aprobar o rechazar")
+    p = await db.patrones_supervision.find_one({"id": pid})
+    if not p:
+        raise HTTPException(status_code=404, detail="Patrón no encontrado")
+    estado = "aprobado" if accion == "aprobar" else "rechazado"
+    await db.patrones_supervision.update_one({"id": pid}, {"$set": {
+        "estado": estado, "resuelto_en": now_iso(), "resuelto_por": "René Osa"}})
+    if accion == "aprobar":
+        fecha_txt = datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M")
+        await db.config.update_one({"_key": "criterios"}, {"$push": {"reglas_supervisadas": {
+            "texto": p["texto"], "aprobado_en": now_iso(), "por": "René Osa"}}})
+        await db.criterios_auditoria.insert_one({
+            "id": str(uuid.uuid4()), "fecha": now_iso(), "usuario": "René Osa",
+            "detalle": f"Patrón aprobado como regla oficial por René Osa el {fecha_txt} (UTC)",
+            "cambios": [{"campo": "reglas_supervisadas", "antes": None, "despues": p["texto"][:200]}]})
+    return {"ok": True, "estado": estado}
 
 
 @api.post("/aprendizaje/analizar")
@@ -8042,6 +8183,7 @@ def _aprobacion_html(payload):
           {f"<p style='margin:0 0 18px;color:#6b7280;font-size:13px'>RUT: {rut}</p>" if rut else "<div style='height:14px'></div>"}
           {intro_html}
           {docs_html}
+          {payload.get("links_html", "")}
         </div>
         <div style="padding:6px 36px 34px;text-align:center">
           <a href="{mailto}" style="display:inline-block;background:#d4af37;color:#1a1f2e;
@@ -8150,6 +8292,235 @@ async def aprobacion_enviar(payload: dict):
                 {"$set": upd_ej})
     return {"ok": True, "to": to, "subject": subject,
             "attachments": [_nombre_cliente_pdf(p.name) for p in rutas], "sender": res.get("desde", "")}
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 📧 AUTOCORREO CLIENTE FINAL — notificación de aprobación directa al cliente
+# ══════════════════════════════════════════════════════════════════════════
+LINK_DESCARGA_MAX_MB = 10
+
+
+async def _link_descarga_seguro(cliente, p):
+    token = uuid.uuid4().hex
+    await db.descargas_seguras.insert_one({
+        "token": token, "cliente": cliente, "path": str(p),
+        "filename": _nombre_cliente_pdf(p.name), "creado_en": now_iso()})
+    base = (os.environ.get("REACT_APP_BACKEND_URL") or os.environ.get("PUBLIC_BASE_URL") or "").strip().rstrip("/")
+    return {"nombre": _nombre_cliente_pdf(p.name), "url": f"{base}/api/descarga-segura/{token}"}
+
+
+@api.get("/descarga-segura/{token}")
+async def descarga_segura(token: str):
+    d = await db.descargas_seguras.find_one({"token": token})
+    if not d or not Path(d["path"]).exists():
+        raise HTTPException(status_code=404, detail="Enlace de descarga no válido o expirado")
+    return FileResponse(d["path"], media_type="application/pdf", filename=d.get("filename", "documento.pdf"))
+
+
+async def _autocorreo_cliente_aprobado(seg, forzar=False):
+    """Aprobación de MESA → felicitación DIRECTA al cliente (remitente comercial,
+    BCC comercial). Sin correo en la carpeta → alerta en panel. Adjunta carta/simulación
+    (o combinado) si pesan ≤10MB; si no, envía links seguros de descarga."""
+    try:
+        if (seg.get("estado") or "").lower() not in ("aprobacion", "aprobado"):
+            return {"ok": False, "motivo": "no_es_aprobacion"}
+        cliente = (seg.get("cliente") or "").strip()
+        if not cliente:
+            return {"ok": False, "motivo": "sin_cliente"}
+        if not forzar:
+            f = (seg.get("fecha") or seg.get("procesado_en") or "")[:19]
+            if f and f < (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()[:19]:
+                return {"ok": False, "motivo": "aprobacion_antigua"}
+        fd, _sim = await _forense_buscar_contexto(cliente, seg.get("rut"))
+        nombre_folder = (fd or {}).get("nombre") or cliente
+        email_cli = ((fd or {}).get("email") or seg.get("email_cliente") or "").strip()
+        if not forzar:
+            ya = await db.aprobacion_log.find_one(
+                {"nombre": {"$regex": f"^{re.escape(nombre_folder[:25])}", "$options": "i"}})
+            if ya:
+                return {"ok": False, "motivo": "ya_notificado", "enviado_en": ya.get("enviado_en")}
+        if not email_cli or "@" not in email_cli:
+            msg_alerta = f"⚠️ {nombre_folder} aprobado pero sin correo para notificación automática"
+            if not await db.alertas.find_one({"mensaje": msg_alerta, "leida": False}):
+                await db.alertas.insert_one({"id": str(uuid.uuid4()), "tipo": "aprobacion",
+                                             "mensaje": msg_alerta, "cliente": nombre_folder,
+                                             "fecha": now_iso(), "leida": False})
+            return {"ok": False, "motivo": "sin_correo", "alerta": msg_alerta}
+        # ADJUNTOS: carta de aprobación + simulación; respaldo = combinado
+        rutas = []
+        if fd:
+            for a in fsvc.scan_archivos(nombre_folder):
+                t = _tipo_pdf_aprobacion(a["nombre"])
+                if t in ("carta_aprobacion", "simulacion_ajustada"):
+                    try:
+                        rutas.append((t, fsvc.resolver_ruta(nombre_folder, a["ruta"])))
+                    except (ValueError, OSError):
+                        pass
+            if not rutas:
+                for a in fsvc.scan_archivos(nombre_folder):
+                    if fsvc.cat_de_archivo(a["nombre"], a["subfolder"]) == "combinado":
+                        try:
+                            rutas.append(("combinado", fsvc.resolver_ruta(nombre_folder, a["ruta"])))
+                            break
+                        except (ValueError, OSError):
+                            pass
+        sel = {}
+        for t, p in sorted(rutas, key=lambda x: x[1].stat().st_mtime, reverse=True):
+            sel.setdefault(t, p)
+        adjuntos, nombres, links_html = [], [], ""
+        peso = sum(p.stat().st_size for p in sel.values())
+        if sel and peso <= LINK_DESCARGA_MAX_MB * 1024 * 1024:
+            for t, p in sel.items():
+                raw = p.read_bytes()
+                if t == "simulacion_ajustada":
+                    try:
+                        raw, _o, _r = pdfs.dejar_primera_pagina(raw)
+                    except Exception:
+                        pass
+                adjuntos.append({"filename": _nombre_cliente_pdf(p.name), "content_b64": _b64(raw)})
+                nombres.append(_nombre_cliente_pdf(p.name))
+        elif sel:
+            filas = ""
+            for _t, p in sel.items():
+                lk = await _link_descarga_seguro(nombre_folder, p)
+                filas += (f"<p style='margin:0 0 8px'><a href='{lk['url']}' style='color:#b8942e;font-weight:700'>"
+                          f"&#128196; Descargar {lk['nombre']}</a></p>")
+            links_html = ("<div style='background:#f8f9fc;border:1px solid #eceef3;border-radius:10px;"
+                          "padding:16px 22px;margin:6px 0 22px'>"
+                          "<div style='color:#1a1f2e;font-weight:700;font-size:14px;margin-bottom:8px'>"
+                          "Sus documentos superan el tamaño permitido por correo — "
+                          f"descárguelos de forma segura aquí:</div>{filas}</div>")
+        tpl = await db.aprobacion_templates.find_one({"cliente": nombre_folder}) or {}
+        payload = {"nombre": nombre_folder, "rut": (fd or {}).get("rut", "") or seg.get("rut", ""),
+                   "intro": tpl.get("intro") or APROBACION_DEFAULTS["intro"],
+                   "boton_texto": tpl.get("boton_texto") or APROBACION_DEFAULTS["boton_texto"],
+                   "_adjuntos_nombres": nombres, "links_html": links_html}
+        cuerpo = _aprobacion_html(payload)
+        subject = tpl.get("subject") or APROBACION_DEFAULTS["subject"]
+        bcc = os.environ.get("MAIL2_USER", "")
+        # REGLA DE SEGURIDAD: siempre la cuenta comercial como remitente de cara al cliente
+        res = await asyncio.to_thread(functools.partial(
+            mail.send_mail, email_cli, subject, cuerpo, adjuntos, "secundaria", bcc=bcc))
+        if not res.get("success"):
+            await db.alertas.insert_one({"id": str(uuid.uuid4()), "tipo": "aprobacion",
+                "mensaje": f"🚨 Falló la notificación de aprobación a {nombre_folder} ({email_cli}): {str(res.get('error', ''))[:120]}",
+                "fecha": now_iso(), "leida": False})
+            return {"ok": False, "motivo": "error_envio", "error": res.get("error")}
+        await db.aprobacion_log.insert_one({
+            "id": str(uuid.uuid4()), "nombre": nombre_folder, "rut": payload["rut"],
+            "to": email_cli, "adjuntos": nombres, "con_links": bool(links_html),
+            "origen": "reenvio_manual" if forzar else "autocorreo_cliente",
+            "bcc": bcc, "enviado_en": now_iso(), "desde": res.get("desde", "")})
+        return {"ok": True, "to": email_cli, "adjuntos": nombres, "con_links": bool(links_html)}
+    except Exception as e:
+        logging.warning(f"autocorreo cliente aprobado: {e}")
+        return {"ok": False, "motivo": "excepcion", "error": str(e)[:200]}
+
+
+@api.post("/clientes/folders/{fid}/reenviar-notificacion")
+async def reenviar_notificacion(fid: str):
+    """RE-ENVÍO MANUAL: salta el bloqueo de duplicados si el cliente dice que no le llegó."""
+    fd = await db.folders.find_one({"id": fid})
+    if not fd:
+        raise HTTPException(status_code=404, detail="Carpeta no encontrada")
+    res = await _autocorreo_cliente_aprobado(
+        {"cliente": fd.get("nombre", ""), "rut": fd.get("rut", ""), "estado": "aprobacion"}, forzar=True)
+    if not res.get("ok"):
+        motivo = {"sin_correo": "La carpeta no tiene correo del cliente — agréguelo primero en la ficha",
+                  "error_envio": f"Error de envío: {res.get('error', '')}"}.get(
+            res.get("motivo"), res.get("motivo", "error"))
+        raise HTTPException(status_code=400, detail=motivo)
+    return res
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 📜 EDITOR MAESTRO DE COMPROMISOS DE COMPRAVENTA
+# ══════════════════════════════════════════════════════════════════════════
+def _compromiso_default(fd):
+    return {
+        "comprador": {"nombre": (fd or {}).get("nombre", ""), "rut": (fd or {}).get("rut", ""),
+                      "nacionalidad": "chilena", "profesion": "", "estado_civil": "", "domicilio": ""},
+        "vendedor": {"nombre": "", "rut": "", "nacionalidad": "chilena", "profesion": "",
+                     "estado_civil": "", "domicilio": ""},
+        "propiedad": {"direccion": "", "comuna": "", "rol_avaluo": "", "fojas": "", "numero": "",
+                      "anio": "", "cbr": ""},
+        "precio": {"valor_total_clp": 0, "pie_clp": 0, "pie_recibido": False,
+                   "credito_clp": 0, "garantia": ""},
+        "resguardos": {"plazo_escritura_dias": 60, "clausula_penal_clp": 0, "gastos": "ambos"},
+    }
+
+
+@api.get("/compromiso/{fid}")
+async def compromiso_get(fid: str):
+    fd = await db.folders.find_one({"id": fid})
+    if not fd:
+        raise HTTPException(status_code=404, detail="Carpeta no encontrada")
+    doc = await db.compromisos.find_one({"folder_id": fid}, {"_id": 0})
+    if doc:
+        return doc
+    datos = _compromiso_default(fd)
+    # PRE-LLENADO INTELIGENTE: OCR de los documentos de la carpeta + extracción IA
+    try:
+        paths = []
+        for a in fsvc.scan_archivos(fd.get("nombre", "")):
+            if a["nombre"].lower().endswith(".pdf"):
+                try:
+                    paths.append(fsvc.resolver_ruta(fd["nombre"], a["ruta"]))
+                except (ValueError, OSError):
+                    pass
+        texto = await asyncio.to_thread(_ocr_adjuntos_paths, paths[:4])
+        if len(texto) < 200 and paths:
+            import ocr_service as _ocr
+            texto = await asyncio.to_thread(_ocr.ocr_texto, paths[0].read_bytes(), 6) or ""
+        ext = await ai_extract.extraer_datos_compromiso(texto, fd.get("nombre", ""))
+        for sec in ("comprador", "vendedor", "propiedad"):
+            for k, v in (ext.get(sec) or {}).items():
+                if v and k in datos[sec] and not datos[sec].get(k):
+                    datos[sec][k] = str(v)
+        pr = ext.get("precio") or {}
+        for k in ("valor_total_clp", "pie_clp", "credito_clp"):
+            if isinstance(pr.get(k), (int, float)) and pr[k] > 0 and not datos["precio"][k]:
+                datos["precio"][k] = pr[k]
+    except Exception as e:
+        logging.warning(f"compromiso prefill: {e}")
+    doc = {"folder_id": fid, "cliente": fd.get("nombre", ""), "datos": datos,
+           "clausulas_html": "", "updated_at": now_iso()}
+    await db.compromisos.update_one({"folder_id": fid}, {"$set": doc}, upsert=True)
+    return doc
+
+
+@api.put("/compromiso/{fid}")
+async def compromiso_put(fid: str, payload: dict):
+    upd = {"datos": payload.get("datos") or {}, "clausulas_html": payload.get("clausulas_html") or "",
+           "updated_at": now_iso()}
+    await db.compromisos.update_one({"folder_id": fid}, {"$set": upd}, upsert=True)
+    return {"ok": True, "updated_at": upd["updated_at"]}
+
+
+@api.post("/compromiso/{fid}/pdf")
+async def compromiso_pdf(fid: str, payload: dict):
+    """EXPORTACIÓN FINAL: genera el PDF EXACTO de lo que muestra el editor."""
+    html = (payload or {}).get("html") or ""
+    if len(html) < 50:
+        raise HTTPException(status_code=400, detail="Documento vacío")
+    from xhtml2pdf import pisa
+    import io
+    buf = io.BytesIO()
+    full = ("<html><head><meta charset='utf-8'><style>"
+            "@page { size: letter; margin: 2.2cm 2.4cm; }"
+            "body { font-family: Helvetica; font-size: 11pt; color: #111; line-height: 1.55; }"
+            "h1 { font-size: 14pt; text-align: center; letter-spacing: 2px; }"
+            "h2 { font-size: 11.5pt; margin: 14px 0 4px; }"
+            "p { margin: 0 0 9px; text-align: justify; }"
+            "table { width: 100%; }"
+            f"</style></head><body>{html}</body></html>")
+    err = await asyncio.to_thread(lambda: pisa.CreatePDF(full, dest=buf, encoding="utf-8").err)
+    if err:
+        raise HTTPException(status_code=500, detail="Error generando el PDF del compromiso")
+    fd = await db.folders.find_one({"id": fid}) or {}
+    fn = f"Compromiso_Compraventa_{(fd.get('nombre') or 'documento').replace(' ', '_')}.pdf"
+    return Response(content=buf.getvalue(), media_type="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="{fn}"'})
 
 
 @api.get("/aprobacion-cliente/preview-pdf")
@@ -10987,7 +11358,9 @@ async def espejo_mesa_status():
 
 
 @api.post("/dashai/espejo-mesa/minar")
-async def espejo_mesa_minar(payload: dict = None):
+async def espejo_mesa_minar(request: Request, payload: dict = None):
+    """Re-calibración manual del Algoritmo Espejo: exclusiva de René Osa (Nivel 1)."""
+    _solo_maestro(request)
     dias = int((payload or {}).get("dias") or 280)
     return await minar_limites_mesa(dias)
 
@@ -11087,6 +11460,11 @@ async def _forense_auditar_entrada(s, modelo):
     if errores:
         hallazgos.append({**base, "categoria": "ERROR HUMANO", "detalle": " · ".join(errores[:3]),
                           "nota_dashai": "DashAI: inconsistencia numérica entre los documentos originales y la respuesta de MESA. La suma de liquidaciones/renta reconocida, el monto o la antigüedad no cuadran con lo resuelto — error operativo de la mesa."})
+    # MODO CONTRALOR OSA: toda diferencia contra la Constitución se rotula con su sello
+    for h in hallazgos:
+        if h.get("categoria") in ("RIESGO", "PERDIDA", "ERROR HUMANO"):
+            h["inconsistencia"] = "Inconsistencia detectada con los Criterios Maestros de René Osa"
+            h["detalle"] = f"⚠ Inconsistencia detectada con los Criterios Maestros de René Osa — {h['detalle']}"
     return hallazgos
 
 

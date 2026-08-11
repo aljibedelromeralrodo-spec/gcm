@@ -50,13 +50,14 @@ def decode_token(token):
 # Rutas públicas: NO exigen token de administrador. Los portales usan su token
 # propio (oid del prospecto / token de firma) validado dentro del endpoint.
 PUBLIC_EXACT = {
-    "/api/", "/api", "/api/auth/login", "/api/inmobiliaria/auth/login",
-    "/api/valor-uf",
+    "/api/", "/api", "/api/auth/login", "/api/auth/crear-clave",
+    "/api/inmobiliaria/auth/login", "/api/valor-uf",
 }
 PUBLIC_PREFIXES = (
     "/api/calificar",              # Portal de Captura Autónoma (token = oid)
     "/api/firma/",                 # Portal de Firma (token de firma en la URL)
     "/api/oportunidades/track",    # Pixeles/clics de correos comerciales
+    "/api/descarga-segura/",       # Links seguros de descarga para clientes (token único)
 )
 # El portal comercial de inmobiliarias tiene su propia sesión (scope inmobiliaria)
 INMO_PREFIX = "/api/inmobiliaria"

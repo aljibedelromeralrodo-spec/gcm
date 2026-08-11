@@ -1,0 +1,34 @@
+{
+  "summary": "Regresión E2E del 'Mando Supremo — René Osa'. Backend 12/12 pytest OK (login legado admin, login rene maestro, 401 clave incorrecta, 403 crear-clave rene ya existente, 403 admin en criterios, 200 rene guarda criterios y aparece en auditoría 'Política modificada por René Osa', 403 admin en espejo-mesa/minar, 200 rene minar con precision_pct, GET supervisión con pendientes/resueltos, 403 admin en resolver, descarga PDF con cookie cm_token OK vs 401 sin auth). Frontend admin: banner criterios-banner-mando 'MODO SOLO LECTURA' OK, 46 inputs disabled, sin botón guardar, supervision-panel + auditoria-panel visibles con 598 chars de historial. Frontend rene: BUG BLOQUEANTE — el módulo 'Criterios' NO aparece en su sidebar y no hay ruta directa; imposible completar el flujo de edición y aprobación desde UI para el rol maestro. Los criterios NO fueron modificados desde UI (RESTAURADOS). Backend save por rene sí ejecutó una autopublicación (mismos valores, versión subió a 3) — no altera negocio.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "App.js sidebar (línea 174)", "issue": "El módulo 'Criterios' solo se agrega al sidebar si user.rol === 'admin'; el rol 'maestro' (rene) — que es el ÚNICO que puede editar la Bóveda — no ve la entrada y no puede acceder al módulo. Además /criterios y /admin/criterios no funcionan porque el app usa state activeModule (no react-router).", "selector": "sidebar item 'Criterios'", "priority": "CRITICAL"},
+      {"component": "App.js sidebar (líneas 168-177)", "issue": "Otras entradas admin-only también están ocultas para maestro: Centro de Ventas VIP, Aprendizaje IA, Usuarios, WhatsApp, Correo a Mesa, Procesamiento Correo. Evaluar si el maestro debería verlas (probablemente sí, dado que es Nivel 1).", "selector": "sidebar", "priority": "HIGH"}
+    ],
+    "integration_issues": [
+      {"flow": "rene → Criterios (edit → guardar → modal clave → auditoría)", "issue": "No pudo ejecutarse por el bug del sidebar; el backend está OK (pytest lo confirma), sólo falta el acceso desde UI.", "affected_selectors": ["sidebar 'Criterios'", "criterios-guardar-btn", "criterios-modal-clave", "criterios-clave-input", "criterios-modal-confirmar", "criterios-msg", "supervision-clave", "supervision-aprobar-*"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_mando_supremo.py", "/app/test_reports/pytest/mando_supremo.xml"],
+  "action_items": [
+    "Fix sidebar visibility en /app/frontend/src/App.js línea 174: cambiar la condición del ítem 'criterios' para incluir también el rol 'maestro'. Sugerencia: `...(user.rol === 'admin' || user.rol === 'maestro' ? [{ key: 'criterios', ... }] : [])` o mejor: exponer 'criterios' siempre y que CriteriosModule maneje modo solo lectura vs edición según rol (como ya lo hace).",
+    "Revisar el resto de entradas admin-only (líneas 168, 171, 173, 175-177) para decidir si el rol 'maestro' debe verlas también (probable sí, ya que es Nivel 1 y jefe del admin).",
+    "Opcional: agregar ruta directa /admin/criterios o soportar deep-link para el módulo."
+  ],
+  "critical_code_review_comments": [
+    "App.js repite el patrón `...(user.rol === 'admin' ? [{...}] : [])` 7 veces; conviene extraer una función `sidebarItemsFor(rol)` con un mapa de permisos por rol para escalabilidad y evitar el sesgo binario admin/no-admin que ignora al rol 'maestro'.",
+    "server.py auth_login: verificar que la respuesta incluya rol='maestro' para rene (ya OK en pytest). Buen diseño: el token diferencia roles.",
+    "CriteriosModule ya soporta modo solo lectura para admin y edición para maestro — todo el ecosistema está listo excepto el enlace en el sidebar.",
+    "Descarga por cookie cm_token funciona OK; buena práctica que /clientes/folders/{id}/download acepte tanto Authorization header como cookie para window.open."
+  ],
+  "updated_files": ["/app/backend/tests/test_mando_supremo.py"],
+  "success_rate": {"backend": "100% (12/12)", "frontend": "50% — admin flow OK; rene flow bloqueado por sidebar oculto"},
+  "test_credentials": "administrador/141617575 (admin) · rene/OsaMaestro2026 (maestro)",
+  "seed_data_creation": "Ninguna. Al guardar criterios como rene desde el test backend, los valores enviados fueron IDÉNTICOS al GET previo (round-trip), por lo que sólo subió la versión y se agregó una entrada de auditoría — sin cambios reales de negocio. NO se modificaron criterios desde UI. NO se tocó db.users ni la clave_hash de rene. Yerile sin cambios.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "El backend del Mando Supremo está 100% verde. El único bloqueo es el sidebar de App.js línea 174 que oculta 'Criterios' al rol maestro. Al arreglarlo, hacer flujo UI: login rene → click sidebar 'Criterios' → banner 'Mando Supremo activo' → modificar un input numérico (+1) → criterios-guardar-btn → criterios-modal-clave con OsaMaestro2026 → confirmar → mensaje ✅ con 'Política modificada por René Osa' → RESTAURAR valor original con otro guardado. Backend puede colgarse con 502 tras hot-reload; en ese caso `sudo supervisorctl restart backend && sleep 18`.",
+  "rca of the issue": "En /app/frontend/src/App.js:174 el array del sidebar añade el ítem 'Criterios' sólo con `user.rol === 'admin'`. El rol 'maestro' (nuevo, para René Osa) no cumple esa condición → el ítem se filtra y no aparece. Es un `else` implícito. Reproducción: login como rene/OsaMaestro2026 → el sidebar NO muestra 'Criterios' (verificado por text_content del <aside>). Mitigación: cambiar la condición a `['admin','maestro'].includes(user.rol)` o eliminar el gating y dejar que CriteriosModule maneje la visibilidad interna."
+}

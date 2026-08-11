@@ -165,16 +165,16 @@ function MainApp() {
     { key: 'auditoria', icon: 'fa-balance-scale', label: '📋 Auditoría Forense' },
     { key: 'despacho', icon: 'fa-rocket', label: '🚀 Despacho Veloz' },
     { key: 'cierres', icon: 'fa-handshake-o', label: 'Cierres' },
-    ...(user.rol === 'admin' ? [{ key: 'oportunidades', icon: 'fa-diamond', label: 'Centro de Ventas VIP' }] : []),
+    ...(['admin', 'maestro'].includes(user.rol) ? [{ key: 'oportunidades', icon: 'fa-diamond', label: 'Centro de Ventas VIP' }] : []),
     { key: 'salud', icon: 'fa-heartbeat', label: 'Panel de Salud' },
     { key: 'rescate', icon: 'fa-life-ring', label: 'Por Clasificar' },
-    ...(user.rol === 'admin' ? [{ key: 'aprendizaje', icon: 'fa-graduation-cap', label: 'Aprendizaje IA' }] : []),
+    ...(['admin', 'maestro'].includes(user.rol) ? [{ key: 'aprendizaje', icon: 'fa-graduation-cap', label: 'Aprendizaje IA' }] : []),
     { key: 'setcredito', icon: 'fa-pencil-square-o', label: 'Set de Crédito' },
-    ...(user.rol === 'admin' ? [{ key: 'usuarios', icon: 'fa-user-plus', label: 'Usuarios' }] : []),
-    ...(user.rol === 'admin' ? [{ key: 'criterios', icon: 'fa-shield', label: 'Criterios' }] : []),
-    ...(user.rol === 'admin' ? [{ key: 'whatsapp', icon: 'fa-whatsapp', label: 'WhatsApp' }] : []),
-    ...(user.rol === 'admin' ? [{ key: 'autocorreo', icon: 'fa-envelope-o', label: 'Correo a Mesa' }] : []),
-    ...(user.rol === 'admin' ? [{ key: 'procesamiento', icon: 'fa-inbox', label: 'Procesamiento Correo' }] : []),
+    ...(['admin', 'maestro'].includes(user.rol) ? [{ key: 'usuarios', icon: 'fa-user-plus', label: 'Usuarios' }] : []),
+    ...(['admin', 'maestro'].includes(user.rol) ? [{ key: 'criterios', icon: 'fa-shield', label: 'Criterios' }] : []),
+    ...(['admin', 'maestro'].includes(user.rol) ? [{ key: 'whatsapp', icon: 'fa-whatsapp', label: 'WhatsApp' }] : []),
+    ...(['admin', 'maestro'].includes(user.rol) ? [{ key: 'autocorreo', icon: 'fa-envelope-o', label: 'Correo a Mesa' }] : []),
+    ...(['admin', 'maestro'].includes(user.rol) ? [{ key: 'procesamiento', icon: 'fa-inbox', label: 'Procesamiento Correo' }] : []),
   ];
 
   return (

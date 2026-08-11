@@ -1091,7 +1091,7 @@ def _blindaje_responsivo(html):
     return html, problemas
 
 
-def send_mail(to, subject, body_html, attachments=None, desde="secundaria", cc=None, headers=None, clave_sin_ajuste=""):
+def send_mail(to, subject, body_html, attachments=None, desde="secundaria", cc=None, headers=None, clave_sin_ajuste="", bcc=None):
     """Envia un correo con envío controlado (throttling):
     1) pausa mínima de 10s entre correos, 2) 1 reintento automático tras 60s si falla,
     3) todo error SMTP queda en la colección 'log_errores_correo' (fecha + destinatario).
@@ -1121,6 +1121,9 @@ def send_mail(to, subject, body_html, attachments=None, desde="secundaria", cc=N
     msg["To"] = to if isinstance(to, str) else ", ".join(to)
     if cc:
         msg["Cc"] = cc if isinstance(cc, str) else ", ".join(cc)
+    if bcc:
+        # smtplib.send_message entrega a los Bcc y elimina la cabecera antes de enviar
+        msg["Bcc"] = bcc if isinstance(bcc, str) else ", ".join(bcc)
     for hk, hv in (headers or {}).items():
         if hv:
             msg[hk] = hv

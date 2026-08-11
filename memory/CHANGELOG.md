@@ -947,3 +947,20 @@
 - 3 fuentes: carpeta en disco → adjuntos proc_queue → buzón IMAP. OCR sobrescribe (regla del dueño).
 - Reinstalados poppler-utils + tesseract-ocr(-spa) (3ª recaída post-fork; OCR fallaba en silencio).
 - Resultado: 54/67 carpetas con datos_financieros, Espejo MESA listo=True (3 casos, 90% precisión).
+
+## 2026-06 (fork) — Autocorreo Cliente Final + Editor Maestro de Compromisos
+- FIX sidebar: rol 'maestro' ahora ve Criterios y demás módulos admin (bug crítico del test iteration_29).
+- Autocorreo Cliente: al detectar aprobación de MESA envía felicitación DIRECTA al cliente con BCC a la
+  cuenta comercial (send_mail ahora soporta bcc). Sin correo → alerta "⚠️ X aprobado pero sin correo…".
+  Guard: solo aprobaciones ≤7 días; bloqueo de duplicados vía aprobacion_log.
+- Botón "Re-enviar Notificación" (detalle carpeta) → POST /api/clientes/folders/{fid}/reenviar-notificacion (forzar=True).
+- Adjuntos ≤10MB (carta+simulación 1ª página, o combinado); si pesan más → links seguros /api/descarga-segura/{token} (público).
+- Editor Maestro de Compromisos: GET/PUT /api/compromiso/{fid} (prefill OCR+IA con extraer_datos_compromiso),
+  POST /api/compromiso/{fid}/pdf (xhtml2pdf, exporta EXACTO lo del editor). UI split-screen CompromisoEditor.js:
+  formulario 360° (partes, inmueble, CBR, módulo financiero con saldo auto = valor − pie, pie/crédito resaltados
+  Oro 24K si vacíos, checkbox pie recibido, condición suspensiva, cláusula penal, gastos) + vista previa
+  contentEditable 100% editable. Marcador [COMPLETAR] en datos faltantes.
+- Datos Paula Vergara sembrados: compradora Paula Constanza Vergara Paris 19.156.215-1 (folder email/rut
+  actualizados, Paula.8b@gmail.com), vendedor Carlos Mauricio Aqueveque Díaz 10.790.083-7, Río Diguillin 249
+  Talcahuano Rol 2068-8. Botón "Ver/Editar Compromiso de Compraventa" en su perfil.
+- xhtml2pdf agregado a requirements.txt.

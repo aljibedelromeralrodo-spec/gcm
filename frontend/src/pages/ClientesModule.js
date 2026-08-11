@@ -3,6 +3,7 @@ import axios from "axios";
 import DOMPurify from "dompurify";
 import ImportarCorreo from "../components/ImportarCorreo";
 import ConversorUF from "../components/ConversorUF";
+import CompromisoEditor from "./CompromisoEditor";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 const CAT_LABELS = { cedula: "Cédula", liquidacion: "Liquidaciones", afp: "AFP", cmf: "CMF", imp_renta: "Imp. Renta", boletas: "Boletas" };
@@ -163,6 +164,7 @@ export default function ClientesModule({ onNavigate }) {
   const [syncMsg, setSyncMsg] = useState("");
   const [currentFolder, setCurrentFolder] = useState(null);
   const [techo, setTecho] = useState(null);
+  const [showCompromiso, setShowCompromiso] = useState(false);
   const [techoBusy, setTechoBusy] = useState(false);
   const [emails, setEmails] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -1901,6 +1903,22 @@ export default function ClientesModule({ onNavigate }) {
                 style={{ background: "#10c98a", border: "1px solid #0e9f6e", color: "#fff", fontWeight: 600 }}>
                 <i className="fa fa-paper-plane"></i> Enviar a Mesa
               </button>
+              <button className="docs-btn secondary" data-testid="btn-reenviar-notificacion"
+                onClick={async () => {
+                  if (!window.confirm(`📧 ¿Re-enviar la notificación de aprobación a ${currentFolder.nombre}?\nSe saltará el bloqueo de duplicados (para cuando el cliente dice que no le llegó).`)) return;
+                  try {
+                    const r = await axios.post(`${API}/api/clientes/folders/${currentFolder.id}/reenviar-notificacion`);
+                    window.alert(`✅ Notificación re-enviada a ${r.data.to}${(r.data.adjuntos || []).length ? ` con ${r.data.adjuntos.length} adjunto(s)` : r.data.con_links ? " con links de descarga segura" : ""} (BCC cuenta comercial)`);
+                  } catch (e) { window.alert(`🚨 ${e.response?.data?.detail || "Error al re-enviar la notificación"}`); }
+                }}
+                style={{ background: "rgba(59,130,246,0.15)", border: "1px solid #3b82f6", color: "#93c5fd" }}>
+                <i className="fa fa-bell"></i> Re-enviar Notificación
+              </button>
+              <button className="docs-btn secondary shimmer-oro" data-testid="btn-compromiso"
+                onClick={() => setShowCompromiso(true)}
+                style={{ background: "rgba(212,175,55,0.18)", border: "1px solid #d4af37", color: "#d4af37", fontWeight: 700 }}>
+                <i className="fa fa-file-text-o"></i> Ver/Editar Compromiso de Compraventa
+              </button>
               <button className="docs-btn secondary" onClick={() => openMissingDocsModal(currentFolder)} data-testid="btn-missing-docs-detail"
                 style={{ background: "rgba(225,29,72,0.15)", border: "1px solid rgba(225,29,72,0.5)", color: "#fb7185" }}>
                 <i className="fa fa-exclamation-triangle"></i> Documento Faltante
@@ -1918,6 +1936,11 @@ export default function ClientesModule({ onNavigate }) {
               </button>
             </div>
           </div>
+
+          {showCompromiso && currentFolder && (
+            <CompromisoEditor folder={currentFolder} onClose={() => setShowCompromiso(false)} />
+          )}
+
 
           {techo && (
             <div data-testid="techo-modal" onClick={() => setTecho(null)}
@@ -3793,4 +3816,3 @@ export default function ClientesModule({ onNavigate }) {
     </div>
   );
 }
-
