@@ -964,3 +964,16 @@
   actualizados, Paula.8b@gmail.com), vendedor Carlos Mauricio Aqueveque Díaz 10.790.083-7, Río Diguillin 249
   Talcahuano Rol 2068-8. Botón "Ver/Editar Compromiso de Compraventa" en su perfil.
 - xhtml2pdf agregado a requirements.txt.
+
+## 2026-06 (fork) — Estándar UF en Compromisos + FIX 401 descargas/preview
+- CompromisoEditor: moneda maestra UF (precio, pie, saldo, multa) con equivalencia CLP al valor UF
+  del día (/api/valor-uf, clave valor_uf) y montos EN PALABRAS (numeroAPalabras es-CL, estilo notarial).
+- Cláusula DÉCIMO de pie (texto legal dictado por el dueño) BLINDADA: contenteditable=false,
+  recuadro dorado prominente; se activa con el checkbox "pie recibido".
+- Saldo/Crédito Hipotecario BLOQUEADO = Precio Total − Pie (campo solo lectura 🔒).
+- FIX 401: downloadFile/openPreview/downloadAll (ClientesModule) y 3 enlaces de SetCreditoModule
+  ahora agregan ?t=TOKEN (secureGet('token', false)); auth.py ya aceptaba cookie cm_token y ?t=.
+- Persistencia: folder_download restaura desde Búnker GridFS (bunker.restaurar_faltantes) si el
+  archivo falta en disco tras un reinicio.
+- Verificado: preview 1er clic con iframe t=+inline, descarga individual 200 PDF, download-all 200 ZIP,
+  sin token 401.

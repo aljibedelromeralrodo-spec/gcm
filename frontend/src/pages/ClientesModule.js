@@ -4,6 +4,7 @@ import DOMPurify from "dompurify";
 import ImportarCorreo from "../components/ImportarCorreo";
 import ConversorUF from "../components/ConversorUF";
 import CompromisoEditor from "./CompromisoEditor";
+import { secureGet } from "../utils/secureStore";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 const CAT_LABELS = { cedula: "Cédula", liquidacion: "Liquidaciones", afp: "AFP", cmf: "CMF", imp_renta: "Imp. Renta", boletas: "Boletas" };
@@ -1073,11 +1074,11 @@ export default function ClientesModule({ onNavigate }) {
   };
 
   const downloadFile = (folderId, filePath) => {
-    window.open(`${API}/api/clientes/folders/${folderId}/download/${filePath}`, "_blank");
+    window.open(`${API}/api/clientes/folders/${folderId}/download/${filePath}?t=${encodeURIComponent(secureGet("token", false) || "")}`, "_blank");
   };
 
   const openPreview = (folderId, filePath, fileName) => {
-    const url = `${API}/api/clientes/folders/${folderId}/download/${encodeURI(filePath)}?inline=true`;
+    const url = `${API}/api/clientes/folders/${folderId}/download/${encodeURI(filePath)}?inline=true&t=${encodeURIComponent(secureGet("token", false) || "")}`;
     const ext = (fileName || "").toLowerCase().split(".").pop();
     const mime = ext === "pdf" ? "pdf" :
                  ["png","jpg","jpeg","gif","webp"].includes(ext) ? "image" :
@@ -1499,7 +1500,7 @@ export default function ClientesModule({ onNavigate }) {
   };
 
   const downloadAll = (folderId) => {
-    window.open(`${API}/api/clientes/folders/${folderId}/download-all`, "_blank");
+    window.open(`${API}/api/clientes/folders/${folderId}/download-all?t=${encodeURIComponent(secureGet("token", false) || "")}`, "_blank");
   };
 
   const formatSize = (bytes) => {

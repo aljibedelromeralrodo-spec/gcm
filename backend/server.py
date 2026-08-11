@@ -2045,6 +2045,12 @@ async def folder_download(fid: str, file_path: str, inline: bool = False):
     except ValueError:
         raise HTTPException(status_code=400, detail="Ruta inválida")
     if not target.exists() or not target.is_file():
+        # PERSISTENCIA: si el disco perdió el archivo (reinicio), restaurar desde el Búnker (GridFS)
+        try:
+            await asyncio.to_thread(bunker.restaurar_faltantes)
+        except Exception as e:
+            logging.warning(f"restauracion bunker en download: {e}")
+    if not target.exists() or not target.is_file():
         raise HTTPException(status_code=404, detail="Archivo no encontrado")
     import mimetypes
     mt = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
@@ -8444,9 +8450,8 @@ def _compromiso_default(fd):
                      "estado_civil": "", "domicilio": ""},
         "propiedad": {"direccion": "", "comuna": "", "rol_avaluo": "", "fojas": "", "numero": "",
                       "anio": "", "cbr": ""},
-        "precio": {"valor_total_clp": 0, "pie_clp": 0, "pie_recibido": False,
-                   "credito_clp": 0, "garantia": ""},
-        "resguardos": {"plazo_escritura_dias": 60, "clausula_penal_clp": 0, "gastos": "ambos"},
+        "precio": {"valor_total_uf": 0, "pie_uf": 0, "pie_recibido": False, "garantia": ""},
+        "resguardos": {"plazo_escritura_dias": 60, "clausula_penal_uf": 0, "gastos": "ambos"},
     }
 
 
@@ -8478,9 +8483,14 @@ async def compromiso_get(fid: str):
                 if v and k in datos[sec] and not datos[sec].get(k):
                     datos[sec][k] = str(v)
         pr = ext.get("precio") or {}
-        for k in ("valor_total_clp", "pie_clp", "credito_clp"):
-            if isinstance(pr.get(k), (int, float)) and pr[k] > 0 and not datos["precio"][k]:
-                datos["precio"][k] = pr[k]
+        try:
+            uf_v = float(await get_valor_uf() or 0)
+        except Exception:
+            uf_v = 0
+        if uf_v > 0:
+            for k_clp, k_uf in (("valor_total_clp", "valor_total_uf"), ("pie_clp", "pie_uf")):
+                if isinstance(pr.get(k_clp), (int, float)) and pr[k_clp] > 0 and not datos["precio"][k_uf]:
+                    datos["precio"][k_uf] = round(pr[k_clp] / uf_v, 2)
     except Exception as e:
         logging.warning(f"compromiso prefill: {e}")
     doc = {"folder_id": fid, "cliente": fd.get("nombre", ""), "datos": datos,

@@ -2,8 +2,10 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import axios from "axios";
 import ImportarCorreo from "../components/ImportarCorreo";
 import { estiloConfianza, PanelAprendizaje, useAprendizaje } from "../components/CampoAprendizaje";
+import { secureGet } from "../utils/secureStore";
 
 const API = process.env.REACT_APP_BACKEND_URL;
+const tkParam = () => `&t=${encodeURIComponent(secureGet("token", false) || "")}`;
 
 const card = { background: "rgba(14,14,16,0.9)", padding: "1.5rem", borderRadius: "0px", border: "1px solid transparent", backgroundImage: "linear-gradient(115deg, rgba(255,255,255,0.09) 0%, rgba(255,255,255,0.02) 18%, transparent 32%), linear-gradient(160deg, rgba(30,30,30,0.95), rgba(10,10,10,0.98)), linear-gradient(135deg, #BF953F, #FCF6BA, #B38728, #FBF5B7, #AA771C)", boxShadow: "0 35px 70px -20px rgba(0,0,0,0.95), 0 0 38px -16px rgba(191,149,63,0.45)", backgroundOrigin: "border-box", backgroundClip: "padding-box, padding-box, border-box", marginBottom: "1.5rem" };
 const inp = { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "0px", padding: "0.55rem 0.8rem", color: "#fff", fontSize: "0.9rem", width: "100%" };
@@ -142,7 +144,7 @@ export default function SetCreditoModule({ onNavigate }) {
         nombre: r.data.combinado,
         usados: r.data.usados || [],
         excluidos: r.data.excluidos_rut || [],
-        url: `${API}/api/set-credito/sets/${current.id}/download/${encodeURIComponent(r.data.combinado)}?inline=true`,
+        url: `${API}/api/set-credito/sets/${current.id}/download/${encodeURIComponent(r.data.combinado)}?inline=true${tkParam()}`,
       });
     } catch (e) { setMsg("Error: " + (e.response?.data?.detail || e.message)); }
     setLoading(false);
@@ -366,7 +368,7 @@ export default function SetCreditoModule({ onNavigate }) {
                 <i className="fa fa-file-pdf-o" style={{ color: "#e11d48" }} />
                 <span style={{ flex: 1 }}>{a.nombre}</span>
                 <span style={{ fontSize: "0.72rem", padding: "0.12rem 0.5rem", borderRadius: "999px", background: "rgba(212,175,55,0.15)", color: "var(--gold)" }}>{docTipos[a.tipo] || "Otro"}</span>
-                <a href={`${API}/api/set-credito/sets/${current.id}/download/${encodeURIComponent(a.ruta)}?inline=true`} target="_blank" rel="noreferrer" style={{ color: "#d4af37" }} title="Ver"><i className="fa fa-eye" /></a>
+                <a href={`${API}/api/set-credito/sets/${current.id}/download/${encodeURIComponent(a.ruta)}?inline=true${tkParam()}`} target="_blank" rel="noreferrer" style={{ color: "#d4af37" }} title="Ver"><i className="fa fa-eye" /></a>
                 <button data-testid={`setcred-firmar-${i}`} onClick={() => abrirFirma(a)} disabled={!migrup?.connected} style={btn("var(--gold)", true)} title="Enviar a firmar"><i className="fa fa-pencil" style={{ marginRight: "0.3rem" }} />Firmar</button>
                 <button onClick={() => borrarFile(a.ruta)} style={{ background: "none", border: "none", color: "#e11d48", cursor: "pointer" }}><i className="fa fa-trash" /></button>
               </div>
@@ -399,7 +401,7 @@ export default function SetCreditoModule({ onNavigate }) {
                   <div key={i} data-testid={`setcred-firmado-${i}`} style={{ display: "flex", alignItems: "center", gap: "0.7rem", padding: "0.4rem 0.2rem", borderBottom: "1px solid rgba(255,255,255,0.05)", fontSize: "0.85rem" }}>
                     <i className="fa fa-file-pdf-o" style={{ color: "#10d98e" }} />
                     <span style={{ flex: 1 }}>{f.nombre}</span>
-                    <a href={`${API}/api/set-credito/sets/${current.id}/download/${encodeURIComponent(f.ruta)}?inline=true`} target="_blank" rel="noreferrer" style={{ color: "#d4af37" }} title="Ver"><i className="fa fa-eye" /></a>
+                    <a href={`${API}/api/set-credito/sets/${current.id}/download/${encodeURIComponent(f.ruta)}?inline=true${tkParam()}`} target="_blank" rel="noreferrer" style={{ color: "#d4af37" }} title="Ver"><i className="fa fa-eye" /></a>
                   </div>
                 ))}
                 <div style={{ display: "flex", gap: "0.6rem", marginTop: "0.9rem", flexWrap: "wrap", alignItems: "center" }}>
