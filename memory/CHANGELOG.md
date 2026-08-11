@@ -1004,3 +1004,9 @@
 - Caché `clausulas_html` eliminada: carga inicial ya no la usa, `guardar` envía "", backend PUT fuerza "", y se purgó de db.compromisos (1 doc).
 - UF sin fallback antiguo: `/api/valor-uf` ahora devuelve `en_vivo`; si no hay UF viva del SII/mindicador, la descarga se ABORTA con mensaje (nunca usa valores viejos).
 - Smoke test: PDF HTTP 200 (%PDF-1.4), UF viva 40.847,42 (sii.cl), frontend compilado OK.
+
+## 2026-08-11 — Rectificación Formato Legal + Cláusula Finiquito (P0)
+- `CompromisoEditor.js`: nueva cláusula "DÉCIMO — Declaración de pago y finiquito del pie" (solo si pie_recibido=true): Vendedor declara bajo juramento recepción íntegra del pie en UF + equivalente CLP, finiquito total. SEGUNDO ahora referencia la cláusula DÉCIMA cuando el pie está pagado.
+- `server.py` compromiso_pdf CSS: márgenes 2.5cm sup/inf y 3cm izq/der explícitos, line-height 1.6, `b/strong/h1/h2 { font-weight:700 }`, background #ffffff, Times New Roman.
+- Todos los `font-weight:bold` inline del editor → `font-weight:700`.
+- Verificado con PyMuPDF: fuente Times-Bold real en montos ($122.542.260, 3.000 UF, 600 UF), margen izq 86pt (≈3cm), margen sup ~65pt, render visual impecable negro/blanco.

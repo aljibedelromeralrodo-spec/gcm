@@ -8546,11 +8546,14 @@ async def compromiso_pdf(fid: str, payload: dict):
     import io
     buf = io.BytesIO()
     full = ("<html><head><meta charset='utf-8'><style>"
-            "@page { size: letter; margin: 2.5cm 3cm; }"
-            "body { font-family: 'Times New Roman', Times, serif; font-size: 11pt; color: #000000; line-height: 1.5; }"
-            "h1 { font-size: 18pt; color: #000000; font-weight: bold; text-align: center; letter-spacing: 1px; }"
-            "h2 { font-size: 12pt; color: #000000; font-weight: bold; margin: 14px 0 4px; }"
-            "p { margin: 0 0 10px; text-align: justify; color: #000000; }"
+            "@page { size: letter; margin-top: 2.5cm; margin-bottom: 2.5cm; margin-left: 3cm; margin-right: 3cm; }"
+            "body { font-family: 'Times New Roman', Times, serif; font-size: 11pt; color: #000000; "
+            "background-color: #ffffff; line-height: 1.6; }"
+            "h1 { font-size: 18pt; color: #000000; font-weight: 700; text-align: center; letter-spacing: 1px; "
+            "line-height: 1.4; margin: 0 0 8px; }"
+            "h2 { font-size: 12pt; color: #000000; font-weight: 700; margin: 16px 0 6px; line-height: 1.5; }"
+            "b, strong { font-weight: 700; color: #000000; }"
+            "p { margin: 0 0 12px; text-align: justify; color: #000000; line-height: 1.6; }"
             "table { width: 100%; }"
             f"</style></head><body>{html}</body></html>")
     err = await asyncio.to_thread(lambda: pisa.CreatePDF(full, dest=buf, encoding="utf-8").err)

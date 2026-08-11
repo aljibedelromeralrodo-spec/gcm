@@ -92,29 +92,30 @@ export function buildCompromisoHTML(datos, ufHoy) {
     ? `El dominio se encuentra inscrito a fojas <b>${d.propiedad.fojas || "[COMPLETAR]"}</b>, número <b>${d.propiedad.numero || "[COMPLETAR]"}</b>, del año <b>${d.propiedad.anio || "[COMPLETAR]"}</b>, en el Registro de Propiedad del Conservador de Bienes Raíces de <b>${d.propiedad.cbr || "[COMPLETAR]"}</b>.`
     : `La inscripción de dominio será acreditada con los certificados correspondientes del Conservador de Bienes Raíces.`;
   // REGLA DE HIERRO: cláusulas financieras SIEMPRE reconstruidas desde datos.precio en vivo
-  const clausulaPie = d.precio.pie_recibido ? `
-<div style="border:1.5pt solid #000000;background:#ffffff;padding:12px 16px;margin:8px 0 12px">
-<p style="margin:0;color:#000000"><b>SEGUNDO — Precio y forma de pago.</b> El precio de la venta es la suma de ${ufTxt(totalUF)}, equivalente a ${clpTxt(totalUF, uf)} al valor UF del día. De este monto, el comprador paga en este acto la suma de ${ufTxt(pieUF)}, equivalentes a ${clpTxt(pieUF, uf)}, dinero que el vendedor declara recibir a su entera y total satisfacción, otorgando por este instrumento el más amplio y completo finiquito respecto de dicha suma.</p>
-</div>` : `
-<h2 style="color:#000000;font-weight:bold">SEGUNDO — Precio y forma de pago.</h2>
-<p>El precio de la venta es la suma de ${ufTxt(totalUF)}, equivalente a ${clpTxt(totalUF, uf)} al valor UF del día. De este monto, el comprador pagará por concepto de pie la suma de ${ufTxt(pieUF)}, equivalentes a ${clpTxt(pieUF, uf)}, en la forma y oportunidad que las partes acuerden por escrito.</p>`;
+  const clausulaPie = `
+<h2 style="color:#000000;font-weight:700">SEGUNDO — Precio y forma de pago.</h2>
+<p>El precio de la venta es la suma de ${ufTxt(totalUF)}, equivalente a ${clpTxt(totalUF, uf)} al valor UF del día. De este monto, el Comprador ${d.precio.pie_recibido ? "ha pagado por concepto de pie" : "pagará por concepto de pie"} la suma de ${ufTxt(pieUF)}, equivalentes a ${clpTxt(pieUF, uf)}${d.precio.pie_recibido ? ", según se declara en la cláusula DÉCIMA del presente instrumento" : ", en la forma y oportunidad que las partes acuerden por escrito"}.</p>`;
+  const clausulaFiniquito = d.precio.pie_recibido ? `
+<h2 style="color:#000000;font-weight:700">DÉCIMO — Declaración de pago y finiquito del pie.</h2>
+<p>El Vendedor declara bajo juramento haber recibido del Comprador, de manera íntegra, total y oportuna, la suma de ${ufTxt(pieUF)}, equivalente a ${clpTxt(pieUF, uf)} al valor UF del día de hoy (${uf > 0 ? fmtCLP(uf) : "[POR DEFINIR]"} al ${new Date().toLocaleDateString("es-CL")}), por concepto de pie del precio de la compraventa. En consecuencia, el Vendedor otorga al Comprador el más amplio, completo y total finiquito respecto de dicha suma, declarándola íntegramente pagada y renunciando expresamente a toda acción, cobro o reclamación posterior derivada de su pago.</p>` : "";
   return `
 <h1 style="color:#000000;-webkit-text-fill-color:#000000;background:none;font-weight:900;font-size:18pt;text-align:center;letter-spacing:1px;text-decoration:none;font-family:'Times New Roman',Times,serif;margin:0 0 6px">COMPROMISO DE COMPRAVENTA</h1>
 <p style="text-align:center;color:#000000;font-size:10pt;margin-bottom:18px">Central Mutuos — Documento preparatorio de escritura pública · Valor UF del día: ${fmtCLP(uf)}</p>
 <p>En <b>${d.propiedad.comuna || "[COMPLETAR]"}</b>, a ${new Date().toLocaleDateString("es-CL", { day: "numeric", month: "long", year: "numeric" })}, comparecen: por una parte, ${personaHTML(d.vendedor, "el Vendedor")}; y por la otra, ${personaHTML(d.comprador, "el Comprador")}; quienes acuerdan el siguiente compromiso de compraventa:</p>
-<h2 style="color:#000000;font-weight:bold">PRIMERO — Objeto.</h2>
+<h2 style="color:#000000;font-weight:700">PRIMERO — Objeto.</h2>
 <p>El Vendedor se obliga a vender, ceder y transferir al Comprador, quien se obliga a comprar, aceptar y adquirir para sí, el inmueble ubicado en <b>${d.propiedad.direccion || "[COMPLETAR]"}</b>, comuna de <b>${d.propiedad.comuna || "[COMPLETAR]"}</b>, Rol de Avalúo N° <b>${d.propiedad.rol_avaluo || "[COMPLETAR]"}</b>. ${insc}</p>
 ${clausulaPie}
 <p><b>Saldo de precio (bloqueo de cálculo):</b> el saldo restante, ascendente a ${saldoUF > 0 ? ufTxt(saldoUF) : "<b>[POR DEFINIR]</b>"}, equivalente a ${clpTxt(saldoUF, uf)} al valor UF del día, corresponde a la diferencia exacta entre el Precio Total y el Pie ya pagado, y se pagará mediante <b>crédito hipotecario</b> otorgado por la institución financiera que apruebe la operación, al momento de la firma de la escritura definitiva de compraventa.</p>
 <p><b>Garantía del saldo:</b> ${d.precio.garantia || "El pago del saldo de precio quedará garantizado mediante instrucciones notariales irrevocables o vale vista bancario, a elección de las partes, entregadas en la notaría al momento de la firma de la escritura definitiva."}</p>
-<h2 style="color:#000000;font-weight:bold">TERCERO — Condición suspensiva.</h2>
+<h2 style="color:#000000;font-weight:700">TERCERO — Condición suspensiva.</h2>
 <p>La celebración de la compraventa definitiva queda expresamente supeditada a la aprobación del crédito hipotecario del Comprador. Las partes se obligan a suscribir la escritura pública de compraventa dentro del plazo de <b>${d.resguardos.plazo_escritura_dias || 60} días corridos</b> contados desde la comunicación formal de dicha aprobación. Si el crédito no fuere aprobado dentro del plazo señalado, este instrumento quedará sin efecto de pleno derecho, restituyéndose a las partes lo que hubieren entregado, sin ulterior responsabilidad.</p>
-<h2 style="color:#000000;font-weight:bold">CUARTO — Cláusula penal.</h2>
+<h2 style="color:#000000;font-weight:700">CUARTO — Cláusula penal.</h2>
 <p>Si cualquiera de las partes se negare injustificadamente a suscribir la escritura definitiva o se arrepintiere de la presente convención, deberá pagar a la otra, a título de avaluación anticipada de perjuicios, una multa de <b>${fmtUF(multaUF)}</b> (${ufPalabras(multaUF)}), equivalente a <b>${fmtCLP(multaUF * uf)}</b> (${clpPalabras(multaUF * uf)}) al valor UF del día, sin perjuicio del derecho de la parte diligente de exigir además el cumplimiento forzado del contrato.</p>
-<h2 style="color:#000000;font-weight:bold">QUINTO — Gastos.</h2>
+<h2 style="color:#000000;font-weight:700">QUINTO — Gastos.</h2>
 <p>Los gastos notariales, impuestos y derechos que irrogue la celebración de la compraventa definitiva ${gastosTxt}. Los gastos de inscripción en el Conservador de Bienes Raíces serán de cargo del Comprador.</p>
-<h2 style="color:#000000;font-weight:bold">SEXTO — Domicilio y ejemplares.</h2>
+<h2 style="color:#000000;font-weight:700">SEXTO — Domicilio y ejemplares.</h2>
 <p>Para todos los efectos legales derivados del presente instrumento, las partes fijan su domicilio en la comuna de <b>${d.propiedad.comuna || "[COMPLETAR]"}</b> y se someten a la competencia de sus Tribunales Ordinarios de Justicia. El presente compromiso se firma en dos ejemplares del mismo tenor, quedando uno en poder de cada parte.</p>
+${clausulaFiniquito}
 <br/><br/>
 <table style="width:100%;margin-top:30px"><tr>
 <td style="text-align:center;width:50%"><p>____________________________<br/><b>${d.vendedor.nombre || "[COMPLETAR]"}</b><br/>RUT ${d.vendedor.rut || "[COMPLETAR]"}<br/>VENDEDOR</p></td>
