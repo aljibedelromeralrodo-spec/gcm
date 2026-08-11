@@ -328,10 +328,20 @@ async def inmo_login(payload: dict):
 # ---------------------------------------------------------------------------
 @api.get("/valor-uf")
 async def valor_uf():
+    """CONEXIÓN SII INFALIBLE: consulta EN VIVO en cada llamada (SII oficial primero,
+    mindicador.cl de respaldo). El caché local queda solo como último recurso."""
+    try:
+        v, fuente, dia = await _actualizar_uf()
+        if v > 0:
+            return {"valor_uf": v, "fecha": now_iso(), "fuente": fuente,
+                    "actualizado": now_iso(), "dia_uf": dia, "en_vivo": True}
+    except Exception as e:
+        logging.warning(f"valor-uf en vivo falló: {e}")
     cfg = await db.config.find_one({"_key": "uf"}) or {}
     return {"valor_uf": await get_valor_uf(), "fecha": now_iso(),
             "fuente": cfg.get("uf_source", "local"),
-            "actualizado": cfg.get("uf_updated_at", ""), "dia_uf": cfg.get("uf_day", "")}
+            "actualizado": cfg.get("uf_updated_at", ""), "dia_uf": cfg.get("uf_day", ""),
+            "en_vivo": False}
 
 
 def _uf_desde_mindicador():
@@ -8161,53 +8171,73 @@ def _aprobacion_html(payload):
     boton = payload.get("boton_texto") or APROBACION_DEFAULTS["boton_texto"]
     contacto = _sender_por_rol("secundaria")
     adjuntos = payload.get("_adjuntos_nombres") or []
-    intro_html = "".join(f"<p style='margin:0 0 14px;line-height:1.75;font-size:15px;color:#2b3245'>{p}</p>"
+    intro_html = "".join(f"<p style='margin:0 0 14px;line-height:1.7;font-size:15px;color:#2b3245'>{p}</p>"
                          for p in intro.split("\n") if p.strip())
     docs_html = ""
     if adjuntos:
         filas = "".join(
             f"<tr><td style='padding:8px 0;color:#2b3245;font-size:14px'>"
-            f"<span style='display:inline-block;width:22px;color:#d4af37;font-weight:700'>&#10003;</span>{n}</td></tr>"
+            f"<span style='display:inline-block;width:22px;color:#1a1f2e;font-weight:700'>&#10003;</span>{n}</td></tr>"
             for n in adjuntos)
         docs_html = f"""
-        <div style="background:#f8f9fc;border:1px solid #eceef3;border-radius:10px;padding:16px 22px;margin:6px 0 22px">
+        <div style="background:#f4f5f7;border:1px solid #e2e4e9;padding:16px 22px;margin:6px 0 22px">
           <div style="color:#1a1f2e;font-weight:700;font-size:14px;margin-bottom:6px">Documentos adjuntos a este correo</div>
-          <table style="border-collapse:collapse">{filas}</table>
+          <table role="presentation" style="border-collapse:collapse">{filas}</table>
         </div>"""
     mailto = (f"mailto:{contacto}?subject=" +
               f"Deseo continuar con el proceso de escrituración — {nombre}".replace(" ", "%20"))
-    return f"""
-    <div style="background:#eef0f5;padding:30px 12px;font-family:Georgia,'Times New Roman',serif">
-      <div style="max-width:640px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 6px 24px rgba(16,24,40,0.12)">
-        <div style="background:#1a1f2e;padding:40px 32px;text-align:center;border-bottom:4px solid #d4af37">
+    return f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Central Mutuos</title>
+<style>
+  @media only screen and (max-width:600px) {{
+    .cm-titulo {{ font-size:24px !important; }}
+    .cm-header {{ padding:26px 16px !important; }}
+    .cm-body {{ padding:22px 16px 6px !important; }}
+    .cm-cta-zone {{ padding:6px 16px 26px !important; }}
+    .cm-footer {{ padding:18px 16px !important; }}
+    .cm-cta {{ display:block !important; width:100% !important; box-sizing:border-box !important; padding:16px 0 !important; }}
+  }}
+</style>
+</head>
+<body style="margin:0;padding:0;background:#eef0f2;font-family:Arial,Helvetica,sans-serif">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#eef0f2">
+    <tr><td align="center" style="padding:24px 10px">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+             style="max-width:600px;background:#ffffff;border:1px solid #e2e4e9">
+        <tr><td class="cm-header" style="background:#111318;padding:36px 28px;text-align:center">
           <div style="color:#9aa3b5;font-size:12px;letter-spacing:4px;margin-bottom:10px">CENTRAL MUTUOS</div>
-          <div style="color:#d4af37;font-size:34px;font-weight:700;letter-spacing:1px;line-height:1.2">¡FELICITACIONES!</div>
-          <div style="color:#ffffff;font-size:17px;margin-top:10px">Su crédito hipotecario ha sido <b style="color:#d4af37">APROBADO</b></div>
-        </div>
-        <div style="padding:34px 36px 8px">
+          <div class="cm-titulo" style="color:#ffffff;font-size:34px;font-weight:700;letter-spacing:1px;line-height:1.2">&iexcl;FELICITACIONES!</div>
+          <div style="color:#c9ced8;font-size:16px;margin-top:10px">Su cr&eacute;dito hipotecario ha sido <b style="color:#ffffff">APROBADO</b></div>
+        </td></tr>
+        <tr><td class="cm-body" style="padding:30px 32px 8px">
           <p style="margin:0 0 4px;color:#1a1f2e;font-size:17px"><b>Estimada(o) {nombre}</b></p>
           {f"<p style='margin:0 0 18px;color:#6b7280;font-size:13px'>RUT: {rut}</p>" if rut else "<div style='height:14px'></div>"}
           {intro_html}
           {docs_html}
           {payload.get("links_html", "")}
-        </div>
-        <div style="padding:6px 36px 34px;text-align:center">
-          <a href="{mailto}" style="display:inline-block;background:#d4af37;color:#1a1f2e;
+        </td></tr>
+        <tr><td class="cm-cta-zone" style="padding:6px 32px 30px;text-align:center">
+          <a class="cm-cta" href="{mailto}" style="display:inline-block;background:#111318;color:#ffffff;
              font-size:16px;font-weight:700;letter-spacing:1px;text-decoration:none;
-             padding:18px 40px;border-radius:50px;box-shadow:0 4px 14px rgba(212,175,55,0.45)">
-             {boton} &nbsp;&#8594;</a>
-          <p style="margin:16px 0 0;color:#9aa3b5;font-size:12px">Al presionar el botón se abrirá un correo dirigido a nuestro equipo para coordinar los siguientes pasos.</p>
-        </div>
-        <div style="background:#f8f9fc;border-top:1px solid #eceef3;padding:22px 36px">
+             padding:16px 38px;text-align:center">{boton} &nbsp;&#8594;</a>
+          <p style="margin:16px 0 0;color:#8a93a3;font-size:12px">Al presionar el bot&oacute;n se abrir&aacute; un correo dirigido a nuestro equipo para coordinar los siguientes pasos.</p>
+        </td></tr>
+        <tr><td class="cm-footer" style="background:#f4f5f7;border-top:1px solid #e2e4e9;padding:20px 32px">
           <p style="margin:0;color:#2b3245;font-size:14px"><b>Central Mutuos</b> — Con Creces</p>
-          <p style="margin:4px 0 0;color:#6b7280;font-size:12px">Especialistas en créditos hipotecarios · {contacto}</p>
-        </div>
-        <div style="background:#1a1f2e;padding:12px 32px;text-align:center">
-          <span style="color:#9aa3b5;font-size:11px">Este correo contiene información confidencial dirigida exclusivamente a su destinatario.</span>
-        </div>
-      </div>
-    </div>
-    """
+          <p style="margin:4px 0 0;color:#6b7280;font-size:12px">Especialistas en cr&eacute;ditos hipotecarios &middot; {contacto}</p>
+        </td></tr>
+        <tr><td style="background:#111318;padding:12px 24px;text-align:center">
+          <span style="color:#8a93a3;font-size:11px">Este correo contiene informaci&oacute;n confidencial dirigida exclusivamente a su destinatario.</span>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
 
 
 @api.post("/aprobacion-cliente/enviar")
@@ -8501,8 +8531,7 @@ async def compromiso_get(fid: str):
 
 @api.put("/compromiso/{fid}")
 async def compromiso_put(fid: str, payload: dict):
-    upd = {"datos": payload.get("datos") or {}, "clausulas_html": payload.get("clausulas_html") or "",
-           "updated_at": now_iso()}
+    upd = {"datos": payload.get("datos") or {}, "clausulas_html": "", "updated_at": now_iso()}
     await db.compromisos.update_one({"folder_id": fid}, {"$set": upd}, upsert=True)
     return {"ok": True, "updated_at": upd["updated_at"]}
 
@@ -8517,11 +8546,11 @@ async def compromiso_pdf(fid: str, payload: dict):
     import io
     buf = io.BytesIO()
     full = ("<html><head><meta charset='utf-8'><style>"
-            "@page { size: letter; margin: 2.2cm 2.4cm; }"
-            "body { font-family: Helvetica; font-size: 11pt; color: #111; line-height: 1.55; }"
-            "h1 { font-size: 14pt; text-align: center; letter-spacing: 2px; }"
-            "h2 { font-size: 11.5pt; margin: 14px 0 4px; }"
-            "p { margin: 0 0 9px; text-align: justify; }"
+            "@page { size: letter; margin: 2.5cm 3cm; }"
+            "body { font-family: 'Times New Roman', Times, serif; font-size: 11pt; color: #000000; line-height: 1.5; }"
+            "h1 { font-size: 18pt; color: #000000; font-weight: bold; text-align: center; letter-spacing: 1px; }"
+            "h2 { font-size: 12pt; color: #000000; font-weight: bold; margin: 14px 0 4px; }"
+            "p { margin: 0 0 10px; text-align: justify; color: #000000; }"
             "table { width: 100%; }"
             f"</style></head><body>{html}</body></html>")
     err = await asyncio.to_thread(lambda: pisa.CreatePDF(full, dest=buf, encoding="utf-8").err)

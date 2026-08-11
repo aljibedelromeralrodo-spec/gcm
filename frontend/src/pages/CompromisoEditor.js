@@ -61,6 +61,24 @@ function personaHTML(p, rol) {
     `con domicilio en ${p.domicilio || F}, en adelante "${rol}"`;
 }
 
+const ufTxt = (n) => n > 0 ? `<b>${fmtUF(n)}</b> (${ufPalabras(n)})` : "<b>[POR DEFINIR]</b>";
+const clpTxt = (n, uf) => (n > 0 && uf > 0) ? `<b>${fmtCLP(n * uf)}</b> (${clpPalabras(n * uf)})` : "<b>[POR DEFINIR]</b>";
+
+export function buildFinanzasHTML(d, ufHoy) {
+  const uf = Number(ufHoy) || 0;
+  const totalUF = Number(d.precio.valor_total_uf) || 0;
+  const pieUF = Number(d.precio.pie_uf) || 0;
+  const saldoUF = Math.max(0, Math.round((totalUF - pieUF) * 100) / 100);
+  const clausulaPie = d.precio.pie_recibido ? `
+<div data-testid="clausula-pie-blindada" style="border:1.5pt solid #000000;background:#ffffff;padding:12px 16px;margin:8px 0 12px">
+<p style="margin:0;color:#000000"><b>DÉCIMO: PRECIO Y FORMA DE PAGO.</b> El precio de la venta es la suma de ${ufTxt(totalUF)}. De este monto, el comprador paga en este acto la suma de ${ufTxt(pieUF)}, equivalentes a ${clpTxt(pieUF, uf)} al valor UF del día de hoy (${uf > 0 ? fmtCLP(uf) : "[POR DEFINIR]"} al ${new Date().toLocaleDateString("es-CL")}), dinero que el vendedor declara recibir a su entera y total satisfacción, otorgando por este instrumento el más amplio y completo finiquito respecto de dicha suma.</p>
+</div>` : `
+<p><b>SEGUNDO — Precio y forma de pago.</b> El precio de la venta es la suma de ${ufTxt(totalUF)}. De este monto, el comprador pagará por concepto de pie la suma de ${ufTxt(pieUF)}, equivalentes a ${clpTxt(pieUF, uf)} al valor UF del día de hoy, en la forma y oportunidad que las partes acuerden por escrito.</p>`;
+  return `<div id="cm-finanzas" contenteditable="false">${clausulaPie}
+<p><b>Saldo de precio (bloqueo de cálculo):</b> el saldo restante, ascendente a ${saldoUF > 0 ? ufTxt(saldoUF) : "<b>[POR DEFINIR]</b>"}, equivalente a ${clpTxt(saldoUF, uf)} al valor UF del día, corresponde a la diferencia exacta entre el Precio Total y el Pie ya pagado, y se pagará mediante <b>crédito hipotecario</b> otorgado por la institución financiera que apruebe la operación, al momento de la firma de la escritura definitiva de compraventa.</p>
+<p><b>Garantía del saldo:</b> ${d.precio.garantia || "El pago del saldo de precio quedará garantizado mediante instrucciones notariales irrevocables o vale vista bancario, a elección de las partes, entregadas en la notaría al momento de la firma de la escritura definitiva."}</p></div>`;
+}
+
 export function buildCompromisoHTML(datos, ufHoy) {
   const d = datos;
   const uf = Number(ufHoy) || 0;
@@ -73,28 +91,29 @@ export function buildCompromisoHTML(datos, ufHoy) {
   const insc = (d.propiedad.fojas || d.propiedad.numero || d.propiedad.anio)
     ? `El dominio se encuentra inscrito a fojas <b>${d.propiedad.fojas || "[COMPLETAR]"}</b>, número <b>${d.propiedad.numero || "[COMPLETAR]"}</b>, del año <b>${d.propiedad.anio || "[COMPLETAR]"}</b>, en el Registro de Propiedad del Conservador de Bienes Raíces de <b>${d.propiedad.cbr || "[COMPLETAR]"}</b>.`
     : `La inscripción de dominio será acreditada con los certificados correspondientes del Conservador de Bienes Raíces.`;
-  // REGLA DE HIERRO: cláusula de pie prominente y NO editable (contenteditable=false)
+  // REGLA DE HIERRO: cláusulas financieras SIEMPRE reconstruidas desde datos.precio en vivo
   const clausulaPie = d.precio.pie_recibido ? `
-<div contenteditable="false" data-testid="clausula-pie-blindada" style="border:2px solid #b8942e;background:#faf6e8;padding:12px 16px;margin:8px 0 12px">
-<p style="margin:0"><b>DÉCIMO: PRECIO Y FORMA DE PAGO.</b> El precio de la venta es la suma de <b>${fmtUF(totalUF)}</b> (${ufPalabras(totalUF)}). De este monto, el comprador paga en este acto la suma de <b>${fmtUF(pieUF)}</b> (${ufPalabras(pieUF)}), equivalentes a <b>${fmtCLP(pieCLP)}</b> (${clpPalabras(pieCLP)}) al valor UF del día de hoy (${fmtCLP(uf)} al ${new Date().toLocaleDateString("es-CL")}), dinero que el vendedor declara recibir a su entera y total satisfacción, otorgando por este instrumento el más amplio y completo finiquito respecto de dicha suma.</p>
+<div style="border:1.5pt solid #000000;background:#ffffff;padding:12px 16px;margin:8px 0 12px">
+<p style="margin:0;color:#000000"><b>SEGUNDO — Precio y forma de pago.</b> El precio de la venta es la suma de ${ufTxt(totalUF)}, equivalente a ${clpTxt(totalUF, uf)} al valor UF del día. De este monto, el comprador paga en este acto la suma de ${ufTxt(pieUF)}, equivalentes a ${clpTxt(pieUF, uf)}, dinero que el vendedor declara recibir a su entera y total satisfacción, otorgando por este instrumento el más amplio y completo finiquito respecto de dicha suma.</p>
 </div>` : `
-<p><b>SEGUNDO — Precio y forma de pago.</b> El precio de la venta es la suma de <b>${fmtUF(totalUF)}</b> (${ufPalabras(totalUF)}). De este monto, el comprador pagará por concepto de pie la suma de <b>${fmtUF(pieUF)}</b> (${ufPalabras(pieUF)}), equivalentes a <b>${fmtCLP(pieCLP)}</b> (${clpPalabras(pieCLP)}) al valor UF del día de hoy, en la forma y oportunidad que las partes acuerden por escrito.</p>`;
+<h2 style="color:#000000;font-weight:bold">SEGUNDO — Precio y forma de pago.</h2>
+<p>El precio de la venta es la suma de ${ufTxt(totalUF)}, equivalente a ${clpTxt(totalUF, uf)} al valor UF del día. De este monto, el comprador pagará por concepto de pie la suma de ${ufTxt(pieUF)}, equivalentes a ${clpTxt(pieUF, uf)}, en la forma y oportunidad que las partes acuerden por escrito.</p>`;
   return `
-<h1>COMPROMISO DE COMPRAVENTA</h1>
-<p style="text-align:center;color:#555;font-size:10pt;margin-bottom:18px">Central Mutuos — Documento preparatorio de escritura pública · Valor UF del día: ${fmtCLP(uf)}</p>
+<h1 style="color:#000000;-webkit-text-fill-color:#000000;background:none;font-weight:900;font-size:18pt;text-align:center;letter-spacing:1px;text-decoration:none;font-family:'Times New Roman',Times,serif;margin:0 0 6px">COMPROMISO DE COMPRAVENTA</h1>
+<p style="text-align:center;color:#000000;font-size:10pt;margin-bottom:18px">Central Mutuos — Documento preparatorio de escritura pública · Valor UF del día: ${fmtCLP(uf)}</p>
 <p>En <b>${d.propiedad.comuna || "[COMPLETAR]"}</b>, a ${new Date().toLocaleDateString("es-CL", { day: "numeric", month: "long", year: "numeric" })}, comparecen: por una parte, ${personaHTML(d.vendedor, "el Vendedor")}; y por la otra, ${personaHTML(d.comprador, "el Comprador")}; quienes acuerdan el siguiente compromiso de compraventa:</p>
-<h2>PRIMERO — Objeto.</h2>
+<h2 style="color:#000000;font-weight:bold">PRIMERO — Objeto.</h2>
 <p>El Vendedor se obliga a vender, ceder y transferir al Comprador, quien se obliga a comprar, aceptar y adquirir para sí, el inmueble ubicado en <b>${d.propiedad.direccion || "[COMPLETAR]"}</b>, comuna de <b>${d.propiedad.comuna || "[COMPLETAR]"}</b>, Rol de Avalúo N° <b>${d.propiedad.rol_avaluo || "[COMPLETAR]"}</b>. ${insc}</p>
 ${clausulaPie}
-<p><b>Saldo de precio (bloqueo de cálculo):</b> el saldo restante, ascendente a <b>${fmtUF(saldoUF)}</b> (${ufPalabras(saldoUF)}), equivalente a <b>${fmtCLP(saldoUF * uf)}</b> (${clpPalabras(saldoUF * uf)}) al valor UF del día, corresponde a la diferencia exacta entre el Precio Total y el Pie ya pagado, y se pagará mediante <b>crédito hipotecario</b> otorgado por la institución financiera que apruebe la operación, al momento de la firma de la escritura definitiva de compraventa.</p>
+<p><b>Saldo de precio (bloqueo de cálculo):</b> el saldo restante, ascendente a ${saldoUF > 0 ? ufTxt(saldoUF) : "<b>[POR DEFINIR]</b>"}, equivalente a ${clpTxt(saldoUF, uf)} al valor UF del día, corresponde a la diferencia exacta entre el Precio Total y el Pie ya pagado, y se pagará mediante <b>crédito hipotecario</b> otorgado por la institución financiera que apruebe la operación, al momento de la firma de la escritura definitiva de compraventa.</p>
 <p><b>Garantía del saldo:</b> ${d.precio.garantia || "El pago del saldo de precio quedará garantizado mediante instrucciones notariales irrevocables o vale vista bancario, a elección de las partes, entregadas en la notaría al momento de la firma de la escritura definitiva."}</p>
-<h2>TERCERO — Condición suspensiva.</h2>
+<h2 style="color:#000000;font-weight:bold">TERCERO — Condición suspensiva.</h2>
 <p>La celebración de la compraventa definitiva queda expresamente supeditada a la aprobación del crédito hipotecario del Comprador. Las partes se obligan a suscribir la escritura pública de compraventa dentro del plazo de <b>${d.resguardos.plazo_escritura_dias || 60} días corridos</b> contados desde la comunicación formal de dicha aprobación. Si el crédito no fuere aprobado dentro del plazo señalado, este instrumento quedará sin efecto de pleno derecho, restituyéndose a las partes lo que hubieren entregado, sin ulterior responsabilidad.</p>
-<h2>CUARTO — Cláusula penal.</h2>
+<h2 style="color:#000000;font-weight:bold">CUARTO — Cláusula penal.</h2>
 <p>Si cualquiera de las partes se negare injustificadamente a suscribir la escritura definitiva o se arrepintiere de la presente convención, deberá pagar a la otra, a título de avaluación anticipada de perjuicios, una multa de <b>${fmtUF(multaUF)}</b> (${ufPalabras(multaUF)}), equivalente a <b>${fmtCLP(multaUF * uf)}</b> (${clpPalabras(multaUF * uf)}) al valor UF del día, sin perjuicio del derecho de la parte diligente de exigir además el cumplimiento forzado del contrato.</p>
-<h2>QUINTO — Gastos.</h2>
+<h2 style="color:#000000;font-weight:bold">QUINTO — Gastos.</h2>
 <p>Los gastos notariales, impuestos y derechos que irrogue la celebración de la compraventa definitiva ${gastosTxt}. Los gastos de inscripción en el Conservador de Bienes Raíces serán de cargo del Comprador.</p>
-<h2>SEXTO — Domicilio y ejemplares.</h2>
+<h2 style="color:#000000;font-weight:bold">SEXTO — Domicilio y ejemplares.</h2>
 <p>Para todos los efectos legales derivados del presente instrumento, las partes fijan su domicilio en la comuna de <b>${d.propiedad.comuna || "[COMPLETAR]"}</b> y se someten a la competencia de sus Tribunales Ordinarios de Justicia. El presente compromiso se firma en dos ejemplares del mismo tenor, quedando uno en poder de cada parte.</p>
 <br/><br/>
 <table style="width:100%;margin-top:30px"><tr>
@@ -102,6 +121,17 @@ ${clausulaPie}
 <td style="text-align:center;width:50%"><p>____________________________<br/><b>${d.comprador.nombre || "[COMPLETAR]"}</b><br/>RUT ${d.comprador.rut || "[COMPLETAR]"}<br/>COMPRADOR</p></td>
 </tr></table>`;
 }
+
+const H1_LEGAL = `<h1 style="color:#000000;-webkit-text-fill-color:#000000;background:none;font-weight:900;font-size:18pt;text-align:center;letter-spacing:1px;text-decoration:none;font-family:'Times New Roman',Times,serif;margin:0 0 6px">`;
+
+// EXTINCIÓN DE DORADOS: sanea documentos guardados con el estilo antiguo
+const sobrio = (html) => (html || "")
+  .replace(/<h1[^>]*>/i, H1_LEGAL)
+  .split("#b8942e").join("#000000")
+  .split("#faf6e8").join("#ffffff")
+  .split("#d4af37").join("#000000")
+  .split("2px solid #000000").join("1.5pt solid #000000")
+  .split("color:#555").join("color:#000000");
 
 function CampoPersona({ rol, datos, set }) {
   const campos = [["nombre", "Nombre Completo"], ["rut", "RUT"], ["nacionalidad", "Nacionalidad"],
@@ -157,9 +187,10 @@ export default function CompromisoEditor({ folder, onClose }) {
       const d = migrarUF(r.data.datos, uf);
       setDatos(d);
       setTimeout(() => {
+        // ELIMINACIÓN DE CACHÉ: el documento SIEMPRE nace del formulario, nunca de clausulas_html guardado
         if (docRef.current) {
-          docRef.current.innerHTML = r.data.clausulas_html || buildCompromisoHTML(d, uf);
-          setManualDirty(!!r.data.clausulas_html);
+          docRef.current.innerHTML = buildCompromisoHTML(d, uf);
+          setManualDirty(false);
         }
       }, 50);
       setLoading(false);
@@ -183,8 +214,7 @@ export default function CompromisoEditor({ folder, onClose }) {
   const guardar = async () => {
     setSaving(true);
     try {
-      await axios.put(`${API_URL}/api/compromiso/${folder.id}`, {
-        datos, clausulas_html: manualDirty ? docRef.current?.innerHTML || "" : "" });
+      await axios.put(`${API_URL}/api/compromiso/${folder.id}`, { datos, clausulas_html: "" });
       setMsg("✅ Borrador guardado");
     } catch { setMsg("🚨 Error al guardar"); }
     setSaving(false);
@@ -193,8 +223,24 @@ export default function CompromisoEditor({ folder, onClose }) {
   const descargarPDF = async () => {
     setPdfBusy(true);
     try {
+      // VERIFICACIÓN SII: UF oficial capturada EN VIVO en el segundo de la generación, sin fallback antiguo
+      let ufFinal = 0;
+      try {
+        const u = await axios.get(`${API_URL}/api/valor-uf`);
+        if (u.data.en_vivo !== false) ufFinal = Number(u.data.valor_uf) || 0;
+      } catch { /* sin conexión al SII */ }
+      if (!(ufFinal > 0)) {
+        setMsg("🚨 UF SII no disponible en vivo. Reintente en unos segundos.");
+        setPdfBusy(false);
+        return;
+      }
+      setUfHoy(ufFinal);
+      // SINCRONIZACIÓN ATÓMICA: reconstrucción total desde el formulario, ignora manualDirty
+      const htmlFinal = sobrio(buildCompromisoHTML(datos, ufFinal));
+      if (docRef.current) docRef.current.innerHTML = htmlFinal;
+      setManualDirty(false);
       const r = await axios.post(`${API_URL}/api/compromiso/${folder.id}/pdf`,
-        { html: docRef.current?.innerHTML || "" }, { responseType: "blob" });
+        { html: htmlFinal }, { responseType: "blob" });
       const url = URL.createObjectURL(new Blob([r.data], { type: "application/pdf" }));
       const a = document.createElement("a");
       a.href = url;
@@ -295,9 +341,9 @@ export default function CompromisoEditor({ folder, onClose }) {
             </div>
             <div ref={docRef} data-testid="compromiso-preview" contentEditable suppressContentEditableWarning
               onInput={() => setManualDirty(true)}
-              style={{ background: "#fdfdfb", color: "#111", minHeight: "90%", padding: "3rem 3.4rem",
-                fontFamily: "Georgia, 'Times New Roman', serif", fontSize: "0.86rem", lineHeight: 1.65,
-                boxShadow: "0 0 50px -12px rgba(212,175,55,0.35)", outline: "none", maxWidth: 820, margin: "0 auto" }} />
+              style={{ background: "#ffffff", color: "#000000", minHeight: "90%", padding: "3rem 3.4rem",
+                fontFamily: "'Times New Roman', Times, serif", fontSize: "0.9rem", lineHeight: 1.5,
+                border: "none", boxShadow: "none", outline: "none", maxWidth: 820, margin: "0 auto" }} />
           </div>
         </div>
       )}

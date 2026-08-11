@@ -1032,8 +1032,13 @@ _RX_IMG = re.compile(r"<img\b([^>]*?)/?>", re.I)
 
 def _blindaje_responsivo(html):
     """Mini-render móvil: corrige anchos fijos > 600px, blinda imágenes con
-    max-width:100%/height:auto y garantiza que nada cause scroll horizontal."""
+    max-width:100%/height:auto y garantiza que nada cause scroll horizontal.
+    RESPETO DE DISEÑO: si el correo ya es un documento HTML estructurado
+    (<!DOCTYPE/<html> con viewport), se respeta tal cual sin re-envolver."""
     if not html or "<" not in html:
+        return html, []
+    low = html[:400].lower()
+    if ("<!doctype" in low or "<html" in low) and "viewport" in html.lower():
         return html, []
     problemas = []
 

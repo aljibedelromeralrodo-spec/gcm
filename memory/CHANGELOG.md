@@ -977,3 +977,30 @@
   archivo falta en disco tras un reinicio.
 - Verificado: preview 1er clic con iframe t=+inline, descarga individual 200 PDF, download-all 200 ZIP,
   sin token 401.
+
+## 2026-06 (fork) — Título notarial + UF SII en vivo
+- Título "COMPROMISO DE COMPRAVENTA": negro, negrita, 18pt, centrado (inline style + saneador
+  `sobrio()` que normaliza el h1 y dorados antiguos en documentos ya guardados; -webkit-text-fill-color
+  para vencer el gradiente dorado del CSS global). Estructura legal intacta.
+- /api/valor-uf ahora consulta EN VIVO (SII oficial → mindicador.cl → caché último recurso);
+  el editor recaptura la UF exacta al segundo de generar el PDF (si no hay ediciones manuales).
+- PDF: Times New Roman, interlineado 1.5, márgenes escritura pública (2.5cm/3cm), todo #000.
+- ⚠️ INCIDENTE: server.py quedó truncado a 8981 líneas durante una edición; restaurado con
+  `git checkout HEAD -- backend/server.py` y re-aplicados los 2 cambios post-commit. Si vuelve a
+  pasar: verificar `wc -l` (~13.100 líneas) y restaurar desde git.
+
+## 2026-06 (fork) — Notificación de aprobación responsiva (negro/blanco/gris)
+- _aprobacion_html (server.py): documento HTML completo (DOCTYPE + viewport + <style> @media 600px),
+  tabla única role=presentation max-width 600px, Arial, CERO dorados (paleta #111318/#fff/grises).
+  Móvil: título 34→24px, paddings reducidos, CTA al 100% de ancho.
+- _blindaje_responsivo (email_service.py): si el HTML ya es documento estructurado con viewport,
+  lo respeta tal cual (no re-envuelve ni pisa el max-width).
+- Prueba de pantalla: 390px (título 24px, CTA full-width, sin scroll horizontal) y 1280px
+  (título 34px, tarjeta 600px centrada) — ambas verificadas con screenshots.
+
+## 2026-08-11 — Sincronización Atómica de Datos Financieros (P0)
+- `CompromisoEditor.js` → `descargarPDF` ignora `manualDirty`: SIEMPRE reconstruye con `buildCompromisoHTML(datos, ufFinal)` justo antes de enviar al backend.
+- BUG RAÍZ corregido: `buildCompromisoHTML` tenía la cláusula SEGUNDO (Precio y Pie) vacía (`clausulaPie = ""`); restaurada con inyección directa de `valor_total_uf`, `pie_uf` y Saldo calculado; vacíos → [POR DEFINIR].
+- Caché `clausulas_html` eliminada: carga inicial ya no la usa, `guardar` envía "", backend PUT fuerza "", y se purgó de db.compromisos (1 doc).
+- UF sin fallback antiguo: `/api/valor-uf` ahora devuelve `en_vivo`; si no hay UF viva del SII/mindicador, la descarga se ABORTA con mensaje (nunca usa valores viejos).
+- Smoke test: PDF HTTP 200 (%PDF-1.4), UF viva 40.847,42 (sii.cl), frontend compilado OK.
