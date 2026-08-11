@@ -17,11 +17,15 @@ const btnOro = {
 const Badge = ({ cat }) => (
   <span style={{ fontWeight: 800, fontSize: "0.63rem", letterSpacing: "0.06em", padding: "0.15rem 0.55rem",
     whiteSpace: "nowrap", color: "#0a0a0a",
-    background: cat === "RIESGO" ? "linear-gradient(135deg,#e11d48,#fb7185)"
+    background: cat === "RIESGO CRÍTICO" ? "linear-gradient(135deg,#7f1d1d,#ef4444)"
+      : cat === "RIESGO" ? "linear-gradient(135deg,#e11d48,#fb7185)"
       : cat === "PERDIDA" ? "linear-gradient(135deg,#d97706,#fbbf24)"
         : cat === "APROBACIÓN VERIFICADA POR EMAIL" ? "linear-gradient(135deg,#0ea5e9,#a5f3fc)"
+          : cat === "AUDITADO AL VUELO" ? "linear-gradient(135deg,#0d9488,#5eead4)"
           : cat === "NO AUDITABLE" ? "linear-gradient(135deg,#64748b,#cbd5e1)" : "linear-gradient(135deg,#60a5fa,#bfdbfe)" }}>
-    {cat === "APROBACIÓN VERIFICADA POR EMAIL" ? "💎 VERIFICADA POR EMAIL" : cat}
+    {cat === "APROBACIÓN VERIFICADA POR EMAIL" ? "💎 VERIFICADA POR EMAIL"
+      : cat === "RIESGO CRÍTICO" ? "🚨 RIESGO CRÍTICO"
+      : cat === "AUDITADO AL VUELO" ? "🛰 AUDITADO AL VUELO" : cat}
   </span>
 );
 
@@ -63,9 +67,10 @@ export default function AuditoriaForenseModule() {
   };
 
   const hallazgos = forense?.hallazgos || [];
-  const listaA = hallazgos.filter(h => h.categoria === "RIESGO" || h.categoria === "ERROR HUMANO");
+  const listaA = hallazgos.filter(h => h.categoria === "RIESGO CRÍTICO" || h.categoria === "RIESGO" || h.categoria === "ERROR HUMANO")
+    .sort((a, b) => (a.categoria === "RIESGO CRÍTICO" ? -1 : 0) - (b.categoria === "RIESGO CRÍTICO" ? -1 : 0));
   const listaB = hallazgos.filter(h => h.categoria === "PERDIDA");
-  const verificadosEmail = hallazgos.filter(h => h.categoria === "APROBACIÓN VERIFICADA POR EMAIL");
+  const verificadosEmail = hallazgos.filter(h => h.categoria === "APROBACIÓN VERIFICADA POR EMAIL" || h.categoria === "AUDITADO AL VUELO");
   const noAuditables = hallazgos.filter(h => h.categoria === "NO AUDITABLE");
 
   const rellenar = async () => {

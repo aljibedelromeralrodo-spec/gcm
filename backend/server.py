@@ -11237,6 +11237,12 @@ async def _forense_buscar_contexto(cliente, rut_seg):
         fd = await db.folders.find_one({"rut": {"$regex": rut_f[:8], "$options": "i"}})
     if not fd and cliente:
         fd = await db.folders.find_one({"nombre": {"$regex": re.escape(cliente[:25]), "$options": "i"}})
+    if not fd and cliente:
+        # DESACOPLE DE CARPETAS: match parcial por tokens del nombre (ej: apellidos)
+        toks = [t for t in re.split(r"\s+", cliente) if len(t) > 3][:2]
+        if toks:
+            fd = await db.folders.find_one(
+                {"$and": [{"nombre": {"$regex": re.escape(t), "$options": "i"}} for t in toks]})
     sim = None
     rut_b = re.sub(r"[^0-9kK]", "", ((fd or {}).get("rut") or rut_seg or "")).lower()
     if rut_b:
@@ -11408,6 +11414,77 @@ async def espejo_mesa_minar(request: Request, payload: dict = None):
 
 
 
+async def _forense_carga_conjunta(df, sim):
+    """Carga financiera CONJUNTA: (cuota teórica 2% de deuda CMF titular+codeudor
+    + PAV + dividendo evaluado) / renta conjunta (titular + codeudor)."""
+    uf = await get_valor_uf()
+    endeud = ce.endeudamiento_mensual(df or {}, uf)
+    renta = _num_limpio((df or {}).get("renta_liquida")) + _num_limpio((df or {}).get("renta_codeudor"))
+    div_clp = 0.0
+    for k in ("dividendo_credito_clp", "div_eval_clp"):
+        try:
+            v = float((sim or {}).get(k) or 0)
+        except (TypeError, ValueError):
+            v = 0.0
+        if v > 0:
+            div_clp = v
+            break
+    carga = ((endeud["endeudamiento_mensual_clp"] + div_clp) / renta) if renta > 0 else 0.0
+    return round(carga, 4), endeud
+
+
+async def _forense_perfil_al_vuelo(s):
+    """DESACOPLE DE CARPETAS — AUDITORÍA AL VUELO: si no existe carpeta, OCR de los
+    PDF adjuntos del correo de la MESA para levantar un perfil financiero temporal.
+    Cachea el resultado 7 días en db.perfiles_vuelo (la búsqueda IMAP es costosa)."""
+    cliente = (s.get("cliente") or "").strip()
+    rut = (s.get("rut") or "").strip()
+    clave = re.sub(r"[^0-9a-zk]", "", (rut or cliente).lower())
+    if not clave:
+        return None
+    corte = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    cached = await db.perfiles_vuelo.find_one({"clave": clave})
+    if cached and (cached.get("actualizado") or "") > corte:
+        return cached.get("perfil")
+    perfil = None
+    try:
+        pares = []
+        if rut:
+            adj = await asyncio.to_thread(mail.buscar_adjuntos_por_rut, rut, 8)
+            pares = [(a["filename"], a["content"]) for a in adj]
+        if not pares and cliente:
+            pares = await asyncio.to_thread(
+                _imap_descargar_adjuntos_cliente, cliente,
+                r"liquidaci|sueldo|renta|informe_?deudas|cmf|codeudor|combinado|carpeta_")
+        if pares:
+            import ocr_service as _ocr
+            partes = []
+            for fn, raw in pares[:4]:
+                if not (fn or "").lower().endswith(".pdf"):
+                    continue
+                try:
+                    txt, _met = await asyncio.to_thread(_ocr.extraer_texto, raw, fn, False)
+                    if txt and txt.strip():
+                        etiqueta = ("DOCUMENTO DEL CODEUDOR" if re.search(r"codeudor", fn, re.I)
+                                    else "ADJUNTO CORREO MESA")
+                        partes.append(f"=== {etiqueta}: {fn} ===\n{txt.strip()[:9000]}")
+                except Exception:
+                    continue
+            if partes:
+                datos = await ai_extract.extraer_datos_financieros("\n\n".join(partes), cliente)
+                if any(datos.get(k) for k in ("renta_liquida", "deuda_cmf_total",
+                                              "deuda_cmf_codeudor", "renta_codeudor")):
+                    perfil = {"nombre": cliente or rut, "rut": rut,
+                              "datos_financieros": datos, "perfil_temporal": True,
+                              "archivos_ocr": [fn for fn, _ in pares[:4]]}
+    except Exception as e:
+        logging.warning(f"perfil al vuelo {cliente or rut}: {e}")
+    await db.perfiles_vuelo.update_one(
+        {"clave": clave},
+        {"$set": {"clave": clave, "perfil": perfil, "actualizado": now_iso()}}, upsert=True)
+    return perfil
+
+
 async def _forense_auditar_entrada(s, modelo):
     """Audita UNA respuesta de MESA. REGLA PERMANENTE: la Bóveda de Criterios DashAI
     es el ÚNICO juez — todos los umbrales se leen de db.config criterios (cero hardcode)."""
@@ -11419,6 +11496,38 @@ async def _forense_auditar_entrada(s, modelo):
         base_sin = {"cliente": cliente or "(sin nombre)", "rut": s.get("rut") or "",
                     "fecha_mesa": (s.get("fecha") or "")[:10],
                     "monto_mesa": s.get("monto_credito"), "certificado_id": None}
+        # REGLA DE HIERRO — EL CONTRALOR MANDA: auditoría AL VUELO desde el correo de MESA
+        fd_vuelo = await _forense_perfil_al_vuelo(s)
+        if fd_vuelo:
+            df_v = fd_vuelo.get("datos_financieros") or {}
+            cert_v = await asyncio.to_thread(
+                mesa_brain.auditar_caso, fd_vuelo, sim, "aprobacion" if aprobada else "rechazo", modelo)
+            carga_v, endeud_v = await _forense_carga_conjunta(df_v, sim)
+            estado_txt = "APROBADO" if aprobada else "RECHAZADO"
+            detalle_fin = (f"renta ${_num_limpio(df_v.get('renta_liquida')):,.0f}"
+                           + (f" + codeudor ${_num_limpio(df_v.get('renta_codeudor')):,.0f}" if df_v.get("renta_codeudor") else "")
+                           + f" · deuda CMF conjunta ${endeud_v['deuda_cmf_total_clp']:,.0f}"
+                           + (f" (codeudor ${endeud_v['deuda_cmf_codeudor_clp']:,.0f})" if endeud_v.get("deuda_cmf_codeudor_clp") else "")
+                           + f" · carga conjunta {carga_v*100:.1f}%")
+            base_v = {**base_sin, "certificado_id": cert_v.get("certificado_id"),
+                      "perfil_temporal": True, "archivos_ocr": fd_vuelo.get("archivos_ocr") or []}
+            if carga_v > 0.40:
+                return [{**base_v, "categoria": "RIESGO CRÍTICO",
+                         "detalle": (f"🚨 RIESGO CRÍTICO — Carga financiera conjunta {carga_v*100:.1f}% "
+                                     f"> 40% (perfil temporal OCR al vuelo: {detalle_fin}) · MESA: {estado_txt}"),
+                         "nota_dashai": ("DashAI (Contralor): sin carpeta digital, el Contralor reconstruyó el perfil "
+                                         "financiero por OCR desde los adjuntos del correo de MESA. La carga conjunta "
+                                         "(titular + codeudor) supera el tope inviolable del 40%: RIESGO CRÍTICO sin "
+                                         "importar la decisión de la MESA.")}]
+            if aprobada and cert_v.get("criticas"):
+                return [{**base_v, "categoria": "RIESGO",
+                         "detalle": ("⚠ Auditoría al vuelo (sin carpeta) — "
+                                     + " · ".join(v["detalle"] for v in cert_v["criticas"][:3])),
+                         "nota_dashai": "DashAI: perfil financiero temporal reconstruido por OCR desde el correo de MESA. La aprobación rompe reglas duras de la Bóveda."}]
+            return [{**base_v, "categoria": "AUDITADO AL VUELO",
+                     "detalle": (f"🛰 Auditoría al vuelo sin carpeta — {estado_txt} · {detalle_fin} · "
+                                 "sin quiebres críticos detectados"),
+                     "nota_dashai": "DashAI: no existe carpeta digital, pero el Contralor levantó un perfil financiero temporal por OCR desde los PDF del correo de MESA y ejecutó la auditoría de inmediato."}]
         asunto = (s.get("asunto") or "").strip()
         # AUDITORÍA BASADA EN EMAIL: si el correo de MESA existe, el negocio existió.
         if asunto:
@@ -11450,6 +11559,16 @@ async def _forense_auditar_entrada(s, modelo):
             "criterios_version": f"v1.{crit_ver}"}
     # 1) RIESGO: aprobación que rompe políticas (violación crítica)
     df = fd.get("datos_financieros") or {}
+    # ALERTA DE INCONSISTENCIA — REGLA DE HIERRO 40%: la carga conjunta manda sobre la MESA
+    carga_cj, endeud_cj = await _forense_carga_conjunta(df, sim)
+    if carga_cj > 0.40:
+        hallazgos.append({**base, "categoria": "RIESGO CRÍTICO",
+                          "detalle": (f"🚨 RIESGO CRÍTICO — Carga financiera conjunta {carga_cj*100:.1f}% > 40% "
+                                      f"(deuda CMF titular ${endeud_cj['deuda_cmf_titular_clp']:,.0f}"
+                                      + (f" + codeudor ${endeud_cj['deuda_cmf_codeudor_clp']:,.0f}" if endeud_cj.get("deuda_cmf_codeudor_clp") else "")
+                                      + f" → cuota teórica ${endeud_cj['endeudamiento_mensual_clp']:,.0f}/mes) · "
+                                      + ("la MESA lo APROBÓ igual" if aprobada else "la MESA lo rechazó")),
+                          "nota_dashai": "DashAI (Contralor): la carga financiera conjunta (titular + codeudor) supera el tope inviolable del 40%. El Contralor manda: se marca RIESGO CRÍTICO sin importar la decisión de la MESA."})
     if aprobada and cert.get("criticas"):
         hallazgos.append({**base, "categoria": "RIESGO",
                           "detalle": " · ".join(v["detalle"] for v in cert["criticas"][:3]),
@@ -11504,7 +11623,7 @@ async def _forense_auditar_entrada(s, modelo):
                           "nota_dashai": "DashAI: inconsistencia numérica entre los documentos originales y la respuesta de MESA. La suma de liquidaciones/renta reconocida, el monto o la antigüedad no cuadran con lo resuelto — error operativo de la mesa."})
     # MODO CONTRALOR OSA: toda diferencia contra la Constitución se rotula con su sello
     for h in hallazgos:
-        if h.get("categoria") in ("RIESGO", "PERDIDA", "ERROR HUMANO"):
+        if h.get("categoria") in ("RIESGO", "RIESGO CRÍTICO", "PERDIDA", "ERROR HUMANO"):
             h["inconsistencia"] = "Inconsistencia detectada con los Criterios Maestros de René Osa"
             h["detalle"] = f"⚠ Inconsistencia detectada con los Criterios Maestros de René Osa — {h['detalle']}"
     return hallazgos
@@ -11534,9 +11653,11 @@ async def _forense_caso_automatico(seg):
             h["detectado_en"] = now_iso()
         hallazgos = agregados + previos
         resumen = {"RIESGO": sum(1 for h in hallazgos if h["categoria"] == "RIESGO"),
+                   "RIESGO CRÍTICO": sum(1 for h in hallazgos if h["categoria"] == "RIESGO CRÍTICO"),
                    "PERDIDA": sum(1 for h in hallazgos if h["categoria"] == "PERDIDA"),
                    "ERROR HUMANO": sum(1 for h in hallazgos if h["categoria"] == "ERROR HUMANO"),
                    "VERIFICADO EMAIL": sum(1 for h in hallazgos if h["categoria"] == "APROBACIÓN VERIFICADA POR EMAIL"),
+                   "AUDITADO AL VUELO": sum(1 for h in hallazgos if h["categoria"] == "AUDITADO AL VUELO"),
                    "NO AUDITABLE": sum(1 for h in hallazgos if h["categoria"] == "NO AUDITABLE")}
         await db.config.update_one({"_key": "auditoria_forense"}, {"$set": {
             "hallazgos": hallazgos, "resumen": resumen,
@@ -11604,9 +11725,11 @@ async def _forense_job(dias=90):
                 "estado": "en_proceso", "progreso": revisados, "total": total}}, upsert=True)
         await asyncio.sleep(1)  # respiro entre bloques diarios
     resumen = {"RIESGO": sum(1 for h in hallazgos if h["categoria"] == "RIESGO"),
+               "RIESGO CRÍTICO": sum(1 for h in hallazgos if h["categoria"] == "RIESGO CRÍTICO"),
                "PERDIDA": sum(1 for h in hallazgos if h["categoria"] == "PERDIDA"),
                "ERROR HUMANO": sum(1 for h in hallazgos if h["categoria"] == "ERROR HUMANO"),
                "VERIFICADO EMAIL": sum(1 for h in hallazgos if h["categoria"] == "APROBACIÓN VERIFICADA POR EMAIL"),
+               "AUDITADO AL VUELO": sum(1 for h in hallazgos if h["categoria"] == "AUDITADO AL VUELO"),
                "NO AUDITABLE": sum(1 for h in hallazgos if h["categoria"] == "NO AUDITABLE")}
     nuevos = sum(1 for h in hallazgos
                  if (h["cliente"], h["fecha_mesa"], h["categoria"]) not in prev_keys)
@@ -12080,22 +12203,29 @@ async def forense_backfill_estado():
 # 🧠 OCR RENTA MASIVO — Backfill de datos_financieros para el Espejo MESA
 # ══════════════════════════════════════════════════════════════════════════
 _OCR_BACKFILL_CAMPOS = ("renta_liquida", "renta_codeudor", "deuda_cmf_total",
-                        "credito_interno_pav", "antiguedad_laboral_meses",
-                        "edad", "con_subsidio", "monto_credito")
+                        "deuda_cmf_codeudor", "credito_interno_pav",
+                        "antiguedad_laboral_meses", "edad", "con_subsidio",
+                        "monto_credito")
 
 
 def _ocr_pdfs_folder(nombre):
-    """Selecciona los PDFs relevantes de la carpeta: liquidaciones + CMF,
+    """Selecciona los PDFs relevantes de la carpeta: liquidaciones + CMF del titular
+    MÁS los CMF/liquidaciones del CODEUDOR (subcarpeta 05_codeudor/),
     con fallback al combinado si el protocolo no tiene esas categorías."""
     import ocr_service as _ocr
-    por_cat = {"liquidacion": [], "cmf": [], "combinado": [], "extras": []}
+    por_cat = {"liquidacion": [], "cmf": [], "combinado": [], "extras": [], "codeudor": []}
     for a in fsvc.scan_archivos(nombre):
         if not a["nombre"].lower().endswith(".pdf"):
             continue
         cat = fsvc.cat_de_archivo(a["nombre"], a["subfolder"])
+        if cat == "codeudor":
+            # EXTRACCIÓN TOTAL: los CMF y liquidaciones del codeudor entran al OCR
+            if fsvc.cat_de_texto(a["nombre"]) in ("cmf", "liquidacion") and len(por_cat["codeudor"]) < 3:
+                por_cat["codeudor"].append(a["ruta"])
+            continue
         if cat in por_cat and len(por_cat[cat]) < 4:
             por_cat[cat].append(a["ruta"])
-    rutas = por_cat["liquidacion"][:2] + por_cat["cmf"][:2]
+    rutas = por_cat["liquidacion"][:2] + por_cat["cmf"][:2] + por_cat["codeudor"][:3]
     if not rutas:
         # Fallback: simuladores / cartas de aprobación / combinado (también traen renta y monto)
         rel_re = re.compile(r"aprobaci|simulad|carta", re.I)
@@ -12107,7 +12237,8 @@ def _ocr_pdfs_folder(nombre):
             raw = fsvc.resolver_ruta(nombre, rel).read_bytes()
             txt, _met = _ocr.extraer_texto(raw, rel, force_ocr=False)
             if txt and txt.strip():
-                partes.append(f"=== DOCUMENTO: {rel} ===\n{txt.strip()[:9000]}")
+                etiqueta = "DOCUMENTO DEL CODEUDOR" if rel.startswith("05_codeudor") else "DOCUMENTO"
+                partes.append(f"=== {etiqueta}: {rel} ===\n{txt.strip()[:9000]}")
         except Exception:
             pass
     return "\n\n".join(partes), len(rutas)

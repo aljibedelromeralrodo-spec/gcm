@@ -139,7 +139,8 @@ export default function ContraloriaModule() {
         {forense?.estado === "completado" && (
           <div style={{ marginTop: "1.1rem" }}>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: "1rem" }}>
-              {[["RIESGO", "Aprobaciones que rompen políticas", RUBI],
+              {[["RIESGO CRÍTICO", "Carga conjunta >40% — el Contralor manda", "#ef4444"],
+                ["RIESGO", "Aprobaciones que rompen políticas", RUBI],
                 ["PERDIDA", "Rechazos viables — rescatar", "#f59e0b"],
                 ["ERROR HUMANO", "Inconsistencias renta/antigüedad", "#93c5fd"]].map(([cat, desc, color]) => (
                 <div key={cat} data-testid={`forense-cat-${cat.toLowerCase().replace(" ", "-")}`}
@@ -163,8 +164,10 @@ export default function ContraloriaModule() {
                 padding: "0.5rem 0", borderTop: "1px solid rgba(255,255,255,0.06)", fontSize: "0.78rem", flexWrap: "wrap" }}>
                 <span style={{ fontWeight: 800, fontSize: "0.65rem", letterSpacing: "0.06em", padding: "0.15rem 0.55rem", whiteSpace: "nowrap",
                   color: "#0a0a0a",
-                  background: h.categoria === "RIESGO" ? "linear-gradient(135deg,#e11d48,#fb7185)"
+                  background: h.categoria === "RIESGO CRÍTICO" ? "linear-gradient(135deg,#7f1d1d,#ef4444)"
+                    : h.categoria === "RIESGO" ? "linear-gradient(135deg,#e11d48,#fb7185)"
                     : h.categoria === "PERDIDA" ? "linear-gradient(135deg,#d97706,#fbbf24)"
+                      : h.categoria === "AUDITADO AL VUELO" ? "linear-gradient(135deg,#0d9488,#5eead4)"
                       : h.categoria === "NO AUDITABLE" ? "linear-gradient(135deg,#64748b,#cbd5e1)" : "linear-gradient(135deg,#60a5fa,#bfdbfe)" }}>
                   {h.categoria}
                 </span>

@@ -92,9 +92,14 @@ def endeudamiento_mensual(df, uf_valor, pct=CF_PCT_MENSUAL):
                 return _n(df.get(k)) * uf_valor
         return 0.0
 
-    deuda_cmf = _monto(
+    deuda_titular = _monto(
         ["deuda_cmf_total", "deuda_cmf", "deudas_cmf_total", "monto_deuda_cmf", "deuda_total_cmf"],
         ["deuda_cmf_uf", "deuda_cmf_total_uf"])
+    deuda_codeudor = _monto(
+        ["deuda_cmf_codeudor", "deuda_codeudor_total", "deuda_codeudor"],
+        ["deuda_cmf_codeudor_uf"])
+    # AGREGACIÓN FINANCIERA CONJUNTA: la deuda total es titular MÁS codeudor
+    deuda_cmf = deuda_titular + deuda_codeudor
     pav_saldo = _monto(
         ["credito_interno_pav", "pav_saldo", "credito_pav", "saldo_pav"],
         ["pav_saldo_uf", "credito_pav_uf"])
@@ -106,6 +111,8 @@ def endeudamiento_mensual(df, uf_valor, pct=CF_PCT_MENSUAL):
         cuota_cmf = _n(df.get("cuota_deudas"))
     return {
         "deuda_cmf_total_clp": round(deuda_cmf),
+        "deuda_cmf_titular_clp": round(deuda_titular),
+        "deuda_cmf_codeudor_clp": round(deuda_codeudor),
         "pav_saldo_clp": round(pav_saldo),
         "cuota_teorica_cmf_clp": round(cuota_cmf),
         "cuota_teorica_pav_clp": round(cuota_pav),

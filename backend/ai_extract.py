@@ -184,9 +184,14 @@ async def extraer_datos_financieros(texto, cliente=""):
             "política pide 6 meses de liquidaciones), "
             "renta_codeudor (renta líquida mensual del codeudor si hay liquidaciones de una "
             "segunda persona, CLP o null), "
-            "deuda_cmf_total (deuda DIRECTA total del informe CMF en PESOS: vigente + mora + "
+            "codeudor_nombre (nombre completo del codeudor/segunda persona si aparece, string o null), "
+            "codeudor_rut (RUT del codeudor con formato 12.345.678-9 si aparece, string o null), "
+            "deuda_cmf_total (deuda DIRECTA total del informe CMF DEL TITULAR en PESOS: vigente + mora + "
             "castigada; OJO: el informe CMF reporta en MILES de pesos, multiplica por 1000; "
             "número o null), "
+            "deuda_cmf_codeudor (deuda DIRECTA total del informe CMF del CODEUDOR en PESOS — el "
+            "informe CMF a nombre de la segunda persona o marcado como DOCUMENTO DEL CODEUDOR; "
+            "misma regla de MILES de pesos, multiplica por 1000; número o null), "
             "credito_interno_pav (saldo de créditos de consumo/PAV si se detalla, CLP o null), "
             "antiguedad_laboral_meses (meses de antigüedad laboral si aparece fecha de ingreso, "
             "número o null), "
@@ -205,11 +210,15 @@ async def extraer_datos_financieros(texto, cliente=""):
         if mj:
             data = json.loads(mj.group(0))
             for k in ("renta_liquida", "renta_codeudor", "deuda_cmf_total",
-                      "credito_interno_pav", "antiguedad_laboral_meses", "edad",
-                      "monto_credito"):
+                      "deuda_cmf_codeudor", "credito_interno_pav",
+                      "antiguedad_laboral_meses", "edad", "monto_credito"):
                 v = data.get(k)
                 if isinstance(v, (int, float)) and v > 0:
                     base[k] = round(float(v), 1)
+            for k in ("codeudor_nombre", "codeudor_rut"):
+                v = data.get(k)
+                if isinstance(v, str) and v.strip():
+                    base[k] = v.strip()
             if isinstance(data.get("con_subsidio"), bool):
                 base["con_subsidio"] = data["con_subsidio"]
             base["metodo"] = "ia"

@@ -1010,3 +1010,13 @@
 - `server.py` compromiso_pdf CSS: márgenes 2.5cm sup/inf y 3cm izq/der explícitos, line-height 1.6, `b/strong/h1/h2 { font-weight:700 }`, background #ffffff, Times New Roman.
 - Todos los `font-weight:bold` inline del editor → `font-weight:700`.
 - Verificado con PyMuPDF: fuente Times-Bold real en montos ($122.542.260, 3.000 UF, 600 UF), margen izq 86pt (≈3cm), margen sup ~65pt, render visual impecable negro/blanco.
+
+## 2026-08-11 — Reingeniería Módulo Contralor: Auditoría Autónoma y Total (P0)
+- `ai_extract.py`: prompt extrae `deuda_cmf_codeudor`, `codeudor_nombre`, `codeudor_rut` (+parseo).
+- `server.py _ocr_pdfs_folder`: incluye CMF/liquidaciones de `05_codeudor/` etiquetados "DOCUMENTO DEL CODEUDOR"; `_OCR_BACKFILL_CAMPOS` persiste deuda_cmf_codeudor.
+- `credit_engine.endeudamiento_mensual`: deuda conjunta = titular + codeudor (nuevos campos deuda_cmf_titular_clp / deuda_cmf_codeudor_clp); impacta carga_fin_conjunta automáticamente (test: 8M+5M=13M → cuota 260.000 OK).
+- DESACOPLE DE CARPETAS: `_forense_perfil_al_vuelo` (OCR al vuelo de adjuntos IMAP por RUT/nombre, cache 7d en db.perfiles_vuelo) + `_forense_carga_conjunta`. Sin carpeta → auditar_caso con perfil temporal. Test real: Banis Ramos sin carpeta → AUDITADO AL VUELO con renta $846.137 y CMF $127.419 extraídos del buzón.
+- ALERTA 40%: categoría "RIESGO CRÍTICO" si carga conjunta >40%, aprobada o no (test sintético: 45% → RIESGO CRÍTICO ✅). Resumen backend + badges/contadores frontend (Contraloria/AuditoriaForense).
+- `_forense_buscar_contexto`: match parcial por tokens de apellidos.
+- CASO ZABALA: carpeta solo tiene docs de estudio de títulos (Condominio Rukan VII); NO existe codeudor válido en buzones. Única candidata (Banis Ramos 19.460.805-5) es prospecta INDEPENDIENTE (Ecomac DS10 dic-2025) → Match Total impidió vínculo; contaminación de datos revertida (datos_financieros limpiados).
+- OJO: un search_replace corrupto truncó server.py → restaurado con git checkout y re-aplicado en 3 tandas con ast.parse entre cada una.
