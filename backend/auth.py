@@ -58,6 +58,7 @@ PUBLIC_PREFIXES = (
     "/api/firma/",                 # Portal de Firma (token de firma en la URL)
     "/api/oportunidades/track",    # Pixeles/clics de correos comerciales
     "/api/descarga-segura/",       # Links seguros de descarga para clientes (token único)
+    "/api/brain/",                 # Conexión Contralora (exige BRAIN_ACCESS_KEY dentro del módulo)
 )
 # El portal comercial de inmobiliarias tiene su propia sesión (scope inmobiliaria)
 INMO_PREFIX = "/api/inmobiliaria"

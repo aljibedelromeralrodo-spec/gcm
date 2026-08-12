@@ -1,0 +1,328 @@
+{
+  "formato": "central-mutuos-brain",
+  "version_export": 1,
+  "generado_en": "2026-08-12T19:50:43.951277+00:00",
+  "job_id_origen": "8f15b608-2c47-4131-9ef1-abcea57ac830",
+  "criterios_version": "v1.5",
+  "boveda_criterios": {
+    "version": 5,
+    "updated_at": "2026-08-10T16:08:27.372070+00:00",
+    "btg_pactual": {
+      "con_subsidio": {
+        "monto_credito_min_uf": 500,
+        "monto_credito_max_uf": 8000,
+        "ltv_max": 0.8,
+        "div_renta_max": 0.35,
+        "carga_financiera_max_sin_codeudor": 0.4,
+        "carga_financiera_max_con_codeudor": 0.35,
+        "edad_termino_max": 80,
+        "antiguedad_laboral_min_meses": 12,
+        "morosidad_permitida": "No"
+      },
+      "sin_subsidio": {
+        "renta_min_uf": 30,
+        "monto_credito_min_uf": 1000,
+        "monto_credito_max_uf": 25000,
+        "valor_propiedad_min_uf": 1000,
+        "valor_propiedad_max_uf": 40000,
+        "plazo_min_anos": 5,
+        "plazo_max_anos": 30,
+        "edad_min": 24,
+        "edad_max": 70,
+        "edad_plazo_max": 80,
+        "ltv_max": 0.9,
+        "div_renta_max_sin_codeudor": 0.3,
+        "div_renta_max_con_codeudor_conjunto": 0.35,
+        "div_renta_max_titular_con_codeudor": 0.3,
+        "carga_financiera_max": 0.4,
+        "antiguedad_laboral_min_meses": 12,
+        "monto_minimo_uf": 2000
+      },
+      "castigos_renta": {
+        "renta_variable_castigo": 0.15,
+        "honorarios_castigo": 0.2,
+        "no_considera": [
+          "Horas extras",
+          "Asignaciones no imponibles",
+          "Bonos esporadicos",
+          "Movilizacion / colacion"
+        ]
+      }
+    },
+    "ameris": {
+      "con_subsidio": {
+        "monto_credito_min_uf": 500,
+        "ltv_max_base": 0.9,
+        "antiguedad_laboral_min_meses": 12,
+        "politicas_edad_final": [
+          {
+            "edad_final_max": 70,
+            "ltv_max": 0.9,
+            "div_renta_max": 0.3,
+            "carga_fin_max": 0.35
+          },
+          {
+            "edad_final_max": 75,
+            "ltv_max": 0.85,
+            "div_renta_max": 0.28,
+            "carga_fin_max": 0.33
+          },
+          {
+            "edad_final_max": 80,
+            "ltv_max": 0.8,
+            "div_renta_max": 0.25,
+            "carga_fin_max": 0.3
+          }
+        ],
+        "div_renta_sin_codeudor": {
+          "edad_max_40": 0.3,
+          "edad_mayor_40": 0.28
+        },
+        "div_renta_con_codeudor_tipo_1_2": {
+          "ltv_max_75": 0.35,
+          "ltv_mayor_75": 0.3
+        },
+        "carga_sin_codeudor_max": 0.35,
+        "carga_con_codeudor_tipo_1_2_max": 0.35,
+        "carga_con_codeudor_tipo_3_max_conjunto": 0.3,
+        "carga_con_codeudor_tipo_3_max_titular": 0.35
+      }
+    },
+    "parametros_generales": {
+      "con_subsidio": {
+        "carga_fin_max": 0.4,
+        "antiguedad_min_meses": 12,
+        "edad_max_termino": 80,
+        "ltv_max": 0.8,
+        "morosidad": "No"
+      },
+      "sin_subsidio": {
+        "carga_fin_max": 0.4,
+        "antiguedad_min_meses": 12,
+        "edad_max_termino": 80,
+        "ltv_max": 0.9,
+        "morosidad": "No"
+      }
+    },
+    "manual_override": true,
+    "prioridad": "suprema",
+    "politicas_maestras": {
+      "antiguedad_minima_meses": 12,
+      "edad_maxima_credito": 80,
+      "morosidad_permitida": false,
+      "carga_financiera_maxima": 0.4,
+      "ltv_maximo_base": 0.9,
+      "bloqueada": true,
+      "prioridad": "hierro",
+      "updated_at": "2026-08-09T21:26:12.465444+00:00"
+    },
+    "formula_endeudamiento": {
+      "descripcion": "Depuración de endeudamiento — Estándar de Oro DashAI",
+      "cuota_pct_mensual": 0.02,
+      "proyeccion_meses": 48,
+      "aplica_a": [
+        "deuda_cmf_total_100pct",
+        "credito_interno_pav_saldo"
+      ],
+      "tope_carga_financiera": 0.4,
+      "conversion_uf": "UF del día (fuente SII) antes de aplicar el %",
+      "vigente_desde": "2026-08-10T04:09:18.241600+00:00"
+    },
+    "reglas_supervisadas": [
+      {
+        "texto": "Monitoreo de transición a escrituración y cierre: Revisar periódicamente las carpetas en escrituración para detectar por qué no se transforman en gastos operacionales ni cierres confirmados, y ajustar el seguimiento comercial interno.",
+        "aprobado_en": "2026-08-10T15:51:57.995723+00:00",
+        "por": "René Osa"
+      }
+    ],
+    "_key": "criterios"
+  },
+  "espejo_mesa_modelo": {
+    "_key": "espejo_mesa_modelo",
+    "a": 0.0,
+    "actualizado_en": "2026-08-12T19:48:11.518696+00:00",
+    "b": 1800.0,
+    "casos": [
+      {
+        "renta_liquida_clp": 398313,
+        "renta_disponible_clp": 265542,
+        "tope_uf": 902.5,
+        "con_codeudor": false,
+        "codeudor_tipo": "ninguno",
+        "con_subsidio": true,
+        "edad_bucket": "s/i"
+      },
+      {
+        "renta_liquida_clp": 949889,
+        "renta_disponible_clp": 905457,
+        "tope_uf": 2330.0,
+        "con_codeudor": false,
+        "codeudor_tipo": "ninguno",
+        "con_subsidio": true,
+        "edad_bucket": "s/i"
+      },
+      {
+        "renta_liquida_clp": 1158429,
+        "renta_disponible_clp": 1134792,
+        "tope_uf": 1800.0,
+        "con_codeudor": false,
+        "codeudor_tipo": "ninguno",
+        "con_subsidio": false,
+        "edad_bucket": "s/i"
+      },
+      {
+        "renta_liquida_clp": 1554951,
+        "renta_disponible_clp": 1379668,
+        "tope_uf": 2150.0,
+        "con_codeudor": false,
+        "codeudor_tipo": "ninguno",
+        "con_subsidio": true,
+        "edad_bucket": "s/i"
+      }
+    ],
+    "codeudor_renta_max": null,
+    "codeudor_renta_min": null,
+    "listo": true,
+    "mape_pct": 15.8,
+    "mult_codeudor": 1.0,
+    "mult_edad60": 1.0,
+    "mult_subsidio": 1.0,
+    "n": 4,
+    "precision_pct": 84,
+    "r2": 0.661,
+    "renta_max_clp": 1200000,
+    "renta_min_clp": 1200000,
+    "uf_ref": 40849,
+    "ventana_dias": 280,
+    "cobertura_segmentos": 5,
+    "dimensiones": [
+      "codeudor_tipo (ninguno/familiar/tercero)",
+      "con_subsidio",
+      "edad_bucket (<40 / 40_59 / 60+)",
+      "renta_disponible = renta conjunta − (CMF 2% + PAV)"
+    ],
+    "nota": null,
+    "segmentos": {
+      "ninguno|nosub|s/i": {
+        "a": 0.0,
+        "b": 1800.0,
+        "r2": 0.0,
+        "n": 1,
+        "mape_pct": 0.0,
+        "precision_pct": 100
+      },
+      "ninguno|nosub": {
+        "a": 0.0,
+        "b": 1800.0,
+        "r2": 0.0,
+        "n": 1,
+        "mape_pct": 0.0,
+        "precision_pct": 100
+      },
+      "ninguno": {
+        "a": 1079.6361,
+        "b": 800.89,
+        "r2": 0.661,
+        "n": 4,
+        "mape_pct": 15.8,
+        "precision_pct": 84
+      },
+      "GLOBAL": {
+        "a": 1079.6361,
+        "b": 800.89,
+        "r2": 0.661,
+        "n": 4,
+        "mape_pct": 15.8,
+        "precision_pct": 84
+      },
+      "ninguno|sub|s/i": {
+        "a": 1182.5234,
+        "b": 788.76,
+        "r2": 0.723,
+        "n": 3,
+        "mape_pct": 18.3,
+        "precision_pct": 82
+      },
+      "ninguno|sub": {
+        "a": 1182.5234,
+        "b": 788.76,
+        "r2": 0.723,
+        "n": 3,
+        "mape_pct": 18.3,
+        "precision_pct": 82
+      }
+    }
+  },
+  "casos_entrenamiento_anonimizados": [
+    {
+      "renta_liquida_clp": 1158429,
+      "renta_codeudor_clp": 0,
+      "renta_disponible_clp": 1134792,
+      "endeudamiento_mensual_clp": 23637,
+      "tope_uf": 1800.0,
+      "con_codeudor": false,
+      "codeudor_tipo": "ninguno",
+      "con_subsidio": false,
+      "edad_bucket": "s/i",
+      "edad_mayor_60": false,
+      "mencion_tope": false,
+      "fecha_mesa": "2026-08-09"
+    },
+    {
+      "renta_liquida_clp": 398313,
+      "renta_codeudor_clp": 0,
+      "renta_disponible_clp": 265542,
+      "endeudamiento_mensual_clp": 132771,
+      "tope_uf": 902.5,
+      "con_codeudor": false,
+      "codeudor_tipo": "ninguno",
+      "con_subsidio": true,
+      "edad_bucket": "s/i",
+      "edad_mayor_60": false,
+      "mencion_tope": false,
+      "fecha_mesa": "2026-07-31"
+    },
+    {
+      "renta_liquida_clp": 949889,
+      "renta_codeudor_clp": 0,
+      "renta_disponible_clp": 905457,
+      "endeudamiento_mensual_clp": 44432,
+      "tope_uf": 2330.0,
+      "con_codeudor": false,
+      "codeudor_tipo": "ninguno",
+      "con_subsidio": true,
+      "edad_bucket": "s/i",
+      "edad_mayor_60": false,
+      "mencion_tope": false,
+      "fecha_mesa": "2026-07-31"
+    },
+    {
+      "renta_liquida_clp": 1554951,
+      "renta_codeudor_clp": 0,
+      "renta_disponible_clp": 1379668,
+      "endeudamiento_mensual_clp": 175283,
+      "tope_uf": 2150.0,
+      "con_codeudor": false,
+      "codeudor_tipo": "ninguno",
+      "con_subsidio": true,
+      "edad_bucket": "s/i",
+      "edad_mayor_60": false,
+      "mencion_tope": false,
+      "fecha_mesa": "2026-07-28"
+    }
+  ],
+  "pesos_contralor": {
+    "formula_endeudamiento_pct_mensual": 0.02,
+    "proyeccion_amortizacion_meses": 48,
+    "tope_carga_financiera_conjunta": 0.4,
+    "regla_riesgo_critico": "carga conjunta (titular + codeudor) > 40% => RIESGO CRÍTICO, mande lo que mande la MESA",
+    "agregacion_deuda": "deuda_cmf_total (titular) + deuda_cmf_codeudor (cuota teórica 2% mensual)"
+  },
+  "modulos_motor": [
+    "mesa_brain.py",
+    "credit_engine.py",
+    "criterios_data.py",
+    "brain_export.py"
+  ],
+  "privacidad": "SIN datos de clientes: carpetas, seguimiento, simulaciones, correos y archivos EXCLUIDOS"
+}

@@ -13258,8 +13258,8 @@ async def calificar_recientes():
     return {"capturas": caps}
 
 
-app.include_router(api)
-
-
+# 🧠 CONEXIÓN CONTRALORA — Cerebro exportable (Contralor + DashAI)
+import brain_export as _brain
+api.include_router(_brain.brain)
 
 app.include_router(api)

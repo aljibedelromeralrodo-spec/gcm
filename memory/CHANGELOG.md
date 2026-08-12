@@ -1020,3 +1020,11 @@
 - `_forense_buscar_contexto`: match parcial por tokens de apellidos.
 - CASO ZABALA: carpeta solo tiene docs de estudio de títulos (Condominio Rukan VII); NO existe codeudor válido en buzones. Única candidata (Banis Ramos 19.460.805-5) es prospecta INDEPENDIENTE (Ecomac DS10 dic-2025) → Match Total impidió vínculo; contaminación de datos revertida (datos_financieros limpiados).
 - OJO: un search_replace corrupto truncó server.py → restaurado con git checkout y re-aplicado en 3 tandas con ast.parse entre cada una.
+
+## 2026-08-12 — Exportación Módulo Contralor + Cerebro DashAI (P0)
+- `brain_export.py` (nuevo): router /api/brain/* — status, export, export/descargar, import. Gate por BRAIN_ACCESS_KEY (header X-Brain-Key). Export ANONIMIZADO: Bóveda de Criterios, Espejo MESA, pesos Contralor (2%/48m/40%), casos de entrenamiento SOLO numéricos (verificado: sin nombres/RUTs).
+- `brain_standalone_setup.py` (nuevo): purga colecciones privadas + storage/clientes e importa el cerebro (para el receptor del fork 8f15b608-2c47-4131-9ef1-abcea57ac830).
+- `/app/exports/brain_config_export.json` (9.4KB, v1.5) + `/app/exports/LEEME_EXPORT.md` (guía de integración).
+- `auth.py`: /api/brain/ público a nivel JWT (la llave se valida dentro del módulo).
+- BONUS: eliminado `app.include_router(api)` duplicado al final de server.py.
+- Tests: status ✅ · export sin llave 401 ✅ · export con llave ✅ · privacidad sin fugas ✅ · import roundtrip ✅ (flag standalone reseteado en instancia origen).
