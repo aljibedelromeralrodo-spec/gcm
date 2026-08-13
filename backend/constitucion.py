@@ -41,9 +41,11 @@ REGLAS_ORO = [
      "ley": "Remitente visible: 'Respuestas Mesa Clientes'. Asuntos limpios y corporativos, sin términos técnicos ('ajustado', 'técnico')."},
     {"id": "master_pin", "titulo": "Master PIN 0586",
      "ley": "El Master PIN 0586 es la autoridad suprema de override del sistema."},
+    {"id": "responsividad_absoluta", "titulo": "Responsividad Absoluta",
+     "ley": "Todo correo, reporte o documento generado por el sistema DEBE ser 100% responsivo. Prohibido el uso de anchos fijos superiores a 600px. El diseño se auto-adapta a teléfonos y PCs, con tipografía legible, proporciones elegantes y sin desbordes visuales."},
 ]
 
-VERSION = 2  # 15 reglas
+VERSION = 3  # 16 reglas
 
 
 class ViolacionConstitucional(Exception):
@@ -86,11 +88,27 @@ def _val_uf_sii(ctx):
     return None
 
 
+_ANCHO_FIJO = re.compile(r"width\s*:\s*(\d{3,})\s*px", re.I)
+
+
+def _val_responsividad(ctx):
+    html = ctx.get("html", "") or ""
+    for m in _ANCHO_FIJO.finditer(html):
+        # max-width está permitido; solo se prohíbe width fijo > 600px
+        prefijo = html[max(0, m.start() - 4):m.start()].lower()
+        if "max-" in prefijo:
+            continue
+        if int(m.group(1)) > 600:
+            return f"ancho fijo {m.group(1)}px supera el máximo responsivo de 600px"
+    return None
+
+
 VALIDADORES = {
     "sobriedad_pdf": _val_sobriedad_pdf,
     "purificacion_correos": _val_purificacion,
     "ratio_80": _val_ratio_80,
     "uf_sii": _val_uf_sii,
+    "responsividad_absoluta": _val_responsividad,
 }
 
 

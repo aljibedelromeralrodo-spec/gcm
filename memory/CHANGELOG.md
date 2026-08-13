@@ -1048,3 +1048,9 @@
 - RENÉ OSA ELIMINADO: users rene borrado, rol maestro→admin. _solo_maestro ahora admin-only; Bóveda protegida con Master PIN (0586). Mando único Gerardo Barrera.
 - Saneamiento correos: FROM_NAME_SOPORTE default → "Respuestas Mesa Clientes"; cerrojo atómico de duplicados en aprobacion_log (reserva clave RUT+Nombre antes de enviar, libera en fallo).
 - PENDIENTE: pacing de ráfaga (máx 3/ciclo, 10s) NO implementado aún; WhatsApp Meta Cloud NO configurado (endpoints son stubs, sin credenciales Meta en .env).
+
+## 2026-08-13 — Regla de Oro #16 Responsividad Absoluta
+- constitucion.py: VERSION 3, regla #16 (responsividad_absoluta) + validador _val_responsividad (bloquea width fijo >600px; permite max-width).
+- _marca_wrap refactorizado: <meta viewport>, max-width:600px, padding fluido, @media <=480px, word-break, img/table 100%. Aplica a TODOS los correos con marca (reporte diario, semanal, etc.).
+- _reporte_correos_html consulta obligatoria a la Constitución (exigir responsividad_absoluta) antes de retornar.
+- Verificado: iPhone 390px sin desborde horizontal (scrollWidth=clientWidth=390); escritorio tarjeta centrada 600px. Sin anchos fijos >600px.

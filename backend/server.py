@@ -1196,7 +1196,11 @@ async def _reporte_correos_html():
       {_sec(f"NO enviadas — faltan documentos ({len(con_faltantes)})", falt_html, "No hay carpetas detenidas por documentos.")}
       {_sec(f"Correos descartados por regla ({len(descartados)})", desc_html, "Ningún correo fue descartado.")}
       {_sec(f"Sin leer / pendientes de revisión ({len(pendientes)})", pend_html, "No hay correos pendientes.")}"""
-    return _marca_wrap(inner, "Reporte Diario de Correos")
+    html = _marca_wrap(inner, "Reporte Diario de Correos")
+    # CONSULTA OBLIGATORIA A DASHAI — Regla #16 (Responsividad Absoluta)
+    import constitucion as _const
+    _const.exigir("responsividad_absoluta", html=html)
+    return html
 
 
 async def _enviar_reporte_correos():
@@ -6495,26 +6499,44 @@ def _num_uf(v):
 def _marca_wrap(inner, subtitulo=""):
     sub_html = (f'<div style="color:#e2e8f0;font-size:13px;margin-top:8px;font-weight:600">{subtitulo}</div>'
                 if subtitulo else "")
-    return f"""
-    <div style="background:#f2f4f8;padding:28px 12px;font-family:Georgia,'Times New Roman',serif">
-      <div style="max-width:640px;margin:0 auto;background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 4px 18px rgba(16,24,40,0.10)">
-        <div style="background:#1a1f2e;padding:26px 32px;border-bottom:3px solid #d4af37">
-          <div style="color:#d4af37;font-size:22px;font-weight:700;letter-spacing:1px">Central Mutuos</div>
+    # REGLA DE ORO #16 — RESPONSIVIDAD ABSOLUTA: max-width 600px, padding fluido,
+    # media query para teléfonos, sin anchos fijos ni desbordes.
+    return f"""<!DOCTYPE html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  body {{ margin:0; padding:0; width:100% !important; background:#f2f4f8; }}
+  .cm-wrap {{ width:100%; max-width:600px; margin:0 auto; }}
+  .cm-pad {{ padding:28px 32px; }}
+  .cm-body {{ font-size:14px; line-height:1.65; word-break:break-word; overflow-wrap:break-word; }}
+  img {{ max-width:100%; height:auto; }}
+  table {{ width:100% !important; border-collapse:collapse; }}
+  @media only screen and (max-width:480px) {{
+    .cm-pad {{ padding:18px 16px !important; }}
+    .cm-title {{ font-size:19px !important; }}
+    .cm-body {{ font-size:15px !important; }}
+  }}
+</style></head>
+<body>
+    <div style="background:#f2f4f8;padding:20px 10px;font-family:Georgia,'Times New Roman',serif">
+      <div class="cm-wrap" style="background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 4px 18px rgba(16,24,40,0.10)">
+        <div class="cm-pad" style="background:#1a1f2e;border-bottom:3px solid #d4af37">
+          <div class="cm-title" style="color:#d4af37;font-size:22px;font-weight:700;letter-spacing:1px">Central Mutuos</div>
           <div style="color:#9aa3b5;font-size:11px;letter-spacing:3px;margin-top:2px">CON CRECES</div>
           {sub_html}
         </div>
-        <div style="padding:28px 32px 10px;color:#2b3245;font-size:14px;line-height:1.65">
+        <div class="cm-pad cm-body" style="color:#2b3245">
           {inner}
         </div>
-        <div style="padding:0 32px 26px">
+        <div class="cm-pad" style="padding-top:0">
           <p style="margin:14px 0 0;color:#1a1f2e;font-size:14px"><b>Central Mutuos</b><br>
           <span style="color:#6b7280;font-size:12px">Con Creces &middot; Cr&eacute;ditos Hipotecarios</span></p>
         </div>
-        <div style="background:#1a1f2e;padding:12px 32px;text-align:center">
+        <div class="cm-pad" style="background:#1a1f2e;text-align:center;padding-top:12px;padding-bottom:12px">
           <span style="color:#9aa3b5;font-size:11px">Este correo contiene informaci&oacute;n confidencial dirigida exclusivamente a su destinatario.</span>
         </div>
       </div>
-    </div>"""
+    </div>
+</body></html>"""
 
 
 def _fmt_num_clp(n):
