@@ -1040,3 +1040,11 @@
 - CompromisoEditor: cláusula "DÉCIMO" renombrada a "SÉPTIMA — Declaración de pago y finiquito del pie" (numeración correlativa tras SEXTO); referencia en SEGUNDO y etiqueta del checkbox actualizadas.
 - PDF FINAL de Paula Vergara generado desde el editor en vivo y archivado en su carpeta: storage/clientes/Paula Vergara/Compromiso_Compraventa_Paula_Vergara_FINAL.pdf (3 páginas).
 - Verificado con PyMuPDF: SÉPTIMA íntegra ✅ · 521,20 UF ✅ · $21.291.051 exacto ✅ · UF $40.850 al 13-08-2026 ✅ · montos en palabras completos ✅ · SIN referencias a DÉCIMO ✅ · colores = {0} (100% negro sobre blanco) ✅ · BLOQUE DE FIRMAS INTACTO (Vendedor Carlos Aqueveque / Comprador Paula Vergara con líneas y RUTs) ✅.
+
+## 2026-08-13 — UF SII estable + Monitor Energía + Constitución Maestra
+- BUG UF CORREGIDO: /api/valor-uf servía scraping en vivo por llamada (timeout 15s) → se colgaba y la UI caía al default 39.842. Ahora sirve de caché al instante (0,2s), refresco SII en background cada 30 min + al arranque; front re-sincroniza cada 5 min. Verificado: $40.850,06 SII 2026-08-13, estable.
+- MONITOR DE ENERGÍA (energia.py): consumo real por llamada LLM (instrumentado en ai_extract._enviar y server._llm_con_timeout), saldo cargable, autonomía a 9cr/día, banner <50 / crítico <27 (alerta por correo), modo ahorro. Indicador en topbar + modal. nivel sin_config cuando no hay saldo.
+- CONSTITUCIÓN MAESTRA (constitucion.py): 15 Reglas de Oro en db.config, decorador @protege + exigir(), ViolacionConstitucional. Runtime verificado: PDF con dorado → 422 bloqueado; PDF sobrio → 200. Endpoints /api/constitucion y /api/constitucion/aprendizaje-secundario (slot 2º buzón solo lectura).
+- RENÉ OSA ELIMINADO: users rene borrado, rol maestro→admin. _solo_maestro ahora admin-only; Bóveda protegida con Master PIN (0586). Mando único Gerardo Barrera.
+- Saneamiento correos: FROM_NAME_SOPORTE default → "Respuestas Mesa Clientes"; cerrojo atómico de duplicados en aprobacion_log (reserva clave RUT+Nombre antes de enviar, libera en fallo).
+- PENDIENTE: pacing de ráfaga (máx 3/ciclo, 10s) NO implementado aún; WhatsApp Meta Cloud NO configurado (endpoints son stubs, sin credenciales Meta en .env).

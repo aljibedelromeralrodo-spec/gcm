@@ -18,6 +18,11 @@ def _llm_key():
 
 async def _enviar(chat, um):
     """TIMEOUT ANTI-CONGELAMIENTO: toda llamada LLM se cancela a los 60s."""
+    try:
+        import energia as _energia
+        await _energia.registrar_llm(1)
+    except Exception:
+        pass
     return await asyncio.wait_for(chat.send_message(um), timeout=60)
 
 TIPOS = ["cedula", "liquidacion", "cotizacion_afp", "certificado_afp",

@@ -28,7 +28,7 @@ IMAP_HOST = os.environ.get("MAIL_IMAP_HOST", "imap.gmail.com")
 SMTP_HOST = os.environ.get("MAIL_SMTP_HOST", "smtp.gmail.com")
 SMTP_PORT = int(os.environ.get("MAIL_SMTP_PORT", "465"))
 FROM_NAME = os.environ.get("MAIL_FROM_NAME", "Central Mutuos")
-FROM_NAME_SOPORTE = os.environ.get("MAIL_FROM_NAME_SOPORTE", "Soporte Técnico Central Mutuos")
+FROM_NAME_SOPORTE = os.environ.get("MAIL_FROM_NAME_SOPORTE", "Respuestas Mesa Clientes")
 
 
 def _clean_pwd(p):

@@ -88,6 +88,9 @@ function MainApp() {
   const [showSearch, setShowSearch] = useState(false);
   const [showTour, setShowTour] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [energia, setEnergia] = useState(null);
+  const [showCargarSaldo, setShowCargarSaldo] = useState(false);
+  const [saldoInput, setSaldoInput] = useState("");
 
   useEffect(() => {
     const saved = secureGet("user");
@@ -118,7 +121,14 @@ function MainApp() {
 
   useEffect(() => {
     if (!user) return;
-    axios.get(`${API_URL}/api/valor-uf`).then(r => { setValorUF(r.data.valor_uf); setUfMeta(r.data); }).catch((e) => console.error(e));
+    const cargarUF = () => axios.get(`${API_URL}/api/valor-uf`)
+      .then(r => { if (r.data?.valor_uf > 0) { setValorUF(r.data.valor_uf); setUfMeta(r.data); } })
+      .catch((e) => console.error(e));
+    cargarUF();
+    const tUF = setInterval(cargarUF, 300000); // re-sincroniza la UF cada 5 min
+    const cargarEnergia = () => axios.get(`${API_URL}/api/energia`).then(r => setEnergia(r.data)).catch(() => {});
+    cargarEnergia();
+    const tEne = setInterval(cargarEnergia, 120000);
     axios.get(`${API_URL}/api/whatsapp/status`).then(r => setWhatsappStatus(r.data)).catch((e) => console.error(e));
     axios.get(`${API_URL}/api/central/email-summary`).then(r => setEmailNotif(r.data?.total || 0)).catch((e) => console.error(e));
     const fetchAlerts = () => {
@@ -131,8 +141,16 @@ function MainApp() {
     };
     fetchAlerts();
     const t = setInterval(fetchAlerts, 60000);
-    return () => clearInterval(t);
+    return () => { clearInterval(t); clearInterval(tUF); clearInterval(tEne); };
   }, [user]);
+
+  const cargarSaldoEnergia = () => {
+    const s = parseFloat(saldoInput);
+    if (!(s >= 0)) return;
+    axios.post(`${API_URL}/api/energia/cargar`, { saldo: s })
+      .then(r => { setEnergia(r.data); setShowCargarSaldo(false); setSaldoInput(""); })
+      .catch((e) => console.error(e));
+  };
 
   const handleLoadSimulation = (sim) => {
     setLoadedSimulation(sim);
@@ -254,8 +272,52 @@ function MainApp() {
               </button>
             )}
             {whatsappStatus?.isReady && <span className="topbar-wa-badge" data-testid="wa-status">WhatsApp Conectado</span>}
+            <button data-testid="energia-indicador" onClick={() => setShowCargarSaldo(true)} title="Reserva de funcionamiento — clic para cargar saldo"
+              style={{ background: energia?.nivel === "critico" ? "rgba(239,68,68,0.18)" : energia?.nivel === "bajo" ? "rgba(245,158,11,0.16)" : "rgba(16,201,138,0.12)",
+                border: `1px solid ${energia?.nivel === "critico" ? "#ef4444" : energia?.nivel === "bajo" ? "#f59e0b" : "#10c98a"}`,
+                color: energia?.nivel === "critico" ? "#fb7185" : energia?.nivel === "bajo" ? "#fbbf24" : "#10c98a",
+                borderRadius: 20, padding: "0.28rem 0.75rem", cursor: "pointer", fontSize: "0.68rem", fontWeight: 800, whiteSpace: "nowrap" }}>
+              <i className="fa fa-bolt" style={{ marginRight: 5 }}></i>
+              {energia?.saldo_inicial > 0 ? `${Math.round(energia.saldo_actual)} cr · ${energia.dias_autonomia}d` : "Cargar saldo"}
+            </button>
           </div>
         </header>
+        {energia?.banner && (
+          <div data-testid="energia-banner" style={{ background: energia.nivel === "critico" ? "#7f1d1d" : "#78350f",
+            color: "#fff", padding: "0.6rem 1.2rem", fontSize: "0.8rem", fontWeight: 700, display: "flex",
+            alignItems: "center", gap: 12, borderBottom: "1px solid rgba(255,255,255,0.15)" }}>
+            <i className="fa fa-exclamation-triangle"></i>
+            <span>{energia.banner}</span>
+            <button data-testid="energia-banner-recargar" onClick={() => setShowCargarSaldo(true)}
+              style={{ marginLeft: "auto", background: "#fff", color: "#111", border: "none", borderRadius: 6,
+                padding: "0.3rem 0.9rem", fontWeight: 800, cursor: "pointer", fontSize: "0.72rem" }}>Actualizar saldo</button>
+          </div>
+        )}
+        {showCargarSaldo && (
+          <div data-testid="energia-modal" onClick={() => setShowCargarSaldo(false)}
+            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div onClick={e => e.stopPropagation()} style={{ background: "#111214", border: "1px solid rgba(212,175,55,0.4)", borderRadius: 12, padding: "1.6rem 1.8rem", width: 380, maxWidth: "90vw" }}>
+              <h3 style={{ color: "#d4af37", margin: "0 0 6px", fontSize: "1rem" }}>⚡ Reserva de Funcionamiento</h3>
+              <p style={{ color: "#94a3b8", fontSize: "0.72rem", margin: "0 0 14px", lineHeight: 1.5 }}>
+                Ingrese su saldo actual de créditos (Perfil → Manage Plan → Universal Key). El sistema descuenta el consumo real por cada llamada de IA y proyecta su autonomía a {energia?.consumo_dia || 9} créditos/día.
+              </p>
+              {energia?.saldo_inicial > 0 && (
+                <div style={{ background: "rgba(255,255,255,0.04)", borderRadius: 8, padding: "0.7rem 0.9rem", marginBottom: 14, fontSize: "0.74rem", color: "#cbd5e1" }}>
+                  Saldo estimado: <b style={{ color: "#fff" }}>{Math.round(energia.saldo_actual)} cr</b> · Gasto: {energia.gasto_estimado} cr · Autonomía: <b>{energia.dias_autonomia} día(s)</b> · Llamadas IA: {energia.llamadas_llm}
+                </div>
+              )}
+              <input data-testid="energia-input-saldo" type="number" value={saldoInput} onChange={e => setSaldoInput(e.target.value)}
+                placeholder="Ej: 150" autoFocus
+                style={{ width: "100%", boxSizing: "border-box", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(212,175,55,0.4)", color: "#fff", padding: "0.6rem 0.8rem", borderRadius: 8, fontSize: "0.9rem", marginBottom: 12 }} />
+              <div style={{ display: "flex", gap: 8 }}>
+                <button data-testid="energia-guardar-saldo" onClick={cargarSaldoEnergia}
+                  style={{ flex: 1, background: "linear-gradient(135deg,#BF953F,#FCF6BA,#AA771C)", color: "#0a0a0a", border: "none", borderRadius: 8, padding: "0.6rem", fontWeight: 800, cursor: "pointer" }}>Guardar saldo</button>
+                <button onClick={() => setShowCargarSaldo(false)}
+                  style={{ background: "transparent", color: "#94a3b8", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 8, padding: "0.6rem 1rem", cursor: "pointer" }}>Cerrar</button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <Suspense fallback={<div style={{ textAlign: "center", padding: "4rem" }}><i className="fa fa-spinner fa-spin" style={{ fontSize: "2rem", color: "var(--gold)" }}></i></div>}>
         {activeModule === 'dashboard' && <DashboardModule valorUF={valorUF} userName={user?.nombre} onNavigate={setActiveModule} />}

@@ -59,6 +59,7 @@ PUBLIC_PREFIXES = (
     "/api/oportunidades/track",    # Pixeles/clics de correos comerciales
     "/api/descarga-segura/",       # Links seguros de descarga para clientes (token único)
     "/api/brain/",                 # Conexión Contralora (exige BRAIN_ACCESS_KEY dentro del módulo)
+    "/api/energia",                # Monitor de energía (indicador de saldo del topbar)
 )
 # El portal comercial de inmobiliarias tiene su propia sesión (scope inmobiliaria)
 INMO_PREFIX = "/api/inmobiliaria"

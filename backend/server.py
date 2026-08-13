@@ -81,10 +81,15 @@ async def ensure_seed():
             {"$set": u, "$setOnInsert": {"created": now_iso()}},
             upsert=True,
         )
-    # MANDO SUPREMO: René Osa (rol maestro, Nivel 1). Crea su clave en el primer ingreso.
-    if not await db.users.find_one({"codigo": "rene"}):
-        await db.users.insert_one({"codigo": "rene", "nombre": "René Osa", "rol": "maestro",
-                                   "requiere_crear_clave": True, "created": now_iso()})
+    # RESTABLECIMIENTO DE AUTORIDAD: mando único de Gerardo Barrera. René Osa eliminado.
+    await db.users.delete_many({"codigo": "rene"})
+    await db.users.update_many({"rol": "maestro"}, {"$set": {"rol": "admin"}})
+    # CONSTITUCIÓN MAESTRA: 15 Reglas de Oro (fuente de verdad inmutable)
+    try:
+        import constitucion as _const
+        await _const.seed_constitucion(db)
+    except Exception as _e:
+        logging.warning(f"seed constitucion: {_e}")
     # Seed config
     if await db.config.count_documents({"_key": "tasas"}) == 0:
         await db.config.insert_one({"_key": "tasas", **DEFAULT_TASAS})
@@ -125,6 +130,11 @@ async def _bunker_loop():
 
 async def _llm_con_timeout(chat, um, timeout=60):
     """TIMEOUT ANTI-CONGELAMIENTO: toda llamada LLM se cancela a los 60s (error controlado)."""
+    try:
+        import energia as _energia
+        await _energia.registrar_llm(1)
+    except Exception:
+        pass
     return await asyncio.wait_for(chat.send_message(um), timeout=timeout)
 
 
@@ -157,6 +167,8 @@ async def _rescate_historico_loop():
                     asyncio.create_task(_forense_caso_automatico(doc_seg))
                     # AUTOCORREO CLIENTE FINAL: felicitación directa si es aprobación
                     asyncio.create_task(_autocorreo_cliente_aprobado(doc_seg))
+                    # NOTIFICACIÓN DE RECHAZO PURIFICADA (solo desde 13-08-2026)
+                    asyncio.create_task(_autocorreo_cliente_rechazado(doc_seg))
                     nuevos += 1
                 await asyncio.sleep(0.5)
             await db.config.update_one({"_key": "seguimiento_historico"}, {"$set": {
@@ -327,21 +339,29 @@ async def inmo_login(payload: dict):
 # Basic data endpoints
 # ---------------------------------------------------------------------------
 @api.get("/valor-uf")
-async def valor_uf():
-    """CONEXIÓN SII INFALIBLE: consulta EN VIVO en cada llamada (SII oficial primero,
-    mindicador.cl de respaldo). El caché local queda solo como último recurso."""
-    try:
-        v, fuente, dia = await _actualizar_uf()
-        if v > 0:
-            return {"valor_uf": v, "fecha": now_iso(), "fuente": fuente,
-                    "actualizado": now_iso(), "dia_uf": dia, "en_vivo": True}
-    except Exception as e:
-        logging.warning(f"valor-uf en vivo falló: {e}")
+async def valor_uf(refresh: bool = False):
+    """SII COORDINADO SIN CUELGUES: sirve al INSTANTE el valor en caché (que un bucle en
+    segundo plano mantiene al día con el SII). Si la caché no es de HOY (hora de Chile),
+    intenta un refresco rápido en vivo; si el SII tarda, igual devuelve la caché para no
+    romper la UI ni caer al valor por defecto. `?refresh=true` fuerza scraping en vivo."""
+    from zoneinfo import ZoneInfo
+    hoy_cl = datetime.now(ZoneInfo("America/Santiago")).strftime("%Y-%m-%d")
     cfg = await db.config.find_one({"_key": "uf"}) or {}
-    return {"valor_uf": await get_valor_uf(), "fecha": now_iso(),
+    al_dia = (cfg.get("uf_day") == hoy_cl) and float(cfg.get("valor_uf") or 0) > 0
+    # Refresco en vivo SOLO si se pide explícitamente o la caché no es de hoy
+    if refresh or not al_dia:
+        try:
+            v, fuente, dia = await asyncio.wait_for(_actualizar_uf(), timeout=8)
+            if v > 0:
+                return {"valor_uf": v, "fecha": now_iso(), "fuente": fuente,
+                        "actualizado": now_iso(), "dia_uf": dia, "en_vivo": True, "al_dia": True}
+        except Exception as e:
+            logging.warning(f"valor-uf refresco rápido falló (sirvo caché): {e}")
+        cfg = await db.config.find_one({"_key": "uf"}) or {}
+    return {"valor_uf": float(cfg.get("valor_uf") or await get_valor_uf()), "fecha": now_iso(),
             "fuente": cfg.get("uf_source", "local"),
             "actualizado": cfg.get("uf_updated_at", ""), "dia_uf": cfg.get("uf_day", ""),
-            "en_vivo": False}
+            "en_vivo": False, "al_dia": bool(al_dia)}
 
 
 def _uf_desde_mindicador():
@@ -401,16 +421,18 @@ async def _actualizar_uf():
 
 
 async def _uf_auto_loop():
-    """SINCRONIZACIÓN OFICIAL SII: refresca la UF cada 60 minutos."""
-    await asyncio.sleep(10)
+    """SINCRONIZACIÓN OFICIAL SII: refresca la UF al arrancar y cada 30 minutos, para
+    que la caché SIEMPRE tenga el valor del día (la UI lee de caché, sin cuelgues)."""
+    await asyncio.sleep(5)
     while True:
         try:
-            await _actualizar_uf()
+            v, fuente, dia = await _actualizar_uf()
+            logger.info(f"💱 UF sincronizada con {fuente}: {v} ({dia})")
         except asyncio.CancelledError:
             break
         except Exception as e:
             logger.warning(f"Actualización automática de UF falló: {e}")
-        await asyncio.sleep(3600)
+        await asyncio.sleep(1800)
 
 
 @api.get("/clientes/uf-actual")
@@ -437,28 +459,26 @@ async def set_uf(payload: dict):
 
 
 def _solo_maestro(request: Request):
-    """MANDO SUPREMO: acceso Nivel 1 exclusivo del Administrador Maestro René Osa."""
+    """MANDO ÚNICO: solo el administrador (Gerardo Barrera, rol admin) o el Master PIN.
+    René Osa fue eliminado — ya no existe rol maestro."""
     claims = getattr(request.state, "user", None) or {}
-    if claims.get("rol") != "maestro":
+    if claims.get("rol") not in ("admin", "maestro"):
         raise HTTPException(status_code=403,
-                            detail="Acceso exclusivo del Administrador Maestro René Osa — la Bóveda está en modo solo lectura para el resto del equipo")
+                            detail="Acceso exclusivo del Administrador (Gerardo Barrera) — la Bóveda está en modo solo lectura para el resto del equipo")
     return claims
 
 
 async def _validar_clave_rene(clave):
-    """Validación digital: cada cambio de la Bóveda exige la clave de René Osa."""
-    u = await db.users.find_one({"rol": "maestro"})
-    if not u or not u.get("clave_hash"):
-        raise HTTPException(status_code=403,
-                            detail="René Osa aún no crea su clave maestra (primer ingreso pendiente)")
-    if not clave or not bcrypt.checkpw(str(clave).encode(), u["clave_hash"].encode()):
-        await db.alertas.insert_one({
-            "id": str(uuid.uuid4()), "tipo": "seguridad",
-            "mensaje": "🚨 Validación digital fallida en la Bóveda de Criterios (clave de René Osa incorrecta) — cambios descartados.",
-            "fecha": now_iso(), "leida": False})
-        raise HTTPException(status_code=403,
-                            detail="Clave de René Osa incorrecta — cambios descartados y alerta de seguridad emitida")
-    return u
+    """MANDO ÚNICO: la Bóveda se protege con el Master PIN (0586) del administrador."""
+    pin = os.environ.get("MASTER_PIN", "")
+    if pin and str(clave) == pin:
+        return {"nombre": "Gerardo Barrera", "rol": "admin"}
+    await db.alertas.insert_one({
+        "id": str(uuid.uuid4()), "tipo": "seguridad",
+        "mensaje": "🚨 Validación fallida en la Bóveda de Criterios (Master PIN incorrecto) — cambios descartados.",
+        "fecha": now_iso(), "leida": False})
+    raise HTTPException(status_code=403,
+                        detail="Master PIN incorrecto — cambios descartados y alerta de seguridad emitida")
 
 
 def _diff_criterios(prev, nuevo, path=""):
@@ -3263,6 +3283,8 @@ async def seg_process(max_emails: int = 30, dias: int = 31):
         asyncio.create_task(_forense_caso_automatico(doc_seg))
         # AUTOCORREO CLIENTE FINAL: felicitación directa si es aprobación
         asyncio.create_task(_autocorreo_cliente_aprobado(doc_seg))
+        # NOTIFICACIÓN DE RECHAZO PURIFICADA (solo desde 13-08-2026)
+        asyncio.create_task(_autocorreo_cliente_rechazado(doc_seg))
         nuevos += 1
     return {"ok": True, "procesados": len(ops), "nuevos": nuevos, "dias": dias}
 
@@ -8370,12 +8392,22 @@ async def _autocorreo_cliente_aprobado(seg, forzar=False):
         fd, _sim = await _forense_buscar_contexto(cliente, seg.get("rut"))
         nombre_folder = (fd or {}).get("nombre") or cliente
         email_cli = ((fd or {}).get("email") or seg.get("email_cliente") or "").strip()
+        # CERROJO ATÓMICO DE DUPLICADOS: se RESERVA la clave (RUT+Nombre) ANTES de enviar.
+        # Si ya está reservada/enviada, se ignora de inmediato (blindaje anti-ráfaga tras reinicio).
+        rut_lock = re.sub(r"[^0-9kK]", "", ((fd or {}).get("rut") or seg.get("rut") or "")).lower()
+        clave_lock = f"{rut_lock}|{re.sub(r'[^a-z]', '', nombre_folder.lower())[:20]}"
         if not forzar:
-            ya = await db.aprobacion_log.find_one(
-                {"nombre": {"$regex": f"^{re.escape(nombre_folder[:25])}", "$options": "i"}})
-            if ya:
-                return {"ok": False, "motivo": "ya_notificado", "enviado_en": ya.get("enviado_en")}
+            resv = await db.aprobacion_log.update_one(
+                {"clave_lock": clave_lock},
+                {"$setOnInsert": {"id": str(uuid.uuid4()), "clave_lock": clave_lock,
+                                  "nombre": nombre_folder, "estado_lock": "reservado",
+                                  "reservado_en": now_iso()}}, upsert=True)
+            if resv.upserted_id is None:
+                return {"ok": False, "motivo": "ya_notificado_o_reservado"}
         if not email_cli or "@" not in email_cli:
+            # Libera el cerrojo para reintentar cuando se agregue el correo
+            if not forzar:
+                await db.aprobacion_log.delete_one({"clave_lock": clave_lock, "estado_lock": "reservado"})
             msg_alerta = f"⚠️ {nombre_folder} aprobado pero sin correo para notificación automática"
             if not await db.alertas.find_one({"mensaje": msg_alerta, "leida": False}):
                 await db.alertas.insert_one({"id": str(uuid.uuid4()), "tipo": "aprobacion",
@@ -8438,15 +8470,22 @@ async def _autocorreo_cliente_aprobado(seg, forzar=False):
         res = await asyncio.to_thread(functools.partial(
             mail.send_mail, email_cli, subject, cuerpo, adjuntos, "secundaria", bcc=bcc))
         if not res.get("success"):
+            # Libera el cerrojo para permitir reintento posterior
+            if not forzar:
+                await db.aprobacion_log.delete_one({"clave_lock": clave_lock, "estado_lock": "reservado"})
             await db.alertas.insert_one({"id": str(uuid.uuid4()), "tipo": "aprobacion",
                 "mensaje": f"🚨 Falló la notificación de aprobación a {nombre_folder} ({email_cli}): {str(res.get('error', ''))[:120]}",
                 "fecha": now_iso(), "leida": False})
             return {"ok": False, "motivo": "error_envio", "error": res.get("error")}
-        await db.aprobacion_log.insert_one({
-            "id": str(uuid.uuid4()), "nombre": nombre_folder, "rut": payload["rut"],
-            "to": email_cli, "adjuntos": nombres, "con_links": bool(links_html),
-            "origen": "reenvio_manual" if forzar else "autocorreo_cliente",
-            "bcc": bcc, "enviado_en": now_iso(), "desde": res.get("desde", "")})
+        # Confirma la reserva → estado enviado (cierra el cerrojo definitivamente)
+        await db.aprobacion_log.update_one(
+            {"clave_lock": clave_lock},
+            {"$set": {"nombre": nombre_folder, "rut": payload["rut"], "to": email_cli,
+                      "adjuntos": nombres, "con_links": bool(links_html),
+                      "origen": "reenvio_manual" if forzar else "autocorreo_cliente",
+                      "estado_lock": "enviado", "bcc": bcc, "enviado_en": now_iso(),
+                      "desde": res.get("desde", "")}},
+            upsert=True)
         return {"ok": True, "to": email_cli, "adjuntos": nombres, "con_links": bool(links_html)}
     except Exception as e:
         logging.warning(f"autocorreo cliente aprobado: {e}")
@@ -8470,6 +8509,139 @@ async def reenviar_notificacion(fid: str):
 
 
 # ══════════════════════════════════════════════════════════════════════════
+# 📪 NOTIFICACIÓN DE RECHAZO PURIFICADA (SOLO ADELANTE — desde 13-08-2026)
+# Texto sobrio blanco/negro. Solo: nombre, motivo, estado. Cero rastro de MESA.
+# ══════════════════════════════════════════════════════════════════════════
+RECHAZO_CUTOFF = "2026-08-13"
+RECHAZO_MOTIVO_DEFAULT = ("Los antecedentes presentados no cumplieron los criterios de "
+                          "evaluación de la entidad financiera en esta instancia.")
+
+_EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
+
+
+def _rechazo_sanear_motivo(motivo):
+    """BLINDAJE DE ORIGEN: limpia del motivo correos, URLs y toda referencia a la MESA."""
+    m = (motivo or "").strip()
+    m = _EMAIL_RE.sub("", m)
+    m = re.sub(r"https?://\S+", "", m)
+    m = re.sub(r"\b(mesa|aprobaciones|remitente|reenviad[oa]|fwd|re:)\b", "", m, flags=re.I)
+    m = re.sub(r"\s{2,}", " ", m).strip(" .:-·|")
+    return m if len(m) >= 12 else ""
+
+
+def _rechazo_html(nombre, motivo):
+    """DISEÑO QUIRÚRGICO: HTML minimalista, negro sobre blanco, sin logos ni colores."""
+    return f"""<!DOCTYPE html><html><body style="margin:0;padding:0;background:#ffffff">
+<div style="max-width:560px;margin:0 auto;padding:32px 24px;font-family:Arial,Helvetica,sans-serif;color:#000000;background:#ffffff;font-size:15px;line-height:1.6">
+<p style="margin:0 0 16px">Estimado/a <b>{html.escape(nombre)}</b>:</p>
+<p style="margin:0 0 16px">Le informamos el resultado de la evaluación de su solicitud de crédito hipotecario.</p>
+<div style="border:1px solid #000000;padding:14px 18px;margin:0 0 16px">
+<p style="margin:0 0 6px"><b>Estado del trámite:</b> No aprobado en esta instancia.</p>
+<p style="margin:0"><b>Motivo:</b> {html.escape(motivo)}</p>
+</div>
+<p style="margin:0 0 16px">Este resultado no impide una futura reevaluación si sus antecedentes cambian. Nuestro equipo queda a su disposición para orientarle sobre los pasos a seguir.</p>
+<p style="margin:24px 0 0">Atentamente,<br/>Equipo Central Mutuos</p>
+</div></body></html>"""
+
+
+def _rechazo_purificar(subject, cuerpo_html):
+    """REGLA DE HIERRO: si el correo contiene una dirección externa o información
+    del sistema fuera del cuerpo del mensaje, el envío se ABORTA. Se apoya en la
+    Constitución Maestra (regla purificacion_correos)."""
+    try:
+        import constitucion as _const
+        _const.exigir("purificacion_correos", subject=subject, html=cuerpo_html)
+    except Exception as _v:
+        if _v.__class__.__name__ == "ViolacionConstitucional":
+            return False, str(_v)
+    texto = re.sub(r"<[^>]+>", " ", f"{subject} {cuerpo_html}")
+    correos = _EMAIL_RE.findall(texto)
+    if correos:
+        return False, f"dirección de correo detectada en el cuerpo: {correos[0]}"
+    prohibidos = [os.environ.get("MESA_SENDER", "") or "aprobaciones@",
+                  os.environ.get("MAIL_USER", ""), os.environ.get("MAIL2_USER", "")]
+    for p in prohibidos:
+        if p and p.split("@")[0] and p.split("@")[0] in texto:
+            return False, f"información del sistema detectada: {p.split('@')[0]}"
+    if re.search(r"\b(mesa|remitente|reenviad[oa]|fwd:)\b", texto, re.I):
+        return False, "referencia al origen (MESA/remitente) detectada"
+    return True, ""
+
+
+async def _autocorreo_cliente_rechazado(seg, forzar=False, solo_preview=False):
+    """RECHAZO PURIFICADO → notificación directa al solicitante, el sistema como
+    único intermediario. Solo estados de rechazo explícitos y solo desde el CUTOFF."""
+    try:
+        if (seg.get("estado") or "").lower() not in ("rechazo", "rechazado"):
+            return {"ok": False, "motivo": "no_es_rechazo"}
+        # FILTRO TEMPORAL (HOY+): nada retroactivo
+        f_proc = (seg.get("procesado_en") or seg.get("fecha") or "")[:10]
+        if not forzar and (not f_proc or f_proc < RECHAZO_CUTOFF):
+            return {"ok": False, "motivo": "anterior_al_cutoff", "fecha": f_proc}
+        cliente = (seg.get("cliente") or "").strip()
+        if not cliente:
+            return {"ok": False, "motivo": "sin_cliente"}
+        fd, _sim = await _forense_buscar_contexto(cliente, seg.get("rut"))
+        nombre = (fd or {}).get("nombre") or cliente
+        motivo = _rechazo_sanear_motivo(seg.get("motivo_rechazo") or seg.get("motivo")
+                                        or seg.get("detalle_rechazo")) or RECHAZO_MOTIVO_DEFAULT
+        subject = "Resultado de la evaluación de su solicitud"
+        cuerpo = _rechazo_html(nombre, motivo)
+        # REGLA DE HIERRO — purificación total antes de cualquier envío
+        limpio, problema = _rechazo_purificar(subject, cuerpo)
+        if not limpio:
+            await db.alertas.insert_one({"id": str(uuid.uuid4()), "tipo": "rechazo",
+                "mensaje": f"⛔ Notificación de rechazo a {nombre} ABORTADA por pureza: {problema}",
+                "fecha": now_iso(), "leida": False})
+            return {"ok": False, "motivo": "abortado_pureza", "problema": problema}
+        if solo_preview:
+            return {"ok": True, "preview": True, "subject": subject, "html": cuerpo,
+                    "nombre": nombre, "motivo": motivo}
+        cfg = await db.config.find_one({"_key": "rechazo_autocorreo"}) or {}
+        if not cfg.get("activo") and not forzar:
+            return {"ok": False, "motivo": "funcion_no_activada"}
+        email_cli = ((fd or {}).get("email") or seg.get("email_cliente") or "").strip()
+        if not email_cli or "@" not in email_cli:
+            msg_a = f"⚠️ {nombre} rechazado pero sin correo para notificación purificada"
+            if not await db.alertas.find_one({"mensaje": msg_a, "leida": False}):
+                await db.alertas.insert_one({"id": str(uuid.uuid4()), "tipo": "rechazo",
+                    "mensaje": msg_a, "cliente": nombre, "fecha": now_iso(), "leida": False})
+            return {"ok": False, "motivo": "sin_correo"}
+        if not forzar and await db.rechazo_log.find_one(
+                {"nombre": nombre, "fecha_mesa": (seg.get("fecha") or "")[:10]}):
+            return {"ok": False, "motivo": "ya_notificado"}
+        bcc = os.environ.get("MAIL2_USER", "")
+        res = await asyncio.to_thread(functools.partial(
+            mail.send_mail, email_cli, subject, cuerpo, [], "secundaria", bcc=bcc))
+        if not res.get("success"):
+            return {"ok": False, "motivo": "error_envio", "error": res.get("error")}
+        await db.rechazo_log.insert_one({"id": str(uuid.uuid4()), "nombre": nombre,
+            "to": email_cli, "motivo_texto": motivo, "fecha_mesa": (seg.get("fecha") or "")[:10],
+            "enviado_en": now_iso()})
+        return {"ok": True, "to": email_cli}
+    except Exception as e:
+        logging.warning(f"autocorreo rechazo purificado: {e}")
+        return {"ok": False, "motivo": "excepcion", "error": str(e)[:200]}
+
+
+@api.get("/autocorreo/rechazo/preview")
+async def rechazo_preview(cliente: str = "", motivo: str = ""):
+    """Vista previa HTML del correo de rechazo purificado (NO envía nada)."""
+    seg = {"cliente": cliente or "Nombre del Solicitante", "estado": "rechazo",
+           "procesado_en": now_iso(), "motivo_rechazo": motivo}
+    r = await _autocorreo_cliente_rechazado(seg, solo_preview=True)
+    if not r.get("ok"):
+        raise HTTPException(status_code=400, detail=f"No previsualizable: {r.get('problema') or r.get('motivo')}")
+    return HTMLResponse(content=r["html"])
+
+
+@api.post("/autocorreo/rechazo/activar")
+async def rechazo_activar(payload: dict):
+    """Enciende/apaga el disparador real (queda apagado hasta aprobación del dueño)."""
+    activo = bool((payload or {}).get("activo"))
+    await db.config.update_one({"_key": "rechazo_autocorreo"}, {"$set": {
+        "activo": activo, "cutoff": RECHAZO_CUTOFF, "actualizado": now_iso()}}, upsert=True)
+    return {"ok": True, "activo": activo, "cutoff": RECHAZO_CUTOFF}
 # 📜 EDITOR MAESTRO DE COMPROMISOS DE COMPRAVENTA
 # ══════════════════════════════════════════════════════════════════════════
 def _compromiso_default(fd):
@@ -8542,6 +8714,12 @@ async def compromiso_pdf(fid: str, payload: dict):
     html = (payload or {}).get("html") or ""
     if len(html) < 50:
         raise HTTPException(status_code=400, detail="Documento vacío")
+    # CONSULTA PREVIA A LA CONSTITUCIÓN — Regla de Oro: sobriedad del PDF legal
+    try:
+        import constitucion as _const
+        _const.exigir("sobriedad_pdf", html=html)
+    except _const.ViolacionConstitucional as _v:
+        raise HTTPException(status_code=422, detail=str(_v))
     from xhtml2pdf import pisa
     import io
     buf = io.BytesIO()
@@ -13261,5 +13439,29 @@ async def calificar_recientes():
 # 🧠 CONEXIÓN CONTRALORA — Cerebro exportable (Contralor + DashAI)
 import brain_export as _brain
 api.include_router(_brain.brain)
+
+# ⚡ MONITOR DE ENERGÍA — Reserva de funcionamiento
+import energia as _energia_mod
+api.include_router(_energia_mod.energia)
+
+
+@api.get("/constitucion")
+async def constitucion_leer():
+    """CONSTITUCIÓN MAESTRA — 15 Reglas de Oro (fuente de verdad de DashAI)."""
+    import constitucion as _const
+    return await _const.seed_constitucion(db)
+
+
+@api.post("/constitucion/aprendizaje-secundario")
+async def constitucion_aprendizaje(payload: dict):
+    """MÓDULO DE APRENDIZAJE EXTERNO: registra el 2º buzón IMAP en modo SOLO LECTURA
+    (slot para el nuevo correo). No envía ni modifica nada de ese buzón."""
+    correo = (payload or {}).get("correo", "").strip()
+    await db.config.update_one({"_key": "constitucion_maestra"}, {"$set": {
+        "aprendizaje.fuente_secundaria_solo_lectura": correo,
+        "aprendizaje.modo": "solo_lectura",
+        "aprendizaje.actualizado": now_iso()}}, upsert=True)
+    return {"ok": True, "fuente_secundaria": correo, "modo": "solo_lectura"}
+
 
 app.include_router(api)
