@@ -1035,3 +1035,8 @@
 - BLOQUEO NORMATIVO: si saldo/crédito > 80% del precio (+0.005 UF epsilon) → banner rojo `comp-alerta-ltv` "🚨 EXCESO DE LÍMITE NORMATIVO 80%" + borde rojo en el campo crédito.
 - fmtUF del editor ahora SIEMPRE 2 decimales (2.606,00 / 521,20 / 2.084,80).
 - Verificado en navegador real: LTV 80,00% ✅ · crédito clavado 2.084,80 ✅ · pie=400 dispara alerta ✅ · restaurado 521,20 vuelve a norma ✅ · contrato muestra montos y CLP con UF SII viva ($40.850).
+
+## 2026-08-13 — Rectificación Legal: Cláusula SÉPTIMA + Finiquito Total (P0)
+- CompromisoEditor: cláusula "DÉCIMO" renombrada a "SÉPTIMA — Declaración de pago y finiquito del pie" (numeración correlativa tras SEXTO); referencia en SEGUNDO y etiqueta del checkbox actualizadas.
+- PDF FINAL de Paula Vergara generado desde el editor en vivo y archivado en su carpeta: storage/clientes/Paula Vergara/Compromiso_Compraventa_Paula_Vergara_FINAL.pdf (3 páginas).
+- Verificado con PyMuPDF: SÉPTIMA íntegra ✅ · 521,20 UF ✅ · $21.291.051 exacto ✅ · UF $40.850 al 13-08-2026 ✅ · montos en palabras completos ✅ · SIN referencias a DÉCIMO ✅ · colores = {0} (100% negro sobre blanco) ✅ · BLOQUE DE FIRMAS INTACTO (Vendedor Carlos Aqueveque / Comprador Paula Vergara con líneas y RUTs) ✅.

@@ -94,9 +94,9 @@ export function buildCompromisoHTML(datos, ufHoy) {
   // REGLA DE HIERRO: cláusulas financieras SIEMPRE reconstruidas desde datos.precio en vivo
   const clausulaPie = `
 <h2 style="color:#000000;font-weight:700">SEGUNDO — Precio y forma de pago.</h2>
-<p>El precio de la venta es la suma de ${ufTxt(totalUF)}, equivalente a ${clpTxt(totalUF, uf)} al valor UF del día. De este monto, el Comprador ${d.precio.pie_recibido ? "ha pagado por concepto de pie" : "pagará por concepto de pie"} la suma de ${ufTxt(pieUF)}, equivalentes a ${clpTxt(pieUF, uf)}${d.precio.pie_recibido ? ", según se declara en la cláusula DÉCIMA del presente instrumento" : ", en la forma y oportunidad que las partes acuerden por escrito"}.</p>`;
+<p>El precio de la venta es la suma de ${ufTxt(totalUF)}, equivalente a ${clpTxt(totalUF, uf)} al valor UF del día. De este monto, el Comprador ${d.precio.pie_recibido ? "ha pagado por concepto de pie" : "pagará por concepto de pie"} la suma de ${ufTxt(pieUF)}, equivalentes a ${clpTxt(pieUF, uf)}${d.precio.pie_recibido ? ", según se declara en la cláusula SÉPTIMA del presente instrumento" : ", en la forma y oportunidad que las partes acuerden por escrito"}.</p>`;
   const clausulaFiniquito = d.precio.pie_recibido ? `
-<h2 style="color:#000000;font-weight:700">DÉCIMO — Declaración de pago y finiquito del pie.</h2>
+<h2 style="color:#000000;font-weight:700">SÉPTIMA — Declaración de pago y finiquito del pie.</h2>
 <p>El Vendedor declara bajo juramento haber recibido del Comprador, de manera íntegra, total y oportuna, la suma de ${ufTxt(pieUF)}, equivalente a ${clpTxt(pieUF, uf)} al valor UF del día de hoy (${uf > 0 ? fmtCLP(uf) : "[POR DEFINIR]"} al ${new Date().toLocaleDateString("es-CL")}), por concepto de pie del precio de la compraventa. En consecuencia, el Vendedor otorga al Comprador el más amplio, completo y total finiquito respecto de dicha suma, declarándola íntegramente pagada y renunciando expresamente a toda acción, cobro o reclamación posterior derivada de su pago.</p>` : "";
   return `
 <h1 style="color:#000000;-webkit-text-fill-color:#000000;background:none;font-weight:900;font-size:18pt;text-align:center;letter-spacing:1px;text-decoration:none;font-family:'Times New Roman',Times,serif;margin:0 0 6px">COMPROMISO DE COMPRAVENTA</h1>
@@ -309,7 +309,7 @@ export default function CompromisoEditor({ folder, onClose }) {
             {datos.precio.pie_uf > 0 && <div style={{ fontSize: "0.62rem", opacity: 0.6, marginTop: -4, marginBottom: 6, fontFamily: MONO }}>≈ {fmtCLP(datos.precio.pie_uf * ufHoy)} al valor UF de hoy</div>}
             <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.68rem", opacity: 0.9, margin: "2px 0 8px", cursor: "pointer" }}>
               <input data-testid="comp-pie-recibido" type="checkbox" checked={!!datos.precio.pie_recibido} onChange={e => set("precio", "pie_recibido", e.target.checked)} />
-              El vendedor declara haber recibido a su entera satisfacción el pago del pie (activa la cláusula DÉCIMO blindada)
+              El vendedor declara haber recibido a su entera satisfacción el pago del pie (activa la cláusula SÉPTIMA blindada)
             </label>
             <div data-testid="comp-saldo-precio" style={{ ...inp, background: "rgba(212,175,55,0.1)", border: `1px solid ${ORO}`, fontWeight: 800 }}>
               ⚖ SALDO DE PRECIO (auto): {fmtUF(saldoUF)} ≈ {fmtCLP(saldoUF * ufHoy)}
