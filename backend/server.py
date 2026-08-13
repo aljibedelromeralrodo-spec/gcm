@@ -13517,6 +13517,10 @@ api.include_router(_brain.brain)
 import energia as _energia_mod
 api.include_router(_energia_mod.energia)
 
+# 📱 MOTOR WHATSAPP OFICIAL — Twilio Número Exclusivo (Regla de Oro #21)
+import whatsapp_twilio_service as _wa_twilio
+api.include_router(_wa_twilio.wa_twilio)
+
 
 @api.get("/constitucion")
 async def constitucion_leer():

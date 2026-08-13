@@ -85,6 +85,16 @@ async def _chequear_reserva_y_avisar():
                           f"<p>Recargue para evitar el apagón del motor de correos y DashAI.</p></div>")
                 await asyncio.to_thread(mail.send_mail, to,
                                         "⚠ Reserva crítica de funcionamiento", cuerpo, [], "secundaria")
+            # Motor WhatsApp oficial Twilio (Regla #21) — si el número exclusivo ya está activo
+            try:
+                import whatsapp_twilio_service as _wa
+                if _wa.configurado():
+                    await _wa.alerta_admin(
+                        f"⚠ RESERVA CRÍTICA Central Mutuos: {est['saldo_actual']} créditos "
+                        f"(~{est['dias_autonomia']} día(s)). Recargue para evitar el apagón del motor.",
+                        tipo="energia_critica")
+            except Exception as _e:
+                logging.warning(f"energia whatsapp: {_e}")
             await db.config.update_one({"_key": "energia"},
                                        {"$set": {"aviso_critico_en": hoy}}, upsert=True)
         except Exception as e:

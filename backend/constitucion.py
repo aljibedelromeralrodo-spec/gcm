@@ -51,9 +51,11 @@ REGLAS_ORO = [
      "ley": "El Master PIN 0586 es la autoridad suprema de override del sistema."},
     {"n": 20, "id": "consulta_de_ley", "titulo": "Consulta de Ley obligatoria",
      "ley": "Antes de aplicar cualquier arreglo de bug o cambio de código, el agente consulta la Constitución en DashAI y verifica que no rompe una Regla de Oro. Si DashAI no lo autoriza, no se publica."},
+    {"n": 21, "id": "whatsapp_twilio", "titulo": "Motor WhatsApp oficial: Twilio",
+     "ley": "Motor WhatsApp oficial: Twilio (Número Exclusivo). Prohibido usar métodos manuales, links wa.me o sesiones de navegador/QR. El número exclusivo es solo para automatización vía API."},
 ]
 
-VERSION = 4  # 20 reglas
+VERSION = 5  # 21 reglas
 
 
 class ViolacionConstitucional(Exception):

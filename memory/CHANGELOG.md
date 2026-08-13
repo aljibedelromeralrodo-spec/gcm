@@ -1060,3 +1060,11 @@
 - CONSTITUCIÓN v4 = 20 REGLAS numeradas (#6 links_privados, #8 anti_rafaga, #11 ratio_80 LTV, #15 filtro_temporal, #20 consulta_de_ley). exigir() ahora loguea "Consultando Constitución en DashAI...".
 - REGLA #11 APLICADA EN MOTOR: credit_engine.simular_credito trunca el tope LTV con int(x*100)/100 (antes round() podía subir → 80.0004%). Test: prop 2606.007 UF → crédito 2084.8 → LTV 79.9998% ✅.
 - REGLA #6 VERIFICADA: descarga sin token → 401; con ?t=TOKEN → 200 (auth.py cookie cm_token o query t).
+
+## 2026-08-13 — Arquitectura WhatsApp Twilio (Número Exclusivo)
+- twilio 9.11.0 instalado (requirements.txt via pip freeze).
+- whatsapp_twilio_service.py: motor de envío automático 1×1 vía API REST (sin QR/navegador), registro en db.whatsapp_log. Endpoints /api/whatsapp-twilio/status y /test-bienvenida (mensaje oficial: "🚀 Este es el canal oficial de notificaciones de Central Mutuos. Su solicitud está en proceso.").
+- Secretos en .env (VACÍOS, esperando compra del número): TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER + WHATSAPP_ADMIN_NUMBER=+56928995453.
+- Constitución v5 = 21 reglas: #21 whatsapp_twilio (motor oficial Twilio, prohibidos métodos manuales/wa.me/QR).
+- Alerta crítica de energía conectada al motor (envía WhatsApp al admin cuando Twilio esté configurado).
+- Tests: status → configurado:false con lista de secretos faltantes ✅ · bienvenida sin credenciales → 503 con instrucción ✅.
