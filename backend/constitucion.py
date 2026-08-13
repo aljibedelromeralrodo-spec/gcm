@@ -9,43 +9,51 @@ import re
 import logging
 from functools import wraps
 
-# ── LAS 15 REGLAS DE ORO (fuente de verdad) ────────────────────────────────
+# ── LAS 20 REGLAS DE ORO (numeración canónica — fuente de verdad) ──────────
 REGLAS_ORO = [
-    {"id": "uf_sii", "titulo": "UF coordinada con el SII",
+    {"n": 1, "id": "uf_sii", "titulo": "UF coordinada con el SII",
      "ley": "El valor UF es SIEMPRE el del SII del día (America/Santiago). Prohibido usar valores antiguos o por defecto en documentos y cálculos."},
-    {"id": "purificacion_correos", "titulo": "Purificación de correos al cliente",
+    {"n": 2, "id": "purificacion_correos", "titulo": "Purificación de correos al cliente",
      "ley": "Las notificaciones al solicitante no pueden contener correos externos, datos del remitente técnico ni rastro de la MESA. El sistema es el único intermediario."},
-    {"id": "sobriedad_pdf", "titulo": "Sobriedad de documentos legales",
+    {"n": 3, "id": "sobriedad_pdf", "titulo": "Sobriedad de documentos legales",
      "ley": "Los PDF legales (Compromisos) son 100% negro sobre blanco, Times/Arial, sin dorados ni estilos corporativos."},
-    {"id": "bloqueo_rut", "titulo": "Bloqueo de RUT (Match Total)",
+    {"n": 4, "id": "bloqueo_rut", "titulo": "Bloqueo de RUT (Match Total)",
      "ley": "Ningún documento se vincula a una carpeta sin coincidencia exacta de RUT. Nunca contaminar datos entre personas distintas."},
-    {"id": "ratio_80", "titulo": "Ratio normativo 80%",
-     "ley": "El crédito nunca supera el 80% del precio. El LTV se muestra truncado a 2 decimales, sin redondear hacia arriba."},
-    {"id": "cerrojo_duplicados", "titulo": "Cerrojo atómico de duplicados",
-     "ley": "Toda notificación reserva su clave (RUT+Nombre) antes de enviar. Prohibidas las ráfagas de correos repetidos tras un reinicio."},
-    {"id": "firmas_ecert", "titulo": "Integridad de firmas eCert",
+    {"n": 5, "id": "firmas_ecert", "titulo": "Integridad de firmas eCert",
      "ley": "Jamás replicar, copiar o falsificar una firma eCert. Solo firmas genuinas emitidas por eCert. Los documentos firmados son inmutables."},
-    {"id": "carga_conjunta_40", "titulo": "Carga financiera conjunta 40%",
+    {"n": 6, "id": "links_privados", "titulo": "Links privados con token",
+     "ley": "Ningún archivo del sistema es accesible sin token de sesión válido (?t=TOKEN o cookie cm_token). Prohibidos los links públicos a documentos de clientes."},
+    {"n": 7, "id": "cerrojo_duplicados", "titulo": "Cerrojo atómico de duplicados",
+     "ley": "Toda notificación reserva su clave (RUT+Nombre) antes de enviar. Prohibidos los correos repetidos tras un reinicio."},
+    {"n": 8, "id": "anti_rafaga", "titulo": "Ritmo anti-ráfaga",
+     "ley": "Máximo 3 correos por ciclo y 10 segundos entre envíos. El backlog sale goteando por la cola pausada, jamás en ráfaga."},
+    {"n": 9, "id": "carga_conjunta_40", "titulo": "Carga financiera conjunta 40%",
      "ley": "Si la carga conjunta (titular + codeudor) supera el 40%, es RIESGO CRÍTICO, mande lo que mande la MESA."},
-    {"id": "privacidad_cerebro", "titulo": "Privacidad del Cerebro exportable",
-     "ley": "El Cerebro DashAI se exporta sin datos privados de clientes: solo inteligencia y casos anonimizados."},
-    {"id": "mando_unico", "titulo": "Mando único",
-     "ley": "El sistema responde únicamente a Gerardo Barrera (rol admin) y al Master PIN 0586. No existen otros administradores maestros."},
-    {"id": "codeudor_total", "titulo": "Codeudor Total",
+    {"n": 10, "id": "codeudor_total", "titulo": "Codeudor Total",
      "ley": "La deuda CMF se agrega titular + codeudor. El OCR procesa también la subcarpeta 05_codeudor/."},
-    {"id": "renta_anticipos", "titulo": "Renta con anticipos",
+    {"n": 11, "id": "ratio_80", "titulo": "LTV 80 sin redondeo hacia arriba",
+     "ley": "El crédito nunca supera el 80% del precio. El LTV se TRUNCA a 2 decimales; el sistema jamás entrega un 80.01%."},
+    {"n": 12, "id": "renta_anticipos", "titulo": "Renta con anticipos",
      "ley": "La renta reconocida suma el líquido más los anticipos/avances de cada mes y promedia sobre los meses disponibles (política 6 meses)."},
-    {"id": "bunker_gridfs", "titulo": "Búnker GridFS",
+    {"n": 13, "id": "bunker_gridfs", "titulo": "Búnker GridFS",
      "ley": "Todo archivo se respalda en espejo disco→GridFS. Si falta en disco tras un reinicio, se restaura desde el Búnker antes de servirlo."},
-    {"id": "notificacion_ejecutivo", "titulo": "Notificación al ejecutivo",
+    {"n": 14, "id": "notificacion_ejecutivo", "titulo": "Notificación al ejecutivo",
      "ley": "Remitente visible: 'Respuestas Mesa Clientes'. Asuntos limpios y corporativos, sin términos técnicos ('ajustado', 'técnico')."},
-    {"id": "master_pin", "titulo": "Master PIN 0586",
-     "ley": "El Master PIN 0586 es la autoridad suprema de override del sistema."},
-    {"id": "responsividad_absoluta", "titulo": "Responsividad Absoluta",
+    {"n": 15, "id": "filtro_temporal", "titulo": "Filtro temporal (nada retroactivo)",
+     "ley": "Las notificaciones automáticas solo operan para correos procesados desde su fecha de activación. Prohibido notificar casos antiguos."},
+    {"n": 16, "id": "responsividad_absoluta", "titulo": "Responsividad Absoluta",
      "ley": "Todo correo, reporte o documento generado por el sistema DEBE ser 100% responsivo. Prohibido el uso de anchos fijos superiores a 600px. El diseño se auto-adapta a teléfonos y PCs, con tipografía legible, proporciones elegantes y sin desbordes visuales."},
+    {"n": 17, "id": "privacidad_cerebro", "titulo": "Privacidad del Cerebro exportable",
+     "ley": "El Cerebro DashAI se exporta sin datos privados de clientes: solo inteligencia y casos anonimizados."},
+    {"n": 18, "id": "mando_unico", "titulo": "Mando único",
+     "ley": "El sistema responde únicamente a Gerardo Barrera (rol admin) y al Master PIN 0586. No existen otros administradores maestros."},
+    {"n": 19, "id": "master_pin", "titulo": "Master PIN 0586",
+     "ley": "El Master PIN 0586 es la autoridad suprema de override del sistema."},
+    {"n": 20, "id": "consulta_de_ley", "titulo": "Consulta de Ley obligatoria",
+     "ley": "Antes de aplicar cualquier arreglo de bug o cambio de código, el agente consulta la Constitución en DashAI y verifica que no rompe una Regla de Oro. Si DashAI no lo autoriza, no se publica."},
 ]
 
-VERSION = 3  # 16 reglas
+VERSION = 4  # 20 reglas
 
 
 class ViolacionConstitucional(Exception):
@@ -115,6 +123,7 @@ VALIDADORES = {
 def exigir(regla, **ctx):
     """Consulta previa obligatoria: valida `regla` contra el contexto. Si la viola,
     lanza ViolacionConstitucional. Uso inline en funciones críticas."""
+    logging.info(f"Consultando Constitución en DashAI... [{regla}]")
     val = VALIDADORES.get(regla)
     if val:
         problema = val(ctx)

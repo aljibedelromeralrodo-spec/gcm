@@ -165,10 +165,8 @@ async def _rescate_historico_loop():
                     await db.seguimiento.insert_one(dict(doc_seg))
                     # CONTRALORÍA AUTOMÁTICA: auditar el caso al instante
                     asyncio.create_task(_forense_caso_automatico(doc_seg))
-                    # AUTOCORREO CLIENTE FINAL: felicitación directa si es aprobación
-                    asyncio.create_task(_autocorreo_cliente_aprobado(doc_seg))
-                    # NOTIFICACIÓN DE RECHAZO PURIFICADA (solo desde 13-08-2026)
-                    asyncio.create_task(_autocorreo_cliente_rechazado(doc_seg))
+                    # RITMO ANTI-RÁFAGA: la notificación entra a la cola pausada (máx 3/ciclo, 10s)
+                    await _encolar_notificacion(doc_seg)
                     nuevos += 1
                 await asyncio.sleep(0.5)
             await db.config.update_one({"_key": "seguimiento_historico"}, {"$set": {
@@ -239,6 +237,7 @@ async def startup():
         asyncio.create_task(_task_blindada(_aprendizaje_loop, "aprendizaje_ia"))
     asyncio.create_task(_task_blindada(_periodic_mesa_loop, "mesa"))
     asyncio.create_task(_task_blindada(_daily_report_loop, "reporte_diario"))
+    asyncio.create_task(_task_blindada(_notif_pace_loop, "notif_pace"))
     asyncio.create_task(_task_blindada(_uf_auto_loop, "uf"))
     asyncio.create_task(_task_blindada(_firmados_auto_loop, "autocorreo_firmados"))
     asyncio.create_task(_task_blindada(_informes_vip_loop, "informes_vip_lunes"))
@@ -3285,10 +3284,8 @@ async def seg_process(max_emails: int = 30, dias: int = 31):
         await db.seguimiento.insert_one(dict(doc_seg))
         # CONTRALORÍA AUTOMÁTICA: auditar el caso al instante
         asyncio.create_task(_forense_caso_automatico(doc_seg))
-        # AUTOCORREO CLIENTE FINAL: felicitación directa si es aprobación
-        asyncio.create_task(_autocorreo_cliente_aprobado(doc_seg))
-        # NOTIFICACIÓN DE RECHAZO PURIFICADA (solo desde 13-08-2026)
-        asyncio.create_task(_autocorreo_cliente_rechazado(doc_seg))
+        # RITMO ANTI-RÁFAGA: la notificación entra a la cola pausada (máx 3/ciclo, 10s)
+        await _encolar_notificacion(doc_seg)
         nuevos += 1
     return {"ok": True, "procesados": len(ops), "nuevos": nuevos, "dias": dias}
 
@@ -8664,6 +8661,60 @@ async def rechazo_activar(payload: dict):
     await db.config.update_one({"_key": "rechazo_autocorreo"}, {"$set": {
         "activo": activo, "cutoff": RECHAZO_CUTOFF, "actualizado": now_iso()}}, upsert=True)
     return {"ok": True, "activo": activo, "cutoff": RECHAZO_CUTOFF}
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 🐢 RITMO ANTI-RÁFAGA — cola pausada de notificaciones (máx 3/ciclo, 10s entre envíos)
+# Regla de Hierro: prefiero tardar más en ponerme al día que 20 correos en 1 minuto.
+# ══════════════════════════════════════════════════════════════════════════
+NOTIF_MAX_POR_CICLO = 3
+NOTIF_PAUSA_SEG = 10
+
+
+async def _encolar_notificacion(seg):
+    """Toda notificación al cliente entra a la cola pausada; nunca envío directo en lote."""
+    est = (seg.get("estado") or "").lower()
+    if est not in ("aprobacion", "aprobado", "rechazo", "rechazado"):
+        return
+    d = {k: seg.get(k) for k in ("id", "cliente", "rut", "estado", "fecha", "asunto",
+                                 "procesado_en", "monto_credito", "email_cliente")}
+    await db.notif_cola.update_one(
+        {"seg_id": seg.get("id")},
+        {"$setOnInsert": {**d, "seg_id": seg.get("id"), "estado_cola": "pendiente",
+                          "encolado_en": now_iso()}}, upsert=True)
+
+
+async def _notif_pace_loop():
+    """Despacha la cola goteando: máx 3 correos por ciclo (60s) y 10s entre envíos.
+    Al despertar tras una pausa, el backlog sale suave, jamás en ráfaga."""
+    await asyncio.sleep(20)
+    while True:
+        try:
+            lote = await db.notif_cola.find({"estado_cola": "pendiente"}) \
+                .sort("encolado_en", 1).to_list(NOTIF_MAX_POR_CICLO)
+            enviados = 0
+            for item in lote:
+                if enviados > 0:
+                    await asyncio.sleep(NOTIF_PAUSA_SEG)
+                est = (item.get("estado") or "").lower()
+                try:
+                    if est in ("aprobacion", "aprobado"):
+                        r = await _autocorreo_cliente_aprobado(item)
+                    else:
+                        r = await _autocorreo_cliente_rechazado(item)
+                except Exception as e:
+                    r = {"ok": False, "motivo": "excepcion", "error": str(e)[:150]}
+                await db.notif_cola.update_one({"_id": item["_id"]}, {"$set": {
+                    "estado_cola": "enviado" if r.get("ok") else "omitido",
+                    "resultado": {k: str(v)[:200] for k, v in (r or {}).items() if k != "html"},
+                    "despachado_en": now_iso()}})
+                if r.get("ok"):
+                    enviados += 1
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logging.warning(f"notif pace loop: {e}")
+        await asyncio.sleep(60)
 # 📜 EDITOR MAESTRO DE COMPROMISOS DE COMPRAVENTA
 # ══════════════════════════════════════════════════════════════════════════
 def _compromiso_default(fd):

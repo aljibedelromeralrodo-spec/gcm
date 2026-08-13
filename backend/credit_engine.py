@@ -290,8 +290,10 @@ def simular_credito(d: dict) -> dict:
     capacidad_uf = capacidad_desde_dividendo(dividendo_tope_uf, tasa, plazo)
 
     # Credito maximo limitado por LTV de la propiedad
-    ltv_cap_uf = valor_prop * u_ltv if valor_prop > 0 else capacidad_uf
-    credito_maximo_uf = round(min(capacidad_uf, ltv_cap_uf) if valor_prop > 0 else capacidad_uf, 2)
+    # REGLA DE ORO #11: el tope LTV se TRUNCA a 2 decimales (jamás redondear hacia arriba → nunca 80.01%)
+    ltv_cap_uf = int(valor_prop * u_ltv * 100) / 100 if valor_prop > 0 else capacidad_uf
+    credito_maximo_uf = min(capacidad_uf, ltv_cap_uf) if valor_prop > 0 else capacidad_uf
+    credito_maximo_uf = int(credito_maximo_uf * 100) / 100
 
     dividendo_credito_uf = dividendo(credito_maximo_uf, tasa, plazo)
     dividendo_credito_clp = round(dividendo_credito_uf * valor_uf)

@@ -1054,3 +1054,9 @@
 - _marca_wrap refactorizado: <meta viewport>, max-width:600px, padding fluido, @media <=480px, word-break, img/table 100%. Aplica a TODOS los correos con marca (reporte diario, semanal, etc.).
 - _reporte_correos_html consulta obligatoria a la Constitución (exigir responsividad_absoluta) antes de retornar.
 - Verificado: iPhone 390px sin desborde horizontal (scrollWidth=clientWidth=390); escritorio tarjeta centrada 600px. Sin anchos fijos >600px.
+
+## 2026-08-13 — Anti-Ráfaga + Constitución 20 Leyes
+- RITMO ANTI-RÁFAGA: db.notif_cola + _notif_pace_loop (ciclo 60s, máx 3 correos, 10s entre envíos). Ambos bucles (histórico línea ~150 y seg_process) ahora ENCOLAN via _encolar_notificacion en vez de create_task directo. Probado con 5 fakes: ciclo 1 despachó exactamente 3, ciclo 2 el resto. Cerrojo atómico evita duplicados.
+- CONSTITUCIÓN v4 = 20 REGLAS numeradas (#6 links_privados, #8 anti_rafaga, #11 ratio_80 LTV, #15 filtro_temporal, #20 consulta_de_ley). exigir() ahora loguea "Consultando Constitución en DashAI...".
+- REGLA #11 APLICADA EN MOTOR: credit_engine.simular_credito trunca el tope LTV con int(x*100)/100 (antes round() podía subir → 80.0004%). Test: prop 2606.007 UF → crédito 2084.8 → LTV 79.9998% ✅.
+- REGLA #6 VERIFICADA: descarga sin token → 401; con ?t=TOKEN → 200 (auth.py cookie cm_token o query t).
