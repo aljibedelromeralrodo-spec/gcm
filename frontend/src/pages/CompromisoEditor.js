@@ -5,7 +5,7 @@ import { API_URL } from "../utils/formatters";
 const ORO = "#d4af37";
 const MONO = "'JetBrains Mono', monospace";
 const fmtCLP = (n) => "$" + Math.round(Number(n) || 0).toLocaleString("es-CL");
-const fmtUF = (n) => (Number(n) || 0).toLocaleString("es-CL", { maximumFractionDigits: 2 }) + " UF";
+const fmtUF = (n) => (Number(n) || 0).toLocaleString("es-CL", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " UF";
 
 // ── Números a palabras (estilo notarial, español de Chile) ──
 const U = ["", "uno", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho", "nueve", "diez", "once", "doce", "trece", "catorce", "quince", "dieciséis", "diecisiete", "dieciocho", "diecinueve", "veinte", "veintiuno", "veintidós", "veintitrés", "veinticuatro", "veinticinco", "veintiséis", "veintisiete", "veintiocho", "veintinueve"];
@@ -255,6 +255,11 @@ export default function CompromisoEditor({ folder, onClose }) {
 
   const cmd = (c) => { document.execCommand(c); setManualDirty(true); };
   const saldoUF = datos ? Math.max(0, Math.round(((Number(datos.precio.valor_total_uf) || 0) - (Number(datos.precio.pie_uf) || 0)) * 100) / 100) : 0;
+  const precioUF = datos ? Number(datos.precio.valor_total_uf) || 0 : 0;
+  // REGLA DE PRECISIÓN: LTV truncado a 2 decimales — jamás redondea hacia arriba
+  const ltvPct = precioUF > 0 ? Math.floor((saldoUF / precioUF) * 10000 + 1e-6) / 100 : 0;
+  const topeNormativoUF = Math.round(precioUF * 0.80 * 100) / 100;
+  const excesoLTV = precioUF > 0 && saldoUF > topeNormativoUF + 0.005;
 
   return (
     <div data-testid="compromiso-editor" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.92)", zIndex: 400, display: "flex", flexDirection: "column" }}>
@@ -310,9 +315,21 @@ export default function CompromisoEditor({ folder, onClose }) {
               ⚖ SALDO DE PRECIO (auto): {fmtUF(saldoUF)} ≈ {fmtCLP(saldoUF * ufHoy)}
             </div>
             <label style={lbl}>Monto Crédito Hipotecario (bloqueado = saldo exacto)</label>
-            <div data-testid="comp-credito-bloqueado" style={{ ...inp, opacity: 0.85, background: "rgba(255,255,255,0.03)" }}>
+            <div data-testid="comp-credito-bloqueado" style={{ ...inp, opacity: 0.85, background: "rgba(255,255,255,0.03)", ...(excesoLTV ? { border: "1.5px solid #ef4444", boxShadow: "0 0 14px -4px rgba(239,68,68,0.8)" } : {}) }}>
               🔒 {fmtUF(saldoUF)} — diferencia exacta Precio Total − Pie
             </div>
+            {precioUF > 0 && (
+              <div data-testid="comp-ltv" style={{ ...inp, fontWeight: 800, background: excesoLTV ? "rgba(239,68,68,0.12)" : "rgba(16,201,138,0.08)",
+                border: `1px solid ${excesoLTV ? "#ef4444" : "#10c98a"}`, color: excesoLTV ? "#fb7185" : "#10c98a" }}>
+                📐 FINANCIAMIENTO (LTV): {ltvPct.toFixed(2).replace(".", ",")}% {excesoLTV ? "" : "· dentro de norma"}
+              </div>
+            )}
+            {excesoLTV && (
+              <div data-testid="comp-alerta-ltv" style={{ background: "rgba(127,29,29,0.4)", border: "1.5px solid #ef4444", color: "#fecaca",
+                padding: "0.55rem 0.75rem", fontSize: "0.7rem", fontWeight: 800, marginBottom: 8, letterSpacing: "0.04em" }}>
+                🚨 EXCESO DE LÍMITE NORMATIVO 80% — el crédito ({fmtUF(saldoUF)}) supera el máximo permitido de {fmtUF(topeNormativoUF)}. Aumente el pie o baje el precio.
+              </div>
+            )}
             <label style={lbl}>Garantía (instrucciones notariales / Vale Vista)</label>
             <textarea data-testid="comp-precio-garantia" style={{ ...inp, minHeight: 54, resize: "vertical" }} value={datos.precio.garantia || ""} onChange={e => set("precio", "garantia", e.target.value)} placeholder="Ej: Vale vista bancario entregado en instrucciones notariales irrevocables…" />
             <div style={secTitle}>🛡 Cláusulas de Resguardo</div>

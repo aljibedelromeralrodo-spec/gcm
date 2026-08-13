@@ -1028,3 +1028,10 @@
 - `auth.py`: /api/brain/ público a nivel JWT (la llave se valida dentro del módulo).
 - BONUS: eliminado `app.include_router(api)` duplicado al final de server.py.
 - Tests: status ✅ · export sin llave 401 ✅ · export con llave ✅ · privacidad sin fugas ✅ · import roundtrip ✅ (flag standalone reseteado en instancia origen).
+
+## 2026-08-13 — Ratio Normativo 80,00% · Caso Paula Vergara (P0)
+- BD: compromiso Paula Vergara (ef82f7b7…) → precio 2.606,00 UF, pie 521,20 UF; folder df.monto_credito 2.084,80, monto_pie 521,20, valor_propiedad_uf 2.606 · clausulas_html purgado.
+- CompromisoEditor: nuevo indicador `comp-ltv` — LTV truncado a 2 decimales (Math.floor, jamás redondea hacia arriba), muestra "80,00% · dentro de norma".
+- BLOQUEO NORMATIVO: si saldo/crédito > 80% del precio (+0.005 UF epsilon) → banner rojo `comp-alerta-ltv` "🚨 EXCESO DE LÍMITE NORMATIVO 80%" + borde rojo en el campo crédito.
+- fmtUF del editor ahora SIEMPRE 2 decimales (2.606,00 / 521,20 / 2.084,80).
+- Verificado en navegador real: LTV 80,00% ✅ · crédito clavado 2.084,80 ✅ · pie=400 dispara alerta ✅ · restaurado 521,20 vuelve a norma ✅ · contrato muestra montos y CLP con UF SII viva ($40.850).
