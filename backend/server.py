@@ -238,6 +238,8 @@ async def startup():
     asyncio.create_task(_task_blindada(_periodic_mesa_loop, "mesa"))
     asyncio.create_task(_task_blindada(_daily_report_loop, "reporte_diario"))
     asyncio.create_task(_task_blindada(_notif_pace_loop, "notif_pace"))
+    import bodega_concreces as _bc
+    asyncio.create_task(_task_blindada(_bc.gerencia_audit_loop, "gerencia_audit"))
     asyncio.create_task(_task_blindada(_uf_auto_loop, "uf"))
     asyncio.create_task(_task_blindada(_firmados_auto_loop, "autocorreo_firmados"))
     asyncio.create_task(_task_blindada(_informes_vip_loop, "informes_vip_lunes"))
@@ -263,12 +265,15 @@ async def startup():
 # ---------------------------------------------------------------------------
 def _token_usuario(user):
     rol = user.get("rol", "ejecutivo")
+    perfil = user.get("perfil", "")
     return {
         "token": _auth.create_token(user["codigo"], rol=rol, scope="terminal",
-                                    extra={"nombre": user.get("nombre", user["codigo"])}),
+                                    extra={"nombre": user.get("nombre", user["codigo"]),
+                                           "perfil": perfil}),
         "codigo": user["codigo"],
         "nombre": user.get("nombre", user["codigo"]),
         "rol": rol,
+        "perfil": perfil,
     }
 
 
@@ -281,6 +286,8 @@ async def auth_login(payload: dict):
         "codigo": {"$regex": f"^{re.escape(codigo)}$", "$options": "i"}})
     if not user:
         raise HTTPException(status_code=401, detail="Credenciales invalidas")
+    if user.get("activo") is False:
+        raise HTTPException(status_code=403, detail="Acceso revocado por el administrador")
     if user.get("clave_hash"):
         if not password or not bcrypt.checkpw(password.encode(), user["clave_hash"].encode()):
             raise HTTPException(status_code=401, detail="Credenciales invalidas")
@@ -1260,8 +1267,36 @@ async def create_user(payload: dict):
     if await db.users.find_one({"codigo": codigo}):
         raise HTTPException(status_code=400, detail="El codigo ya existe")
     doc = {"codigo": codigo, "nombre": payload["nombre"], "password": payload["password"],
-           "rol": payload.get("rol", "ejecutivo"), "created": now_iso()}
+           "rol": payload.get("rol", "ejecutivo"), "perfil": payload.get("perfil", ""),
+           "activo": True, "created": now_iso()}
     await db.users.insert_one(dict(doc))
+    return {"ok": True, "codigo": codigo, "perfil": payload.get("perfil", "")}
+
+
+@api.post("/admin/users/{codigo}/activo")
+async def user_toggle_activo(codigo: str, payload: dict, request: Request):
+    """CONTROL GERARDO: revoca o reactiva el acceso de un usuario con un clic."""
+    _solo_maestro(request)
+    if codigo in ("admin", "administrador"):
+        raise HTTPException(status_code=400, detail="No se puede revocar al administrador")
+    activo = bool((payload or {}).get("activo"))
+    r = await db.users.update_one({"codigo": codigo}, {"$set": {"activo": activo}})
+    if not r.matched_count:
+        raise HTTPException(status_code=404, detail="Usuario no existe")
+    return {"ok": True, "codigo": codigo, "activo": activo}
+
+
+@api.post("/admin/users/{codigo}/clave")
+async def user_reset_clave(codigo: str, payload: dict, request: Request):
+    """CONTROL GERARDO: asigna una nueva clave al usuario."""
+    _solo_maestro(request)
+    clave = ((payload or {}).get("clave") or "").strip()
+    if len(clave) < 4:
+        raise HTTPException(status_code=400, detail="Clave demasiado corta")
+    r = await db.users.update_one({"codigo": codigo},
+                                  {"$set": {"password": clave}, "$unset": {"clave_hash": ""}})
+    if not r.matched_count:
+        raise HTTPException(status_code=404, detail="Usuario no existe")
     return {"ok": True, "codigo": codigo}
 
 
@@ -13520,6 +13555,12 @@ api.include_router(_energia_mod.energia)
 # 📱 MOTOR WHATSAPP OFICIAL — Twilio Número Exclusivo (Regla de Oro #21)
 import whatsapp_twilio_service as _wa_twilio
 api.include_router(_wa_twilio.wa_twilio)
+
+# 🏦 BODEGA CONCRECES + GERENCIA COMERCIAL (Reglas #24 y #25)
+import bodega_concreces as _bodega_mod
+api.include_router(_bodega_mod.bodega)
+api.include_router(_bodega_mod.gerencia)
+api.include_router(_bodega_mod.excepciones)
 
 
 @api.get("/constitucion")

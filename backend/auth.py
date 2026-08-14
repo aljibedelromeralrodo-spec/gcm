@@ -72,6 +72,15 @@ def _es_publica(path):
     return any(path.startswith(p) for p in PUBLIC_PREFIXES)
 
 
+# JERARQUÍA A/B (Regla de Oro #22): módulos vetados por perfil. Admin pasa libre.
+PERFIL_BLOQUEOS = {
+    "A": ("/api/contraloria", "/api/dashai", "/api/admin", "/api/gerencia", "/api/bodega",
+          "/api/brain", "/api/constitucion", "/api/criterios", "/api/reporte-diario"),
+    "B": ("/api/clientes", "/api/simulaciones", "/api/compromiso", "/api/setcredito",
+          "/api/admin/users", "/api/escritura", "/api/tasacion"),
+}
+
+
 class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         path = request.url.path
@@ -106,5 +115,12 @@ class AuthMiddleware(BaseHTTPMiddleware):
             # exclusivas del terminal interno.
             if scope != "terminal":
                 return JSONResponse({"detail": "Acceso restringido al terminal de administración"}, status_code=403)
+        # HERMETICIDAD A/B: nadie entra ni ve lo que no le corresponde (Regla #22)
+        perfil = claims.get("perfil", "")
+        if perfil in PERFIL_BLOQUEOS and claims.get("rol") not in ("admin", "maestro"):
+            if any(path.startswith(p) for p in PERFIL_BLOQUEOS[perfil]):
+                return JSONResponse(
+                    {"detail": f"Módulo restringido para su perfil {perfil} (Regla de Oro #22 — DashAI monitorea este acceso)"},
+                    status_code=403)
         request.state.user = claims
         return await call_next(request)

@@ -1068,3 +1068,12 @@
 - Constitución v5 = 21 reglas: #21 whatsapp_twilio (motor oficial Twilio, prohibidos métodos manuales/wa.me/QR).
 - Alerta crítica de energía conectada al motor (envía WhatsApp al admin cuando Twilio esté configurado).
 - Tests: status → configurado:false con lista de secretos faltantes ✅ · bienvenida sin credenciales → 503 con instrucción ✅.
+
+## 2026-08-14 — Jerarquía A/B + Bodega Concreces + Gerencia Comercial + Excepciones + Daniela/Victoria
+- JERARQUÍA A/B (Regla #22): perfil en users/token; PERFIL_BLOQUEOS en auth.py (A vetado de contraloría/dashai/admin/gerencia/bodega; B vetado de clientes/simulador/compromiso). Endpoints revocar/reactivar (+clave reset) en /api/admin/users. Login bloquea activo:false. UsuariosModule con select perfil + botón Revocar. Test: usuario A → contraloría 403, clientes 200 ✅.
+- CONSTITUCIÓN v8: reglas #22-#25, #31 (excepción), #32 (Daniela/Victoria) + 5 Leyes de Eficiencia + BOVEDA_ALGORITMO_ESPEJO socket (config protegido).
+- BODEGA_DE_DATOS_CONCRECES (bodega_concreces.py): GET /api/bodega (94 registros: RUTs, renta, rol, dirección, respaldo OCR), POST /contrastar/{fid} (motor RUT eje central, expulsa mismatch), mapeo Concreces (Ingreso_Mesa/Tasacion/Riesgo/Escrituracion). Envío BLOQUEADO sin OCR+contraste (Regla #24).
+- GERENCIA_COMERCIAL: /api/gerencia/cartera (63 ops del mes, hitos docs/firma/concreces/notaría, alertas notaría por regex en seguimiento), export-xlsx (openpyxl, HTTP 200 ✅), costo desarrollo (4.08 cr), audit loop 6h (Regla #25). UI glassmorphism dark slate + oro.
+- PROTOCOLO EXCEPCIÓN (Regla #31): POST /api/excepciones/autorizar (re-valida clave bcrypt/password → firma digital, justificación ≥10 chars, registro INMUTABLE en excepciones_log — sin endpoints de borrado, alerta a Gerencia). Tests: clave mala 403 ✅, firma válida 200 con registro ✅. Modal AutorizacionExcepcion en Administración.
+- DIVISIÓN OPERATIVA (Regla #32): paneles espejo Daniela Galindo (Revisión) / Victoria Vilche (Carga) en Administración, auto-selección por nombre de usuario logueado, banner de esqueleto (funciones definitivas bloqueadas hasta orden de Gerardo).
+- Verificado visualmente: Administración (paneles+bodega) y Gerencia (tabla+export+costo) renderizan perfecto.

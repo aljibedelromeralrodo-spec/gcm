@@ -7,8 +7,15 @@ export default function UsuariosModule() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState({ codigo: "", nombre: "", password: "", rol: "ejecutivo" });
+  const [form, setForm] = useState({ codigo: "", nombre: "", password: "", rol: "ejecutivo", perfil: "" });
   const [error, setError] = useState("");
+
+  const toggleActivo = async (u) => {
+    try {
+      await axios.post(`${API}/api/admin/users/${u.codigo}/activo`, { activo: u.activo === false });
+      await loadUsers();
+    } catch (err) { alert(err.response?.data?.detail || "Error"); }
+  };
 
   useEffect(() => { loadUsers(); }, []);
 
@@ -87,6 +94,14 @@ export default function UsuariosModule() {
                 <option value="admin">Administrador</option>
               </select>
             </div>
+            <div className="clientes-field">
+              <label>Perfil de Acceso (Jerarquía A/B)</label>
+              <select value={form.perfil} onChange={e => setForm({ ...form, perfil: e.target.value })} data-testid="select-user-perfil">
+                <option value="">Completo (sin restricción)</option>
+                <option value="A">Usuario A — Clientes, Simulador y Compromisos</option>
+                <option value="B">Usuario B — Contralor, DashAI y Reportes</option>
+              </select>
+            </div>
           </div>
           {error && <p style={{ color: "#e11d48", fontSize: "0.85rem", margin: "0.5rem 0" }} data-testid="user-error">{error}</p>}
           <div className="clientes-form-actions">
@@ -120,18 +135,26 @@ export default function UsuariosModule() {
                   <td>
                     <span className={`status-pill ${u.rol === 'admin' ? 'pill-approved' : 'pill-rejected'}`}
                       style={{ fontSize: "0.75rem" }}>
-                      {u.rol === 'admin' ? 'Admin' : 'Ejecutivo'}
+                      {u.rol === 'admin' ? 'Admin' : `Ejecutivo${u.perfil ? ` · Perfil ${u.perfil}` : ''}`}
                     </span>
+                    {u.activo === false && <span style={{ color: "#ef4444", fontSize: "0.65rem", fontWeight: 800, marginLeft: 6 }}>REVOCADO</span>}
                   </td>
                   <td style={{ fontSize: "0.82rem", color: "var(--text-secondary)" }}>
                     {u.created ? new Date(u.created).toLocaleDateString("es-CL") : "-"}
                   </td>
                   <td>
                     {u.codigo !== "administrador" && (
-                      <button className="clientes-delete-btn" onClick={() => deleteUser(u.codigo)}
-                        data-testid={`btn-delete-user-${u.codigo}`} title="Eliminar usuario">
-                        <i className="fa fa-trash"></i>
-                      </button>
+                      <>
+                        <button className="docs-btn secondary" onClick={() => toggleActivo(u)}
+                          data-testid={`btn-toggle-user-${u.codigo}`} style={{ fontSize: "0.65rem", marginRight: 6 }}
+                          title={u.activo === false ? "Reactivar acceso" : "Revocar acceso"}>
+                          <i className={`fa fa-${u.activo === false ? 'unlock' : 'lock'}`}></i> {u.activo === false ? "Reactivar" : "Revocar"}
+                        </button>
+                        <button className="clientes-delete-btn" onClick={() => deleteUser(u.codigo)}
+                          data-testid={`btn-delete-user-${u.codigo}`} title="Eliminar usuario">
+                          <i className="fa fa-trash"></i>
+                        </button>
+                      </>
                     )}
                   </td>
                 </tr>

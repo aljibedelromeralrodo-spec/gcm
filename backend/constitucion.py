@@ -53,9 +53,29 @@ REGLAS_ORO = [
      "ley": "Antes de aplicar cualquier arreglo de bug o cambio de código, el agente consulta la Constitución en DashAI y verifica que no rompe una Regla de Oro. Si DashAI no lo autoriza, no se publica."},
     {"n": 21, "id": "whatsapp_twilio", "titulo": "Motor WhatsApp oficial: Twilio",
      "ley": "Motor WhatsApp oficial: Twilio (Número Exclusivo). Prohibido usar métodos manuales, links wa.me o sesiones de navegador/QR. El número exclusivo es solo para automatización vía API."},
+    {"n": 22, "id": "jerarquia_ab", "titulo": "Jerarquía de usuarios A y B",
+     "ley": "Solo el administrador supremo puede gestionar los niveles de acceso A y B. DashAI monitorea que ningún usuario A acceda a funciones de auditoría."},
+    {"n": 23, "id": "eficiencia_creditos", "titulo": "Ley de Eficiencia y Ahorro de Créditos",
+     "ley": "El objetivo es construir el mejor sistema con el menor consumo posible: Economía de Código, Minimización de Llamadas, Bypass Pesado, Detección de Bucle y Estimación Previa. La inteligencia no es gastar más, sino gastar mejor."},
+    {"n": 24, "id": "contraste_rut_rol", "titulo": "Contraste RUT/Rol contra SII",
+     "ley": "La automatización administrativa solo procede si el RUT y el Rol de Propiedad han sido contrastados y validados al 100% contra el SII. Sin respaldo OCR, el envío queda bloqueado."},
+    {"n": 25, "id": "reporte_gerencia", "titulo": "Reporte de Gerencia Comercial",
+     "ley": "El reporte de Gerencia Comercial es la fuente oficial de metas. Los datos de avance deben ser auditados por DashAI cada 6 horas."},
+    {"n": 31, "id": "protocolo_excepcion", "titulo": "Protocolo de Autorización de Excepción",
+     "ley": "Toda regla puede ser saltada manualmente por un ejecutivo autorizado, siempre que quede registro inmutable de su identidad y motivo bajo el Protocolo de Excepción. No hay avance manual sin firma digital del ejecutivo."},
+    {"n": 32, "id": "division_operativa", "titulo": "División Operativa Daniela/Victoria",
+     "ley": "La operación se divide en dos fases: Revisión (Daniela) y Carga (Victoria). Ambas deben usar sus respectivos módulos para mantener el orden administrativo. Funciones definitivas solo por instrucción final de Gerardo."},
 ]
 
-VERSION = 5  # 21 reglas
+REGLAS_EFICIENCIA = [
+    {"id": "economia_codigo", "ley": "Economía de Código: ediciones por parches (diff), jamás reescrituras completas de componentes."},
+    {"id": "minimizacion_llamadas", "ley": "Minimización de Llamadas: agrupar operaciones en lotes paralelos; una sola verificación al final."},
+    {"id": "bypass_pesado", "ley": "Bypass Pesado: servir desde caché lo costoso (UF, IMAP, OCR); refrescar en segundo plano."},
+    {"id": "deteccion_bucle", "ley": "Detección de Bucle: al segundo intento fallido, cambiar de estrategia en vez de repetir."},
+    {"id": "estimacion_previa", "ley": "Estimación Previa: antes de construir, calcular la ruta de menor costo de créditos según DashAI."},
+]
+
+VERSION = 8  # +#32 división operativa Daniela/Victoria
 
 
 class ViolacionConstitucional(Exception):
@@ -156,11 +176,18 @@ async def seed_constitucion(db):
     doc = await db.config.find_one({"_key": "constitucion_maestra"})
     if not doc or int(doc.get("version") or 0) < VERSION:
         await db.config.update_one({"_key": "constitucion_maestra"}, {"$set": {
-            "version": VERSION, "reglas": REGLAS_ORO, "mando": "Gerardo Barrera",
+            "version": VERSION, "reglas": REGLAS_ORO, "reglas_eficiencia": REGLAS_EFICIENCIA,
+            "mando": "Gerardo Barrera",
             "master_pin_ref": "MASTER_PIN (0586)",
             "aprendizaje": {
                 "fuente_primaria": "buzones IMAP operativos",
                 "fuente_secundaria_solo_lectura": (doc or {}).get("aprendizaje", {}).get("fuente_secundaria_solo_lectura", ""),
                 "nota": "Slot reservado para el segundo buzón de aprendizaje (solo lectura)."},
         }}, upsert=True)
+    # BÓVEDA DE ALGORITMO (SOCKET): protegida, lista para la lógica de aprendizaje externo
+    if not await db.config.find_one({"_key": "boveda_algoritmo_espejo"}):
+        await db.config.update_one({"_key": "boveda_algoritmo_espejo"}, {"$set": {
+            "estado": "socket_listo", "protegido": True, "logica_externa": None,
+            "nota": "Recibe la lógica de aprendizaje externo solo por orden del administrador supremo."}},
+            upsert=True)
     return await db.config.find_one({"_key": "constitucion_maestra"}, {"_id": 0})

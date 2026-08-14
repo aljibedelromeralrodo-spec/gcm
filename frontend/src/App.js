@@ -18,6 +18,8 @@ const ClientesModule = lazy(() => import("./pages/ClientesModule"));
 const CentralChat = lazy(() => import("./components/CentralChat"));
 const SeguimientoModule = lazy(() => import("./pages/SeguimientoModule"));
 const UsuariosModule = lazy(() => import("./pages/UsuariosModule"));
+const GerenciaComercialModule = lazy(() => import("./pages/GerenciaComercialModule"));
+const AdministracionModule = lazy(() => import("./pages/AdministracionModule"));
 const CriteriosModule = lazy(() => import("./pages/CriteriosModule"));
 const WhatsAppModule = lazy(() => import("./pages/WhatsAppModule"));
 const AutocorreoModule = lazy(() => import("./pages/AutocorreoModule"));
@@ -193,7 +195,18 @@ function MainApp() {
     ...(['admin', 'maestro'].includes(user.rol) ? [{ key: 'whatsapp', icon: 'fa-whatsapp', label: 'WhatsApp' }] : []),
     ...(['admin', 'maestro'].includes(user.rol) ? [{ key: 'autocorreo', icon: 'fa-envelope-o', label: 'Correo a Mesa' }] : []),
     ...(['admin', 'maestro'].includes(user.rol) ? [{ key: 'procesamiento', icon: 'fa-inbox', label: 'Procesamiento Correo' }] : []),
-  ];
+    ...(['admin', 'maestro'].includes(user.rol) || user.perfil === 'B' ? [
+      { key: 'gerencia', icon: 'fa-line-chart', label: 'Gerencia Comercial' },
+      { key: 'administracion', icon: 'fa-database', label: 'Administración' },
+    ] : []),
+  ].filter(item => {
+    if (['admin', 'maestro'].includes(user.rol) || !user.perfil) return true;
+    const PERMISOS = {
+      A: ['dashboard', 'clientes', 'simulador', 'historial', 'calculadora', 'formato', 'setcredito'],
+      B: ['dashboard', 'contraloria', 'criterios', 'seguimiento', 'gerencia', 'administracion', 'salud'],
+    };
+    return (PERMISOS[user.perfil] || []).includes(item.key);
+  });
 
   return (
     <>
@@ -328,6 +341,8 @@ function MainApp() {
         {activeModule === 'clientes' && <ClientesModule onNavigate={setActiveModule} />}
         {activeModule === 'seguimiento' && <SeguimientoModule />}
         {activeModule === 'usuarios' && <UsuariosModule />}
+        {activeModule === 'gerencia' && <GerenciaComercialModule />}
+        {activeModule === 'administracion' && <AdministracionModule user={user} />}
         {activeModule === 'criterios' && <CriteriosModule />}
         {activeModule === 'whatsapp' && <WhatsAppModule />}
         {activeModule === 'autocorreo' && <AutocorreoModule />}
