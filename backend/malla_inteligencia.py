@@ -92,6 +92,11 @@ def _capturar_fecha(texto):
 _now = lambda: datetime.now(timezone.utc).isoformat()
 _rut_limpio = lambda r: re.sub(r"[^0-9kK]", "", str(r or "")).lower()
 RUT_RE = re.compile(r"\b(\d{1,2}\.?\d{3}\.?\d{3}\s*-\s*[0-9kK])\b")
+# REGLA DE HIERRO: la firma SOLO se confirma con evidencia REAL en pasado (jamás agendamientos)
+FIRMA_REAL_RE = re.compile(
+    r"(escritura\s+(?:fue\s+)?firmad[ao]|se\s+firm[óo]\b|firmad[ao]\s+(?:la\s+)?escritura"
+    r"|firma\s+(?:realizada|efectuada|concretada|exitosa)|firmaron\s+la\s+escritura"
+    r"|cesi[óo]n\s+firmad[ao]|firmad[ao]\s+(?:la\s+)?cesi[óo]n)", re.I)
 EMAIL_RE = re.compile(r"^[\w.+-]+@[\w-]+\.[\w.-]+$")
 
 PANELES = ("victoria", "daniela", "postventa", "brokers")
@@ -940,6 +945,44 @@ def _verificar_firmas_pdf(pdf_bytes):
         return False, f"no se pudo abrir el PDF para verificar firmas ({str(e)[:80]})"
 
 
+async def _capturar_remitente(fd, hito, e):
+    """CAPTURA AUTOMÁTICA DE REMITENTES: aprende quién envía qué. Queda 'Pendiente de
+    Confirmación' hasta que Gerencia lo valide (Regla de Hierro) + registro por broker."""
+    try:
+        de_raw = e.get("from") or ""
+        m = re.search(r"[\w.+-]+@[\w.-]+", de_raw)
+        if not m:
+            return
+        correo = m.group(0).lower()
+        bloqueados = (await db.config.find_one({"_key": "remitentes_bloqueados"}) or {}).get("correos") or []
+        if correo in bloqueados or correo in {a["user"].lower() for a in mail.ACCOUNTS}:
+            return
+        nm = re.match(r'^\s*"?([^"<]+?)"?\s*<', de_raw)
+        nombre_rem = (nm.group(1).strip() if nm else correo.split("@")[0])
+        apr = await db.remitentes_registro.find_one({"correo": correo}) or {}
+        hito_final = apr.get("hito_forzado") or hito
+        ya_fuente = correo in _correos_de((fd.get("fuentes_doc") or {}).get(hito_final))
+        detectadas = (fd.get("fuentes_detectadas") or {}).get(hito_final) or []
+        if not ya_fuente and not any(d.get("correo") == correo for d in detectadas):
+            hoy = _now()[:10]
+            await db.folders.update_one({"id": fd["id"]}, {"$push": {
+                f"fuentes_detectadas.{hito_final}": {
+                    "correo": correo, "nombre": nombre_rem, "primera_vez": _now(),
+                    "estado": "pendiente_confirmacion",
+                    "etiqueta": f"Detectado automáticamente el {hoy}"}}})
+            await db.alertas.insert_one({"id": str(uuid.uuid4()), "tipo": "remitente_detectado",
+                "mensaje": f"📡 Nuevo remitente detectado: {nombre_rem} ({correo}) agregado como fuente de "
+                           f"{hito_final} para {fd.get('nombre')} — Pendiente de Confirmación.",
+                "fecha": _now(), "leida": False})
+        await db.remitentes_registro.update_one({"correo": correo}, {
+            "$set": {"nombre": nombre_rem, "ultima": _now()},
+            "$inc": {f"hitos.{hito_final}": 1,
+                     f"brokers.{(fd.get('inmobiliaria') or fd.get('broker_origen') or 'sin_broker').replace('.', '·').replace('$', '')}": 1}},
+            upsert=True)
+    except Exception as ex:
+        logging.warning(f"captura remitente: {ex}")
+
+
 async def _auditar_lote(correos):
     """Procesa un lote de correos (Regla #67): detecta tasaciones (Value Property),
     estudios de títulos (Victoria Vilches / Guillermo Majluf) y notaría, y ESCRIBE
@@ -980,7 +1023,7 @@ async def _auditar_lote(correos):
                 continue
             setn = {"escritura_notaria_detectada_at": e.get("date") or _now()}
             hito_txt = "Actividad de notaría detectada"
-            if "firmad" in tx or "firma de escritura" in tx:
+            if FIRMA_REAL_RE.search(tx):
                 setn["escritura_confirmada_at"] = e.get("date") or _now()
                 setn["fecha_firma_detectada"] = str(e.get("date") or _now())[:10]
                 hito_txt = "FIRMA DE ESCRITURA confirmada por correo de la notaría"
@@ -993,6 +1036,7 @@ async def _auditar_lote(correos):
                 "asunto": asunto[:160], "fecha": e.get("date") or "", "fuente": "correo notaría",
                 "direccion": de[:80], "creado": _now()})
             await _sync_adn(fd_n["id"])
+            await _capturar_remitente(fd_n, "notaria", e)
             res["detalle"].append({"asunto": asunto[:100], "cliente": fd_n.get("nombre"),
                                    "hito": hito_txt, "match": "fuente notaría"})
             continue
@@ -1008,13 +1052,19 @@ async def _auditar_lote(correos):
         asunto_l = asunto.lower()
         frase_set = "set firmado" in asunto_l or "set para la firma" in asunto_l
         es_set = frase_set and (not set_src or any(s in de for s in set_src))
-        if not (es_tasacion or es_estudio or es_notaria or es_set):
+        es_serviu = any(k in asunto_l for k in ("serviu", "subsidio", "resolucion", "resolución"))
+        if not (es_tasacion or es_estudio or es_notaria or es_set or es_serviu):
             continue
         fd, metodo = _match_carpeta(texto, por_rut, folders)
         if not fd:
             res["sin_respaldo"] += 1
             res["detalle"].append({"asunto": asunto[:100], "estado": "Pendiente de Información",
                                    "motivo": "sin RUT ni nombre de cliente identificable"})
+            continue
+        hito_cap = ("tasacion" if es_tasacion else "estudio" if es_estudio else
+                    "cesion" if es_notaria else "set_credito" if es_set else "serviu")
+        await _capturar_remitente(fd, hito_cap, e)
+        if es_serviu and not (es_tasacion or es_estudio or es_notaria or es_set):
             continue
         clave = "aud-" + hashlib.md5(f"{de}|{asunto}|{e.get('date','')}".encode()).hexdigest()
         if await db.hitos_externos.find_one({"clave": clave}):
@@ -1062,7 +1112,7 @@ async def _auditar_lote(correos):
         elif es_notaria:
             # RADAR ESCRITURACIÓN: envío a notaría / cesión / firma serie de créditos
             marcas = {"escritura_notaria_detectada_at": e.get("date") or _now()}
-            if any(k in texto.lower() for k in ("cesión", "cesion", "serie de crédito", "serie de credito", "firma confirmada")):
+            if FIRMA_REAL_RE.search(texto):
                 marcas["firma_cesion_confirmada_at"] = e.get("date") or _now()
             fecha_f = _capturar_fecha(texto)
             if fecha_f and not (await db.folders.find_one({"id": fd["id"]}, {"fecha_firma": 1}) or {}).get("fecha_firma"):
@@ -1463,10 +1513,9 @@ def _estado_estudio(fd):
 
 
 def _estado_cesion(fd):
-    firmas = fd.get("firmas_log") or {}
-    todas = firmas and all(v == "firmado" for v in firmas.values())
-    if (fd.get("firma_cesion_confirmada_at") or fd.get("escritura_confirmada_at")
-            or fd.get("escritura_notaria_detectada_at") or todas):
+    """REGLA DE HIERRO: 'Confirmada' SOLO con evidencia real de firma detectada en un
+    correo de la fuente configurada. Actividad de notaría o inferencias NO confirman."""
+    if fd.get("firma_cesion_confirmada_at") or fd.get("escritura_confirmada_at"):
         return "Confirmada"
     return "Pendiente"
 
@@ -1567,16 +1616,74 @@ async def flota_definir(request: Request, payload: dict):
             "regla_hierro": "Solo existen estos clientes en las vistas activas hasta nueva autorización"}
 
 
+_AVANCE_OK_RE = re.compile(
+    r"(aprobad|firmad[ao]|verificado\b|informe recibido|recibid[ao]|confirmad[ao]|limpio|inscrita)", re.I)
+
+
+async def _avance_notificar(mes_sel, clientes, pct_global):
+    """Notifica a Rodrigo Ibáñez (100% por cliente) y a Gerencia General (hitos 50/75/100%)."""
+    try:
+        cfg = await db.config.find_one({"_key": f"avance_hitos_{mes_sel}"}) or {}
+        upd, notif100 = {}, list(cfg.get("clientes_100") or [])
+        for c in clientes:
+            if (c.get("avance") or {}).get("pct", 0) >= 100 and c["id"] not in notif100:
+                await db.alertas.insert_one({"id": str(uuid.uuid4()), "tipo": "avance_100",
+                    "mensaje": f"🏆 Cliente {c['cliente']} ha completado todas las etapas. "
+                               f"Crédito listo para escriturar. UF: {c.get('monto_uf') or 0}",
+                    "fecha": _now(), "leida": False, "destino": "gerencia"})
+                notif100.append(c["id"])
+                upd["clientes_100"] = notif100
+        for hito in (50, 75, 100):
+            if pct_global >= hito and not cfg.get(f"hito_{hito}"):
+                await db.alertas.insert_one({"id": str(uuid.uuid4()), "tipo": "avance_global",
+                    "mensaje": f"📈 Proyección {mes_sel}: el cumplimiento global superó el {hito}% "
+                               f"(actual: {pct_global}%). Hito informado a Gerencia General.",
+                    "fecha": _now(), "leida": False, "destino": "gerencia_general"})
+                upd[f"hito_{hito}"] = _now()
+        if upd:
+            await db.config.update_one({"_key": f"avance_hitos_{mes_sel}"}, {"$set": upd}, upsert=True)
+    except Exception as e:
+        logging.warning(f"avance notificar: {e}")
+
+
+async def avance_snapshot_loop():
+    """HISTÓRICO DE AVANCE: foto diaria del % de cada cliente, guardada en ADN_CLIENTES_360."""
+    import adn_clientes as _adn
+    await asyncio.sleep(300)
+    while True:
+        try:
+            hoy = _now()[:10]
+            cfg = await db.config.find_one({"_key": "avance_snapshot"}) or {}
+            if cfg.get("dia") != hoy:
+                meses = {m for m in await db.folders.distinct("mes_proyeccion") if m} | {"2026-08"}
+                for mes_s in meses:
+                    data = await supercarpeta_vista(mes_s)
+                    for c in data.get("clientes", []):
+                        if c.get("rut"):
+                            await db.adn_clientes_360.update_one(
+                                {"rut_norm": _adn._norm_rut(c["rut"])},
+                                {"$push": {"avance_historico": {"fecha": hoy, "mes": mes_s,
+                                           "pct": (c.get("avance") or {}).get("pct", 0)}}})
+                await db.config.update_one({"_key": "avance_snapshot"},
+                                           {"$set": {"dia": hoy, "en": _now()}}, upsert=True)
+        except Exception as e:
+            logging.warning(f"avance snapshot: {e}")
+        await asyncio.sleep(3600)
+
+
 @supercarpeta.get("")
-async def supercarpeta_vista():
-    """Regla #55 (V3): consulta directa a la Bóveda ADN_CLIENTES_360 — sin escanear PDFs físicos."""
+async def supercarpeta_vista(mes: str = ""):
+    """Regla #55 (V3): consulta directa a la Bóveda ADN_CLIENTES_360 — sin escanear PDFs físicos.
+    NAVEGACIÓN MENSUAL: ?mes=YYYY-MM muestra la proyección de ese mes (bóveda compartida)."""
     from datetime import timedelta
     import adn_clientes as _adn
-    from base_historica import validar_rut_chileno as _vrut
-    mes = datetime.now(timezone.utc).strftime("%Y-%m")
+    from base_historica import validar_rut_chileno as _vrut, _fmt_rut
+    mes_cal = datetime.now(timezone.utc).strftime("%Y-%m")
+    mes_sel = (mes or "").strip() or "2026-08"
     limite24 = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
     flota_cfg = await db.config.find_one({"_key": "flota_agosto"}) or {}
-    flota = {n.strip().upper() for n in (flota_cfg.get("nombres") or [])} if flota_cfg.get("activo") else set()
+    flota = ({n.strip().upper() for n in (flota_cfg.get("nombres") or [])}
+             if flota_cfg.get("activo") and mes_sel == "2026-08" else set())
     adn_map = {}
     async for r in db.adn_clientes_360.find({}, {"rut_norm": 1, "rut": 1, "expediente_360": 1,
                                                  "actualizado": 1, "identidad": 1, "propiedad": 1,
@@ -1587,13 +1694,15 @@ async def supercarpeta_vista():
         nombre_u = (fd.get("nombre") or "").strip().upper()
         if fd.get("oculto_supercarpeta"):
             continue  # P10: eliminado de la vista por Gerencia (ficha ADN intacta)
+        if (fd.get("mes_proyeccion") or "2026-08") != mes_sel:
+            continue  # NAVEGACIÓN MENSUAL: cada mes muestra solo su proyección
         if flota:
             # REGLA DE HIERRO (Flota Agosto): solo existe la flota autorizada
             if not any(nf in nombre_u or nombre_u in nf for nf in flota):
                 continue
-        else:
+        elif mes_sel == "2026-08":
             act = (fd.get("updated_at") or fd.get("created") or fd.get("created_at") or "")[:7]
-            if act != mes and not (fd.get("datos_financieros") or {}).get("monto_credito"):
+            if act != mes_cal and not (fd.get("datos_financieros") or {}).get("monto_credito"):
                 continue
         reg = adn_map.get(_adn._norm_rut(fd.get("rut"))) or {}
         exp = reg.get("expediente_360") or {}
@@ -1665,6 +1774,11 @@ async def supercarpeta_vista():
         prop_adn = reg.get("propiedad") or {}
         exp_prop = exp.get("propiedad") or {}
         ident = reg.get("identidad") or {}
+        fin_adn = reg.get("financiero") or {}
+        monto_v = fd.get("proyeccion_uf") or fin_adn.get("monto_credito_uf")
+        sub_adn = fin_adn.get("con_subsidio")
+        subsidio_v = (fd.get("subsidio_proyeccion")
+                      or ("Con Subsidio" if sub_adn is True else "Sin Subsidio" if sub_adn is False else ""))
         rut_v = fd.get("rut") or reg.get("rut") or ""
         tipo_op = (fd.get("tipo_operacion") or prop_adn.get("tipo_operacion") or "").lower()
         inmo_dato = (fd.get("inmobiliaria") or prop_adn.get("inmobiliaria")
@@ -1697,7 +1811,7 @@ async def supercarpeta_vista():
             faltantes.append("inmobiliaria")
         if not broker_v:
             faltantes.append("broker")
-        if not fd.get("proyeccion_uf"):
+        if not monto_v:
             faltantes.append("monto")
         if not proyecto_v:
             faltantes.append("proyecto")
@@ -1713,7 +1827,33 @@ async def supercarpeta_vista():
         except Exception:
             bit = {}
         fechas = [v["fecha"] for v in inf.values() if v["disponible"]]
-        clientes.append({"id": fd["id"], "cliente": fd.get("nombre"), "rut": rut_v,
+        # ── AVANCE POR CLIENTE (Regla de Hierro): solo etapas realmente completadas ──
+        con_sub_av = "con" in subsidio_v.lower()
+        etapas_av = [
+            ("docs", "Documentos Comerciales recibidos y actualizados", 15,
+             bool(fd.get("datos_financieros_ocr_fecha"))),
+            ("tasacion", "Tasación aprobada", 15, bool(_AVANCE_OK_RE.search(est_tas or ""))),
+            ("estudio", "Estudio de Títulos aprobado", 20, est_estudio in ("Aprobado", "Aprobada")),
+            ("serviu", "Resolución Serviu aprobada", 15, bool(_AVANCE_OK_RE.search(est_serviu or ""))),
+            ("set", "Cédula de Crédito (SET) firmada y verificada", 15,
+             bool(re.search(r"firmad|verificado\b|aprobad", set_est or "", re.I))
+             and "esperando" not in (set_est or "").lower()),
+            ("borrador", "Borrador de Escritura listo en Notaría", 10,
+             est_carpeta == "Enviada" or inf["borrador"]["disponible"]),
+            ("escritura", "Firma de Escritura en Notaría", 10, est_escritura == "Firmada"),
+        ]
+        if not con_sub_av:
+            etapas_av = [e for e in etapas_av if e[0] != "serviu"]
+        peso_tot = sum(e[2] for e in etapas_av) or 1
+        avance_pct = round(sum(e[2] for e in etapas_av if e[3]) * 100 / peso_tot)
+        avance = {"pct": avance_pct,
+                  "etapas": [{"clave": k, "etapa": lb, "peso": round(p * 100 / peso_tot, 1),
+                              "completada": ok_} for k, lb, p, ok_ in etapas_av]}
+        clientes.append({"id": fd["id"], "cliente": fd.get("nombre"),
+                         "avance": avance,
+                         "rut": _fmt_rut(rut_v) if _vrut(rut_v) else (rut_v or ""),
+                         "manual_identidad": list((fd.get("ingreso_manual") or {}).keys()),
+                         "arrastre": fd.get("arrastre_desde") or "",
                          "inmobiliaria": inmobiliaria,
                          "proyecto": proyecto_v,
                          "ciudad": ciudad_v or "Por Confirmar",
@@ -1722,8 +1862,8 @@ async def supercarpeta_vista():
                          "alerta_reparos": bool(fd.get("alerta_reparos_sin_procesar")),
                          "broker": broker_v or "",
                          "broker_origen": broker_v or inmobiliaria,
-                         "monto_uf": fd.get("proyeccion_uf"),
-                         "subsidio": fd.get("subsidio_proyeccion") or "",
+                         "monto_uf": monto_v,
+                         "subsidio": subsidio_v,
                          "reactivacion": bool(fd.get("reactivacion")),
                          "faltantes": faltantes,
                          "contacto": {"email": ident.get("email") or "",
@@ -1737,7 +1877,7 @@ async def supercarpeta_vista():
                          "serviu": est_serviu, "promesa": est_promesa,
                          "carpeta_notaria": est_carpeta, "escritura": est_escritura,
                          "fecha_firma": fd.get("fecha_firma") or fd.get("fecha_firma_detectada") or "",
-                         "con_subsidio": "con" in (fd.get("subsidio_proyeccion") or "").lower(),
+                         "con_subsidio": "con" in subsidio_v.lower(),
                          "set_credito": {"estado": set_est,
                                          "evidencia": fd.get("set_credito_evidencia") or "",
                                          "asunto": fd.get("set_credito_asunto") or "",
@@ -1746,17 +1886,39 @@ async def supercarpeta_vista():
                          "bitacora": bit,
                          "en_adn": bool(reg),
                          "recien_24h": any(f >= limite24 for f in fechas)})
-    meta_cfg = await db.config.find_one({"_key": "proyeccion_agosto"}) or {}
-    meta_uf = meta_cfg.get("meta_uf") or 41717
+    if mes_sel == "2026-08":
+        meta_cfg = await db.config.find_one({"_key": "proyeccion_agosto"}) or {}
+        meta_uf = meta_cfg.get("meta_uf") or 41717
+    else:
+        meta_cfg = await db.config.find_one({"_key": f"proyeccion_{mes_sel}"})
+        if meta_cfg is None:
+            # PROYECCIÓN DEL MES: estructura creada automáticamente, lista para recibir clientes
+            await db.config.update_one({"_key": f"proyeccion_{mes_sel}"},
+                                       {"$setOnInsert": {"creada": _now(), "meta_uf": 0}}, upsert=True)
+            meta_cfg = {}
+        meta_uf = meta_cfg.get("meta_uf") or 0
     suma_uf = sum(c.get("monto_uf") or 0 for c in clientes)
     pendientes_monto = [c["cliente"] for c in clientes if not c.get("monto_uf")]
     proyeccion = {"meta_uf": meta_uf, "suma_uf": round(suma_uf, 1),
                   "avance_pct": round(suma_uf * 100 / meta_uf, 1) if meta_uf else 0,
                   "diferencia_uf": round(meta_uf - suma_uf, 1),
-                  "alerta_diferencia": bool(abs(meta_uf - suma_uf) > 0.5),
+                  "alerta_diferencia": bool(meta_uf and abs(meta_uf - suma_uf) > 0.5),
                   "pendientes_monto": pendientes_monto,
                   "broker": "Mutuaria y Leasing Limitada"}
-    return {"mes": mes, "clientes": clientes, "total": len(clientes),
+    meses = sorted({m for m in await db.folders.distinct("mes_proyeccion") if m} | {"2026-08", "2026-09"})
+    # ── META DE PROYECCIÓN: consolidado hacia Gerencia General y Rodrigo Ibáñez ──
+    avance_prom = round(sum((c.get("avance") or {}).get("pct", 0) for c in clientes) / len(clientes), 1) if clientes else 0
+    uf_en_avance = round(sum(c.get("monto_uf") or 0 for c in clientes if (c.get("avance") or {}).get("pct", 0) > 50), 1)
+    uf_cerradas = round(sum(c.get("monto_uf") or 0 for c in clientes if (c.get("avance") or {}).get("pct", 0) >= 100), 1)
+    pct_global = round(uf_cerradas * 100 / meta_uf, 1) if meta_uf else 0
+    proyeccion.update({"avance_promedio": avance_prom, "uf_en_avance": uf_en_avance,
+                       "uf_cerradas": uf_cerradas, "pct_global": pct_global})
+    await _avance_notificar(mes_sel, clientes, pct_global)
+    await db.config.update_one({"_key": f"avance_global_{mes_sel}"}, {"$set": {
+        "pct_global": pct_global, "avance_promedio": avance_prom, "uf_cerradas": uf_cerradas,
+        "uf_en_avance": uf_en_avance, "meta_uf": meta_uf, "actualizado": _now()}}, upsert=True)
+    return {"mes": mes_cal, "mes_proyeccion": mes_sel, "meses": meses,
+            "clientes": clientes, "total": len(clientes),
             "proyeccion": proyeccion,
             "flota_activa": bool(flota), "flota_total": len(flota),
             "fuente": "ADN_CLIENTES_360 (Regla #66) — sin escaneo de PDFs físicos",
@@ -1781,35 +1943,58 @@ def _exigir_gerencia(request):
 @supercarpeta.post("/manual/{fid}")
 async def supercarpeta_manual(fid: str, payload: dict, request: Request):
     """P6 — INGRESO MANUAL DE RESPALDO: alerta de fallo de cosecha. El dato se guarda
-    de inmediato en la carpeta y en la Bóveda ADN_CLIENTES_360 (Regla #67)."""
-    from base_historica import validar_rut_chileno
+    de inmediato en la carpeta y en la Bóveda ADN_CLIENTES_360 (Regla #67).
+    BITÁCORA: valor anterior, valor nuevo, fecha/hora y usuario (inmutable)."""
+    from base_historica import validar_rut_chileno, _fmt_rut
     user = getattr(request.state, "user", {}) or {}
     campo = (payload.get("campo") or "").strip().lower()
     valor = (payload.get("valor") or "").strip()
-    if campo not in ("rut", "inmobiliaria", "broker", "tipo_operacion", "monto",
-                     "proyecto", "ciudad", "notaria") or not valor:
+    if campo not in ("rut", "nombre", "inmobiliaria", "broker", "tipo_operacion", "monto",
+                     "proyecto", "ciudad", "notaria", "subsidio") or not valor:
         raise HTTPException(status_code=400, detail="Campo o valor inválido")
     fd = await db.folders.find_one({"id": fid})
     if not fd:
         raise HTTPException(status_code=404, detail="Carpeta no existe")
-    if campo == "rut" and not validar_rut_chileno(valor):
-        raise HTTPException(status_code=400,
-                            detail="RUT inválido: no pasa el Dígito Verificador (Regla #66)")
+    if campo == "rut":
+        if not validar_rut_chileno(valor):
+            raise HTTPException(status_code=400,
+                                detail="RUT inválido: no pasa el Dígito Verificador (Regla #66)")
+        valor = _fmt_rut(valor)
+    if campo == "nombre":
+        valor = valor.upper()
+        if len(valor) < 5 or len(valor.split()) < 2:
+            raise HTTPException(status_code=400, detail="Nombre inválido (nombre y apellido)")
     if campo == "monto":
         try:
             valor = float(str(valor).replace("$", "").replace(" ", "").replace(".", "").replace(",", "."))
         except Exception:
             raise HTTPException(status_code=400, detail="Monto UF inválido")
-    destino = {"rut": "rut", "inmobiliaria": "inmobiliaria",
+    destino = {"rut": "rut", "nombre": "nombre", "inmobiliaria": "inmobiliaria",
                "broker": "broker_origen", "tipo_operacion": "tipo_operacion",
                "monto": "proyeccion_uf", "proyecto": "proyecto", "ciudad": "ciudad",
-               "notaria": "notaria"}[campo]
+               "notaria": "notaria", "subsidio": "subsidio_proyeccion"}[campo]
+    anterior = fd.get(destino)
+    ahora = _now()
+    await db.estado_manual_log.insert_one({
+        "id": str(uuid.uuid4()), "folder_id": fid, "cliente": fd.get("nombre") or "",
+        "hito": f"identidad_{campo}", "estado_anterior": str(anterior or ""),
+        "estado_nuevo": str(valor), "por": user.get("sub") or "usuario",
+        "fecha": ahora, "inmutable": True})
     await db.folders.update_one({"id": fid}, {"$set": {
-        destino: valor, "updated_at": _now(),
-        f"ingreso_manual.{campo}": {"valor": valor, "por": user.get("sub") or "usuario", "en": _now()}}})
+        destino: valor, "updated_at": ahora,
+        f"ingreso_manual.{campo}": {"valor": valor, "anterior": anterior,
+                                    "por": user.get("sub") or "usuario", "en": ahora}}})
+    if campo == "nombre" and (fd.get("nombre") or "") != valor:
+        try:
+            viejo, nuevo = fsvc.folder_dir(fd.get("nombre") or ""), fsvc.folder_dir(valor)
+            if viejo.exists() and not nuevo.exists():
+                viejo.rename(nuevo)
+        except Exception:
+            pass
     en_adn = await _sync_adn(fid)
-    return {"ok": True, "campo": campo, "valor": valor, "en_adn": bool(en_adn),
-            "alerta": "Ingreso manual registrado: la cosecha automática falló para este campo (Regla #67)"}
+    return {"ok": True, "campo": campo, "valor": valor, "anterior": anterior,
+            "en_adn": bool(en_adn), "marca": "✏️ manual",
+            "alerta": "Ingreso manual registrado en bitácora inmutable (Regla #67)"}
 
 
 @supercarpeta.post("/estado/{fid}")
@@ -1976,6 +2161,400 @@ async def fuentes_doc_cliente(fid: str, payload: dict, request: Request):
     return {"ok": True, "cliente": fd.get("nombre"), "fuentes_doc": fdoc}
 
 
+# ── CUENTA DE BARRIDO (SOLO LECTURA) — categoría propia del Panel ⚙️ ────────
+def _dv_rut(cuerpo):
+    s, f = 0, 2
+    for d in reversed(cuerpo):
+        s += int(d) * f
+        f = 2 if f == 7 else f + 1
+    r = 11 - (s % 11)
+    return "0" if r == 11 else "k" if r == 10 else str(r)
+
+
+async def _cosechar_ruts_faltantes(correos):
+    """Regla #66: si un correo trae el nombre de un cliente SIN RUT + exactamente un
+    RUT válido (DV verificado), se cosecha y queda ESCRITO en carpeta + Bóveda ADN."""
+    sin_rut = await db.folders.find(
+        {"oculto_supercarpeta": {"$exists": False},
+         "$or": [{"rut": ""}, {"rut": None}, {"rut": {"$exists": False}}]},
+        {"id": 1, "nombre": 1}).to_list(200)
+    if not sin_rut:
+        return 0
+    usados = {_rut_limpio(f.get("rut")) async for f in db.folders.find({"rut": {"$nin": ["", None]}}, {"rut": 1})}
+    hallados = 0
+    for e in correos or []:
+        texto = f"{e.get('subject', '')} {e.get('body', '')}".lower()
+        ruts = list({_rut_limpio(m) for m in RUT_RE.findall(texto)})
+        ruts = [r for r in ruts if len(r) >= 8 and _dv_rut(r[:-1]) == r[-1] and r not in usados]
+        if len(ruts) != 1:
+            continue
+        for fd in list(sin_rut):
+            toks = [x for x in (fd.get("nombre") or "").lower().split() if len(x) > 2]
+            if len(toks) >= 2 and sum(1 for x in toks if x in texto) >= 2:
+                rut_fmt = f"{ruts[0][:-1]}-{ruts[0][-1].upper()}"
+                await db.folders.update_one({"id": fd["id"]}, {"$set": {
+                    "rut": rut_fmt, "rut_origen": "cuenta_barrido", "updated_at": _now()}})
+                await db.alertas.insert_one({"id": str(uuid.uuid4()), "tipo": "cuenta_barrido",
+                    "mensaje": f"🧬 RUT cosechado por la Cuenta de Barrido: {fd.get('nombre')} → {rut_fmt}",
+                    "fecha": _now(), "leida": False})
+                await _sync_adn(fd["id"])
+                sin_rut.remove(fd)
+                usados.add(ruts[0])
+                hallados += 1
+                break
+    return hallados
+
+
+async def _ejecutar_barrido_cuenta(dias, origen):
+    cfg = await db.config.find_one({"_key": "cuenta_barrido"}) or {}
+    rol = cfg.get("rol")
+    if not rol:
+        return {"error": "sin cuenta designada"}
+    await db.config.update_one({"_key": "cuenta_barrido"}, {"$set": {
+        "barrido_estado": "en_proceso", "barrido_inicio": _now(), "barrido_origen": origen}}, upsert=True)
+    try:
+        correos = await asyncio.to_thread(mail.fetch_recent_account, rol, dias)
+        res = await _auditar_lote(correos)
+        res["ruts_cosechados"] = await _cosechar_ruts_faltantes(correos)
+        resumen = {k: v for k, v in res.items() if k != "detalle"}
+        await db.config.update_one({"_key": "cuenta_barrido"}, {"$set": {
+            "barrido_estado": "completado", "ultima_lectura": _now(),
+            "barrido_origen": origen, "ultimo_resultado": resumen}}, upsert=True)
+        return resumen
+    except Exception as ex:
+        logging.warning(f"barrido cuenta: {ex}")
+        await db.config.update_one({"_key": "cuenta_barrido"}, {"$set": {
+            "barrido_estado": f"error: {str(ex)[:120]}", "ultima_lectura": _now()}}, upsert=True)
+        return {"error": str(ex)[:200]}
+
+
+@supercarpeta.get("/cuenta-barrido")
+async def cuenta_barrido_get():
+    cfg = await db.config.find_one({"_key": "cuenta_barrido"}, {"_id": 0}) or {}
+    disponibles = [{"rol": a["rol"], "correo": a["user"]} for a in mail.ACCOUNTS]
+    correo = next((a["user"] for a in mail.ACCOUNTS if a["rol"] == cfg.get("rol")), "")
+    return {"configurada": bool(cfg.get("rol")), "rol": cfg.get("rol", ""), "correo": correo,
+            "activo": cfg.get("activo", True), "modo": "solo_lectura",
+            "ultima_lectura": cfg.get("ultima_lectura", ""),
+            "barrido_estado": cfg.get("barrido_estado", ""),
+            "ultimo_resultado": cfg.get("ultimo_resultado") or {},
+            "cuentas_disponibles": disponibles,
+            "nota": "Lectura BODY.PEEK (solo lectura): jamás marca, mueve ni envía correos"}
+
+
+@supercarpeta.post("/cuenta-barrido")
+async def cuenta_barrido_set(payload: dict, request: Request):
+    """Designa la casilla existente que actúa como Cuenta de Barrido (Solo Lectura)."""
+    user = _exigir_gerencia(request)
+    rol = (payload.get("rol") or "").strip().lower()
+    if rol and rol not in [a["rol"] for a in mail.ACCOUNTS]:
+        raise HTTPException(status_code=400, detail="Esa cuenta no existe en el sistema")
+    upd = {"actualizado": _now(), "por": user.get("sub") or "gerencia"}
+    if rol:
+        upd["rol"] = rol
+    if "activo" in payload:
+        upd["activo"] = bool(payload.get("activo"))
+    await db.config.update_one({"_key": "cuenta_barrido"}, {"$set": upd}, upsert=True)
+    correo = next((a["user"] for a in mail.ACCOUNTS if a["rol"] == rol), "")
+    if rol:
+        await _log_fuente(user, "cuenta_barrido", "todas", "designar", correo,
+                          "Cuenta de Barrido (Solo Lectura)")
+    cfg = await db.config.find_one({"_key": "cuenta_barrido"}) or {}
+    return {"ok": True, "rol": cfg.get("rol", ""), "correo": correo or "",
+            "activo": cfg.get("activo", True)}
+
+
+@supercarpeta.post("/cuenta-barrido/barrer")
+async def cuenta_barrido_barrer(request: Request, dias: int = 7):
+    """Barrido manual 'Barrer ahora': corre en segundo plano (solo lectura)."""
+    _exigir_gerencia(request)
+    cfg = await db.config.find_one({"_key": "cuenta_barrido"}) or {}
+    if not cfg.get("rol"):
+        raise HTTPException(status_code=400, detail="Primero designa la cuenta de barrido en el Panel ⚙️")
+    d = min(max(int(dias or 7), 1), 90)
+    asyncio.create_task(_ejecutar_barrido_cuenta(d, "manual"))
+    return {"ok": True, "lanzado": True, "dias": d,
+            "seguimiento": "GET /api/supercarpeta/cuenta-barrido"}
+
+
+async def cuenta_barrido_loop():
+    """Cada 20 min barre la cuenta designada (solo lectura) y persiste cada hallazgo
+    en la carpeta y la Bóveda ADN (estados, PDFs firmados, RUTs, notaría)."""
+    await asyncio.sleep(200)
+    while True:
+        try:
+            cfg = await db.config.find_one({"_key": "cuenta_barrido"}) or {}
+            if cfg.get("rol") and cfg.get("activo", True):
+                await _ejecutar_barrido_cuenta(2, "automatico")
+        except Exception as e:
+            logging.warning(f"cuenta barrido loop: {e}")
+        await asyncio.sleep(1200)
+
+
+# ── AUDITORÍA DE BÓVEDA (Regla de Hierro): RUT en 4 fuentes + campos de identidad ──
+def _rut_en_pdfs(nombre):
+    """Busca un RUT válido (DV verificado) en el texto de los PDFs del cliente."""
+    from base_historica import validar_rut_chileno as _v
+    base = fsvc.folder_dir(nombre or "")
+    if not base.exists():
+        return "", ""
+    from pypdf import PdfReader
+    for p in sorted(base.rglob("*.pdf"))[:40]:
+        try:
+            rd = PdfReader(str(p))
+            texto = ""
+            for pg in rd.pages[:5]:
+                texto += pg.extract_text() or ""
+            for m in RUT_RE.findall(texto):
+                if _v(m):
+                    return m, p.name
+        except Exception:
+            continue
+    return "", ""
+
+
+async def _buscar_rut_cliente(fd, usados):
+    """Orden obligatorio: 1) ficha ADN → 2) EXPEDIENTE_360 → 3) documentos → 4) correos 90d."""
+    from base_historica import validar_rut_chileno as _v
+    import json as _json
+    nombre = (fd.get("nombre") or "").strip()
+    toks = [t for t in nombre.lower().split() if len(t) > 2][:2]
+    reg = None
+    if toks:
+        rx = ".*".join(re.escape(t) for t in toks)
+        reg = await db.adn_clientes_360.find_one({"identidad.nombre": {"$regex": rx, "$options": "i"}})
+    if reg and _v(reg.get("rut")) and _rut_limpio(reg["rut"]) not in usados:
+        return reg["rut"], "ficha ADN_CLIENTES_360"
+    if reg:
+        blob = _json.dumps(reg.get("expediente_360") or {}, ensure_ascii=False, default=str)
+        for m in RUT_RE.findall(blob):
+            if _v(m) and _rut_limpio(m) not in usados:
+                return m, "EXPEDIENTE_360"
+    rut_doc, archivo = await asyncio.to_thread(_rut_en_pdfs, nombre)
+    if rut_doc and _rut_limpio(rut_doc) not in usados:
+        return rut_doc, f"documento ({archivo})"
+    try:
+        correos = await asyncio.to_thread(mail.fetch_since_text, 90, nombre, 15)
+        for e in correos or []:
+            texto = f"{e.get('subject', '')} {e.get('body', '')}"
+            for m in RUT_RE.findall(texto):
+                if _v(m) and _rut_limpio(m) not in usados:
+                    return m, f"correo ({(e.get('subject') or '')[:60]})"
+    except Exception:
+        pass
+    return "", ""
+
+
+async def _auditoria_boveda_run(user_sub):
+    """Audita los clientes activos de la flota: RUT (4 fuentes, escritura obligatoria)
+    + campos de identidad. Cada hallazgo se ESCRIBE en la Bóveda ADN (Regla #66/#67)."""
+    from base_historica import validar_rut_chileno as _v, _fmt_rut
+    await db.config.update_one({"_key": "auditoria_boveda"}, {"$set": {
+        "estado": "en_proceso", "inicio": _now()}}, upsert=True)
+    try:
+        flota_cfg = await db.config.find_one({"_key": "flota_agosto"}) or {}
+        flota = {n.strip().upper() for n in (flota_cfg.get("nombres") or [])}
+        folders = []
+        async for fd in db.folders.find({"oculto_supercarpeta": {"$exists": False}}):
+            nu = (fd.get("nombre") or "").strip().upper()
+            if not flota or any(nf in nu or nu in nf for nf in flota):
+                folders.append(fd)
+        usados = {_rut_limpio(f.get("rut")) for f in folders if _v(f.get("rut"))}
+        rep = {"clientes_auditados": len(folders), "con_rut_boveda": 0, "sin_rut_inicial": 0,
+               "ruts_encontrados": [], "ruts_por_confirmar": [],
+               "campos_vacios": 0, "campos_poblados": 0, "detalle_campos": [], "fecha": _now()}
+        for fd in folders:
+            ahora = _now()
+            if _v(fd.get("rut")):
+                rep["con_rut_boveda"] += 1
+                await _sync_adn(fd["id"])
+            else:
+                rep["sin_rut_inicial"] += 1
+                rut, fuente = await _buscar_rut_cliente(fd, usados)
+                if rut:
+                    rut_f = _fmt_rut(rut)
+                    usados.add(_rut_limpio(rut))
+                    await db.folders.update_one({"id": fd["id"]}, {"$set": {
+                        "rut": rut_f, "rut_origen": f"auditoria_boveda:{fuente}", "updated_at": ahora}})
+                    await db.estado_manual_log.insert_one({
+                        "id": str(uuid.uuid4()), "folder_id": fd["id"], "cliente": fd.get("nombre") or "",
+                        "hito": "identidad_rut", "estado_anterior": str(fd.get("rut") or ""),
+                        "estado_nuevo": rut_f, "por": f"auditoria_boveda ({user_sub})",
+                        "fecha": ahora, "inmutable": True})
+                    await _sync_adn(fd["id"])
+                    rep["ruts_encontrados"].append({"cliente": fd.get("nombre"), "rut": rut_f, "fuente": fuente})
+                else:
+                    await db.alertas.insert_one({"id": str(uuid.uuid4()), "tipo": "auditoria_boveda",
+                        "mensaje": f"🔴 RUT Por Confirmar: {fd.get('nombre')} — no está en ficha ADN, "
+                                   f"EXPEDIENTE_360, documentos ni correos de 90 días. Requiere ingreso manual.",
+                        "fecha": ahora, "leida": False})
+                    rep["ruts_por_confirmar"].append(fd.get("nombre"))
+            # ── Campos de identidad: si está vacío en carpeta pero existe en ADN, se escribe ──
+            rut_actual = fd.get("rut")
+            if not _v(rut_actual):
+                rut_actual = next((x["rut"] for x in rep["ruts_encontrados"]
+                                   if x["cliente"] == fd.get("nombre")), None)
+            reg = await db.adn_clientes_360.find_one({"rut_norm": _adn_norm(rut_actual)}) if rut_actual else None
+            prop = (reg or {}).get("propiedad") or {}
+            exp_p = ((reg or {}).get("expediente_360") or {}).get("propiedad") or {}
+            ident = (reg or {}).get("identidad") or {}
+            fuentes_campo = {
+                "inmobiliaria": prop.get("inmobiliaria") or exp_p.get("inmobiliaria") or "",
+                "proyecto": prop.get("proyecto") or exp_p.get("proyecto") or "",
+                "ciudad": ident.get("ciudad") or exp_p.get("comuna") or prop.get("comuna") or "",
+                "broker_origen": "Mutuaria y Leasing Limitada" if flota else "",
+                "notaria": exp_p.get("notaria") or ""}
+            upd = {}
+            for campo, valor in fuentes_campo.items():
+                if fd.get(campo):
+                    continue
+                if campo == "inmobiliaria" and "usad" in (fd.get("tipo_operacion") or "").lower():
+                    continue
+                rep["campos_vacios"] += 1
+                if valor:
+                    upd[campo] = valor
+                    rep["campos_poblados"] += 1
+                    rep["detalle_campos"].append({"cliente": fd.get("nombre"), "campo": campo, "valor": valor})
+            fin_a = (reg or {}).get("financiero") or {}
+            if not fd.get("proyeccion_uf"):
+                rep["campos_vacios"] += 1
+                if fin_a.get("monto_credito_uf"):
+                    upd["proyeccion_uf"] = fin_a["monto_credito_uf"]
+                    rep["campos_poblados"] += 1
+                    rep["detalle_campos"].append({"cliente": fd.get("nombre"), "campo": "monto_uf",
+                                                  "valor": fin_a["monto_credito_uf"]})
+            if not fd.get("subsidio_proyeccion"):
+                rep["campos_vacios"] += 1
+                if fin_a.get("con_subsidio") is not None:
+                    sub_v = "Con Subsidio" if fin_a["con_subsidio"] else "Sin Subsidio"
+                    upd["subsidio_proyeccion"] = sub_v
+                    rep["campos_poblados"] += 1
+                    rep["detalle_campos"].append({"cliente": fd.get("nombre"), "campo": "subsidio", "valor": sub_v})
+            if upd:
+                await db.folders.update_one({"id": fd["id"]}, {"$set": {**upd, "updated_at": ahora}})
+                await _sync_adn(fd["id"])
+        rep["requieren_ingreso_manual"] = len(rep["ruts_por_confirmar"])
+        await db.config.update_one({"_key": "auditoria_boveda"}, {"$set": {
+            "estado": "completado", "ultima": _now(), "reporte": rep}}, upsert=True)
+        return rep
+    except Exception as ex:
+        logging.warning(f"auditoria boveda: {ex}")
+        await db.config.update_one({"_key": "auditoria_boveda"}, {"$set": {
+            "estado": f"error: {str(ex)[:120]}", "ultima": _now()}}, upsert=True)
+        return {"error": str(ex)[:200]}
+
+
+def _adn_norm(rut):
+    import adn_clientes as _adn
+    return _adn._norm_rut(rut)
+
+
+@supercarpeta.post("/auditoria-boveda")
+async def auditoria_boveda_post(request: Request):
+    """REGLA DE HIERRO: un cliente sin RUT es falla crítica — auditoría en segundo plano."""
+    user = _exigir_gerencia(request)
+    asyncio.create_task(_auditoria_boveda_run(user.get("sub") or "gerencia"))
+    return {"ok": True, "lanzada": True, "seguimiento": "GET /api/supercarpeta/auditoria-boveda"}
+
+
+@supercarpeta.get("/auditoria-boveda")
+async def auditoria_boveda_get():
+    return await db.config.find_one({"_key": "auditoria_boveda"}, {"_id": 0}) or {"estado": "nunca_ejecutada"}
+
+
+async def migracion_reset_firmas():
+    """LIMPIEZA DE ESTADOS FALSOS (una sola vez por BD): resetea TODA firma a Pendiente.
+    Solo un correo fuente con evidencia real podrá volver a marcarla (bitácora incluida)."""
+    if await db.config.find_one({"_key": "migracion_reset_firmas_v1"}):
+        return
+    reseteados = 0
+    async for fd in db.folders.find({"$or": [
+            {"escritura_confirmada_at": {"$exists": True}},
+            {"firma_cesion_confirmada_at": {"$exists": True}},
+            {"fecha_firma_detectada": {"$exists": True}},
+            {"estado_manual.cesion.estado": {"$regex": "firm|confirm", "$options": "i"}},
+            {"estado_manual.escritura.estado": {"$regex": "firm|confirm", "$options": "i"}}]}):
+        unset = {k: "" for k in ("escritura_confirmada_at", "firma_cesion_confirmada_at",
+                                 "fecha_firma_detectada") if fd.get(k)}
+        em = fd.get("estado_manual") or {}
+        for h in ("cesion", "escritura"):
+            est = ((em.get(h) or {}).get("estado") or "")
+            if re.search(r"firm|confirm", est, re.I):
+                unset[f"estado_manual.{h}"] = ""
+                await db.estado_manual_log.insert_one({
+                    "id": str(uuid.uuid4()), "folder_id": fd["id"],
+                    "cliente": fd.get("nombre") or "", "hito": h,
+                    "estado_anterior": est, "estado_nuevo": "Pendiente",
+                    "por": "sistema (limpieza de estados falsos de firma)",
+                    "fecha": _now(), "inmutable": True})
+        if unset:
+            await db.folders.update_one({"id": fd["id"]}, {"$unset": unset})
+            reseteados += 1
+            await db.estado_manual_log.insert_one({
+                "id": str(uuid.uuid4()), "folder_id": fd["id"],
+                "cliente": fd.get("nombre") or "", "hito": "firma",
+                "estado_anterior": "estado de firma sin respaldo de correo fuente",
+                "estado_nuevo": "Pendiente",
+                "por": "sistema (Regla de Hierro: la firma solo se confirma desde correo)",
+                "fecha": _now(), "inmutable": True})
+    await db.config.update_one({"_key": "migracion_reset_firmas_v1"}, {"$set": {
+        "en": _now(), "carpetas_reseteadas": reseteados}}, upsert=True)
+    logging.info(f"🧹 Reset de firmas falsas: {reseteados} carpeta(s) devueltas a Pendiente")
+
+
+# ── REMITENTES DETECTADOS: revisión y control manual de la captura automática ──
+@supercarpeta.get("/remitentes-detectados")
+async def remitentes_detectados_get():
+    items = []
+    async for f in db.folders.find({"fuentes_detectadas": {"$exists": True}},
+                                   {"id": 1, "nombre": 1, "fuentes_detectadas": 1}):
+        for hito, lst in (f.get("fuentes_detectadas") or {}).items():
+            for d in lst or []:
+                items.append({**d, "cliente": f.get("nombre"), "folder_id": f["id"], "hito": hito})
+    items.sort(key=lambda x: x.get("primera_vez", ""), reverse=True)
+    bloqueados = (await db.config.find_one({"_key": "remitentes_bloqueados"}) or {}).get("correos") or []
+    registro = [r async for r in db.remitentes_registro.find({}, {"_id": 0}).sort("ultima", -1).limit(50)]
+    return {"detectados": items, "bloqueados": bloqueados, "registro": registro,
+            "hitos_validos": list(FUENTES_HITOS)}
+
+
+@supercarpeta.post("/remitentes-detectados/accion")
+async def remitentes_accion(payload: dict, request: Request):
+    """CONFIRMAR / REUBICAR / ELIMINAR / BLOQUEAR con aprendizaje acumulativo."""
+    user = _exigir_gerencia(request)
+    fid = payload.get("folder_id") or ""
+    hito = (payload.get("hito") or "").strip()
+    correo = (payload.get("correo") or "").strip().lower()
+    accion = (payload.get("accion") or "").strip().lower()
+    destino = (payload.get("hito_destino") or "").strip()
+    if accion not in ("confirmar", "reubicar", "eliminar", "bloquear") or not correo:
+        raise HTTPException(status_code=400, detail="Acción o correo inválido")
+    fd = await db.folders.find_one({"id": fid})
+    if not fd:
+        raise HTTPException(status_code=404, detail="Carpeta no existe")
+    await db.folders.update_one({"id": fid}, {"$pull": {f"fuentes_detectadas.{hito}": {"correo": correo}}})
+    if accion == "confirmar":
+        await db.folders.update_one({"id": fid}, {"$addToSet": {f"fuentes_doc.{hito}": correo}})
+    elif accion == "reubicar":
+        if destino not in FUENTES_HITOS:
+            raise HTTPException(status_code=400, detail=f"Hito destino inválido ({', '.join(FUENTES_HITOS)})")
+        await db.folders.update_one({"id": fid}, {"$addToSet": {f"fuentes_doc.{destino}": correo}})
+        reg = await db.remitentes_registro.find_one({"correo": correo}) or {}
+        seguidas = (reg.get("reubicaciones") or 0) + 1 if reg.get("ultimo_destino") == destino else 1
+        upd = {"ultimo_destino": destino, "reubicaciones": seguidas}
+        if seguidas >= 2:
+            upd["hito_forzado"] = destino  # aprendizaje permanente tras 2 correcciones iguales
+        await db.remitentes_registro.update_one({"correo": correo}, {"$set": upd}, upsert=True)
+    elif accion == "bloquear":
+        await db.config.update_one({"_key": "remitentes_bloqueados"},
+                                   {"$addToSet": {"correos": correo}}, upsert=True)
+    await _log_fuente(user, "remitente_detectado", destino or hito or "todas", accion, correo,
+                      "captura automática", fd.get("nombre") or "")
+    await _sync_adn(fid)
+    return {"ok": True, "accion": accion, "correo": correo,
+            "aprendizaje": "el sistema ajusta su criterio con cada corrección de Gerencia"}
+
+
 @supercarpeta.post("/cliente")
 async def supercarpeta_cliente_agregar(payload: dict, request: Request):
     """P10 — Gerencia agrega un cliente manualmente: crea la ficha y la suma a la vista.
@@ -2002,11 +2581,12 @@ async def supercarpeta_cliente_agregar(payload: dict, request: Request):
           "subsidio_proyeccion": (payload.get("subsidio") or "").strip(),
           "proyeccion_uf": monto,
           "broker_origen": (payload.get("broker") or "Mutuaria y Leasing Limitada").strip(),
+          "mes_proyeccion": ((payload.get("mes") or "").strip() or "2026-08"),
           "archivos": [], "created": ahora, "updated_at": ahora,
           "origen_alta": {"manual": True, "por": user.get("sub") or "gerencia", "en": ahora}}
     await db.folders.insert_one(dict(fd))
     cfg = await db.config.find_one({"_key": "flota_agosto"}) or {}
-    if cfg.get("activo"):
+    if cfg.get("activo") and fd["mes_proyeccion"] == "2026-08":
         await db.config.update_one({"_key": "flota_agosto"}, {"$addToSet": {"nombres": nombre}})
     await db.supercarpeta_log.insert_one({
         "id": str(uuid.uuid4()), "accion": "cliente_agregado", "folder_id": fd["id"],
@@ -2014,6 +2594,38 @@ async def supercarpeta_cliente_agregar(payload: dict, request: Request):
     await _sync_adn(fd["id"])
     return {"ok": True, "id": fd["id"], "cliente": nombre,
             "nota": "Ficha creada y agregada a la vista; queda en bitácora inmutable"}
+
+
+@supercarpeta.post("/mes-siguiente/{fid}")
+async def supercarpeta_mes_siguiente(fid: str, request: Request, payload: dict = None):
+    """TRASLADO MENSUAL: mueve al cliente a la proyección del mes siguiente conservando
+    TODOS sus datos y estados. NUNCA borra nada; la ficha ADN queda íntegra + bitácora."""
+    import adn_clientes as _adn
+    user = _exigir_gerencia(request)
+    fd = await db.folders.find_one({"id": fid})
+    if not fd:
+        raise HTTPException(status_code=404, detail="Carpeta no existe")
+    actual = fd.get("mes_proyeccion") or "2026-08"
+    y, m = int(actual[:4]), int(actual[5:7])
+    destino = (((payload or {}).get("mes_destino") or "").strip()
+               or (f"{y + 1}-01" if m == 12 else f"{y}-{m + 1:02d}"))
+    ahora = _now()
+    await db.folders.update_one({"id": fid}, {"$set": {
+        "mes_proyeccion": destino, "arrastre_desde": actual, "updated_at": ahora}})
+    await db.estado_manual_log.insert_one({
+        "id": str(uuid.uuid4()), "folder_id": fid, "cliente": fd.get("nombre") or "",
+        "hito": "traslado_mes", "estado_anterior": actual, "estado_nuevo": destino,
+        "por": user.get("sub") or "gerencia", "fecha": ahora, "inmutable": True})
+    await db.config.update_one({"_key": f"proyeccion_{destino}"},
+                               {"$setOnInsert": {"creada": ahora, "meta_uf": 0}}, upsert=True)
+    if fd.get("rut"):
+        await db.adn_clientes_360.update_one({"rut_norm": _adn._norm_rut(fd["rut"])}, {"$push": {
+            "traslados": {"de": actual, "a": destino, "fecha": ahora,
+                          "por": user.get("sub") or "gerencia"}}})
+    await _sync_adn(fid)
+    return {"ok": True, "cliente": fd.get("nombre"), "de": actual, "a": destino,
+            "etiqueta": f"Arrastre {actual}",
+            "regla": "El traslado nunca borra datos; la ficha ADN_CLIENTES_360 se conserva íntegra"}
 
 
 @supercarpeta.post("/cliente/{fid}/eliminar")

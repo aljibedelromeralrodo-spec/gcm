@@ -1,0 +1,27 @@
+{
+  "summary": "Iteración 35 — Backend 5/5 pytest OK (100%): GET /api/gestion-ejecutivos devuelve modulos {daniela,victoria,postventa} con las claves exigidas (nombre,hoy,semana,mes,por_hora[24],tipos,clientes_hoy,cumplimiento_pct,alerta_incompleto) + postventa.{casos_activos,resueltos_hoy,tiempo_promedio_dias} + consolidado.{total_hoy,mas_activo,comparativa_semanal[7],alertas_baja_actividad} + ultima_actualizacion; POST /gestion-ejecutivos/fuentes agregar/quitar victoria.vilche@centralmutuos.cl OK con bitácora en db.gestion_fuentes_log; GET /supercarpeta/remitentes-detectados con {detectados,bloqueados,registro,hitos_validos incluye tasacion}; POST accion=confirmar mueve test.remitente@qa.cl a fuentes_doc.tasacion; POST accion=bloquear lo agrega a config.remitentes_bloqueados; limpieza total realizada; GET /supercarpeta?mes=2026-08 sigue devolviendo 17 clientes con avance y proyeccion; GET /gerencia/cartera devuelve 17 filas con cumplimiento_broker. Frontend 100% para features solicitadas: LOGIN OK, tour+briefing dismiss OK, /nav-supercarpeta muestra 17 filas visibles (super-fila-* == 17, tbody tr == 17, visible height>0 == 17) — se ven todos los clientes de Agosto y el reporte del usuario 'no se ven' NO se reproduce en administrador/141617575; remitentes-btn abre remitentes-modal con texto 'captura automática' presente; /nav-gestion-ejecutivos monta gestion-ejecutivos-modulo con gestion-total-hoy (0), comparativa-semanal SVG visible, las 3 tarjetas (daniela/victoria/postventa) y gestion-postventa-extras visibles; gestion-fuentes-btn-daniela abre modal con input+botón AGREGAR FUENTE (mensaje 'Detección automática' solo se renderiza si la lista de fuentes está vacía — minor); /nav-gerencia muestra 15 headers exactos sin Doc 2.0/Firmas/Divergencia/Concreces/Mesa y sin 'Malla de Inteligencia', 17 filas. Ningún error de consola.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Gestión Ejecutivos — Modal Fuentes", "issues": ["El mensaje '🤖 Detección automática activa …' solo se muestra cuando el ejecutivo no tiene fuentes configuradas. Si ya tiene alguna dirección, el mensaje explicativo desaparece. Considerar mostrarlo siempre como pie del modal para reforzar la promesa de 'cero configuración'."]}
+    ]
+  },
+  "test_report_links": ["/app/tests/test_iteration_35.py", "/app/test_reports/pytest/iter35.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "gestion_ejecutivos._cosechar_gestiones (línea ~98) carga TODAS las carpetas en memoria con list-comprehension async; puede crecer sin control. OK para 91 folders actuales, pero paginar cuando la Bóveda escale.",
+    "gestion_ejecutivos.gestion_panel realiza N find() secuenciales por ejecutivo dentro de un handler HTTP; con 3 ejecutivos es aceptable, pero considerar agregar índice compuesto {ejecutivo, dia} en db.gestion_eventos para evitar full scan cuando el histórico crezca.",
+    "malla_inteligencia.remitentes_detectados_get NO filtra estado='pendiente_confirmacion': si un ítem quedó huérfano en fuentes_detectadas.<hito> tras confirmar/bloquear vía otro flujo, sigue apareciendo. La cobertura actual con $pull en `accion` mitiga, pero un job de limpieza mensual sería prudente.",
+    "GestionEjecutivosModule.js — todos los data-testid requeridos presentes; el mensaje 'Detección automática' es condicional (ver design_issues)."
+  ],
+  "updated_files": ["/app/tests/test_iteration_35.py (nuevo)"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "administrador / 141617575 (POST /api/auth/login body {rut, password})",
+  "seed_data_creation": "Ninguno persistente. Solo un ítem sintético temporal en folders.fuentes_detectadas.tasacion (test.remitente@qa.cl) usado para probar confirmar y bloquear; LIMPIADO al final del test (fuentes_doc.tasacion pulled, fuentes_detectadas.tasacion pulled, config.remitentes_bloqueados pulled, remitentes_registro delete).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "iter35 completo. Backend gestion-ejecutivos + remitentes-detectados estables. Los 17 clientes de Agosto SE VEN correctamente en Supercarpeta (super-fila count == 17, todos con height>0). El reporte del usuario 'no se ven los clientes' NO se reproduce con administrador/141617575 en este entorno preview — puede ser específico a otro rol/sesión, otro navegador, cache, o resolución diferente. Regresiones iter34 (proyeccion.meses faltante, auditoria-boveda 1 vs 7 RUTs, onClick avance-modal en td padre) NO se retestearon en esta corrida — siguen abiertas. Test suite /app/tests/test_iteration_35.py está fuera de /app/backend para evitar reload de uvicorn.",
+  "rca_no_se_ven_clientes": "No reproducido: DOM contiene 17 <tr data-testid='super-fila-*'> con height>0 y width>0 dentro del contenedor de scroll de supercarpeta-tabla. Posibles causas si el usuario aún lo reporta: (a) cliente autenticado como otro rol distinto de admin/gerencia (Supercarpeta puede filtrar por permisos), (b) filtros previos guardados en sessionStorage/localStorage, (c) viewport móvil comprime el header sticky y esconde filas iniciales, (d) contenedor con overflow:hidden en algún wrapper padre. Recomendar al main agent: agregar log 'super-render-count' visible al lado del selector de mes para diagnóstico en producción."
+}

@@ -1165,3 +1165,19 @@ Constitución VERSION 19 (nuevas reglas #55, #56, #57).
 - REGLA DE ORO UF (violación corregida): eliminado fallback mindicador.cl — SII EXCLUSIVO; si SII cae → último valor MongoDB + alerta discreta a Gerencia; eliminados defaults 39842/39000 (credit_engine._uf_oficial + UF_SII_CACHE).
 - CONSTITUCIÓN v26: Regla #67 (Supremacía Bóveda en pantalla) + Regla de Oro de Eficiencia perpetua (reutilizar, cambios quirúrgicos, arranque liviano).
 - FIXES: server.py cola duplicada corrupta (r(_hist_mod...)), constitucion.py duplicado, SupercarpetaModule panel state perdido (crash 'panel is not defined' reportado por testing iteration_33 — corregido y verificado sin referencias indefinidas).
+
+## 2026-08-14 (sesión fork — lote grande)
+- Cuenta de Barrido (solo lectura) en Panel ⚙️: designación de casilla existente, barrido manual + loop 20 min, cosecha de RUTs faltantes.
+- Auditoría de Bóveda (4 fuentes: ficha ADN → EXPEDIENTE_360 → PDFs → correos 90d): 7 RUTs encontrados y escritos; endpoint POST/GET /api/supercarpeta/auditoria-boveda + modal reporte.
+- Edición en línea (doble clic) de TODOS los campos de identidad con bitácora valor anterior/nuevo (estado_manual_log).
+- Reset de estados falsos de firma (migración v1) + FIRMA_REAL_RE: la firma SOLO se confirma con evidencia real de correo fuente.
+- Encabezados sticky dorados + columnas Cliente/RUT fijas (Supercarpeta y Gerencia).
+- Gerencia Comercial: orden inamovible de 14 columnas, botones de estado por color, columnas Doc2.0/Firmas/Divergencia/Concreces/Mesa ELIMINADAS por orden del usuario, feed Malla eliminado, filas compactas.
+- Navegación mensual (selector de mes), traslado "Pasar a Septiembre" con etiqueta Arrastre, eliminación por fila con confirmación (ficha ADN intacta).
+- Avance por cliente (7 etapas ponderadas, serviu redistribuido sin subsidio) + Panel de Meta (UF proyectadas/en avance/cerradas, % global) + notificaciones 100% cliente y hitos 50/75/100% + snapshot diario en ADN + sync cumplimiento_broker a Gerencia.
+- ORDEN SUPREMA: _hitos de Gerencia lee la bóveda con escritura obligatoria de vuelta + alerta roja de error de lectura (caso Miguel Escalona reparado).
+- Panel de Gestión por Ejecutivo (Daniela/Victoria/Postventa): detección automática por nombre desde las 2 casillas del admin (cero configuración), métricas hoy/semana/mes, barras por hora, tipos, clientes gestionados, comparativa semanal, extras postventa, privacidad absoluta (solo cabeceras).
+- Captura automática de remitentes por hito + panel 📡 Confirmar/Reubicar/Eliminar/Bloquear con aprendizaje acumulativo (2 correcciones = criterio permanente).
+- Limpieza total autorizada: 4 scripts huérfanos + 29 tests antiguos + backup storage + 4 carpetas prueba/duplicadas eliminadas; índice redundante drop; RUT falso de Carlos Salgado retirado (auditoría encontró el real 13.820.383-2 en ADN); inmobiliarias de la planilla oficial escritas en bóveda.
+- Fix cuelgue hot-reload: cancelación de loops de fondo en shutdown (_BG_TASKS).
+- Tests: iteration_34 (pass) e iteration_35 (100% backend+frontend, 17 clientes visibles verificados).

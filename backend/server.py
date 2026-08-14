@@ -191,9 +191,23 @@ async def _rescate_historico_loop():
         await asyncio.sleep(3 * 24 * 3600)
 
 
+_BG_TASKS = set()
+
+
+@app.on_event("shutdown")
+async def _cancelar_tareas_fondo():
+    """Evita cuelgues en hot-reload: cancela todos los loops de fondo al apagar."""
+    for t in list(_BG_TASKS):
+        t.cancel()
+
+
 async def _task_blindada(coro_fn, nombre):
     """Supervisor: si un loop de fondo muere por error, se registra y se reinicia solo.
     Si el loop retorna limpio (cliente Mongo cerrado en hot-reload), el supervisor termina."""
+    t = asyncio.current_task()
+    if t is not None:
+        _BG_TASKS.add(t)
+        t.add_done_callback(_BG_TASKS.discard)
     while True:
         try:
             await coro_fn()
@@ -260,6 +274,11 @@ async def startup():
     import malla_inteligencia as _malla
     asyncio.create_task(_task_blindada(_malla.malla_loop, "malla_inteligencia"))
     asyncio.create_task(_task_blindada(_malla.lector_ejecutivos_loop, "lector_ejecutivos"))
+    asyncio.create_task(_task_blindada(_malla.cuenta_barrido_loop, "cuenta_barrido"))
+    asyncio.create_task(_task_blindada(_malla.migracion_reset_firmas, "reset_firmas"))
+    asyncio.create_task(_task_blindada(_malla.avance_snapshot_loop, "avance_snapshot"))
+    import gestion_ejecutivos as _gest
+    asyncio.create_task(_task_blindada(_gest.gestion_harvest_loop, "gestion_ejecutivos"))
     asyncio.create_task(_task_blindada(_malla.buzon_aprendizaje_loop, "buzon_aprendizaje"))
     import grid_dashai as _grid
     asyncio.create_task(_task_blindada(_grid.grid_loop, "grid_dashai_forzado"))
@@ -269,7 +288,6 @@ async def startup():
     asyncio.create_task(_task_blindada(_tasacion_fecha_loop, "fecha_tasacion"))
     asyncio.create_task(_task_blindada(_cobro_tasacion_loop, "cobro_tasacion"))
     # DESACTIVADO (regla del usuario): los faltantes se piden solo manualmente
-    # asyncio.create_task(_task_blindada(_faltantes_recordatorio_loop, "recordatorio_faltantes"))
     asyncio.create_task(_task_blindada(_actividades_terminadas_loop, "actividades_terminadas"))
     asyncio.create_task(_task_blindada(_dashai_perpetuo_loop, "dashai_perpetuo"))
     asyncio.create_task(_task_blindada(_resumen_semanal_loop, "resumen_semanal"))
@@ -5920,66 +5938,6 @@ async def cobros_tasacion_list():
                         "monto_pagado_clp": _fmt_clp(pagadas * TASACION_COBRO_UF * uf),
                         "monto_pendiente_clp": _fmt_clp(pendientes * TASACION_COBRO_UF * uf)}}
 
-
-async def _faltantes_recordatorio_loop():
-    """Cada hora: mientras sigan faltando documentos, reenvía el recordatorio
-    CADA 3 días al mismo destinatario (vendedor/solicitante)."""
-    while True:
-        await asyncio.sleep(3600)
-        docs = await db.folders.find({"faltantes_pedidos_at": {"$exists": True, "$ne": None},
-                                      "source_email": {"$exists": True, "$nin": [None, ""]}}
-                                     ).limit(30).to_list(30)
-        for d in docs:
-            try:
-                if int(d.get("faltantes_recordatorio_count") or 0) >= 2:
-                    continue
-                ultimo = d.get("faltantes_recordatorio_at") or d["faltantes_pedidos_at"]
-                if _dias_desde(ultimo) < 3:
-                    continue
-                faltan = [c["nombre"] for c in _criterios_folder(d)
-                          if not c["ok"] and c["nombre"] not in ("Enviada a mesa", "Datos financieros completos")]
-                if not faltan:
-                    continue
-                nombre = d.get("nombre", "")
-                lis = "".join(f'<li style="margin:4px 0">{f}</li>' for f in faltan)
-                cuerpo = _marca_wrap(f"""
-                  <p>Estimados, junto con saludar:</p>
-                  <p>Le recordamos que para continuar con la evaluación de la solicitud de crédito de
-                  <b>{nombre}</b>{f" (RUT {d.get('rut')})" if d.get('rut') else ""} aún nos faltan los
-                  siguientes documentos:</p>
-                  <ol style="margin:6px 0 0;padding-left:22px;color:#111">{lis}</ol>
-                  <p style="margin-top:14px">Agradeceremos hacérnoslos llegar a la brevedad para no
-                  retrasar el proceso. Quedamos atentos. Muchas gracias.</p>
-                  <p style="margin-top:16px;color:#555">Saludos cordiales,</p>""",
-                  "Recordatorio — Documentos Faltantes")
-                res = await asyncio.to_thread(mail.send_mail, d["source_email"],
-                                              f"Recordatorio: Documentos faltantes — {nombre}",
-                                              cuerpo, [], "secundaria")
-                if res.get("success"):
-                    n = int(d.get("faltantes_recordatorio_count") or 0) + 1
-                    await db.folders.update_one({"id": d["id"]}, {"$set": {
-                        "faltantes_recordatorio_at": now_iso(),
-                        "faltantes_recordatorio_count": n}})
-                    await db.alertas.insert_one({
-                        "id": str(uuid.uuid4()), "tipo": "faltantes_recordatorio",
-                        "cliente": nombre, "folder_id": d["id"],
-                        "mensaje": f"⏰ Recordatorio {n}/2 de documentos faltantes enviado — {nombre}: {', '.join(faltan)}",
-                        "fecha": now_iso(), "leida": False})
-                    if n >= 2:
-                        aviso = _marca_wrap(f"""
-                          <p>Ya se enviaron <b>2 recordatorios</b> de documentos faltantes para la solicitud de
-                          crédito de <b>{nombre}</b>{f" (RUT {d.get('rut')})" if d.get('rut') else ""} sin respuesta.</p>
-                          <p>Documentos que siguen faltando:</p>
-                          <ol style="margin:6px 0 0;padding-left:22px;color:#111">{lis}</ol>
-                          <p style="margin-top:14px">No se enviarán más recordatorios automáticos.
-                          Se sugiere contactar directamente al solicitante: <b>{d.get('source_email','')}</b>.</p>""",
-                          "Tope de Recordatorios — Requiere Gestión Directa")
-                        await asyncio.to_thread(mail.send_mail, _sender_por_rol("principal"),
-                                                f"⚠️ Sin respuesta tras 2 recordatorios — {nombre}",
-                                                aviso, [], "principal")
-            except Exception as e:
-                logging.warning(f"recordatorio faltantes {d.get('nombre','')}: {e}")
-                continue
 
 
 @api.get("/gastos-operacionales/cobros-tasacion/historial")
@@ -13659,6 +13617,8 @@ api.include_router(_bodega_mod.control)
 
 # 🕸️ MALLA DE INTELIGENCIA + BROKERS + FLUJOS + MI CORREO (Reglas #34, #36, #37, #38)
 import malla_inteligencia as _malla_mod
+import gestion_ejecutivos as _gest_mod
+api.include_router(_gest_mod.gestion)
 api.include_router(_malla_mod.broker)
 api.include_router(_malla_mod.fuentes)
 api.include_router(_malla_mod.hitos)

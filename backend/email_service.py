@@ -482,6 +482,111 @@ def fetch_since_by_senders(dias=60, senders=None, limit_per=250):
     return out
 
 
+def _hdr_txt(v):
+    from email.header import decode_header
+    out = ""
+    try:
+        for p, enc in decode_header(v or ""):
+            out += p.decode(enc or "utf-8", errors="ignore") if isinstance(p, bytes) else str(p)
+    except Exception:
+        out = str(v or "")
+    return out
+
+
+def fetch_recent_headers(rol, dias=2, limit=150):
+    """GESTIÓN EJECUTIVOS: solo cabeceras (From/To/Subject/Date) — JAMÁS el contenido."""
+    acc = next((a for a in ACCOUNTS if a["rol"] == rol), None)
+    if not acc:
+        return []
+    from datetime import datetime, timezone, timedelta
+    fecha = (datetime.now(timezone.utc) - timedelta(days=max(int(dias or 1), 1))).strftime("%d-%b-%Y")
+    out = []
+    try:
+        m = _connect(acc)
+        m.select("INBOX", readonly=True)
+        typ, data = m.uid("search", None, "SINCE", fecha)
+        uids = (data[0] or b"").split()
+        for uid in sorted(uids, key=lambda x: int(x), reverse=True)[:limit]:
+            try:
+                typ, md = m.uid("fetch", uid, "(BODY.PEEK[HEADER.FIELDS (FROM TO CC SUBJECT DATE)])")
+                if not md or not isinstance(md[0], tuple):
+                    continue
+                msg = email.message_from_bytes(md[0][1])
+                out.append({"id": f"{acc['rol']}|{uid.decode()}",
+                            "from": _hdr_txt(msg.get("From", "")), "to": _hdr_txt(msg.get("To", "")),
+                            "cc": _hdr_txt(msg.get("Cc", "")),
+                            "subject": _hdr_txt(msg.get("Subject", "")), "date": msg.get("Date", "")})
+            except Exception:
+                continue
+        m.logout()
+    except Exception:
+        return out
+    return out
+
+
+def fetch_recent_account(rol, dias=7, limit=120):
+    """CUENTA DE BARRIDO (SOLO LECTURA): lee exclusivamente la cuenta designada.
+    BODY.PEEK + readonly — jamás marca, mueve ni envía correos desde esta casilla."""
+    acc = next((a for a in ACCOUNTS if a["rol"] == rol), None)
+    if not acc:
+        return []
+    from datetime import datetime, timezone, timedelta
+    fecha = (datetime.now(timezone.utc) - timedelta(days=max(int(dias or 1), 1))).strftime("%d-%b-%Y")
+    out = []
+    try:
+        m = _connect(acc)
+        m.select("INBOX", readonly=True)
+        typ, data = m.uid("search", None, "SINCE", fecha)
+        uids = (data[0] or b"").split()
+        for uid in sorted(uids, key=lambda x: int(x), reverse=True)[:limit]:
+            try:
+                typ, msgdata = m.uid("fetch", uid, "(BODY.PEEK[])")
+                if not msgdata or not isinstance(msgdata[0], tuple):
+                    continue
+                info = _parse_full_message(email.message_from_bytes(msgdata[0][1]))
+                info["id"] = f"{acc['rol']}|{uid.decode()}"
+                info["cuenta"] = acc["user"]
+                out.append(info)
+            except Exception:
+                continue
+        m.logout()
+    except Exception:
+        return out
+    out.sort(key=lambda e: e.get("date", ""), reverse=True)
+    return out
+
+
+def fetch_since_text(dias, texto, limit=15):
+    """AUDITORÍA DE BÓVEDA: busca en TODAS las cuentas correos de los últimos N días
+    que contengan el texto (ej. nombre del cliente). Solo lectura (BODY.PEEK)."""
+    if not configured() or not (texto or "").strip():
+        return []
+    from datetime import datetime, timezone, timedelta
+    fecha = (datetime.now(timezone.utc) - timedelta(days=max(int(dias or 1), 1))).strftime("%d-%b-%Y")
+    out = []
+    for acc in ACCOUNTS:
+        try:
+            m = _connect(acc)
+            m.select("INBOX", readonly=True)
+            typ, data = m.uid("search", None, "SINCE", fecha, "TEXT", f'"{texto.strip()}"')
+            uids = (data[0] or b"").split()
+            for uid in sorted(uids, key=lambda x: int(x), reverse=True)[:limit]:
+                try:
+                    typ, msgdata = m.uid("fetch", uid, "(BODY.PEEK[])")
+                    if not msgdata or not isinstance(msgdata[0], tuple):
+                        continue
+                    info = _parse_full_message(email.message_from_bytes(msgdata[0][1]))
+                    info["id"] = f"{acc['rol']}|{uid.decode()}"
+                    info["cuenta"] = acc["user"]
+                    out.append(info)
+                except Exception:
+                    continue
+            m.logout()
+        except Exception:
+            continue
+    return out
+
+
 def fetch_attachments_by_id(email_id, filename=None):
     """Descarga los adjuntos (bytes) de un correo identificado como 'rol|uid'."""
     rol, _, uid = (email_id or "").partition("|")

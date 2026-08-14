@@ -2,28 +2,36 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import axios from "axios";
 
 const API = process.env.REACT_APP_BACKEND_URL;
-const HITO = {
-  ok: { c: "#22c55e", i: "fa-check-circle", t: "Éxito" },
-  proceso: { c: "#f59e0b", i: "fa-clock-o", t: "Proceso" },
-  pendiente: { c: "#f59e0b", i: "fa-hourglass-half", t: "Pendiente" },
-  bloqueo: { c: "#ef4444", i: "fa-ban", t: "Bloqueo" },
-  alerta: { c: "#ef4444", i: "fa-exclamation-triangle", t: "ALERTA" },
-};
-const Icono = ({ estado }) => {
-  const h = HITO[estado] || HITO.pendiente;
-  return <i className={`fa ${h.i}`} title={h.t} style={{ color: h.c, fontSize: "1rem" }} />;
-};
-
-// SISTEMA DE ICONOGRAFÍA: ✅ verde · ⏳ amarillo · ⚠️ rojo
-const EstadoRadar = ({ estado, title }) => {
-  if (estado === "ok") return <span title={title || "Completo"} style={{ fontSize: "0.85rem" }}>✅</span>;
-  if (estado === "alerta") return <span title={title || "Alerta"} style={{ fontSize: "0.85rem" }}>⚠️</span>;
-  if (estado === "pendiente_informacion") return <span title={title} style={{ color: "#94a3b8", fontSize: "0.58rem" }}>Pendiente de Información</span>;
-  return <span title={title || "En proceso"} style={{ fontSize: "0.85rem" }}>⏳</span>;
-};
-
 const selEstilo = { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(148,163,184,0.3)",
   color: "#e2e8f0", padding: "0.45rem 0.6rem", borderRadius: 10, fontSize: "0.7rem" };
+
+// PROBLEMA 5: botones de estado diferenciados con color propio
+const EST_LABEL = {
+  ok: "✅ Aprobado", proceso: "⏳ En Proceso", pendiente: "Pendiente",
+  pendiente_informacion: "Pendiente de Información", bloqueo: "❌ Bloqueado", alerta: "⚠️ Con Observaciones",
+};
+const estBtnStyle = (estado) => {
+  const base = { display: "inline-block", borderRadius: 6, padding: "4px 10px", fontSize: 14,
+    fontWeight: 700, boxShadow: "0 1px 3px rgba(0,0,0,0.4)", whiteSpace: "nowrap" };
+  if (estado === "ok") return { ...base, background: "#1A5C2A", color: "#fff" };
+  if (estado === "proceso") return { ...base, background: "#1A3A5C", color: "#fff" };
+  if (estado === "alerta") return { ...base, background: "#7A4A00", color: "#fff" };
+  if (estado === "bloqueo") return { ...base, background: "#5C1A1A", color: "#fff" };
+  if (estado === "manual") return { ...base, background: "#3A3A3A", color: "#fff", border: "1px solid #eab308" };
+  return { ...base, background: "#2A2A2A", color: "#9aa4b2", fontStyle: "italic", border: "1px dashed #555", fontWeight: 500 };
+};
+const BotonEstado = ({ estado, label, title, testid }) => (
+  <span data-testid={testid} title={title} style={estBtnStyle(estado)}>{label || EST_LABEL[estado] || EST_LABEL.pendiente}</span>
+);
+
+// PROBLEMA 2/4: encabezados 13px dorados, sticky con fondo dorado 20% y sombra inferior
+const thG = { padding: "14px 16px", textAlign: "left", whiteSpace: "nowrap", fontSize: 13,
+  letterSpacing: 1, textTransform: "uppercase", color: "#D4AF37", height: 48,
+  position: "sticky", top: 0, zIndex: 25,
+  background: "linear-gradient(rgba(212,175,55,0.20), rgba(212,175,55,0.20)), #0f172a",
+  boxShadow: "0 4px 10px rgba(0,0,0,0.45)", borderRight: "1px solid rgba(255,255,255,0.25)" };
+const tdG = { padding: "8px 14px", fontSize: 14, verticalAlign: "middle",
+  borderRight: "1px solid rgba(255,255,255,0.12)" };
 
 const RECLAMOS_UI = [
   ["tasacion", "📩 Reclamar Tasación", f => f.tasacion_estado !== "ok", "mb-azul"],
@@ -35,7 +43,6 @@ const RECLAMOS_UI = [
 
 export default function GerenciaComercialModule() {
   const [data, setData] = useState(null);
-  const [feed, setFeed] = useState(null);
   const [busyRec, setBusyRec] = useState("");
   const [reparosModal, setReparosModal] = useState(null);
 
@@ -58,14 +65,6 @@ export default function GerenciaComercialModule() {
   }, []);
   useEffect(() => { recargar(); }, [recargar]);
 
-  // FEED DE GERENCIA: hitos externos de la Malla de Inteligencia, actualizado al segundo
-  useEffect(() => {
-    const load = () => axios.get(`${API}/api/hitos/feed`).then(r => setFeed(r.data)).catch(() => {});
-    load();
-    const iv = setInterval(load, 1000);
-    return () => clearInterval(iv);
-  }, []);
-
   const exportar = async () => {
     const r = await axios.get(`${API}/api/gerencia/export-xlsx`, { responseType: "blob" });
     const url = URL.createObjectURL(r.data);
@@ -74,10 +73,6 @@ export default function GerenciaComercialModule() {
     URL.revokeObjectURL(url);
   };
 
-  const marcarFirma = async (fid, rol, estado) => {
-    try { await axios.post(`${API}/api/flujos/firmas/${fid}`, { rol, estado }); recargar(); }
-    catch (e) { console.error(e); }
-  };
   const fecharFirma = async (fid, fecha) => {
     try { await axios.post(`${API}/api/flujos/fecha-firma/${fid}`, { fecha }); recargar(); }
     catch (e) { console.error(e); }
@@ -138,6 +133,13 @@ export default function GerenciaComercialModule() {
           <i className="fa fa-line-chart" style={{ color: "#d4af37", marginRight: 8 }} />Gerencia Comercial — Centro de Mando Estratégico
         </h3>
         <span style={{ color: "#94a3b8", fontSize: "0.72rem" }}>Mes {data?.mes || "…"} · {cartera.length}/{data?.total ?? 0} operaciones · Auditoría DashAI: {(data?.ultima_auditoria_dashai || "").slice(0, 16) || "pendiente"}</span>
+        {data?.cumplimiento_broker?.actualizado && (
+          <span data-testid="gerencia-cumplimiento-broker" title="Sincronizado en tiempo real con la Supercarpeta (Meta de Proyección)"
+            style={{ background: "rgba(212,175,55,0.12)", border: "1px solid rgba(212,175,55,0.5)", color: "#d4af37",
+              borderRadius: 10, padding: "0.35rem 0.7rem", fontWeight: 800, fontSize: "0.72rem" }}>
+            📈 Cumplimiento Broker: {data.cumplimiento_broker.pct_global ?? 0}% · UF cerradas {Number(data.cumplimiento_broker.uf_cerradas || 0).toLocaleString("es-CL")} / {Number(data.cumplimiento_broker.meta_uf || 0).toLocaleString("es-CL")}
+          </span>
+        )}
         <button data-testid="btn-export-gerencia" onClick={exportar} className="maserati-btn" style={{ marginLeft: "auto" }}>
           <i className="fa fa-file-excel-o" /> Exportar Reporte Mensual
         </button>
@@ -186,26 +188,6 @@ export default function GerenciaComercialModule() {
         </label>
       </div>
 
-      {feed && (
-        <div data-testid="gerencia-feed-hitos" style={{ ...glass, borderColor: "rgba(212,175,55,0.4)", padding: "0.8rem 1rem", marginBottom: 12 }}>
-          <div style={{ display: "flex", gap: 10, alignItems: "baseline", flexWrap: "wrap", marginBottom: 6 }}>
-            <b style={{ color: "#d4af37", fontSize: "0.78rem" }}>🕸️ Malla de Inteligencia — Hitos Externos en vivo</b>
-            <span style={{ color: "#64748b", fontSize: "0.62rem" }}>
-              actualiza al segundo · Regla #34: sin RUT no hay hito · {feed.descartados || 0} descartado(s) por Regla de Hierro
-            </span>
-          </div>
-          {(feed.hitos || []).length === 0 && <span style={{ color: "#94a3b8", fontSize: "0.7rem" }}>Sin hitos externos todavía. DashAI escucha las fuentes activas del Gestor.</span>}
-          {(feed.hitos || []).slice(0, 6).map(h => (
-            <div key={h.id} data-testid={`feed-hito-${h.id}`} style={{ display: "flex", gap: 8, flexWrap: "wrap", fontSize: "0.7rem", padding: "0.25rem 0", borderBottom: "1px solid rgba(148,163,184,0.08)" }}>
-              <b style={{ color: h.hito?.includes("Reparo") ? "#ef4444" : "#22c55e" }}>{h.hito}</b>
-              <span style={{ color: "#f8fafc" }}>{h.cliente}</span>
-              <span style={{ color: "#94a3b8", fontFamily: "monospace" }}>{h.rut}</span>
-              <span style={{ color: "#64748b" }}>{h.direccion === "enviado" ? "→" : "←"} {h.fuente}</span>
-              <span style={{ color: "#64748b", marginLeft: "auto" }}>{(h.creado || "").slice(0, 16).replace("T", " ")}</span>
-            </div>
-          ))}
-        </div>
-      )}
       {(data?.alertas_notaria || 0) > 0 && (
         <div data-testid="gerencia-alerta-notaria" style={{ ...glass, borderColor: "#ef4444", color: "#fecaca", padding: "0.6rem 1rem", marginBottom: 12, fontSize: "0.78rem", fontWeight: 700 }}>
           🚨 {data.alertas_notaria} aviso(s) de notaría sobre firmas faltantes detectados por DashAI
@@ -217,97 +199,107 @@ export default function GerenciaComercialModule() {
         </div>
       )}
 
-      <div style={{ ...glass, overflowX: "auto" }}>
-        <table data-testid="gerencia-tabla" style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.78rem", color: "#e2e8f0" }}>
+      <div style={{ ...glass, overflow: "auto", maxHeight: "calc(100vh - 130px)" }}>
+        <table data-testid="gerencia-tabla" style={{ width: "100%", borderCollapse: "collapse", fontSize: 14, color: "#e2e8f0", minWidth: 1900 }}>
           <thead>
-            <tr style={{ color: "#94a3b8", fontSize: "0.66rem", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-              {["Cliente", "Inmobiliaria / Origen", "RUT", "Tipo", "Monto UF", "Subsidio", "Inmobiliaria", "Divergencia", "Docs", "Doc 2.0", "Firmas", "Fecha Firma", "Tasación", "Estudio", "Firma Set", "Concreces", "Notaría", "Mesa", "Acciones de Mando"].map(h =>
-                <th key={h} style={{ padding: "0.7rem 0.8rem", textAlign: "left", borderBottom: "1px solid rgba(148,163,184,0.15)" }}>{h}</th>)}
+            <tr>
+              {["Cliente", "Inmobiliaria", "Proyecto", "Ciudad", "Broker", "Subsidio", "Monto UF",
+                "Documentos Comerciales", "Tasación", "Estudio de Títulos", "Firma del Set",
+                "Fecha de Firma de Escritura", "Notaría", "Firma de Escritura en Notaría",
+                "Acciones de Mando"].map(h =>
+                <th key={h} style={thG}>{h}</th>)}
             </tr>
           </thead>
           <tbody>
-            {cartera.map(f => (
+            {cartera.map((f, idx) => (
               <tr key={f.folder_id} data-testid={`gerencia-fila-${f.folder_id}`}
                 style={{
-                  background: f.datos_incompletos ? "rgba(239,68,68,0.12)" : (f.inactivo_96h ? "rgba(148,163,184,0.10)" : undefined) }}>
-                <td style={{ padding: "0.6rem 0.8rem", fontWeight: 700, color: "#f8fafc" }}>{f.cliente}
-                  {f.datos_incompletos && <div data-testid={`broker-no-actualizado-${f.folder_id}`} style={{ color: "#ef4444", fontSize: "0.6rem", fontWeight: 800 }}>🔴 Broker no actualizado</div>}
-                  {f.inactivo_96h && !f.datos_incompletos && <div style={{ color: "#94a3b8", fontSize: "0.58rem" }}>⏸ Sin actividad 96h</div>}
-                  {f.alerta_notaria && <div style={{ color: "#fb7185", fontSize: "0.62rem", fontWeight: 600 }}>{f.alerta_notaria}</div>}
+                  height: 52, borderBottom: "1px solid rgba(255,255,255,0.4)",
+                  background: f.datos_incompletos ? "rgba(94,26,26,0.45)" : (idx % 2 === 0 ? "#1E2A3A" : "#253347") }}>
+                {/* 1. CLIENTE (nombre + RUT) */}
+                <td style={{ ...tdG, fontWeight: 700, fontSize: 15, color: "#FFFFFF", whiteSpace: "nowrap" }}>
+                  {f.cliente}
+                  <div style={{ fontFamily: "monospace", fontWeight: 400, fontSize: 14, color: "#B0BEC5" }}>{f.rut || "—"}</div>
+                  {f.datos_incompletos && <div data-testid={`broker-no-actualizado-${f.folder_id}`} style={{ color: "#ef4444", fontSize: "0.62rem", fontWeight: 800 }}>🔴 Broker no actualizado</div>}
+                  {f.inactivo_96h && !f.datos_incompletos && <div style={{ color: "#94a3b8", fontSize: "0.6rem" }}>⏸ Sin actividad 96h</div>}
+                  {f.alerta_notaria && <div title={f.alerta_notaria} style={{ color: "#fb7185", fontSize: "0.62rem", fontWeight: 600,
+                    maxWidth: 230, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.alerta_notaria}</div>}
                 </td>
-                <td data-testid={`gerencia-origen-${f.folder_id}`} style={{ padding: "0.6rem 0.8rem", fontSize: "0.68rem",
-                    color: (f.origen || "").startsWith("⚠️") ? "#ef4444" : "#38bdf8",
-                    fontWeight: (f.origen || "").startsWith("⚠️") ? 800 : 600 }}
+                {/* 2. INMOBILIARIA */}
+                <td data-testid={`gerencia-origen-${f.folder_id}`} style={{ ...tdG,
+                    color: (!f.inmobiliaria && (f.origen || "").startsWith("⚠️")) ? "#ef4444" : "#B0BEC5", fontWeight: 700 }}
                   title="Regla #58: prohibido 'Directo' — se prioriza la identidad de la Inmobiliaria">
-                  {f.origen || "⚠️ Falta Identidad de Inmobiliaria"}</td>
-                <td style={{ padding: "0.6rem 0.8rem", fontFamily: "monospace" }}>{f.rut || "—"}</td>
-                <td style={{ padding: "0.6rem 0.8rem" }}>
-                  {f.tipo_operacion
-                    ? <span data-testid={`gerencia-tipo-${f.folder_id}`} style={{ fontSize: "0.6rem", fontWeight: 800, padding: "0.15rem 0.5rem", borderRadius: 6,
-                        background: f.tipo_operacion === "USADA" ? "rgba(34,197,94,0.15)" : "rgba(56,189,248,0.15)",
-                        color: f.tipo_operacion === "USADA" ? "#22c55e" : "#38bdf8" }}>{f.tipo_operacion}</span>
-                    : "—"}
+                  {f.inmobiliaria || f.origen || "⚠️ Falta Identidad de Inmobiliaria"}
+                  {f.tipo_operacion && <div data-testid={`gerencia-tipo-${f.folder_id}`} style={{ marginTop: 3 }}>
+                    <span style={{ fontSize: "0.6rem", fontWeight: 800, padding: "0.15rem 0.5rem", borderRadius: 6,
+                      background: f.tipo_operacion === "USADA" ? "rgba(34,197,94,0.15)" : "rgba(56,189,248,0.15)",
+                      color: f.tipo_operacion === "USADA" ? "#22c55e" : "#38bdf8" }}>{f.tipo_operacion}</span></div>}
                 </td>
-                <td style={{ padding: "0.6rem 0.8rem" }}>{f.monto_credito_uf ? Number(f.monto_credito_uf).toLocaleString("es-CL") : "—"}</td>
-                <td style={{ padding: "0.6rem 0.8rem" }}>{f.subsidio ? "Sí" : "No"}</td>
-                <td style={{ padding: "0.6rem 0.8rem" }}>{f.inmobiliaria || "—"}</td>
-                <td data-testid={`gerencia-divergencia-${f.folder_id}`} style={{ padding: "0.6rem 0.8rem", textAlign: "center" }}>
-                  {f.divergencia_control
-                    ? <span title="DashAI detectó diferencia entre Bodega e Ingreso Concreces (Regla #35)" style={{ color: "#f59e0b", fontSize: "0.6rem", fontWeight: 800 }}>⚠️ Inconsistencia con Control</span>
-                    : <span style={{ color: "#22c55e", fontSize: "0.8rem" }}>✅</span>}
+                {/* 3. PROYECTO */}
+                <td style={{ ...tdG, color: "#90A4AE" }}>{f.proyecto || <i style={{ color: "#64748b" }}>Pendiente</i>}</td>
+                {/* 4. CIUDAD */}
+                <td style={{ ...tdG, color: "#78909C" }}>{f.ciudad || <i style={{ color: "#64748b" }}>Por Confirmar</i>}</td>
+                {/* 5. BROKER */}
+                <td style={{ ...tdG, color: "#B0BEC5", fontStyle: "italic", whiteSpace: "nowrap" }}>{f.broker_origen || "—"}</td>
+                {/* 6. SUBSIDIO */}
+                <td style={{ ...tdG, whiteSpace: "nowrap" }}>{f.subsidio
+                  ? <span style={{ color: "#4ade80", fontWeight: 700 }}>Con Subsidio</span>
+                  : <span style={{ color: "#94a3b8" }}>Sin Subsidio</span>}</td>
+                {/* 7. MONTO UF */}
+                <td style={{ ...tdG, textAlign: "right", fontWeight: 800, color: "#D4AF37", whiteSpace: "nowrap" }}>
+                  {f.monto_credito_uf ? <>{Number(f.monto_credito_uf).toLocaleString("es-CL")} <span style={{ color: "#B0BEC5", fontWeight: 400 }}>UF</span></> : "—"}</td>
+                {/* 8. DOCUMENTOS COMERCIALES */}
+                <td style={{ ...tdG, textAlign: "center" }}>
+                  <BotonEstado testid={`gerencia-docs-${f.folder_id}`} estado={f.documentacion}
+                    label={f.documentacion === "ok" ? "✅ Completos" : f.documentacion === "proceso" ? "⏳ En Proceso" : "❌ Incompletos"} /></td>
+                {/* 9. TASACIÓN */}
+                <td data-testid={`gerencia-tasacion-${f.folder_id}`} style={{ ...tdG, textAlign: "center" }}>
+                  <BotonEstado estado={f.tasacion_estado}
+                    label={f.tasacion_estado === "ok" ? "✅ Informe Recibido" : f.tasacion_estado === "proceso" ? "⏳ En Proceso" : undefined} /></td>
+                {/* 10. ESTUDIO DE TÍTULOS */}
+                <td data-testid={`gerencia-estudio-${f.folder_id}`} style={{ ...tdG, textAlign: "center" }}>
+                  <BotonEstado estado={f.estudio_estado}
+                    label={f.estudio_estado === "ok" ? "✅ Aprobado" : f.estudio_estado === "proceso" ? "⏳ En Proceso" : undefined} />
+                  {f.reparos_pendientes > 0 && (
+                    <button data-testid={`gerencia-reparos-btn-${f.folder_id}`}
+                      onClick={() => verReparos(f)}
+                      title="⚠️ Reparo detectado — pinche para leer el texto del abogado"
+                      style={{ display: "block", margin: "4px auto 0", cursor: "pointer", border: "none",
+                        borderRadius: 6, fontWeight: 800, fontSize: "0.62rem", padding: "2px 8px",
+                        background: "rgba(239,68,68,0.18)", color: "#ef4444" }}>
+                      ⚠️ {f.reparos_pendientes} reparo(s)
+                    </button>
+                  )}
                 </td>
-                <td style={{ padding: "0.6rem 0.8rem", textAlign: "center" }}><Icono estado={f.documentacion} /></td>
-                <td data-testid={`gerencia-doc20-${f.folder_id}`} style={{ padding: "0.6rem 0.8rem", textAlign: "center" }}>
-                  <EstadoRadar estado={f.doc20?.estado} title={(f.doc20?.faltantes || []).length ? `Falta: ${f.doc20.faltantes.join(", ")}` : "AFP + Liquidación + CMF al día"} />
-                </td>
-                <td data-testid={`gerencia-firmas-${f.folder_id}`} style={{ padding: "0.6rem 0.8rem", textAlign: "center" }}>
-                  <EstadoRadar estado={f.hito_firmas === "ok" ? "ok" : (f.hito_firmas === "proceso" ? "proceso" : "alerta")}
-                    title={(f.firmas || []).map(x => `${x.label}: ${x.estado}`).join(" · ") || "Sin firmantes"} />
-                  <div style={{ display: "flex", gap: 3, justifyContent: "center", marginTop: 3 }}>
-                    {(f.firmas || []).map(x => (
-                      <span key={x.rol} data-testid={`firma-${x.rol}-${f.folder_id}`}
-                        title={`${x.label}: ${x.estado} (clic para cambiar)`}
-                        onClick={() => marcarFirma(f.folder_id, x.rol, x.estado === "firmado" ? "pendiente" : "firmado")}
-                        style={{ cursor: "pointer", fontSize: "0.56rem", fontWeight: 800, padding: "0.05rem 0.3rem", borderRadius: 4,
-                          background: x.estado === "firmado" ? "rgba(34,197,94,0.2)" : "rgba(148,163,184,0.15)",
-                          color: x.estado === "firmado" ? "#22c55e" : "#94a3b8" }}>
-                        {x.label[0]}
-                      </span>
-                    ))}
-                  </div>
-                </td>
-                <td data-testid={`gerencia-fecha-firma-${f.folder_id}`} style={{ padding: "0.6rem 0.4rem" }}>
+                {/* 11. FIRMA DEL SET (Cédula de Crédito) */}
+                <td style={{ ...tdG, textAlign: "center" }}>
+                  <BotonEstado testid={`gerencia-firmaset-${f.folder_id}`} estado={f.firma_set}
+                    label={f.firma_set === "ok" ? "✅ Firmado" : f.firma_set === "proceso" ? "⏳ Enviado" : undefined} /></td>
+                {/* 12. FECHA DE FIRMA DE ESCRITURA */}
+                <td data-testid={`gerencia-fecha-firma-${f.folder_id}`} style={{ ...tdG }}>
                   <input type="date" defaultValue={f.fecha_firma || ""} onBlur={e => fecharFirma(f.folder_id, e.target.value)}
-                    style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(148,163,184,0.25)", color: "#e2e8f0", borderRadius: 6, padding: "0.15rem 0.3rem", fontSize: "0.62rem", width: 110 }} />
+                    style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(148,163,184,0.25)",
+                      color: "#e2e8f0", borderRadius: 6, padding: "0.25rem 0.4rem", fontSize: 14, width: 140 }} />
                 </td>
-                <td data-testid={`gerencia-tasacion-${f.folder_id}`} style={{ padding: "0.6rem 0.8rem", textAlign: "center", fontSize: "0.6rem" }}>
-                  {f.tasacion_estado === "pendiente_informacion"
-                    ? <span style={{ color: "#94a3b8" }}>Pendiente de Información</span>
-                    : <Icono estado={f.tasacion_estado} />}
+                {/* 13. NOTARÍA: nombre + estado en dos líneas */}
+                <td data-testid={`gerencia-notaria-${f.folder_id}`} style={{ ...tdG }}>
+                  <div style={{ fontWeight: 700, color: f.notaria_nombre ? "#B0BEC5" : "#78909C",
+                    fontStyle: f.notaria_nombre ? "normal" : "italic" }}>{f.notaria_nombre || "Por Asignar"}</div>
+                  <div style={{ marginTop: 3, fontSize: 14,
+                    color: f.notaria_estado_escritura === "Escritura Lista Para Firmar" ? "#4ade80"
+                      : f.notaria_estado_escritura === "En Preparación" ? "#60a5fa" : "#9aa4b2",
+                    fontWeight: f.notaria_estado_escritura === "Pendiente" ? 400 : 700,
+                    fontStyle: f.notaria_estado_escritura === "Pendiente" ? "italic" : "normal" }}>
+                    {f.notaria_estado_escritura}</div>
                 </td>
-                <td data-testid={`gerencia-estudio-${f.folder_id}`} style={{ padding: "0.6rem 0.8rem", textAlign: "center", fontSize: "0.6rem" }}>
-                  {f.estudio_estado === "pendiente_informacion"
-                    ? <span style={{ color: "#94a3b8" }}>Pendiente de Información</span>
-                    : <>
-                        <Icono estado={f.estudio_estado} />
-                        {f.reparos_pendientes > 0 && (
-                          <button data-testid={`gerencia-reparos-btn-${f.folder_id}`}
-                            onClick={() => verReparos(f)}
-                            title="⚠️ Reparo detectado — pinche para leer el texto del abogado"
-                            style={{ display: "block", margin: "2px auto 0", cursor: "pointer", border: "none",
-                              borderRadius: 6, fontWeight: 800, fontSize: "0.58rem", padding: "2px 6px",
-                              background: "rgba(239,68,68,0.18)", color: "#ef4444" }}>
-                            ⚠️ {f.reparos_pendientes} reparo(s)
-                          </button>
-                        )}
-                      </>}
+                {/* 14. FIRMA DE ESCRITURA EN NOTARÍA — HITO FINAL */}
+                <td data-testid={`gerencia-firma-escritura-${f.folder_id}`} style={{ ...tdG, textAlign: "center" }}>
+                  {f.escritura_firmada
+                    ? <span style={{ color: "#FFD700", fontWeight: 900, fontSize: 15, textShadow: "0 0 12px rgba(255,215,0,0.4)" }}>🏆 FIRMADA</span>
+                    : <span style={estBtnStyle("pendiente")}>Pendiente</span>}
                 </td>
-                <td style={{ padding: "0.6rem 0.8rem", textAlign: "center" }}><Icono estado={f.firma_set} /></td>
-                <td style={{ padding: "0.6rem 0.8rem", textAlign: "center" }}><Icono estado={f.ingreso_concreces} /></td>
-                <td style={{ padding: "0.6rem 0.8rem", textAlign: "center" }}><Icono estado={f.notaria} /></td>
-                <td style={{ padding: "0.6rem 0.8rem", fontSize: "0.68rem", color: "#94a3b8" }}>{f.estado_mesa || "—"}</td>
-                <td style={{ padding: "0.6rem 0.6rem" }}>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                <td style={{ ...tdG, padding: "10px 10px" }}>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4, maxWidth: 360, alignItems: "center" }}>
                     {RECLAMOS_UI.filter(([, , cond]) => cond(f)).map(([tipo, label, , color]) => {
                       const hecho = f.reclamos?.[tipo];
                       return (
@@ -315,14 +307,12 @@ export default function GerenciaComercialModule() {
                           <button data-testid={`reclamo-${tipo}-${f.folder_id}`}
                             className={`maserati-btn ${hecho ? "mb-hecho" : color}`}
                             disabled={busyRec === `${f.folder_id}-${tipo}`}
-                            title={hecho ? `Última gestión: ${hecho.por} → ${hecho.destinatario} (Regla #57)` : "El envío depende 100% de Gerencia (Regla #49)"}
+                            style={{ minHeight: 28, padding: "0.25rem 0.5rem", fontSize: "0.58rem", borderRadius: 8 }}
+                            title={hecho ? `Última gestión: ${hecho.por} → ${hecho.destinatario} · ${(hecho.fecha || "").slice(0, 16).replace("T", " ")} UTC (Regla #57)` : "El envío depende 100% de Gerencia (Regla #49)"}
                             onClick={() => reclamar(f.folder_id, tipo, hecho?.fecha)}>
                             {busyRec === `${f.folder_id}-${tipo}` ? "Enviando…"
                               : hecho ? `✓ ${label.replace("📩 ", "")}` : label}
                           </button>
-                          {hecho && <span data-testid={`huella-${tipo}-${f.folder_id}`} className="huella-ts">
-                            Última solicitud: {(hecho.fecha || "").slice(0, 16).replace("T", " ")} UTC
-                          </span>}
                         </div>
                       );
                     })}

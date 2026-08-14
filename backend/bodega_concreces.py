@@ -133,13 +133,54 @@ async def _hitos(fd, cache=None):
                 alerta_notaria = (s.get("asunto") or "")[:120]
                 break
     df = fd.get("datos_financieros") or {}
+    # ── ORDEN SUPREMA: la Bóveda ADN_CLIENTES_360 manda en TODOS los módulos ──
+    adn = None
+    if fd.get("rut"):
+        try:
+            import adn_clientes as _adn
+            adn = await db.adn_clientes_360.find_one({"rut_norm": _adn._norm_rut(fd["rut"])})
+        except Exception:
+            adn = None
+    fin_a = (adn or {}).get("financiero") or {}
+    prop_a = (adn or {}).get("propiedad") or {}
+    exp_p = ((adn or {}).get("expediente_360") or {}).get("propiedad") or {}
+    ident_a = (adn or {}).get("identidad") or {}
+    monto_v = df.get("monto_credito") or fd.get("proyeccion_uf") or fin_a.get("monto_credito_uf")
+    sub_v = (bool(df.get("con_subsidio")) or "con" in (fd.get("subsidio_proyeccion") or "").lower()
+             or fin_a.get("con_subsidio") is True)
+    proyecto_v = fd.get("proyecto") or prop_a.get("proyecto") or exp_p.get("proyecto") or ""
+    ciudad_v = fd.get("ciudad") or ident_a.get("ciudad") or exp_p.get("comuna") or prop_a.get("comuna") or ""
+    inmob_v = fd.get("inmobiliaria") or prop_a.get("inmobiliaria") or exp_p.get("inmobiliaria") or ""
+    # ESCRITURA OBLIGATORIA + ALERTA DE INCONSISTENCIA (Corrección 5): reparación inmediata
+    repara = {}
+    for campo, v_fd, v_adn in (("proyecto", fd.get("proyecto"), proyecto_v),
+                               ("ciudad", fd.get("ciudad"), ciudad_v),
+                               ("inmobiliaria", fd.get("inmobiliaria"), inmob_v),
+                               ("proyeccion_uf", fd.get("proyeccion_uf") or df.get("monto_credito"), monto_v)):
+        if not v_fd and v_adn:
+            repara[campo] = v_adn
+    if repara:
+        await db.folders.update_one({"id": fid}, {"$set": repara})
+        if not fd.get("alerta_lectura_enviada"):
+            await db.alertas.insert_one({"id": str(uuid.uuid4()), "tipo": "lectura_boveda",
+                "mensaje": f"🔴 Campo(s) {', '.join(repara)} vacío(s) para {nombre}. Dato disponible en bóveda. "
+                           f"Error de lectura detectado y reparado automáticamente.",
+                "fecha": now_iso(), "leida": False})
+            await db.folders.update_one({"id": fid}, {"$set": {"alerta_lectura_enviada": True}})
     return {
         "folder_id": fid, "cliente": nombre, "rut": fd.get("rut") or "",
         "broker_origen": fd.get("broker_origen") or fd.get("broker_nombre") or "",
         "origen": _origen_folder(fd),  # Regla #58: nunca 'Directo'
-        "monto_credito_uf": df.get("monto_credito"), "subsidio": bool(df.get("con_subsidio")),
-        "inmobiliaria": fd.get("inmobiliaria") or "",
-        "proyecto": fd.get("proyecto") or "",
+        "monto_credito_uf": monto_v,
+        "subsidio": sub_v,
+        "inmobiliaria": inmob_v,
+        "proyecto": proyecto_v,
+        "ciudad": ciudad_v,
+        "notaria_nombre": fd.get("notaria") or "",
+        "notaria_estado_escritura": ("Escritura Lista Para Firmar" if fd.get("escritura_notaria_detectada_at")
+                                     else "En Preparación" if fd.get("escritura_solicitada_at")
+                                     else "Pendiente"),
+        "escritura_firmada": bool(fd.get("escritura_confirmada_at")),
         "documentacion": "ok" if fd.get("datos_financieros_ocr_fecha") else ("proceso" if n_arch else "bloqueo"),
         "firma_set": "ok" if fd.get("set_firmado") else ("proceso" if fd.get("set_enviado") else "pendiente"),
         "ingreso_concreces": conc.get("estado", "pendiente"),
@@ -224,6 +265,7 @@ async def gerencia_cartera():
             "costo_desarrollo_creditos": gasto,
             "ultima_auditoria_dashai": audit.get("fecha", ""),
             "excepciones_recientes": excs,
+            "cumplimiento_broker": await db.config.find_one({"_key": "avance_global_2026-08"}, {"_id": 0}) or {},
             "alertas_notaria": sum(1 for f in filas if f["notaria"] == "alerta")}
 
 

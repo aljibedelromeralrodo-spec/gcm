@@ -20,6 +20,7 @@ const CentralChat = lazy(() => import("./components/CentralChat"));
 const SeguimientoModule = lazy(() => import("./pages/SeguimientoModule"));
 const UsuariosModule = lazy(() => import("./pages/UsuariosModule"));
 const GerenciaComercialModule = lazy(() => import("./pages/GerenciaComercialModule"));
+const GestionEjecutivosModule = lazy(() => import("./pages/GestionEjecutivosModule"));
 const AdministracionModule = lazy(() => import("./pages/AdministracionModule"));
 const BrokersModule = lazy(() => import("./pages/BrokersModule"));
 const MiCorreoModule = lazy(() => import("./pages/MiCorreoModule"));
@@ -208,6 +209,7 @@ function MainApp() {
     ...(['admin', 'maestro'].includes(user.rol) ? [{ key: 'basehistorica', icon: 'fa-university', label: 'Base de Datos Histórica' }] : []),
     ...(['admin', 'maestro'].includes(user.rol) || user.perfil === 'B' ? [
       { key: 'gerencia', icon: 'fa-line-chart', label: 'Gerencia Comercial' },
+      { key: 'gestion-ejecutivos', icon: 'fa-users', label: 'Gestión Ejecutivos' },
       { key: 'supercarpeta', icon: 'fa-folder-open', label: 'Supercarpeta' },
       { key: 'administracion', icon: 'fa-database', label: 'Administración' },
     ] : []),
@@ -219,7 +221,7 @@ function MainApp() {
     if (['admin', 'maestro'].includes(user.rol) || !user.perfil) return true;
     const PERMISOS = {
       A: ['dashboard', 'clientes', 'simulador', 'historial', 'calculadora', 'formato', 'setcredito', 'micorreo'],
-      B: ['dashboard', 'contraloria', 'criterios', 'seguimiento', 'gerencia', 'supercarpeta', 'administracion', 'salud', 'micorreo'],
+      B: ['dashboard', 'contraloria', 'criterios', 'seguimiento', 'gerencia', 'gestion-ejecutivos', 'supercarpeta', 'administracion', 'salud', 'micorreo'],
       D: ['brokers', 'micorreo'],
     };
     return (PERMISOS[user.perfil] || []).includes(item.key);
@@ -360,6 +362,7 @@ function MainApp() {
         {activeModule === 'seguimiento' && <SeguimientoModule />}
         {activeModule === 'usuarios' && <UsuariosModule />}
         {activeModule === 'gerencia' && <GerenciaComercialModule />}
+        {activeModule === 'gestion-ejecutivos' && <GestionEjecutivosModule />}
         {activeModule === 'administracion' && <AdministracionModule user={user} />}
         {activeModule === 'brokers' && <BrokersModule user={user} />}
         {activeModule === 'micorreo' && <MiCorreoModule user={user} />}
