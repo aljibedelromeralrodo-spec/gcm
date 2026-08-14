@@ -91,27 +91,55 @@ async def bodega_contrastar(fid: str):
 
 NOTARIA_RE = re.compile(r"notar[ií]a|firma\s+(faltante|pendiente)|falta\s+firma", re.I)
 
+ALERTA_SIN_INMOBILIARIA = "⚠️ Falta Identidad de Inmobiliaria"
 
-async def _hitos(fd):
+
+def _origen_folder(fd):
+    """Regla #58: prohibido 'Directo'. Prioridad: Inmobiliaria (individualizada) > Broker > Usado > alerta."""
+    inmo = (fd.get("inmobiliaria") or "").strip()
+    if inmo and inmo != "—":
+        proy = (fd.get("proyecto") or "").strip()
+        return f"{inmo.upper()} · {proy.upper()}" if proy else inmo.upper()
+    broker = (fd.get("broker_origen") or fd.get("broker_nombre") or "").strip()
+    if broker and broker.upper() != "DIRECTO":
+        return f"BROKER · {broker.upper()}"
+    if (fd.get("tipo_operacion") or "").lower() == "usada":
+        return "USADO"
+    return ALERTA_SIN_INMOBILIARIA
+
+
+async def _hitos(fd, cache=None):
     import malla_inteligencia as _mi
     _firmas_info = _mi.firmas_folder(fd)
     fid, nombre = fd.get("id"), fd.get("nombre") or ""
     n_arch = len(fd.get("archivos") or []) or await db.fs_indice.count_documents({"folder_id": fid}) if False else len(fd.get("archivos") or [])
-    reg = await db.bodega_contraste.find_one({"folder_id": fid}) or {}
-    conc = await db.concreces_estado.find_one({"folder_id": fid}) or {}
-    seg = await db.seguimiento.find_one(
-        {"cliente": {"$regex": re.escape(nombre[:20]), "$options": "i"}}, sort=[("fecha", -1)]) or {}
-    alerta_notaria = ""
-    async for s in db.seguimiento.find({"cliente": {"$regex": re.escape(nombre[:20]), "$options": "i"}}).limit(20):
-        if NOTARIA_RE.search(s.get("asunto") or ""):
-            alerta_notaria = (s.get("asunto") or "")[:120]
-            break
+    if cache is not None:
+        # REFACCIÓN DE COMPLEJIDAD: sin N+1 — todo pre-cargado en un solo viaje a Mongo
+        reg = cache["contraste"].get(fid) or {}
+        conc = cache["concreces"].get(fid) or {}
+        clave = nombre[:20].lower()
+        segs = [s for s in cache["seguimiento"] if clave and clave in (s.get("cliente") or "").lower()]
+        seg = segs[0] if segs else {}
+        alerta_notaria = next((s.get("asunto", "")[:120] for s in segs[:20]
+                               if NOTARIA_RE.search(s.get("asunto") or "")), "")
+    else:
+        reg = await db.bodega_contraste.find_one({"folder_id": fid}) or {}
+        conc = await db.concreces_estado.find_one({"folder_id": fid}) or {}
+        seg = await db.seguimiento.find_one(
+            {"cliente": {"$regex": re.escape(nombre[:20]), "$options": "i"}}, sort=[("fecha", -1)]) or {}
+        alerta_notaria = ""
+        async for s in db.seguimiento.find({"cliente": {"$regex": re.escape(nombre[:20]), "$options": "i"}}).limit(20):
+            if NOTARIA_RE.search(s.get("asunto") or ""):
+                alerta_notaria = (s.get("asunto") or "")[:120]
+                break
     df = fd.get("datos_financieros") or {}
     return {
         "folder_id": fid, "cliente": nombre, "rut": fd.get("rut") or "",
-        "broker_origen": fd.get("broker_origen") or fd.get("broker_nombre") or "DIRECTO",
+        "broker_origen": fd.get("broker_origen") or fd.get("broker_nombre") or "",
+        "origen": _origen_folder(fd),  # Regla #58: nunca 'Directo'
         "monto_credito_uf": df.get("monto_credito"), "subsidio": bool(df.get("con_subsidio")),
         "inmobiliaria": fd.get("inmobiliaria") or "",
+        "proyecto": fd.get("proyecto") or "",
         "documentacion": "ok" if fd.get("datos_financieros_ocr_fecha") else ("proceso" if n_arch else "bloqueo"),
         "firma_set": "ok" if fd.get("set_firmado") else ("proceso" if fd.get("set_enviado") else "pendiente"),
         "ingreso_concreces": conc.get("estado", "pendiente"),
@@ -140,14 +168,34 @@ async def gerencia_cartera():
     mes = datetime.now(timezone.utc).strftime("%Y-%m")
     ahora = datetime.now(timezone.utc)
     filas = []
+    flota_cfg = await db.config.find_one({"_key": "flota_agosto"}) or {}
+    flota = {n.strip().upper() for n in (flota_cfg.get("nombres") or [])} if flota_cfg.get("activo") else set()
+    cache = {
+        "contraste": {d.get("folder_id"): d async for d in db.bodega_contraste.find({})},
+        "concreces": {d.get("folder_id"): d async for d in db.concreces_estado.find({})},
+        "seguimiento": await db.seguimiento.find(
+            {}, {"cliente": 1, "estado": 1, "asunto": 1, "fecha": 1}).sort("fecha", -1).to_list(3000),
+    }
     async for fd in db.folders.find({}).sort("nombre", 1):
+        if flota:
+            # REGLA DE HIERRO (Flota Agosto): solo existe la flota autorizada en las vistas
+            nombre_u = (fd.get("nombre") or "").strip().upper()
+            if not any(nf in nombre_u or nombre_u in nf for nf in flota):
+                continue
         act = (fd.get("updated_at") or fd.get("created") or fd.get("created_at") or "")[:7]
-        if act == mes or (fd.get("datos_financieros") or {}).get("monto_credito"):
-            h = await _hitos(fd)
+        if flota or act == mes or (fd.get("datos_financieros") or {}).get("monto_credito"):
+            h = await _hitos(fd, cache)
             # COLUMNA DE DIVERGENCIA: inconsistencia detectada por Módulo Control (Regla #35)
             h["divergencia_control"] = bool(await _difs_folder(fd))
             # BLOQUEO DE DATOS INCOMPLETOS: sin RUT, Monto o Inmobiliaria → Broker no actualizado
-            h["datos_incompletos"] = not (h.get("rut") and h.get("monto_credito_uf") and h.get("inmobiliaria"))
+            # REGLA DE HIERRO (Exp. 360): prohibido reportar 'datos incompletos' si la info
+            # está en la historia documental (perfil consolidado / Bóveda ADN)
+            p_inc = fd.get("perfil_consolidado") or {}
+            h["datos_incompletos"] = not (
+                (h.get("rut") or p_inc.get("rut")) and
+                (h.get("monto_credito_uf") or p_inc.get("monto_credito")) and
+                (h.get("inmobiliaria") or p_inc.get("inmobiliaria")
+                 or (fd.get("tipo_operacion") or "").lower() == "usada"))
             # ALERTA DE INACTIVIDAD 96H
             ult = fd.get("updated_at") or fd.get("created_at") or fd.get("created") or ""
             try:
@@ -158,6 +206,8 @@ async def gerencia_cartera():
             h["reclamos"] = fd.get("reclamos_gerencia") or {}
             h["actualizado"] = str(ult)[:10]
             filas.append(h)
+    # Regla #58: cartera ordenada por Inmobiliaria/Usado, cada inmobiliaria individualizada; alertas al final
+    filas.sort(key=lambda f: (f["origen"] == ALERTA_SIN_INMOBILIARIA, f["origen"], f["cliente"]))
     energia = await db.config.find_one({"_key": "energia"}) or {}
     gasto = round((int(energia.get("llamadas_llm") or 0) - int(energia.get("llamadas_base") or 0)) * 0.12, 2)
     audit = await db.config.find_one({"_key": "gerencia_audit"}) or {}
@@ -170,7 +220,7 @@ async def gerencia_cartera():
             "resumen": {"subsidio": {"n": len(con_sub), "uf": _uf(con_sub)},
                         "sin_subsidio": {"n": len(sin_sub), "uf": _uf(sin_sub)},
                         "total": {"n": len(filas), "uf": _uf(filas)}},
-            "brokers": sorted({f.get("broker_origen") or "DIRECTO" for f in filas}),
+            "brokers": sorted({f["origen"] for f in filas}),
             "costo_desarrollo_creditos": gasto,
             "ultima_auditoria_dashai": audit.get("fecha", ""),
             "excepciones_recientes": excs,
@@ -261,13 +311,13 @@ async def gerencia_export():
     wb = Workbook()
     ws = wb.active
     ws.title = f"Cartera {data['mes']}"
-    ws.append(["Cliente", "Broker", "RUT", "Tipo Operación", "Monto Crédito (UF)", "Subsidio", "Inmobiliaria",
+    ws.append(["Cliente", "Origen (Regla #58)", "RUT", "Tipo Operación", "Monto Crédito (UF)", "Subsidio", "Inmobiliaria",
                "Documentación", "Doc 2.0", "Firmas", "Fecha Firma", "Firma Set", "Ingreso Concreces", "Notaría", "Estado Mesa", "Alerta Notaría"])
     for f in data["cartera"]:
         firmas_txt = " · ".join(f"{x['label']}: {x['estado']}" for x in (f.get("firmas") or []))
         doc20 = f.get("doc20") or {}
         doc20_txt = "OK" if doc20.get("estado") == "ok" else "Pendiente de Información: " + ", ".join(doc20.get("faltantes") or [])
-        ws.append([f["cliente"], f.get("broker_origen") or "DIRECTO", f["rut"], f.get("tipo_operacion") or "—", f["monto_credito_uf"], "Sí" if f["subsidio"] else "No",
+        ws.append([f["cliente"], f.get("origen") or ALERTA_SIN_INMOBILIARIA, f["rut"], f.get("tipo_operacion") or "—", f["monto_credito_uf"], "Sí" if f["subsidio"] else "No",
                    f["inmobiliaria"], f["documentacion"], doc20_txt, firmas_txt, f.get("fecha_firma") or "—",
                    f["firma_set"], f["ingreso_concreces"],
                    f["notaria"], f["estado_mesa"], f["alerta_notaria"]])

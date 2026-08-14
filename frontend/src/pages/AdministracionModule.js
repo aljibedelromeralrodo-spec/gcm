@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import GestorFuentesIMAP from "../components/GestorFuentesIMAP";
+import EstadoSalida from "../components/EstadoSalida";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 const PILL = { validado: "#22c55e", observado: "#f59e0b", pendiente: "#94a3b8", expulsado: "#ef4444" };
@@ -232,6 +233,7 @@ export default function AdministracionModule({ user }) {
           <i className="fa fa-database" style={{ marginRight: 8, color: "var(--gold)" }} />Administración — Bodega de Datos Concreces
         </h3>
         <span style={{ color: "var(--text-secondary)", fontSize: "0.72rem" }}>{data?.total ?? 0} registros · Regla de Oro #24: sin contraste RUT/Rol + respaldo OCR, el envío queda bloqueado</span>
+        <EstadoSalida />
       </div>
       {/* DIVISIÓN OPERATIVA (Regla #32) + Postventa */}
       <div style={{ display: "flex", gap: 10, marginTop: 14, flexWrap: "wrap" }}>
@@ -277,7 +279,9 @@ export default function AdministracionModule({ user }) {
             {(data?.registros || []).map(r => (
               <tr key={r.folder_id} data-testid={`bodega-fila-${r.folder_id}`}>
                 <td style={{ fontWeight: 700 }}>{r.cliente}
-                  {r.broker_origen && r.broker_origen !== "DIRECTO" && <div style={{ color: "#38bdf8", fontSize: "0.6rem" }}>Broker: {r.broker_origen}</div>}
+                  {r.inmobiliaria && r.inmobiliaria !== "—"
+                    ? <div style={{ color: "#d4af37", fontSize: "0.6rem", fontWeight: 700 }}>{String(r.inmobiliaria).toUpperCase()}</div>
+                    : (r.broker_origen && r.broker_origen !== "DIRECTO" && <div style={{ color: "#38bdf8", fontSize: "0.6rem" }}>Broker: {r.broker_origen}</div>)}
                 </td>
                 <td style={{ fontFamily: "monospace" }}>{r.rut_titular || "—"}</td>
                 <td style={{ fontFamily: "monospace" }}>{r.rut_codeudor || "—"}</td>

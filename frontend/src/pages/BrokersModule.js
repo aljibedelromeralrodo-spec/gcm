@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import GestorFuentesIMAP from "../components/GestorFuentesIMAP";
+import EstadoSalida from "../components/EstadoSalida";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 const card = { background: "rgba(30,41,59,0.55)", border: "1px solid rgba(212,175,55,0.3)", borderRadius: 12, padding: "1.1rem", marginTop: 14 };
@@ -105,6 +106,7 @@ export default function BrokersModule({ user }) {
         <span style={{ color: "var(--text-secondary)", fontSize: "0.72rem" }}>
           Usuario D · Sello de origen en cada carpeta (Regla #38) · Solo ve sus propias carpetas
         </span>
+        <EstadoSalida />
       </div>
       {msg && <div data-testid="broker-msg" style={{ marginTop: 10, color: msg.startsWith("✅") ? "#22c55e" : "#ef4444", fontSize: "0.74rem", fontWeight: 700 }}>{msg}</div>}
 

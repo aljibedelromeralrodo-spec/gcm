@@ -1,0 +1,60 @@
+{
+  "summary": "Iteración 32: Backend 9/9 pytest OK sobre Bóveda ADN_CLIENTES_360 (Regla #66) + Supercarpeta V2 + auditoría real. Frontend: login+briefing OK, Supercarpeta V2 con las 4 columnas nuevas y 95 celdas super-reparos-* + 'Con Reparos' en naranja OK, Clientes con 50 tarjetas mostrando ✓100% (RUT válido) OK, Base Histórica módulo/contador/toggle/export/buscar OK. HALLAZGO CRÍTICO: al pulsar el botón gerencia-reparos-btn-* en Gerencia Comercial la app cae con TypeError 'reparosModal.reparos.map is not a function' y muestra el overlay rojo de runtime — el modal gerencia-reparos-modal NUNCA aparece.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "GerenciaComercialModule.js — verReparos()",
+        "issue": "TypeError: (reparosModal.reparos || []).map is not a function. El endpoint GET /api/estudio-titulo/reparos/{fid} devuelve reparos como OBJETO {items:[], estado:'…'}, no como array. La línea 46 hace `r.data?.reparos || r.data?.alertas || []` que es TRUTHY (objeto), por lo que reparos queda como objeto y el .map() de la línea 351 crashea. El modal gerencia-reparos-modal jamás llega a renderizarse.",
+        "selector": "gerencia-reparos-btn-*",
+        "priority": "CRITICAL"
+      },
+      {
+        "component": "ClientesModule.js",
+        "issue": "No se encontró ningún botón reparos-btn-* renderizado en las tarjetas de clientes visibles (aunque en Supercarpeta sí hay 1 fila 'Con Reparos' de Catalina Castillo, en Carpeta Clientes no aparece el ⚠️ N reparo(s) esperado). Puede ser porque las tarjetas visibles no coinciden con la carpeta con reparos o el filtro de estado no incluye 'Con Reparos'. Verificar mapping.",
+        "selector": "reparos-btn-*",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Gerencia → Ver reparos del abogado",
+        "issue": "Click en gerencia-reparos-btn-* dispara ver reparos → axios GET /api/estudio-titulo/reparos/{fid} → shape mismatch (objeto vs array) → crash. Debe accederse a r.data.reparos.items.",
+        "affected_selectors": ["gerencia-reparos-btn-*", "gerencia-reparos-modal", "gerencia-reparos-cerrar"]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_32.py",
+    "/app/test_reports/pytest/iter32.xml"
+  ],
+  "action_items": [
+    "FIX CRÍTICO en /app/frontend/src/pages/GerenciaComercialModule.js línea 46: cambiar `r.data?.reparos || r.data?.alertas || []` por `r.data?.reparos?.items || r.data?.alertas || []` (o normalizar a array antes del setState). Sin este fix, el modal de reparos del abogado en Gerencia Comercial es inusable y tira runtime error rojo.",
+    "Revisar ClientesModule.js: por qué reparos-btn-{id} no aparece cuando existe carpeta 'Con Reparos' (Catalina Castillo). Puede ser filtro de visibilidad o falta de conexión con estudio_reparos.items."
+  ],
+  "critical_code_review_comments": [
+    "Bug de shape mismatch entre backend y frontend en /api/estudio-titulo/reparos/{fid}: backend devuelve {reparos: {items, estado}} y frontend espera {reparos: [...]}. Este contrato debe documentarse y validarse con TypeScript o pydantic response_model. Ya existe (r.data?.alertas || []) como fallback histórico — evidencia de que la interfaz ha cambiado sin actualizar todos los consumidores.",
+    "GerenciaComercialModule.js no captura el error de render — un solo objeto malformado tira TODO el módulo con overlay rojo. Envolver en ErrorBoundary + normalizar la respuesta al setState.",
+    "adn_clientes.py _mask_query: usa nombre[:25] con $regex simple — si el usuario tiene rol='D' pero sin 'nombre' en el token (como create_token('broker1','D')), la máscara cae en {'_id': None} (correcto: bloquea todo). Verificar que create_token siempre inyecte 'nombre' cuando hay sub, o el broker no verá NADA de su cartera.",
+    "adn_clientes.py adn_expediente: si el usuario NO tiene rol admin/maestro ni perfil B, aún así devuelve el expediente (sólo 'piezas_modulo') SIN aplicar máscara de cartera — cualquier ejecutivo autenticado puede consultar el expediente parcial de CUALQUIER RUT. Debe aplicarse la máscara también en 'piezas_modulo'."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_32.py",
+    "/app/test_reports/iteration_32.json",
+    "/app/test_reports/pytest/iter32.xml"
+  ],
+  "success_rate": {
+    "backend": "100% (9/9)",
+    "frontend": "75% (3/4 flujos OK: supercarpeta V2, clientes ✓100%, base histórica; FALLA: gerencia reparos modal)"
+  },
+  "test_credentials": "administrador / 141617575 (admin); broker1 rol D token generado en el fixture via auth.create_token",
+  "seed_data_creation": "Ninguno. No se tocó CARLOS SALGADO ni CATALINA CASTILLO. No se envió correo real. Motor de historia no fue iniciado. Endpoint /api/adn/volcar no se ejecutó como admin (sólo se probó 403 en broker).",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend 100% OK. FIX pendiente en frontend GerenciaComercialModule.js:46 (shape del response de /api/estudio-titulo/reparos/{fid}: reparos.items es el array). Tras el fix, re-verificar clic gerencia-reparos-btn-* abre gerencia-reparos-modal con texto del abogado y gerencia-reparos-cerrar lo cierra. También revisar por qué reparos-btn-* no aparece en ClientesModule aunque Catalina Castillo está 'Con Reparos' en Supercarpeta. La máscara de privacidad en /api/adn/expediente para ejecutivos (no admin/B) permite ver piezas_modulo de CUALQUIER RUT — endurecer.",
+  "rca of the issue": "RCA: Backend /api/estudio-titulo/reparos/{fid} (server.py:7736) devuelve `{reparos: {items:[], estado:'sin_reparos'}, ...}`. Frontend GerenciaComercialModule.js:46 asume que r.data.reparos ES un array y hace `.map()` en línea 351. Al ser objeto truthy, el `|| []` fallback no dispara → runtime TypeError rompe el render de todo el módulo (overlay rojo). Reproducción: login admin → nav-gerencia → clic gerencia-reparos-btn-<folder>. Mitigación (una línea): en línea 46 usar `r.data?.reparos?.items || r.data?.alertas || []`. Robustez extra: normalizar `Array.isArray(x) ? x : (x?.items || [])` y envolver el módulo en ErrorBoundary."
+}

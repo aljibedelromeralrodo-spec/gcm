@@ -1096,7 +1096,7 @@ def _blindaje_responsivo(html):
     return html, problemas
 
 
-def send_mail(to, subject, body_html, attachments=None, desde="secundaria", cc=None, headers=None, clave_sin_ajuste="", bcc=None):
+def send_mail(to, subject, body_html, attachments=None, desde="secundaria", cc=None, headers=None, clave_sin_ajuste="", bcc=None, registro_fallo=True):
     """Envia un correo con envío controlado (throttling):
     1) pausa mínima de 10s entre correos, 2) 1 reintento automático tras 60s si falla,
     3) todo error SMTP queda en la colección 'log_errores_correo' (fecha + destinatario).
@@ -1185,6 +1185,15 @@ def send_mail(to, subject, body_html, attachments=None, desde="secundaria", cc=N
             time.sleep(REINTENTO_ESPERA)
     if not res.get("success") and res.get("error"):
         res["error"] = f"{res['error']} (se reintentó 1 vez tras {REINTENTO_ESPERA}s)"
+    if not res.get("success") and registro_fallo:
+        # REGLA DE ORO #62: el fallo queda en correos_fallidos para re-intento atómico
+        import uuid as _uuid
+        _log_db_insert("correos_fallidos", {
+            "id": str(_uuid.uuid4()), "estado": "fallido",
+            "to": msg["To"], "cc": msg.get("Cc", ""), "bcc": msg.get("Bcc", ""),
+            "desde_rol": desde, "subject": subject, "body_html": body_html,
+            "attachments": attachments or [],
+            "smtp_code": res.get("smtp_code"), "error": res.get("error", ""), "reintentos": 0})
     try:
         size_kb = round(len(msg.as_bytes()) / 1024, 1)
     except Exception:

@@ -7,6 +7,17 @@ import CompromisoEditor from "./CompromisoEditor";
 import { secureGet } from "../utils/secureStore";
 
 const API = process.env.REACT_APP_BACKEND_URL;
+// Regla #65: validador de dígito verificador (módulo 11) — RUT verificado al 100%
+const rutValido = (rut) => {
+  const r = String(rut || "").replace(/[^0-9kK]/g, "").toLowerCase();
+  if (r.length < 8 || !/^\d+$/.test(r.slice(0, -1))) return false;
+  const cuerpo = r.slice(0, -1), dv = r.slice(-1);
+  let s = 0, m = 2;
+  for (let i = cuerpo.length - 1; i >= 0; i--) { s += parseInt(cuerpo[i], 10) * m; m = m === 7 ? 2 : m + 1; }
+  const res = 11 - (s % 11);
+  const dvC = res === 11 ? "0" : res === 10 ? "k" : String(res);
+  return dv === dvC;
+};
 const CAT_LABELS = { cedula: "Cédula", liquidacion: "Liquidaciones", afp: "AFP", cmf: "CMF", imp_renta: "Imp. Renta", boletas: "Boletas" };
 
 const BrokersPanel = ({ brokers, dest, setDest, reloadBrokers, soloAdmin }) => {
@@ -1662,8 +1673,24 @@ export default function ClientesModule({ onNavigate }) {
                   )}
                   <div className="clientes-card-icon"><i className="fa fa-folder"></i></div>
                   <div className="clientes-card-info">
-                    <h4>{f.nombre}</h4>
-                    {f.rut && <span className="clientes-rut">{f.rut}</span>}
+                    <h4 style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>{f.nombre}
+                      {(f.tasacion_informe_recibido_at || f.estudio_recibido_at) && (
+                        <span data-testid={`informe-ok-${f.id}`}
+                          title={`Informe recibido${f.tasacion_informe_recibido_at ? " · Tasación " + String(f.tasacion_informe_recibido_at).slice(0, 10) : ""}${f.estudio_recibido_at ? " · Títulos " + String(f.estudio_recibido_at).slice(0, 10) : ""}`}
+                          style={{ fontSize: 13 }}>✅</span>
+                      )}
+                      {((f.reparos_alertas || []).length + ((f.estudio_reparos || {}).items || []).length) > 0 && (
+                        <button data-testid={`reparos-btn-${f.id}`}
+                          onClick={(ev) => { ev.stopPropagation(); openReparos(f); }}
+                          title="Reparos del abogado — pinche para leer el texto íntegro"
+                          style={{ cursor: "pointer", border: "none", borderRadius: 8, fontWeight: 800,
+                            fontSize: 10, padding: "2px 7px", background: "rgba(239,68,68,0.18)", color: "#ef4444" }}>
+                          ⚠️ {(f.reparos_alertas || []).length + ((f.estudio_reparos || {}).items || []).length} reparo(s)
+                        </button>
+                      )}
+                    </h4>
+                    {f.rut && <span className="clientes-rut">{f.rut}{rutValido(f.rut) &&
+                      <b title="RUT verificado al 100% (dígito verificador módulo 11)" style={{ color: "#22c55e", marginLeft: 4 }}>✓100%</b>}</span>}
                     {f.codeudor_nombre && <span className="clientes-codeudor"><i className="fa fa-user-plus"></i> {f.codeudor_nombre}</span>}
                     <span className="clientes-file-count">{f.total_archivos || 0} archivos</span>
                     <div style={{ display: "flex", gap: 6, marginTop: 4, flexWrap: "wrap" }}>

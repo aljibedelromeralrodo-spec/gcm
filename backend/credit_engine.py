@@ -276,11 +276,11 @@ def simular_credito(d: dict) -> dict:
     # Umbrales (defaults BTG con-codeudor si vienen)
     u_div = float(d.get("umbral_btg_div_renta") or 0.35)
     u_carga = float(d.get("umbral_btg_carga_fin") or 0.40)
-    u_ltv = float(d.get("umbral_btg_ltv") or 0.80)
+    u_ltv = min(float(d.get("umbral_btg_ltv") or 0.80), LTV_MAX_63)
     u_edad_plazo = float(d.get("umbral_btg_edad_plazo") or 80)
     a_div = float(d.get("umbral_ameris_div_renta") or 0.30)
     a_carga = float(d.get("umbral_ameris_carga_fin") or 0.35)
-    a_ltv = float(d.get("umbral_ameris_ltv") or 0.80)
+    a_ltv = min(float(d.get("umbral_ameris_ltv") or 0.80), LTV_MAX_63)
     a_edad_plazo = float(d.get("umbral_ameris_edad_plazo") or 75)
 
     # Capacidad de credito (tope de dividendo = 30% conjunta)
@@ -290,8 +290,8 @@ def simular_credito(d: dict) -> dict:
     capacidad_uf = capacidad_desde_dividendo(dividendo_tope_uf, tasa, plazo)
 
     # Credito maximo limitado por LTV de la propiedad
-    # REGLA DE ORO #11: el tope LTV se TRUNCA a 2 decimales (jamás redondear hacia arriba → nunca 80.01%)
-    ltv_cap_uf = int(valor_prop * u_ltv * 100) / 100 if valor_prop > 0 else capacidad_uf
+    # REGLA DE ORO #11 + #63: tope 79.50% exacto (10 decimales) y TRUNCADO a 2 (jamás hacia arriba)
+    ltv_cap_uf = int(round(valor_prop * u_ltv, 10) * 100) / 100 if valor_prop > 0 else capacidad_uf
     credito_maximo_uf = min(capacidad_uf, ltv_cap_uf) if valor_prop > 0 else capacidad_uf
     credito_maximo_uf = int(credito_maximo_uf * 100) / 100
 
@@ -342,9 +342,16 @@ def simular_credito(d: dict) -> dict:
     # Credito solicitado viable?
     credito_viable = False
     pie_requerido_uf = 0.0
+    ajuste_pie_795 = False
+    credito_ajustado_795_uf = credito_sol
     if credito_sol > 0:
         credito_viable = credito_sol <= credito_maximo_uf + 0.5 and (valor_prop == 0 or ltv <= max(u_ltv, a_ltv))
         pie_requerido_uf = round(max(0.0, valor_prop - credito_sol - subsidio - ahorro), 2)
+        # REGLA DE ORO #63: ratio sobre 79.50% → el Pie sube automáticamente hasta clavar el 79.50%
+        if valor_prop > 0 and ltv > LTV_MAX_63:
+            ajuste_pie_795 = True
+            credito_ajustado_795_uf = int(round(valor_prop * LTV_MAX_63, 10) * 100) / 100
+            pie_requerido_uf = round(max(0.0, valor_prop - credito_ajustado_795_uf - subsidio - ahorro), 2)
 
     valor_maximo_compra_uf = round(credito_maximo_uf + ahorro + subsidio, 2)
 
@@ -376,6 +383,9 @@ def simular_credito(d: dict) -> dict:
         "credito_solicitado_uf": credito_sol,
         "credito_viable": credito_viable,
         "pie_requerido_uf": pie_requerido_uf,
+        "ajuste_pie_795": ajuste_pie_795,
+        "credito_ajustado_795_uf": credito_ajustado_795_uf,
+        "ltv_maximo_795": LTV_MAX_63,
         "valor_propiedad_uf": valor_prop,
         "div_renta_individual": round(div_renta_individual, 4),
         "div_renta_codeudor": round(div_renta_codeudor, 4),
@@ -395,6 +405,10 @@ def simular_credito(d: dict) -> dict:
         "endeudamiento": _endeud,
         "alerta_carga_40": bool(carga_fin_conjunta > CF_TOPE_CARGA),
     }
+
+
+# REGLA DE ORO #63 — ULTRA-PRECISIÓN: financiamiento máximo 79.50% EXACTO (10 decimales)
+LTV_MAX_63 = round(0.7950000000, 10)
 
 
 # ---------------------------------------------------------------------------
@@ -438,10 +452,10 @@ def predict_inmobiliaria(d: dict, tasas: dict, seguros: dict, valor_uf: float) -
     # Tasa
     if modo == "subsidio":
         tasa = tasas["tasa_subsidio_mayor_2000"] if monto_credito > 2000 else tasas["tasa_subsidio_menor_2000"]
-        ltv_max = float(u.get("ltv_maximo") or 0.80)
+        ltv_max = min(float(u.get("ltv_maximo") or 0.80), LTV_MAX_63)
     else:
         tasa = tasas["tasa_sin_subsidio"]
-        ltv_max = float(u.get("ltv_maximo_sin_subsidio") or 0.90)
+        ltv_max = min(float(u.get("ltv_maximo_sin_subsidio") or 0.90), LTV_MAX_63)
     tasa_aplicada = round(tasa * 100, 2)
 
     plazo_max = _plazo_maximo(max(edad, edad_codeudor) if tiene_codeudor else edad, u_edad)
@@ -457,7 +471,7 @@ def predict_inmobiliaria(d: dict, tasas: dict, seguros: dict, valor_uf: float) -
     div_tope_uf = div_tope_clp / valor_uf
     capacidad_uf = capacidad_desde_dividendo(div_tope_uf, tasa, plazo)
 
-    ltv_cap_uf = valor_prop * ltv_max if valor_prop > 0 else capacidad_uf
+    ltv_cap_uf = round(valor_prop * ltv_max, 10) if valor_prop > 0 else capacidad_uf
     candidates = [capacidad_uf]
     if valor_prop > 0:
         candidates.append(ltv_cap_uf)

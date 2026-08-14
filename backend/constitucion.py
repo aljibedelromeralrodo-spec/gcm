@@ -93,6 +93,18 @@ REGLAS_ORO = [
      "ley": "La experiencia visual del Maserati es fluida. El sistema debe evitar el uso de marcos, recuadros y divisiones visuales que dificulten la lectura continua de la cartera de clientes. REGLA DE DISEÑO: el foco es la información; el fondo es Dark Slate sólido y las letras e iconos definen la estructura, no las cajas. La separación se logra con espaciado y leves gradientes."},
     {"n": 57, "id": "huella_gestion_botones", "titulo": "Huella visible de gestión",
      "ley": "Toda acción de la Gerencia Comercial debe dejar una huella visible en la interfaz. Los botones deben informar el estado de la última gestión realizada para evitar duplicidad de trabajo. REGLA DE HIERRO: la fecha de cada reclamo se guarda en la carpeta del cliente (persistente a reinicios) y reclamar el mismo hito antes de 12 horas exige confirmación explícita."},
+    {"n": 58, "id": "identidad_inmobiliaria", "titulo": "Identidad de Inmobiliaria obligatoria",
+     "ley": "Prohibido el uso del término 'Directo' cuando el cliente pertenece a una inmobiliaria identificada. El sistema debe priorizar el nombre de la Inmobiliaria en todos los cuadros de mando, individualizando cada inmobiliaria y ordenando la cartera por Inmobiliaria o Usado. REGLA DE HIERRO: si el dato de la inmobiliaria no se ha llenado, el sistema alerta '⚠️ Falta Identidad de Inmobiliaria'; nunca se pone 'Directo' por defecto."},
+    {"n": 62, "id": "confirmacion_salida_smtp", "titulo": "Confirmación de salida SMTP",
+     "ley": "Ningún hito se considera enviado hasta que el servidor de correo confirme la salida exitosa. Es obligación de cada ejecutivo limpiar su lista de envíos fallidos al inicio de su jornada. REGLA DE HIERRO: el sistema no permite marcar un hito como 'Completado' si el correo de notificación asociado está en estado 'Fallido'."},
+    {"n": 63, "id": "ultra_precision_795", "titulo": "Ultra-Precisión 79.50%",
+     "ley": "El financiamiento máximo permitido es 79.50% exacto, calculado a 10 decimales. Si el ratio original es superior, el sistema aumenta el Pie automáticamente hasta clavar el 79.50%, manteniendo la operación de crédito intacta. REGLA DE HIERRO: jamás se emite una evaluación con LTV sobre 79.50%."},
+    {"n": 64, "id": "verdad_dato_dashai", "titulo": "La verdad del dato reside en DashAI",
+     "ley": "La verdad del dato reside en DashAI. El sistema prioriza la información almacenada localmente (1° DashAI DB, 2° Archivos Bóveda, 3° Correo IMAP) para garantizar velocidad y evitar bloqueos de servidores externos de correo. Prohibido consultar el correo si el dato ya existe internamente. REGLA DE HIERRO: una vez validado un dato por el administrador, DashAI lo defiende como la fuente de verdad única."},
+    {"n": 65, "id": "certeza_absoluta_100", "titulo": "Certeza Absoluta (100%)",
+     "ley": "La precisión en la extracción y cruce de datos (RUT, Nombre, Montos) debe ser del 100%. Prohibido dar por válido cualquier dato que presente una discrepancia mínima. REGLA DE HIERRO: si el sistema no tiene certeza absoluta, el campo queda bloqueado y marcado en Rojo para revisión manual. Ninguna actualización puede relajar el estándar del 100% de precisión ni el límite del 79.50% para usadas."},
+    {"n": 66, "id": "boveda_adn_clientes", "titulo": "Bóveda de ADN de Clientes",
+     "ley": "La Bóveda de ADN de Clientes (ADN_CLIENTES_360) es el registro civil único de Central Mutuos. El acceso a la información es restringido por propiedad de cartera: los ejecutivos solo consultan RUTs de su propia gestión; el administrador y la Gerencia Comercial tienen acceso total y búsqueda global, garantizando la privacidad y la integridad absoluta de los datos. Cada registro contiene el EXPEDIENTE_360 (titular, codeudor amarrado por RUT, propiedad con fojas/número/año, hitos legales y links a los archivos originales de la Bóveda Local). MODO BODEGA SOBERANA: es la fuente primaria y final de consulta; si falta un dato, se succiona del PDF histórico y se guarda para siempre. REGLA DE HIERRO: ningún dato nuevo entra sin pasar el Validador de Dígito Verificador de RUT; el sistema no le pide nada a Gmail si el dato existe en el EXPEDIENTE_360 y la IA tiene prohibido reportar 'datos incompletos' si la información está en la historia documental del cliente."},
 ]
 
 REGLAS_EFICIENCIA = [
@@ -103,7 +115,7 @@ REGLAS_EFICIENCIA = [
     {"id": "estimacion_previa", "ley": "Estimación Previa: antes de construir, calcular la ruta de menor costo de créditos según DashAI."},
 ]
 
-VERSION = 19  # +#56 Seamless UI +#57 Huella de Gestión (botones dinámicos, bloqueo 12h)
+VERSION = 24  # #66 ampliada: EXPEDIENTE_360 (réplica total, bodega soberana, cruce codeudores)
 
 
 class ViolacionConstitucional(Exception):

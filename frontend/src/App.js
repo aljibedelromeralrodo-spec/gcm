@@ -8,6 +8,7 @@ import CentralPredic from "./pages/CentralPredic";
 import PortalCliente from "./pages/PortalCliente";
 import ShareTargetPage from "./pages/ShareTargetPage";
 import PWAInstallPrompt from "./components/PWAInstallPrompt";
+import BriefingMananero from "./components/BriefingMananero";
 
 const DashboardModule = lazy(() => import("./pages/DashboardModule"));
 const SimuladorModule = lazy(() => import("./pages/SimuladorModule"));
@@ -22,6 +23,7 @@ const GerenciaComercialModule = lazy(() => import("./pages/GerenciaComercialModu
 const AdministracionModule = lazy(() => import("./pages/AdministracionModule"));
 const BrokersModule = lazy(() => import("./pages/BrokersModule"));
 const MiCorreoModule = lazy(() => import("./pages/MiCorreoModule"));
+const BaseHistoricaModule = lazy(() => import("./pages/BaseHistoricaModule"));
 const SupercarpetaModule = lazy(() => import("./pages/SupercarpetaModule"));
 const CriteriosModule = lazy(() => import("./pages/CriteriosModule"));
 const WhatsAppModule = lazy(() => import("./pages/WhatsAppModule"));
@@ -65,6 +67,7 @@ const MODULE_TITLES = {
   'whatsapp': 'WhatsApp - Conexion y Aprobaciones',
   'autocorreo': 'Correo a Mesa - Envío revisado directo a mesa',
   'procesamiento': 'Procesamiento de Correo',
+  basehistorica: '🏛 Base de Datos Histórica — Archivo Nacional',
   gastos: 'Gastos Operacionales',
   aprobacion: 'Envío Aprobación Cliente',
   cierres: 'Cierres — Seguimiento de Aprobaciones',
@@ -202,6 +205,7 @@ function MainApp() {
     ...(['admin', 'maestro'].includes(user.rol) ? [{ key: 'whatsapp', icon: 'fa-whatsapp', label: 'WhatsApp' }] : []),
     ...(['admin', 'maestro'].includes(user.rol) ? [{ key: 'autocorreo', icon: 'fa-envelope-o', label: 'Correo a Mesa' }] : []),
     ...(['admin', 'maestro'].includes(user.rol) ? [{ key: 'procesamiento', icon: 'fa-inbox', label: 'Procesamiento Correo' }] : []),
+    ...(['admin', 'maestro'].includes(user.rol) ? [{ key: 'basehistorica', icon: 'fa-university', label: 'Base de Datos Histórica' }] : []),
     ...(['admin', 'maestro'].includes(user.rol) || user.perfil === 'B' ? [
       { key: 'gerencia', icon: 'fa-line-chart', label: 'Gerencia Comercial' },
       { key: 'supercarpeta', icon: 'fa-folder-open', label: 'Supercarpeta' },
@@ -345,6 +349,7 @@ function MainApp() {
           </div>
         )}
 
+        <BriefingMananero user={user} />
         <Suspense fallback={<div style={{ textAlign: "center", padding: "4rem" }}><i className="fa fa-spinner fa-spin" style={{ fontSize: "2rem", color: "var(--gold)" }}></i></div>}>
         {activeModule === 'dashboard' && <DashboardModule valorUF={valorUF} userName={user?.nombre} onNavigate={setActiveModule} />}
         {activeModule === 'simulador' && <SimuladorModule valorUF={valorUF} loadedSimulation={loadedSimulation} />}
@@ -359,6 +364,7 @@ function MainApp() {
         {activeModule === 'brokers' && <BrokersModule user={user} />}
         {activeModule === 'micorreo' && <MiCorreoModule user={user} />}
         {activeModule === 'supercarpeta' && <SupercarpetaModule />}
+        {activeModule === 'basehistorica' && <BaseHistoricaModule />}
         {activeModule === 'criterios' && <CriteriosModule />}
         {activeModule === 'whatsapp' && <WhatsAppModule />}
         {activeModule === 'autocorreo' && <AutocorreoModule />}

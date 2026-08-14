@@ -192,13 +192,17 @@ async def _rescate_historico_loop():
 
 
 async def _task_blindada(coro_fn, nombre):
-    """Supervisor: si un loop de fondo muere, se registra y se reinicia solo."""
+    """Supervisor: si un loop de fondo muere por error, se registra y se reinicia solo.
+    Si el loop retorna limpio (cliente Mongo cerrado en hot-reload), el supervisor termina."""
     while True:
         try:
             await coro_fn()
+            break  # retorno limpio = proceso en cierre: no revivir zombies
         except asyncio.CancelledError:
             break
         except Exception as e:
+            if "after close" in str(e):
+                break
             try:
                 await db.system_log.insert_one({"id": str(uuid.uuid4()), "loop": nombre,
                                                 "error": str(e)[:300], "fecha": now_iso()})
@@ -277,6 +281,12 @@ async def startup():
     asyncio.create_task(_task_blindada(_dashai_dataset_loop, "dashai_dataset_2359"))
     asyncio.create_task(_task_blindada(_cloud_bunker_loop, "cloud_bunker_espejo"))
     asyncio.create_task(_task_blindada(_espejo_mesa_loop, "espejo_mesa_24h"))
+    asyncio.create_task(_task_blindada(_perfil.cosecha_loop, "cosecha_perfil_64"))
+    import base_historica as _hist_loop_mod
+    asyncio.create_task(_task_blindada(_hist_loop_mod.historia_loop, "historia_minado"))
+    import adn_clientes as _adn_loop_mod
+    asyncio.create_task(_task_blindada(_adn_loop_mod.adn_loop, "adn_360"))
+    asyncio.create_task(_task_blindada(_malla_mod.auditoria_loop, "auditoria_tiempo_real"))
 
 
 # ---------------------------------------------------------------------------
@@ -2712,11 +2722,13 @@ async def _sync_docs_aprobacion(nombre):
         for p in candidatos:
             if _tipo_pdf_aprobacion(p.name) != "otro":
                 _guardar(p.name, p.read_bytes())
-    # 2) Directo del correo (carta aprobación / simulador / ajustado)
-    try:
-        adjuntos = await asyncio.to_thread(_imap_descargar_adjuntos_cliente, nombre)
-    except Exception:
-        adjuntos = []
+    # 2) Directo del correo — REGLA DE ORO #64: 1° Bóveda; IMAP solo si falta el dato
+    adjuntos = []
+    if not copiados and await _perfil.imap_permitido(nombre, "adjuntos aprobación"):
+        try:
+            adjuntos = await asyncio.to_thread(_imap_descargar_adjuntos_cliente, nombre)
+        except Exception:
+            adjuntos = []
     for fn, raw in adjuntos:
         _guardar(fn, raw)
     if copiados:
@@ -3831,6 +3843,13 @@ async def _asegurar_carpeta_aprobacion(nombre):
             "mensaje": f"📁 Carpeta creada automáticamente por APROBACIÓN de mesa: {folder['nombre']}",
             "fecha": now_iso(), "leida": False})
     copiados = await _sync_docs_aprobacion(folder.get("nombre", ""))
+    # MOTOR DE COSECHA (Regla #64): datos clave de la aprobación → perfil_consolidado
+    try:
+        fd_full = await db.folders.find_one({"id": folder["id"]})
+        if fd_full:
+            await _perfil.cosechar_carpeta(fd_full, "aprobacion_mesa")
+    except Exception as e:
+        logging.warning(f"cosecha aprobación: {e}")
     return {"carpeta": folder.get("nombre", ""), "copiados": copiados}
 
 
@@ -7037,6 +7056,12 @@ async def tasacion_detectar_fecha(fid: str):
     doc = await db.folders.find_one({"id": fid})
     if not doc:
         raise HTTPException(status_code=404, detail="Carpeta no encontrada")
+    # REGLA DE ORO #64: 1° DashAI DB — si el perfil ya tiene la fecha, no se consulta el correo
+    p_fecha = (doc.get("perfil_consolidado") or {}).get("fecha_tasacion") or doc.get("tasacion_fecha")
+    if p_fecha:
+        await db.folders.update_one({"id": fid}, {"$set": {"tasacion_fecha": p_fecha,
+                                                           "tasacion_fecha_origen": "dashai_db"}})
+        return {"ok": True, "fecha": p_fecha, "fuente": "DashAI DB (Regla #64)"}
     fecha = await asyncio.to_thread(_buscar_fecha_tasacion_imap, doc.get("nombre", ""))
     if not fecha:
         return {"ok": False, "detail": "No se encontró respuesta de Value Property con fecha para este cliente"}
@@ -7712,7 +7737,8 @@ async def _estudio_reparos_loop():
 async def reparos_get(fid: str):
     doc = await _get_folder_doc(fid)
     rep = doc.get("estudio_reparos") or {"items": [], "estado": "sin_reparos"}
-    return {"reparos": clean(rep), "vendedor": doc.get("estudio_titulo_vendedor") or {},
+    return {"reparos": clean(rep), "alertas": clean(doc.get("reparos_alertas") or []),
+            "vendedor": doc.get("estudio_titulo_vendedor") or {},
             "tipo_vivienda": doc.get("estudio_titulo_tipo_vivienda", ""),
             "subject": doc.get("estudio_titulo_subject", "")}
 
@@ -8831,8 +8857,25 @@ async def compromiso_get(fid: str):
 @api.put("/compromiso/{fid}")
 async def compromiso_put(fid: str, payload: dict):
     upd = {"datos": payload.get("datos") or {}, "clausulas_html": "", "updated_at": now_iso()}
+    # REGLA DE ORO #63: en Vivienda Usada el crédito del compromiso no supera el 79.50% exacto
+    try:
+        fd = await db.folders.find_one({"id": fid}, {"tipo_operacion": 1})
+        precio = (upd["datos"].get("precio") or {})
+        valor = float(precio.get("valor_total_uf") or 0)
+        pie = float(precio.get("pie_uf") or 0)
+        if (fd or {}).get("tipo_operacion", "").lower() == "usada" and valor > 0:
+            from credit_engine import LTV_MAX_63
+            credito_max = round(valor * LTV_MAX_63, 10)
+            if valor - pie > credito_max:
+                pie_min = round(valor - credito_max, 2)
+                precio["pie_uf"] = pie_min
+                precio["ajuste_pie_795"] = True
+                upd["nota_795"] = (f"Regla #63: pie ajustado automáticamente a {pie_min} UF "
+                                   f"para clavar el LTV en 79.50% exacto (Vivienda Usada)")
+    except Exception as e:
+        logging.warning(f"compromiso 79.5%: {e}")
     await db.compromisos.update_one({"folder_id": fid}, {"$set": upd}, upsert=True)
-    return {"ok": True, "updated_at": upd["updated_at"]}
+    return {"ok": True, "updated_at": upd["updated_at"], "nota_795": upd.get("nota_795", "")}
 
 
 @api.post("/compromiso/{fid}/pdf")
@@ -8841,6 +8884,24 @@ async def compromiso_pdf(fid: str, payload: dict):
     html = (payload or {}).get("html") or ""
     if len(html) < 50:
         raise HTTPException(status_code=400, detail="Documento vacío")
+    # BLOQUEO DE PRECISIÓN 100% (Regla #63): usadas sobre 79.50% NO generan PDF
+    try:
+        fd_63 = await db.folders.find_one({"id": fid}, {"tipo_operacion": 1})
+        comp_63 = await db.compromisos.find_one({"folder_id": fid}) or {}
+        precio_63 = ((comp_63.get("datos") or {}).get("precio") or {})
+        valor_63 = float(precio_63.get("valor_total_uf") or 0)
+        pie_63 = float(precio_63.get("pie_uf") or 0)
+        if (fd_63 or {}).get("tipo_operacion", "").lower() == "usada" and valor_63 > 0:
+            from credit_engine import LTV_MAX_63
+            if round((valor_63 - pie_63) / valor_63, 10) > LTV_MAX_63:
+                raise HTTPException(status_code=422, detail=(
+                    f"⛔ Regla de Oro #63: el contrato no cumple el LTV máximo de 79.5000000000% para "
+                    f"Vivienda Usada (crédito {round(valor_63 - pie_63, 2)} UF sobre {valor_63} UF). "
+                    f"Ajuste el Pie antes de generar el PDF."))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.warning(f"pdf 79.5%: {e}")
     # CONSULTA PREVIA A LA CONSTITUCIÓN — Regla de Oro: sobriedad del PDF legal
     try:
         import constitucion as _const
@@ -11507,7 +11568,20 @@ async def contraloria_certificado(cliente: str = "", rut: str = ""):
     modelo = await asyncio.to_thread(mesa_brain.modelo_actual)
     modelo.pop("_id", None)
     fd = None
-    if rut:
+    # BÓVEDA ADN (Regla #66): el Contralor consulta primero el registro civil único
+    adn_reg = None
+    try:
+        import adn_clientes as _adn_m
+        if rut:
+            adn_reg = await db.adn_clientes_360.find_one({"rut_norm": _adn_m._norm_rut(rut)})
+        if not adn_reg and cliente:
+            adn_reg = await db.adn_clientes_360.find_one(
+                {"identidad.nombre": {"$regex": re.escape(cliente[:25]), "$options": "i"}})
+        if adn_reg and (adn_reg.get("origen") or {}).get("folder_id"):
+            fd = await db.folders.find_one({"id": adn_reg["origen"]["folder_id"]})
+    except Exception as e:
+        logging.warning(f"contraloria ADN: {e}")
+    if not fd and rut:
         rut_f = re.sub(r"[^0-9kK]", "", rut).lower()
         fd = await db.folders.find_one({"rut": {"$regex": rut_f[:8], "$options": "i"}})
     if not fd and cliente:
@@ -11528,6 +11602,10 @@ async def contraloria_certificado(cliente: str = "", rut: str = ""):
     resp = "aprobacion" if (seg or {}).get("estado") in ("aprobacion", "aprobado") else "rechazo"
     cert = await asyncio.to_thread(mesa_brain.auditar_caso, fd, sim, resp, modelo)
     cert["fecha_mesa"] = (seg or {}).get("fecha", "")
+    if adn_reg:
+        adn_reg.pop("_id", None)
+        cert["adn_360"] = {"rut": adn_reg.get("rut"), "fuente": "ADN_CLIENTES_360 (Regla #66)",
+                           "propiedad": adn_reg.get("propiedad"), "financiero": adn_reg.get("financiero")}
     return cert
 
 
@@ -11754,10 +11832,12 @@ async def _forense_perfil_al_vuelo(s):
     perfil = None
     try:
         pares = []
-        if rut:
+        # REGLA DE ORO #64: sin búsquedas de RUT/dirección en el correo si el set está completo
+        _imap_ok = await _perfil.imap_permitido(cliente or rut, "perfil_vuelo")
+        if rut and _imap_ok:
             adj = await asyncio.to_thread(mail.buscar_adjuntos_por_rut, rut, 8)
             pares = [(a["filename"], a["content"]) for a in adj]
-        if not pares and cliente:
+        if not pares and cliente and _imap_ok:
             pares = await asyncio.to_thread(
                 _imap_descargar_adjuntos_cliente, cliente,
                 r"liquidaci|sueldo|renta|informe_?deudas|cmf|codeudor|combinado|carpeta_")
@@ -12150,6 +12230,8 @@ async def _dashai_dataset_loop():
         except asyncio.CancelledError:
             break
         except Exception as e:
+            if "after close" in str(e):
+                break  # cliente Mongo cerrado (hot-reload): el loop zombie muere aquí
             logging.warning(f"dashai dataset loop: {e}")
 
 
@@ -12649,7 +12731,7 @@ async def _ocr_renta_backfill_job():
             if texto_mail:
                 texto = (texto + "\n\n" + texto_mail).strip()
                 n_pdfs += n_adj
-            if not texto:
+            if not texto and await _perfil.imap_permitido(nombre, "ocr_backfill"):
                 texto, n_pdfs = await _ocr_adjuntos_imap(nombre)
             if not texto:
                 sin_docs += 1
@@ -12657,7 +12739,7 @@ async def _ocr_renta_backfill_job():
                 await _progreso()
                 continue
             datos = await ai_extract.extraer_datos_financieros(texto, nombre)
-            if not datos.get("renta_liquida"):
+            if not datos.get("renta_liquida") and await _perfil.imap_permitido(nombre, "ocr_renta"):
                 texto_imap, n_imap = await _ocr_adjuntos_imap(nombre)
                 if texto_imap:
                     n_pdfs += n_imap
@@ -13596,6 +13678,16 @@ api.include_router(_malla_mod.supercarpeta)
 import grid_dashai as _grid_mod
 api.include_router(_grid_mod.grid)
 
+# Regla #62 (Monitor de Envíos SMTP) + Regla #64 (Perfil Consolidado — verdad DashAI)
+import monitor_envios as _monit_mod
+import perfil_consolidado as _perfil
+import base_historica as _hist_mod
+import adn_clientes as _adn_mod
+api.include_router(_monit_mod.correos_r)
+api.include_router(_perfil.perfil_r)
+api.include_router(_hist_mod.historia)
+api.include_router(_adn_mod.adn)
+
 
 @api.get("/constitucion")
 async def constitucion_leer():
@@ -13614,6 +13706,7 @@ async def constitucion_aprendizaje(payload: dict):
         "aprendizaje.modo": "solo_lectura",
         "aprendizaje.actualizado": now_iso()}}, upsert=True)
     return {"ok": True, "fuente_secundaria": correo, "modo": "solo_lectura"}
+
 
 
 app.include_router(api)

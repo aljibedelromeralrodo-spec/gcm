@@ -8,6 +8,7 @@ export default function SupercarpetaModule() {
   const [data, setData] = useState(null);
   const [solo24, setSolo24] = useState(false);
   const [preview, setPreview] = useState(null);
+  const [reparoModal, setReparoModal] = useState(null);
 
   useEffect(() => {
     axios.get(`${API}/api/supercarpeta`).then(r => setData(r.data)).catch(() => setData({ clientes: [] }));
@@ -42,7 +43,7 @@ export default function SupercarpetaModule() {
         <table data-testid="supercarpeta-tabla" style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.72rem", color: "#e2e8f0" }}>
           <thead>
             <tr style={{ color: "#94a3b8", fontSize: "0.6rem", textTransform: "uppercase", letterSpacing: "0.1em" }}>
-              {["Cliente", "RUT", "Broker", "Tasación (Value Property)", "Estudio de Títulos", "Borrador de Escritura"].map(h =>
+              {["Cliente", "RUT", "Inmobiliaria / Broker", "Estado Tasación", "Estudio de Títulos", "Estado Legal", "Detalle de Reparos", "Cesión / Transacción"].map(h =>
                 <th key={h} style={{ padding: "0.5rem 0.7rem", textAlign: "left", borderBottom: "1px solid rgba(148,163,184,0.15)" }}>{h}</th>)}
             </tr>
           </thead>
@@ -56,27 +57,82 @@ export default function SupercarpetaModule() {
                   {c.recien_24h && <span data-testid={`recien-${c.id}`} style={{ marginLeft: 6, color: "#22c55e", fontSize: "0.56rem", fontWeight: 800 }}>● NUEVO 24H</span>}
                 </td>
                 <td style={{ padding: "0.3rem 0.7rem", fontFamily: "monospace", fontSize: "0.66rem" }}>{c.rut || "—"}</td>
-                <td style={{ padding: "0.3rem 0.7rem", color: "#38bdf8", fontSize: "0.62rem" }}>{c.broker_origen}</td>
-                {INFORMES.map(([k]) => {
-                  const inf = c.informes?.[k] || {};
-                  return (
-                    <td key={k} style={{ padding: "0.3rem 0.7rem" }}>
-                      {inf.disponible
-                        ? <button data-testid={`ver-${k}-${c.id}`} onClick={() => abrir(c.id, c.cliente, inf)}
-                            title={`${inf.archivo} · ${(inf.fecha || "").slice(0, 16).replace("T", " ")}`}
-                            style={{ cursor: "pointer", background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.5)",
-                              color: "#22c55e", borderRadius: 8, padding: "0.2rem 0.6rem", fontSize: "0.62rem", fontWeight: 800 }}>
-                            📄 Ver PDF
-                          </button>
-                        : <span style={{ color: "#64748b", fontSize: "0.58rem" }}>Pendiente de Información</span>}
-                    </td>
-                  );
-                })}
+                <td style={{ padding: "0.3rem 0.7rem", color: (c.broker_origen || "").startsWith("⚠️") ? "#ef4444" : "#38bdf8", fontSize: "0.62rem" }}>{c.broker_origen}</td>
+                <td data-testid={`super-tasacion-${c.id}`} style={{ padding: "0.3rem 0.7rem", fontSize: "0.62rem" }}>
+                  <span style={{ fontWeight: 800, color: c.estado_tasacion === "Informe Recibido" ? "#22c55e"
+                    : c.estado_tasacion === "Visita" ? "#38bdf8" : c.estado_tasacion === "Solicitada" ? "#f59e0b" : "#ef4444" }}>
+                    {c.estado_tasacion === "Informe Recibido" ? "✅ " : c.estado_tasacion === "Pendiente" ? "🔴 " : ""}{c.estado_tasacion === "Pendiente" ? "PENDIENTE" : c.estado_tasacion}
+                  </span>
+                  {c.informes?.tasacion?.disponible && (
+                    <button data-testid={`ver-tasacion-${c.id}`} onClick={() => abrir(c.id, c.cliente, c.informes.tasacion)}
+                      title={`${c.informes.tasacion.archivo} · ${(c.informes.tasacion.fecha || "").slice(0, 16).replace("T", " ")}`}
+                      style={{ display: "block", marginTop: 2, cursor: "pointer", background: "rgba(34,197,94,0.12)",
+                        border: "1px solid rgba(34,197,94,0.5)", color: "#22c55e", borderRadius: 8,
+                        padding: "0.15rem 0.5rem", fontSize: "0.58rem", fontWeight: 800 }}>📄 Ver PDF</button>
+                  )}
+                </td>
+                <td data-testid={`super-estudio-${c.id}`} style={{ padding: "0.3rem 0.7rem", fontSize: "0.62rem" }}>
+                  <span style={{ fontWeight: 800, color: c.estudio_titulos === "Aprobado" ? "#22c55e"
+                    : c.estudio_titulos === "Con Reparos" ? "#f97316" : "#94a3b8" }}>
+                    {c.estudio_titulos === "Aprobado" ? "✅ " : c.estudio_titulos === "Con Reparos" ? "⚠️ " : "⏳ "}{c.estudio_titulos}
+                  </span>
+                  {c.informes?.estudio?.disponible && (
+                    <button data-testid={`ver-estudio-${c.id}`} onClick={() => abrir(c.id, c.cliente, c.informes.estudio)}
+                      title={`${c.informes.estudio.archivo} · ${(c.informes.estudio.fecha || "").slice(0, 16).replace("T", " ")}`}
+                      style={{ display: "block", marginTop: 2, cursor: "pointer", background: "rgba(34,197,94,0.12)",
+                        border: "1px solid rgba(34,197,94,0.5)", color: "#22c55e", borderRadius: 8,
+                        padding: "0.15rem 0.5rem", fontSize: "0.58rem", fontWeight: 800 }}>📄 Ver PDF</button>
+                  )}
+                </td>
+                <td data-testid={`super-legal-${c.id}`} style={{ padding: "0.3rem 0.7rem", fontSize: "0.62rem" }}>
+                  {c.estado_legal === "⚠️ Con Reparos"
+                    ? <button data-testid={`super-legal-btn-${c.id}`} onClick={() => setReparoModal({ cliente: c.cliente, texto: c.detalle_reparos })}
+                        title="Pinche para leer el texto íntegro del reparo extraído del correo"
+                        style={{ cursor: "pointer", border: "none", borderRadius: 8, fontWeight: 800,
+                          fontSize: "0.6rem", padding: "2px 8px", background: "rgba(249,115,22,0.18)", color: "#f97316" }}>
+                        ⚠️ Con Reparos</button>
+                    : <span style={{ fontWeight: 800, color: c.estado_legal === "✅ Limpio" ? "#22c55e" : "#f59e0b" }}>{c.estado_legal}</span>}
+                </td>
+                <td data-testid={`super-reparos-${c.id}`} style={{ padding: "0.3rem 0.7rem", fontSize: "0.6rem", maxWidth: 260,
+                  background: c.detalle_reparos ? "rgba(249,115,22,0.14)" : undefined,
+                  color: c.detalle_reparos ? "#f97316" : "#64748b" }}
+                  title={c.detalle_reparos || "Sin reparos detectados"}>
+                  {c.detalle_reparos
+                    ? <span style={{ fontWeight: 700, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{c.detalle_reparos}</span>
+                    : "—"}
+                </td>
+                <td data-testid={`super-cesion-${c.id}`} style={{ padding: "0.3rem 0.7rem", fontSize: "0.62rem" }}>
+                  <span style={{ fontWeight: 800, color: c.cesion === "Confirmada" ? "#22c55e" : "#94a3b8" }}>
+                    {c.cesion === "Confirmada" ? "✅ Confirmada" : "⏳ Pendiente"}
+                  </span>
+                  {c.informes?.borrador?.disponible && (
+                    <button data-testid={`ver-borrador-${c.id}`} onClick={() => abrir(c.id, c.cliente, c.informes.borrador)}
+                      title={`${c.informes.borrador.archivo}`}
+                      style={{ display: "block", marginTop: 2, cursor: "pointer", background: "rgba(34,197,94,0.12)",
+                        border: "1px solid rgba(34,197,94,0.5)", color: "#22c55e", borderRadius: 8,
+                        padding: "0.15rem 0.5rem", fontSize: "0.58rem", fontWeight: 800 }}>📄 Borrador</button>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
         {data && clientes.length === 0 && <p style={{ color: "#94a3b8", textAlign: "center", padding: "1.5rem" }}>Sin clientes {solo24 ? "con informes en las últimas 24h" : "en el mes corriente"}.</p>}
+        {reparoModal && (
+          <div data-testid="super-reparo-modal" onClick={() => setReparoModal(null)}
+            style={{ position: "fixed", inset: 0, zIndex: 210, background: "rgba(2,6,23,0.8)",
+              backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
+            <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 560, maxHeight: "78vh", overflowY: "auto",
+              background: "rgba(15,23,42,0.97)", borderRadius: 16, padding: "1.4rem 1.6rem", boxShadow: "0 30px 80px rgba(0,0,0,0.6)" }}>
+              <h4 style={{ margin: 0, color: "#f97316", fontSize: "0.9rem" }}>⚠️ Reparo extraído del correo — {reparoModal.cliente}</h4>
+              <div style={{ marginTop: 10, padding: "0.8rem 1rem", background: "rgba(249,115,22,0.1)",
+                borderLeft: "3px solid #f97316", borderRadius: 8, color: "#f8fafc", fontSize: "0.72rem", whiteSpace: "pre-wrap" }}>
+                {reparoModal.texto || "Sin texto registrado."}
+              </div>
+              <button data-testid="super-reparo-cerrar" onClick={() => setReparoModal(null)} className="maserati-btn" style={{ marginTop: 14 }}>Cerrar</button>
+            </div>
+          </div>
+        )}
       </div>
       {preview && (
         <div data-testid="super-preview-modal" onClick={() => { URL.revokeObjectURL(preview.url); setPreview(null); }}

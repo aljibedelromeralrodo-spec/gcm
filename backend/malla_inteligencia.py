@@ -545,6 +545,20 @@ async def malla_scan():
     return res
 
 
+async def auditoria_loop():
+    """REGLA DE ORO (Supercarpeta V2): actualización en tiempo real — cada 10 minutos se
+    revisan los correos recientes de brokers y tasadores autorizados."""
+    await asyncio.sleep(240)
+    while True:
+        try:
+            await flujos_auditoria_real(limit=40, dias=2)
+        except Exception as e:
+            if "after close" in str(e):
+                break
+            logging.warning(f"auditoria loop: {e}")
+        await asyncio.sleep(600)
+
+
 async def malla_loop():
     """DashAI rastrea envíos y recepciones con los aliados externos cada 5 minutos."""
     await asyncio.sleep(90)
@@ -671,6 +685,41 @@ async def flujos_contactos_visita():
 NOTARIA_KW = ("notar", "escritura", "repertorio")
 
 
+OBS_RE = re.compile(r"(observaci[oó]n(?:es)?|reparos?)\s*[:\-\n]?\s*(.{40,900}?)(?:\n\s*\n|$)",
+                    re.I | re.S)
+
+
+async def _minar_reparos_pdf(fd):
+    """REGLA DE MINADO: extrae el texto EXACTO de 'Observaciones'/'Reparos' desde los PDFs
+    de Estudio de Títulos archivados en la Bóveda Local (celda NARANJA en la Supercarpeta)."""
+    import ocr_service as _ocr
+    base = fsvc.folder_dir(fd.get("nombre") or "")
+    if not base.exists():
+        return 0
+    pdfs = sorted([p for p in base.rglob("*.pdf")
+                   if "estudio" in p.name.lower() or p.parent.name == "07_estudio_titulo"],
+                  key=lambda x: -x.stat().st_mtime)[:2]
+    existentes = {(r.get("texto") or "")[:80] for r in (fd.get("reparos_alertas") or [])}
+    nuevos = 0
+    for p in pdfs:
+        try:
+            texto = await asyncio.to_thread(_ocr.ocr_texto, p.read_bytes(), 8) or ""
+        except Exception:
+            continue
+        for m in OBS_RE.finditer(texto):
+            exacto = re.sub(r"\s+", " ", m.group(2)).strip()[:800]
+            if len(exacto) < 40 or exacto[:80] in existentes:
+                continue
+            reparo = {"asunto": f"Minado PDF: {p.name[:120]}", "texto": exacto,
+                      "de": "minado_pdf", "fecha": _now(), "detectado": _now(),
+                      "origen": "minado_pdf", "celda": "naranja", "archivo_fuente": p.name}
+            await db.folders.update_one({"id": fd["id"]}, {"$push": {"reparos_alertas": reparo}})
+            existentes.add(exacto[:80])
+            nuevos += 1
+            break  # una sección por PDF: el texto íntegro ya quedó copiado
+    return nuevos
+
+
 def _match_carpeta(texto, por_rut, folders):
     """Eje 1: RUT (Regla #34). Eje 2: nombre completo (≥2 tokens) como respaldo."""
     m = RUT_RE.search(texto or "")
@@ -687,14 +736,18 @@ def _match_carpeta(texto, por_rut, folders):
 
 
 @flujos.post("/auditoria-real")
-async def flujos_auditoria_real():
+async def flujos_auditoria_real(limit: int = 60, dias: int = 0):
     """Escaneo inmediato del correo del administrador (Regla #43): detecta informes de
     Value Property (tasación) y de Estudio de Títulos (con reparos), y sincroniza fechas
     y documentos con cada carpeta. REGLA DE HIERRO: sin correo de respaldo → el hito
     queda 'Pendiente de Información' (jamás se inventan datos)."""
     folders = await db.folders.find({}, {"id": 1, "nombre": 1, "rut": 1}).to_list(2000)
     por_rut = {_rut_limpio(f.get("rut")): f for f in folders if len(_rut_limpio(f.get("rut"))) >= 8}
-    correos = await asyncio.to_thread(mail.fetch_recent_full, 60)
+    correos = await asyncio.to_thread(mail.fetch_recent_full, min(max(limit, 10), 400))
+    if dias > 0:
+        from datetime import timedelta
+        corte = (datetime.now(timezone.utc) - timedelta(days=dias)).isoformat()
+        correos = [e for e in (correos or []) if (e.get("date") or "9999") >= corte[:10] or not e.get("date")]
     res = {"correos_revisados": len(correos or []), "tasaciones_detectadas": 0,
            "estudios_detectados": 0, "reparos_transcritos": 0, "sin_respaldo": 0, "detalle": []}
     for e in correos or []:
@@ -720,6 +773,13 @@ async def flujos_auditoria_real():
             await db.folders.update_one({"id": fd["id"]}, {"$set": {
                 "tasacion_informe_recibido_at": e.get("date") or _now(),
                 "tasacion_informe_asunto": asunto[:180]}})
+            # MOTOR DE COSECHA (Regla #64): el dato queda en DashAI, sin re-consultar IMAP
+            try:
+                import perfil_consolidado as _pc
+                await _pc.cosechar(fd["id"], {"fecha_informe_tasacion": e.get("date") or _now()},
+                                   "informe_tasacion")
+            except Exception:
+                pass
             if e.get("id"):
                 await _archivar_adjuntos(fd, e["id"], "TASACION", subdir="99_otros")
             hito_n, res_k = "Informe de Tasación Recibido", "tasaciones_detectadas"
@@ -743,7 +803,34 @@ async def flujos_auditoria_real():
             await db.folders.update_one({"id": fd["id"]}, {"$set": marcas})
             if e.get("id"):
                 await _archivar_adjuntos(fd, e["id"], "ESTUDIO")
+                # REGLA DE MINADO: si el PDF del estudio trae 'Observaciones'/'Reparos',
+                # el texto EXACTO se copia a la columna Detalle de Reparos (celda naranja)
+                try:
+                    n_min = await _minar_reparos_pdf(fd)
+                    res["reparos_transcritos"] += n_min
+                except Exception as ex:
+                    logging.warning(f"minado reparos pdf: {ex}")
             hito_n, res_k = "Informe Estudio de Títulos Recibido", "estudios_detectados"
+        # ALERTAS DE ACCIÓN: notificación automática a la Malla (Ejecutivos A y B) + hito ✅
+        try:
+            await db.alertas.insert_one({
+                "id": str(uuid.uuid4()), "tipo": "malla_inteligencia",
+                "destino": "Ejecutivos A y B", "cliente": fd.get("nombre") or "",
+                "mensaje": f"✅ {hito_n}: {fd.get('nombre')} ({fd.get('rut') or 'sin RUT'}) — "
+                           f"detectado en el correo y guardado en el EXPEDIENTE_360",
+                "fecha": _now(), "leida": False})
+        except Exception:
+            pass
+        # VINCULACIÓN EXPEDIENTE_360: el hallazgo queda para siempre en la Bóveda de ADN
+        try:
+            import adn_clientes as _adn
+            fd_full = await db.folders.find_one({"id": fd["id"]})
+            if fd_full:
+                reg = _adn._registro_desde_folder(fd_full)
+                reg["expediente_360"] = await _adn._expediente_360(fd_full)
+                await _adn._upsert_adn(reg)
+        except Exception:
+            pass
         await db.hitos_externos.insert_one({
             "id": str(uuid.uuid4()), "clave": clave, "folder_id": fd["id"],
             "cliente": fd.get("nombre"), "rut": fd.get("rut") or "", "hito": hito_n,
@@ -781,6 +868,10 @@ async def flujos_marcar_firma(fid: str, payload: dict):
     fd = await db.folders.find_one({"id": fid})
     if not fd:
         raise HTTPException(status_code=404, detail="Carpeta no existe")
+    if estado == "firmado":
+        # REGLA DE HIERRO #62: sin salida SMTP confirmada, el hito no se completa
+        import monitor_envios as _me
+        await _me.exigir_correo_ok(fd.get("nombre") or "")
     await db.folders.update_one({"id": fid}, {"$set": {f"firmas_log.{rol}": estado, "updated_at": _now()}})
     fd = await db.folders.find_one({"id": fid})
     firmas, hito = firmas_folder(fd)
@@ -1021,24 +1112,118 @@ def _informes_folder(fd):
     return inf
 
 
+def _estado_tasacion(fd):
+    if fd.get("tasacion_informe_recibido_at"):
+        return "Informe Recibido"
+    if fd.get("tasacion_fecha"):
+        return "Visita"
+    if (fd.get("reclamos_gerencia") or {}).get("tasacion") or fd.get("tasacion_solicitada_at"):
+        return "Solicitada"
+    return "Pendiente"
+
+
+def _estado_estudio(fd):
+    reparos = [r for r in (fd.get("reparos_alertas") or []) if not r.get("resuelto")]
+    if reparos:
+        return "Con Reparos", " | ".join((r.get("texto") or r.get("asunto") or "")[:300] for r in reparos[:4])
+    if fd.get("estudio_titulo_terminado_at"):
+        return "Aprobado", ""
+    return "En Proceso", ""
+
+
+def _estado_cesion(fd):
+    firmas = fd.get("firmas_log") or {}
+    todas = firmas and all(v == "firmado" for v in firmas.values())
+    if fd.get("escritura_confirmada_at") or fd.get("escritura_notaria_detectada_at") or todas:
+        return "Confirmada"
+    return "Pendiente"
+
+
+@supercarpeta.get("/flota")
+async def flota_ver():
+    cfg = await db.config.find_one({"_key": "flota_agosto"}, {"_id": 0}) or {}
+    return {"activo": bool(cfg.get("activo")), "nombres": cfg.get("nombres") or [],
+            "definida": _now() if cfg else None}
+
+
+@supercarpeta.post("/flota")
+async def flota_definir(request: Request, payload: dict):
+    """PURGA TOTAL (Flota Agosto): solo el administrador define el universo de trabajo.
+    Bloquea el ingreso de nuevos prospectos a las vistas sin autorización expresa."""
+    user = getattr(request.state, "user", {}) or {}
+    if (user.get("rol") or "") not in ("admin", "maestro"):
+        raise HTTPException(status_code=403, detail="Solo el administrador define la Flota Agosto")
+    nombres = [str(n).strip().upper() for n in (payload.get("nombres") or []) if str(n).strip()]
+    activo = bool(payload.get("activo", True)) and len(nombres) > 0
+    await db.config.update_one({"_key": "flota_agosto"}, {"$set": {
+        "nombres": nombres, "activo": activo, "definida": _now(),
+        "por": user.get("sub") or "admin"}}, upsert=True)
+    return {"ok": True, "activo": activo, "total": len(nombres),
+            "regla_hierro": "Solo existen estos clientes en las vistas activas hasta nueva autorización"}
+
+
 @supercarpeta.get("")
 async def supercarpeta_vista():
-    """Regla #55: refleja la disponibilidad FÍSICA de los informes del mes corriente."""
+    """Regla #55 (V3): consulta directa a la Bóveda ADN_CLIENTES_360 — sin escanear PDFs físicos."""
     from datetime import timedelta
+    import adn_clientes as _adn
     mes = datetime.now(timezone.utc).strftime("%Y-%m")
     limite24 = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+    flota_cfg = await db.config.find_one({"_key": "flota_agosto"}) or {}
+    flota = {n.strip().upper() for n in (flota_cfg.get("nombres") or [])} if flota_cfg.get("activo") else set()
+    adn_map = {}
+    async for r in db.adn_clientes_360.find({}, {"rut_norm": 1, "expediente_360": 1, "actualizado": 1}):
+        adn_map[r.get("rut_norm")] = r
     clientes = []
     async for fd in db.folders.find({}).sort("nombre", 1):
-        act = (fd.get("updated_at") or fd.get("created") or fd.get("created_at") or "")[:7]
-        if act != mes and not (fd.get("datos_financieros") or {}).get("monto_credito"):
-            continue
-        inf = await asyncio.to_thread(_informes_folder, fd)
+        nombre_u = (fd.get("nombre") or "").strip().upper()
+        if flota:
+            # REGLA DE HIERRO (Flota Agosto): solo existe la flota autorizada
+            if not any(nf in nombre_u or nombre_u in nf for nf in flota):
+                continue
+        else:
+            act = (fd.get("updated_at") or fd.get("created") or fd.get("created_at") or "")[:7]
+            if act != mes and not (fd.get("datos_financieros") or {}).get("monto_credito"):
+                continue
+        reg = adn_map.get(_adn._norm_rut(fd.get("rut"))) or {}
+        exp = reg.get("expediente_360") or {}
+        docs = exp.get("documentos") or []
+        inf = {"tasacion": None, "estudio": None, "borrador": None}
+        for d in docs:
+            n = (d.get("archivo") or "").lower()
+            item = {"disponible": True, "archivo": d.get("archivo") or "",
+                    "fecha": reg.get("actualizado") or ""}
+            if not inf["tasacion"] and "tasac" in n:
+                inf["tasacion"] = item
+            elif not inf["estudio"] and "estudio" in n:
+                inf["estudio"] = item
+            elif not inf["borrador"] and ("escritura" in n or "borrador" in n):
+                inf["borrador"] = item
+        for k in inf:
+            if not inf[k]:
+                inf[k] = {"disponible": False, "archivo": "", "fecha": ""}
+        est_estudio, detalle_reparos = _estado_estudio(fd)
+        hl = exp.get("hitos_legales") or {}
+        if not detalle_reparos and hl.get("reparos"):
+            detalle_reparos = hl["reparos"]
+            est_estudio = "Con Reparos"
+        estado_legal = ("⚠️ Con Reparos" if est_estudio == "Con Reparos"
+                        else "✅ Limpio" if est_estudio == "Aprobado" else "⏳ En Proceso")
         fechas = [v["fecha"] for v in inf.values() if v["disponible"]]
         clientes.append({"id": fd["id"], "cliente": fd.get("nombre"), "rut": fd.get("rut") or "",
-                         "broker_origen": fd.get("broker_origen") or fd.get("broker_nombre") or "DIRECTO",
+                         "broker_origen": fd.get("inmobiliaria") or fd.get("broker_origen")
+                         or fd.get("broker_nombre") or "⚠️ Falta Identidad de Inmobiliaria",
                          "informes": inf,
+                         "estado_tasacion": _estado_tasacion(fd),
+                         "estudio_titulos": est_estudio,
+                         "estado_legal": estado_legal,
+                         "detalle_reparos": detalle_reparos,
+                         "cesion": _estado_cesion(fd),
+                         "en_adn": bool(reg),
                          "recien_24h": any(f >= limite24 for f in fechas)})
     return {"mes": mes, "clientes": clientes, "total": len(clientes),
+            "flota_activa": bool(flota), "flota_total": len(flota),
+            "fuente": "ADN_CLIENTES_360 (Regla #66) — sin escaneo de PDFs físicos",
             "recien_llegados": sum(1 for c in clientes if c["recien_24h"])}
 
 
