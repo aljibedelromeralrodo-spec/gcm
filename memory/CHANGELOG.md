@@ -1077,3 +1077,34 @@
 - PROTOCOLO EXCEPCIÓN (Regla #31): POST /api/excepciones/autorizar (re-valida clave bcrypt/password → firma digital, justificación ≥10 chars, registro INMUTABLE en excepciones_log — sin endpoints de borrado, alerta a Gerencia). Tests: clave mala 403 ✅, firma válida 200 con registro ✅. Modal AutorizacionExcepcion en Administración.
 - DIVISIÓN OPERATIVA (Regla #32): paneles espejo Daniela Galindo (Revisión) / Victoria Vilche (Carga) en Administración, auto-selección por nombre de usuario logueado, banner de esqueleto (funciones definitivas bloqueadas hasta orden de Gerardo).
 - Verificado visualmente: Administración (paneles+bodega) y Gerencia (tabla+export+costo) renderizan perfecto.
+
+## Sesión 14-Jun-2026 (fork) — Malla de Inteligencia, Brokers y Centro de Mando Gerencial
+Constitución Maestra: VERSION 16 (nuevas Reglas de Oro #34, #35, #36, #37, #38, #41, #43, #49, #52, #53, #54).
+
+### Backend nuevo
+- `malla_inteligencia.py`: routers broker/fuentes/hitos/flujos/mi-correo.
+  - Módulo Brokers (perfil D): carpetas propias + 6 subcarpetas, proyección mensual, Estado de Situación, huella broker_activity_log, carga masiva con AUDITORÍA DE RUT por OCR (422 si el RUT del PDF no coincide).
+  - Fuentes IMAP por panel (victoria/daniela/postventa/brokers/broker_<codigo>): etiqueta obligatoria, firma digital con clave, fuentes_auditoria_log (Regla #36).
+  - Malla: hitos externos validados por RUT (Regla #34 — sin RUT → hitos_descartados), valueproperty→Tasación Solicitada, gmardones→Estudio Recibido + archivo PDF, motor de reparos (mardluf/gmardones/olave/ibarra), vendedores transitorios (Regla #37).
+  - Radar Escrituración: doc20_folder (AFP+Liquidación+CMF → 'Pendiente de Información'), firmas_folder (Titular/Codeudor/Mandatario/Anexos — firma parcial JAMÁS verde), fecha firma manual + captura de correos notariales.
+  - Auditoría real (POST /flujos/auditoria-real): escaneo IMAP inmediato (Regla #43, no inventar).
+  - Mi Correo (Regla #38): IMAP validado en vivo, credencial AES-256-GCM en correos_ejecutivos, revelar solo dueño o admin+PIN, lector_ejecutivos_loop con pausas y alerta '⚠️ Su conexión de correo necesita actualización'.
+- `grid_dashai.py` (Reglas #41/#53): espejo MD5 disco↔GridFS (espejo_concreces_cloud), eventos push (SSE /grid/stream + webhooks), resync sin interruptor, alerta 2h sin respaldo, POST /grid/disaster-recovery.
+- `bodega_concreces.py`: router control (Regla #35 — discrepancias Bodega vs Ingreso, correo sobrio al Destinatario Maestro, NO bloquea); gerencia_cartera con resumen Subsidio/SinSubsidio/Total, brokers, divergencia_control, datos_incompletos ('Broker no actualizado'), inactivo_96h, radar, tipo_operacion, broker_origen; POST /gerencia/reclamo/{fid} (Regla #49 — manual, CC Victoria/Daniela, 'Solicitado el [fecha]') + gestion_gerencial_log (Regla #52).
+- `auth.py`: whitelist perfil D. Seguridad: middleware cabeceras (HSTS/nosniff/X-Frame/XSS/Referrer/Permissions). ESLint --fix: 0 errores.
+
+### Frontend
+- Nuevos: BrokersModule.js, MiCorreoModule.js, components/GestorFuentesIMAP.js.
+- AdministracionModule: paneles Daniela/Victoria/Postventa + GRID estado + Fuentes IMAP + Flujos Usada/Inmobiliaria + Control Auditor.
+- GerenciaComercialModule: Centro de Mando — tarjetas segmentadas filtrantes, filtros multi-variable, feed 1s, iconografía ✅⏳⚠️, Maserati Action Buttons (.maserati-btn en App.css, 44px cristal JetBrains Mono), reclamos manuales, divergencia, filas roja/gris.
+- CerebroDashAI: Destinatario Maestro. TasacionModule: Contacto de Visita. UsuariosModule: opción perfil D.
+
+### Datos reales y credenciales
+- Broker Maestro mutuaria/mutuaria2026 (Mutuaria y Leasing Limitada — Gerardo) con las 10 carpetas de Escrituración. Broker prueba broker1/broker123.
+- Inmobiliarias seed: Maestra, Comac, Bestal. Auditoría real: 60 correos, 1 estudio detectado (CATALINA CASTILLO).
+
+### Testing
+- iteration_30: backend 22/22 OK; bug wiring App.js (brokers/micorreo) CORREGIDO y verificado en DOM + screenshots de Gerencia y Panel Broker.
+
+### Pendiente
+- Object Storage externo (S3/Emergent) como espejo adicional (hoy Espejo Cloud = GridFS). Twilio .env. 2º buzón IMAP. Alerta Cumpleaños (ofrecida, sin confirmar). OCR se pierde al forkar: reinstalar poppler-utils + tesseract-ocr(-spa).

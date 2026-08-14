@@ -93,6 +93,8 @@ NOTARIA_RE = re.compile(r"notar[ií]a|firma\s+(faltante|pendiente)|falta\s+firma
 
 
 async def _hitos(fd):
+    import malla_inteligencia as _mi
+    _firmas_info = _mi.firmas_folder(fd)
     fid, nombre = fd.get("id"), fd.get("nombre") or ""
     n_arch = len(fd.get("archivos") or []) or await db.fs_indice.count_documents({"folder_id": fid}) if False else len(fd.get("archivos") or [])
     reg = await db.bodega_contraste.find_one({"folder_id": fid}) or {}
@@ -107,6 +109,7 @@ async def _hitos(fd):
     df = fd.get("datos_financieros") or {}
     return {
         "folder_id": fid, "cliente": nombre, "rut": fd.get("rut") or "",
+        "broker_origen": fd.get("broker_origen") or fd.get("broker_nombre") or "DIRECTO",
         "monto_credito_uf": df.get("monto_credito"), "subsidio": bool(df.get("con_subsidio")),
         "inmobiliaria": fd.get("inmobiliaria") or "",
         "documentacion": "ok" if fd.get("datos_financieros_ocr_fecha") else ("proceso" if n_arch else "bloqueo"),
@@ -116,26 +119,139 @@ async def _hitos(fd):
         "alerta_notaria": alerta_notaria,
         "estado_mesa": seg.get("estado", ""),
         "contraste": reg.get("estado", "pendiente"),
+        # Regla #37: distinguir claramente USADA vs INMOBILIARIA en Gerencia
+        "tipo_operacion": (fd.get("tipo_operacion") or "").upper(),
+        # Regla #43: estado real por correos — sin respaldo = Pendiente de Información
+        "tasacion_estado": ("ok" if fd.get("tasacion_informe_recibido_at")
+                            else ("proceso" if fd.get("tasacion_solicitada_at") else "pendiente_informacion")),
+        "estudio_estado": ("alerta" if (fd.get("reparos_alertas") or [])
+                           else ("ok" if fd.get("estudio_recibido_at")
+                                 else ("proceso" if fd.get("estudio_titulo_solicitado_at") else "pendiente_informacion"))),
+        "reparos_pendientes": len(fd.get("reparos_alertas") or []),
+        # RADAR DE ESCRITURACIÓN: Documentación 2.0 + Log de Firmas + Fecha de Firma
+        "doc20": _mi.doc20_folder(fd),
+        "firmas": _firmas_info[0], "hito_firmas": _firmas_info[1],
+        "fecha_firma": fd.get("fecha_firma") or fd.get("fecha_firma_detectada") or "",
     }
 
 
 @gerencia.get("/cartera")
 async def gerencia_cartera():
     mes = datetime.now(timezone.utc).strftime("%Y-%m")
+    ahora = datetime.now(timezone.utc)
     filas = []
     async for fd in db.folders.find({}).sort("nombre", 1):
-        act = (fd.get("updated_at") or fd.get("created") or "")[:7]
+        act = (fd.get("updated_at") or fd.get("created") or fd.get("created_at") or "")[:7]
         if act == mes or (fd.get("datos_financieros") or {}).get("monto_credito"):
-            filas.append(await _hitos(fd))
+            h = await _hitos(fd)
+            # COLUMNA DE DIVERGENCIA: inconsistencia detectada por Módulo Control (Regla #35)
+            h["divergencia_control"] = bool(await _difs_folder(fd))
+            # BLOQUEO DE DATOS INCOMPLETOS: sin RUT, Monto o Inmobiliaria → Broker no actualizado
+            h["datos_incompletos"] = not (h.get("rut") and h.get("monto_credito_uf") and h.get("inmobiliaria"))
+            # ALERTA DE INACTIVIDAD 96H
+            ult = fd.get("updated_at") or fd.get("created_at") or fd.get("created") or ""
+            try:
+                dt_u = datetime.fromisoformat(str(ult)).astimezone(timezone.utc)
+                h["inactivo_96h"] = (ahora - dt_u).total_seconds() > 96 * 3600
+            except Exception:
+                h["inactivo_96h"] = True
+            h["reclamos"] = fd.get("reclamos_gerencia") or {}
+            h["actualizado"] = str(ult)[:10]
+            filas.append(h)
     energia = await db.config.find_one({"_key": "energia"}) or {}
     gasto = round((int(energia.get("llamadas_llm") or 0) - int(energia.get("llamadas_base") or 0)) * 0.12, 2)
     audit = await db.config.find_one({"_key": "gerencia_audit"}) or {}
     excs = await db.excepciones_log.find({}, {"_id": 0}).sort("fecha", -1).to_list(5)
+    # CABECERA SEGMENTADA: Subsidio / Sin Subsidio / Total
+    con_sub = [f for f in filas if f.get("subsidio")]
+    sin_sub = [f for f in filas if not f.get("subsidio")]
+    _uf = lambda fs: round(sum(float(f.get("monto_credito_uf") or 0) for f in fs), 2)
     return {"mes": mes, "cartera": filas, "total": len(filas),
+            "resumen": {"subsidio": {"n": len(con_sub), "uf": _uf(con_sub)},
+                        "sin_subsidio": {"n": len(sin_sub), "uf": _uf(sin_sub)},
+                        "total": {"n": len(filas), "uf": _uf(filas)}},
+            "brokers": sorted({f.get("broker_origen") or "DIRECTO" for f in filas}),
             "costo_desarrollo_creditos": gasto,
             "ultima_auditoria_dashai": audit.get("fecha", ""),
             "excepciones_recientes": excs,
             "alertas_notaria": sum(1 for f in filas if f["notaria"] == "alerta")}
+
+
+# ── MANDO MANUAL DE GERENCIA (Reglas #49 y #52) — Rodrigo decide, DashAI provee ─
+RECLAMOS_DEF = {
+    "tasacion": ("Reclamo de Tasación Pendiente", "victoria"),
+    "serviu": ("Reclamo de Resolución SERVIU", None),
+    "actualizacion": ("Reclamo de Actualización Documental", "daniela"),
+    "firmas": ("Reclamo de Firmas Pendientes", None),
+    "movimiento": ("Reclamo de Movimiento — carpeta sin actividad 96 horas", None),
+}
+
+
+def _reclamo_html(titulo, cliente, rut, cuerpo):
+    return (
+        '<div style="max-width:600px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;'
+        'color:#000;background:#fff;padding:18px;">'
+        f'<h2 style="font-size:17px;margin:0 0 4px;">{titulo}</h2>'
+        '<p style="font-size:13px;margin:0 0 14px;">Central Mutuos — Gerencia Comercial</p>'
+        f'<p style="font-size:14px;margin:0 0 12px;"><b>Cliente:</b> {cliente}<br/><b>RUT:</b> {rut or "—"}</p>'
+        f'<p style="font-size:13px;line-height:1.6;margin:0 0 14px;">{cuerpo}</p>'
+        '<p style="font-size:12px;margin:14px 0 0;">Agradeceremos gestionar este requerimiento a la '
+        'brevedad e informar su avance respondiendo este correo.</p>'
+        '</div>')
+
+
+@gerencia.post("/reclamo/{fid}")
+async def gerencia_reclamo(fid: str, payload: dict, request: Request):
+    """ACCIÓN ÚNICA (Regla #49): el mail SOLO sale cuando Rodrigo pincha el botón."""
+    tipo = (payload.get("tipo") or "").strip()
+    if tipo not in RECLAMOS_DEF:
+        raise HTTPException(status_code=400, detail="Tipo de reclamo inválido")
+    fd = await db.folders.find_one({"id": fid})
+    if not fd:
+        raise HTTPException(status_code=404, detail="Carpeta no existe")
+    titulo, cc_panel = RECLAMOS_DEF[tipo]
+    # Destinatario: correo del Broker responsable
+    destinatario = (payload.get("destinatario") or "").strip()
+    if not destinatario:
+        cfgb = await db.correos_ejecutivos.find_one({"codigo": fd.get("broker_codigo") or "‽"}) or {}
+        usr = await db.users.find_one({"codigo": fd.get("broker_codigo") or "‽"}) or {}
+        destinatario = cfgb.get("email") or usr.get("email") or ""
+    if not destinatario:
+        raise HTTPException(status_code=400,
+            detail="El Broker no tiene correo configurado — indique el destinatario o pida al Broker configurar 'Mi Correo'")
+    cc = []
+    if cc_panel:  # MANTENER COPIAS: Victoria (Tasación) · Daniela (Actualizaciones)
+        cfg = await db.config.find_one({"_key": f"fuentes_imap_{cc_panel}"}) or {}
+        if cfg.get("correo_principal"):
+            cc.append(cfg["correo_principal"])
+    cuerpo = ((payload.get("mensaje") or "").strip()
+              or f"Se requiere su gestión inmediata sobre el hito «{titulo}» de la operación indicada, "
+                 "actualmente pendiente en nuestro tablero de Gerencia Comercial.")
+    subject = f"{titulo} — {fd.get('nombre','')}"
+    body = _reclamo_html(titulo, fd.get("nombre", ""), fd.get("rut", ""), cuerpo)
+    exigir("responsividad_absoluta", html=body)
+    exigir("purificacion_correos", subject=subject, html=body)
+    res = await asyncio.to_thread(_mail.send_mail, destinatario, subject, body, cc or None)
+    if not (res or {}).get("success"):
+        raise HTTPException(status_code=502, detail=(res or {}).get("error", "Error de envío"))
+    claims = getattr(request.state, "user", None) or {}
+    marca = {"fecha": _now(), "por": claims.get("nombre", claims.get("sub", "")),
+             "destinatario": destinatario, "cc": cc}
+    await db.folders.update_one({"id": fid}, {"$set": {f"reclamos_gerencia.{tipo}": marca}})
+    # LOG DE GESTIÓN GERENCIAL (Regla #52): cada clic queda auditado
+    await db.gestion_gerencial_log.insert_one({
+        "id": str(uuid.uuid4()), "usuario": claims.get("nombre", claims.get("sub", "")),
+        "accion": f"reclamo_{tipo}", "cliente": fd.get("nombre", ""), "rut": fd.get("rut", ""),
+        "destinatario": destinatario, "cc": cc, "fecha": _now()})
+    return {"ok": True, "tipo": tipo, "destinatario": destinatario, "cc": cc,
+            "solicitado_el": marca["fecha"],
+            "regla": "#49 — Ningún reclamo sale sin la intervención de Gerencia"}
+
+
+@gerencia.get("/gestion-log")
+async def gerencia_gestion_log():
+    regs = await db.gestion_gerencial_log.find({}, {"_id": 0}).sort("fecha", -1).to_list(100)
+    return {"gestion": regs, "total": len(regs)}
 
 
 @gerencia.get("/export-xlsx")
@@ -145,11 +261,15 @@ async def gerencia_export():
     wb = Workbook()
     ws = wb.active
     ws.title = f"Cartera {data['mes']}"
-    ws.append(["Cliente", "RUT", "Monto Crédito (UF)", "Subsidio", "Inmobiliaria",
-               "Documentación", "Firma Set", "Ingreso Concreces", "Notaría", "Estado Mesa", "Alerta Notaría"])
+    ws.append(["Cliente", "Broker", "RUT", "Tipo Operación", "Monto Crédito (UF)", "Subsidio", "Inmobiliaria",
+               "Documentación", "Doc 2.0", "Firmas", "Fecha Firma", "Firma Set", "Ingreso Concreces", "Notaría", "Estado Mesa", "Alerta Notaría"])
     for f in data["cartera"]:
-        ws.append([f["cliente"], f["rut"], f["monto_credito_uf"], "Sí" if f["subsidio"] else "No",
-                   f["inmobiliaria"], f["documentacion"], f["firma_set"], f["ingreso_concreces"],
+        firmas_txt = " · ".join(f"{x['label']}: {x['estado']}" for x in (f.get("firmas") or []))
+        doc20 = f.get("doc20") or {}
+        doc20_txt = "OK" if doc20.get("estado") == "ok" else "Pendiente de Información: " + ", ".join(doc20.get("faltantes") or [])
+        ws.append([f["cliente"], f.get("broker_origen") or "DIRECTO", f["rut"], f.get("tipo_operacion") or "—", f["monto_credito_uf"], "Sí" if f["subsidio"] else "No",
+                   f["inmobiliaria"], f["documentacion"], doc20_txt, firmas_txt, f.get("fecha_firma") or "—",
+                   f["firma_set"], f["ingreso_concreces"],
                    f["notaria"], f["estado_mesa"], f["alerta_notaria"]])
     buf = io.BytesIO()
     wb.save(buf)
@@ -214,3 +334,130 @@ async def excepciones_listar():
     """Registro de auditoría INMUTABLE: sin endpoints de borrado ni edición."""
     regs = await db.excepciones_log.find({}, {"_id": 0}).sort("fecha", -1).to_list(200)
     return {"excepciones": regs, "total": len(regs)}
+
+
+# ═════════ MÓDULO CONTROL — AUDITOR INFORMATIVO (Regla de Oro #35) ═════════
+# Detecta y documenta discrepancias entre la Bodega y el Ingreso de Concreces.
+# NO-INTERFERENCIA: un hallazgo JAMÁS bloquea la operación; solo marca e informa.
+import email_service as _mail
+from constitucion import exigir
+
+control = APIRouter(prefix="/control")
+
+CAMPOS_CONTROL = {
+    "rut_titular": "RUT Titular", "rut_codeudor": "RUT Codeudor",
+    "renta_promedio": "Renta Promedio", "monto_credito_uf": "Monto Crédito UF",
+    "rol_propiedad": "Rol Propiedad", "direccion": "Dirección", "subsidio": "Subsidio",
+}
+
+
+async def _difs_folder(fd):
+    conc = await db.concreces_estado.find_one({"folder_id": fd.get("id")}) or {}
+    ingreso = conc.get("datos") or {}
+    if not ingreso:
+        return []
+    reg = await _registro_bodega(fd)
+    difs = []
+    for campo, label in CAMPOS_CONTROL.items():
+        vi = ingreso.get(campo)
+        if vi in (None, ""):
+            continue
+        vb = reg.get(campo)
+        if campo.startswith("rut"):
+            igual = _rut_limpio(vb) == _rut_limpio(vi)
+        else:
+            igual = str(vb if vb is not None else "").strip().lower() == str(vi).strip().lower()
+        if not igual:
+            difs.append({"campo": label, "valor_bodega": vb, "valor_ingreso": vi,
+                         "motivo": f"{label} difiere entre la Bodega y el registro de Ingreso"})
+    return difs
+
+
+@control.get("/discrepancias")
+async def control_discrepancias():
+    out = []
+    async for fd in db.folders.find({}).sort("nombre", 1):
+        difs = await _difs_folder(fd)
+        if difs:
+            alerta = await db.control_alertas.find_one({"folder_id": fd["id"]}, sort=[("fecha", -1)])
+            out.append({"folder_id": fd["id"], "cliente": fd.get("nombre"), "rut": fd.get("rut") or "",
+                        "diferencias": difs, "alerta_enviada": bool(alerta),
+                        "alerta_fecha": (alerta or {}).get("fecha", "")})
+    cfg = await db.config.find_one({"_key": "control_inconsistencias"}) or {}
+    return {"discrepancias": out, "total": len(out),
+            "destinatario_maestro": cfg.get("destinatario_maestro", ""),
+            "no_interferencia": True}
+
+
+@control.get("/config")
+async def control_config_get():
+    cfg = await db.config.find_one({"_key": "control_inconsistencias"}, {"_id": 0}) or {}
+    return {"destinatario_maestro": cfg.get("destinatario_maestro", "")}
+
+
+@control.post("/config")
+async def control_config_set(payload: dict, request: Request):
+    dest = (payload.get("destinatario_maestro") or "").strip().lower()
+    if dest and not re.match(r"^[\w.+-]+@[\w-]+\.[\w.-]+$", dest):
+        raise HTTPException(status_code=400, detail="Correo de destinatario inválido")
+    claims = getattr(request.state, "user", None) or {}
+    await db.config.update_one({"_key": "control_inconsistencias"}, {"$set": {
+        "destinatario_maestro": dest, "actualizado_por": claims.get("nombre", ""),
+        "actualizado": _now()}}, upsert=True)
+    return {"ok": True, "destinatario_maestro": dest}
+
+
+def _alerta_html(cliente, rut, difs, motivo):
+    fmt = lambda v: "—" if v in (None, "") else ("Sí" if v is True else ("No" if v is False else str(v)))
+    filas = "".join(
+        f"<tr><td style='padding:8px 10px;border:1px solid #000;'>{d['campo']}</td>"
+        f"<td style='padding:8px 10px;border:1px solid #000;'>{fmt(d['valor_bodega'])}</td>"
+        f"<td style='padding:8px 10px;border:1px solid #000;'>{fmt(d['valor_ingreso'])}</td></tr>"
+        for d in difs)
+    return (
+        '<div style="max-width:600px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;'
+        'color:#000;background:#fff;padding:18px;">'
+        '<h2 style="font-size:18px;margin:0 0 4px;">Alerta de Inconsistencia de Datos</h2>'
+        '<p style="font-size:13px;margin:0 0 16px;">Central Mutuos — Módulo Control (Auditoría e Información)</p>'
+        f'<p style="font-size:14px;margin:0 0 14px;"><b>Nombre Cliente:</b> {cliente}<br/><b>RUT:</b> {rut or "—"}</p>'
+        '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
+        '<tr><th style="padding:8px 10px;border:1px solid #000;text-align:left;">Dato</th>'
+        '<th style="padding:8px 10px;border:1px solid #000;text-align:left;">Registro en Bodega</th>'
+        '<th style="padding:8px 10px;border:1px solid #000;text-align:left;">Registro en Ingreso</th></tr>'
+        f'{filas}</table>'
+        f'<p style="font-size:13px;margin:14px 0 8px;"><b>Motivo de la alerta:</b> {motivo}</p>'
+        '<p style="font-size:12px;margin:14px 0 0;">Este informe es de carácter exclusivamente auditor e '
+        'informativo. La decisión operativa final recae en Gerencia de Riesgo y Concreces.</p>'
+        '</div>')
+
+
+@control.post("/alerta/{fid}")
+async def control_alerta(fid: str, payload: dict, request: Request):
+    fd = await db.folders.find_one({"id": fid})
+    if not fd:
+        raise HTTPException(status_code=404, detail="Carpeta no existe")
+    difs = await _difs_folder(fd)
+    if not difs:
+        raise HTTPException(status_code=400, detail="Sin discrepancias vigentes para esta carpeta")
+    cfg = await db.config.find_one({"_key": "control_inconsistencias"}) or {}
+    destinatario = ((payload or {}).get("destinatario") or cfg.get("destinatario_maestro") or "").strip()
+    if not destinatario:
+        raise HTTPException(status_code=400,
+                            detail="Configure el Destinatario Maestro de Inconsistencias en el panel de DashAI")
+    motivo = ((payload or {}).get("motivo") or "").strip() or "; ".join(d["motivo"] for d in difs)
+    subject = f"Alerta de Inconsistencia de Datos — {fd.get('nombre','')}"
+    body = _alerta_html(fd.get("nombre", ""), fd.get("rut", ""), difs, motivo)
+    # REGLA DE HIERRO: 100% responsivo y libre de rastro técnico (Purificación)
+    exigir("responsividad_absoluta", html=body)
+    exigir("purificacion_correos", subject=subject, html=body)
+    res = await asyncio.to_thread(_mail.send_mail, destinatario, subject, body)
+    if not (res or {}).get("success"):
+        raise HTTPException(status_code=502, detail=(res or {}).get("error", "Error de envío"))
+    claims = getattr(request.state, "user", None) or {}
+    reg = {"id": str(uuid.uuid4()), "folder_id": fid, "cliente": fd.get("nombre", ""),
+           "rut": fd.get("rut", ""), "destinatario": destinatario, "diferencias": difs,
+           "motivo": motivo, "usuario": claims.get("nombre", claims.get("sub", "")),
+           "fecha": _now()}
+    await db.control_alertas.insert_one(dict(reg))
+    return {"ok": True, "no_interferencia": True, "destinatario": destinatario,
+            "diferencias": len(difs)}

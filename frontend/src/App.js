@@ -20,6 +20,8 @@ const SeguimientoModule = lazy(() => import("./pages/SeguimientoModule"));
 const UsuariosModule = lazy(() => import("./pages/UsuariosModule"));
 const GerenciaComercialModule = lazy(() => import("./pages/GerenciaComercialModule"));
 const AdministracionModule = lazy(() => import("./pages/AdministracionModule"));
+const BrokersModule = lazy(() => import("./pages/BrokersModule"));
+const MiCorreoModule = lazy(() => import("./pages/MiCorreoModule"));
 const CriteriosModule = lazy(() => import("./pages/CriteriosModule"));
 const WhatsAppModule = lazy(() => import("./pages/WhatsAppModule"));
 const AutocorreoModule = lazy(() => import("./pages/AutocorreoModule"));
@@ -146,6 +148,10 @@ function MainApp() {
     return () => { clearInterval(t); clearInterval(tUF); clearInterval(tEne); };
   }, [user]);
 
+  useEffect(() => {
+    if (user?.perfil === 'D') setActiveModule('brokers');
+  }, [user]);
+
   const cargarSaldoEnergia = () => {
     const s = parseFloat(saldoInput);
     if (!(s >= 0)) return;
@@ -199,11 +205,16 @@ function MainApp() {
       { key: 'gerencia', icon: 'fa-line-chart', label: 'Gerencia Comercial' },
       { key: 'administracion', icon: 'fa-database', label: 'Administración' },
     ] : []),
+    ...(['admin', 'maestro'].includes(user.rol) || user.perfil === 'D' ? [
+      { key: 'brokers', icon: 'fa-briefcase', label: 'Panel Broker' },
+    ] : []),
+    { key: 'micorreo', icon: 'fa-envelope', label: 'Mi Correo' },
   ].filter(item => {
     if (['admin', 'maestro'].includes(user.rol) || !user.perfil) return true;
     const PERMISOS = {
-      A: ['dashboard', 'clientes', 'simulador', 'historial', 'calculadora', 'formato', 'setcredito'],
-      B: ['dashboard', 'contraloria', 'criterios', 'seguimiento', 'gerencia', 'administracion', 'salud'],
+      A: ['dashboard', 'clientes', 'simulador', 'historial', 'calculadora', 'formato', 'setcredito', 'micorreo'],
+      B: ['dashboard', 'contraloria', 'criterios', 'seguimiento', 'gerencia', 'administracion', 'salud', 'micorreo'],
+      D: ['brokers', 'micorreo'],
     };
     return (PERMISOS[user.perfil] || []).includes(item.key);
   });
@@ -343,6 +354,8 @@ function MainApp() {
         {activeModule === 'usuarios' && <UsuariosModule />}
         {activeModule === 'gerencia' && <GerenciaComercialModule />}
         {activeModule === 'administracion' && <AdministracionModule user={user} />}
+        {activeModule === 'brokers' && <BrokersModule user={user} />}
+        {activeModule === 'micorreo' && <MiCorreoModule user={user} />}
         {activeModule === 'criterios' && <CriteriosModule />}
         {activeModule === 'whatsapp' && <WhatsAppModule />}
         {activeModule === 'autocorreo' && <AutocorreoModule />}

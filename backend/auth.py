@@ -80,6 +80,11 @@ PERFIL_BLOQUEOS = {
           "/api/admin/users", "/api/escritura", "/api/tasacion"),
 }
 
+# PERFIL D (Brokers): lista blanca — SOLO su propio módulo (Regla de Oro #34)
+PERFIL_PERMITIDOS = {
+    "D": ("/api/broker", "/api/fuentes/broker", "/api/mi-correo", "/api/valor-uf", "/api/auth"),
+}
+
 
 class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
@@ -117,6 +122,12 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 return JSONResponse({"detail": "Acceso restringido al terminal de administración"}, status_code=403)
         # HERMETICIDAD A/B: nadie entra ni ve lo que no le corresponde (Regla #22)
         perfil = claims.get("perfil", "")
+        permitidos = PERFIL_PERMITIDOS.get(perfil)
+        if permitidos and claims.get("rol") not in ("admin", "maestro"):
+            if not any(path.startswith(p) for p in permitidos):
+                return JSONResponse(
+                    {"detail": "Perfil Broker (D): acceso limitado a su propio módulo (Regla de Oro #34)"},
+                    status_code=403)
         if perfil in PERFIL_BLOQUEOS and claims.get("rol") not in ("admin", "maestro"):
             if any(path.startswith(p) for p in PERFIL_BLOQUEOS[perfil]):
                 return JSONResponse(

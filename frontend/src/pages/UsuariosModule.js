@@ -100,6 +100,7 @@ export default function UsuariosModule() {
                 <option value="">Completo (sin restricción)</option>
                 <option value="A">Usuario A — Clientes, Simulador y Compromisos</option>
                 <option value="B">Usuario B — Contralor, DashAI y Reportes</option>
+                <option value="D">Usuario D — Broker (solo su propio panel)</option>
               </select>
             </div>
           </div>

@@ -63,6 +63,10 @@ export const VipVacio = ({ texto, testId }) => (
 
 export default function TasacionModule() {
   const { carpetas, loading, error, reload } = useCarpetasVIP("tasacion/carpetas");
+  const [visitas, setVisitas] = useState({});
+  useEffect(() => {
+    axios.get(`${API}/api/flujos/contactos-visita`).then(r => setVisitas(r.data.contactos || {})).catch(() => {});
+  }, []);
   return (
     <div style={{ padding: "2rem", maxWidth: "1100px" }} data-testid="tasacion-module">
       <VipHeader icon="fa-home" titulo="Tasación" sub="Fichas leídas directo desde MongoDB · carga instantánea, sin dependencia del disco" total={carpetas.length} testId="tasacion-header" />
@@ -90,6 +94,19 @@ export default function TasacionModule() {
               <Semaforo ok={!!c.terminado_at} label={c.terminado_at ? `Terminada ${FechaFmt(c.terminado_at)}` : "Sin respuesta aún"} testId={`tasacion-sem-fin-${i}`} />
               <Semaforo ok={!!c.pdf_disponible} label={c.pdf_disponible ? "PDF disponible" : "PDF no disponible (solo alerta)"} testId={`tasacion-sem-pdf-${i}`} />
             </div>
+            {visitas[c.id] && (
+              <div data-testid={`tasacion-contacto-visita-${i}`} style={{ marginTop: "0.9rem", padding: "0.7rem 0.9rem", border: "1px solid rgba(212,175,55,0.35)", background: "rgba(212,175,55,0.06)" }}>
+                <div style={{ fontSize: "0.68rem", letterSpacing: "1.5px", color: "#d4af37", fontWeight: 800, marginBottom: 4 }}>
+                  CONTACTO DE VISITA · {visitas[c.id].tipo} ({visitas[c.id].origen})
+                </div>
+                <div style={{ color: "#fff", fontSize: "0.8rem" }}>
+                  {visitas[c.id].nombre || "Sin nombre"} · {visitas[c.id].email || "sin correo"} · {visitas[c.id].telefono || "sin teléfono"}
+                </div>
+                <div style={{ color: "#94a3b8", fontSize: "0.62rem", marginTop: 3 }}>
+                  {visitas[c.id].tipo === "USADA" ? "Auto-completado con el Vendedor de la usada (Regla #37)" : "Encargado del proyecto para coordinar con Value Property"}
+                </div>
+              </div>
+            )}
           </div>
         ))}
     </div>

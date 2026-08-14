@@ -780,3 +780,7 @@ requieren re-deploy para llegar a producción.
 - P2: Afinar detección automática de transferencias cuando el usuario comparta un comprobante bancario real.
 - P2: Modularizar server.py (~8900 líneas; extracción/aprendizaje ya movidos a ai_extract.py 2026-08-04).
 - Pendiente usuario: prueba en vivo de Auto-correo con saldo eCert.
+
+---
+## Sesión 14-Jun-2026 — Ver /app/memory/CHANGELOG.md
+Constitución v16 (Reglas #34-#38, #41, #43, #49, #52, #53, #54). Módulo Brokers (perfil D: broker1/broker123, mutuaria/mutuaria2026), Malla de Inteligencia (hitos por RUT), Módulo Control (Regla #35), Flujos Usada/Inmobiliaria, Mi Correo AES-256, GRID-DASHAI (espejo MD5 sin interruptor + disaster recovery), Radar Escrituración (Doc 2.0 + Log de Firmas), Centro de Mando Gerencial de Rodrigo Ibáñez (reclamos manuales + filtros + Maserati buttons), saneamiento (cabeceras seguridad, eslint 0 errores). Testing: iteration_30 backend 22/22 + fix wiring App.js verificado.

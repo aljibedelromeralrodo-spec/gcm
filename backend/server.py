@@ -52,6 +52,19 @@ app.add_middleware(
 )
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
+
+@app.middleware("http")
+async def _security_headers(request, call_next):
+    """BLINDAJE: refuerzo de cabeceras de seguridad (XSS, sniffing, clickjacking, SSL)."""
+    resp = await call_next(request)
+    resp.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+    resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+    resp.headers.setdefault("X-Frame-Options", "DENY")
+    resp.headers.setdefault("X-XSS-Protection", "1; mode=block")
+    resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    resp.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+    return resp
+
 api = APIRouter(prefix="/api")
 
 logging.basicConfig(level=logging.INFO)
@@ -240,6 +253,11 @@ async def startup():
     asyncio.create_task(_task_blindada(_notif_pace_loop, "notif_pace"))
     import bodega_concreces as _bc
     asyncio.create_task(_task_blindada(_bc.gerencia_audit_loop, "gerencia_audit"))
+    import malla_inteligencia as _malla
+    asyncio.create_task(_task_blindada(_malla.malla_loop, "malla_inteligencia"))
+    asyncio.create_task(_task_blindada(_malla.lector_ejecutivos_loop, "lector_ejecutivos"))
+    import grid_dashai as _grid
+    asyncio.create_task(_task_blindada(_grid.grid_loop, "grid_dashai_forzado"))
     asyncio.create_task(_task_blindada(_uf_auto_loop, "uf"))
     asyncio.create_task(_task_blindada(_firmados_auto_loop, "autocorreo_firmados"))
     asyncio.create_task(_task_blindada(_informes_vip_loop, "informes_vip_lunes"))
@@ -13556,11 +13574,24 @@ api.include_router(_energia_mod.energia)
 import whatsapp_twilio_service as _wa_twilio
 api.include_router(_wa_twilio.wa_twilio)
 
-# 🏦 BODEGA CONCRECES + GERENCIA COMERCIAL (Reglas #24 y #25)
+# 🏦 BODEGA CONCRECES + GERENCIA COMERCIAL (Reglas #24 y #25) + CONTROL (#35)
 import bodega_concreces as _bodega_mod
 api.include_router(_bodega_mod.bodega)
 api.include_router(_bodega_mod.gerencia)
 api.include_router(_bodega_mod.excepciones)
+api.include_router(_bodega_mod.control)
+
+# 🕸️ MALLA DE INTELIGENCIA + BROKERS + FLUJOS + MI CORREO (Reglas #34, #36, #37, #38)
+import malla_inteligencia as _malla_mod
+api.include_router(_malla_mod.broker)
+api.include_router(_malla_mod.fuentes)
+api.include_router(_malla_mod.hitos)
+api.include_router(_malla_mod.flujos)
+api.include_router(_malla_mod.micorreo)
+
+# 🛰 GRID-DASHAI — Sincronización forzada e integral (Regla #41, SIN interruptor)
+import grid_dashai as _grid_mod
+api.include_router(_grid_mod.grid)
 
 
 @api.get("/constitucion")

@@ -65,6 +65,28 @@ REGLAS_ORO = [
      "ley": "Toda regla puede ser saltada manualmente por un ejecutivo autorizado, siempre que quede registro inmutable de su identidad y motivo bajo el Protocolo de Excepción. No hay avance manual sin firma digital del ejecutivo."},
     {"n": 32, "id": "division_operativa", "titulo": "División Operativa Daniela/Victoria",
      "ley": "La operación se divide en dos fases: Revisión (Daniela) y Carga (Victoria). Ambas deben usar sus respectivos módulos para mantener el orden administrativo. Funciones definitivas solo por instrucción final de Gerardo."},
+    {"n": 34, "id": "malla_inteligencia_rut", "titulo": "Malla de Inteligencia — Validación por RUT",
+     "ley": "Toda actualización de hito por correo externo debe ser validada por DashAI mediante el RUT del cliente en el asunto o cuerpo del mail. REGLA DE HIERRO: el RUT es el pegamento; si DashAI no encuentra un RUT en el mail externo, el hito no se marca para evitar falsos positivos."},
+    {"n": 35, "id": "control_auditor_informativo", "titulo": "Módulo Control — Auditor Informativo",
+     "ley": "El Módulo Control solo tiene facultades de Auditoría e Información. La decisión operativa final recae exclusivamente en Gerencia de Riesgo y Concreces. El hallazgo de una inconsistencia NUNCA bloquea el flujo de la operación: solo se marca visualmente y se informa por correo responsivo y purificado."},
+    {"n": 36, "id": "gestion_fuentes_firmada", "titulo": "Gestión de Fuentes firmada por módulo",
+     "ley": "Cada ejecutivo gestiona sus propios aliados y fuentes de datos. Todo cambio en la red de escucha debe quedar firmado digitalmente por el responsable del módulo. REGLA DE HIERRO: DashAI solo procesa correos de las fuentes activas en el Gestor; si se borra un correo, el sistema deja de escucharlo inmediatamente."},
+    {"n": 37, "id": "fuentes_transitorias_permanentes", "titulo": "Fuentes Transitorias vs Permanentes",
+     "ley": "Las fuentes de datos se dividen en Transitorias (Vendedores) y Permanentes (Inmobiliarias). DashAI debe archivar la información siguiendo este flujo. REGLA DE HIERRO: el RUT del cliente es el único eje que une al vendedor de una usada con el estudio del abogado, para evitar cruces de carpetas."},
+    {"n": 38, "id": "salud_buzon_trazabilidad_broker", "titulo": "Salud del buzón y trazabilidad del Broker",
+     "ley": "Cada ejecutivo es responsable de la salud técnica de su buzón. El sistema garantiza la trazabilidad del Broker desde el ingreso hasta la entrega final. REGLA DE HIERRO: si una clave de aplicación falla, el sistema notifica '⚠️ Su conexión de correo necesita actualización' en lugar de detener todo el Maserati. Las credenciales se cifran con AES-256 y solo el dueño o Gerardo (PIN 0586) acceden."},
+    {"n": 41, "id": "sincronizacion_forzada_grid", "titulo": "Sincronización Forzada GRID-DASHAI",
+     "ley": "La información en Central Mutuos es única y universal. Todo cambio en un módulo debe propagarse a toda la red local y nube de forma inmediata y forzada. REGLA DE HIERRO: si un computador está en línea, su carpeta de clientes debe ser un espejo exacto del servidor (firmas MD5); no se permiten versiones distintas de un mismo archivo, y está PROHIBIDO cualquier interruptor que detenga la sincronización."},
+    {"n": 43, "id": "escrituracion_flujo_real", "titulo": "Escrituración nutrida del flujo real de correos",
+     "ley": "La información de escrituración se nutre del flujo real de correos con abogados y tasadores. DashAI es responsable de transcribir los reparos directamente a la ficha del cliente. REGLA DE HIERRO: no se inventan datos; si no hay un correo que respalde la tasación o el reparo, el hito queda como 'Pendiente de Información'."},
+    {"n": 49, "id": "comunicacion_manual_brokers", "titulo": "Comunicación normativa manual con Brokers",
+     "ley": "La comunicación normativa con los Brokers es una facultad manual de la Gerencia Comercial. El sistema solo provee la herramienta de envío rápido. REGLA DE HIERRO: el Maserati provee los datos, pero Rodrigo Ibáñez provee la decisión; ningún mail de reclamo sale de forma automática sin su intervención."},
+    {"n": 52, "id": "gerencia_juez_velocidad", "titulo": "Gerencia Comercial: juez de la velocidad",
+     "ley": "La Gerencia Comercial tiene la facultad única de priorizar operaciones y auditar discrepancias. El Dashboard de Rodrigo es el único juez de la velocidad del negocio. REGLA DE HIERRO: cada clic de gestión queda registrado en el Log de Gestión Gerencial para auditar la eficiencia del seguimiento."},
+    {"n": 53, "id": "doble_boveda_documental", "titulo": "Doble Bóveda y Respaldo Permanente",
+     "ley": "Ningún documento legal es válido si no existe simultáneamente en la Bóveda Local del ejecutivo y en el Espejo Cloud de Central Mutuos. REGLA DE HIERRO: se alerta de inmediato a Gerardo si un archivo lleva más de 2 horas sin respaldo en la bóveda, y se verifica a diario la firma digital (MD5) de cada archivo byte a byte."},
+    {"n": 54, "id": "ergonomia_gerencia", "titulo": "Ergonomía y velocidad en Gerencia Comercial",
+     "ley": "La interfaz de Gerencia Comercial debe priorizar la ergonomía y la velocidad. Los filtros y botones de acción son las herramientas primarias de mando. REGLA DE DISEÑO: prohibidos los botones estándar HTML; todo con acabado Maserati (Dark Mode, cristal, oro 24K, sombras suaves y contrastes nítidos)."},
 ]
 
 REGLAS_EFICIENCIA = [
@@ -75,7 +97,7 @@ REGLAS_EFICIENCIA = [
     {"id": "estimacion_previa", "ley": "Estimación Previa: antes de construir, calcular la ruta de menor costo de créditos según DashAI."},
 ]
 
-VERSION = 8  # +#32 división operativa Daniela/Victoria
+VERSION = 16  # +#49 mando manual Rodrigo +#52 log gestión +#53 doble bóveda +#54 ergonomía Maserati
 
 
 class ViolacionConstitucional(Exception):

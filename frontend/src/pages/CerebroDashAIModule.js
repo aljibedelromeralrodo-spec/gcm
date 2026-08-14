@@ -41,6 +41,20 @@ export default function CerebroDashAIModule() {
   const [msg, setMsg] = useState("");
   const [dataset, setDataset] = useState(null);
   const [busyDs, setBusyDs] = useState(false);
+  const [destMaestro, setDestMaestro] = useState("");
+  const [destMsg, setDestMsg] = useState("");
+
+  useEffect(() => {
+    axios.get(`${API_URL}/api/control/config`).then(r => setDestMaestro(r.data.destinatario_maestro || "")).catch(() => {});
+  }, []);
+
+  const guardarDestMaestro = async () => {
+    setDestMsg("");
+    try {
+      await axios.post(`${API_URL}/api/control/config`, { destinatario_maestro: destMaestro });
+      setDestMsg("✅ Destinatario Maestro guardado — los informes de inconsistencia irán a esa dirección");
+    } catch (e) { setDestMsg(`⛔ ${e.response?.data?.detail || "Error"}`); }
+  };
 
   useEffect(() => {
     axios.get(`${API_URL}/api/dashai/dataset/status`).then(r => setDataset(r.data)).catch(() => {});
@@ -146,6 +160,26 @@ export default function CerebroDashAIModule() {
           ))}
         </div>
       )}
+
+      <div style={{ ...panel, marginBottom: "1.2rem", borderColor: "rgba(245,158,11,0.5)" }} data-testid="dashai-control-config">
+        <div style={{ color: ORO, fontSize: "0.7rem", letterSpacing: "0.18em", textTransform: "uppercase", marginBottom: 10 }}>
+          🔎 Módulo Control — Destinatario Maestro de Inconsistencias (Regla #35)
+        </div>
+        <p style={{ color: "#94a3b8", fontSize: "0.72rem", margin: "0 0 10px", lineHeight: 1.6 }}>
+          Correo que recibe los informes de discrepancia entre la Bodega y el Ingreso de Concreces (ej. Riesgo Concreces).
+          El hallazgo NUNCA bloquea la operación: el Módulo Control solo audita e informa.
+        </p>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <input data-testid="dashai-dest-maestro" placeholder="riesgo@concreces.cl" value={destMaestro}
+            onChange={e => setDestMaestro(e.target.value)}
+            style={{ flex: "1 1 260px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(245,158,11,0.4)", color: "#fff", padding: "0.5rem 0.7rem", borderRadius: 8, fontSize: "0.78rem", boxSizing: "border-box" }} />
+          <button data-testid="dashai-dest-guardar" onClick={guardarDestMaestro}
+            style={{ background: "linear-gradient(135deg,#BF953F,#FCF6BA,#AA771C)", color: "#0a0a0a", border: "none", borderRadius: 8, padding: "0.5rem 1rem", fontWeight: 800, cursor: "pointer", fontSize: "0.74rem" }}>
+            Guardar Destinatario
+          </button>
+        </div>
+        {destMsg && <p data-testid="dashai-dest-msg" style={{ color: destMsg.startsWith("✅") ? "#22c55e" : "#ef4444", fontSize: "0.7rem", marginTop: 8 }}>{destMsg}</p>}
+      </div>
 
       {(d?.motivos_rechazo || []).length > 0 && (
         <div style={{ ...panel, marginBottom: "1.2rem" }} data-testid="dashai-motivos">
