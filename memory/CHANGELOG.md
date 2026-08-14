@@ -1138,3 +1138,12 @@ Constitución VERSION 19 (nuevas reglas #55, #56, #57).
 - **Detección firma cesión**: NOTARIA_KW ampliado (cesión, serie de créditos, firma confirmada) → folder.firma_cesion_confirmada_at; expediente_360.hitos_legales ahora con campos exactos estudio_reparos / tasacion_estado / firma_cesion.
 - **Rescate RUTs Flota**: Catalina Castillo 20.064.076-4 rescatado de hitos_externos (validado DV). Sin RUT interno disponible: Kanela Ibañez, Yuritza Bravo, Javiera Salgado, Luis Sepúlveda, Héctor Curi, Kevin Olivos (fuera del ADN hasta que llegue el dato real — Reglas #64/#65, no se inventa).
 - **Catalina Castillo sincronizada**: en ADN (55 registros), informe ESTUDIO_Informe Catalina Andrea Castillo Pauvif en 07_estudio_titulo, Ver PDF apunta al Informe (prioridad 'informe' en matching de documentos), bitácora resuelta (13/08 · Abogados · respondido), PDF servido 200/2.9MB.
+
+## 2026-08-14 (3ª tanda) — Rescate RUTs desde el Cerebro DashAI (sin IMAP)
+- Fuente: minería SOLO en colecciones internas (ai_extract_cache, gastos_op_log, mesa_enviados, proc_queue, folders) — el usuario ordenó NO minar GridFS/buzón por ahora.
+- **YURITZA BRAVO** = 18.865.076-7 (carpeta duplicada "YARITZA BRAVO" tenía el RUT; DV validado). En ADN ✓.
+- **HÉCTOR CURI Y COMPLEMENTO** = 25.426.472-5 (HECTOR JOHAN CURI CAMPOS, gastos_op_log). Complemento: madre DANA BANEZA CAMPOS ESPINOZA 22.544.754-3 → perfil_consolidado.rut_codeudor. Proyecto Uvas y el Viento / Boetsch / con subsidio. En ADN ✓ con codeudor amarrado.
+- **KEVIN OLIVOS** = 19.930.960-9 (KEVIN ARNOLD WILLIAMS OLIVOS ABARCA, ai_extract_cache confianza 0.99; el "25802753" de la carpeta era un teléfono, no RUT). En ADN ✓.
+- Descartes con evidencia: 21.256.138-K es de Natalia Javiera Illanes Santana (NO Javiera Salgado); 10.568.791-5 es de Patricia Cabezas (ejecutiva Andrea Salgado).
+- SIN RUT interno (agotado el cerebro): KANELA IBAÑEZ (su "25790880" no pasa DV, parece teléfono), JAVIERA SALGADO, LUIS SEPÚLVEDA. Requieren dato del usuario o pasada IMAP futura.
+- Volcado ADN ejecutado vía POST /api/adn/volcar (59 procesados). Verificado en /api/supercarpeta: en_adn=true para los 3.
