@@ -9,6 +9,18 @@ export default function SupercarpetaModule() {
   const [solo24, setSolo24] = useState(false);
   const [preview, setPreview] = useState(null);
   const [reparoModal, setReparoModal] = useState(null);
+  const [bitModal, setBitModal] = useState(null);
+
+  const verBitacora = async (c, hito) => {
+    setBitModal({ cliente: c.cliente, loading: true });
+    try {
+      const r = await axios.get(`${API}/api/supercarpeta/bitacora/${c.id}?hito=${hito}`);
+      setBitModal({ cliente: c.cliente, loading: false, ...r.data });
+    } catch (e) {
+      setBitModal({ cliente: c.cliente, loading: false, error_seguimiento: true,
+        detalle: e.response?.data?.detail || "Error consultando la bitácora" });
+    }
+  };
 
   useEffect(() => {
     axios.get(`${API}/api/supercarpeta`).then(r => setData(r.data)).catch(() => setData({ clientes: [] }));
@@ -59,10 +71,18 @@ export default function SupercarpetaModule() {
                 <td style={{ padding: "0.3rem 0.7rem", fontFamily: "monospace", fontSize: "0.66rem" }}>{c.rut || "—"}</td>
                 <td style={{ padding: "0.3rem 0.7rem", color: (c.broker_origen || "").startsWith("⚠️") ? "#ef4444" : "#38bdf8", fontSize: "0.62rem" }}>{c.broker_origen}</td>
                 <td data-testid={`super-tasacion-${c.id}`} style={{ padding: "0.3rem 0.7rem", fontSize: "0.62rem" }}>
-                  <span style={{ fontWeight: 800, color: c.estado_tasacion === "Informe Recibido" ? "#22c55e"
-                    : c.estado_tasacion === "Visita" ? "#38bdf8" : c.estado_tasacion === "Solicitada" ? "#f59e0b" : "#ef4444" }}>
+                  <button data-testid={`bitacora-tasacion-${c.id}`} onClick={() => verBitacora(c, "tasacion")}
+                    title="Bitácora de tiempos: cuándo se solicitó, a quién y días transcurridos"
+                    style={{ cursor: "pointer", border: "none", background: "transparent", padding: 0, fontWeight: 800,
+                      color: c.estado_tasacion === "Informe Recibido" ? "#22c55e"
+                        : c.estado_tasacion === "Visita" ? "#38bdf8" : c.estado_tasacion === "Solicitada" ? "#f59e0b" : "#ef4444" }}>
                     {c.estado_tasacion === "Informe Recibido" ? "✅ " : c.estado_tasacion === "Pendiente" ? "🔴 " : ""}{c.estado_tasacion === "Pendiente" ? "PENDIENTE" : c.estado_tasacion}
-                  </span>
+                  </button>
+                  {c.bitacora?.tasacion?.demora_48h &&
+                    <div style={{ color: "#ef4444", fontWeight: 800, fontSize: "0.56rem" }}>
+                      🔴 {c.bitacora.tasacion.fecha_solicitud?.slice(0, 10)} · +48h sin respuesta</div>}
+                  {c.bitacora?.tasacion?.error_seguimiento && c.estado_tasacion !== "Informe Recibido" &&
+                    <div style={{ color: "#ef4444", fontWeight: 800, fontSize: "0.56rem" }}>ERROR DE SEGUIMIENTO</div>}
                   {c.informes?.tasacion?.disponible && (
                     <button data-testid={`ver-tasacion-${c.id}`} onClick={() => abrir(c.id, c.cliente, c.informes.tasacion)}
                       title={`${c.informes.tasacion.archivo} · ${(c.informes.tasacion.fecha || "").slice(0, 16).replace("T", " ")}`}
@@ -91,7 +111,17 @@ export default function SupercarpetaModule() {
                         style={{ cursor: "pointer", border: "none", borderRadius: 8, fontWeight: 800,
                           fontSize: "0.6rem", padding: "2px 8px", background: "rgba(249,115,22,0.18)", color: "#f97316" }}>
                         ⚠️ Con Reparos</button>
-                    : <span style={{ fontWeight: 800, color: c.estado_legal === "✅ Limpio" ? "#22c55e" : "#f59e0b" }}>{c.estado_legal}</span>}
+                    : <button data-testid={`bitacora-legal-${c.id}`} onClick={() => verBitacora(c, "estudio")}
+                        title="Bitácora de tiempos del estudio de títulos"
+                        style={{ cursor: "pointer", border: "none", background: "transparent", padding: 0,
+                          fontWeight: 800, color: c.estado_legal === "✅ Limpio" ? "#22c55e" : "#f59e0b" }}>
+                        {c.estado_legal}
+                        {c.bitacora?.estudio?.demora_48h &&
+                          <span style={{ display: "block", color: "#ef4444", fontSize: "0.56rem" }}>
+                            🔴 {c.bitacora.estudio.fecha_solicitud?.slice(0, 10)} · +48h</span>}
+                        {c.bitacora?.estudio?.error_seguimiento && c.estado_legal === "⏳ En Proceso" &&
+                          <span style={{ display: "block", color: "#ef4444", fontSize: "0.56rem" }}>ERROR DE SEGUIMIENTO</span>}
+                      </button>}
                 </td>
                 <td data-testid={`super-reparos-${c.id}`} style={{ padding: "0.3rem 0.7rem", fontSize: "0.6rem", maxWidth: 260,
                   background: c.detalle_reparos ? "rgba(249,115,22,0.14)" : undefined,
@@ -118,6 +148,49 @@ export default function SupercarpetaModule() {
           </tbody>
         </table>
         {data && clientes.length === 0 && <p style={{ color: "#94a3b8", textAlign: "center", padding: "1.5rem" }}>Sin clientes {solo24 ? "con informes en las últimas 24h" : "en el mes corriente"}.</p>}
+        {bitModal && (
+          <div data-testid="bitacora-modal" onClick={() => setBitModal(null)}
+            style={{ position: "fixed", inset: 0, zIndex: 220, background: "rgba(2,6,23,0.8)",
+              backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
+            <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 520, background: "rgba(15,23,42,0.97)",
+              borderRadius: 16, padding: "1.4rem 1.6rem", boxShadow: "0 30px 80px rgba(0,0,0,0.6)" }}>
+              <h4 style={{ margin: 0, color: "#d4af37", fontSize: "0.9rem" }}>
+                🕐 Bitácora de Tiempos — {bitModal.cliente} · {bitModal.hito === "estudio" ? "Estudio de Títulos" : "Tasación"}
+              </h4>
+              {bitModal.loading && <p style={{ color: "#94a3b8", fontSize: "0.7rem" }}>Consultando registros…</p>}
+              {!bitModal.loading && bitModal.error_seguimiento && (
+                <div style={{ marginTop: 10, padding: "0.8rem 1rem", background: "rgba(239,68,68,0.12)",
+                  borderLeft: "3px solid #ef4444", borderRadius: 8 }}>
+                  <b style={{ color: "#ef4444", fontSize: "0.78rem" }}>⛔ ERROR DE SEGUIMIENTO</b>
+                  <p style={{ color: "#f8fafc", fontSize: "0.68rem", margin: "6px 0 0" }}>
+                    {bitModal.detalle || "No hay registro de cuándo se solicitó este hito (Regla de Hierro)."}</p>
+                </div>
+              )}
+              {!bitModal.loading && !bitModal.error_seguimiento && (
+                <div style={{ marginTop: 10, fontSize: "0.72rem", color: "#e2e8f0", display: "grid", gap: 8 }}>
+                  <div>📅 <b>Fecha de solicitud:</b>{" "}
+                    <span style={{ color: bitModal.demora_48h ? "#ef4444" : "#22c55e", fontWeight: 800 }}>
+                      {(bitModal.fecha_solicitud || "").replace("T", " ")}</span>
+                    {bitModal.demora_48h && <b style={{ color: "#ef4444" }}> · 🔴 +48h SIN RESPUESTA (cuello de botella)</b>}
+                  </div>
+                  <div>📨 <b>Destinatario:</b> {bitModal.destinatario || "—"} <span style={{ color: "#64748b" }}>({bitModal.fuente})</span></div>
+                  <div>⏱ <b>Días transcurridos:</b>{" "}
+                    <span style={{ fontWeight: 800, color: bitModal.demora_48h ? "#ef4444" : "#f59e0b" }}>
+                      {bitModal.dias_transcurridos ?? "?"} día(s) ({bitModal.horas_transcurridas ?? "?"} h)</span></div>
+                  <div>{bitModal.respondido
+                    ? <span style={{ color: "#22c55e", fontWeight: 800 }}>✅ Respondido el {(bitModal.respondido_at || "").replace("T", " ")}</span>
+                    : <span style={{ color: "#f59e0b", fontWeight: 800 }}>⏳ Aún sin respuesta</span>}</div>
+                  <div style={{ padding: "0.6rem 0.8rem", background: "rgba(212,175,55,0.08)",
+                    borderLeft: "3px solid #d4af37", borderRadius: 8 }}>
+                    <b style={{ color: "#d4af37", fontSize: "0.62rem" }}>QUÉ SE PIDIÓ (extracto del correo):</b>
+                    <div style={{ marginTop: 4, whiteSpace: "pre-wrap" }}>{bitModal.resumen || "—"}</div>
+                  </div>
+                </div>
+              )}
+              <button data-testid="bitacora-cerrar" onClick={() => setBitModal(null)} className="maserati-btn" style={{ marginTop: 14 }}>Cerrar</button>
+            </div>
+          </div>
+        )}
         {reparoModal && (
           <div data-testid="super-reparo-modal" onClick={() => setReparoModal(null)}
             style={{ position: "fixed", inset: 0, zIndex: 210, background: "rgba(2,6,23,0.8)",

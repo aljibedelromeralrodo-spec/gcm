@@ -682,7 +682,7 @@ async def flujos_contactos_visita():
 
 
 # ── AUDITORÍA DE CORREO DASHAI (Regla de Oro #43) — flujo real, sin inventar ─
-NOTARIA_KW = ("notar", "escritura", "repertorio")
+NOTARIA_KW = ("notar", "escritura", "repertorio", "cesión", "cesion", "serie de crédito", "serie de credito", "firma confirmada")
 
 
 OBS_RE = re.compile(r"(observaci[oó]n(?:es)?|reparos?)\s*[:\-\n]?\s*(.{40,900}?)(?:\n\s*\n|$)",
@@ -784,8 +784,10 @@ async def flujos_auditoria_real(limit: int = 60, dias: int = 0):
                 await _archivar_adjuntos(fd, e["id"], "TASACION", subdir="99_otros")
             hito_n, res_k = "Informe de Tasación Recibido", "tasaciones_detectadas"
         elif es_notaria:
-            # RADAR ESCRITURACIÓN: envío a notaría + captura automática de fecha de firma
+            # RADAR ESCRITURACIÓN: envío a notaría / cesión / firma serie de créditos
             marcas = {"escritura_notaria_detectada_at": e.get("date") or _now()}
+            if any(k in texto.lower() for k in ("cesión", "cesion", "serie de crédito", "serie de credito", "firma confirmada")):
+                marcas["firma_cesion_confirmada_at"] = e.get("date") or _now()
             fecha_f = _capturar_fecha(texto)
             if fecha_f and not (await db.folders.find_one({"id": fd["id"]}, {"fecha_firma": 1}) or {}).get("fecha_firma"):
                 marcas["fecha_firma_detectada"] = fecha_f
@@ -1134,9 +1136,83 @@ def _estado_estudio(fd):
 def _estado_cesion(fd):
     firmas = fd.get("firmas_log") or {}
     todas = firmas and all(v == "firmado" for v in firmas.values())
-    if fd.get("escritura_confirmada_at") or fd.get("escritura_notaria_detectada_at") or todas:
+    if (fd.get("firma_cesion_confirmada_at") or fd.get("escritura_confirmada_at")
+            or fd.get("escritura_notaria_detectada_at") or todas):
         return "Confirmada"
     return "Pendiente"
+
+
+def _parse_fecha(s):
+    from email.utils import parsedate_to_datetime
+    s = str(s or "")
+    try:
+        return datetime.fromisoformat(s.replace("Z", "+00:00"))
+    except Exception:
+        try:
+            return parsedate_to_datetime(s)
+        except Exception:
+            return None
+
+
+async def _bitacora_hito(fd, hito):
+    """BITÁCORA DE TIEMPOS: respaldo de fecha/hora de cada solicitud 'En Proceso'.
+    REGLA DE HIERRO: sin registro de solicitud → 'ERROR DE SEGUIMIENTO'."""
+    nombre = (fd.get("nombre") or "").strip()
+    kw = "TASACION" if hito == "tasacion" else "ESTUDIO"
+    rx_n = {"$regex": re.escape(nombre[:18]), "$options": "i"}
+    envio = await db.correos_smtp_log.find_one(
+        {"success": True, "$and": [{"subject": rx_n},
+                                   {"subject": {"$regex": kw, "$options": "i"}}]},
+        sort=[("fecha", -1)])
+    seg = None
+    hx = None
+    if not envio:
+        seg = await db.seguimiento.find_one(
+            {"$and": [{"$or": [{"cliente": rx_n}, {"asunto": rx_n}]},
+                      {"asunto": {"$regex": kw, "$options": "i"}}]}, sort=[("fecha", -1)])
+    if not envio and not seg:
+        hx = await db.hitos_externos.find_one(
+            {"$and": [{"$or": [{"cliente": rx_n}, {"asunto": rx_n}]},
+                      {"asunto": {"$regex": kw, "$options": "i"}}]}, sort=[("fecha", -1)])
+    rec = (fd.get("reclamos_gerencia") or {}).get(hito) or {}
+    fecha_raw = ((envio or {}).get("fecha") or (seg or {}).get("fecha") or (hx or {}).get("fecha")
+                 or rec.get("fecha") or rec.get("en") or "")
+    if not fecha_raw:
+        return {"hito": hito, "error_seguimiento": True, "estado": "ERROR DE SEGUIMIENTO",
+                "detalle": "Regla de Hierro: no hay registro de cuándo se solicitó este hito"}
+    destinatario = ((envio or {}).get("to")
+                    or ((seg or {}).get("de") or "registro de seguimiento" if seg else "")
+                    or ((hx or {}).get("fuente") or "radar de correos" if hx else "")
+                    or ("Gerencia Comercial (reclamo manual)" if rec else ""))
+    resumen = ((envio or {}).get("subject") or (seg or {}).get("asunto")
+               or (hx or {}).get("asunto") or rec.get("hito") or "")
+    respondido_at = (fd.get("tasacion_informe_recibido_at") if hito == "tasacion"
+                     else fd.get("estudio_recibido_at") or fd.get("estudio_titulo_terminado_at"))
+    dt = _parse_fecha(fecha_raw)
+    horas = dias = None
+    if dt:
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        delta = datetime.now(timezone.utc) - dt
+        horas = round(delta.total_seconds() / 3600, 1)
+        dias = delta.days
+    return {"hito": hito, "error_seguimiento": False,
+            "fecha_solicitud": str(fecha_raw)[:19],
+            "destinatario": destinatario, "resumen": resumen[:220],
+            "fuente": "correo SMTP" if envio else ("seguimiento" if seg else "huella de gestión"),
+            "dias_transcurridos": dias, "horas_transcurridas": horas,
+            "respondido": bool(respondido_at), "respondido_at": str(respondido_at or "")[:19],
+            "demora_48h": bool(horas is not None and horas > 48 and not respondido_at)}
+
+
+@supercarpeta.get("/bitacora/{fid}")
+async def supercarpeta_bitacora(fid: str, hito: str = "tasacion"):
+    fd = await db.folders.find_one({"id": fid})
+    if not fd:
+        raise HTTPException(status_code=404, detail="Carpeta no existe")
+    b = await _bitacora_hito(fd, "tasacion" if hito == "tasacion" else "estudio")
+    b["cliente"] = fd.get("nombre") or ""
+    return b
 
 
 @supercarpeta.get("/flota")
@@ -1188,20 +1264,18 @@ async def supercarpeta_vista():
         reg = adn_map.get(_adn._norm_rut(fd.get("rut"))) or {}
         exp = reg.get("expediente_360") or {}
         docs = exp.get("documentos") or []
-        inf = {"tasacion": None, "estudio": None, "borrador": None}
-        for d in docs:
-            n = (d.get("archivo") or "").lower()
-            item = {"disponible": True, "archivo": d.get("archivo") or "",
-                    "fecha": reg.get("actualizado") or ""}
-            if not inf["tasacion"] and "tasac" in n:
-                inf["tasacion"] = item
-            elif not inf["estudio"] and "estudio" in n:
-                inf["estudio"] = item
-            elif not inf["borrador"] and ("escritura" in n or "borrador" in n):
-                inf["borrador"] = item
-        for k in inf:
-            if not inf[k]:
-                inf[k] = {"disponible": False, "archivo": "", "fecha": ""}
+
+        def _doc(kws, preferir="informe"):
+            cands = [d for d in docs if any(k in (d.get("archivo") or "").lower() for k in kws)]
+            cands.sort(key=lambda d: 0 if preferir in (d.get("archivo") or "").lower() else 1)
+            return cands[0] if cands else None
+
+        inf = {}
+        for k, sel in (("tasacion", _doc(["tasac"])), ("estudio", _doc(["estudio"])),
+                       ("borrador", _doc(["escritura", "borrador"], preferir="borrador"))):
+            inf[k] = ({"disponible": True, "archivo": sel.get("archivo") or "",
+                       "fecha": reg.get("actualizado") or ""} if sel
+                      else {"disponible": False, "archivo": "", "fecha": ""})
         est_estudio, detalle_reparos = _estado_estudio(fd)
         hl = exp.get("hitos_legales") or {}
         if not detalle_reparos and hl.get("reparos"):
@@ -1209,6 +1283,15 @@ async def supercarpeta_vista():
             est_estudio = "Con Reparos"
         estado_legal = ("⚠️ Con Reparos" if est_estudio == "Con Reparos"
                         else "✅ Limpio" if est_estudio == "Aprobado" else "⏳ En Proceso")
+        # BITÁCORA rápida por hito pendiente (respaldo de fecha o ERROR DE SEGUIMIENTO)
+        bit = {}
+        try:
+            if _estado_tasacion(fd) != "Informe Recibido":
+                bit["tasacion"] = await _bitacora_hito(fd, "tasacion")
+            if est_estudio != "Aprobado":
+                bit["estudio"] = await _bitacora_hito(fd, "estudio")
+        except Exception:
+            bit = {}
         fechas = [v["fecha"] for v in inf.values() if v["disponible"]]
         clientes.append({"id": fd["id"], "cliente": fd.get("nombre"), "rut": fd.get("rut") or "",
                          "broker_origen": fd.get("inmobiliaria") or fd.get("broker_origen")
@@ -1219,6 +1302,7 @@ async def supercarpeta_vista():
                          "estado_legal": estado_legal,
                          "detalle_reparos": detalle_reparos,
                          "cesion": _estado_cesion(fd),
+                         "bitacora": bit,
                          "en_adn": bool(reg),
                          "recien_24h": any(f >= limite24 for f in fechas)})
     return {"mes": mes, "clientes": clientes, "total": len(clientes),

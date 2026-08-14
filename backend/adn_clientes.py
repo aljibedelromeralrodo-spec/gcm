@@ -79,6 +79,9 @@ async def _expediente_360(fd):
     nombre_carpeta = fd.get("nombre") or ""
     documentos = [{"archivo": a, "link_boveda": f"{nombre_carpeta}/{a}", "fuente": "boveda_local"}
                   for a in (fd.get("archivos") or []) if isinstance(a, str)][:150]
+    rep_raw = fd.get("estudio_reparos")
+    rep_estado = rep_raw.get("estado", "") if isinstance(rep_raw, dict) else (rep_raw or "")
+    rep_textos = " | ".join((r.get("texto") or "")[:250] for r in (fd.get("reparos_alertas") or [])[:5])
     return {
         "titular": {"nombre": fd.get("nombre_completo") or fd.get("nombre") or "",
                     "rut": fd.get("rut") or "",
@@ -103,8 +106,15 @@ async def _expediente_360(fd):
                       "contacto_vendedor": {"nombre": cvend.get("nombre") or "", "rut": cvend.get("rut") or ""}},
         "hitos_legales": {"estudio_titulos_recibido": fd.get("estudio_recibido_at") or "",
                           "estudio_titulos_terminado": fd.get("estudio_titulo_terminado_at") or "",
-                          "reparos": fd.get("estudio_reparos") or " | ".join(
-                              (r.get("texto") or "")[:250] for r in (fd.get("reparos_alertas") or [])[:5]),
+                          "estudio_reparos": rep_textos or rep_estado,
+                          "tasacion_estado": ("Informe Recibido" if fd.get("tasacion_informe_recibido_at")
+                                              else "Visita" if fd.get("tasacion_fecha")
+                                              else "Solicitada" if (fd.get("reclamos_gerencia") or {}).get("tasacion")
+                                              else "Pendiente"),
+                          "firma_cesion": ("Confirmada" if fd.get("firma_cesion_confirmada_at")
+                                           or fd.get("escritura_confirmada_at")
+                                           or fd.get("escritura_notaria_detectada_at") else "Pendiente"),
+                          "reparos": rep_textos or rep_estado,
                           "borrador_escritura": fd.get("escritura_confirmada_at") or "",
                           "fecha_firma": fd.get("fecha_firma") or fd.get("fecha_firma_detectada") or "",
                           "anexos_notaria": fd.get("anexos_notaria") or ""},
