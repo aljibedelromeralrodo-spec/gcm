@@ -26,11 +26,11 @@ const selEstilo = { background: "rgba(255,255,255,0.06)", border: "1px solid rgb
   color: "#e2e8f0", padding: "0.45rem 0.6rem", borderRadius: 10, fontSize: "0.7rem" };
 
 const RECLAMOS_UI = [
-  ["tasacion", "📩 Reclamar Tasación", f => f.tasacion_estado !== "ok"],
-  ["serviu", "📩 Reclamar SERVIU", f => !!f.subsidio],
-  ["actualizacion", "📩 Reclamar Actualización", f => f.doc20?.estado !== "ok"],
-  ["firmas", "📩 Reclamar Firmas", f => f.hito_firmas !== "ok"],
-  ["movimiento", "📩 Reclamar Movimiento", f => !!f.inactivo_96h],
+  ["tasacion", "📩 Reclamar Tasación", f => f.tasacion_estado !== "ok", "mb-azul"],
+  ["serviu", "📩 Reclamar SERVIU", f => !!f.subsidio, "mb-verde"],
+  ["actualizacion", "📩 Reclamar Actualización", f => f.doc20?.estado !== "ok", "mb-naranja"],
+  ["firmas", "📩 Reclamar Firmas", f => f.hito_firmas !== "ok", "mb-azul"],
+  ["movimiento", "📩 Reclamar Movimiento", f => !!f.inactivo_96h, "mb-naranja"],
 ];
 
 export default function GerenciaComercialModule() {
@@ -69,8 +69,11 @@ export default function GerenciaComercialModule() {
     catch (e) { console.error(e); }
   };
 
-  // ACCIÓN ÚNICA (Regla #49): el reclamo SOLO sale cuando Rodrigo pincha
-  const reclamar = async (fid, tipo, destinatario) => {
+  // ACCIÓN ÚNICA (Regla #49) + HUELLA Y BLOQUEO 12H (Regla #57)
+  const reclamar = async (fid, tipo, ultimaFecha, destinatario) => {
+    if (ultimaFecha && (Date.now() - new Date(ultimaFecha).getTime()) < 12 * 3600 * 1000) {
+      if (!window.confirm("¿Estás seguro de enviar un nuevo reclamo tan pronto? (último hace menos de 12 horas)")) return;
+    }
     setBusyRec(`${fid}-${tipo}`);
     try {
       await axios.post(`${API}/api/gerencia/reclamo/${fid}`, { tipo, destinatario });
@@ -79,7 +82,7 @@ export default function GerenciaComercialModule() {
       const det = e.response?.data?.detail || "Error de envío";
       if (e.response?.status === 400 && det.includes("correo configurado")) {
         const manual = window.prompt("El Broker no tiene correo configurado.\nIngrese el correo del destinatario:");
-        if (manual) { await reclamar(fid, tipo, manual); return; }
+        if (manual) { await reclamar(fid, tipo, null, manual); return; }
       } else {
         window.alert(det);
       }
@@ -115,7 +118,7 @@ export default function GerenciaComercialModule() {
   );
 
   return (
-    <div className="module-content" data-testid="gerencia-module" style={{ background: "#0f172a", minHeight: "100%", padding: "1.2rem", borderRadius: 12 }}>
+    <div className="module-content seamless-scope" data-testid="gerencia-module" style={{ minHeight: "100%", padding: "1.2rem", borderRadius: 12 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", marginBottom: 14 }}>
         <h3 style={{ margin: 0, color: "#f8fafc", fontSize: "1.05rem" }}>
           <i className="fa fa-line-chart" style={{ color: "#d4af37", marginRight: 8 }} />Gerencia Comercial — Centro de Mando Estratégico
@@ -211,8 +214,8 @@ export default function GerenciaComercialModule() {
           <tbody>
             {cartera.map(f => (
               <tr key={f.folder_id} data-testid={`gerencia-fila-${f.folder_id}`}
-                style={{ borderBottom: "1px solid rgba(148,163,184,0.08)",
-                  background: f.datos_incompletos ? "rgba(239,68,68,0.12)" : (f.inactivo_96h ? "rgba(148,163,184,0.10)" : "transparent") }}>
+                style={{
+                  background: f.datos_incompletos ? "rgba(239,68,68,0.12)" : (f.inactivo_96h ? "rgba(148,163,184,0.10)" : undefined) }}>
                 <td style={{ padding: "0.6rem 0.8rem", fontWeight: 700, color: "#f8fafc" }}>{f.cliente}
                   {f.datos_incompletos && <div data-testid={`broker-no-actualizado-${f.folder_id}`} style={{ color: "#ef4444", fontSize: "0.6rem", fontWeight: 800 }}>🔴 Broker no actualizado</div>}
                   {f.inactivo_96h && !f.datos_incompletos && <div style={{ color: "#94a3b8", fontSize: "0.58rem" }}>⏸ Sin actividad 96h</div>}
@@ -278,17 +281,22 @@ export default function GerenciaComercialModule() {
                 <td style={{ padding: "0.6rem 0.8rem", fontSize: "0.68rem", color: "#94a3b8" }}>{f.estado_mesa || "—"}</td>
                 <td style={{ padding: "0.6rem 0.6rem" }}>
                   <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                    {RECLAMOS_UI.filter(([, , cond]) => cond(f)).map(([tipo, label]) => {
+                    {RECLAMOS_UI.filter(([, , cond]) => cond(f)).map(([tipo, label, , color]) => {
                       const hecho = f.reclamos?.[tipo];
                       return (
-                        <button key={tipo} data-testid={`reclamo-${tipo}-${f.folder_id}`}
-                          className={`maserati-btn ${hecho ? "hecho" : (tipo === "movimiento" ? "neon" : "")}`}
-                          disabled={busyRec === `${f.folder_id}-${tipo}`}
-                          title={hecho ? `Ya solicitado por ${hecho.por} a ${hecho.destinatario}` : "El envío depende 100% de Gerencia (Regla #49)"}
-                          onClick={() => reclamar(f.folder_id, tipo)}>
-                          {busyRec === `${f.folder_id}-${tipo}` ? "Enviando…"
-                            : hecho ? `✓ Solicitado el ${(hecho.fecha || "").slice(0, 10)}` : label}
-                        </button>
+                        <div key={tipo}>
+                          <button data-testid={`reclamo-${tipo}-${f.folder_id}`}
+                            className={`maserati-btn ${hecho ? "mb-hecho" : color}`}
+                            disabled={busyRec === `${f.folder_id}-${tipo}`}
+                            title={hecho ? `Última gestión: ${hecho.por} → ${hecho.destinatario} (Regla #57)` : "El envío depende 100% de Gerencia (Regla #49)"}
+                            onClick={() => reclamar(f.folder_id, tipo, hecho?.fecha)}>
+                            {busyRec === `${f.folder_id}-${tipo}` ? "Enviando…"
+                              : hecho ? `✓ ${label.replace("📩 ", "")}` : label}
+                          </button>
+                          {hecho && <span data-testid={`huella-${tipo}-${f.folder_id}`} className="huella-ts">
+                            Última solicitud: {(hecho.fecha || "").slice(0, 16).replace("T", " ")} UTC
+                          </span>}
+                        </div>
                       );
                     })}
                     {RECLAMOS_UI.every(([, , cond]) => !cond(f)) && <span style={{ color: "#22c55e", fontSize: "0.62rem" }}>Sin gestiones pendientes</span>}

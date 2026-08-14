@@ -784,3 +784,4 @@ requieren re-deploy para llegar a producción.
 ---
 ## Sesión 14-Jun-2026 — Ver /app/memory/CHANGELOG.md
 Constitución v16 (Reglas #34-#38, #41, #43, #49, #52, #53, #54). Módulo Brokers (perfil D: broker1/broker123, mutuaria/mutuaria2026), Malla de Inteligencia (hitos por RUT), Módulo Control (Regla #35), Flujos Usada/Inmobiliaria, Mi Correo AES-256, GRID-DASHAI (espejo MD5 sin interruptor + disaster recovery), Radar Escrituración (Doc 2.0 + Log de Firmas), Centro de Mando Gerencial de Rodrigo Ibáñez (reclamos manuales + filtros + Maserati buttons), saneamiento (cabeceras seguridad, eslint 0 errores). Testing: iteration_30 backend 22/22 + fix wiring App.js verificado.
+- Cont. sesión: Constitución v19 (#55 Supercarpeta, #56 Seamless UI, #57 Huella). Bóveda Externa Object Storage (973/973), Buzón de Aprendizaje solo-lectura (UI en DashAI, faltan credenciales del usuario), Supercarpeta con preview PDF y neón 24h, botones reclamo con huella y bloqueo 12h.

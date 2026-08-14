@@ -22,6 +22,41 @@ from fastapi.responses import StreamingResponse
 from database import db
 import bunker
 
+# ── BÓVEDA EXTERNA (Object Storage) — Regla #53: espejo fuera de la BD ──────
+import requests as _rq
+from urllib.parse import quote as _q
+STORAGE_BASE = (os.environ.get("INTEGRATION_PROXY_URL") or "").strip() or "https://integrations.emergentagent.com"
+STORAGE_URL = STORAGE_BASE.rstrip("/") + "/objstore/api/v1/storage"
+_storage_key = None
+
+
+def _init_storage(force=False):
+    global _storage_key
+    if _storage_key and not force:
+        return _storage_key
+    r = _rq.post(f"{STORAGE_URL}/init", json={"emergent_key": os.environ.get("EMERGENT_LLM_KEY")}, timeout=30)
+    r.raise_for_status()
+    _storage_key = r.json()["storage_key"]
+    return _storage_key
+
+
+def _subir_nube(ruta, data):
+    key = _init_storage()
+    url = f"{STORAGE_URL}/objects/centralmutuos/espejo/{_q(ruta)}"
+    r = _rq.put(url, headers={"X-Storage-Key": key, "Content-Type": "application/octet-stream"}, data=data, timeout=120)
+    if r.status_code == 404:
+        key = _init_storage(force=True)
+        r = _rq.put(url, headers={"X-Storage-Key": key, "Content-Type": "application/octet-stream"}, data=data, timeout=120)
+    r.raise_for_status()
+    return r.json()["path"]
+
+
+def _bajar_nube(cloud_path):
+    key = _init_storage()
+    r = _rq.get(f"{STORAGE_URL}/objects/{_q(cloud_path)}", headers={"X-Storage-Key": key}, timeout=60)
+    r.raise_for_status()
+    return r.content
+
 grid = APIRouter(prefix="/grid")
 _now = lambda: datetime.now(timezone.utc).isoformat()
 
@@ -101,8 +136,15 @@ async def resync():
             continue
         if not prev or prev.get("md5") != md5:
             cambiados += 1
+        cloud_path = (prev or {}).get("cloud_path", "")
+        if not cloud_path or not prev or prev.get("md5") != md5:
+            try:  # BÓVEDA EXTERNA: delta a Object Storage (la BD se mantiene liviana)
+                cloud_path = await asyncio.to_thread(_subir_nube, ruta, p.read_bytes())
+            except Exception as e:
+                logging.warning(f"bóveda externa {ruta}: {e}")
         await db.espejo_concreces_cloud.update_one({"ruta": ruta}, {"$set": {
-            "ruta": ruta, "md5": md5, "size": size, "mtime": mtime, "verificado": _now()}}, upsert=True)
+            "ruta": ruta, "md5": md5, "size": size, "mtime": mtime,
+            "cloud_path": cloud_path, "verificado": _now()}}, upsert=True)
     borrados = 0
     for ruta in list(idx):
         if ruta not in disco:
@@ -117,6 +159,7 @@ async def resync():
     estado = {"ultima_resync": _now(), "archivos_espejo": len(disco),
               "restaurados_desde_nube": restaurados,
               "subidos_a_nube": (sync or {}).get("subidos", 0),
+              "archivos_en_boveda_externa": await db.espejo_concreces_cloud.count_documents({"cloud_path": {"$ne": ""}}),
               "firmas_actualizadas": cambiados, "firmas_eliminadas": borrados,
               "bloqueo_desactivacion": True, "permanente": True}
     await db.config.update_one({"_key": "grid_dashai"}, {"$set": estado}, upsert=True)
@@ -159,6 +202,9 @@ async def grid_loop():
     while True:
         try:
             await _detectar_cambios_clientes()
+            pend = await db.espejo_concreces_cloud.count_documents({"$or": [{"cloud_path": ""}, {"cloud_path": {"$exists": False}}]})
+            if pend:
+                await _backfill_externo(30)
             ciclo += 1
             if ciclo % 10 == 0:  # espejo completo cada ~10 minutos
                 await resync()
@@ -222,12 +268,51 @@ async def grid_webhooks_listar():
     return {"webhooks": regs, "total": len(regs)}
 
 
+async def _backfill_externo(maxn):
+    base = bunker.ROOT / "clientes"
+    subidos = fallidos = 0
+    async for doc in db.espejo_concreces_cloud.find({"$or": [{"cloud_path": ""}, {"cloud_path": {"$exists": False}}]}).limit(maxn):
+        p = base / doc["ruta"].replace("clientes/", "", 1)
+        if not p.exists():
+            continue
+        try:
+            cp = await asyncio.to_thread(_subir_nube, doc["ruta"], p.read_bytes())
+            await db.espejo_concreces_cloud.update_one({"ruta": doc["ruta"]}, {"$set": {"cloud_path": cp}})
+            subidos += 1
+        except Exception:
+            fallidos += 1
+        await asyncio.sleep(0.2)
+    logging.info(f"🛰 Bóveda externa: backfill {subidos} subidos, {fallidos} fallidos")
+    return subidos, fallidos
+
+
+@grid.post("/respaldo-externo")
+async def grid_respaldo_externo(payload: dict = None):
+    """Backfill hacia la Bóveda Externa — corre en segundo plano (no bloquea)."""
+    maxn = int((payload or {}).get("max", 200))
+    asyncio.create_task(_backfill_externo(maxn))
+    pendientes = await db.espejo_concreces_cloud.count_documents({"$or": [{"cloud_path": ""}, {"cloud_path": {"$exists": False}}]})
+    return {"ok": True, "en_curso": True, "lote": maxn, "pendientes_antes": pendientes}
+
+
 @grid.post("/disaster-recovery")
 async def grid_disaster_recovery():
     """PROTOCOLO DE RECUPERACIÓN (Regla #53): reconstruye la base documental desde
-    las bóvedas (Espejo Cloud GridFS + discos locales de los ejecutivos)."""
+    las bóvedas (Espejo GridFS + Bóveda Externa + discos locales de los ejecutivos)."""
     restaurados = await asyncio.to_thread(bunker.restaurar_faltantes)
     base = bunker.ROOT / "clientes"
+    desde_nube = 0
+    async for doc in db.espejo_concreces_cloud.find({"cloud_path": {"$nin": ["", None]}}):
+        p = base / doc["ruta"].replace("clientes/", "", 1)
+        if p.exists():
+            continue
+        try:
+            data = await asyncio.to_thread(_bajar_nube, doc["cloud_path"])
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_bytes(data)
+            desde_nube += 1
+        except Exception as e:
+            logging.warning(f"DR bóveda externa {doc['ruta']}: {e}")
     reconstruidas = 0
     if base.exists():
         for d in base.iterdir():
@@ -241,7 +326,8 @@ async def grid_disaster_recovery():
                 "created_at": _now()})
             reconstruidas += 1
     estado = await resync()
-    await _emitir("disaster_recovery", {"restaurados": restaurados, "carpetas_reconstruidas": reconstruidas})
-    return {"ok": True, "archivos_restaurados": restaurados,
+    await _emitir("disaster_recovery", {"restaurados": restaurados, "desde_boveda_externa": desde_nube,
+                                        "carpetas_reconstruidas": reconstruidas})
+    return {"ok": True, "archivos_restaurados": restaurados, "desde_boveda_externa": desde_nube,
             "carpetas_reconstruidas": reconstruidas, "espejo": estado,
-            "regla": "#53 — Doble Bóveda: local + Espejo Cloud"}
+            "regla": "#53 — Doble Bóveda: local + Espejo Cloud + Bóveda Externa"}

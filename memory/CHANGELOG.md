@@ -1108,3 +1108,12 @@ Constitución Maestra: VERSION 16 (nuevas Reglas de Oro #34, #35, #36, #37, #38,
 
 ### Pendiente
 - Object Storage externo (S3/Emergent) como espejo adicional (hoy Espejo Cloud = GridFS). Twilio .env. 2º buzón IMAP. Alerta Cumpleaños (ofrecida, sin confirmar). OCR se pierde al forkar: reinstalar poppler-utils + tesseract-ocr(-spa).
+
+## Sesión 14-Jun-2026 (cont.) — Bóveda Externa, Buzón Aprendizaje, Supercarpeta, Seamless UI, Huella #57
+Constitución VERSION 19 (nuevas reglas #55, #56, #57).
+- **Bóveda Externa (Object Storage Emergent)**: grid_dashai.py sube el espejo a `centralmutuos/espejo/*` (973/973 archivos respaldados). Delta en cada resync + backfill automático (30/min en grid_loop) + POST /grid/respaldo-externo (background). Disaster Recovery restaura también desde la nube externa (_bajar_nube). Usa EMERGENT_LLM_KEY + INTEGRATION_PROXY_URL (init /objstore).
+- **Buzón de Aprendizaje**: router /buzon-aprendizaje (configurar con validación IMAP + AES-256, estado). Loop cada 15 min lee SOLO LECTURA (readonly + BODY.PEEK), clasifica asuntos (tasación/estudio/reparo/notaría) en db.buzon_aprendizaje. UI en Cerebro DashAI (dashai-buzon-aprendizaje). PENDIENTE: usuario debe ingresar email+clave de aplicación del 2º buzón en el panel DashAI.
+- **Supercarpeta de Management (Regla #55)**: /api/supercarpeta (disponibilidad física de Tasación/Estudio/Borrador por cliente del mes, recién_24h) + /api/supercarpeta/archivo/{fid}?ruta= (preview PDF inline, anti path-traversal). Frontend SupercarpetaModule.js: 20 clientes/pantalla, iconos metálicos (.folder-metal), neón verde 24h (tr.neon-verde), modal iframe de PDF, filtro recién llegados. Nav fija 'supercarpeta' (admin + perfil B).
+- **Seamless UI (Regla #56)**: clase .seamless-scope (App.css) — sin bordes/sombras en tablas y bloques de clientes de Gerencia/Administración/Supercarpeta/Brokers, separación por zebra-gradiente y espaciado, fondo Dark Slate.
+- **Huella de Gestión (Regla #57)**: botones de reclamo con colores vibrantes (azul/verde/naranja + glow hover), al reclamar mutan a desaturado (.mb-hecho) con marca de tiempo exacta debajo (persistida en folder.reclamos_gerencia); confirmación si se reintenta en <12h.
+- Fix de estabilidad: backfill externo movido a background task (evita 502 del gateway).

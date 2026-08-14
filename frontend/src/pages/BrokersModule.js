@@ -97,7 +97,7 @@ export default function BrokersModule({ user }) {
   };
 
   return (
-    <div className="module-content" data-testid="brokers-module">
+    <div className="module-content seamless-scope" data-testid="brokers-module" style={{ padding: "1.2rem", borderRadius: 12 }}>
       <div className="clientes-toolbar">
         <h3 style={{ margin: 0, color: "var(--text-primary)", fontSize: "1.05rem" }}>
           <i className="fa fa-briefcase" style={{ marginRight: 8, color: "var(--gold)" }} />Panel Broker — {user?.nombre}

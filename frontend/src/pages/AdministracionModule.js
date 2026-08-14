@@ -226,7 +226,7 @@ export default function AdministracionModule({ user }) {
   const panelActual = PANELES.find(p => p[0] === panel) || PANELES[0];
 
   return (
-    <div className="module-content" data-testid="administracion-module">
+    <div className="module-content seamless-scope" data-testid="administracion-module" style={{ padding: "1.2rem", borderRadius: 12 }}>
       <div className="clientes-toolbar">
         <h3 style={{ margin: 0, color: "var(--text-primary)", fontSize: "1.05rem" }}>
           <i className="fa fa-database" style={{ marginRight: 8, color: "var(--gold)" }} />Administración — Bodega de Datos Concreces

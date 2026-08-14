@@ -43,6 +43,23 @@ export default function CerebroDashAIModule() {
   const [busyDs, setBusyDs] = useState(false);
   const [destMaestro, setDestMaestro] = useState("");
   const [destMsg, setDestMsg] = useState("");
+  const [buzon, setBuzon] = useState(null);
+  const [buzonForm, setBuzonForm] = useState({ email: "", app_password: "", imap_host: "imap.gmail.com" });
+  const [buzonMsg, setBuzonMsg] = useState("");
+
+  useEffect(() => {
+    axios.get(`${API_URL}/api/buzon-aprendizaje`).then(r => setBuzon(r.data)).catch(() => {});
+  }, []);
+
+  const guardarBuzon = async () => {
+    setBuzonMsg("");
+    try {
+      const r = await axios.post(`${API_URL}/api/buzon-aprendizaje/configurar`, buzonForm);
+      setBuzonMsg(`✅ ${r.data.nota}`);
+      setBuzonForm({ ...buzonForm, app_password: "" });
+      axios.get(`${API_URL}/api/buzon-aprendizaje`).then(x => setBuzon(x.data)).catch(() => {});
+    } catch (e) { setBuzonMsg(`${e.response?.data?.detail || "⛔ Error"}`); }
+  };
 
   useEffect(() => {
     axios.get(`${API_URL}/api/control/config`).then(r => setDestMaestro(r.data.destinatario_maestro || "")).catch(() => {});
@@ -179,6 +196,32 @@ export default function CerebroDashAIModule() {
           </button>
         </div>
         {destMsg && <p data-testid="dashai-dest-msg" style={{ color: destMsg.startsWith("✅") ? "#22c55e" : "#ef4444", fontSize: "0.7rem", marginTop: 8 }}>{destMsg}</p>}
+      </div>
+
+      <div style={{ ...panel, marginBottom: "1.2rem", borderColor: "rgba(56,189,248,0.5)" }} data-testid="dashai-buzon-aprendizaje">
+        <div style={{ color: ORO, fontSize: "0.7rem", letterSpacing: "0.18em", textTransform: "uppercase", marginBottom: 10 }}>
+          📚 Buzón de Aprendizaje — 2º IMAP solo lectura
+        </div>
+        <p style={{ color: "#94a3b8", fontSize: "0.72rem", margin: "0 0 10px", lineHeight: 1.6 }}>
+          DashAI lee este buzón SIN marcar ni mover correos y aprende de asuntos reales (tasaciones, estudios, reparos, notarías).
+          {buzon?.configurado && <> · <b style={{ color: buzon.estado === "ok" ? "#22c55e" : "#f59e0b" }}>{buzon.email}</b> — {buzon.ingeridos} correo(s) ingeridos · última lectura {(buzon.ultima_lectura || "—").slice(0, 16).replace("T", " ")}</>}
+        </p>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <input data-testid="buzon-email" placeholder="segundo.buzon@gmail.com" value={buzonForm.email}
+            onChange={e => setBuzonForm({ ...buzonForm, email: e.target.value })}
+            style={{ flex: "1 1 200px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(56,189,248,0.4)", color: "#fff", padding: "0.5rem 0.7rem", borderRadius: 8, fontSize: "0.76rem", boxSizing: "border-box" }} />
+          <input data-testid="buzon-password" type="password" placeholder="Clave de aplicación" value={buzonForm.app_password}
+            onChange={e => setBuzonForm({ ...buzonForm, app_password: e.target.value })}
+            style={{ flex: "1 1 170px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(56,189,248,0.4)", color: "#fff", padding: "0.5rem 0.7rem", borderRadius: 8, fontSize: "0.76rem", boxSizing: "border-box" }} />
+          <input data-testid="buzon-imap" value={buzonForm.imap_host}
+            onChange={e => setBuzonForm({ ...buzonForm, imap_host: e.target.value })}
+            style={{ flex: "0 1 150px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(56,189,248,0.4)", color: "#fff", padding: "0.5rem 0.7rem", borderRadius: 8, fontSize: "0.76rem", boxSizing: "border-box" }} />
+          <button data-testid="buzon-guardar" onClick={guardarBuzon} disabled={!buzonForm.email || !buzonForm.app_password}
+            style={{ background: "linear-gradient(135deg,#BF953F,#FCF6BA,#AA771C)", color: "#0a0a0a", border: "none", borderRadius: 8, padding: "0.5rem 1rem", fontWeight: 800, cursor: "pointer", fontSize: "0.74rem" }}>
+            Conectar (solo lectura)
+          </button>
+        </div>
+        {buzonMsg && <p data-testid="buzon-msg" style={{ color: buzonMsg.startsWith("✅") ? "#22c55e" : "#f59e0b", fontSize: "0.7rem", marginTop: 8 }}>{buzonMsg}</p>}
       </div>
 
       {(d?.motivos_rechazo || []).length > 0 && (

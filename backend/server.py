@@ -256,6 +256,7 @@ async def startup():
     import malla_inteligencia as _malla
     asyncio.create_task(_task_blindada(_malla.malla_loop, "malla_inteligencia"))
     asyncio.create_task(_task_blindada(_malla.lector_ejecutivos_loop, "lector_ejecutivos"))
+    asyncio.create_task(_task_blindada(_malla.buzon_aprendizaje_loop, "buzon_aprendizaje"))
     import grid_dashai as _grid
     asyncio.create_task(_task_blindada(_grid.grid_loop, "grid_dashai_forzado"))
     asyncio.create_task(_task_blindada(_uf_auto_loop, "uf"))
@@ -13588,6 +13589,8 @@ api.include_router(_malla_mod.fuentes)
 api.include_router(_malla_mod.hitos)
 api.include_router(_malla_mod.flujos)
 api.include_router(_malla_mod.micorreo)
+api.include_router(_malla_mod.buzon)
+api.include_router(_malla_mod.supercarpeta)
 
 # 🛰 GRID-DASHAI — Sincronización forzada e integral (Regla #41, SIN interruptor)
 import grid_dashai as _grid_mod

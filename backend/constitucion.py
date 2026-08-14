@@ -87,6 +87,12 @@ REGLAS_ORO = [
      "ley": "Ningún documento legal es válido si no existe simultáneamente en la Bóveda Local del ejecutivo y en el Espejo Cloud de Central Mutuos. REGLA DE HIERRO: se alerta de inmediato a Gerardo si un archivo lleva más de 2 horas sin respaldo en la bóveda, y se verifica a diario la firma digital (MD5) de cada archivo byte a byte."},
     {"n": 54, "id": "ergonomia_gerencia", "titulo": "Ergonomía y velocidad en Gerencia Comercial",
      "ley": "La interfaz de Gerencia Comercial debe priorizar la ergonomía y la velocidad. Los filtros y botones de acción son las herramientas primarias de mando. REGLA DE DISEÑO: prohibidos los botones estándar HTML; todo con acabado Maserati (Dark Mode, cristal, oro 24K, sombras suaves y contrastes nítidos)."},
+    {"n": 55, "id": "supercarpeta_management", "titulo": "Supercarpeta de Management",
+     "ley": "La Supercarpeta de Management es la vista de control primario. Debe reflejar la disponibilidad física de los informes de títulos y tasaciones del mes corriente. REGLA DE DISEÑO: interfaz de alta gerencia, iconos metálicos, 20 clientes por pantalla y luz neón verde para informes recibidos en las últimas 24 horas."},
+    {"n": 56, "id": "interfaz_fluida_seamless", "titulo": "Interfaz Fluida (Seamless UI)",
+     "ley": "La experiencia visual del Maserati es fluida. El sistema debe evitar el uso de marcos, recuadros y divisiones visuales que dificulten la lectura continua de la cartera de clientes. REGLA DE DISEÑO: el foco es la información; el fondo es Dark Slate sólido y las letras e iconos definen la estructura, no las cajas. La separación se logra con espaciado y leves gradientes."},
+    {"n": 57, "id": "huella_gestion_botones", "titulo": "Huella visible de gestión",
+     "ley": "Toda acción de la Gerencia Comercial debe dejar una huella visible en la interfaz. Los botones deben informar el estado de la última gestión realizada para evitar duplicidad de trabajo. REGLA DE HIERRO: la fecha de cada reclamo se guarda en la carpeta del cliente (persistente a reinicios) y reclamar el mismo hito antes de 12 horas exige confirmación explícita."},
 ]
 
 REGLAS_EFICIENCIA = [
@@ -97,7 +103,7 @@ REGLAS_EFICIENCIA = [
     {"id": "estimacion_previa", "ley": "Estimación Previa: antes de construir, calcular la ruta de menor costo de créditos según DashAI."},
 ]
 
-VERSION = 16  # +#49 mando manual Rodrigo +#52 log gestión +#53 doble bóveda +#54 ergonomía Maserati
+VERSION = 19  # +#56 Seamless UI +#57 Huella de Gestión (botones dinámicos, bloqueo 12h)
 
 
 class ViolacionConstitucional(Exception):

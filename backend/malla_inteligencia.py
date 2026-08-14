@@ -17,6 +17,7 @@ import hashlib
 import logging
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form
+from fastapi.responses import Response
 from database import db
 import email_service as mail
 import folders_service as fsvc
@@ -26,6 +27,8 @@ fuentes = APIRouter(prefix="/fuentes")
 hitos = APIRouter(prefix="/hitos")
 flujos = APIRouter(prefix="/flujos")
 micorreo = APIRouter(prefix="/mi-correo")
+buzon = APIRouter(prefix="/buzon-aprendizaje")
+supercarpeta = APIRouter(prefix="/supercarpeta")
 
 # MOTOR DE REPAROS: remitentes de los abogados de estudio de título / escrituración
 REPARO_REMITENTES = ("mardluf", "gmardones", "olave", "ibarra")
@@ -899,3 +902,155 @@ async def lector_ejecutivos_loop():
         except Exception as e:
             logging.warning(f"lector ejecutivos: {e}")
         await asyncio.sleep(600)
+
+
+# ── BUZÓN DE APRENDIZAJE (2º IMAP, SOLO LECTURA) — entrena DashAI ───────────
+_CLASIF = [("tasac", "tasacion"), ("reparo", "reparo"), ("estudio", "estudio_titulo"),
+           ("notar", "notaria"), ("escritura", "escrituracion"), ("subsidio", "subsidio")]
+
+
+def _leer_buzon_ro(host, email_u, clave, limit=25):
+    """Lectura SOLO LECTURA (readonly + BODY.PEEK): jamás marca ni altera correos."""
+    import imaplib
+    import socket
+    import email as _em
+    from email.header import decode_header
+    socket.setdefaulttimeout(25)
+    m = imaplib.IMAP4_SSL(host)
+    m.login(email_u, clave)
+    m.select("INBOX", readonly=True)
+    _, data = m.search(None, "ALL")
+    ids = (data[0].split() or [])[-limit:]
+    out = []
+    for i in reversed(ids):
+        try:
+            _, md = m.fetch(i, "(BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE)])")
+            msg = _em.message_from_bytes(md[0][1])
+            def _dec(v):
+                try:
+                    return " ".join(t.decode(e or "utf-8", "ignore") if isinstance(t, bytes) else t
+                                    for t, e in decode_header(v or ""))
+                except Exception:
+                    return v or ""
+            out.append({"de": _dec(msg.get("From")), "asunto": _dec(msg.get("Subject")),
+                        "fecha": msg.get("Date", "")})
+        except Exception:
+            continue
+    m.logout()
+    return out
+
+
+@buzon.get("")
+async def buzon_estado():
+    cfg = await db.config.find_one({"_key": "buzon_aprendizaje"}, {"_id": 0, "cred_enc": 0}) or {}
+    total = await db.buzon_aprendizaje.count_documents({})
+    return {"configurado": bool(cfg.get("email")), "email": cfg.get("email", ""),
+            "ingeridos": total, "ultima_lectura": cfg.get("ultima_lectura", ""),
+            "estado": cfg.get("estado", ""), "modo": "solo_lectura"}
+
+
+@buzon.post("/configurar")
+async def buzon_configurar(payload: dict):
+    em = (payload.get("email") or "").strip().lower()
+    clave = (payload.get("app_password") or "").strip()
+    host = (payload.get("imap_host") or "imap.gmail.com").strip()
+    if not em or not EMAIL_RE.match(em) or not clave:
+        raise HTTPException(status_code=400, detail="Correo y clave de aplicación son obligatorios")
+    try:
+        await asyncio.to_thread(_probar_imap, host, em, clave)
+    except Exception:
+        raise HTTPException(status_code=400, detail="⚠️ No fue posible conectar: verifique el correo y la clave de aplicación")
+    await db.config.update_one({"_key": "buzon_aprendizaje"}, {"$set": {
+        "email": em, "imap_host": host, "cred_enc": _enc_aes(clave),
+        "estado": "ok", "configurado_en": _now()}}, upsert=True)
+    return {"ok": True, "email": em, "modo": "solo_lectura",
+            "nota": "DashAI leerá este buzón sin marcar ni mover correos (AES-256)"}
+
+
+async def buzon_aprendizaje_loop():
+    """Cada 15 min ingiere encabezados del buzón de aprendizaje para entrenar DashAI."""
+    await asyncio.sleep(150)
+    while True:
+        try:
+            cfg = await db.config.find_one({"_key": "buzon_aprendizaje"}) or {}
+            if cfg.get("email") and cfg.get("cred_enc"):
+                try:
+                    correos = await asyncio.to_thread(_leer_buzon_ro, cfg.get("imap_host", "imap.gmail.com"),
+                                                      cfg["email"], _dec_aes(cfg["cred_enc"]))
+                    nuevos = 0
+                    for c in correos or []:
+                        clave_h = hashlib.md5(f"{c['de']}|{c['asunto']}|{c['fecha']}".encode()).hexdigest()
+                        if await db.buzon_aprendizaje.find_one({"clave": clave_h}):
+                            continue
+                        t = c["asunto"].lower()
+                        clasif = next((v for k, v in _CLASIF if k in t), "otro")
+                        m = RUT_RE.search(c["asunto"])
+                        await db.buzon_aprendizaje.insert_one({
+                            "id": str(uuid.uuid4()), "clave": clave_h, **c,
+                            "clasificacion": clasif, "rut_detectado": m.group(1) if m else "",
+                            "ingerido": _now()})
+                        nuevos += 1
+                    await db.config.update_one({"_key": "buzon_aprendizaje"}, {"$set": {
+                        "estado": "ok", "ultima_lectura": _now(), "ultimos_nuevos": nuevos}})
+                except Exception as e:
+                    await db.config.update_one({"_key": "buzon_aprendizaje"}, {"$set": {"estado": "requiere_actualizacion"}})
+                    logging.warning(f"buzón aprendizaje: {e}")
+        except Exception as e:
+            logging.warning(f"buzón loop: {e}")
+        await asyncio.sleep(900)
+
+
+# ── SUPERCARPETA DE MANAGEMENT (Regla de Oro #55) — vista de control primario ─
+def _informes_folder(fd):
+    base = fsvc.folder_dir(fd.get("nombre") or "")
+    inf = {"tasacion": None, "estudio": None, "borrador": None}
+    if base.exists():
+        for p in sorted(base.rglob("*.pdf"), key=lambda x: -x.stat().st_mtime):
+            n = p.name.lower()
+            rel = f"{p.parent.name}/{p.name}" if p.parent != base else p.name
+            mt = datetime.fromtimestamp(p.stat().st_mtime, tz=timezone.utc).isoformat()
+            if not inf["tasacion"] and "tasac" in n:
+                inf["tasacion"] = {"disponible": True, "archivo": rel, "fecha": mt}
+            elif not inf["estudio"] and (p.parent.name == "07_estudio_titulo" or "estudio" in n):
+                inf["estudio"] = {"disponible": True, "archivo": rel, "fecha": mt}
+            elif not inf["borrador"] and ("escritura" in n or "borrador" in n):
+                inf["borrador"] = {"disponible": True, "archivo": rel, "fecha": mt}
+    for k in inf:
+        if not inf[k]:
+            inf[k] = {"disponible": False, "archivo": "", "fecha": ""}
+    return inf
+
+
+@supercarpeta.get("")
+async def supercarpeta_vista():
+    """Regla #55: refleja la disponibilidad FÍSICA de los informes del mes corriente."""
+    from datetime import timedelta
+    mes = datetime.now(timezone.utc).strftime("%Y-%m")
+    limite24 = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+    clientes = []
+    async for fd in db.folders.find({}).sort("nombre", 1):
+        act = (fd.get("updated_at") or fd.get("created") or fd.get("created_at") or "")[:7]
+        if act != mes and not (fd.get("datos_financieros") or {}).get("monto_credito"):
+            continue
+        inf = await asyncio.to_thread(_informes_folder, fd)
+        fechas = [v["fecha"] for v in inf.values() if v["disponible"]]
+        clientes.append({"id": fd["id"], "cliente": fd.get("nombre"), "rut": fd.get("rut") or "",
+                         "broker_origen": fd.get("broker_origen") or fd.get("broker_nombre") or "DIRECTO",
+                         "informes": inf,
+                         "recien_24h": any(f >= limite24 for f in fechas)})
+    return {"mes": mes, "clientes": clientes, "total": len(clientes),
+            "recien_llegados": sum(1 for c in clientes if c["recien_24h"])}
+
+
+@supercarpeta.get("/archivo/{fid}")
+async def supercarpeta_archivo(fid: str, ruta: str):
+    """VISUALIZADOR RÁPIDO: sirve el PDF para previsualizar sin entrar a la ficha."""
+    fd = await db.folders.find_one({"id": fid})
+    if not fd:
+        raise HTTPException(status_code=404, detail="Carpeta no existe")
+    base = fsvc.folder_dir(fd.get("nombre") or "").resolve()
+    p = (base / ruta).resolve()
+    if not str(p).startswith(str(base)) or not p.exists() or not p.name.lower().endswith(".pdf"):
+        raise HTTPException(status_code=404, detail="Informe no disponible")
+    return Response(content=p.read_bytes(), media_type="application/pdf",
+                    headers={"Content-Disposition": f'inline; filename="{p.name}"'})

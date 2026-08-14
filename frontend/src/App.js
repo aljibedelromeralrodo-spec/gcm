@@ -22,6 +22,7 @@ const GerenciaComercialModule = lazy(() => import("./pages/GerenciaComercialModu
 const AdministracionModule = lazy(() => import("./pages/AdministracionModule"));
 const BrokersModule = lazy(() => import("./pages/BrokersModule"));
 const MiCorreoModule = lazy(() => import("./pages/MiCorreoModule"));
+const SupercarpetaModule = lazy(() => import("./pages/SupercarpetaModule"));
 const CriteriosModule = lazy(() => import("./pages/CriteriosModule"));
 const WhatsAppModule = lazy(() => import("./pages/WhatsAppModule"));
 const AutocorreoModule = lazy(() => import("./pages/AutocorreoModule"));
@@ -203,6 +204,7 @@ function MainApp() {
     ...(['admin', 'maestro'].includes(user.rol) ? [{ key: 'procesamiento', icon: 'fa-inbox', label: 'Procesamiento Correo' }] : []),
     ...(['admin', 'maestro'].includes(user.rol) || user.perfil === 'B' ? [
       { key: 'gerencia', icon: 'fa-line-chart', label: 'Gerencia Comercial' },
+      { key: 'supercarpeta', icon: 'fa-folder-open', label: 'Supercarpeta' },
       { key: 'administracion', icon: 'fa-database', label: 'Administración' },
     ] : []),
     ...(['admin', 'maestro'].includes(user.rol) || user.perfil === 'D' ? [
@@ -213,7 +215,7 @@ function MainApp() {
     if (['admin', 'maestro'].includes(user.rol) || !user.perfil) return true;
     const PERMISOS = {
       A: ['dashboard', 'clientes', 'simulador', 'historial', 'calculadora', 'formato', 'setcredito', 'micorreo'],
-      B: ['dashboard', 'contraloria', 'criterios', 'seguimiento', 'gerencia', 'administracion', 'salud', 'micorreo'],
+      B: ['dashboard', 'contraloria', 'criterios', 'seguimiento', 'gerencia', 'supercarpeta', 'administracion', 'salud', 'micorreo'],
       D: ['brokers', 'micorreo'],
     };
     return (PERMISOS[user.perfil] || []).includes(item.key);
@@ -356,6 +358,7 @@ function MainApp() {
         {activeModule === 'administracion' && <AdministracionModule user={user} />}
         {activeModule === 'brokers' && <BrokersModule user={user} />}
         {activeModule === 'micorreo' && <MiCorreoModule user={user} />}
+        {activeModule === 'supercarpeta' && <SupercarpetaModule />}
         {activeModule === 'criterios' && <CriteriosModule />}
         {activeModule === 'whatsapp' && <WhatsAppModule />}
         {activeModule === 'autocorreo' && <AutocorreoModule />}
