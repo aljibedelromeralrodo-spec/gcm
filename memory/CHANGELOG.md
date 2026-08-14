@@ -1147,3 +1147,21 @@ Constitución VERSION 19 (nuevas reglas #55, #56, #57).
 - Descartes con evidencia: 21.256.138-K es de Natalia Javiera Illanes Santana (NO Javiera Salgado); 10.568.791-5 es de Patricia Cabezas (ejecutiva Andrea Salgado).
 - SIN RUT interno (agotado el cerebro): KANELA IBAÑEZ (su "25790880" no pasa DV, parece teléfono), JAVIERA SALGADO, LUIS SEPÚLVEDA. Requieren dato del usuario o pasada IMAP futura.
 - Volcado ADN ejecutado vía POST /api/adn/volcar (59 procesados). Verificado en /api/supercarpeta: en_adn=true para los 3.
+
+## 2026-08-14 (4ª tanda) — Reparación Total Supercarpeta (Orden Crítica Consolidada P0-P12)
+- P0: 17 clientes exactos Proyección Agosto seedados (4 creados: Ruben Zabala, Marioli Montero, Miguel Escalona, Jose Olivares). Meta 41.717 UF, suma 39.717 (José Olivares monto pendiente → alerta Gerencia activa).
+- P1/P5: Vista lee ADN-first. Columnas: Cliente, RUT, Inmobiliaria (Casa Usada/Directa/nombre), Proyecto, Ciudad, NOTARÍA (Por Asignar + coherencia ciudad), Broker (forzado Mutuaria y Leasing p/ flota), Monto UF + subsidio pill + REACTIVACIÓN (Karla Soto).
+- P2: Cosecha reparada: REPARO_REMITENTES corregido (majluf/vilches/amvabogados — antes 'mardluf' typo = nunca matcheaba), _auditar_lote extrae y PERSISTE en folder + EXPEDIENTE_360; perfil_consolidado.cosechar sincroniza ADN inmediato.
+- P3: Barrido forzado POST /api/flujos/barrido-forzado?dias=N (tarea background + GET /barrido-estado). Solo 2 cuentas IMAP con credenciales (contacto@centralmutuos.cl SIN credenciales — pedir app password al usuario).
+- P4: Bitácora 48h ya existente, integrada al Panel Lateral.
+- P6: Ingreso manual respaldo POST /supercarpeta/manual/{fid} (rut c/ DV, inmobiliaria, broker, monto, proyecto, ciudad, notaria).
+- P7: Estados manuales con bitácora inmutable (estado_manual_log), marca ✏️, conflicto auto-vs-manual con resolver mantener/sobreescribir. 8 hitos: tasacion, estudio, serviu, promesa, set_credito, carpeta_notaria, escritura, cesion.
+- P8: Fuentes por columna reestructuradas: BLOQUE GLOBAL + BLOQUE INDIVIDUAL, casillas ilimitadas con nombre descriptivo, agregar/quitar inmediato (accion-based API), última detección, bitácora fuentes_log. Notaría = fuente SOLO individual.
+- P9: Set de Crédito: 'Set Para la Firma'=⏳ esperando; 'Set Firmado' exige verificación de firmas en PDF (_verificar_firmas_pdf: AcroForm SigFlags, texto firma electrónica, imagen manuscrita + OCR) → ✅ o ⚠️ Verificación Pendiente.
+- P10: Agregar/Eliminar cliente (eliminación solo de vista, ficha ADN histórica, bitácora supercarpeta_log).
+- P11: Parser proyección broker (Excel/PDF/CSV) → _aplicar_proyeccion: upsert + reemplazo sin duplicados + alerta resumen a Gerencia.
+- P12: Rediseño planilla alto contraste: filas #1E2A3A/#253347, separadores blancos, encabezado dorado 15%, estados como botones (#1A5C2A/#1A3A5C/#7A4A00/#5C1A1A/manual #3A3A3A+amarillo/N/A), fila totales dorada con barra de avance, hover borde dorado.
+- CASO KANELA: estudio 'Con Reparos' con texto de reparos visible en Bóveda/panel ✓.
+- REGLA DE ORO UF (violación corregida): eliminado fallback mindicador.cl — SII EXCLUSIVO; si SII cae → último valor MongoDB + alerta discreta a Gerencia; eliminados defaults 39842/39000 (credit_engine._uf_oficial + UF_SII_CACHE).
+- CONSTITUCIÓN v26: Regla #67 (Supremacía Bóveda en pantalla) + Regla de Oro de Eficiencia perpetua (reutilizar, cambios quirúrgicos, arranque liviano).
+- FIXES: server.py cola duplicada corrupta (r(_hist_mod...)), constitucion.py duplicado, SupercarpetaModule panel state perdido (crash 'panel is not defined' reportado por testing iteration_33 — corregido y verificado sin referencias indefinidas).

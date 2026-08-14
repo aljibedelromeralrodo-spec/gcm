@@ -6,6 +6,21 @@ viability evaluators used across the platform.
 import math
 
 
+# REGLA DE ORO #1 (Constitución DashAI): la UF proviene EXCLUSIVAMENTE del SII.
+# server.py inyecta aquí el valor oficial en caché tras cada sincronización.
+UF_SII_CACHE = {"v": 0.0}
+
+
+def _uf_oficial(d: dict) -> float:
+    v = float(d.get("valor_uf") or 0)
+    if v > 0:
+        return v
+    v = float(UF_SII_CACHE.get("v") or 0)
+    if v > 0:
+        return v
+    raise ValueError("UF no coordinada con el SII (Regla de Oro #1): sin valor oficial disponible")
+
+
 # ---------------------------------------------------------------------------
 # Financial helpers
 # ---------------------------------------------------------------------------
@@ -244,7 +259,7 @@ def tipo_deudor_texto(t: int, tiene_codeudor: bool) -> str:
 # simular-credito  (main platform Simulador)
 # ---------------------------------------------------------------------------
 def simular_credito(d: dict) -> dict:
-    valor_uf = float(d.get("valor_uf") or 39842)
+    valor_uf = _uf_oficial(d)
     renta_t = float(d.get("renta_titular") or 0)
     renta_c = float(d.get("renta_codeudor") or 0)
     plazo = int(d.get("plazo_anos") or 25)
@@ -633,7 +648,7 @@ def predict_inmobiliaria(d: dict, tasas: dict, seguros: dict, valor_uf: float) -
 # ia/predict  (real-time predictive panel)
 # ---------------------------------------------------------------------------
 def ia_predict(d: dict) -> dict:
-    valor_uf = float(d.get("valor_uf") or 39842)
+    valor_uf = _uf_oficial(d)
     renta_t = float(d.get("renta_titular") or 0)
     renta_c = float(d.get("renta_codeudor") or 0)
     plazo = int(d.get("plazo_anos") or 0)

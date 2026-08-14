@@ -440,6 +440,48 @@ def fetch_recent_full(limit=20):
     return _store(cache_key, out)
 
 
+def fetch_since_by_senders(dias=60, senders=None, limit_per=250):
+    """BARRIDO FORZADO: SEARCH por fecha (SINCE) y remitente en TODAS las cuentas.
+    Devuelve mensajes completos con id 'rol|uid' (compatible con fetch_attachments_by_id)."""
+    if not configured():
+        return []
+    from datetime import datetime, timezone, timedelta
+    fecha = (datetime.now(timezone.utc) - timedelta(days=max(int(dias or 1), 1))).strftime("%d-%b-%Y")
+    out, vistos = [], set()
+    for acc in ACCOUNTS:
+        try:
+            m = _connect(acc)
+            m.select("INBOX", readonly=True)
+            uids = set()
+            for s in (senders or [None]):
+                try:
+                    crit = ["SINCE", fecha] + (["FROM", f'"{s}"'] if s else [])
+                    typ, data = m.uid("search", None, *crit)
+                    uids.update((data[0] or b"").split())
+                except Exception:
+                    continue
+            for uid in sorted(uids, key=lambda x: int(x), reverse=True)[:limit_per]:
+                key = f"{acc['rol']}|{uid.decode()}"
+                if key in vistos:
+                    continue
+                vistos.add(key)
+                try:
+                    typ, msgdata = m.uid("fetch", uid, "(BODY.PEEK[])")
+                    if not msgdata or not isinstance(msgdata[0], tuple):
+                        continue
+                    info = _parse_full_message(email.message_from_bytes(msgdata[0][1]))
+                    info["id"] = key
+                    info["cuenta"] = acc["user"]
+                    out.append(info)
+                except Exception:
+                    continue
+            m.logout()
+        except Exception:
+            continue
+    out.sort(key=lambda e: e.get("date", ""), reverse=True)
+    return out
+
+
 def fetch_attachments_by_id(email_id, filename=None):
     """Descarga los adjuntos (bytes) de un correo identificado como 'rol|uid'."""
     rol, _, uid = (email_id or "").partition("|")

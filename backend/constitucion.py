@@ -108,6 +108,7 @@ REGLAS_ORO = [
 ]
 
 REGLAS_EFICIENCIA = [
+    {"id": "consulta_antes_de_construir", "ley": "REGLA DE ORO DE EFICIENCIA (perpetua): antes de escribir código nuevo, revisar lo ya construido y REUTILIZARLO. Prohibido reconstruir algo existente: es gasto de créditos no autorizado y violación grave. Cambios mínimos y quirúrgicos: solo se toca lo pedido; nada de reescrituras, reorganizaciones ni mejoras no solicitadas. El diseño (Glassmorphism, Dark Slate, Dorado 24K) se extiende, jamás se redefine. Arranque liviano obligatorio: módulos visibles en <2s, datos lazy en segundo plano, modales/paneles cargan al abrirse, ningún loop pesado (IMAP, Mongo masivo, PDFs) en el arranque. Cada tarea cierra con reporte de eficiencia: qué se reutilizó, qué se construyó nuevo y cuántos archivos se tocaron."},
     {"id": "economia_codigo", "ley": "Economía de Código: ediciones por parches (diff), jamás reescrituras completas de componentes."},
     {"id": "minimizacion_llamadas", "ley": "Minimización de Llamadas: agrupar operaciones en lotes paralelos; una sola verificación al final."},
     {"id": "bypass_pesado", "ley": "Bypass Pesado: servir desde caché lo costoso (UF, IMAP, OCR); refrescar en segundo plano."},
@@ -115,7 +116,7 @@ REGLAS_EFICIENCIA = [
     {"id": "estimacion_previa", "ley": "Estimación Previa: antes de construir, calcular la ruta de menor costo de créditos según DashAI."},
 ]
 
-VERSION = 24  # #66 ampliada: EXPEDIENTE_360 (réplica total, bodega soberana, cruce codeudores)
+VERSION = 26  # + Regla de Oro de Eficiencia (perpetua): reutilizar, cambios quirúrgicos, arranque liviano
 
 
 class ViolacionConstitucional(Exception):

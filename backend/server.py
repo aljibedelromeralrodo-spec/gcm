@@ -399,15 +399,6 @@ async def valor_uf(refresh: bool = False):
             "en_vivo": False, "al_dia": bool(al_dia)}
 
 
-def _uf_desde_mindicador():
-    import urllib.request
-    import json as _json
-    with urllib.request.urlopen("https://mindicador.cl/api/uf", timeout=12) as r:
-        data = _json.loads(r.read().decode())
-    serie = (data.get("serie") or [{}])[0]
-    return float(serie.get("valor") or 0), (serie.get("fecha") or "")[:10]
-
-
 _MESES_ES = {1: "enero", 2: "febrero", 3: "marzo", 4: "abril", 5: "mayo", 6: "junio",
              7: "julio", 8: "agosto", 9: "septiembre", 10: "octubre", 11: "noviembre", 12: "diciembre"}
 
@@ -11652,7 +11643,9 @@ def _num_limpio(v):
         return 0.0
 
 
-def _monto_uf_desde(*fuentes, uf=39000):
+def _monto_uf_desde(*fuentes, uf=0):
+    if not uf or uf <= 0:
+        return 0.0  # Regla #1: sin UF oficial del SII no se convierte con valores inventados
     for v in fuentes:
         n = _num_limpio(v)
         if n > 0:
@@ -13685,6 +13678,31 @@ import base_historica as _hist_mod
 import adn_clientes as _adn_mod
 api.include_router(_monit_mod.correos_r)
 api.include_router(_perfil.perfil_r)
+api.include_router(_hist_mod.historia)
+api.include_router(_adn_mod.adn)
+
+
+@api.get("/constitucion")
+async def constitucion_leer():
+    """CONSTITUCIÓN MAESTRA — 15 Reglas de Oro (fuente de verdad de DashAI)."""
+    import constitucion as _const
+    return await _const.seed_constitucion(db)
+
+
+@api.post("/constitucion/aprendizaje-secundario")
+async def constitucion_aprendizaje(payload: dict):
+    """MÓDULO DE APRENDIZAJE EXTERNO: registra el 2º buzón IMAP en modo SOLO LECTURA
+    (slot para el nuevo correo). No envía ni modifica nada de ese buzón."""
+    correo = (payload or {}).get("correo", "").strip()
+    await db.config.update_one({"_key": "constitucion_maestra"}, {"$set": {
+        "aprendizaje.fuente_secundaria_solo_lectura": correo,
+        "aprendizaje.modo": "solo_lectura",
+        "aprendizaje.actualizado": now_iso()}}, upsert=True)
+    return {"ok": True, "fuente_secundaria": correo, "modo": "solo_lectura"}
+
+
+
+app.include_router(api)
 api.include_router(_hist_mod.historia)
 api.include_router(_adn_mod.adn)
 

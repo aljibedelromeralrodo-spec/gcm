@@ -117,6 +117,9 @@ async def _expediente_360(fd):
                           "reparos": rep_textos or rep_estado,
                           "borrador_escritura": fd.get("escritura_confirmada_at") or "",
                           "fecha_firma": fd.get("fecha_firma") or fd.get("fecha_firma_detectada") or "",
+                          "set_credito": {"estado": fd.get("set_credito_estado") or "",
+                                          "evidencia": fd.get("set_credito_evidencia") or "",
+                                          "fecha": str(fd.get("set_credito_at") or "")[:19]},
                           "anexos_notaria": fd.get("anexos_notaria") or ""},
         "documentos": documentos,
     }

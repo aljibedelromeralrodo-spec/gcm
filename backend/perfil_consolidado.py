@@ -42,6 +42,16 @@ async def cosechar(folder_id, campos, fuente):
         await db.folders.update_one({"id": folder_id}, {"$set": {
             "perfil_consolidado": perfil, "perfil_consolidado_meta": meta,
             "perfil_consolidado_actualizado": _now()}})
+        # REGLA #67: la cosecha termina ESCRITA en la Bóveda ADN — jamás solo leída
+        try:
+            import adn_clientes as _adn
+            fd_full = await db.folders.find_one({"id": folder_id})
+            if fd_full:
+                reg = _adn._registro_desde_folder(fd_full)
+                reg["expediente_360"] = await _adn._expediente_360(fd_full)
+                await _adn._upsert_adn(reg)
+        except Exception:
+            pass
     return cambios
 
 
