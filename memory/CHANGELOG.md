@@ -1335,3 +1335,4 @@ Constitución VERSION 19 (nuevas reglas #55, #56, #57).
   · 409 verificado · previews por tipo verificados · screenshots UI OK.
 - 2026-06: Comisión WORD y URBANIZATE = 0,5% (regla del dueño) — testeado 4/4 PASS
 - 2026-06: Rodrigo Salazar (BOETCH/Fuchslocker) = fuchslocher@boetsch.cl — confirmado por el dueño, cargado en contactos_carta
+- 2026-06: Proyectos confirmados por Gerencia: Escalona → UVAS Y EL VIENTO; C. Salgado → ALTO PARQUE (folder + ADN). Lista maestra sin pendientes.
