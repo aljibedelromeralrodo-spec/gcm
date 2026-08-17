@@ -7321,31 +7321,25 @@ async def estudio_defaults():
 @api.get("/estudio-titulo/preview-carpeta/{fid}")
 async def estudio_preview_carpeta(fid: str):
     """SUPERCARPETA — Vista previa del correo de Estudio de Título de una carpeta.
-    Plantilla PROPIA (jamás la de Carta Oferta): nueva = solicitud estándar sin listado;
-    usada = listado oficial I/II/III en HTML profesional."""
+    Plantilla PROPIA (jamás la de Carta Oferta). Destinatario en orden:
+    1) inmobiliaria registrada → 2) vendedor registrado → 3) correo de origen de la solicitud."""
     import malla_inteligencia as _mi
     fd = await db.folders.find_one({"id": fid})
     if not fd:
         raise HTTPException(status_code=404, detail="Carpeta no encontrada")
     nombre = (fd.get("nombre") or "").strip()
     rut = (fd.get("rut") or "").strip()
-    usada = (fd.get("tipo_operacion") or "").lower().startswith("usada") \
-        or _mi._inmo_de_folder(fd) == "Casa Usada"
+    inmo = _mi._inmo_de_folder(fd)
+    proyecto = (fd.get("proyecto") or "").strip()
+    tiene_inmo = bool(inmo) and inmo.strip().lower() not in ("", "casa usada")
+    usada = (fd.get("tipo_operacion") or "").lower().startswith("usada") or not tiene_inmo
     tipo = "usada" if usada else "nueva"
-    para, encargado, faltantes = "", "", []
+    v = fd.get("vendedor_usada") or {}
+    para, encargado, fuente, faltantes = "", "", "", []
     p = {"nombre": nombre, "rut": rut, "tipo_vivienda": tipo,
          "direccion": (fd.get("proyecto") or "") if usada else ""}
-    if usada:
-        v = fd.get("vendedor_usada") or {}
-        para = (v.get("email") or "").strip()
-        encargado = (v.get("nombre") or "").strip()
-        p.update({"vendedor_nombre": encargado, "vendedor_email": para,
-                  "vendedor_telefono": (v.get("telefono") or "").strip()})
-        if not para:
-            faltantes.append("Correo del vendedor (Panel de Fuentes)")
-    else:
-        inmo = _mi._inmo_de_folder(fd)
-        proyecto = (fd.get("proyecto") or "").strip()
+    if tiene_inmo:
+        # 1) INMOBILIARIA registrada: contacto de estudio (exacto → general) o el de carta
         c = await db.contactos_carta.find_one({
             "inmobiliaria_norm": _mi._norm_inmo(inmo), "proyecto_norm": _mi._norm_inmo(proyecto),
             "activo": True, "estudio_email": {"$nin": ["", None]}})
@@ -7353,16 +7347,43 @@ async def estudio_preview_carpeta(fid: str):
             c = await db.contactos_carta.find_one({
                 "inmobiliaria_norm": _mi._norm_inmo(inmo), "activo": True,
                 "estudio_email": {"$nin": ["", None]}})
-        para = ((c or {}).get("estudio_email") or "").strip()
-        encargado = ((c or {}).get("estudio_nombre") or "").strip()
+        if not c:
+            c = await db.contactos_carta.find_one({
+                "inmobiliaria_norm": _mi._norm_inmo(inmo), "proyecto_norm": _mi._norm_inmo(proyecto),
+                "activo": True, "email": {"$nin": ["", None]}}) or await db.contactos_carta.find_one({
+                "inmobiliaria_norm": _mi._norm_inmo(inmo), "activo": True, "email": {"$nin": ["", None]}})
+        para = ((c or {}).get("estudio_email") or (c or {}).get("email") or "").strip()
+        encargado = ((c or {}).get("estudio_nombre") or (c or {}).get("contacto") or "").strip()
+        fuente = f"Inmobiliaria {inmo}"
         p.update({"inmobiliaria": f"{inmo}{' / ' + proyecto if proyecto else ''}",
                   "inmo_contacto_nombre": encargado, "inmo_contacto_email": para})
         if not para:
-            faltantes.append("Contacto de Estudio de Títulos de la inmobiliaria (Panel de Fuentes ⚙️)")
+            faltantes.append(f"Contacto de la inmobiliaria {inmo} (Panel de Fuentes ⚙️)")
+    elif (v.get("email") or "").strip():
+        # 2) VENDEDOR registrado
+        para = v["email"].strip()
+        encargado = (v.get("nombre") or "").strip()
+        fuente = "Vendedor directo"
+        p.update({"vendedor_nombre": encargado, "vendedor_email": para,
+                  "vendedor_telefono": (v.get("telefono") or "").strip()})
+    else:
+        # 3) Correo de ORIGEN de la solicitud de crédito (sugerido, editable)
+        src = (fd.get("source_email") or "").strip()
+        m = re.search(r"<([^<>]+@[^<>]+)>", src)
+        para = (m.group(1) if m else (src if "@" in src else "")).strip()
+        m_n = re.match(r'^"?([^"<]*)"?\s*<', src)
+        encargado = (m_n.group(1).strip() if m_n else "")
+        fuente = "Origen de la solicitud de crédito (sugerido)"
+        if usada:
+            p.update({"vendedor_nombre": encargado, "vendedor_email": para})
+        else:
+            p.update({"inmobiliaria": inmo, "inmo_contacto_nombre": encargado, "inmo_contacto_email": para})
+        if not para:
+            faltantes.append("Sin inmobiliaria, vendedor ni correo de origen — ingrese el destinatario a mano")
     subject = f"Solicitud de Antecedentes - Estudio de Título - {nombre}" + (f" {rut}" if rut else "")
     return {"cliente": nombre, "rut": rut, "tipo_vivienda": tipo, "para": para,
-            "encargado": encargado, "cc": ESTUDIO_DEST_DEFAULT, "faltantes": faltantes,
-            "asunto": subject, "body": _estudio_html(p), "payload_envio": p}
+            "encargado": encargado, "fuente_destinatario": fuente, "cc": ESTUDIO_DEST_DEFAULT,
+            "faltantes": faltantes, "asunto": subject, "body": _estudio_html(p), "payload_envio": p}
 
 
 @api.post("/estudio-titulo/enviar")

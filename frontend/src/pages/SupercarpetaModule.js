@@ -487,6 +487,7 @@ export default function SupercarpetaModule() {
   const enviarEstudio = async () => {
     const m = estudioModal;
     if (!m?.para || !m.para.includes("@")) { window.alert("⚠️ Falta el correo del destinatario"); return; }
+    if (!window.confirm(`📨 CONFIRMAR ENVÍO — Estudio de Título\n\nSe enviará a: ${m.para}${m.encargado ? ` (${m.encargado})` : ""}\nFuente: ${m.fuente_destinatario || "manual"}\nCC: ${(m.cc || []).join(", ") || "—"}\n\n¿Despachar ahora?`)) return;
     setGuardando(true);
     try {
       const pe = { ...(m.payload_envio || {}) };
@@ -1526,10 +1527,27 @@ export default function SupercarpetaModule() {
                   ⚠️ Faltantes: {estudioModal.faltantes.join(" · ")}</div>
               )}
               <div style={{ marginTop: 10, display: "grid", gap: 6 }}>
-                <label style={{ fontSize: "0.62rem", color: "#94a3b8", fontWeight: 800 }}>PARA (editable)</label>
-                <input data-testid="estudio-para" value={estudioModal.para || ""}
-                  onChange={e => setEstudioModal(m => ({ ...m, para: e.target.value }))}
-                  placeholder="correo@destinatario.cl" style={inputStyle} />
+                <label style={{ fontSize: "0.62rem", color: "#94a3b8", fontWeight: 800 }}>
+                  DESTINATARIO — {estudioModal.fuente_destinatario || "manual"} · doble clic para editar</label>
+                {estudioModal.editandoPara ? (
+                  <input autoFocus data-testid="estudio-para" defaultValue={estudioModal.para || ""}
+                    onBlur={e => setEstudioModal(m => ({ ...m, para: e.target.value.trim(), editandoPara: false }))}
+                    onKeyDown={e => { if (e.key === "Enter") setEstudioModal(m => ({ ...m, para: e.target.value.trim(), editandoPara: false })); if (e.key === "Escape") setEstudioModal(m => ({ ...m, editandoPara: false })); }}
+                    placeholder="correo@destinatario.cl" style={inputStyle} />
+                ) : (
+                  <div data-testid="estudio-para-display"
+                    onDoubleClick={() => setEstudioModal(m => ({ ...m, editandoPara: true }))}
+                    onClick={() => { if (!estudioModal.para) setEstudioModal(m => ({ ...m, editandoPara: true })); }}
+                    title="Doble clic para editar el destinatario"
+                    style={{ background: "rgba(2,6,23,0.6)", border: "1px dashed rgba(212,175,55,0.5)",
+                      borderRadius: 8, padding: "0.45rem 0.7rem", cursor: "pointer",
+                      color: estudioModal.para ? "#f8fafc" : "#64748b", fontSize: "0.78rem",
+                      fontStyle: estudioModal.para ? "normal" : "italic" }}>
+                    {estudioModal.para
+                      ? <>📧 <b>{estudioModal.para}</b>{estudioModal.encargado ? ` — ${estudioModal.encargado}` : ""}</>
+                      : "Agregar correo del destinatario…"}
+                  </div>
+                )}
                 <div style={{ fontSize: "0.62rem", color: "#94a3b8" }}>
                   CC: {(estudioModal.cc || []).join(", ") || "—"}</div>
                 <div style={{ fontSize: "0.66rem", color: "#e2e8f0" }}>

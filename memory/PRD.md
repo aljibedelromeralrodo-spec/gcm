@@ -956,3 +956,14 @@ Constitución v16 (Reglas #34-#38, #41, #43, #49, #52, #53, #54). Módulo Broker
 - Verificado: previews nueva (sin listado, sin mención carta oferta) y usada (listado I/II/III,
   plazos bold) + screenshot del modal con Catalina Castillo OK. Envío usa el flujo existente
   /api/estudio-titulo/enviar (con vendedor/inmo aprendizaje y log).
+
+## Actualización 2026-06 (fork, 4k) — Lógica de destinatario Estudio de Título (3 niveles)
+- preview-carpeta ahora resuelve en orden: 1) inmobiliaria registrada (estudio_email →
+  fallback contacto de carta) → 2) vendedor_usada con email → 3) source_email de la carpeta
+  (origen de la solicitud de crédito, "sugerido"). Devuelve fuente_destinatario.
+- Modal: destinatario mostrado como texto con su fuente, DOBLE CLIC para editar (regla
+  general), y confirm() previo al envío mostrando destinatario + fuente + CC.
+- Verificado en vivo: Salgado→Inmobiliaria BOETCH (csoria), Ibarra→Vendedor directo (juan@),
+  Catalina→Origen (contacto@valueproperty.cl, parseado de "Nombre <correo>"). Screenshot OK.
+- Pendiente usuario (ask_human abierta): cargar correos reales de Estudio por inmobiliaria
+  (opción a: copiar contacto carta; b: usuario entrega correos; c: mixto) y vendedores usada.
