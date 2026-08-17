@@ -869,3 +869,15 @@ Constitución v16 (Reglas #34-#38, #41, #43, #49, #52, #53, #54). Módulo Broker
 - Refactors masivos (dividir ClientesModule 3.675 líneas, CentralChat, 108 hook deps,
   114 array keys) NO aplicados: violan la Regla de Eficiencia de la Constitución (alto riesgo
   de regresión en sistema productivo).
+
+## Actualización 2026-06 (fork, 4e) — Cierre revisión de código (correcciones aprobadas por Gerencia)
+- MD5→SHA-256 con compatibilidad hacia atrás: malla_inteligencia.py (5 claves dedup) y
+  grid_dashai.py (firmas bóveda + detector clientes con migración silenciosa sin webhooks falsos).
+- Operadores is/==: auditados server.py y simulador_engine.py — 0 casos reales (todos is None/False).
+- Variables indefinidas (auditoría pylint+ruff, 5 reales de las "42" del reporte):
+  * P0 credit_engine.py: predict_inmobiliaria ahora recibe umbrales de la Constitución
+    (u, u_edad conectados) — POST /api/inmobiliaria/predict revivido (era 500, ahora 200 ambos modos).
+  * P1 server.py: _uf_desde_mindicador implementada (respaldo real UF) + doble caída mantiene
+    último valor conocido sin sobrescribir. Probados los 3 escenarios con mocks.
+  * P2 bodega_concreces.py: import now_iso desde criterios_data — alerta de lectura de bóveda funcional.
+- Barrido final ruff F821: 0 variables indefinidas en los 29 archivos del backend.

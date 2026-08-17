@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from database import db
+from criterios_data import now_iso
 
 bodega = APIRouter(prefix="/bodega")
 gerencia = APIRouter(prefix="/gerencia")
