@@ -1255,3 +1255,21 @@ Constitución VERSION 19 (nuevas reglas #55, #56, #57).
   manuales intactos. Backfill aplicado (10 celdas).
 - NOTA: verificación automática de firma en compromisos de compraventa (usadas) queda como estado
   manual "Pendiente verificación manual" — automatización pendiente.
+
+## 2026-06 (fork) — Verificación IA de firma de Promesa + Numeración correlativa
+- **Verificación de Firma Compromiso/Promesa (IA)**: `_verificar_compromiso_ia` en malla_inteligencia.py.
+  Al detectar correo con promesa/compromiso de compraventa (regex asunto+cuerpo) en `_auditar_lote`
+  (loop 24/7 + auditoría real + barrido), descarga el PDF adjunto, corre `_verificar_firmas_pdf`
+  (heurística AcroForm/texto/OCR) + `ai_extract.verificar_firma_compromiso` (gpt-5.4-mini, prohibido
+  inventar). Firmado con confianza alta → estado VERDE "Firmada (verificada IA)"; cualquier duda o
+  sin firma → AZUL "Pendiente verificación manual". Guarda `promesa_verificacion` +
+  `promesa_verificada_at` en folder; columna Promesa CV la lee (est_promesa) con 🤖 detalle/tooltip
+  (testid promesa-ia-{id}). Override manual del Admin ya operativo vía estados manuales (lápiz) con
+  detección de conflicto (auto_marks.promesa). Adjuntos archivados como PROMESA_* en 99_otros.
+  Solo aplica a correos nuevos (sin retroactivo, decisión del usuario). PASS test firmado/sin firma.
+- **Numeración correlativa (solo lectura, recalculada auto)**: Supercarpeta columna N° sticky
+  (testid super-numero-{id}) a la izquierda del Cliente (sticky lefts 0/46/286); tabla CBR modal
+  con N°; Excel CBR con "N°" primera columna (fills/estado corridos a col 8/13). Gastos
+  Operacionales: números en Envíos y Seguimiento de Pagos (gastos-log-numero-{i}), Cobros de
+  Tasación (cobro-numero-{i}) e Historial mensual. Verificado: UI 1-18 Supercarpeta, 1-10 Gastos,
+  Excel openpyxl OK.

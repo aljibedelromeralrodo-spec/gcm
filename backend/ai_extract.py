@@ -259,6 +259,38 @@ async def extraer_datos_compromiso(texto, cliente=""):
         return {}
 
 
+async def verificar_firma_compromiso(texto, cliente="", senales=""):
+    """Verifica con IA si un compromiso/promesa de compraventa viene FIRMADO.
+    PROHIBIDO inventar: ante la duda → firmado=false."""
+    key = _llm_key()
+    if not key or len(texto or "") < 60:
+        return {}
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        system = (
+            "Eres abogado inmobiliario chileno experto en promesas/compromisos de compraventa. "
+            "Analiza el texto OCR del documento adjunto y determina si viene FIRMADO por las partes. "
+            "Evidencia válida de firma: 'firmado electrónicamente', firma electrónica avanzada, "
+            "e-CertChile, autorización o timbre notarial, constancia de firma con nombre/RUT de las "
+            "partes, o texto que acredite que las partes firmaron. Un espacio de firma VACÍO "
+            "('____', 'Firma:' sin constancia, 'p.p.' sin nombre) NO cuenta como firma. "
+            "Responde SOLO un JSON válido: {\"firmado\": true|false, "
+            "\"confianza\": \"alta\"|\"media\"|\"baja\", "
+            "\"evidencia\": \"explicación breve en español de lo detectado\"}. "
+            "PROHIBIDO inventar: si no hay evidencia clara y literal, firmado=false."
+        )
+        chat = LlmChat(api_key=key, session_id=f"firmacomp-{uuid.uuid4()}",
+                       system_message=system).with_model("openai", "gpt-5.4-mini")
+        um = UserMessage(text=f"Cliente: {cliente}\nSeñales técnicas del PDF: {senales or 'ninguna'}\n\n"
+                              f"Texto del documento:\n{(texto or '')[:18000]}")
+        resp = await _enviar(chat, um)
+        raw = resp if isinstance(resp, str) else str(resp)
+        m = re.search(r"\{.*\}", raw, re.S)
+        return json.loads(m.group(0)) if m else {}
+    except Exception:
+        return {}
+
+
 async def analizar_flujo_comercial(stats, aprendizajes_previos, notas_usuario):
     """Analiza el flujo comercial real de Central Mutuos y aprende de él.
     PROHIBIDO inventar métricas: solo usa los datos entregados."""

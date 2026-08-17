@@ -430,8 +430,10 @@ export default function GastosOperacionalesModule({ onNavigate }) {
           </div>
         ) : (
           <div style={{ display: "grid", gap: 6 }} data-testid="cobros-lista">
-            {cobros.cobros.map((c) => (
+            {cobros.cobros.map((c, nCobro) => (
               <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 10, background: c.pagado ? "rgba(16,217,142,0.08)" : "rgba(255,255,255,0.04)", border: `1px solid ${c.pagado ? "rgba(16,217,142,0.35)" : "rgba(255,255,255,0.1)"}`, borderRadius: 0, padding: "0.55rem 0.9rem", fontSize: "0.85rem" }}>
+                <span data-testid={`cobro-numero-${nCobro}`} title="Numeración correlativa (solo lectura)"
+                  style={{ color: "var(--gold)", fontWeight: 900, minWidth: 24, textAlign: "right", userSelect: "none" }}>{nCobro + 1}.</span>
                 <div style={{ flex: 1 }}>
                   <b>{c.cliente || c.subject || c.from_email}</b>
                   <span style={{ opacity: 0.6 }}> · {c.from_email}</span>
@@ -468,6 +470,7 @@ export default function GastosOperacionalesModule({ onNavigate }) {
               <div style={{ padding: "0.3rem 0.5rem" }}>
                 {h.detalle.map((d, i) => (
                   <div key={i} style={{ display: "flex", gap: 8, fontSize: "0.8rem", opacity: 0.85, padding: "0.25rem 0.4rem", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                    <span style={{ color: "var(--gold)", fontWeight: 900, minWidth: 20, textAlign: "right", userSelect: "none" }}>{i + 1}.</span>
                     <span style={{ flex: 1 }}><b>{d.cliente}</b> <span style={{ opacity: 0.6 }}>· {d.from_email}</span></span>
                     <span style={{ opacity: 0.7 }}>{String(d.pagado_at || "").slice(0, 10)}</span>
                     <span style={{ color: "#34eab9", fontWeight: 600 }}>{d.monto_clp}</span>
@@ -496,6 +499,8 @@ export default function GastosOperacionalesModule({ onNavigate }) {
             return (
               <div key={l.id || i} data-testid={`gastos-log-${i}`} style={{ border: "1px solid transparent", backgroundImage: "linear-gradient(115deg, rgba(255,255,255,0.09) 0%, rgba(255,255,255,0.02) 18%, transparent 32%), linear-gradient(160deg, rgba(30,30,30,0.95), rgba(10,10,10,0.98)), linear-gradient(135deg, #BF953F, #FCF6BA, #B38728, #FBF5B7, #AA771C)", boxShadow: "0 35px 70px -20px rgba(0,0,0,0.95), 0 0 38px -16px rgba(191,149,63,0.45)", backgroundOrigin: "border-box", backgroundClip: "padding-box, padding-box, border-box", borderRadius: 0, padding: "0.7rem 0.9rem", marginBottom: "0.6rem", background: estado === "pagado" ? "rgba(16,217,142,0.05)" : "rgba(255,255,255,0.02)" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", fontSize: "0.87rem" }}>
+                  <span data-testid={`gastos-log-numero-${i}`} title="Numeración correlativa (solo lectura)"
+                    style={{ color: "var(--gold)", fontWeight: 900, minWidth: 24, textAlign: "right", userSelect: "none" }}>{i + 1}.</span>
                   <b>{l.nombre}</b>
                   <span style={{ opacity: 0.55 }}>{l.rut}</span>
                   <span style={{ opacity: 0.55 }}>{String(l.enviado_en || "").slice(0, 10)}</span>

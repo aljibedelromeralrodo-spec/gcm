@@ -810,3 +810,14 @@ Constitución v16 (Reglas #34-#38, #41, #43, #49, #52, #53, #54). Módulo Broker
 - CBR: editabilidad absoluta de todos los campos (regla del Admin General): IMPLEMENTADO.
 - Pendiente usuario: porcentajes de comisión Word/Urbanizate/Maestra; correos reales de encargados
   por inmobiliaria (se cargan desde el botón 🏢 Inmobiliarias).
+
+## Actualización 2026-06 (fork) — Verificación IA Promesa + Numeración correlativa
+- Verificación de Firma del Compromiso/Promesa de Compraventa con IA: IMPLEMENTADO y testeado
+  (firmado→verde "Firmada (verificada IA)"; duda/sin firma→azul "Pendiente verificación manual";
+  override manual Admin operativo). Solo correos nuevos, sin retroactivo. Ver CHANGELOG.md.
+- Numeración correlativa de clientes (solo lectura, auto-recalculada): Supercarpeta (columna N°
+  sticky), tabla CBR + Excel CBR (primera columna), y Gastos Operacionales (envíos, cobros,
+  historial). Verificado UI + Excel.
+- Backlog pendiente: Resumen Semanal lunes a Gerencia (P1), % comisión Word/Urbanizate/Maestra
+  (espera usuario), Twilio keys (espera usuario), optimización móvil iPhone (P2), alerta
+  cumpleaños (P2).

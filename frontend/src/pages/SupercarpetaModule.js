@@ -12,7 +12,7 @@ const ESTADOS_POR = {
   estudio: ["Pendiente", "Solicitado", "En Proceso", "Recibido", "Con Reparos", "Aprobado"],
   serviu: ["Pendiente", "Solicitada", "Recibida", "Aprobada", "Rechazada", "Pendiente verificación manual"],
   carta_oferta: ["Pendiente", "Solicitada", "Recibida", "Aprobada", "Rechazada", "Pendiente verificación manual"],
-  promesa: ["Pendiente", "Redactada", "Firmada", "Enviada a Notaría"],
+  promesa: ["Pendiente", "Redactada", "Firmada", "Firmada (verificada IA)", "Enviada a Notaría", "Pendiente verificación manual"],
   set_credito: ["Pendiente", "Set Para la Firma", "Verificación Pendiente", "Firmado y Verificado"],
   carpeta_notaria: ["Pendiente", "Preparando Carpeta", "Enviada", "Recibida por Notaría", "En Revisión", "Aprobada"],
   escritura: ["Pendiente", "Agendada", "Firmada", "Inscrita en CBR"],
@@ -31,7 +31,7 @@ const estadoBg = (estado, manual) => {
   let st;
   if (/verificaci.*manual/.test(e)) st = { background: "#1A3A8A", color: "#fff" };
   else if (!e || /pendiente/.test(e)) st = { background: "#2A2A2A", color: "#888", fontStyle: "italic", border: "1px dashed #555" };
-  else if (/(aprobad|firmado|verificado$|informe recibido|recibida|recibido|confirmada|limpio|inscrita)/.test(e)) st = { background: "#1A5C2A", color: "#fff" };
+  else if (/(aprobad|firmado|verificada ia|verificado$|informe recibido|recibida|recibido|confirmada|limpio|inscrita)/.test(e)) st = { background: "#1A5C2A", color: "#fff" };
   else if (/(observacion|reparo|verificaci)/.test(e)) st = { background: "#7A4A00", color: "#fff" };
   else if (/(rechaz|bloquead)/.test(e)) st = { background: "#5C1A1A", color: "#fff" };
   else st = { background: "#1A3A5C", color: "#fff" };
@@ -624,8 +624,9 @@ export default function SupercarpetaModule() {
           <thead>
             <tr style={{ background: "rgba(212,175,55,0.15)", color: "#D4AF37",
               textTransform: "uppercase", borderBottom: "1px solid rgba(212,175,55,0.6)" }}>
-              <th style={{ ...th, left: 0, zIndex: 40, width: 240, minWidth: 240, maxWidth: 240, boxSizing: "border-box" }}>Cliente</th>
-              <th style={{ ...th, left: 240, zIndex: 40 }}>RUT</th>
+              <th style={{ ...th, left: 0, zIndex: 40, width: 46, minWidth: 46, maxWidth: 46, textAlign: "center", boxSizing: "border-box" }}>N°</th>
+              <th style={{ ...th, left: 46, zIndex: 40, width: 240, minWidth: 240, maxWidth: 240, boxSizing: "border-box" }}>Cliente</th>
+              <th style={{ ...th, left: 286, zIndex: 40 }}>RUT</th>
               <th style={th}>Inmobiliaria</th>
               <th style={th}>Proyecto</th>
               <th style={th}>Ciudad</th>
@@ -651,8 +652,15 @@ export default function SupercarpetaModule() {
                 className={`super-row ${c.recien_24h ? "neon-verde" : ""}`}
                 style={{ borderBottom: "1px solid rgba(255,255,255,0.3)", minHeight: 52,
                   background: idx % 2 === 0 ? "#1E2A3A" : "#253347" }}>
+                <td data-testid={`super-numero-${c.id}`} title="Numeración correlativa (solo lectura — se recalcula automáticamente)"
+                  style={{ ...celdaId, fontWeight: 900, color: "#D4AF37", fontSize: 14, textAlign: "center",
+                    position: "sticky", left: 0, zIndex: 20, width: 46, minWidth: 46, maxWidth: 46,
+                    boxSizing: "border-box", userSelect: "none",
+                    background: idx % 2 === 0 ? "#17222F" : "#1C2839" }}>
+                  {idx + 1}
+                </td>
                 <td style={{ ...celdaId, fontWeight: 800, color: "#FFFFFF", fontSize: 15,
-                  position: "sticky", left: 0, zIndex: 20, width: 240, minWidth: 240, maxWidth: 240,
+                  position: "sticky", left: 46, zIndex: 20, width: 240, minWidth: 240, maxWidth: 240,
                   boxSizing: "border-box", overflowWrap: "break-word",
                   background: idx % 2 === 0 ? "#17222F" : "#1C2839" }}>
                   <i className="fa fa-folder folder-metal" style={{ marginRight: 6, fontSize: "0.85rem" }} />
@@ -676,7 +684,7 @@ export default function SupercarpetaModule() {
                       {c.contacto.email}{c.contacto.email && c.contacto.telefono ? " · " : ""}{c.contacto.telefono}</div>}
                 </td>
                 <td data-testid={`super-rut-${c.id}`} style={{ ...celdaId, fontFamily: "monospace", color: "#B0BEC5",
-                  position: "sticky", left: 240, zIndex: 20, whiteSpace: "nowrap",
+                  position: "sticky", left: 286, zIndex: 20, whiteSpace: "nowrap",
                   background: idx % 2 === 0 ? "#17222F" : "#1C2839" }}>
                   {editable(c, "rut", c.faltantes?.includes("rut")
                     ? <span data-testid={`rut-por-confirmar-${c.id}`}
@@ -755,7 +763,13 @@ export default function SupercarpetaModule() {
                     style={{ ...btnPdf, background: "rgba(96,165,250,0.15)", border: "1px solid rgba(96,165,250,0.6)",
                       color: "#60a5fa", width: "100%" }}>📨 Pedir CO+RS</button>
                 </>) })}
-                {celdaEstado(c, "promesa", c.promesa, { naSinSubsidio: true })}
+                {celdaEstado(c, "promesa", c.promesa, { naSinSubsidio: true, extra: c.promesa_ia ? (
+                  <div data-testid={`promesa-ia-${c.id}`}
+                    title={`Análisis IA (${c.promesa_ia.fecha}): ${c.promesa_ia.evidencia}${c.promesa_ia.archivo ? ` · Archivo: ${c.promesa_ia.archivo}` : ""}`}
+                    style={{ marginTop: 2, fontSize: "0.56rem", fontWeight: 800, textAlign: "center",
+                      color: c.promesa_ia.firmado ? "#4ade80" : "#93c5fd", cursor: "help" }}>
+                    🤖 {c.promesa_ia.firmado ? "Firma verificada por IA" : "IA: revisar firma manualmente"}
+                  </div>) : null })}
                 {celdaEstado(c, "set_credito", SET_LABEL[c.set_credito?.estado] || c.set_credito?.estado, { extra:
                     c.set_credito?.fecha ? <div style={{ color: "#cbd5e1", fontSize: "0.55rem" }}>{c.set_credito.fecha.slice(0, 10)}</div> : null })}
                 {celdaEstado(c, "carpeta_notaria", c.carpeta_notaria, {})}
@@ -868,7 +882,7 @@ export default function SupercarpetaModule() {
                 <table data-testid="cbr-tabla" style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.64rem", marginTop: 12, color: "#e2e8f0" }}>
                   <thead>
                     <tr style={{ color: "#d4af37", textTransform: "uppercase", fontSize: "0.56rem", letterSpacing: 1 }}>
-                      {["Cliente", "RUT", "Broker", "Proyecto", "Tipo", "Subsidio", "Monto UF", "Valor CBR", "Tasación", "Est. Títulos", "Total Pagado", "Comisión", "% Aplicado", "Moneda", "Fecha correo", "Estado"].map(h =>
+                      {["N°", "Cliente", "RUT", "Broker", "Proyecto", "Tipo", "Subsidio", "Monto UF", "Valor CBR", "Tasación", "Est. Títulos", "Total Pagado", "Comisión", "% Aplicado", "Moneda", "Fecha correo", "Estado"].map(h =>
                         <th key={h} style={{ textAlign: "left", padding: "6px 8px", borderBottom: "1px solid rgba(212,175,55,0.4)" }}>{h}</th>)}
                     </tr>
                   </thead>
@@ -878,6 +892,7 @@ export default function SupercarpetaModule() {
                       const editandoTP = cbrEdit && (cbrEdit.fila.fid ? cbrEdit.fila.fid === r.fid : cbrEdit.fila.cliente === r.cliente) && cbrEdit.campo === "total_pagado";
                       return (
                         <tr key={r.fid || i} data-testid={`cbr-fila-${i}`} style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+                          <td data-testid={`cbr-numero-${i}`} style={{ padding: "6px 8px", color: "#d4af37", fontWeight: 900, textAlign: "center", userSelect: "none" }}>{i + 1}</td>
                           {celdaCbrEdit(r, i, "cliente", { texto: true, color: "#f8fafc", estilo: { whiteSpace: "normal", minWidth: 130 } })}
                           {celdaCbrEdit(r, i, "rut", { texto: true, suave: true, color: "#94a3b8" })}
                           {celdaCbrEdit(r, i, "broker", { texto: true, suave: true, color: "#94a3b8" })}

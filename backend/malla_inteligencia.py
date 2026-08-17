@@ -945,6 +945,59 @@ def _verificar_firmas_pdf(pdf_bytes):
         return False, f"no se pudo abrir el PDF para verificar firmas ({str(e)[:80]})"
 
 
+_PEND_VERIF_PROMESA = "Pendiente verificación manual"
+
+
+async def _verificar_compromiso_ia(fd, e):
+    """VERIFICACIÓN DE FIRMA (IA): el compromiso/promesa de compraventa adjunto solo se
+    marca 'Firmada (verificada IA)' con evidencia de firma de alta confianza; en cualquier
+    duda queda azul 'Pendiente verificación manual' (jamás verde sin respaldo)."""
+    import ai_extract as _ai
+    estado, evidencia, archivo, firmado_ok = _PEND_VERIF_PROMESA, "correo sin adjunto PDF verificable", "", False
+    try:
+        atts = (await asyncio.to_thread(mail.fetch_attachments_by_id, e["id"])) if e.get("id") else []
+        pdfs = [a for a in (atts or [])
+                if (a.get("filename") or "").lower().endswith(".pdf") and a.get("content_bytes")]
+        pref = [a for a in pdfs if re.search(r"promes|compromis|compravent", (a.get("filename") or "").lower())]
+        for a in (pref or pdfs)[:3]:
+            archivo = a.get("filename") or ""
+            heur_ok, heur_ev = await asyncio.to_thread(_verificar_firmas_pdf, a["content_bytes"])
+            texto = ""
+            try:
+                import io
+                from pypdf import PdfReader
+                r = PdfReader(io.BytesIO(a["content_bytes"]))
+                texto = " ".join((p.extract_text() or "") for p in r.pages)
+            except Exception:
+                pass
+            if len(texto.strip()) < 120:
+                try:
+                    import ocr_service as _ocr
+                    texto = (await asyncio.to_thread(_ocr.ocr_texto, a["content_bytes"], 8)) or texto
+                except Exception:
+                    pass
+            ia = await _ai.verificar_firma_compromiso(texto, fd.get("nombre") or "",
+                                                      heur_ev if heur_ok else "")
+            if ia:
+                firmado_ok = bool(ia.get("firmado")) and (ia.get("confianza") == "alta" or heur_ok)
+                evidencia = (ia.get("evidencia") or "").strip()[:400] or heur_ev
+            else:
+                firmado_ok = heur_ok
+                evidencia = f"IA no disponible — verificación técnica del PDF: {heur_ev}"
+            if firmado_ok:
+                break
+        if firmado_ok:
+            estado = "Firmada (verificada IA)"
+    except Exception as ex:
+        evidencia = f"error al verificar el adjunto ({str(ex)[:80]})"
+    await db.folders.update_one({"id": fd["id"]}, {"$set": {
+        "promesa_verificacion": {"estado": estado, "firmado": firmado_ok,
+                                 "evidencia": evidencia, "archivo": archivo,
+                                 "fecha": e.get("date") or _now(), "origen": "ia"},
+        "promesa_verificada_at": e.get("date") or _now()}})
+    return estado, evidencia
+
+
 async def _capturar_remitente(fd, hito, e):
     """CAPTURA AUTOMÁTICA DE REMITENTES: aprende quién envía qué. Queda 'Pendiente de
     Confirmación' hasta que Gerencia lo valide (Regla de Hierro) + registro por broker."""
@@ -991,7 +1044,7 @@ async def _auditar_lote(correos):
     folders = await db.folders.find({}, {"id": 1, "nombre": 1, "rut": 1}).to_list(2000)
     por_rut = {_rut_limpio(f.get("rut")): f for f in folders if len(_rut_limpio(f.get("rut"))) >= 8}
     res = {"correos_revisados": len(correos or []), "tasaciones_detectadas": 0,
-           "estudios_detectados": 0, "sets_detectados": 0,
+           "estudios_detectados": 0, "sets_detectados": 0, "promesas_detectadas": 0,
            "reparos_transcritos": 0, "sin_respaldo": 0, "detalle": []}
     fu = await _fuentes_documentos()
     tas_src = [s.lower() for s in fu.get("tasacion", []) if s]
@@ -1053,7 +1106,9 @@ async def _auditar_lote(correos):
         frase_set = "set firmado" in asunto_l or "set para la firma" in asunto_l
         es_set = frase_set and (not set_src or any(s in de for s in set_src))
         es_serviu = any(k in asunto_l for k in ("serviu", "subsidio", "resolucion", "resolución"))
-        if not (es_tasacion or es_estudio or es_notaria or es_set or es_serviu):
+        es_promesa = bool(re.search(r"(promesa|compromiso)\s+(de\s+)?compraventa|promesa\s+firmada|compromiso\s+firmado",
+                                    f"{asunto_l} {cuerpo[:800].lower()}"))
+        if not (es_tasacion or es_estudio or es_notaria or es_set or es_serviu or es_promesa):
             continue
         fd, metodo = _match_carpeta(texto, por_rut, folders)
         if not fd:
@@ -1062,9 +1117,10 @@ async def _auditar_lote(correos):
                                    "motivo": "sin RUT ni nombre de cliente identificable"})
             continue
         hito_cap = ("tasacion" if es_tasacion else "estudio" if es_estudio else
-                    "cesion" if es_notaria else "set_credito" if es_set else "serviu")
+                    "cesion" if es_notaria else "set_credito" if es_set else
+                    "promesa" if es_promesa else "serviu")
         await _capturar_remitente(fd, hito_cap, e)
-        if es_serviu and not (es_tasacion or es_estudio or es_notaria or es_set):
+        if es_serviu and not (es_tasacion or es_estudio or es_notaria or es_set or es_promesa):
             continue
         clave = "aud-" + hashlib.md5(f"{de}|{asunto}|{e.get('date','')}".encode()).hexdigest()
         if await db.hitos_externos.find_one({"clave": clave}):
@@ -1095,6 +1151,13 @@ async def _auditar_lote(correos):
             if e.get("id"):
                 await _archivar_adjuntos(fd, e["id"], "SETCRED", subdir="99_otros")
             hito_n, res_k = f"Set de Crédito: {estado_set} ({evidencia[:80]})", "sets_detectados"
+        elif es_promesa:
+            # VERIFICACIÓN DE FIRMA (IA): solo verde con evidencia de firma de alta confianza
+            estado_p, evidencia_p = await _verificar_compromiso_ia(fd, e)
+            if e.get("id"):
+                await _archivar_adjuntos(fd, e["id"], "PROMESA", subdir="99_otros")
+            hito_n = f"Promesa de Compraventa: {estado_p} ({evidencia_p[:80]})"
+            res_k = "promesas_detectadas"
         elif es_tasacion:
             await db.folders.update_one({"id": fd["id"]}, {"$set": {
                 "tasacion_informe_recibido_at": e.get("date") or _now(),
@@ -1736,11 +1799,13 @@ async def supercarpeta_vista(mes: str = ""):
                       "cesion": str(fd.get("firma_cesion_confirmada_at")
                                     or fd.get("escritura_confirmada_at") or ""),
                       "set_credito": str(fd.get("set_credito_at") or ""),
-                      "serviu": "", "promesa": "", "carta_oferta": "",
+                      "serviu": "", "promesa": str(fd.get("promesa_verificada_at") or ""), "carta_oferta": "",
                       "carpeta_notaria": str(fd.get("escritura_notaria_detectada_at") or ""),
                       "escritura": str(fd.get("escritura_confirmada_at") or "")}
         set_est = fd.get("set_credito_estado") or ""
-        est_serviu = est_promesa = "Pendiente"
+        pv = fd.get("promesa_verificacion") or {}
+        est_serviu = "Pendiente"
+        est_promesa = pv.get("estado") or "Pendiente"
         est_carta = "Pendiente"
         est_carpeta = "Enviada" if fd.get("escritura_notaria_detectada_at") else "Pendiente"
         est_escritura = ("Firmada" if fd.get("escritura_confirmada_at")
@@ -1879,6 +1944,10 @@ async def supercarpeta_vista(mes: str = ""):
                          "detalle_reparos": detalle_reparos,
                          "cesion": est_ces,
                          "serviu": est_serviu, "promesa": est_promesa,
+                         "promesa_ia": ({"evidencia": pv.get("evidencia") or "",
+                                         "archivo": pv.get("archivo") or "",
+                                         "firmado": bool(pv.get("firmado")),
+                                         "fecha": str(pv.get("fecha") or "")[:10]} if pv else None),
                          "carta_oferta": est_carta,
                          "docs_co_rs": _marcado_docs(est_carta, est_serviu),
                          "carpeta_notaria": est_carpeta, "escritura": est_escritura,
@@ -2979,7 +3048,7 @@ async def cbr_excel(request: Request):
     wb = Workbook()
     ws = wb.active
     ws.title = "Costos CBR"
-    ws.append(["Nombre del cliente", "Broker", "Monto del crédito (UF)",
+    ws.append(["N°", "Nombre del cliente", "Broker", "Monto del crédito (UF)",
                "Valor CBR (Inscripción Registro Propiedad + Hipoteca)",
                "Tasación", "Estudio de Títulos", "Total Pagado",
                "Comisión (monto calculado)", "Porcentaje aplicado",
@@ -2987,34 +3056,34 @@ async def cbr_excel(request: Request):
     for c in ws[1]:
         c.font = Font(bold=True, color="FFFFFF")
         c.fill = PatternFill("solid", fgColor="1F2937")
-    for r in res:
+    for num, r in enumerate(res, start=1):
         tp = _cbr_total_fila(r)
         incompleto = (r.get("total_pagado_origen") != "manual"
                       and any(r.get(k) in ("", None) for k in ("valor_cbr", "tasacion", "est_titulos")))
         total_pagado = round(tp, 2) if tp is not None else ""
-        ws.append([r.get("cliente", ""), r.get("broker", ""), r.get("monto_credito", ""),
+        ws.append([num, r.get("cliente", ""), r.get("broker", ""), r.get("monto_credito", ""),
                    r.get("valor_cbr", ""), r.get("tasacion", ""), r.get("est_titulos", ""),
                    f"{total_pagado} ⚠ incompleto" if incompleto and total_pagado != "" else total_pagado,
                    r.get("comision", ""), r.get("pct_aplicado", ""),
                    r.get("moneda", ""), r.get("fecha_correo", ""), r.get("estado", "")])
         if incompleto:
-            ws.cell(row=ws.max_row, column=7).fill = PatternFill("solid", fgColor="FEF3C7")
-        ws.cell(row=ws.max_row, column=12).font = Font(
+            ws.cell(row=ws.max_row, column=8).fill = PatternFill("solid", fgColor="FEF3C7")
+        ws.cell(row=ws.max_row, column=13).font = Font(
             bold=True, color="15803D" if r.get("estado") == "ENCONTRADO" else "B91C1C")
     tot = _cbr_totales(res)
-    ws.append(["TOTAL EN UF", "", "", tot["total_cbr_uf"], tot["total_tasacion_uf"],
+    ws.append(["", "TOTAL EN UF", "", "", tot["total_cbr_uf"], tot["total_tasacion_uf"],
                tot["total_titulos_uf"], tot["gran_total_uf"], tot["total_comision_uf"],
                "", "UF", "", ""])
     for c in ws[ws.max_row]:
         c.font = Font(bold=True, color="FFFFFF")
         c.fill = PatternFill("solid", fgColor="1E3A8A")
-    ws.append(["TOTAL EN PESOS", "", "", tot["total_cbr_clp"], tot["total_tasacion_clp"],
+    ws.append(["", "TOTAL EN PESOS", "", "", tot["total_cbr_clp"], tot["total_tasacion_clp"],
                tot["total_titulos_clp"], tot["gran_total_clp"], tot["total_comision_clp"],
                "", "CLP", "", ""])
     for c in ws[ws.max_row]:
         c.font = Font(bold=True, color="FFFFFF")
         c.fill = PatternFill("solid", fgColor="14532D")
-    for col, w in zip("ABCDEFGHIJKL", (34, 24, 18, 24, 12, 16, 16, 20, 18, 9, 16, 16)):
+    for col, w in zip("ABCDEFGHIJKLM", (6, 34, 24, 18, 24, 12, 16, 16, 20, 18, 9, 16, 16)):
         ws.column_dimensions[col].width = w
     buf = _io.BytesIO()
     wb.save(buf)
