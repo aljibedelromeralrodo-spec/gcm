@@ -1798,6 +1798,7 @@ async def supercarpeta_vista(mes: str = ""):
             broker_v = (fd.get("broker_origen") or fd.get("broker_nombre")
                         or (reg.get("origen") or {}).get("broker_origen") or "").strip()
         proyecto_v = (fd.get("proyecto") or prop_adn.get("proyecto") or exp_prop.get("proyecto")
+                      or _limpiar_proyecto(reg.get("nombre_proyecto"))
                       or (fd.get("perfil_consolidado") or {}).get("proyecto") or "").strip()
         if not proyecto_v and "usad" in tipo_op:
             proyecto_v = (exp_prop.get("direccion") or prop_adn.get("direccion")
@@ -1879,6 +1880,7 @@ async def supercarpeta_vista(mes: str = ""):
                          "cesion": est_ces,
                          "serviu": est_serviu, "promesa": est_promesa,
                          "carta_oferta": est_carta,
+                         "docs_co_rs": _marcado_docs(est_carta, est_serviu),
                          "carpeta_notaria": est_carpeta, "escritura": est_escritura,
                          "fecha_firma": fd.get("fecha_firma") or fd.get("fecha_firma_detectada") or "",
                          "con_subsidio": "con" in subsidio_v.lower(),
@@ -1931,6 +1933,23 @@ async def supercarpeta_vista(mes: str = ""):
 
 HITOS_VALIDOS = ("tasacion", "estudio", "cesion", "set_credito",
                  "serviu", "promesa", "carta_oferta", "carpeta_notaria", "escritura", "notaria")
+
+_PEND_VERIF = "Pendiente verificación manual"
+
+
+def _marcado_docs(est_carta, est_serviu):
+    """Marcado ficha cliente: ✅ verde ambos, 🟡 falta uno, 🔴 ninguno, 🔵 verificación manual."""
+    pres = lambda e: e in ("Recibida", "Aprobada")
+    llego = lambda e: pres(e) or e == _PEND_VERIF
+    if pres(est_carta) and pres(est_serviu):
+        return {"color": "verde", "icono": "✅", "detalle": "Carta Oferta y Resolución Serviu completas"}
+    if llego(est_carta) and llego(est_serviu):
+        return {"color": "azul", "icono": "🔵", "detalle": "Ambos documentos llegaron — hay verificación manual pendiente"}
+    if llego(est_carta):
+        return {"color": "amarillo", "icono": "🟡", "detalle": "Falta la Resolución Serviu"}
+    if llego(est_serviu):
+        return {"color": "amarillo", "icono": "🟡", "detalle": "Falta la Carta Oferta"}
+    return {"color": "rojo", "icono": "🔴", "detalle": "No ha llegado ningún documento"}
 
 
 ESTADOS_MANUALES_BASE = ["Tasación Piloto", "Solicitada", "En Proceso",
@@ -2214,57 +2233,229 @@ async def inmobiliarias_set(payload: dict, request: Request):
     return {"ok": True}
 
 
+# ── DESTINATARIOS GLOBALES (CC obligatoria en todos los envíos) ─────────────
+_CC_SEMILLA = [
+    {"nombre": "Victoria Vilche", "email": "victoriavilches@centralmutuos.cl", "activo": True},
+    {"nombre": "Daniela Galindo", "email": "daniela.galindo@centralmutuos.cl", "activo": True},
+]
+
+
+async def _cc_globales():
+    cfg = await db.config.find_one({"_key": "cc_globales"}) or {}
+    lista = cfg.get("lista")
+    if not lista:
+        lista = [dict(x) for x in _CC_SEMILLA]
+        await db.config.update_one({"_key": "cc_globales"}, {"$set": {
+            "lista": lista, "actualizado": _now()}}, upsert=True)
+    return lista
+
+
+@supercarpeta.get("/cc-globales")
+async def cc_globales_get(request: Request):
+    _exigir_gerencia(request)
+    return {"lista": await _cc_globales()}
+
+
+@supercarpeta.post("/cc-globales")
+async def cc_globales_set(payload: dict, request: Request):
+    """Editable solo por el Admin General. REGLA: no se eliminan — solo se desactivan."""
+    _exigir_admin_general(request)
+    nombre = (payload.get("nombre") or "").strip()
+    email_d = (payload.get("email") or "").strip()
+    if not nombre or "@" not in email_d:
+        raise HTTPException(status_code=400, detail="Nombre y correo válido son obligatorios")
+    lista = await _cc_globales()
+    n_norm = mail._sin_acentos(nombre.lower())
+    for x in lista:
+        if mail._sin_acentos((x.get("nombre") or "").lower()) == n_norm:
+            x.update({"nombre": nombre, "email": email_d,
+                      "activo": bool(payload.get("activo", x.get("activo", True)))})
+            break
+    else:
+        lista.append({"nombre": nombre, "email": email_d, "activo": bool(payload.get("activo", True))})
+    await db.config.update_one({"_key": "cc_globales"}, {"$set": {
+        "lista": lista, "actualizado": _now()}}, upsert=True)
+    return {"ok": True, "lista": lista}
+
+
+# ── CONTACTOS CARTA OFERTA: por INMOBILIARIA + PROYECTO específico ──────────
+@supercarpeta.get("/contactos-carta")
+async def contactos_carta_get(request: Request):
+    _exigir_gerencia(request)
+    contactos = [c async for c in db.contactos_carta.find({}, {"_id": 0}).sort(
+        [("inmobiliaria", 1), ("proyecto", 1)])]
+    if not contactos:
+        # migración: los contactos generales legados de db.inmobiliarias
+        async for r in db.inmobiliarias.find({}):
+            if r.get("email"):
+                doc = {"id": str(uuid.uuid4()), "inmobiliaria": r.get("nombre") or "",
+                       "inmobiliaria_norm": r.get("nombre_norm") or "",
+                       "proyecto": "", "proyecto_norm": "",
+                       "contacto": r.get("encargado") or "", "email": r["email"],
+                       "activo": True, "actualizado": _now()}
+                await db.contactos_carta.insert_one(dict(doc))
+                contactos.append(doc)
+    detectadas = set()
+    async for fd in db.folders.find({}, {"inmobiliaria": 1, "tipo_operacion": 1, "oculto_supercarpeta": 1}):
+        if not fd.get("oculto_supercarpeta"):
+            n = _inmo_de_folder(fd)
+            if n:
+                detectadas.add(n)
+    return {"contactos": contactos, "inmobiliarias_detectadas": sorted(detectadas)}
+
+
+@supercarpeta.post("/contactos-carta")
+async def contactos_carta_set(payload: dict, request: Request):
+    """Alta/edición/desactivación (nunca eliminación) — Admin General."""
+    _exigir_admin_general(request)
+    inmob = (payload.get("inmobiliaria") or "").strip()
+    email_c = (payload.get("email") or "").strip()
+    if not inmob:
+        raise HTTPException(status_code=400, detail="La inmobiliaria/corredor es obligatoria")
+    if email_c and "@" not in email_c:
+        raise HTTPException(status_code=400, detail="Correo del contacto inválido")
+    proyecto = (payload.get("proyecto") or "").strip()
+    doc = {"inmobiliaria": inmob, "inmobiliaria_norm": _norm_inmo(inmob),
+           "proyecto": proyecto, "proyecto_norm": _norm_inmo(proyecto),
+           "contacto": (payload.get("contacto") or "").strip(), "email": email_c,
+           "activo": bool(payload.get("activo", True)), "actualizado": _now()}
+    if payload.get("id"):
+        await db.contactos_carta.update_one({"id": payload["id"]}, {"$set": doc})
+    else:
+        doc["id"] = str(uuid.uuid4())
+        await db.contactos_carta.insert_one(dict(doc))
+    return {"ok": True}
+
+
+async def _contacto_para(fd, proyecto):
+    """LÓGICA DE SELECCIÓN: inmobiliaria+proyecto exacto → contacto general → legado → nada."""
+    inmo = _inmo_de_folder(fd) or ""
+    inmo_n, proy_n = _norm_inmo(inmo), _norm_inmo(proyecto)
+    cands = [c async for c in db.contactos_carta.find(
+        {"inmobiliaria_norm": inmo_n, "activo": {"$ne": False}})]
+    if proy_n:
+        for c in cands:
+            pn = c.get("proyecto_norm") or ""
+            if pn and (pn == proy_n or pn in proy_n or proy_n in pn):
+                return inmo, c
+    general = next((c for c in cands if not c.get("proyecto_norm")), None)
+    if general:
+        return inmo, general
+    legado = await db.inmobiliarias.find_one({"nombre_norm": inmo_n}) or {}
+    if legado.get("email"):
+        return inmo, {"contacto": legado.get("encargado") or "", "email": legado["email"]}
+    return inmo, None
+
+
+def _saludo_genero(nombre):
+    primer = (nombre or "").strip().split(" ")[0]
+    return "Estimada" if primer.lower().endswith("a") else "Estimado"
+
+
 @supercarpeta.get("/solicitud-doc/{fid}")
 async def solicitud_doc_preview(fid: str, request: Request):
-    """Vista previa del correo que pide Carta Oferta + Resolución Serviu (un solo botón).
-    Detecta la inmobiliaria del cliente y autocompleta encargado, RUT y proyecto."""
+    """VISTA PREVIA OBLIGATORIA de la solicitud Carta Oferta + Resolución Serviu.
+    Selección automática del destinatario por inmobiliaria + proyecto específico."""
     _exigir_gerencia(request)
     import adn_clientes as _adn
     fd = await db.folders.find_one({"id": fid})
     if not fd:
         raise HTTPException(status_code=404, detail="Carpeta no encontrada")
-    inmo = _inmo_de_folder(fd) or "Directa"
-    r = await db.inmobiliarias.find_one({"nombre_norm": _norm_inmo(inmo)}) or {}
     reg = (await db.adn_clientes_360.find_one({"rut_norm": _adn._norm_rut(fd["rut"])})
            if fd.get("rut") else None) or {}
-    proyecto = (fd.get("proyecto") or (reg.get("propiedad") or {}).get("proyecto") or "").strip()
-    encargado = r.get("encargado") or ""
-    asunto = f"Solicitud de Carta Oferta y Resolución Serviu — {fd.get('nombre')} (RUT {fd.get('rut') or 'por confirmar'})"
-    cuerpo = (f"Estimado/a {encargado or 'equipo ' + inmo}:\n\n"
-              f"Por medio de la presente, solicito la CARTA OFERTA y la RESOLUCIÓN SERVIU "
-              f"del cliente {fd.get('nombre')}, RUT {fd.get('rut') or 'por confirmar'}, "
-              f"para el proyecto {proyecto or 'por confirmar'} de la inmobiliaria {inmo}.\n\n"
-              f"Agradeceré su envío a la brevedad para continuar con el proceso de escrituración.\n\n"
-              f"Atentamente,\nGerardo Barrera\nCentral Mutuos")
+    proyecto = (fd.get("proyecto") or (reg.get("propiedad") or {}).get("proyecto")
+                or _limpiar_proyecto(reg.get("nombre_proyecto")) or "").strip()
+    resolucion = (fd.get("resolucion_serviu")
+                  or (reg.get("resolucion_serviu") or {}).get("numero", "")
+                  if isinstance(reg.get("resolucion_serviu"), dict)
+                  else fd.get("resolucion_serviu") or reg.get("resolucion_serviu") or "")
+    inmo, contacto = await _contacto_para(fd, proyecto)
+    encargado = (contacto or {}).get("contacto") or ""
+    saludo = _saludo_genero(encargado)
+    rut = fd.get("rut") or ""
+    faltantes = []
+    if not rut:
+        faltantes.append("RUT del cliente")
+    if not proyecto:
+        faltantes.append("Nombre del proyecto")
+    if not resolucion:
+        faltantes.append("Resolución SERVIU")
+    cc = [x["email"] for x in await _cc_globales() if x.get("activo") and x.get("email")]
+    asunto = f"Carta Oferta - {fd.get('nombre')} - {proyecto or '[Nombre del proyecto]'}"
+    cuerpo = (f"{saludo} {encargado or '[nombre del destinatario]'},\n\n"
+              f"Solicito por medio de la presente carta oferta de:\n\n"
+              f"Cliente: {fd.get('nombre')}\n"
+              f"RUT: {rut or '[RUT del cliente]'}\n"
+              f"Proyecto: {proyecto or '[Nombre del proyecto]'}\n"
+              f"Resolución SERVIU: {resolucion or '[Número de resolución SERVIU]'}\n\n"
+              f"Agradeciendo su buena disposición,\n"
+              f"Atentamente,\nCentral Mutuos")
     desde = ""
     for a in mail.ACCOUNTS:
         if a["rol"] == "secundaria":
             desde = a["user"]
     if not desde and mail.ACCOUNTS:
         desde = mail.ACCOUNTS[0]["user"]
-    return {"cliente": fd.get("nombre"), "rut": fd.get("rut") or "", "inmobiliaria": inmo,
-            "encargado": encargado, "para": r.get("email") or "",
-            "configurada": bool(r.get("email")), "asunto": asunto, "cuerpo": cuerpo, "desde": desde}
+    return {"cliente": fd.get("nombre"), "rut": rut, "inmobiliaria": inmo,
+            "proyecto": proyecto, "resolucion_serviu": resolucion,
+            "encargado": encargado, "para": (contacto or {}).get("email") or "",
+            "configurada": bool((contacto or {}).get("email")), "cc": cc,
+            "faltantes": faltantes, "asunto": asunto, "cuerpo": cuerpo, "desde": desde}
 
 
 @supercarpeta.post("/solicitud-doc/{fid}/enviar")
 async def solicitud_doc_enviar(fid: str, payload: dict, request: Request):
-    """Envío confirmado de la solicitud (vista previa aprobada por el ejecutivo).
-    Marca Carta Oferta y Resolución Serviu como 'Solicitada' con bitácora."""
+    """REGLA ABSOLUTA: solo envía al confirmar el preview — jamás automático ni retroactivo.
+    CC obligatoria a los destinatarios globales activos. Registro en ADN_CLIENTES_360."""
     user = _exigir_gerencia(request)
+    import adn_clientes as _adn
     fd = await db.folders.find_one({"id": fid})
     if not fd:
         raise HTTPException(status_code=404, detail="Carpeta no encontrada")
     para = (payload.get("para") or "").strip()
     if "@" not in para:
         raise HTTPException(status_code=400,
-                            detail="Configure el correo del encargado de la inmobiliaria (botón 🏢 Inmobiliarias)")
-    asunto = (payload.get("asunto") or "").strip() or f"Solicitud Carta Oferta y Resolución Serviu — {fd.get('nombre')}"
+                            detail="Configure el contacto de la inmobiliaria/proyecto (botón 🏢 Contactos)")
+    # VALIDACIÓN BLOQUEANTE: indica exactamente qué campo falta
+    rut = (payload.get("rut") or fd.get("rut") or "").strip()
+    proyecto = (payload.get("proyecto") or fd.get("proyecto") or "").strip()
+    resolucion = str(payload.get("resolucion_serviu") or fd.get("resolucion_serviu") or "").strip()
+    faltantes = [n for v, n in ((rut, "RUT del cliente"), (proyecto, "Nombre del proyecto"),
+                                (resolucion, "Resolución SERVIU")) if not v]
+    if faltantes:
+        raise HTTPException(status_code=400,
+                            detail="ENVÍO BLOQUEADO — falta: " + ", ".join(faltantes))
+    asunto = (payload.get("asunto") or "").strip() or f"Carta Oferta - {fd.get('nombre')} - {proyecto}"
     cuerpo = (payload.get("cuerpo") or "").strip()
     if not cuerpo:
         raise HTTPException(status_code=400, detail="El cuerpo del correo no puede ir vacío")
+    # persistir datos completados desde el preview (proyecto / resolución)
+    sets_fd = {}
+    if proyecto and proyecto != (fd.get("proyecto") or ""):
+        sets_fd["proyecto"] = proyecto
+    if resolucion and resolucion != (fd.get("resolucion_serviu") or ""):
+        sets_fd["resolucion_serviu"] = resolucion
+    if sets_fd:
+        await db.folders.update_one({"id": fid}, {"$set": {**sets_fd, "updated_at": _now()}})
+        await _sync_adn(fid)
+    # CC OBLIGATORIA en todos los casos (destinatarios globales activos)
+    cc = [x["email"] for x in await _cc_globales()
+          if x.get("activo") and x.get("email") and x["email"].lower() != para.lower()]
     html = "<p>" + cuerpo.replace("\n", "<br>") + "</p>"
-    res = await asyncio.to_thread(mail.send_mail, para, asunto, html, None, "secundaria")
+    firma = await db.config.find_one({"_key": "firma_correo"}) or {}
+    if firma.get("url"):
+        html += (f'<br><img src="{firma["url"]}" alt="Central Mutuos" '
+                 f'width="340" style="max-width:340px;border-radius:6px;display:block;">')
+    # FIRMA PERSONAL del Administrador General (texto: solo "Central Mutuos")
+    html += ('<div style="margin-top:10px;font-family:Georgia,\'Times New Roman\',serif;'
+             'color:#1e293b;font-size:14px;line-height:1.5;">'
+             '<b style="color:#0f2557;">Gerardo Barrera P.</b><br>'
+             '<span style="color:#8a6d1d;">Asesor Jefe Externo</span><br>'
+             'Canal Inmobiliarias y Brokers<br>'
+             '<span style="color:#0f2557;font-weight:bold;">Central Mutuos</span>'
+             '</div>')
+    res = await asyncio.to_thread(
+        lambda: mail.send_mail(para, asunto, html, desde="secundaria", cc=cc))
     if not res.get("success"):
         raise HTTPException(status_code=502, detail=res.get("error") or "Error de envío SMTP")
     em = fd.get("estados_manuales") or {}
@@ -2272,12 +2463,18 @@ async def solicitud_doc_enviar(fid: str, payload: dict, request: Request):
         if not (em.get(h) or {}).get("estado"):
             em[h] = {"estado": "Solicitada", "por": user.get("sub") or "",
                      "en": _now(), "via": "solicitud_email"}
+    registro = {"tipo": "carta_oferta+resolucion_serviu", "para": para, "cc": cc,
+                "asunto": asunto, "en": _now(), "por": user.get("sub") or "",
+                "estado": "enviado", "smtp_code": res.get("smtp_code")}
     await db.folders.update_one({"id": fid}, {
         "$set": {"estados_manuales": em, "updated_at": _now()},
-        "$push": {"bitacora_solicitudes": {
-            "tipo": "carta_oferta+resolucion_serviu", "para": para, "asunto": asunto,
-            "en": _now(), "por": user.get("sub") or "", "smtp_code": res.get("smtp_code")}}})
-    return {"ok": True, "smtp_code": res.get("smtp_code")}
+        "$push": {"bitacora_solicitudes": registro}})
+    # REGISTRO EN ADN_CLIENTES_360: fecha, hora, destinatarios y estado
+    if fd.get("rut"):
+        await db.adn_clientes_360.update_one(
+            {"rut_norm": _adn._norm_rut(fd["rut"])},
+            {"$push": {"envios_carta_oferta": registro}})
+    return {"ok": True, "smtp_code": res.get("smtp_code"), "cc": cc}
 
 
 # ── COSTOS CBR — extracción desde adjuntos "Simulación" de Mesa ─────────────
@@ -2337,9 +2534,31 @@ def _extraer_gastos_texto(texto):
     return out
 
 
+_PROY_LINEA_RE = re.compile(r"^\s*proyecto\s*:?\s+(.{2,90})$", re.I)
+
+
+def _limpiar_proyecto(raw):
+    """'BOETSCH/LAS UVAS Y EL VIENTO' → 'LAS UVAS Y EL VIENTO'. 'CASA USADA/N/D' → ''."""
+    v = (raw or "").strip()
+    if not v or v.upper() in ("N/D", "ND", "S/I", "POR CONFIRMAR"):
+        return ""
+    if "/" in v:
+        resto = v.split("/", 1)[1].strip()
+        return "" if not resto or resto.upper() in ("N/D", "ND", "S/I") else resto
+    return v
+
+
+def _extraer_proyecto_texto(texto):
+    for l in (texto or "").splitlines():
+        m = _PROY_LINEA_RE.match(l.strip())
+        if m:
+            return m.group(1).strip()
+    return ""
+
+
 def _extraer_gastos_pdf(pdf_bytes):
     """Abre el adjunto: prioriza la SEGUNDA página (Gastos Operacionales), luego el resto.
-    Extrae CBR + Tasación + Estudio de Títulos en una sola pasada."""
+    Extrae CBR + Tasación + Estudio de Títulos + Nombre del Proyecto en una sola pasada."""
     import io as _io
     import pdfplumber
     acumulado = {}
@@ -2349,12 +2568,16 @@ def _extraer_gastos_pdf(pdf_bytes):
             orden = ([1] if len(paginas) > 1 else []) + [i for i in range(len(paginas)) if i != 1]
             for i in orden:
                 try:
-                    d = _extraer_gastos_texto(paginas[i].extract_text() or "")
+                    texto = paginas[i].extract_text() or ""
+                    d = _extraer_gastos_texto(texto)
+                    proy = _extraer_proyecto_texto(texto)
                 except Exception:
-                    d = {}
+                    d, proy = {}, ""
                 for k, v in d.items():
                     acumulado.setdefault(k, {**v, "pagina": i + 1})
-                if len(acumulado) == len(_GASTO_FILAS):
+                if proy:
+                    acumulado.setdefault("proyecto", {"valor": proy, "pagina": i + 1})
+                if len(acumulado) >= len(_GASTO_FILAS) + 1:
                     break
     except Exception:
         pass
@@ -2412,6 +2635,7 @@ async def _ejecutar_cbr():
         viejo = await db.config.find_one({"_key": "cbr_extraccion"}) or {}
         old_map = {(r.get("cliente") or "").strip().upper(): r
                    for r in viejo.get("resultados") or []}
+        base = await _valores_base()
         resultados = []
         for fd in carpetas:
             nombre_u = (fd.get("nombre") or "").strip().upper()
@@ -2488,7 +2712,30 @@ async def _ejecutar_cbr():
             for _c, mon_key, _f in _CBR_CAMPOS:
                 if fila.get(f"{_c}_origen") == "manual" and old.get(mon_key) and not fila.get(mon_key):
                     fila[mon_key] = old[mon_key]
+            # VALORES BASE: Tasación 2,5 UF / Est. Títulos 2 UF si el cliente no trae dato
+            for campo in ("tasacion", "est_titulos"):
+                if fila.get(campo) in ("", None):
+                    fila[campo] = base[campo]
+                    fila[f"{campo}_moneda"] = "UF"
             resultados.append(fila)
+            # ── NOMBRE DEL PROYECTO: simulación → ADN (campo unificado nombre_proyecto) ──
+            proy_raw = ((gastos or {}).get("proyecto") or {}).get("valor", "")
+            rut_n = _adn._norm_rut(fd["rut"]) if fd.get("rut") else None
+            if not proy_raw and reg:
+                # unificación de variantes ya existentes en la Bóveda
+                proy_raw = ((reg.get("propiedad") or {}).get("proyecto")
+                            or reg.get("nombre_proyecto") or reg.get("inmueble") or "")
+            if proy_raw:
+                limpio = _limpiar_proyecto(proy_raw)
+                if rut_n:
+                    await db.adn_clientes_360.update_one(
+                        {"rut_norm": rut_n}, {"$set": {"nombre_proyecto": proy_raw}})
+                if limpio and not (fd.get("proyecto") or "").strip():
+                    await db.folders.update_one({"id": fd["id"]}, {"$set": {
+                        "proyecto": limpio, "updated_at": _now()}})
+                    fd["proyecto"] = limpio
+                if limpio and fila.get("proyecto_origen") != "manual":
+                    fila["proyecto"] = fila.get("proyecto") or limpio
             # persistencia: carpeta + Bóveda ADN_CLIENTES_360
             sets_f = {}
             for campo, doc_key in (("valor_cbr", "costo_CBR"), ("tasacion", "costo_tasacion"),
@@ -2540,6 +2787,29 @@ _CBR_TXT = ("cliente", "rut", "broker", "proyecto", "tipo_propiedad", "subsidio"
 _CBR_FOLDER_MAP = {"rut": "rut", "broker": "inmobiliaria", "proyecto": "proyecto",
                    "tipo_propiedad": "tipo_operacion", "subsidio": "subsidio_proyeccion",
                    "monto_credito": "proyeccion_uf"}
+
+
+# ── VALORES BASE OPERACIONALES (Tasación / Estudio de Títulos por defecto) ──
+async def _valores_base():
+    cfg = await db.config.find_one({"_key": "valores_base"}) or {}
+    return {"tasacion": cfg.get("tasacion", 2.5), "est_titulos": cfg.get("est_titulos", 2)}
+
+
+@supercarpeta.post("/valores-base")
+async def valores_base_set(payload: dict, request: Request):
+    """Cambia el valor global (clientes nuevos sin dato); los manuales no se tocan."""
+    _exigir_admin_general(request)
+    sets = {}
+    for k in ("tasacion", "est_titulos"):
+        if payload.get(k) is not None:
+            try:
+                sets[k] = round(float(str(payload[k]).replace(",", ".")), 2)
+            except ValueError:
+                raise HTTPException(status_code=400, detail=f"Valor inválido para {k}")
+    if sets:
+        await db.config.update_one({"_key": "valores_base"}, {"$set": {
+            **sets, "actualizado": _now()}}, upsert=True)
+    return {"ok": True, **await _valores_base()}
 
 
 def _cbr_total_fila(r):
@@ -2594,6 +2864,7 @@ async def cbr_estado(request: Request):
     d = (await db.config.find_one({"_key": "cbr_extraccion"}, {"_id": 0})
          or {"estado": "nunca_ejecutado", "resultados": []})
     d.update(_cbr_totales(d.get("resultados") or []))
+    d["valores_base"] = await _valores_base()
     return d
 
 

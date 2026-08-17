@@ -1234,3 +1234,24 @@ Constitución VERSION 19 (nuevas reglas #55, #56, #57).
   folder+_sync_adn (rut/broker/proyecto/tipo/subsidio/monto), costo_* docs, adn.comision,
   adn.total_pagado, adn.cbr_overrides.{campo}. Filas ahora llevan fid.
 - Tabla CBR: 16 columnas + totales sticky doble moneda. Excel usa _cbr_total_fila (override manual).
+
+## Sesión 2026-08-17 (cont. 4) — Módulo Carta Oferta DEFINITIVO + Firma + Valores Base
+- Contactos por INMOBILIARIA + PROYECTO: db.contactos_carta, GET/POST /supercarpeta/contactos-carta
+  (alta/edición/desactivar, nunca eliminar). Selección automática: combinación exacta → general → legado
+  db.inmobiliarias → alerta. Verificado: Boetsch+"Las Uvas y el Viento" → Rodrigo Quintero.
+- CC GLOBALES obligatorios: config cc_globales (semilla Victoria Vilche + Daniela Galindo), GET/POST
+  /supercarpeta/cc-globales (solo desactivar, no eliminar). CC server-enforced en cada envío.
+- Plantilla definitiva: asunto "Carta Oferta - [Cliente] - [Proyecto]"; saludo por género
+  (termina en 'a' → Estimada); VALIDACIÓN BLOQUEANTE si falta RUT/Proyecto/Resolución SERVIU
+  (mensaje exacto, verificado 400). resolucion_serviu se persiste en folder + _sync_adn.
+- Registro en ADN: push envios_carta_oferta {fecha, para, cc, estado, smtp_code} (verificado).
+- Marcado ficha: _marcado_docs → ✅verde/🟡amarillo(cuál falta)/🔴rojo/🔵azul(verif. manual).
+  Estado nuevo "Pendiente verificación manual" (chip azul #1A3A8A). Badge en celda Carta Oferta.
+- FIRMA: imagen definitiva azul/dorada "CENTRAL MUTUOS / Concreces" (config firma_correo) + firma
+  personal "Gerardo Barrera P. / Asesor Jefe Externo / Canal Inmobiliarias y Brokers / Central Mutuos".
+  CORRECCIÓN: el texto escrito dice SOLO "Central Mutuos" (el logo mantiene su diseño).
+- VALORES BASE OPERACIONALES: Tasación 2,5 UF / Est. Títulos 2 UF (config valores_base, POST
+  /supercarpeta/valores-base, editable doble clic en modal CBR). Se precargan en clientes sin dato;
+  manuales intactos. Backfill aplicado (10 celdas).
+- NOTA: verificación automática de firma en compromisos de compraventa (usadas) queda como estado
+  manual "Pendiente verificación manual" — automatización pendiente.

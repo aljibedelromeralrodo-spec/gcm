@@ -10,8 +10,8 @@ const HITO_LABEL = { tasacion: "Tasación", estudio: "Estudio de Títulos", cesi
 const ESTADOS_POR = {
   tasacion: ["Pendiente", "Solicitada", "Tasación Piloto", "En Proceso", "Recibida", "Con Observaciones", "Aprobada"],
   estudio: ["Pendiente", "Solicitado", "En Proceso", "Recibido", "Con Reparos", "Aprobado"],
-  serviu: ["Pendiente", "Solicitada", "Recibida", "Aprobada", "Rechazada"],
-  carta_oferta: ["Pendiente", "Solicitada", "Recibida", "Aprobada", "Rechazada"],
+  serviu: ["Pendiente", "Solicitada", "Recibida", "Aprobada", "Rechazada", "Pendiente verificación manual"],
+  carta_oferta: ["Pendiente", "Solicitada", "Recibida", "Aprobada", "Rechazada", "Pendiente verificación manual"],
   promesa: ["Pendiente", "Redactada", "Firmada", "Enviada a Notaría"],
   set_credito: ["Pendiente", "Set Para la Firma", "Verificación Pendiente", "Firmado y Verificado"],
   carpeta_notaria: ["Pendiente", "Preparando Carpeta", "Enviada", "Recibida por Notaría", "En Revisión", "Aprobada"],
@@ -29,7 +29,8 @@ const CAMPO_LABEL = { rut: "RUT", inmobiliaria: "Inmobiliaria", broker: "Broker"
 const estadoBg = (estado, manual) => {
   const e = (estado || "").toLowerCase();
   let st;
-  if (!e || /pendiente/.test(e)) st = { background: "#2A2A2A", color: "#888", fontStyle: "italic", border: "1px dashed #555" };
+  if (/verificaci.*manual/.test(e)) st = { background: "#1A3A8A", color: "#fff" };
+  else if (!e || /pendiente/.test(e)) st = { background: "#2A2A2A", color: "#888", fontStyle: "italic", border: "1px dashed #555" };
   else if (/(aprobad|firmado|verificado$|informe recibido|recibida|recibido|confirmada|limpio|inscrita)/.test(e)) st = { background: "#1A5C2A", color: "#fff" };
   else if (/(observacion|reparo|verificaci)/.test(e)) st = { background: "#7A4A00", color: "#fff" };
   else if (/(rechaz|bloquead)/.test(e)) st = { background: "#5C1A1A", color: "#fff" };
@@ -93,6 +94,7 @@ export default function SupercarpetaModule() {
   const [remitentesModal, setRemitentesModal] = useState(null);
   const [cbrModal, setCbrModal] = useState(null);
   const [cbrEdit, setCbrEdit] = useState(null);
+  const [vbEdit, setVbEdit] = useState(null);
   const [inmoModal, setInmoModal] = useState(null);
   const [solicitudModal, setSolicitudModal] = useState(null);
   // ACCESO EXCLUSIVO: módulo Comisiones/CBR solo para el Administrador General
@@ -341,22 +343,57 @@ export default function SupercarpetaModule() {
     } catch (e) { window.alert(e.response?.data?.detail || "Error al guardar el valor manual"); }
   };
 
+  const guardarValorBase = async () => {
+    if (!vbEdit) return;
+    const { campo, valor } = vbEdit;
+    setVbEdit(null);
+    try {
+      await axios.post(`${API}/api/supercarpeta/valores-base`, { [campo]: valor });
+      await refrescarCbr();
+    } catch (e) { window.alert(e.response?.data?.detail || "Error al guardar el valor base"); }
+  };
+  const valorBaseSpan = (campo, etiqueta) => (
+    <span data-testid={`vb-${campo}`} title="Doble clic para editar el valor global (no afecta valores manuales)"
+      onDoubleClick={() => setVbEdit({ campo, valor: cbrModal?.valores_base?.[campo] ?? "" })}
+      style={{ cursor: "cell", fontWeight: 800, color: "#d4af37" }}>
+      {vbEdit?.campo === campo ? (
+        <input data-testid={`vb-${campo}-input`} autoFocus value={vbEdit.valor}
+          onChange={e => setVbEdit({ ...vbEdit, valor: e.target.value })}
+          onBlur={guardarValorBase}
+          onKeyDown={e => { if (e.key === "Enter") guardarValorBase(); if (e.key === "Escape") setVbEdit(null); }}
+          style={{ width: 50, background: "#0f172a", color: "#e2e8f0", border: "1px solid #3b82f6", borderRadius: 4, padding: "1px 4px", fontSize: "0.62rem" }} />
+      ) : `${etiqueta}: ${Number(cbrModal?.valores_base?.[campo] ?? 0).toLocaleString("es-CL")} UF`}
+    </span>
+  );
+
   const abrirInmobiliarias = async () => {
     setInmoModal({ loading: true });
     try {
-      const r = await axios.get(`${API}/api/supercarpeta/inmobiliarias`);
-      setInmoModal({ loading: false, inmobiliarias: r.data.inmobiliarias || [], nueva: { nombre: "", encargado: "", email: "" } });
-    } catch (e) { setInmoModal(null); window.alert(e.response?.data?.detail || "Error al cargar inmobiliarias"); }
+      const [rc, rg] = await Promise.all([
+        axios.get(`${API}/api/supercarpeta/contactos-carta`),
+        axios.get(`${API}/api/supercarpeta/cc-globales`)]);
+      setInmoModal({ loading: false, contactos: rc.data.contactos || [],
+        detectadas: rc.data.inmobiliarias_detectadas || [], cc: rg.data.lista || [],
+        nuevo: { inmobiliaria: "", proyecto: "", contacto: "", email: "" },
+        nuevoCc: { nombre: "", email: "" } });
+    } catch (e) { setInmoModal(null); window.alert(e.response?.data?.detail || "Error al cargar contactos"); }
   };
-  const guardarInmobiliaria = async (inm) => {
+  const guardarContacto = async (c) => {
     try {
-      await axios.post(`${API}/api/supercarpeta/inmobiliarias`, {
-        nombre: inm.nombre, encargado: inm.encargado, email: inm.email });
+      await axios.post(`${API}/api/supercarpeta/contactos-carta`, c);
       await abrirInmobiliarias();
-    } catch (e) { window.alert(e.response?.data?.detail || "Error al guardar la inmobiliaria"); }
+    } catch (e) { window.alert(e.response?.data?.detail || "Error al guardar el contacto"); }
   };
-  const editarInmo = (i, campo, valor) => setInmoModal(m => ({
-    ...m, inmobiliarias: m.inmobiliarias.map((x, j) => j === i ? { ...x, [campo]: valor } : x) }));
+  const editarContacto = (i, campo, valor) => setInmoModal(m => ({
+    ...m, contactos: m.contactos.map((x, j) => j === i ? { ...x, [campo]: valor } : x) }));
+  const guardarCc = async (x) => {
+    try {
+      await axios.post(`${API}/api/supercarpeta/cc-globales`, x);
+      await abrirInmobiliarias();
+    } catch (e) { window.alert(e.response?.data?.detail || "Error al guardar el destinatario"); }
+  };
+  const editarCc = (i, campo, valor) => setInmoModal(m => ({
+    ...m, cc: m.cc.map((x, j) => j === i ? { ...x, [campo]: valor } : x) }));
 
   const abrirSolicitud = async (c) => {
     setSolicitudModal({ loading: true, fid: c.id });
@@ -369,10 +406,11 @@ export default function SupercarpetaModule() {
     const m = solicitudModal;
     setSolicitudModal({ ...m, enviando: true });
     try {
-      await axios.post(`${API}/api/supercarpeta/solicitud-doc/${m.fid}/enviar`, {
-        para: m.para, asunto: m.asunto, cuerpo: m.cuerpo });
+      const r = await axios.post(`${API}/api/supercarpeta/solicitud-doc/${m.fid}/enviar`, {
+        para: m.para, asunto: m.asunto, cuerpo: m.cuerpo,
+        rut: m.rut, proyecto: m.proyecto, resolucion_serviu: m.resolucion_serviu });
       setSolicitudModal(null);
-      window.alert(`✅ Solicitud enviada a ${m.para} — Carta Oferta y Resolución Serviu quedan "Solicitada"`);
+      window.alert(`✅ Solicitud enviada a ${m.para} (CC: ${(r.data.cc || []).join(", ") || "—"}) — Carta Oferta y Resolución Serviu quedan "Solicitada"`);
       recargar();
     } catch (e) {
       setSolicitudModal({ ...m, enviando: false });
@@ -708,11 +746,15 @@ export default function SupercarpetaModule() {
                       <button data-testid={`ver-estudio-${c.id}`} onClick={() => abrir(c.id, c.cliente, c.informes.estudio)} style={btnPdf}>📄 Ver PDF</button>}
                   </> })}
                 {celdaEstado(c, "serviu", c.serviu, { naSinSubsidio: true })}
-                {celdaEstado(c, "carta_oferta", c.carta_oferta, { extra:
+                {celdaEstado(c, "carta_oferta", c.carta_oferta, { extra: (<>
+                  <span data-testid={`docs-co-rs-${c.id}`} title={c.docs_co_rs?.detalle || ""}
+                    style={{ fontSize: "0.7rem", display: "block", textAlign: "center" }}>
+                    {c.docs_co_rs?.icono || ""}</span>
                   <button data-testid={`solicitar-co-rs-${c.id}`} onClick={() => abrirSolicitud(c)}
-                    title="Pedir por correo la Carta Oferta y la Resolución Serviu a la inmobiliaria (vista previa antes de enviar)"
+                    title="Pedir por correo la Carta Oferta y la Resolución Serviu (vista previa antes de enviar, CC automática a Victoria y Daniela)"
                     style={{ ...btnPdf, background: "rgba(96,165,250,0.15)", border: "1px solid rgba(96,165,250,0.6)",
-                      color: "#60a5fa", width: "100%" }}>📨 Pedir CO+RS</button> })}
+                      color: "#60a5fa", width: "100%" }}>📨 Pedir CO+RS</button>
+                </>) })}
                 {celdaEstado(c, "promesa", c.promesa, { naSinSubsidio: true })}
                 {celdaEstado(c, "set_credito", SET_LABEL[c.set_credito?.estado] || c.set_credito?.estado, { extra:
                     c.set_credito?.fecha ? <div style={{ color: "#cbd5e1", fontSize: "0.55rem" }}>{c.set_credito.fecha.slice(0, 10)}</div> : null })}
@@ -812,6 +854,16 @@ export default function SupercarpetaModule() {
                   {cbrModal.estado === "completado" ? ` · ${cbrModal.encontrados}/${cbrModal.total} encontrados · ${cbrModal.correos_revisados ?? 0} correos revisados` : ""}
                 </span>
               </div>
+              {cbrModal.valores_base && (
+                <div data-testid="valores-base" style={{ marginTop: 8, padding: "0.45rem 0.7rem", borderRadius: 8,
+                  background: "rgba(212,175,55,0.08)", border: "1px solid rgba(212,175,55,0.3)",
+                  fontSize: "0.62rem", color: "#94a3b8", display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+                  <b style={{ color: "#d4af37" }}>⚙ Valores Base Operacionales</b>
+                  {valorBaseSpan("tasacion", "Tasación")}
+                  {valorBaseSpan("est_titulos", "Estudio de Títulos")}
+                  <span style={{ fontSize: "0.56rem" }}>se precargan en clientes sin dato · los valores manuales no se tocan</span>
+                </div>
+              )}
               {(cbrModal.resultados || []).length > 0 && (
                 <table data-testid="cbr-tabla" style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.64rem", marginTop: 12, color: "#e2e8f0" }}>
                   <thead>
@@ -910,57 +962,97 @@ export default function SupercarpetaModule() {
 
       {inmoModal && (
         <div data-testid="inmobiliarias-modal" onClick={() => setInmoModal(null)} style={modalBg}>
-          <div onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 760, maxHeight: "84vh", overflowY: "auto" }}>
-            <h4 style={{ margin: 0, color: "#d4af37", fontSize: "0.9rem" }}>🏢 Inmobiliarias — encargado y correo de contacto</h4>
+          <div onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 940, maxHeight: "86vh", overflowY: "auto" }}>
+            <h4 style={{ margin: 0, color: "#d4af37", fontSize: "0.9rem" }}>🏢 Contactos Carta Oferta — por inmobiliaria + proyecto</h4>
             <p style={{ color: "#94a3b8", fontSize: "0.62rem", margin: "6px 0 0" }}>
-              DashAI detecta las inmobiliarias desde los clientes de la Bóveda. Registra el encargado y su correo:
-              a él se le pedirá la Carta Oferta y la Resolución Serviu con el botón 📨 de cada cliente.
+              Cada carta oferta va al contacto de la combinación <b>inmobiliaria + proyecto</b>. Proyecto vacío = contacto
+              general (aplica cuando no hay uno específico). Nada se elimina: solo se desactiva.
+              Detectadas: {(inmoModal.detectadas || []).join(", ") || "—"}
             </p>
             {inmoModal.loading ? <p style={{ color: "#94a3b8", fontSize: "0.7rem" }}>Cargando…</p> : (<>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.66rem", marginTop: 12, color: "#e2e8f0" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.64rem", marginTop: 12, color: "#e2e8f0" }}>
                 <thead>
                   <tr style={{ color: "#d4af37", textTransform: "uppercase", fontSize: "0.56rem", letterSpacing: 1 }}>
-                    {["Inmobiliaria", "Encargado", "Correo del encargado", "", ""].map((h, j) =>
+                    {["Inmobiliaria / Corredor", "Proyecto (vacío = general)", "Contacto", "Correo", "Activo", ""].map((h, j) =>
                       <th key={j} style={{ textAlign: "left", padding: "6px 8px", borderBottom: "1px solid rgba(212,175,55,0.4)" }}>{h}</th>)}
                   </tr>
                 </thead>
                 <tbody>
-                  {(inmoModal.inmobiliarias || []).map((inm, i) => (
-                    <tr key={inm.nombre} data-testid={`inmo-fila-${i}`} style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-                      <td style={{ padding: "6px 8px", fontWeight: 800 }}>{inm.nombre}
-                        {inm.detectada && <span title="Detectada automáticamente desde los clientes" style={{ marginLeft: 5, fontSize: "0.54rem", color: "#4ade80" }}>● auto</span>}</td>
+                  {(inmoModal.contactos || []).map((c, i) => (
+                    <tr key={c.id} data-testid={`contacto-fila-${i}`} style={{ borderBottom: "1px solid rgba(255,255,255,0.08)", opacity: c.activo === false ? 0.45 : 1 }}>
+                      {["inmobiliaria", "proyecto", "contacto", "email"].map(campo => (
+                        <td key={campo} style={{ padding: "4px 6px" }}>
+                          <input data-testid={`contacto-${campo}-${i}`} value={c[campo] || ""}
+                            onChange={e => editarContacto(i, campo, e.target.value)}
+                            placeholder={campo === "proyecto" ? "(general)" : campo}
+                            style={{ ...inputStyle, marginTop: 0, padding: "0.32rem 0.5rem", fontSize: "0.62rem" }} /></td>
+                      ))}
+                      <td style={{ padding: "4px 6px", textAlign: "center" }}>
+                        <button data-testid={`contacto-activo-${i}`}
+                          onClick={() => guardarContacto({ ...c, activo: c.activo === false })}
+                          title={c.activo === false ? "Reactivar" : "Desactivar (no se elimina)"}
+                          style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.9rem" }}>
+                          {c.activo === false ? "🚫" : "🟢"}</button></td>
                       <td style={{ padding: "4px 6px" }}>
-                        <input data-testid={`inmo-encargado-${i}`} value={inm.encargado}
-                          onChange={e => editarInmo(i, "encargado", e.target.value)} placeholder="Nombre encargado"
-                          style={{ ...inputStyle, marginTop: 0, padding: "0.35rem 0.5rem", fontSize: "0.64rem" }} /></td>
-                      <td style={{ padding: "4px 6px" }}>
-                        <input data-testid={`inmo-email-${i}`} value={inm.email}
-                          onChange={e => editarInmo(i, "email", e.target.value)} placeholder="correo@inmobiliaria.cl"
-                          style={{ ...inputStyle, marginTop: 0, padding: "0.35rem 0.5rem", fontSize: "0.64rem" }} /></td>
-                      <td style={{ padding: "4px 6px" }}>
-                        <button data-testid={`inmo-guardar-${i}`} onClick={() => guardarInmobiliaria(inm)}
-                          className="maserati-btn" style={{ minHeight: 30, fontSize: "0.6rem" }}>💾 Guardar</button></td>
-                      <td style={{ padding: "4px 6px", fontSize: "0.7rem" }}>
-                        {inm.configurada ? <span title="Lista para solicitudes" style={{ color: "#4ade80" }}>✅</span>
-                          : <span title="Falta el correo del encargado" style={{ color: "#facc15" }}>⚠️</span>}</td>
+                        <button data-testid={`contacto-guardar-${i}`} onClick={() => guardarContacto(c)}
+                          className="maserati-btn" style={{ minHeight: 28, fontSize: "0.58rem" }}>💾</button></td>
                     </tr>
                   ))}
-                  <tr data-testid="inmo-nueva">
-                    <td style={{ padding: "4px 6px" }}>
-                      <input data-testid="inmo-nueva-nombre" value={inmoModal.nueva?.nombre || ""} placeholder="Nueva inmobiliaria"
-                        onChange={e => setInmoModal(m => ({ ...m, nueva: { ...m.nueva, nombre: e.target.value } }))}
-                        style={{ ...inputStyle, marginTop: 0, padding: "0.35rem 0.5rem", fontSize: "0.64rem" }} /></td>
-                    <td style={{ padding: "4px 6px" }}>
-                      <input data-testid="inmo-nueva-encargado" value={inmoModal.nueva?.encargado || ""} placeholder="Encargado"
-                        onChange={e => setInmoModal(m => ({ ...m, nueva: { ...m.nueva, encargado: e.target.value } }))}
-                        style={{ ...inputStyle, marginTop: 0, padding: "0.35rem 0.5rem", fontSize: "0.64rem" }} /></td>
-                    <td style={{ padding: "4px 6px" }}>
-                      <input data-testid="inmo-nueva-email" value={inmoModal.nueva?.email || ""} placeholder="correo@…"
-                        onChange={e => setInmoModal(m => ({ ...m, nueva: { ...m.nueva, email: e.target.value } }))}
-                        style={{ ...inputStyle, marginTop: 0, padding: "0.35rem 0.5rem", fontSize: "0.64rem" }} /></td>
+                  <tr data-testid="contacto-nuevo">
+                    {["inmobiliaria", "proyecto", "contacto", "email"].map(campo => (
+                      <td key={campo} style={{ padding: "4px 6px" }}>
+                        <input data-testid={`contacto-nuevo-${campo}`} value={inmoModal.nuevo?.[campo] || ""}
+                          placeholder={campo === "inmobiliaria" ? "Nueva inmobiliaria/corredor" : campo === "proyecto" ? "(general)" : campo}
+                          onChange={e => setInmoModal(m => ({ ...m, nuevo: { ...m.nuevo, [campo]: e.target.value } }))}
+                          style={{ ...inputStyle, marginTop: 0, padding: "0.32rem 0.5rem", fontSize: "0.62rem" }} /></td>
+                    ))}
                     <td colSpan={2} style={{ padding: "4px 6px" }}>
-                      <button data-testid="inmo-nueva-guardar" onClick={() => inmoModal.nueva?.nombre && guardarInmobiliaria(inmoModal.nueva)}
-                        className="maserati-btn" style={{ minHeight: 30, fontSize: "0.6rem" }}>➕ Agregar</button></td>
+                      <button data-testid="contacto-nuevo-guardar"
+                        onClick={() => inmoModal.nuevo?.inmobiliaria && guardarContacto(inmoModal.nuevo)}
+                        className="maserati-btn" style={{ minHeight: 28, fontSize: "0.58rem" }}>➕ Agregar</button></td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <h4 style={{ margin: "18px 0 0", color: "#d4af37", fontSize: "0.78rem" }}>📋 Destinatarios Globales — CC obligatoria en todos los envíos</h4>
+              <p style={{ color: "#94a3b8", fontSize: "0.6rem", margin: "4px 0 0" }}>
+                Van con copia en cada correo del sistema. No se eliminan: solo se desactivan.</p>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.64rem", marginTop: 8, color: "#e2e8f0" }}>
+                <tbody>
+                  {(inmoModal.cc || []).map((x, i) => (
+                    <tr key={i} data-testid={`cc-fila-${i}`} style={{ borderBottom: "1px solid rgba(255,255,255,0.08)", opacity: x.activo === false ? 0.45 : 1 }}>
+                      <td style={{ padding: "4px 6px" }}>
+                        <input data-testid={`cc-nombre-${i}`} value={x.nombre || ""}
+                          onChange={e => editarCc(i, "nombre", e.target.value)}
+                          style={{ ...inputStyle, marginTop: 0, padding: "0.32rem 0.5rem", fontSize: "0.62rem" }} /></td>
+                      <td style={{ padding: "4px 6px" }}>
+                        <input data-testid={`cc-email-${i}`} value={x.email || ""}
+                          onChange={e => editarCc(i, "email", e.target.value)}
+                          style={{ ...inputStyle, marginTop: 0, padding: "0.32rem 0.5rem", fontSize: "0.62rem" }} /></td>
+                      <td style={{ padding: "4px 6px", textAlign: "center" }}>
+                        <button data-testid={`cc-activo-${i}`}
+                          onClick={() => guardarCc({ ...x, activo: x.activo === false })}
+                          title={x.activo === false ? "Reactivar" : "Desactivar (no se elimina)"}
+                          style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.9rem" }}>
+                          {x.activo === false ? "🚫" : "🟢"}</button></td>
+                      <td style={{ padding: "4px 6px" }}>
+                        <button data-testid={`cc-guardar-${i}`} onClick={() => guardarCc(x)}
+                          className="maserati-btn" style={{ minHeight: 28, fontSize: "0.58rem" }}>💾</button></td>
+                    </tr>
+                  ))}
+                  <tr data-testid="cc-nuevo">
+                    <td style={{ padding: "4px 6px" }}>
+                      <input data-testid="cc-nuevo-nombre" value={inmoModal.nuevoCc?.nombre || ""} placeholder="Nuevo destinatario"
+                        onChange={e => setInmoModal(m => ({ ...m, nuevoCc: { ...m.nuevoCc, nombre: e.target.value } }))}
+                        style={{ ...inputStyle, marginTop: 0, padding: "0.32rem 0.5rem", fontSize: "0.62rem" }} /></td>
+                    <td style={{ padding: "4px 6px" }}>
+                      <input data-testid="cc-nuevo-email" value={inmoModal.nuevoCc?.email || ""} placeholder="correo@…"
+                        onChange={e => setInmoModal(m => ({ ...m, nuevoCc: { ...m.nuevoCc, email: e.target.value } }))}
+                        style={{ ...inputStyle, marginTop: 0, padding: "0.32rem 0.5rem", fontSize: "0.62rem" }} /></td>
+                    <td colSpan={2} style={{ padding: "4px 6px" }}>
+                      <button data-testid="cc-nuevo-guardar"
+                        onClick={() => inmoModal.nuevoCc?.nombre && guardarCc(inmoModal.nuevoCc)}
+                        className="maserati-btn" style={{ minHeight: 28, fontSize: "0.58rem" }}>➕ Agregar</button></td>
                   </tr>
                 </tbody>
               </table>
@@ -984,15 +1076,46 @@ export default function SupercarpetaModule() {
               {!solicitudModal.configurada && (
                 <div data-testid="solicitud-sin-encargado" style={{ marginTop: 8, padding: "0.6rem 0.8rem",
                   background: "rgba(250,204,21,0.10)", borderLeft: "3px solid #facc15", borderRadius: 8 }}>
-                  <b style={{ color: "#facc15", fontSize: "0.66rem" }}>⚠️ Esta inmobiliaria no tiene correo de encargado configurado.</b>
+                  <b style={{ color: "#facc15", fontSize: "0.66rem" }}>⚠️ No hay contacto configurado para esta inmobiliaria/proyecto.</b>
                   <button onClick={() => { setSolicitudModal(null); abrirInmobiliarias(); }}
                     className="maserati-btn" style={{ marginLeft: 8, minHeight: 26, fontSize: "0.58rem" }}>🏢 Configurar ahora</button>
                 </div>
               )}
+              {(solicitudModal.faltantes || []).length > 0 && (
+                <div data-testid="solicitud-faltantes" style={{ marginTop: 8, padding: "0.6rem 0.8rem",
+                  background: "rgba(239,68,68,0.10)", borderLeft: "3px solid #ef4444", borderRadius: 8 }}>
+                  <b style={{ color: "#f87171", fontSize: "0.66rem" }}>
+                    ⛔ Envío bloqueado — falta: {(solicitudModal.faltantes || []).join(", ")}. Complete los campos abajo.</b>
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ color: "#94a3b8", fontSize: "0.58rem" }}>RUT DEL CLIENTE *</label>
+                  <input data-testid="solicitud-rut" value={solicitudModal.rut || ""}
+                    onChange={e => setSolicitudModal(m => ({ ...m, rut: e.target.value }))}
+                    style={{ ...inputStyle, marginTop: 3 }} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ color: "#94a3b8", fontSize: "0.58rem" }}>PROYECTO *</label>
+                  <input data-testid="solicitud-proyecto" value={solicitudModal.proyecto || ""}
+                    onChange={e => setSolicitudModal(m => ({ ...m, proyecto: e.target.value }))}
+                    style={{ ...inputStyle, marginTop: 3 }} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ color: "#94a3b8", fontSize: "0.58rem" }}>RESOLUCIÓN SERVIU *</label>
+                  <input data-testid="solicitud-resolucion" value={solicitudModal.resolucion_serviu || ""}
+                    onChange={e => setSolicitudModal(m => ({ ...m, resolucion_serviu: e.target.value }))}
+                    placeholder="N° resolución" style={{ ...inputStyle, marginTop: 3 }} />
+                </div>
+              </div>
               <label style={{ color: "#94a3b8", fontSize: "0.58rem", display: "block", marginTop: 10 }}>PARA (correo del encargado)</label>
               <input data-testid="solicitud-para" value={solicitudModal.para || ""}
                 onChange={e => setSolicitudModal(m => ({ ...m, para: e.target.value }))}
                 placeholder="correo@inmobiliaria.cl" style={{ ...inputStyle, marginTop: 3 }} />
+              <div data-testid="solicitud-cc" style={{ marginTop: 6, fontSize: "0.6rem", color: "#94a3b8" }}>
+                CC obligatoria: <b style={{ color: "#60a5fa" }}>{(solicitudModal.cc || []).join(", ") || "—"}</b>
+                {" "}· firma "Central Mutuos" incluida al pie
+              </div>
               <label style={{ color: "#94a3b8", fontSize: "0.58rem", display: "block", marginTop: 8 }}>ASUNTO</label>
               <input data-testid="solicitud-asunto" value={solicitudModal.asunto || ""}
                 onChange={e => setSolicitudModal(m => ({ ...m, asunto: e.target.value }))}
@@ -1003,9 +1126,11 @@ export default function SupercarpetaModule() {
                 style={{ ...inputStyle, marginTop: 3, resize: "vertical", fontFamily: "inherit" }} />
               <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
                 <button data-testid="solicitud-enviar" onClick={enviarSolicitud}
-                  disabled={solicitudModal.enviando || !(solicitudModal.para || "").includes("@")}
+                  disabled={solicitudModal.enviando || !(solicitudModal.para || "").includes("@")
+                    || !solicitudModal.rut || !solicitudModal.proyecto || !solicitudModal.resolucion_serviu}
                   className="maserati-btn" style={{ minHeight: 36,
-                    opacity: (solicitudModal.para || "").includes("@") ? 1 : 0.5 }}>
+                    opacity: ((solicitudModal.para || "").includes("@") && solicitudModal.rut
+                      && solicitudModal.proyecto && solicitudModal.resolucion_serviu) ? 1 : 0.5 }}>
                   {solicitudModal.enviando ? "✉️ Enviando…" : "✉️ Confirmar y Enviar"}</button>
                 <button data-testid="solicitud-cancelar" onClick={() => setSolicitudModal(null)}
                   className="maserati-btn" style={{ minHeight: 36 }}>Cancelar</button>
