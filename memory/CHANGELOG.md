@@ -1336,3 +1336,4 @@ Constitución VERSION 19 (nuevas reglas #55, #56, #57).
 - 2026-06: Comisión WORD y URBANIZATE = 0,5% (regla del dueño) — testeado 4/4 PASS
 - 2026-06: Rodrigo Salazar (BOETCH/Fuchslocker) = fuchslocher@boetsch.cl — confirmado por el dueño, cargado en contactos_carta
 - 2026-06: Proyectos confirmados por Gerencia: Escalona → UVAS Y EL VIENTO; C. Salgado → ALTO PARQUE (folder + ADN). Lista maestra sin pendientes.
+- 2026-06: Testing agent iteración 36: backend 13/13 PASS, frontend 100% (flujo documentos e2e, panel fuentes, 409, confirmación, móvil). Hallazgo de datos: KANELA IBAÑEZ duplicada (RUT 20.219.355-2 vs 25790773) — pendiente decisión del dueño.

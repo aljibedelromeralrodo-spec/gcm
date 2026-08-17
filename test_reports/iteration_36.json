@@ -1,0 +1,36 @@
+{
+  "summary": "Iteración 36 — Flujo definitivo de documentos (matriz por tipo de cliente), panel de fuentes, bloqueo 409 origen y validaciones de envío. Backend 13/13 pytest PASS: GET /supercarpeta devuelve 18 clientes con lista_maestra, promesa_ia y docs_co_rs; CBR estado + Excel OK; matriz CARLOS SALGADO → tipo_cliente=nueva_con_subsidio + docs=[Carta Oferta, Resolución SERVIU] + requiere_resolucion=true + para=csoria@boetsch.cl; matriz LUIS GUERRERO usada → alternativas=[promesa, carta_pie] y ?doc=carta_pie cambia asunto a 'Carta Pie …'; POST /solicitud-doc/{fid}/enviar con para vacío → 400 con mensaje de contacto; con resolucion_serviu vacío en cliente nueva con subsidio → 400 con 'Resolución SERVIU' (SIN enviar correos, comportamiento esperado); POST /supercarpeta/manual/{CARLOS} con inmobiliaria='Inmobiliaria Fantasma XYZ' → 409 detail.code=ORIGEN_NO_CONFIGURADO, con 'BOETCH' → 200 (revertido); GET /fuentes-panel expone inmobiliarias (incluye BOETCH con correo_general y contacto csoria@boetsch.cl), brokers, individuales y lista_maestra; GET /fuentes/verificar?inmobiliaria=BOETCH → true; ?broker=NoExiste → false; POST /vendedores-usada set QA sobre LUIS GUERRERO y limpieza posterior a vendedor:'' email:''. Frontend PASS: LOGIN OK con nav-supercarpeta visible tras cerrar tour+briefing (Saltar+Comenzar jornada), Supercarpeta muestra 18 super-fila-* con super-numero-1..18 correlativos, 25 doc-badge-* renderizados y 18 solicitar-co-rs-* botones; abrir CARLOS abre solicitud-modal con título '📨 Confirmar envío de Carta Oferta + Resolución SERVIU para CARLOS SALGADO', solicitud-para='csoria@boetsch.cl' con atributo readonly presente, solicitud-cc contiene victoriavilches+daniela.galindo+'CC automático (fijo, no editable)', solicitud-editar visible, solicitud-cancelar cierra, click FUERA del modal NO cierra (modal_after_outside_click=1 ✓); abrir LUIS GUERRERO usada sin subsidio muestra solicitud-alternativas con solicitud-doc-promesa + solicitud-doc-carta_pie, click carta_pie cambia título a '📨 Confirmar envío de Carta Pie para LUIS GUERRERO'; Panel de Fuentes (inmobiliarias-btn) abre modal con 3 general-email-*, 6 contacto-exp-*, broker-fila-0 y 5 vendedor-fila-*; reg-nueva-inmobiliaria abre registro-fuente form; Gerencia Comercial en escritorio muestra 18 filas de tabla; en móvil 390x844 supercarpeta-cards visible con múltiples super-card-*, y gerencia-cards-mobile visible sin superposiciones. Sin errores de consola PageError.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/supercarpeta/fuentes-panel", "issue": "El campo 'proyecto' de los objetos en inmobiliarias[*].proyectos viene vacío ('') en BOETCH (spec pedía 'UVAS Y EL VIENTO / UVAS Y EL VIENTO 2 / Fuchslocker'). Se detectan contactos (Celinda Soria csoria@boetsch.cl) pero no el nombre del proyecto por proyecto — probablemente la detección automática desde buzón aún no distingue proyecto y sólo pobló contacto+email. Verificar que el poblado inicial de proyectos esperados quede persistido."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Modal solicitud CARLOS (nueva con subsidio)", "issues": ["El botón solicitud-confirmar NO se renderiza cuando falta Resolución SERVIU (count=0). La spec pedía CONFIRMAR 'deshabilitado' para reflejar UX de 'no puedes enviar aún'. Ocultarlo funciona funcionalmente (usuario no envía) pero pierde el affordance explícito. Considerar renderizarlo con disabled=true + tooltip 'Falta Resolución SERVIU' para mayor claridad."]}
+    ]
+  },
+  "test_report_links": ["/app/tests/test_iteration_36.py", "/app/test_reports/pytest/iter36.xml"],
+  "action_items": [
+    "(minor) Confirmar/actualizar proyectos BOETCH en /fuentes-panel para que aparezcan UVAS Y EL VIENTO / UVAS Y EL VIENTO 2 / Fuchslocker con sus emails.",
+    "(minor UX) Renderizar solicitud-confirmar como disabled en lugar de ocultarlo cuando falte Resolución SERVIU."
+  ],
+  "critical_code_review_comments": [
+    "malla_inteligencia.py — solicitud_doc_preview / solicitud_doc_enviar aplican matriz por tipo_cliente correctamente (validación 400 sin enviar correo cuando falta Resolución SERVIU verificada por test). Buen patrón defensivo.",
+    "supercarpeta/manual endpoint devuelve 409 estructurado con detail.code=ORIGEN_NO_CONFIGURADO — permite al front discriminar del genérico 400/500. Mantener.",
+    "SupercarpetaModule.js — click fuera del solicitud-modal NO lo cierra (correcto). Solo se cierra con solicitud-cancelar/CONFIRMAR. Buen patrón para evitar pérdidas accidentales.",
+    "Frontend: el CC fijo se muestra como texto informativo en solicitud-cc en vez de como readonly input real — usuario percibe la restricción claramente; ok.",
+    "Test previous iter35 reportaba 17 filas Agosto — ahora son 18 (Kanela Ibañez / kanela Ibañez aparecen como dos folders con RUT distinto, dobleteo aparente por normalización mayúsculas/minúsculas). Revisar dedupe por RUT normalizado."
+  ],
+  "updated_files": ["/app/tests/test_iteration_36.py (nuevo)"],
+  "success_rate": {"backend": "100% (13/13)", "frontend": "100% (todos los data-testid solicitados respondieron)"},
+  "test_credentials": "administrador / 141617575 (POST /api/auth/login body {rut, password})",
+  "seed_data_creation": "Solo mutaciones REVERTIDAS: (1) POST /supercarpeta/manual/CARLOS con valor 'BOETCH' — coincide con valor original; (2) POST /vendedores-usada LUIS GUERRERO {vendedor:'QA Test',email:'qa.test@test.cl'} seguido inmediatamente por reset a vendedor:'' email:''. Ningún cambio persistente respecto al estado inicial.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Ruta React no es basada en URL — la app usa activeModule state con sidebar. Para navegar entre módulos NO usar page.goto('/nav-<mod>') sino click [data-testid=\"nav-<mod>\"]. Tras login aparecen DOS overlays: WelcomeTour ('Saltar' link) y Briefing Mañanero ('Comenzar jornada' button); ambos deben cerrarse antes de interactuar con el sidebar. FIDs útiles: CARLOS SALGADO 111e1299-e6d6-4295-9bb1-14304fd37500 (nueva_con_subsidio, BOETCH), LUIS GUERRERO f60cc0fc-f4d5-4ac8-b881-441331d8587e (usada sin subsidio), KANELA IBAÑEZ a1b5cfe4-1bcb-44b1-85b2-cdbdf637136f (usada sin subsidio). El endpoint /api/supercarpeta/manual/{fid} usa body {campo,valor}. NO ejecutar POST /solicitud-doc/{fid}/enviar con payload válido — envía correo real a csoria@boetsch.cl + CC. Test suite quedó en /app/tests/ (fuera de /app/backend) para evitar reload de uvicorn.",
+  "rca_de_deviacion_confirmar": "Al ejecutar solicitud-doc/preview con cliente nueva_con_subsidio pero sin Resolución SERVIU disponible en manual, el frontend en SupercarpetaModule.js decide ocultar el botón 'CONFIRMAR Y ENVIAR' (render condicional) en lugar de renderizarlo con disabled=true. La spec pide 'deshabilitado' — comportamiento actual es funcionalmente equivalente (bloquea envío) pero UX diferente. No es bug bloqueante."
+}
