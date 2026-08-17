@@ -3292,7 +3292,7 @@ def _extraer_cbr_pdf(pdf_bytes):
 
 # COMISIÓN (USO INTERNO — SOLO GERENCIA): % según broker/inmobiliaria
 _COMISION_PCT = {"boetsch": 1.0, "boetch": 1.0, "ecomac": 1.0, "poch": 1.0,
-                 "comod": 0.8, "usada": 0.5}
+                 "comod": 0.8, "usada": 0.5, "word": 0.5, "urbanizate": 0.5}
 
 
 def _comision_cliente(fd, monto_uf, con_subsidio=None):

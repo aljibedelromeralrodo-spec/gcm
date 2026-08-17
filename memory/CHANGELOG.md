@@ -1333,3 +1333,5 @@ Constitución VERSION 19 (nuevas reglas #55, #56, #57).
   Quintero mantiene correo de prueba del usuario (ethangerardobarr@gmail.com).
 - TESTS: 6/6 matriz+reenvío PASS · auto-envío 2/2 PASS (con CBR envía, sin CBR alerta, no duplica)
   · 409 verificado · previews por tipo verificados · screenshots UI OK.
+- 2026-06: Comisión WORD y URBANIZATE = 0,5% (regla del dueño) — testeado 4/4 PASS
+- 2026-06: Rodrigo Salazar (BOETCH/Fuchslocker) = fuchslocher@boetsch.cl — confirmado por el dueño, cargado en contactos_carta
