@@ -84,6 +84,13 @@ const TarjetaCliente = ({ c, idx, recargar, abrirPanel, abrirSolicitud, abrirEst
   const [notaForm, setNotaForm] = useState(null);
   const [hilo, setHilo] = useState(null);
   const [guardando, setGuardando] = useState(false);
+  const abrirAdjunto = async (ruta) => {
+    try {
+      const r = await axios.get(`${API}/api/supercarpeta/archivo/${c.id}`,
+        { params: { ruta }, responseType: "blob" });
+      window.open(URL.createObjectURL(new Blob([r.data], { type: "application/pdf" })), "_blank");
+    } catch { window.alert("PDF no disponible"); }
+  };
   const verHilo = async () => {
     if (hilo) { setHilo(null); return; }
     setHilo({ loading: true });
@@ -328,6 +335,19 @@ const TarjetaCliente = ({ c, idx, recargar, abrirPanel, abrirSolicitud, abrirEst
                         <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 1 }}>
                           {e.tipo === "enviado" ? "Para" : "De"}: {e.con || "—"}{e.detalle && e.asunto ? ` · ${e.detalle}` : ""} · {fFecha(e.en)}
                         </div>
+                        {(e.adjuntos || []).length > 0 && (
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 4 }}>
+                            {e.adjuntos.map((a) => (
+                              <button key={a} data-testid={`hilo-adjunto-${c.id}`}
+                                onClick={() => abrirAdjunto(a)} title={a}
+                                style={{ background: "rgba(212,175,55,0.12)", border: "1px solid rgba(212,175,55,0.5)",
+                                  color: "#d4af37", borderRadius: 6, padding: "2px 8px", fontSize: 12,
+                                  fontWeight: 700, cursor: "pointer", maxWidth: 260, overflow: "hidden",
+                                  textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                📄 {a.split("/").pop()}</button>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}

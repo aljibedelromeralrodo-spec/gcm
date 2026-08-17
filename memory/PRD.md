@@ -991,3 +991,15 @@ Constitución v16 (Reglas #34-#38, #41, #43, #49, #52, #53, #54). Módulo Broker
   hito, fecha/hora, marca 🔴 FALLIDO si aplica, scroll interno 320px.
 - Verificado: API (Salgado 1 enviado; Catalina 12 recibidos de Abogados Estudio de Título)
   + screenshot del timeline en la tarjeta OK.
+
+## Actualización 2026-06 (fork, 4n) — Hilo con Adjuntos
+- _archivar_adjuntos ahora devuelve las rutas archivadas (antes contador). Todos los puntos
+  del barrido (SETCRED/PROMESA/CARTA_OFERTA/CERT_SUBSIDIO/CARTA_PIE/TASACION/NOTARIA/ESTUDIO/
+  VENDEDOR/gmardones) guardan "adjuntos": [rutas] en el registro de hitos_externos →
+  vínculo 1 a 1 correo↔PDFs para correos nuevos.
+- Hilo endpoint: incluye adjuntos por evento + VÍNCULO RETROACTIVO (archivos ya archivados
+  sin vínculo se asignan al evento más reciente de su tipo por prefijo, sin duplicar).
+- Frontend: chips "📄 archivo.pdf" bajo cada correo recibido (hilo-adjunto-{id}) que abren
+  el PDF vía /api/supercarpeta/archivo/{fid}?ruta= (blob → nueva pestaña).
+- Verificado: Catalina 18 PDFs vinculados a su último "Informe Estudio de Títulos Recibido";
+  apertura del PDF responde 200.

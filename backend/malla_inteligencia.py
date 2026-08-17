@@ -527,7 +527,7 @@ async def _archivar_adjuntos(fd, email_id, prefijo, subdir="07_estudio_titulo"):
         atts = await asyncio.to_thread(mail.fetch_attachments_by_id, email_id)
         destino = fsvc.folder_dir(fd.get("nombre") or "") / subdir
         destino.mkdir(parents=True, exist_ok=True)
-        n = 0
+        rutas = []
         for a in atts or []:
             fn = a.get("filename") or ""
             if fn.lower().endswith(".pdf") and a.get("content_bytes"):
@@ -535,11 +535,11 @@ async def _archivar_adjuntos(fd, email_id, prefijo, subdir="07_estudio_titulo"):
                 (destino / nombre_f).write_bytes(a["content_bytes"])
                 await db.folders.update_one({"id": fd["id"]},
                     {"$addToSet": {"archivos": f"{subdir}/{nombre_f}"}})
-                n += 1
-        return n
+                rutas.append(f"{subdir}/{nombre_f}")
+        return rutas
     except Exception as e:
         logging.warning(f"malla archivar {fd.get('nombre')}: {e}")
-        return 0
+        return []
 
 
 async def _procesar_hito(correo, dom, info, direccion, por_rut, texto, email_id=None):
@@ -576,7 +576,9 @@ async def _procesar_hito(correo, dom, info, direccion, por_rut, texto, email_id=
     if dom == "gmardones" and direccion == "recibido":
         marcas["estudio_recibido_at"] = _now()
         if email_id:
-            await _archivar_adjuntos(fd, email_id, "ESTUDIO")
+            adjs_g = await _archivar_adjuntos(fd, email_id, "ESTUDIO")
+            if adjs_g:
+                await db.hitos_externos.update_one({"id": reg["id"]}, {"$set": {"adjuntos": adjs_g}})
     await db.folders.update_one({"id": fd["id"]}, {"$set": marcas})
     return "marcado"
 
@@ -631,13 +633,14 @@ async def malla_scan():
             clave = "vend-" + hashlib.sha256(_raw_v).hexdigest()
             _legacy_v = "vend-" + hashlib.md5(_raw_v, usedforsecurity=False).hexdigest()
             if not await db.hitos_externos.find_one({"clave": {"$in": [clave, _legacy_v]}}):
-                archivados = await _archivar_adjuntos(fd_v, e.get("id"), "VENDEDOR") if e.get("id") else 0
+                archivados = (await _archivar_adjuntos(fd_v, e.get("id"), "VENDEDOR")) if e.get("id") else []
                 await db.hitos_externos.insert_one({
                     "id": str(uuid.uuid4()), "clave": clave, "folder_id": fd_v["id"],
                     "cliente": fd_v.get("nombre"), "rut": fd_v.get("rut") or "",
                     "hito": "Documento de Vendedor Recibido", "fuente": (fd_v.get("vendedor_usada") or {}).get("nombre") or "Vendedor",
                     "dominio": "vendedor_usada", "panel": "victoria", "direccion": "recibido",
-                    "asunto": asunto[:180], "fecha": e.get("date", ""), "archivados": archivados,
+                    "asunto": asunto[:180], "fecha": e.get("date", ""), "archivados": len(archivados),
+                    "adjuntos": archivados,
                     "validado_rut": True, "tipo_operacion": "usada", "creado": _now()})
                 res["marcados"] += 1
         # 2) MOTOR DE REPAROS (DashAI): "reparo" en correos de los abogados
@@ -1146,6 +1149,7 @@ async def _auditar_lote(correos):
         _legacy_a = "aud-" + hashlib.md5(_raw_a, usedforsecurity=False).hexdigest()
         if await db.hitos_externos.find_one({"clave": {"$in": [clave, _legacy_a]}}):
             continue
+        adjs = []  # rutas de PDF archivados de este correo (para el Hilo del Cliente)
         if es_set:
             # P9 — SET DE CRÉDITO: 'Set Para la Firma' = pendiente; 'Set Firmado' exige
             # verificación de firmas reales dentro del PDF adjunto
@@ -1170,13 +1174,13 @@ async def _auditar_lote(correos):
                 "set_credito_estado": estado_set, "set_credito_asunto": asunto[:180],
                 "set_credito_evidencia": evidencia, "set_credito_at": e.get("date") or _now()}})
             if e.get("id"):
-                await _archivar_adjuntos(fd, e["id"], "SETCRED", subdir="99_otros")
+                adjs = await _archivar_adjuntos(fd, e["id"], "SETCRED", subdir="99_otros")
             hito_n, res_k = f"Set de Crédito: {estado_set} ({evidencia[:80]})", "sets_detectados"
         elif es_promesa:
             # VERIFICACIÓN DE FIRMA (IA): solo verde con evidencia de firma de alta confianza
             estado_p, evidencia_p = await _verificar_compromiso_ia(fd, e)
             if e.get("id"):
-                await _archivar_adjuntos(fd, e["id"], "PROMESA", subdir="99_otros")
+                adjs = await _archivar_adjuntos(fd, e["id"], "PROMESA", subdir="99_otros")
             hito_n = f"Promesa de Compraventa: {estado_p} ({evidencia_p[:80]})"
             res_k = "promesas_detectadas"
         elif es_carta_doc or es_cert_sub or es_carta_pie:
@@ -1184,7 +1188,7 @@ async def _auditar_lote(correos):
             hito_d = "carta_oferta" if es_carta_doc else "cert_subsidio" if es_cert_sub else "carta_pie"
             await _marcar_doc_llegada(fd, hito_d, e)
             if e.get("id"):
-                await _archivar_adjuntos(fd, e["id"], hito_d.upper(), subdir="99_otros")
+                adjs = await _archivar_adjuntos(fd, e["id"], hito_d.upper(), subdir="99_otros")
             hito_n = f"{_DOC_LABEL[hito_d]}: recibido — {_PEND_VERIF}"
             res_k = "docs_detectados"
         elif es_tasacion:
@@ -1199,7 +1203,7 @@ async def _auditar_lote(correos):
             except Exception:
                 pass
             if e.get("id"):
-                await _archivar_adjuntos(fd, e["id"], "TASACION", subdir="99_otros")
+                adjs = await _archivar_adjuntos(fd, e["id"], "TASACION", subdir="99_otros")
             hito_n, res_k = "Informe de Tasación Recibido", "tasaciones_detectadas"
         elif es_notaria:
             # RADAR ESCRITURACIÓN: envío a notaría / cesión / firma serie de créditos
@@ -1211,7 +1215,7 @@ async def _auditar_lote(correos):
                 marcas["fecha_firma_detectada"] = fecha_f
             await db.folders.update_one({"id": fd["id"]}, {"$set": marcas})
             if e.get("id"):
-                await _archivar_adjuntos(fd, e["id"], "NOTARIA", subdir="99_otros")
+                adjs = await _archivar_adjuntos(fd, e["id"], "NOTARIA", subdir="99_otros")
             hito_n, res_k = "Escritura enviada a Notaría", "estudios_detectados"
         else:
             marcas = {"estudio_recibido_at": e.get("date") or _now()}
@@ -1222,7 +1226,7 @@ async def _auditar_lote(correos):
                 res["reparos_transcritos"] += 1
             await db.folders.update_one({"id": fd["id"]}, {"$set": marcas})
             if e.get("id"):
-                await _archivar_adjuntos(fd, e["id"], "ESTUDIO")
+                adjs = await _archivar_adjuntos(fd, e["id"], "ESTUDIO")
                 # REGLA DE MINADO: si el PDF del estudio trae 'Observaciones'/'Reparos',
                 # el texto EXACTO se copia a la columna Detalle de Reparos (celda naranja)
                 try:
@@ -1257,7 +1261,7 @@ async def _auditar_lote(correos):
             "fuente": "Value Property" if es_tasacion else "Abogados (Estudio de Título)",
             "dominio": "auditoria_real", "direccion": "recibido", "asunto": asunto[:180],
             "fecha": e.get("date", ""), "validado_rut": metodo == "rut", "match": metodo,
-            "creado": _now()})
+            "adjuntos": adjs, "creado": _now()})
         res[res_k] += 1
         res["detalle"].append({"asunto": asunto[:100], "cliente": fd.get("nombre"),
                                "hito": hito_n, "match": metodo})
@@ -4380,8 +4384,30 @@ async def supercarpeta_hilo(fid: str, request: Request):
     async for h in db.hitos_externos.find({"folder_id": fid}):
         eventos.append({"tipo": "recibido", "en": h.get("creado") or h.get("fecha") or "",
                         "asunto": h.get("asunto") or "", "con": h.get("fuente") or h.get("dominio") or "",
-                        "detalle": h.get("hito") or "", "estado": "recibido"})
+                        "detalle": h.get("hito") or "", "estado": "recibido",
+                        "adjuntos": h.get("adjuntos") or []})
     eventos.sort(key=lambda e: e.get("en") or "", reverse=True)
+    # ADJUNTOS RETROACTIVOS: archivos ya archivados sin vínculo se muestran en el
+    # evento MÁS RECIENTE de su tipo (los nuevos correos quedan vinculados 1 a 1)
+    pref_map = [("estudio", ["07_estudio_titulo/ESTUDIO_"]), ("tasaci", ["99_otros/TASACION_"]),
+                ("set de crédito", ["99_otros/SETCRED_"]), ("promesa", ["99_otros/PROMESA_"]),
+                ("carta oferta", ["99_otros/CARTA_OFERTA_"]), ("notaría", ["99_otros/NOTARIA_"]),
+                ("vendedor", ["07_estudio_titulo/VENDEDOR_"]),
+                ("subsidio", ["99_otros/CERT_SUBSIDIO_"]), ("carta pie", ["99_otros/CARTA_PIE_"])]
+    archivos_fd = fd.get("archivos") or []
+    ya_vinculados = {a for e in eventos for a in (e.get("adjuntos") or [])}
+    for ev in eventos:
+        if ev["tipo"] != "recibido" or ev.get("adjuntos"):
+            continue
+        det = (ev.get("detalle") or "").lower()
+        for k, prefs in pref_map:
+            if k in det:
+                m = [a for a in archivos_fd
+                     if any(a.startswith(p) for p in prefs) and a not in ya_vinculados]
+                if m:
+                    ev["adjuntos"] = m
+                    ya_vinculados.update(m)
+                break
     return {"cliente": nombre, "eventos": eventos, "total": len(eventos),
             "enviados": sum(1 for e in eventos if e["tipo"] == "enviado"),
             "recibidos": sum(1 for e in eventos if e["tipo"] == "recibido")}
