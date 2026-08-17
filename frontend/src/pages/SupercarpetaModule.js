@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
+import { secureGet } from "../utils/secureStore";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 const ESTADOS = ["Tasación Piloto", "Solicitada", "En Proceso", "Con Observaciones", "Aprobada", "Rechazada"];
@@ -89,6 +90,9 @@ export default function SupercarpetaModule() {
   const [mes, setMes] = useState("2026-08");
   const [avanceModal, setAvanceModal] = useState(null);
   const [remitentesModal, setRemitentesModal] = useState(null);
+  const [cbrModal, setCbrModal] = useState(null);
+  // ACCESO EXCLUSIVO: módulo Comisiones/CBR solo para el Administrador General
+  const esAdminGeneral = ["admin", "maestro"].includes((secureGet("user") || {}).rol);
   const [guardando, setGuardando] = useState(false);
 
   const abrirPanel = async (c, hito) => {
@@ -290,6 +294,39 @@ export default function SupercarpetaModule() {
     } catch (e) { window.alert(e.response?.data?.detail || "Error al trasladar de mes"); }
   };
 
+  const refrescarCbr = async () => {
+    const r = await axios.get(`${API}/api/supercarpeta/cbr/estado`);
+    setCbrModal(m => (m ? { ...m, ...r.data, loading: false } : m));
+    return r.data;
+  };
+  const abrirCbr = async () => {
+    setCbrModal({ loading: true });
+    try { await refrescarCbr(); } catch { setCbrModal(m => ({ ...m, loading: false })); }
+  };
+  const lanzarCbr = async () => {
+    try {
+      await axios.post(`${API}/api/supercarpeta/cbr/extraer`, {});
+      setCbrModal(m => ({ ...m, estado: "en_proceso" }));
+      const poll = setInterval(async () => {
+        try {
+          const d = await refrescarCbr();
+          if (d.estado !== "en_proceso") { clearInterval(poll); recargar(); }
+        } catch { clearInterval(poll); }
+      }, 4000);
+    } catch (e) { window.alert(e.response?.data?.detail || "Error al lanzar la extracción CBR"); }
+  };
+  const descargarCbrExcel = async () => {
+    try {
+      const r = await axios.get(`${API}/api/supercarpeta/cbr/excel`, { responseType: "blob" });
+      const url = URL.createObjectURL(r.data);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `costos_CBR_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch { window.alert("Aún no hay resultados CBR para exportar — ejecute primero la extracción"); }
+  };
+
   const clientes = (data?.clientes || []).filter(c => !solo24 || c.recien_24h);
   const proy = data?.proyeccion;
 
@@ -402,6 +439,9 @@ export default function SupercarpetaModule() {
         <button data-testid="remitentes-btn" onClick={abrirRemitentes}
           title="Remitentes capturados automáticamente por DashAI — confirmar, reubicar, eliminar o bloquear"
           className="maserati-btn" style={{ minHeight: 38 }}>📡 Remitentes</button>
+        {esAdminGeneral && <button data-testid="cbr-btn" onClick={abrirCbr}
+          title="Buscar los costos CBR en las simulaciones de aprobaciones@centralmutuos.cl y calcular comisiones — EXCLUSIVO Administrador General"
+          className="maserati-btn" style={{ minHeight: 38 }}>💰 CBR Mesa</button>}
         <button data-testid="agregar-cliente-btn" onClick={() => setAgregarModal({
           nombre: "", inmobiliaria: "", proyecto: "", ciudad: "", broker: "Mutuaria y Leasing Limitada",
           tipo_propiedad: "nueva", subsidio: "Sin Subsidio", monto_uf: "" })}
@@ -638,6 +678,81 @@ export default function SupercarpetaModule() {
         </table>
         {data && clientes.length === 0 && <p style={{ color: "#94a3b8", textAlign: "center", padding: "1.5rem" }}>Sin clientes {solo24 ? "con informes en las últimas 24h" : "en el mes corriente"}.</p>}
       </div>
+
+      {cbrModal && (
+        <div data-testid="cbr-modal" onClick={() => setCbrModal(null)} style={modalBg}>
+          {!esAdminGeneral ? (
+            <div onClick={e => e.stopPropagation()} style={modalBox}>
+              <h4 data-testid="cbr-acceso-denegado" style={{ margin: 0, color: "#ef4444", fontSize: "0.9rem" }}>⛔ Acceso Denegado</h4>
+              <p style={{ color: "#94a3b8", fontSize: "0.7rem", marginTop: 8 }}>
+                El módulo de Comisiones y CBR es de uso exclusivo del Administrador General.</p>
+              <button onClick={() => setCbrModal(null)} className="maserati-btn" style={{ marginTop: 14 }}>Cerrar</button>
+            </div>
+          ) : (
+          <div onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 1020, maxHeight: "84vh", overflowY: "auto" }}>
+            <h4 style={{ margin: 0, color: "#d4af37", fontSize: "0.9rem" }}>💰 Costos CBR — correos de aprobaciones@centralmutuos.cl</h4>
+            <p style={{ color: "#94a3b8", fontSize: "0.62rem", margin: "6px 0 0" }}>
+              Busca ÚNICAMENTE los correos de aprobación (remitente aprobaciones@centralmutuos.cl), abre la simulación adjunta
+              (2ª hoja, Gastos Operacionales) y extrae la fila "CBR (Inscripción Registro Propiedad + Hipoteca)".
+              REGLA DE HIERRO: jamás se inventa un valor. El dato se guarda en la Bóveda ADN_CLIENTES_360 como <b>costo_CBR</b>.
+              La comisión es de uso exclusivo de Gerencia.
+            </p>
+            {cbrModal.loading && <p style={{ color: "#94a3b8", fontSize: "0.7rem" }}>Consultando estado…</p>}
+            {!cbrModal.loading && (<>
+              <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginTop: 12 }}>
+                <button data-testid="cbr-extraer-btn" onClick={lanzarCbr} disabled={cbrModal.estado === "en_proceso"}
+                  className="maserati-btn" style={{ minHeight: 36 }}>
+                  {cbrModal.estado === "en_proceso" ? "🔎 Buscando en correos…" : "🔎 Buscar y Extraer CBR"}</button>
+                <button data-testid="cbr-excel-btn" onClick={descargarCbrExcel}
+                  disabled={!(cbrModal.resultados || []).length}
+                  className="maserati-btn" style={{ minHeight: 36, opacity: (cbrModal.resultados || []).length ? 1 : 0.5 }}>
+                  📥 Descargar Excel</button>
+                <span data-testid="cbr-estado" style={{ fontSize: "0.62rem", fontWeight: 800,
+                  color: cbrModal.estado === "completado" ? "#4ade80"
+                    : cbrModal.estado === "en_proceso" ? "#facc15"
+                    : String(cbrModal.estado || "").startsWith("error") ? "#f87171" : "#94a3b8" }}>
+                  Estado: {cbrModal.estado || "nunca ejecutado"}
+                  {cbrModal.ultima ? ` · última: ${String(cbrModal.ultima).slice(0, 16).replace("T", " ")}` : ""}
+                  {cbrModal.estado === "completado" ? ` · ${cbrModal.encontrados}/${cbrModal.total} encontrados · ${cbrModal.correos_revisados ?? 0} correos revisados` : ""}
+                </span>
+              </div>
+              {(cbrModal.resultados || []).length > 0 && (
+                <table data-testid="cbr-tabla" style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.64rem", marginTop: 12, color: "#e2e8f0" }}>
+                  <thead>
+                    <tr style={{ color: "#d4af37", textTransform: "uppercase", fontSize: "0.56rem", letterSpacing: 1 }}>
+                      {["Cliente", "Broker", "Monto UF", "Valor CBR", "Comisión", "% Aplicado", "Moneda", "Fecha correo", "Estado"].map(h =>
+                        <th key={h} style={{ textAlign: "left", padding: "6px 8px", borderBottom: "1px solid rgba(212,175,55,0.4)" }}>{h}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cbrModal.resultados.map((r, i) => (
+                      <tr key={i} data-testid={`cbr-fila-${i}`} style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+                        <td style={{ padding: "6px 8px", fontWeight: 700 }} title={r.archivo || ""}>{r.cliente}</td>
+                        <td style={{ padding: "6px 8px", color: "#94a3b8" }}>{r.broker || "—"}</td>
+                        <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>
+                          {r.monto_credito !== "" && r.monto_credito != null ? Number(r.monto_credito).toLocaleString("es-CL") : "—"}</td>
+                        <td style={{ padding: "6px 8px", fontWeight: 800, color: "#d4af37" }} title={r.linea}>
+                          {r.valor_cbr !== "" ? Number(r.valor_cbr).toLocaleString("es-CL") : ""}</td>
+                        <td style={{ padding: "6px 8px", fontWeight: 800, color: "#4ade80", whiteSpace: "nowrap" }}>
+                          {r.comision !== "" && r.comision != null ? `${Number(r.comision).toLocaleString("es-CL")} UF` : "—"}</td>
+                        <td style={{ padding: "6px 8px", fontSize: "0.58rem",
+                          color: String(r.pct_aplicado || "").includes("REVISAR") ? "#facc15" : "#e2e8f0",
+                          fontWeight: String(r.pct_aplicado || "").includes("REVISAR") ? 800 : 400 }}>{r.pct_aplicado || "—"}</td>
+                        <td style={{ padding: "6px 8px" }}>{r.moneda}</td>
+                        <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>{r.fecha_correo}</td>
+                        <td style={{ padding: "6px 8px" }}>
+                          <b style={{ color: r.estado === "ENCONTRADO" ? "#4ade80" : "#f87171" }}>{r.estado}</b></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </>)}
+            <button data-testid="cbr-cerrar" onClick={() => setCbrModal(null)} className="maserati-btn" style={{ marginTop: 14 }}>Cerrar</button>
+          </div>
+          )}
+        </div>
+      )}
 
       {bitModal && (
         <div data-testid="bitacora-modal" onClick={() => setBitModal(null)} style={modalBg}>

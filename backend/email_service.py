@@ -742,6 +742,102 @@ def search_attachments_by_person(person_name, limit=40, rut=None, correo_origen=
     return exactos
 
 
+def _all_mail_folder(m):
+    """Detecta la carpeta 'Todos' de Gmail (flag \\All): cubre archivados y enviados."""
+    try:
+        typ, boxes = m.list()
+        for b in boxes or []:
+            s = b.decode(errors="ignore") if isinstance(b, bytes) else str(b)
+            if "\\All" in s:
+                mm = re.findall(r'"([^"]+)"', s)
+                if mm:
+                    return mm[-1]
+    except Exception:
+        pass
+    return None
+
+
+def fetch_simulacion_attachments(limit_per=40, remitente="aprobaciones@centralmutuos.cl", nombres=None):
+    """CBR MESA (fuente definitiva): SOLO correos de aprobaciones@centralmutuos.cl.
+    Si se entregan nombres de clientes, la búsqueda es DIRIGIDA (por cliente, últimos 3
+    correos c/u) — mucho más rápida que bajar todo el historial. Solo lectura."""
+    out, vistos = [], set()
+    rem = (remitente or "").strip().lower()
+    for acc in ACCOUNTS:
+        try:
+            m = _connect(acc)
+            allm = _all_mail_folder(m)
+            # 'Todos' de Gmail ya contiene INBOX: un solo buzón por cuenta
+            buzon = f'"{allm}"' if allm else "INBOX"
+            try:
+                m.select(buzon, readonly=True)
+            except Exception:
+                m.select("INBOX", readonly=True)
+            uids = set()
+            if nombres:
+                for n in nombres:
+                    n_l = _sin_acentos((n or "").strip().lower())
+                    if not n_l:
+                        continue
+                    try:
+                        typ, data = m.uid("search", None, "X-GM-RAW",
+                                          f'"from:{rem} \\"{n_l}\\""')
+                        encontrados = (data[0] or b"").split()
+                    except Exception:
+                        encontrados = []
+                    if not encontrados:
+                        toks = [t for t in n_l.split() if len(t) > 2][:2]
+                        try:
+                            crit = ["FROM", f'"{rem}"'] + [x for t in toks for x in ("TEXT", f'"{t}"')]
+                            typ, data = m.uid("search", None, *crit)
+                            encontrados = (data[0] or b"").split()
+                        except Exception:
+                            encontrados = []
+                    uids.update(sorted(encontrados, key=lambda x: int(x))[-3:])
+            else:
+                try:
+                    typ, data = m.uid("search", None, "X-GM-RAW", f'"from:{rem} has:attachment"')
+                    uids.update((data[0] or b"").split())
+                except Exception:
+                    try:
+                        typ, data = m.uid("search", None, "FROM", f'"{rem}"')
+                        uids.update((data[0] or b"").split())
+                    except Exception:
+                        pass
+            for uid in sorted(uids, key=lambda x: int(x), reverse=True)[:max(limit_per, len(uids) if nombres else 0) or limit_per]:
+                try:
+                    typ, msgdata = m.uid("fetch", uid, "(BODY.PEEK[])")
+                    if not msgdata or not isinstance(msgdata[0], tuple):
+                        continue
+                    raw = email.message_from_bytes(msgdata[0][1])
+                    mid = (raw.get("Message-ID") or "").strip()
+                    if mid and mid in vistos:
+                        continue
+                    info = _parse_full_message(raw, with_bytes=True)
+                    if rem not in (info.get("from") or "").lower():
+                        continue  # REGLA: exclusivamente el remitente de aprobaciones
+                    pdfs = [a for a in info["attachments"]
+                            if (a.get("filename") or "").lower().endswith(".pdf")
+                            and a.get("content_bytes")]
+                    if not pdfs:
+                        continue
+                    # la simulación primero (si viene junto a otros adjuntos)
+                    pdfs.sort(key=lambda a: 0 if "simulaci" in _sin_acentos(
+                        (a.get("filename") or "").lower()) else 1)
+                    if mid:
+                        vistos.add(mid)
+                    out.append({"from": info["from"], "subject": info["subject"],
+                                "date": info["date"], "body": info["body"],
+                                "cuenta": acc["user"], "pdfs": pdfs})
+                except Exception:
+                    continue
+            m.logout()
+        except Exception:
+            continue
+    out.sort(key=lambda e: e.get("date", ""), reverse=True)
+    return out
+
+
 def fetch_attachments_by_message_ids(message_ids):
     """Baja los correos exactos (por Message-ID) con sus adjuntos."""
     CAPTURA_EXT = (".pdf", ".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp")

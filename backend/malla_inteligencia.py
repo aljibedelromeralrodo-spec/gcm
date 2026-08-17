@@ -2161,6 +2161,236 @@ async def fuentes_doc_cliente(fid: str, payload: dict, request: Request):
     return {"ok": True, "cliente": fd.get("nombre"), "fuentes_doc": fdoc}
 
 
+# ── COSTOS CBR — extracción desde adjuntos "Simulación" de Mesa ─────────────
+_CBR_FILA_RE = re.compile(r"(\bC\.?\s?B\.?\s?R\.?\b|conservador(?:\s+de)?\s+bienes\s+ra[ií]ces|\bconservador\b)", re.I)
+_CBR_UF_RE = re.compile(r"(?:UF\s*\$?\s*(\d+(?:[.,]\d+)?)|(\d+(?:[.,]\d+)?)\s*UF\b)", re.I)
+_CBR_CLP_RE = re.compile(r"\$\s*(\d{1,3}(?:\.\d{3})+|\d{4,9})|\b(\d{1,3}(?:\.\d{3})+)\b")
+
+
+def _monto_en_linea(l):
+    m_uf = _CBR_UF_RE.search(l)
+    if m_uf:
+        try:
+            return float((m_uf.group(1) or m_uf.group(2)).replace(",", ".")), "UF"
+        except ValueError:
+            pass
+    m_clp = _CBR_CLP_RE.search(l)
+    if m_clp:
+        try:
+            return int((m_clp.group(1) or m_clp.group(2)).replace(".", "")), "CLP"
+        except ValueError:
+            pass
+    m_num = re.search(r"\b(\d{4,9})\b", l)
+    if m_num:
+        return int(m_num.group(1)), "CLP"
+    return None
+
+
+def _extraer_cbr_texto(texto):
+    """REGLA DE HIERRO: solo lee la fila CBR/Conservador — jamás inventa valores.
+    Si existe la sección 'Gastos Operacionales', busca desde ahí hacia abajo."""
+    lineas = [l.strip() for l in (texto or "").splitlines() if l.strip()]
+    idx = next((i for i, l in enumerate(lineas) if "gastos operacionales" in l.lower()), None)
+    ambito = lineas[idx:] if idx is not None else lineas
+    for i, l in enumerate(ambito):
+        if not _CBR_FILA_RE.search(l):
+            continue
+        r = _monto_en_linea(l)
+        if not r and i + 1 < len(ambito):
+            r = _monto_en_linea(ambito[i + 1])
+        if r:
+            return {"valor": r[0], "moneda": r[1], "linea": l[:180]}
+    return None
+
+
+def _extraer_cbr_pdf(pdf_bytes):
+    """Abre el adjunto: prioriza la SEGUNDA página (Gastos Operacionales), luego el resto."""
+    import io as _io
+    import pdfplumber
+    try:
+        with pdfplumber.open(_io.BytesIO(pdf_bytes)) as pdf:
+            paginas = pdf.pages
+            orden = ([1] if len(paginas) > 1 else []) + [i for i in range(len(paginas)) if i != 1]
+            for i in orden:
+                try:
+                    res = _extraer_cbr_texto(paginas[i].extract_text() or "")
+                except Exception:
+                    res = None
+                if res:
+                    res["pagina"] = i + 1
+                    return res
+    except Exception:
+        pass
+    return None
+
+
+# COMISIÓN (USO INTERNO — SOLO GERENCIA): % según broker/inmobiliaria
+_COMISION_PCT = {"boetsch": 1.0, "boetch": 1.0, "ecomac": 1.0, "poch": 1.0,
+                 "comod": 0.8, "usada": 0.5}
+
+
+def _comision_cliente(fd, monto_uf):
+    """Regla de cálculo: % sobre el monto del crédito según broker. Sin regla → revisar."""
+    tipo = (fd.get("tipo_operacion") or "").lower()
+    b = mail._sin_acentos((fd.get("inmobiliaria") or fd.get("broker_origen") or "").lower())
+    pct = 0.5 if ("usad" in tipo or "usada" in b) else next(
+        (p for k, p in _COMISION_PCT.items() if k in b), None)
+    if pct is None:
+        return None, "REVISAR CON GERENCIA"
+    com = round(float(monto_uf or 0) * pct / 100, 2) if monto_uf else ""
+    return com, f"{pct}%"
+
+
+async def _ejecutar_cbr():
+    import adn_clientes as _adn
+    await db.config.update_one({"_key": "cbr_extraccion"}, {"$set": {
+        "estado": "en_proceso", "inicio": _now()}}, upsert=True)
+    try:
+        flota_cfg = await db.config.find_one({"_key": "flota_agosto"}) or {}
+        flota = ({n.strip().upper() for n in (flota_cfg.get("nombres") or [])}
+                 if flota_cfg.get("activo") else set())
+        carpetas = []
+        async for fd in db.folders.find({}).sort("nombre", 1):
+            if fd.get("oculto_supercarpeta"):
+                continue
+            if (fd.get("mes_proyeccion") or "2026-08") != "2026-08":
+                continue
+            nombre_u = (fd.get("nombre") or "").strip().upper()
+            if flota and not any(nf in nombre_u or nombre_u in nf for nf in flota):
+                continue
+            carpetas.append(fd)
+        # BÚSQUEDA DIRIGIDA: solo correos de aprobaciones@ que mencionan a cada cliente
+        nombres = [" ".join((fd.get("nombre") or "").split()[:2]) for fd in carpetas]
+        correos = await asyncio.to_thread(mail.fetch_simulacion_attachments, 60,
+                                          "aprobaciones@centralmutuos.cl", nombres)
+        adn_map = {}
+        async for r in db.adn_clientes_360.find({}, {"rut_norm": 1, "financiero": 1}):
+            adn_map[r.get("rut_norm")] = r
+        resultados = []
+        for fd in carpetas:
+            nombre_u = (fd.get("nombre") or "").strip().upper()
+            toks = [t for t in mail._sin_acentos(nombre_u.lower()).split() if len(t) > 2]
+            necesarios = min(2, len(toks)) or 1
+            hallazgo = None
+            for e in correos:  # ya vienen ordenados del más reciente al más antiguo
+                blob = mail._sin_acentos(" ".join(
+                    [e.get("subject") or "", e.get("body") or ""]
+                    + [p.get("filename") or "" for p in e.get("pdfs") or []]).lower())
+                if sum(1 for t in toks if t in blob) < necesarios:
+                    continue
+                for p in e.get("pdfs") or []:
+                    res = await asyncio.to_thread(_extraer_cbr_pdf, p.get("content_bytes") or b"")
+                    if res:
+                        hallazgo = {**res, "fecha_correo": (e.get("date") or "")[:10],
+                                    "archivo": p.get("filename") or "",
+                                    "fuente": e.get("cuenta") or "correo"}
+                        break
+                if hallazgo:
+                    break
+            reg = adn_map.get(_adn._norm_rut(fd.get("rut"))) if fd.get("rut") else None
+            monto_uf = (fd.get("proyeccion_uf")
+                        or ((reg or {}).get("financiero") or {}).get("monto_credito_uf") or "")
+            comision, pct_txt = _comision_cliente(fd, monto_uf)
+            resultados.append({
+                "cliente": fd.get("nombre") or "",
+                "broker": fd.get("inmobiliaria") or fd.get("broker_origen") or "",
+                "monto_credito": monto_uf,
+                "comision": comision if comision is not None else "",
+                "pct_aplicado": pct_txt,
+                "valor_cbr": hallazgo["valor"] if hallazgo else "",
+                "moneda": hallazgo["moneda"] if hallazgo else "",
+                "fecha_correo": (hallazgo or {}).get("fecha_correo", ""),
+                "archivo": (hallazgo or {}).get("archivo", ""),
+                "linea": (hallazgo or {}).get("linea", ""),
+                "estado": "ENCONTRADO" if hallazgo else "NO ENCONTRADO"})
+            if hallazgo:
+                doc_cbr = {"valor": hallazgo["valor"], "moneda": hallazgo["moneda"],
+                           "fecha_correo": hallazgo["fecha_correo"], "archivo": hallazgo["archivo"],
+                           "extraido": _now(), "origen": "aprobaciones@centralmutuos.cl"}
+                await db.folders.update_one({"id": fd["id"]}, {"$set": {
+                    "costo_CBR": doc_cbr, "updated_at": _now()}})
+                await _sync_adn(fd["id"])
+                if fd.get("rut"):
+                    await db.adn_clientes_360.update_one(
+                        {"rut_norm": _adn._norm_rut(fd["rut"])}, {"$set": {"costo_CBR": doc_cbr}})
+        await db.config.update_one({"_key": "cbr_extraccion"}, {"$set": {
+            "estado": "completado", "ultima": _now(), "resultados": resultados,
+            "remitente": "aprobaciones@centralmutuos.cl",
+            "encontrados": sum(1 for r in resultados if r["estado"] == "ENCONTRADO"),
+            "total": len(resultados), "correos_revisados": len(correos)}}, upsert=True)
+    except Exception as ex:
+        logging.warning(f"cbr extraccion: {ex}")
+        await db.config.update_one({"_key": "cbr_extraccion"}, {"$set": {
+            "estado": f"error: {str(ex)[:150]}", "ultima": _now()}}, upsert=True)
+
+
+def _es_admin_general(request):
+    """ACCESO EXCLUSIVO: solo el Administrador General (Gerardo) ve CBR y comisiones."""
+    return ((getattr(request.state, "user", {}) or {}).get("rol") or "") in ("admin", "maestro")
+
+
+def _exigir_admin_general(request):
+    if not _es_admin_general(request):
+        raise HTTPException(status_code=403,
+            detail="Acceso denegado: módulo de Comisiones y CBR exclusivo del Administrador General")
+
+
+@supercarpeta.get("/cbr/estado")
+async def cbr_estado(request: Request):
+    _exigir_admin_general(request)
+    return (await db.config.find_one({"_key": "cbr_extraccion"}, {"_id": 0})
+            or {"estado": "nunca_ejecutado", "resultados": []})
+
+
+@supercarpeta.post("/cbr/extraer")
+async def cbr_extraer(request: Request):
+    """Lanza la búsqueda de correos de aprobaciones@ y extrae el CBR de cada cliente."""
+    _exigir_admin_general(request)
+    from datetime import timedelta
+    cfg = await db.config.find_one({"_key": "cbr_extraccion"}) or {}
+    if cfg.get("estado") == "en_proceso" and (cfg.get("inicio") or "") > (
+            datetime.now(timezone.utc) - timedelta(minutes=10)).isoformat():
+        return {"ok": True, "estado": "en_proceso", "nota": "Extracción CBR ya en curso"}
+    asyncio.create_task(_ejecutar_cbr())
+    return {"ok": True, "lanzado": True, "seguimiento": "GET /api/supercarpeta/cbr/estado"}
+
+
+@supercarpeta.get("/cbr/excel")
+async def cbr_excel(request: Request):
+    """ACCESO EXCLUSIVO: el Excel de CBR + comisiones solo para el Administrador General."""
+    _exigir_admin_general(request)
+    cfg = await db.config.find_one({"_key": "cbr_extraccion"}) or {}
+    res = cfg.get("resultados") or []
+    if not res:
+        raise HTTPException(status_code=404, detail="Sin resultados CBR: ejecute primero la extracción")
+    import io as _io
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Costos CBR"
+    ws.append(["Nombre del cliente", "Broker", "Monto del crédito (UF)",
+               "Valor CBR (Inscripción Registro Propiedad + Hipoteca)",
+               "Comisión (monto calculado)", "Porcentaje aplicado",
+               "Moneda", "Fecha del correo fuente", "Estado CBR"])
+    for c in ws[1]:
+        c.font = Font(bold=True, color="FFFFFF")
+        c.fill = PatternFill("solid", fgColor="1F2937")
+    for r in res:
+        ws.append([r.get("cliente", ""), r.get("broker", ""), r.get("monto_credito", ""),
+                   r.get("valor_cbr", ""), r.get("comision", ""), r.get("pct_aplicado", ""),
+                   r.get("moneda", ""), r.get("fecha_correo", ""), r.get("estado", "")])
+        ws.cell(row=ws.max_row, column=9).font = Font(
+            bold=True, color="15803D" if r.get("estado") == "ENCONTRADO" else "B91C1C")
+    for col, w in zip("ABCDEFGHI", (34, 24, 20, 26, 22, 20, 10, 18, 16)):
+        ws.column_dimensions[col].width = w
+    buf = _io.BytesIO()
+    wb.save(buf)
+    return Response(content=buf.getvalue(),
+                    media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": 'attachment; filename="costos_CBR.xlsx"'})
+
+
 # ── CUENTA DE BARRIDO (SOLO LECTURA) — categoría propia del Panel ⚙️ ────────
 def _dv_rut(cuerpo):
     s, f = 0, 2

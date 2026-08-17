@@ -1181,3 +1181,18 @@ Constitución VERSION 19 (nuevas reglas #55, #56, #57).
 - Limpieza total autorizada: 4 scripts huérfanos + 29 tests antiguos + backup storage + 4 carpetas prueba/duplicadas eliminadas; índice redundante drop; RUT falso de Carlos Salgado retirado (auditoría encontró el real 13.820.383-2 en ADN); inmobiliarias de la planilla oficial escritas en bóveda.
 - Fix cuelgue hot-reload: cancelación de loops de fondo en shutdown (_BG_TASKS).
 - Tests: iteration_34 (pass) e iteration_35 (100% backend+frontend, 17 clientes visibles verificados).
+
+## Sesión 2026-08-17 (fork) — Módulo CBR + Comisiones (EXCLUSIVO Admin General)
+- Nuevo módulo "💰 CBR Mesa" en Supercarpeta (botón solo visible para rol admin/maestro).
+- Backend: `fetch_simulacion_attachments()` en email_service.py — búsqueda DIRIGIDA por cliente
+  (X-GM-RAW `from:aprobaciones@centralmutuos.cl "<nombre>"`, últimos 3 correos c/u, All Mail, solo lectura).
+- Extracción: `_extraer_cbr_pdf()` en malla_inteligencia.py — 2ª página, sección "Gastos Operacionales",
+  fila "CBR (Inscripción Registro Propiedad + Hipoteca)". REGLA DE HIERRO: sin valor → NO ENCONTRADO.
+- Guardado: campo `costo_CBR` en db.folders + ADN_CLIENTES_360 (12/17 clientes poblados).
+- Comisiones: BOETCH/ECOMAC/POCH 1%, COMOD 0.8%, USADA 0.5%, WORD/URBANIZATE/MAESTRA → "REVISAR CON GERENCIA".
+- Excel (openpyxl): Nombre, Broker, Monto crédito UF, Valor CBR, Comisión, % aplicado, Moneda, Fecha correo, Estado.
+- Endpoints: GET/POST /api/supercarpeta/cbr/{estado,extraer,excel} — todos con _exigir_admin_general (403 verificado).
+- Resultado real: 12/17 ENCONTRADO. NO ENCONTRADO (sin correo de aprobaciones@): José Olivares,
+  Kanela Ibáñez, Marioli Montero, Rubén Zabala, Yuritza Bravo.
+- Aprendizaje: la búsqueda genérica from:aprobaciones@ + descarga total era demasiado lenta (>10 min,
+  colgaba el reload); la búsqueda dirigida por nombre la baja a ~2-4 min.

@@ -798,3 +798,9 @@ Constitución v16 (Reglas #34-#38, #41, #43, #49, #52, #53, #54). Módulo Broker
 - Gerencia Comercial: 14 columnas oficiales + Acciones de Mando (Doc2.0/Firmas/Divergencia/Concreces/Mesa eliminadas a pedido), cumplimiento broker sincronizado.
 - Nuevo módulo: Gestión Ejecutivos (daniela/victoria/postventa) — solo lectura de cabeceras, privacidad absoluta.
 - PENDIENTES: Twilio (esperando claves), sincronización contactos Gmail (requiere Google OAuth), meta_uf de meses futuros configurable, resumen semanal lunes, alertas cumpleaños, optimización móvil.
+
+## Actualización 2026-08-17
+- Módulo CBR + Comisiones implementado (ver CHANGELOG.md). ACCESO EXCLUSIVO Administrador General.
+- PENDIENTE APROBADO POR USUARIO (antes del pivote a CBR): columna "Carta Oferta" en Supercarpeta,
+  gestión de Inmobiliarias con encargado+correo, y botón único que solicita por correo Carta Oferta
+  + Resolución Serviu (vista previa + confirmar, envío desde el entorno de cada ejecutivo).
