@@ -451,14 +451,34 @@ def _uf_desde_sii():
     return valores[dia], f"{hoy.year}-{hoy.month:02d}-{dia:02d}"
 
 
+def _uf_desde_mindicador():
+    """RESPALDO UF: API pública de mindicador.cl cuando el SII no responde."""
+    import json as _json
+    import urllib.request
+    req = urllib.request.Request("https://mindicador.cl/api/uf",
+                                 headers={"User-Agent": "Mozilla/5.0"})
+    data = _json.loads(urllib.request.urlopen(req, timeout=15).read().decode("utf-8"))
+    serie = data.get("serie") or []
+    v = float((serie[0].get("valor") if serie else 0) or 0)
+    if v <= 0:
+        raise ValueError("mindicador.cl: serie UF vacía o valor inválido")
+    return v, str(serie[0].get("fecha") or "")[:10]
+
+
 async def _actualizar_uf():
     """Intenta SII primero, luego mindicador.cl. Guarda en config."""
     try:
         v, dia = await asyncio.to_thread(_uf_desde_sii)
         fuente = "sii.cl"
     except Exception:
-        v, dia = await asyncio.to_thread(_uf_desde_mindicador)
-        fuente = "mindicador.cl"
+        try:
+            v, dia = await asyncio.to_thread(_uf_desde_mindicador)
+            fuente = "mindicador.cl"
+        except Exception:
+            # DOBLE CAÍDA (SII + mindicador): se mantiene el último valor conocido sin sobrescribir
+            prev = await db.config.find_one({"_key": "uf"}) or {}
+            return (float(prev.get("valor_uf") or 0),
+                    prev.get("uf_source") or "último valor conocido", prev.get("uf_day") or "")
     if v > 0:
         await db.config.update_one({"_key": "uf"}, {"$set": {
             "valor_uf": v, "uf_source": fuente, "uf_day": dia,
