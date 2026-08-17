@@ -82,7 +82,16 @@ const TarjetaCliente = ({ c, idx, recargar, abrirPanel, abrirSolicitud, abrirEst
   const [abierta, setAbierta] = useState(false);
   const [hitoAbierto, setHitoAbierto] = useState(null);
   const [notaForm, setNotaForm] = useState(null);
+  const [hilo, setHilo] = useState(null);
   const [guardando, setGuardando] = useState(false);
+  const verHilo = async () => {
+    if (hilo) { setHilo(null); return; }
+    setHilo({ loading: true });
+    try {
+      const r = await axios.get(`${API}/api/supercarpeta/hilo/${c.id}`);
+      setHilo(r.data);
+    } catch { setHilo(null); window.alert("Error al cargar el hilo del cliente"); }
+  };
   const notas = c.notas || [];
   const hitos = [["tasacion", c.estado_tasacion], ["estudio", c.estudio_titulos],
     ["serviu", c.con_subsidio ? c.serviu : null], ["carta_oferta", c.carta_oferta],
@@ -285,9 +294,47 @@ const TarjetaCliente = ({ c, idx, recargar, abrirPanel, abrirSolicitud, abrirEst
               style={{ background: "rgba(96,165,250,0.15)", border: "1px solid rgba(96,165,250,0.6)",
                 color: "#60a5fa", borderRadius: 8, padding: "0.35rem 0.9rem", fontSize: 14, fontWeight: 800, cursor: "pointer" }}>
               📨 Pedir Documentos</button>
+            <button data-testid={`tarjeta-hilo-${c.id}`} onClick={verHilo}
+              style={{ background: hilo ? "rgba(212,175,55,0.2)" : "rgba(2,6,23,0.5)",
+                border: `1px solid ${hilo ? "#d4af37" : "rgba(148,163,184,0.4)"}`,
+                color: hilo ? "#FFD700" : "#cbd5e1", borderRadius: 8, padding: "0.35rem 0.9rem",
+                fontSize: 14, fontWeight: 800, cursor: "pointer" }}>
+              🧵 Hilo del Cliente{hilo?.total != null ? ` (${hilo.total})` : ""}</button>
             {c.promesa_ia && <span style={{ fontSize: 13, color: c.promesa_ia.firmado ? "#4ade80" : "#93c5fd" }}
               title={c.promesa_ia.evidencia}>🤖 {c.promesa_ia.firmado ? "Firma verificada" : "Revisar firma"}</span>}
           </div>
+
+          {/* 🧵 HILO DEL CLIENTE: línea de tiempo de correos enviados y recibidos */}
+          {hilo && (
+            <div data-testid={`hilo-timeline-${c.id}`} style={{ marginTop: 10, background: "rgba(2,6,23,0.45)",
+              border: "1px solid rgba(212,175,55,0.3)", borderRadius: 10, padding: "0.8rem 1rem" }}>
+              {hilo.loading ? <span style={{ color: "#94a3b8", fontSize: 14 }}>Cargando hilo…</span> : (<>
+                <div style={{ fontSize: 13, color: "#94a3b8", fontWeight: 800, marginBottom: 8 }}>
+                  {hilo.total} correo{hilo.total !== 1 ? "s" : ""} · 📤 {hilo.enviados} enviado{hilo.enviados !== 1 ? "s" : ""} · 📥 {hilo.recibidos} recibido{hilo.recibidos !== 1 ? "s" : ""}
+                </div>
+                {hilo.total === 0 && <span style={{ color: "#64748b", fontSize: 14, fontStyle: "italic" }}>
+                  Aún no hay correos registrados para este cliente.</span>}
+                <div style={{ display: "grid", gap: 0, maxHeight: 320, overflowY: "auto" }}>
+                  {(hilo.eventos || []).map((e, i) => (
+                    <div key={`${e.en}-${i}`} style={{ display: "flex", gap: 10, padding: "7px 0",
+                      borderLeft: `3px solid ${e.tipo === "enviado" ? "#60a5fa" : "#4ade80"}`,
+                      paddingLeft: 12, borderBottom: i < hilo.eventos.length - 1 ? "1px solid rgba(148,163,184,0.12)" : "none" }}>
+                      <span style={{ fontSize: 15 }}>{e.tipo === "enviado" ? "📤" : "📥"}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 14, color: "#f8fafc", overflowWrap: "anywhere" }}>
+                          {e.asunto || e.detalle || "(sin asunto)"}
+                          {e.estado === "fallido" && <b style={{ color: "#f87171" }}> · 🔴 FALLIDO</b>}
+                        </div>
+                        <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 1 }}>
+                          {e.tipo === "enviado" ? "Para" : "De"}: {e.con || "—"}{e.detalle && e.asunto ? ` · ${e.detalle}` : ""} · {fFecha(e.en)}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>)}
+            </div>
+          )}
         </div>
       )}
     </div>

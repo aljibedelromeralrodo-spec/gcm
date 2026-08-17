@@ -4354,6 +4354,39 @@ async def supercarpeta_panel(fid: str, hito: str = "tasacion"):
             "estado_manual": (fd.get("estados_manuales") or {}).get(hito) or {}}
 
 
+@supercarpeta.get("/hilo/{fid}")
+async def supercarpeta_hilo(fid: str, request: Request):
+    """HILO DEL CLIENTE: línea de tiempo unificada de correos enviados y recibidos."""
+    _exigir_gerencia(request)
+    fd = await db.folders.find_one({"id": fid})
+    if not fd:
+        raise HTTPException(status_code=404, detail="Carpeta no existe")
+    eventos = []
+    # ENVIADOS — solicitudes desde la Supercarpeta (carta oferta / RS / compromiso, etc.)
+    for r in (fd.get("bitacora_solicitudes") or []):
+        eventos.append({"tipo": "enviado", "en": r.get("en") or "",
+                        "asunto": r.get("asunto") or "", "con": r.get("para") or "",
+                        "detalle": " + ".join(r.get("documentos") or []) or (r.get("tipo") or ""),
+                        "estado": r.get("estado") or "enviado"})
+    # ENVIADOS — estudio de título (log del módulo)
+    nombre = (fd.get("nombre") or "").strip()
+    async for r in db.estudio_titulo_log.find({"nombre": {"$regex": f"^{re.escape(nombre)}$", "$options": "i"}}):
+        to = r.get("to") or []
+        eventos.append({"tipo": "enviado", "en": r.get("enviado_en") or "",
+                        "asunto": f"Solicitud de Antecedentes - Estudio de Título ({r.get('tipo_vivienda') or ''})",
+                        "con": ", ".join(to) if isinstance(to, list) else str(to),
+                        "detalle": "Estudio de Título", "estado": "enviado"})
+    # RECIBIDOS — correos detectados por la malla (hitos externos)
+    async for h in db.hitos_externos.find({"folder_id": fid}):
+        eventos.append({"tipo": "recibido", "en": h.get("creado") or h.get("fecha") or "",
+                        "asunto": h.get("asunto") or "", "con": h.get("fuente") or h.get("dominio") or "",
+                        "detalle": h.get("hito") or "", "estado": "recibido"})
+    eventos.sort(key=lambda e: e.get("en") or "", reverse=True)
+    return {"cliente": nombre, "eventos": eventos, "total": len(eventos),
+            "enviados": sum(1 for e in eventos if e["tipo"] == "enviado"),
+            "recibidos": sum(1 for e in eventos if e["tipo"] == "recibido")}
+
+
 @supercarpeta.post("/nota/{fid}")
 async def supercarpeta_nota(fid: str, payload: dict, request: Request):
     """SECCIÓN 5 — Notas manuales por estado, guardadas en la Bóveda ADN."""

@@ -981,3 +981,13 @@ Constitución v16 (Reglas #34-#38, #41, #43, #49, #52, #53, #54). Módulo Broker
   (contacto@valueproperty.cl) quedó como su Vendedor directo y el preview cambió de
   "Origen (sugerido)" a "Vendedor directo". Flags de envío simulados limpiados; vendedor
   aprendido conservado (dato real: Value Property fue el origen de su solicitud).
+
+## Actualización 2026-06 (fork, 4m) — Hilo del Cliente (línea de tiempo de correos)
+- Nuevo GET /api/supercarpeta/hilo/{fid}: unifica ENVIADOS (bitacora_solicitudes del folder +
+  estudio_titulo_log por nombre) y RECIBIDOS (hitos_externos por folder_id) ordenados por
+  fecha desc, con contadores enviados/recibidos.
+- Tarjeta expandida: botón "🧵 Hilo del Cliente (N)" (tarjeta-hilo-{id}) despliega timeline
+  (hilo-timeline-{id}): 📤 azul enviados / 📥 verde recibidos, asunto, Para/De, detalle del
+  hito, fecha/hora, marca 🔴 FALLIDO si aplica, scroll interno 320px.
+- Verificado: API (Salgado 1 enviado; Catalina 12 recibidos de Abogados Estudio de Título)
+  + screenshot del timeline en la tarjeta OK.
