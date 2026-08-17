@@ -7163,30 +7163,106 @@ async def _actividades_terminadas_loop():
 # Solicitud de Estudio de Título (Hipotecario Gestión, siempre CC Victoria)
 # ---------------------------------------------------------------------------
 ESTUDIO_DEST_DEFAULT = [VICTORIA_EMAIL]
-DOCS_ESTUDIO_USADA = [
-    "Copia de escritura de compraventa anterior (título del vendedor), incluyendo personería si el vendedor es una sociedad",
-    "Copia de inscripción de dominio con vigencia en el Conservador de Bienes Raíces",
-    "Certificado de hipotecas, gravámenes y prohibiciones (CBR)",
-    "Certificado de no expropiación municipal y SERVIU, emitido con fecha reciente",
-    "Certificado de contribuciones al día (Tesorería General de la República)",
-    "Certificado del administrador del condominio que acredite que no hay deudas de gastos comunes (si aplica)",
-    "Copia de Junta Extraordinaria de Accionistas / autorización de enajenación (si el vendedor es sociedad)",
+# ─── VIVIENDA USADA: listado oficial estructurado (secciones romanas / subsecciones) ───
+SECCIONES_ESTUDIO_USADA = [
+    ("I.- ANTECEDENTES DEL INMUEBLE", [
+        ("a.- Título vigente:", [
+            "Copia de inscripción de dominio con certificado de vigencia (emisión no mayor a 45 días).",
+            "Certificado de hipotecas, gravámenes y litigios pendientes de 30 años (emisión no mayor a 45 días).",
+            "Copia de la escritura con la cual se efectuó la inscripción.",
+        ]),
+        ("b.- Propiedad adquirida por Herencia:", [
+            "Copia de inscripción especial de herencia con certificado de vigencia (emisión no mayor a 45 días).",
+            "Copia de inscripción de posesión efectiva con anotación marginal de pago o exención de impuesto de herencia.",
+            "Copia del testamento y su inscripción si los hubiere.",
+            "Copia del inventario de bienes.",
+        ]),
+        ("c.- Títulos anteriores hasta completar 10 años:", [
+            "Copias de inscripciones de dominio de antecesores hasta completar 10 años de posesión inscrita.",
+            "Copias de escrituras de dichas inscripciones.",
+            "En caso de sucesiones hereditarias: mismos antecedentes de letra b.",
+            "En caso de personas jurídicas como propietarias anteriores: copias de los poderes.",
+        ]),
+    ]),
+    ("II.- ANTECEDENTES DE SUBDIVISIONES, FUSIONES Y/O EDIFICACIONES", [
+        ("a.- Inmueble urbano resultante de subdivisión:", [
+            "Copia de Resolución DOM que autorizó la subdivisión.",
+            "Copia del Plano de Subdivisión aprobado por DOM y archivado en CBR.",
+            "Certificado DOM de urbanización ejecutada o garantizada.",
+            "Certificado DOM de numeración municipal.",
+            "Certificado SII de asignación de roles de avalúo en trámite.",
+        ]),
+        ("b.- Inmueble rural resultante de subdivisión:", [
+            "Copia de Resolución SAG que autorizó la subdivisión.",
+            "Copia del Plano de Subdivisión aprobado por SAG y archivado en CBR.",
+            "Certificado SII de asignación de roles de avalúo en trámite.",
+            "Copia del Reglamento del Loteo Rural si lo hubiere.",
+            "Para inmuebles ExCora: Certificado de deuda Cora y Certificado de deuda Indap.",
+        ]),
+        ("c.- Inmueble resultante de fusión:", [
+            "Copia de Resolución DOM que autorizó la fusión.",
+            "Copia del Plano de Fusión aprobado por DOM y archivado en CBR.",
+            "Certificado DOM de urbanización ejecutada o garantizada si corresponde.",
+            "Certificado DOM de numeración municipal.",
+            "Certificado SII de asignación de rol al lote resultante.",
+        ]),
+    ]),
+    ("III.- OTROS DOCUMENTOS Y CERTIFICADOS", [
+        ("", [
+            "Certificado de Deudas de Contribuciones emitido por TGR.",
+            "Copia del recibo de pago de cuotas de contribuciones vencidas según corresponda.",
+            "Certificado de no expropiación SERVIU (emisión no mayor a 30 días).",
+            "Certificado de no expropiación Municipal (emisión no mayor a 30 días).",
+            "Certificado de numeración Municipal si hubiere cambiado o no aparece en la inscripción de dominio.",
+            "Copia del Contrato de Promesa de Compraventa si lo hubiere.",
+        ]),
+    ]),
 ]
+# Lista plana solo para visualización en el formulario del frontend
+DOCS_ESTUDIO_USADA = [d for _, subs in SECCIONES_ESTUDIO_USADA for _, docs in subs for d in docs]
+# VIVIENDA NUEVA: sin listado de documentos — solo la solicitud estándar
+DOCS_ESTUDIO_NUEVA = []
 
 
-DOCS_ESTUDIO_NUEVA = [
-    "Copia de inscripción de dominio con vigencia en el Conservador de Bienes Raíces (a nombre de la inmobiliaria)",
-    "Certificado de hipotecas, gravámenes y prohibiciones (CBR)",
-    "Copia de escritura de compraventa anterior (título de la inmobiliaria) y personería vigente de sus representantes",
-    "Permiso de edificación municipal",
-    "Certificado de recepción final municipal (o recepción parcial si aplica)",
-    "Certificado de número municipal",
-    "Certificado de no expropiación municipal y SERVIU",
-    "Plano de loteo / copropiedad y certificado de acogida a la Ley de Copropiedad Inmobiliaria (si aplica)",
-    "Reglamento de copropiedad inscrito (si aplica)",
-    "Certificado de contribuciones al día (Tesorería General de la República)",
-    "Promesa de compraventa o borrador de escritura (si existe)",
-]
+def _plazos_bold(texto):
+    return re.sub(r"(45 días|30 días|10 años)", r"<b>\1</b>", texto)
+
+
+def _docs_usada_html():
+    """Listado oficial de estudio de título para vivienda usada — HTML cuidado."""
+    partes = ['<div style="margin-top:22px">'
+              '<div style="text-align:center;font-weight:bold;font-size:16px;color:#111;'
+              'letter-spacing:0.5px">ESTUDIO DE TÍTULO - DOCUMENTOS REQUERIDOS</div>'
+              '<hr style="border:none;border-top:2px solid #333;margin:8px auto 18px;width:100%">']
+    for titulo, subsecciones in SECCIONES_ESTUDIO_USADA:
+        partes.append(
+            f'<div style="background:#f0f0f0;border:1px solid #ddd;padding:8px 14px;'
+            f'font-weight:bold;font-size:14px;color:#111;margin:16px 0 8px">{titulo}</div>')
+        for letra, docs in subsecciones:
+            if letra:
+                partes.append(f'<div style="font-weight:bold;font-size:13.5px;color:#222;'
+                              f'margin:10px 0 4px 4px">{letra}</div>')
+            lis = "".join(f'<li style="margin:6px 0;line-height:1.55">{_plazos_bold(d)}</li>' for d in docs)
+            partes.append(f'<ul style="margin:4px 0 10px;padding-left:26px;color:#111;font-size:13.5px">{lis}</ul>')
+    partes.append('</div>')
+    return "".join(partes)
+
+
+def _estudio_usada_wrap(inner):
+    """Correo de estudio de título USADA: fondo blanco, Arial, pie formal sin Concreces."""
+    return f"""<!DOCTYPE html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background:#ffffff">
+  <div style="max-width:680px;margin:0 auto;padding:30px 34px;background:#ffffff;
+    font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6;color:#111">
+    {inner}
+    <hr style="border:none;border-top:1px solid #ccc;margin:26px 0 14px">
+    <p style="margin:0;color:#111;font-size:14px"><b>Central Mutuos</b><br>
+    <span style="color:#555;font-size:12.5px">Cr&eacute;ditos Hipotecarios</span></p>
+    <p style="margin-top:12px;color:#888;font-size:11px">Este correo contiene informaci&oacute;n
+    confidencial dirigida exclusivamente a su destinatario.</p>
+  </div>
+</body></html>"""
 
 
 def _estudio_html(p):
@@ -7214,19 +7290,9 @@ def _estudio_html(p):
                                       (p.get("vendedor_telefono") or "").strip()] if x)
         fila("Vendedor (contacto)", vend)
     fila("Dirección de la propiedad", p.get("direccion", ""))
-    docs = [d for d in (p.get("docs_lista") or []) if str(d).strip()]
-    docs_html = ""
-    if docs:
-        lis = "".join(f'<li style="margin:4px 0">{str(d).strip()}</li>' for d in docs)
-        titulo_docs = ("Para el estudio de títulos de vivienda usada necesitamos los siguientes documentos:"
-                       if tipo == "usada"
-                       else "Para el estudio de títulos solicitamos a la inmobiliaria los siguientes documentos:")
-        docs_html = (
-            f'<p style="margin-top:14px"><b>{titulo_docs}</b></p>'
-            f'<ol style="margin:6px 0 0;padding-left:22px;color:#111">{lis}</ol>'
-            '<p style="margin-top:10px;color:#334155;font-size:13px"><i>En caso de ser necesario, '
-            'nos reservamos la posibilidad de seguir solicitando antecedentes que permitan la '
-            'conclusión en tiempo y forma de este estudio de títulos.</i></p>')
+    # VIVIENDA NUEVA: sin listado de documentos (solo la solicitud estándar).
+    # VIVIENDA USADA: listado oficial estructurado con formato cuidado.
+    docs_html = _docs_usada_html() if tipo == "usada" else ""
     obs = (p.get("observaciones") or "").strip()
     intro = (p.get("intro") or "").strip() or ("Solicitamos dar inicio al <b>estudio de títulos</b> del cliente en referencia, "
                                                "con copia a Victoria Vilches. Se detallan los antecedentes:")
@@ -7236,8 +7302,13 @@ def _estudio_html(p):
       <table style="border-collapse:collapse;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;width:100%">{''.join(filas)}</table>
       {docs_html}
       {f'<p style="margin-top:12px"><b>Observaciones:</b> {obs}</p>' if obs else ''}
+      <p style="margin-top:10px;color:#334155;font-size:13px"><i>En caso de ser necesario,
+      nos reservamos la posibilidad de seguir solicitando antecedentes que permitan la
+      conclusi&oacute;n en tiempo y forma de este estudio de t&iacute;tulos.</i></p>
       <p style="margin-top:14px">Quedamos atentos a sus comentarios y a cualquier antecedente adicional que sea necesario.</p>
       <p style="margin-top:16px;color:#555">Saludos cordiales,</p>"""
+    if tipo == "usada":
+        return _estudio_usada_wrap(inner)
     return _marca_wrap(inner, "Estudio de Títulos")
 
 

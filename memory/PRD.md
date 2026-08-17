@@ -928,3 +928,14 @@ Constitución v16 (Reglas #34-#38, #41, #43, #49, #52, #53, #54). Módulo Broker
 - NOTA OPERATIVA: el hot-reload de uvicorn a veces queda pegado tras editar malla_inteligencia
   (proceso viejo termina, nuevo no arranca — hilos de LiteLLM/SMTP en atexit).
   Solución: sudo supervisorctl restart backend.
+
+## Actualización 2026-06 (fork, 4i) — Estudio de Título por tipo de propiedad
+- VIVIENDA NUEVA: correo de solicitud SIN listado de documentos (solo solicitud estándar,
+  formato marca habitual). DOCS_ESTUDIO_NUEVA = [].
+- VIVIENDA USADA: correo con listado oficial estructurado (SECCIONES_ESTUDIO_USADA en
+  server.py): secciones I/II/III con encabezado gris, subsecciones a/b/c en negrita,
+  viñetas espaciadas, plazos (45 días / 30 días / 10 años) en negrita. Wrapper dedicado
+  _estudio_usada_wrap: fondo blanco, Arial, título centrado "ESTUDIO DE TÍTULO - DOCUMENTOS
+  REQUERIDOS" con línea separadora, pie "Central Mutuos" SIN mencionar Concreces.
+- Verificado con previews (confirm=false, sin envío real): 14/14 checks usada OK,
+  nueva sin listado OK. defaults: docs_usada=32 ítems planos para el form, docs_nueva=[].
