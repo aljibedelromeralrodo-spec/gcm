@@ -433,7 +433,10 @@ def _plazo_maximo(edad: int, edad_max: float = 80) -> int:
     return max(1, min(40, int(edad_max) - edad))
 
 
-def predict_inmobiliaria(d: dict, tasas: dict, seguros: dict, valor_uf: float) -> dict:
+def predict_inmobiliaria(d: dict, tasas: dict, seguros: dict, valor_uf: float,
+                         umbrales: dict = None) -> dict:
+    u = umbrales or {}
+    u_edad = float(u.get("edad_plazo_max") or 80)
     modo = d.get("modo", "subsidio")
     valor_prop = float(d.get("valor_propiedad_uf") or 0)
     subsidio = float(d.get("subsidio_uf") or 0)
