@@ -3037,7 +3037,9 @@ async def solicitud_doc_preview(fid: str, request: Request, doc: str = ""):
         faltantes.append("RUT del cliente")
     if not usada and not proyecto:
         faltantes.append("Nombre del proyecto")
-    cc = [x["email"] for x in await _cc_globales() if x.get("activo") and x.get("email")]
+    # SIN CC: la solicitud sale SOLO al contacto — Victoria/Daniela reciben los
+    # documentos por el reenvío automático cuando llega la respuesta (_reenvio_co_rs)
+    cc = []
     pie_datos = (f"Cliente: {nombre}\nRUT: {rut or '[RUT del cliente]'}\n")
     doc_sel = doc if doc in ("promesa", "carta_pie") else "promesa"
     alternativas = None
@@ -3093,7 +3095,7 @@ async def solicitud_doc_preview(fid: str, request: Request, doc: str = ""):
 @supercarpeta.post("/solicitud-doc/{fid}/enviar")
 async def solicitud_doc_enviar(fid: str, payload: dict, request: Request):
     """REGLA ABSOLUTA: solo envía al confirmar el preview — jamás automático ni retroactivo.
-    CC obligatoria a los destinatarios globales activos. Registro en ADN_CLIENTES_360."""
+    Sin CC (la copia a Gerencia va después, vía reenvío automático). Registro en ADN_CLIENTES_360."""
     user = _exigir_gerencia(request)
     import adn_clientes as _adn
     fd = await db.folders.find_one({"id": fid})
@@ -3136,57 +3138,75 @@ async def solicitud_doc_enviar(fid: str, payload: dict, request: Request):
     if sets_fd:
         await db.folders.update_one({"id": fid}, {"$set": {**sets_fd, "updated_at": _now()}})
         await _sync_adn(fid)
-    # CC OBLIGATORIA en todos los casos (destinatarios globales activos)
-    cc = [x["email"] for x in await _cc_globales()
-          if x.get("activo") and x.get("email") and x["email"].lower() != para.lower()]
+    # SIN CC: la solicitud sale SOLO al contacto de la inmobiliaria/vendedor.
+    # Victoria y Daniela reciben los documentos completos vía reenvío automático (_reenvio_co_rs).
+    cc = []
     html = "<p>" + cuerpo.replace("\n", "<br>") + "</p>"
     html += await _firma_html()
-    res = await asyncio.to_thread(
-        lambda: mail.send_mail(para, asunto, html, desde="secundaria", cc=cc))
-    if not res.get("success"):
-        raise HTTPException(status_code=502, detail=res.get("error") or "Error de envío SMTP")
-    # APRENDIZAJE AUTOMÁTICO: si el Admin editó el destinatario en la confirmación,
-    # queda guardado en el panel de fuentes para ese origen (precargado la próxima vez)
-    try:
-        inmo_ap = _inmo_de_folder(fd)
-        if usada:
-            v = fd.get("vendedor_usada") or {}
-            if para.lower() != (v.get("email") or "").lower():
-                v.update({"nombre": (payload.get("encargado") or v.get("nombre") or "").strip(),
-                          "email": para, "activo": True, "actualizado": _now(),
-                          "por": "aprendizaje automático (editado en confirmación)"})
-                await db.folders.update_one({"id": fid}, {"$set": {"vendedor_usada": v}})
-        else:
-            _, cont_prev = await _contacto_para(fd, proyecto)
-            if para.lower() != ((cont_prev or {}).get("email") or "").lower():
-                await db.contactos_carta.update_one(
-                    {"inmobiliaria_norm": _norm_inmo(inmo_ap), "proyecto_norm": _norm_inmo(proyecto)},
-                    {"$set": {"inmobiliaria": inmo_ap, "inmobiliaria_norm": _norm_inmo(inmo_ap),
-                              "proyecto": proyecto, "proyecto_norm": _norm_inmo(proyecto),
-                              "contacto": (payload.get("encargado") or "").strip(), "email": para,
-                              "activo": True, "actualizado": _now(),
-                              "origen": "aprendizaje automático (editado en confirmación)"},
-                     "$setOnInsert": {"id": str(uuid.uuid4())}}, upsert=True)
-    except Exception as ex:
-        logging.warning(f"aprendizaje contacto: {ex}")
-    em = fd.get("estados_manuales") or {}
-    for h in hitos_marca:
-        if not (em.get(h) or {}).get("estado"):
-            em[h] = {"estado": "Solicitada", "por": user.get("sub") or "",
-                     "en": _now(), "via": "solicitud_email"}
-    registro = {"tipo": "+".join(hitos_marca), "tipo_cliente": tipo,
-                "documentos": [_DOC_LABEL[h] for h in hitos_marca], "para": para, "cc": cc,
-                "asunto": asunto, "en": _now(), "por": user.get("sub") or "",
-                "estado": "enviado", "smtp_code": res.get("smtp_code")}
-    await db.folders.update_one({"id": fid}, {
-        "$set": {"estados_manuales": em, "updated_at": _now()},
-        "$push": {"bitacora_solicitudes": registro}})
-    # REGISTRO EN ADN_CLIENTES_360: fecha, hora, destinatarios y estado
-    if fd.get("rut"):
-        await db.adn_clientes_360.update_one(
-            {"rut_norm": _adn._norm_rut(fd["rut"])},
-            {"$push": {"envios_carta_oferta": registro}})
-    return {"ok": True, "smtp_code": res.get("smtp_code"), "cc": cc}
+    usuario_envio = user.get("sub") or ""
+
+    async def _envio_bg():
+        """ENVÍO EN SEGUNDO PLANO: el throttling SMTP (10s + reintento 60s) jamás
+        congela la interfaz ni la respuesta HTTP. El resultado queda en bitácora/alertas."""
+        try:
+            res = await asyncio.to_thread(
+                lambda: mail.send_mail(para, asunto, html, desde="secundaria", cc=cc))
+            ok = bool(res.get("success"))
+            if ok:
+                # APRENDIZAJE AUTOMÁTICO: si el Admin editó el destinatario en la confirmación,
+                # queda guardado en el panel de fuentes para ese origen (precargado la próxima vez)
+                try:
+                    inmo_ap = _inmo_de_folder(fd)
+                    if usada:
+                        v = fd.get("vendedor_usada") or {}
+                        if para.lower() != (v.get("email") or "").lower():
+                            v.update({"nombre": (payload.get("encargado") or v.get("nombre") or "").strip(),
+                                      "email": para, "activo": True, "actualizado": _now(),
+                                      "por": "aprendizaje automático (editado en confirmación)"})
+                            await db.folders.update_one({"id": fid}, {"$set": {"vendedor_usada": v}})
+                    else:
+                        _, cont_prev = await _contacto_para(fd, proyecto)
+                        if para.lower() != ((cont_prev or {}).get("email") or "").lower():
+                            await db.contactos_carta.update_one(
+                                {"inmobiliaria_norm": _norm_inmo(inmo_ap), "proyecto_norm": _norm_inmo(proyecto)},
+                                {"$set": {"inmobiliaria": inmo_ap, "inmobiliaria_norm": _norm_inmo(inmo_ap),
+                                          "proyecto": proyecto, "proyecto_norm": _norm_inmo(proyecto),
+                                          "contacto": (payload.get("encargado") or "").strip(), "email": para,
+                                          "activo": True, "actualizado": _now(),
+                                          "origen": "aprendizaje automático (editado en confirmación)"},
+                                 "$setOnInsert": {"id": str(uuid.uuid4())}}, upsert=True)
+                except Exception as ex:
+                    logging.warning(f"aprendizaje contacto: {ex}")
+                em = fd.get("estados_manuales") or {}
+                for h in hitos_marca:
+                    if not (em.get(h) or {}).get("estado"):
+                        em[h] = {"estado": "Solicitada", "por": usuario_envio,
+                                 "en": _now(), "via": "solicitud_email"}
+                await db.folders.update_one({"id": fid}, {"$set": {"estados_manuales": em}})
+            registro = {"tipo": "+".join(hitos_marca), "tipo_cliente": tipo,
+                        "documentos": [_DOC_LABEL[h] for h in hitos_marca], "para": para, "cc": cc,
+                        "asunto": asunto, "en": _now(), "por": usuario_envio,
+                        "estado": "enviado" if ok else "fallido",
+                        "smtp_code": res.get("smtp_code"), "error": res.get("error") or ""}
+            await db.folders.update_one({"id": fid}, {
+                "$set": {"updated_at": _now()},
+                "$push": {"bitacora_solicitudes": registro}})
+            # REGISTRO EN ADN_CLIENTES_360: fecha, hora, destinatarios y estado
+            if fd.get("rut"):
+                await db.adn_clientes_360.update_one(
+                    {"rut_norm": _adn._norm_rut(fd["rut"])},
+                    {"$push": {"envios_carta_oferta": registro}})
+            if not ok:
+                await db.alertas.insert_one({"id": str(uuid.uuid4()), "tipo": "solicitud_fallida",
+                    "mensaje": f"🔴 Falló el envío de la solicitud de {fd.get('nombre')} a {para}: "
+                               f"{res.get('error') or 'error SMTP'} — reintente desde la Supercarpeta",
+                    "fecha": _now(), "leida": False})
+        except Exception as ex:
+            logging.warning(f"solicitud envío bg {fd.get('nombre')}: {ex}")
+
+    asyncio.create_task(_envio_bg())
+    return {"ok": True, "estado": "en_envio", "cc": cc,
+            "documentos": [_DOC_LABEL[h] for h in hitos_marca]}
 
 
 # ── COSTOS CBR — extracción desde adjuntos "Simulación" de Mesa ─────────────

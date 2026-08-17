@@ -479,12 +479,12 @@ export default function SupercarpetaModule() {
     const m = solicitudModal;
     setSolicitudModal({ ...m, enviando: true });
     try {
-      const r = await axios.post(`${API}/api/supercarpeta/solicitud-doc/${m.fid}/enviar`, {
+      await axios.post(`${API}/api/supercarpeta/solicitud-doc/${m.fid}/enviar`, {
         para: m.para, asunto: m.asunto, cuerpo: m.cuerpo, doc_elegido: m.doc_elegido || "",
         encargado: m.encargado || "",
         rut: m.rut, proyecto: m.proyecto, resolucion_serviu: m.resolucion_serviu });
       setSolicitudModal(null);
-      window.alert(`✅ Solicitud enviada a ${m.para} (CC: ${(r.data.cc || []).join(", ") || "—"}) — ${(m.docs_solicitados || []).join(" y ")} queda(n) "Solicitada"`);
+      window.alert(`✅ Solicitud despachada a ${m.para} (sin copia) — ${(m.docs_solicitados || []).join(" y ")} queda(n) "Solicitada". El resultado del envío queda en la bitácora.`);
       recargar();
     } catch (e) {
       setSolicitudModal({ ...m, enviando: false });

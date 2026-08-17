@@ -894,3 +894,18 @@ Constitución v16 (Reglas #34-#38, #41, #43, #49, #52, #53, #54). Módulo Broker
 - Verificado: Supercarpeta renderiza flota completa con UF SII en vivo (screenshot OK).
 - NO aplicados (riesgo/regla eficiencia): hook dependencies masivas, división de componentes
   gigantes (ClientesModule 3.675 líneas, CentralChat), refactors de complejidad backend.
+
+## Actualización 2026-06 (fork, 4g) — Flujo Carta Oferta sin CC + envío en 2º plano + servidor
+- CORRECCIÓN 1: la solicitud de carta oferta ya NO lleva CC a Victoria/Daniela — sale solo
+  al contacto de la inmobiliaria/vendedor (preview y envío devuelven cc=[]).
+- CORRECCIÓN 2: el reenvío automático con adjuntos a Victoria + Daniela YA EXISTÍA
+  (_reenvio_co_rs + loop 30 min): se dispara solo cuando llegan y se confirman TODOS los
+  documentos del tipo de cliente. Nunca antes. Sin cambios.
+- CORRECCIÓN 3 / CLOUDFLARE: causa raíz del congelamiento = send_mail tiene lock global +
+  pausa 10s entre correos + reintento tras 60s (hasta ~2 min por envío) y el endpoint
+  esperaba todo eso → Cloudflare corta a los 100s. Ahora /solicitud-doc/{fid}/enviar valida
+  y responde INMEDIATO ({ok, estado: "en_envio"}), y el SMTP corre en asyncio.create_task:
+  éxito → marca Solicitada + bitácora + ADN + aprendizaje; fallo → bitácora "fallido" +
+  alerta roja 🔴 en el panel. Workers reiniciados; login 200 en ~0.16s sostenido.
+- Deploy blocker corregido (deployment_agent): eliminado delete_many({"codigo":"rene"}) del
+  arranque (operación destructiva en startup bloqueaba el readiness).

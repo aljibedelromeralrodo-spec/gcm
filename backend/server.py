@@ -94,8 +94,8 @@ async def ensure_seed():
             {"$set": u, "$setOnInsert": {"created": now_iso()}},
             upsert=True,
         )
-    # RESTABLECIMIENTO DE AUTORIDAD: mando único de Gerardo Barrera. René Osa eliminado.
-    await db.users.delete_many({"codigo": "rene"})
+    # RESTABLECIMIENTO DE AUTORIDAD: mando único de Gerardo Barrera. René Osa fue eliminado
+    # en su momento; el borrado destructivo se retiró del arranque (bloqueaba el deploy).
     await db.users.update_many({"rol": "maestro"}, {"$set": {"rol": "admin"}})
     # CONSTITUCIÓN MAESTRA: 15 Reglas de Oro (fuente de verdad inmutable)
     try:
