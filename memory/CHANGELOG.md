@@ -1300,3 +1300,36 @@ Constitución VERSION 19 (nuevas reglas #55, #56, #57).
 - **UI**: modal 🏢 con sección "Vendedores — Vivienda Usada" (alerta sin configurar); modal de
   solicitud adaptado a usada (título Compromiso CV, sin campos serviu, PARA=vendedor); botón por
   fila "📨 Pedir Compromiso CV" en clientes Casa Usada.
+
+## 2026-06 (fork) — Matriz de Documentos + Panel de Fuentes + Confirmación + Auto-envío Mesa
+- **AUDITORÍA ADN**: inmobiliarias unificadas a canónico (BOETCH/WORD/MAESTRA/ECOMAC/URBANIZATE/
+  CASA USADA) en folders + ADN. Proyectos: UVAS Y EL VIENTO (confirmado por Gerencia) corregido;
+  UVAS Y EL VIENTO 2 y FUCHSLOCKER validados; pendientes confirmar: Escalona (UVAS/LA GRANJA) y
+  C. Salgado (Proyecto Test vs ALTO PARQUE). Listas maestras en config.lista_maestra_origenes.
+- **MATRIZ DOCUMENTOS POR TIPO** (_tipo_cliente/_docs_de_tipo/_marcado_documentos): nueva c/sub
+  → CO+RS · nueva s/sub → CO · usada c/sub → Compromiso+Cert Subsidio · usada s/sub → Compromiso
+  O Carta Pie (elige ejecutivo). Nuevos hitos cert_subsidio/carta_pie. Marcado por documento
+  ✅🟡🔴🔵 (badges en tabla y tarjetas, testid doc-badge-{hito}-{id}). Reenvío automático a
+  Victoria/Daniela SOLO con TODOS los docs del tipo confirmados (_reenvio_co_rs generalizado).
+- **BARRIDO detecta llegadas**: carta oferta/resolución/cert subsidio/carta pie entrantes →
+  _marcar_doc_llegada = azul "Pendiente verificación manual" (jamás confirma sola) + alerta.
+- **PANEL DE FUENTES** (GET /supercarpeta/fuentes-panel): Sección 1 inmobiliarias (correo general
+  db.inmobiliarias + proyectos con contactos por función CO/tasación/estudio, ⚙ expandible),
+  Sección 2 brokers (db.brokers_fuentes, word_consultor/autocorredor, 3 contactos), Sección 3
+  individuales usada (tipo + docs auto). Registro completo (reg-nueva-inmobiliaria/reg-nuevo-broker).
+  Orden destinatario: individual → proyecto → general → broker. _norm_inmo unifica boetsch→boetch.
+- **BLOQUEO ORIGEN**: POST /supercarpeta/manual campo inmobiliaria/broker inexistente → 409
+  ORIGEN_NO_CONFIGURADO → frontend abre registro prefilleado. lista_maestra en vista.
+- **CUADRO CONFIRMACIÓN** (siempre, sin excepción): modal 70%+ pantalla, no cierra con clic fuera,
+  campos bloqueados hasta EDITAR, CC fijos no editables, CONFIRMAR/EDITAR/CANCELAR. APRENDIZAJE:
+  destinatario editado → se guarda en fuentes (contactos_carta o vendedor_usada) al enviar.
+- **AUTO-ENVÍO EXCLUSIVO MESA**: barrido activo=True cada 20 min; simulación PDF de aprobaciones@
+  → extrae CBR pág. 2 (_extraer_gastos_pdf) → correo ajustado c/ gastos base (2,5+2 UF) + PDF a
+  gerardo.ext@centralmutuos.cl SIN confirm (db.auto_envios_aprobaciones dedupe, 11 históricos
+  omitidos). Sin CBR legible → NO envía + alerta Admin. Todo lo demás mantiene confirm manual.
+- **CONTACTOS DETECTADOS EN BUZÓN** (verificar): Celinda Soria=csoria@boetsch.cl ✓ cargado;
+  Uvas y el Viento 2=uvasyelviento2@boetsch.cl; Ecomac general=xgomez@ecomac.cl; Maestra
+  general=fabiola.perez@maestra.cl. Rodrigo Salazar: NO encontrado (pendiente usuario).
+  Quintero mantiene correo de prueba del usuario (ethangerardobarr@gmail.com).
+- TESTS: 6/6 matriz+reenvío PASS · auto-envío 2/2 PASS (con CBR envía, sin CBR alerta, no duplica)
+  · 409 verificado · previews por tipo verificados · screenshots UI OK.

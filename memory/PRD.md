@@ -824,5 +824,12 @@ Constitución v16 (Reglas #34-#38, #41, #43, #49, #52, #53, #54). Módulo Broker
 - Resumen Semanal Gerencia: lunes 08:00 Chile, avances + cuellos de botella Flota, destinatarios
   editables (default rodrigoibanez + Victoria + Daniela). Preview probado, sin envío real aún.
 - Vista móvil (≤768px): tarjetas apiladas en Supercarpeta y Gerencia. Verificado 390x844.
-- Backlog: % comisión Word/Urbanizate (espera usuario), correos de Celinda Soria/Rodrigo Salazar/
-  Maestra/Ecomac (espera usuario — cargar en 🏢), Twilio keys, alerta cumpleaños (P2).
+## Actualización 2026-06 (fork, 3) — Matriz Documentos + Fuentes + Confirmación + Auto-envío
+- Ver CHANGELOG.md (misma fecha): matriz de documentos por tipo de cliente, Panel de Fuentes
+  (3 secciones + registro inteligente + bloqueo 409 de origen no configurado), cuadro de
+  confirmación obligatorio con aprendizaje de destinatarios, barrido automático activo (20 min)
+  con auto-envío EXCLUSIVO de simulaciones de aprobaciones@ a gerardo.ext, auditoría y
+  canonicalización de inmobiliarias/proyectos en ADN.
+- Pendiente usuario: correo de Rodrigo Salazar (Fuchslocker); confirmar proyecto de Miguel
+  Escalona (¿Uvas y el Viento o La Granja?) y de Carlos Salgado (¿ALTO PARQUE?); % comisión
+  Word/Urbanizate; Twilio keys; alerta cumpleaños (P2).

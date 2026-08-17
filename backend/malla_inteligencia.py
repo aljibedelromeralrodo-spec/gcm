@@ -1045,6 +1045,7 @@ async def _auditar_lote(correos):
     por_rut = {_rut_limpio(f.get("rut")): f for f in folders if len(_rut_limpio(f.get("rut"))) >= 8}
     res = {"correos_revisados": len(correos or []), "tasaciones_detectadas": 0,
            "estudios_detectados": 0, "sets_detectados": 0, "promesas_detectadas": 0,
+           "docs_detectados": 0,
            "reparos_transcritos": 0, "sin_respaldo": 0, "detalle": []}
     fu = await _fuentes_documentos()
     tas_src = [s.lower() for s in fu.get("tasacion", []) if s]
@@ -1108,7 +1109,11 @@ async def _auditar_lote(correos):
         es_serviu = any(k in asunto_l for k in ("serviu", "subsidio", "resolucion", "resolución"))
         es_promesa = bool(re.search(r"(promesa|compromiso)\s+(de\s+)?compraventa|promesa\s+firmada|compromiso\s+firmado",
                                     f"{asunto_l} {cuerpo[:800].lower()}"))
-        if not (es_tasacion or es_estudio or es_notaria or es_set or es_serviu or es_promesa):
+        es_carta_doc = "carta oferta" in asunto_l
+        es_cert_sub = bool(re.search(r"certificado.{0,14}subsidio", asunto_l))
+        es_carta_pie = bool(re.search(r"carta\s+(de\s+)?pie", asunto_l))
+        if not (es_tasacion or es_estudio or es_notaria or es_set or es_serviu or es_promesa
+                or es_carta_doc or es_cert_sub or es_carta_pie):
             continue
         fd, metodo = _match_carpeta(texto, por_rut, folders)
         if not fd:
@@ -1118,9 +1123,14 @@ async def _auditar_lote(correos):
             continue
         hito_cap = ("tasacion" if es_tasacion else "estudio" if es_estudio else
                     "cesion" if es_notaria else "set_credito" if es_set else
-                    "promesa" if es_promesa else "serviu")
+                    "promesa" if (es_promesa or es_cert_sub or es_carta_pie) else
+                    "carta_oferta" if es_carta_doc else "serviu")
         await _capturar_remitente(fd, hito_cap, e)
-        if es_serviu and not (es_tasacion or es_estudio or es_notaria or es_set or es_promesa):
+        if es_serviu and not (es_tasacion or es_estudio or es_notaria or es_set or es_promesa
+                              or es_carta_doc or es_cert_sub or es_carta_pie):
+            # CUENTA DE BARRIDO: resolución serviu que llega → marcado azul (verificación manual)
+            if re.search(r"resoluci", asunto_l):
+                await _marcar_doc_llegada(fd, "serviu", e)
             continue
         clave = "aud-" + hashlib.md5(f"{de}|{asunto}|{e.get('date','')}".encode()).hexdigest()
         if await db.hitos_externos.find_one({"clave": clave}):
@@ -1158,6 +1168,14 @@ async def _auditar_lote(correos):
                 await _archivar_adjuntos(fd, e["id"], "PROMESA", subdir="99_otros")
             hito_n = f"Promesa de Compraventa: {estado_p} ({evidencia_p[:80]})"
             res_k = "promesas_detectadas"
+        elif es_carta_doc or es_cert_sub or es_carta_pie:
+            # CUENTA DE BARRIDO: documento solicitado que llega → 🔵 azul, jamás confirma sola
+            hito_d = "carta_oferta" if es_carta_doc else "cert_subsidio" if es_cert_sub else "carta_pie"
+            await _marcar_doc_llegada(fd, hito_d, e)
+            if e.get("id"):
+                await _archivar_adjuntos(fd, e["id"], hito_d.upper(), subdir="99_otros")
+            hito_n = f"{_DOC_LABEL[hito_d]}: recibido — {_PEND_VERIF}"
+            res_k = "docs_detectados"
         elif es_tasacion:
             await db.folders.update_one({"id": fd["id"]}, {"$set": {
                 "tasacion_informe_recibido_at": e.get("date") or _now(),
@@ -1949,8 +1967,8 @@ async def supercarpeta_vista(mes: str = ""):
                                          "firmado": bool(pv.get("firmado")),
                                          "fecha": str(pv.get("fecha") or "")[:10]} if pv else None),
                          "carta_oferta": est_carta,
-                         "docs_co_rs": _marcado_docs(est_carta, est_serviu,
-                                                     bool(fd.get("co_rs_reenviado_at"))),
+                         "docs_co_rs": _marcado_documentos(fd, "con" in subsidio_v.lower(),
+                                                           bool(fd.get("co_rs_reenviado_at"))),
                          "carpeta_notaria": est_carpeta, "escritura": est_escritura,
                          "fecha_firma": fd.get("fecha_firma") or fd.get("fecha_firma_detectada") or "",
                          "con_subsidio": "con" in subsidio_v.lower(),
@@ -1995,6 +2013,8 @@ async def supercarpeta_vista(mes: str = ""):
         "uf_en_avance": uf_en_avance, "meta_uf": meta_uf, "actualizado": _now()}}, upsert=True)
     return {"mes": mes_cal, "mes_proyeccion": mes_sel, "meses": meses,
             "clientes": clientes, "total": len(clientes),
+            "lista_maestra": {k: (await db.config.find_one({"_key": "lista_maestra_origenes"}) or {}).get(k) or []
+                              for k in ("inmobiliarias", "brokers")},
             "proyeccion": proyeccion,
             "flota_activa": bool(flota), "flota_total": len(flota),
             "fuente": "ADN_CLIENTES_360 (Regla #66) — sin escaneo de PDFs físicos",
@@ -2002,26 +2022,101 @@ async def supercarpeta_vista(mes: str = ""):
 
 
 HITOS_VALIDOS = ("tasacion", "estudio", "cesion", "set_credito",
-                 "serviu", "promesa", "carta_oferta", "carpeta_notaria", "escritura", "notaria")
+                 "serviu", "promesa", "carta_oferta", "carpeta_notaria", "escritura", "notaria",
+                 "cert_subsidio", "carta_pie")
 
 _PEND_VERIF = "Pendiente verificación manual"
 
 
-def _marcado_docs(est_carta, est_serviu, reenviado=False):
-    """Marcado ficha cliente: ✅ verde ambos, 🟡 falta uno, 🔴 ninguno, 🔵 verificación manual."""
-    pres = lambda e: e in ("Recibida", "Aprobada")
-    llego = lambda e: pres(e) or e == _PEND_VERIF
-    if pres(est_carta) and pres(est_serviu):
-        det = ("Carta Oferta y Resolución Serviu completas — reenviadas ✓ a los destinatarios globales"
-               if reenviado else "Carta Oferta y Resolución Serviu completas — reenvío automático en curso")
-        return {"color": "verde", "icono": "✅", "detalle": det, "reenviado": reenviado}
-    if llego(est_carta) and llego(est_serviu):
-        return {"color": "azul", "icono": "🔵", "detalle": "Ambos documentos llegaron — hay verificación manual pendiente (no se reenvía hasta confirmar)"}
-    if llego(est_carta):
-        return {"color": "amarillo", "icono": "🟡", "detalle": "Falta la Resolución Serviu"}
-    if llego(est_serviu):
-        return {"color": "amarillo", "icono": "🟡", "detalle": "Falta la Carta Oferta"}
-    return {"color": "rojo", "icono": "🔴", "detalle": "No ha llegado ningún documento"}
+# ── MATRIZ DEFINITIVA: DOCUMENTOS POR TIPO DE CLIENTE (detectado desde ADN) ──
+_DOCS_CONFIRMADOS = ("Recibida", "Aprobada", "Recibido", "Aprobado",
+                     "Firmada", "Firmada (verificada IA)")
+_DOC_LABEL = {"carta_oferta": "Carta Oferta", "serviu": "Resolución SERVIU",
+              "promesa": "Compromiso de Compraventa", "cert_subsidio": "Certificado de Subsidio",
+              "carta_pie": "Carta Pie"}
+_DOC_ADJ_RE = {"carta_oferta": r"carta.?oferta|cartaoferta|oferta", "serviu": r"serviu|resoluc",
+               "promesa": r"promes|compromis|compravent", "cert_subsidio": r"cert.*subsidio|subsidio",
+               "carta_pie": r"carta.?pie|cartapie"}
+
+
+def _tipo_cliente(fd, con_subsidio):
+    usada = _inmo_de_folder(fd) == "Casa Usada"
+    return (("usada_con_subsidio" if con_subsidio else "usada_sin_subsidio") if usada
+            else ("nueva_con_subsidio" if con_subsidio else "nueva_sin_subsidio"))
+
+
+def _docs_de_tipo(tipo):
+    """Cada requisito es una lista de alternativas (la 'O' del ejecutivo en usada sin subsidio)."""
+    return {"nueva_con_subsidio": [["carta_oferta"], ["serviu"]],
+            "nueva_sin_subsidio": [["carta_oferta"]],
+            "usada_con_subsidio": [["promesa"], ["cert_subsidio"]],
+            "usada_sin_subsidio": [["promesa", "carta_pie"]]}[tipo]
+
+
+async def _con_subsidio_fd(fd):
+    sub = (fd.get("subsidio_proyeccion") or "").lower()
+    if sub:
+        return sub.startswith("con")
+    try:
+        import adn_clientes as _adn
+        reg = await db.adn_clientes_360.find_one(
+            {"rut_norm": _adn._norm_rut(fd.get("rut") or "")}, {"financiero": 1}) if fd.get("rut") else None
+        return bool(((reg or {}).get("financiero") or {}).get("con_subsidio"))
+    except Exception:
+        return False
+
+
+def _estado_doc(fd, hito):
+    em = fd.get("estados_manuales") or {}
+    est = (em.get(hito) or {}).get("estado") or ""
+    if hito == "promesa" and not est:
+        est = (fd.get("promesa_verificacion") or {}).get("estado") or ""
+    return est
+
+
+def _color_doc(est):
+    """✅ recibido y confirmado · 🔵 recibido pendiente verificación · 🟡 solicitado sin respuesta · 🔴 no solicitado."""
+    if est in _DOCS_CONFIRMADOS:
+        return "verde", "✅"
+    if est == _PEND_VERIF:
+        return "azul", "🔵"
+    if not est or est == "Pendiente":
+        return "rojo", "🔴"
+    return "amarillo", "🟡"
+
+
+def _marcado_documentos(fd, con_subsidio, reenviado=False):
+    """Marcado por documento + color global del cliente según la matriz de su tipo."""
+    tipo = _tipo_cliente(fd, con_subsidio)
+    rango = {"rojo": 0, "amarillo": 1, "azul": 2, "verde": 3}
+    docs, faltan, hay_azul, llegaron_todos, alguno_llego = [], [], False, True, False
+    for alts in _docs_de_tipo(tipo):
+        estados = [(h, _estado_doc(fd, h)) for h in alts]
+        h, est = max(estados, key=lambda x: rango[_color_doc(x[1])[0]])
+        color, icono = _color_doc(est)
+        label = " / ".join(_DOC_LABEL[x] for x in alts)
+        docs.append({"hito": h, "alternativas": alts, "label": label,
+                     "estado": est or "No solicitado", "color": color, "icono": icono})
+        if color == "azul":
+            hay_azul = True
+        if color in ("verde", "azul"):
+            alguno_llego = True
+        else:
+            llegaron_todos = False
+            faltan.append(label)
+    if llegaron_todos and not hay_azul:
+        det = ("Documentos completos — reenviados ✓ a los destinatarios globales" if reenviado
+               else "Documentos completos — reenvío automático en curso")
+        return {"tipo": tipo, "color": "verde", "icono": "✅", "detalle": det,
+                "documentos": docs, "reenviado": reenviado}
+    if llegaron_todos and hay_azul:
+        return {"tipo": tipo, "color": "azul", "icono": "🔵", "documentos": docs,
+                "detalle": "Llegaron todos — hay verificación manual pendiente (no se reenvía hasta confirmar)"}
+    if alguno_llego:
+        return {"tipo": tipo, "color": "amarillo", "icono": "🟡", "documentos": docs,
+                "detalle": "Falta: " + ", ".join(faltan)}
+    return {"tipo": tipo, "color": "rojo", "icono": "🔴", "documentos": docs,
+            "detalle": "No ha llegado ningún documento (" + ", ".join(faltan) + ")"}
 
 
 ESTADOS_MANUALES_BASE = ["Tasación Piloto", "Solicitada", "En Proceso",
@@ -2064,6 +2159,18 @@ async def supercarpeta_manual(fid: str, payload: dict, request: Request):
             valor = float(str(valor).replace("$", "").replace(" ", "").replace(".", "").replace(",", "."))
         except Exception:
             raise HTTPException(status_code=400, detail="Monto UF inválido")
+    # REGLA: ningún cliente sin origen configurado — si la inmobiliaria/broker no existe
+    # en el panel de fuentes, se bloquea el guardado hasta registrarla (HTTP 409)
+    if campo in ("inmobiliaria", "broker") and str(valor).strip():
+        chk = await fuentes_verificar(request,
+                                      inmobiliaria=valor if campo == "inmobiliaria" else "",
+                                      broker=valor if campo == "broker" else "")
+        ok_key = "inmobiliaria_ok" if campo == "inmobiliaria" else "broker_ok"
+        if not chk.get(ok_key):
+            raise HTTPException(status_code=409, detail={
+                "code": "ORIGEN_NO_CONFIGURADO", "campo": campo, "valor": valor,
+                "mensaje": f"'{valor}' no existe en el Panel de Fuentes. Registre sus contactos "
+                           f"(tasación, estudio de títulos, carta oferta/RS) antes de guardar."})
     destino = {"rut": "rut", "nombre": "nombre", "inmobiliaria": "inmobiliaria",
                "broker": "broker_origen", "tipo_operacion": "tipo_operacion",
                "monto": "proyeccion_uf", "proyecto": "proyecto", "ciudad": "ciudad",
@@ -2119,8 +2226,8 @@ async def supercarpeta_estado_manual(fid: str, payload: dict, request: Request):
                                      "en": ahora, "anterior": anterior},
         "updated_at": ahora}})
     await _sync_adn(fid)
-    # PARTE 2: si con este estado quedan CO+RS ambas confirmadas → reenvío automático
-    if hito in ("carta_oferta", "serviu"):
+    # REENVÍO AUTOMÁTICO: si con este estado quedan TODOS los documentos del tipo confirmados
+    if hito in ("carta_oferta", "serviu", "promesa", "cert_subsidio", "carta_pie"):
         try:
             fd2 = await db.folders.find_one({"id": fid})
             if fd2:
@@ -2266,7 +2373,8 @@ async def fuentes_doc_cliente(fid: str, payload: dict, request: Request):
 
 # ── INMOBILIARIAS (encargado + correo) y SOLICITUD CARTA OFERTA + RES. SERVIU ──
 def _norm_inmo(s):
-    return mail._sin_acentos((s or "").strip().lower())
+    # unifica variantes de escritura (Boetsch/Boetch → boetch)
+    return mail._sin_acentos((s or "").strip().lower()).replace("boetsch", "boetch")
 
 
 def _inmo_de_folder(fd):
@@ -2360,11 +2468,11 @@ async def cc_globales_set(payload: dict, request: Request):
 
 # ── CONTACTOS CARTA OFERTA: por INMOBILIARIA + PROYECTO específico ──────────
 _CONTACTOS_SEMILLA = [
-    {"inmobiliaria": "Boetsch", "proyecto": "", "contacto": "Celinda Soria", "email": ""},
-    {"inmobiliaria": "Boetsch", "proyecto": "Las Uvas y el Viento", "contacto": "Rodrigo Quintero", "email": ""},
-    {"inmobiliaria": "Boetsch", "proyecto": "Fuchslocker", "contacto": "Rodrigo Salazar", "email": ""},
-    {"inmobiliaria": "Maestra", "proyecto": "", "contacto": "", "email": ""},
-    {"inmobiliaria": "Ecomac", "proyecto": "", "contacto": "", "email": ""},
+    {"inmobiliaria": "BOETCH", "proyecto": "", "contacto": "Celinda Soria", "email": ""},
+    {"inmobiliaria": "BOETCH", "proyecto": "Uvas y el Viento", "contacto": "Rodrigo Quintero", "email": ""},
+    {"inmobiliaria": "BOETCH", "proyecto": "Fuchslocker", "contacto": "Rodrigo Salazar", "email": ""},
+    {"inmobiliaria": "MAESTRA", "proyecto": "", "contacto": "", "email": ""},
+    {"inmobiliaria": "ECOMAC", "proyecto": "", "contacto": "", "email": ""},
 ]
 
 
@@ -2424,6 +2532,10 @@ async def contactos_carta_set(payload: dict, request: Request):
     doc = {"inmobiliaria": inmob, "inmobiliaria_norm": _norm_inmo(inmob),
            "proyecto": proyecto, "proyecto_norm": _norm_inmo(proyecto),
            "contacto": (payload.get("contacto") or "").strip(), "email": email_c,
+           "tasacion_nombre": (payload.get("tasacion_nombre") or "").strip(),
+           "tasacion_email": (payload.get("tasacion_email") or "").strip(),
+           "estudio_nombre": (payload.get("estudio_nombre") or "").strip(),
+           "estudio_email": (payload.get("estudio_email") or "").strip(),
            "activo": bool(payload.get("activo", True)), "actualizado": _now()}
     if payload.get("id"):
         await db.contactos_carta.update_one({"id": payload["id"]}, {"$set": doc})
@@ -2453,6 +2565,15 @@ async def _contacto_para(fd, proyecto):
     legado = await db.inmobiliarias.find_one({"nombre_norm": inmo_n}) or {}
     if legado.get("email"):
         return inmo, {"contacto": legado.get("encargado") or "", "email": legado["email"]}
+    # ORDEN 4: broker configurado en fuentes
+    broker_n = _norm_inmo(fd.get("broker_origen") or fd.get("broker_nombre") or "")
+    if broker_n:
+        async for b in db.brokers_fuentes.find({"activo": {"$ne": False}}):
+            bn = b.get("nombre_norm") or ""
+            if bn and (bn in broker_n or broker_n in bn):
+                em_b = b.get("carta_email") or b.get("email")
+                if em_b:
+                    return inmo, {"contacto": b.get("carta_nombre") or b.get("nombre") or "", "email": em_b}
     return inmo, None
 
 
@@ -2466,10 +2587,14 @@ async def vendedores_usada_get(request: Request):
         if fd.get("oculto_supercarpeta") or _inmo_de_folder(fd) != "Casa Usada":
             continue
         v = fd.get("vendedor_usada") or {}
+        con_sub_v = (fd.get("subsidio_proyeccion") or "").lower().startswith("con")
         out.append({"fid": fd["id"], "cliente": fd.get("nombre") or "", "rut": fd.get("rut") or "",
                     "vendedor": v.get("nombre") or "", "email": v.get("email") or "",
                     "telefono": v.get("telefono") or "",
                     "activo": v.get("activo", True) is not False,
+                    "tipo_propiedad": "usada_con_subsidio" if con_sub_v else "usada_sin_subsidio",
+                    "docs": (["Compromiso de Compraventa", "Certificado de Subsidio"] if con_sub_v
+                             else ["Compromiso de Compraventa O Carta Pie (elige el ejecutivo)"]),
                     "configurado": bool(v.get("email"))})
     return {"vendedores": sorted(out, key=lambda x: x["cliente"])}
 
@@ -2494,6 +2619,108 @@ async def vendedores_usada_set(payload: dict, request: Request):
     await db.folders.update_one({"id": fid}, {"$set": {"vendedor_usada": v, "updated_at": _now()}})
     await _sync_adn(fid)
     return {"ok": True, "vendedor_usada": v}
+
+
+# ── PANEL DE FUENTES: Sección 1 inmobiliarias/proyectos · 2 brokers · 3 individuales ──
+@supercarpeta.get("/fuentes-panel")
+async def fuentes_panel_get(request: Request):
+    _exigir_gerencia(request)
+    await _seed_contactos_conocidos()
+    if not await db.brokers_fuentes.find_one({}):
+        await db.brokers_fuentes.insert_one({
+            "id": str(uuid.uuid4()), "nombre": "MUTUARIA Y LEASING LIMITADA",
+            "nombre_norm": _norm_inmo("Mutuaria y Leasing Limitada"), "tipo": "word_consultor",
+            "email": "", "tasacion_nombre": "", "tasacion_email": "",
+            "estudio_nombre": "", "estudio_email": "", "carta_nombre": "", "carta_email": "",
+            "activo": True, "origen": "semilla", "actualizado": _now()})
+    contactos = [c async for c in db.contactos_carta.find({}, {"_id": 0}).sort(
+        [("inmobiliaria", 1), ("proyecto", 1)])]
+    generales = {g["nombre_norm"]: g async for g in db.inmobiliarias.find({}, {"_id": 0})}
+    arbol, orden = {}, []
+    for c in contactos:
+        k = c.get("inmobiliaria_norm") or ""
+        if k not in arbol:
+            g = next((v for gk, v in generales.items() if gk and (gk in k or k in gk)), {})
+            arbol[k] = {"inmobiliaria": (c.get("inmobiliaria") or "").upper(),
+                        "correo_general": g.get("email") or "", "proyectos": []}
+            orden.append(k)
+        arbol[k]["proyectos"].append(c)
+    brokers = [b async for b in db.brokers_fuentes.find({}, {"_id": 0}).sort("nombre", 1)]
+    vend = await vendedores_usada_get(request)
+    lm = await db.config.find_one({"_key": "lista_maestra_origenes"}, {"_id": 0}) or {}
+    return {"inmobiliarias": [arbol[k] for k in orden], "brokers": brokers,
+            "individuales": vend["vendedores"],
+            "lista_maestra": {"inmobiliarias": lm.get("inmobiliarias") or [],
+                              "brokers": lm.get("brokers") or []}}
+
+
+@supercarpeta.post("/inmobiliaria-general")
+async def inmobiliaria_general_set(payload: dict, request: Request):
+    _exigir_admin_general(request)
+    nombre = (payload.get("inmobiliaria") or "").strip()
+    email_g = (payload.get("email") or "").strip()
+    if not nombre:
+        raise HTTPException(status_code=400, detail="Nombre de inmobiliaria obligatorio")
+    if email_g and "@" not in email_g:
+        raise HTTPException(status_code=400, detail="Correo general inválido")
+    await db.inmobiliarias.update_one({"nombre_norm": _norm_inmo(nombre)},
+        {"$set": {"nombre": nombre.upper(), "nombre_norm": _norm_inmo(nombre),
+                  "email": email_g, "actualizado": _now()}}, upsert=True)
+    await db.config.update_one({"_key": "lista_maestra_origenes"},
+        {"$addToSet": {"inmobiliarias": nombre.upper()}}, upsert=True)
+    return {"ok": True}
+
+
+@supercarpeta.post("/brokers-fuentes")
+async def brokers_fuentes_set(payload: dict, request: Request):
+    """Registro completo de broker: correo + contactos de tasación, estudio y carta oferta/RS."""
+    _exigir_admin_general(request)
+    nombre = (payload.get("nombre") or "").strip()
+    if not nombre:
+        raise HTTPException(status_code=400, detail="Nombre del broker obligatorio")
+    for k in ("email", "tasacion_email", "estudio_email", "carta_email"):
+        if (payload.get(k) or "").strip() and "@" not in payload[k]:
+            raise HTTPException(status_code=400, detail=f"Correo inválido en {k}")
+    doc = {"nombre": nombre.upper(), "nombre_norm": _norm_inmo(nombre),
+           "tipo": payload.get("tipo") if payload.get("tipo") in ("word_consultor", "autocorredor") else "word_consultor",
+           "email": (payload.get("email") or "").strip(),
+           "tasacion_nombre": (payload.get("tasacion_nombre") or "").strip(),
+           "tasacion_email": (payload.get("tasacion_email") or "").strip(),
+           "estudio_nombre": (payload.get("estudio_nombre") or "").strip(),
+           "estudio_email": (payload.get("estudio_email") or "").strip(),
+           "carta_nombre": (payload.get("carta_nombre") or "").strip(),
+           "carta_email": (payload.get("carta_email") or "").strip(),
+           "activo": bool(payload.get("activo", True)), "actualizado": _now()}
+    if payload.get("id"):
+        await db.brokers_fuentes.update_one({"id": payload["id"]}, {"$set": doc})
+    else:
+        doc["id"] = str(uuid.uuid4())
+        await db.brokers_fuentes.insert_one(dict(doc))
+    await db.config.update_one({"_key": "lista_maestra_origenes"},
+        {"$addToSet": {"brokers": nombre.upper()}}, upsert=True)
+    return {"ok": True}
+
+
+@supercarpeta.get("/fuentes/verificar")
+async def fuentes_verificar(request: Request, inmobiliaria: str = "", broker: str = ""):
+    """REGISTRO INTELIGENTE: ¿existe ya este origen en el panel de fuentes?"""
+    _exigir_gerencia(request)
+    out = {}
+    if inmobiliaria:
+        n = _norm_inmo(inmobiliaria)
+        existe = (n in ("casa usada", "directa")
+                  or await db.contactos_carta.find_one({"inmobiliaria_norm": {"$regex": f"^{re.escape(n[:6])}"}}) is not None
+                  or await db.inmobiliarias.find_one({"nombre_norm": n}) is not None)
+        if not existe:
+            existe = any([c async for c in db.contactos_carta.find({"activo": {"$ne": False}})
+                          if (c.get("inmobiliaria_norm") or "zzz") in n or n in (c.get("inmobiliaria_norm") or "zzz")])
+        out["inmobiliaria_ok"] = bool(existe)
+    if broker:
+        n = _norm_inmo(broker)
+        existe = any([b async for b in db.brokers_fuentes.find({"activo": {"$ne": False}})
+                      if (b.get("nombre_norm") or "zzz") in n or n in (b.get("nombre_norm") or "zzz")])
+        out["broker_ok"] = bool(existe)
+    return out
 
 
 def _saludo_genero(nombre):
@@ -2523,62 +2750,92 @@ _PRES_CO_RS = ("Recibida", "Aprobada")
 
 
 async def _reenvio_co_rs(fd):
-    """ÚNICA automatización de envío permitida (REGLA ABSOLUTA): cuando Carta Oferta Y
-    Resolución Serviu están ambas RECIBIDAS Y CONFIRMADAS, se reenvían JUNTAS a los
-    destinatarios globales activos (Victoria/Daniela). Con uno solo, JAMÁS reenvía."""
+    """ÚNICA automatización de envío permitida (REGLA ABSOLUTA): solo cuando TODOS los
+    documentos que corresponden al TIPO del cliente están confirmados, se reenvían JUNTOS
+    a los destinatarios globales activos (Victoria/Daniela). Jamás documentos parciales."""
     if fd.get("co_rs_reenviado_at"):
         return {"ok": False, "motivo": "ya reenviado"}
-    em = fd.get("estados_manuales") or {}
-    est_c = (em.get("carta_oferta") or {}).get("estado") or ""
-    est_s = (em.get("serviu") or {}).get("estado") or ""
-    if est_c not in _PRES_CO_RS or est_s not in _PRES_CO_RS:
-        return {"ok": False, "motivo": "espera: ambos documentos deben estar recibidos y confirmados"}
+    con_sub = await _con_subsidio_fd(fd)
+    tipo = _tipo_cliente(fd, con_sub)
+    elegidos = []
+    for alts in _docs_de_tipo(tipo):
+        conf = next((h for h in alts if _estado_doc(fd, h) in _DOCS_CONFIRMADOS), None)
+        if not conf:
+            return {"ok": False, "motivo": "espera: falta " + " / ".join(_DOC_LABEL[a] for a in alts)}
+        elegidos.append(conf)
     destinos = [x["email"] for x in await _cc_globales() if x.get("activo") and x.get("email")]
     if not destinos:
         return {"ok": False, "motivo": "sin destinatarios globales activos"}
-    adjuntos, tiene = [], {"Carta Oferta": False, "Resolución Serviu": False}
+    adjuntos, tiene = [], {h: False for h in elegidos}
     try:
         base = fsvc.folder_dir(fd.get("nombre") or "")
         for p in sorted(base.rglob("*.pdf")):
             n = mail._sin_acentos(p.name.lower())
-            if re.search(r"carta.?oferta|cartaoferta|oferta", n) and not tiene["Carta Oferta"]:
-                adjuntos.append({"filename": p.name, "content_b64": base64.b64encode(p.read_bytes()).decode()})
-                tiene["Carta Oferta"] = True
-            elif re.search(r"serviu|resoluc", n) and not tiene["Resolución Serviu"]:
-                adjuntos.append({"filename": p.name, "content_b64": base64.b64encode(p.read_bytes()).decode()})
-                tiene["Resolución Serviu"] = True
+            for h in elegidos:
+                if not tiene[h] and re.search(_DOC_ADJ_RE[h], n):
+                    adjuntos.append({"filename": p.name,
+                                     "content_b64": base64.b64encode(p.read_bytes()).decode()})
+                    tiene[h] = True
+                    break
     except Exception as ex:
-        logging.warning(f"reenvio co+rs adjuntos {fd.get('nombre')}: {ex}")
+        logging.warning(f"reenvio docs adjuntos {fd.get('nombre')}: {ex}")
     nombre, rut = fd.get("nombre") or "", fd.get("rut") or ""
-    filas = "".join(f"<li><b>{d}</b>: {'adjunto ✓' if ok else 'confirmado en sistema (archivo no localizado en la carpeta digital)'}</li>"
-                    for d, ok in tiene.items())
+    filas = "".join(
+        f"<li><b>{_DOC_LABEL[h]}</b> ({_estado_doc(fd, h)}): "
+        f"{'adjunto ✓' if tiene[h] else 'confirmado en sistema (archivo no localizado en la carpeta digital)'}</li>"
+        for h in elegidos)
+    tipo_txt = {"nueva_con_subsidio": "Vivienda Nueva con Subsidio",
+                "nueva_sin_subsidio": "Vivienda Nueva sin Subsidio",
+                "usada_con_subsidio": "Vivienda Usada con Subsidio",
+                "usada_sin_subsidio": "Vivienda Usada sin Subsidio"}[tipo]
     html = (f"<p>Estimadas,</p>"
             f"<p>Se reenvían de forma automática los documentos completos del cliente "
-            f"<b>{nombre}</b> (RUT {rut or 'por confirmar'}):</p>"
+            f"<b>{nombre}</b> (RUT {rut or 'por confirmar'}) — {tipo_txt}:</p>"
             f"<ul>{filas}</ul>"
-            f"<p>Ambos documentos fueron recibidos y confirmados en el sistema "
-            f"(Carta Oferta: {est_c} · Resolución Serviu: {est_s}).</p>"
+            f"<p>Todos los documentos que corresponden a este tipo de cliente fueron "
+            f"recibidos y confirmados en el sistema.</p>"
             f"<p>Atentamente,<br>Central Mutuos — reenvío automático</p>")
     html += await _firma_html()
-    asunto = f"Carta Oferta + Resolución Serviu — {nombre}" + (f" ({rut})" if rut else "")
+    asunto = " + ".join(_DOC_LABEL[h] for h in elegidos) + f" — {nombre}" + (f" ({rut})" if rut else "")
     res = await asyncio.to_thread(
         lambda: mail.send_mail(destinos, asunto, html, attachments=adjuntos, desde="secundaria"))
     if not res.get("success"):
-        logging.warning(f"reenvio co+rs {nombre}: {res.get('error')}")
+        logging.warning(f"reenvio docs {nombre}: {res.get('error')}")
         return {"ok": False, "motivo": res.get("error") or "error SMTP"}
     ahora = _now()
-    registro = {"tipo": "reenvio_automatico_co_rs", "para": destinos,
+    registro = {"tipo": "reenvio_automatico_docs", "tipo_cliente": tipo, "para": destinos,
+                "documentos": [_DOC_LABEL[h] for h in elegidos],
                 "adjuntos": [a["filename"] for a in adjuntos], "asunto": asunto,
                 "en": ahora, "por": "sistema (automático)", "estado": "enviado"}
     await db.folders.update_one({"id": fd["id"]}, {
         "$set": {"co_rs_reenviado_at": ahora, "co_rs_reenvio": registro, "updated_at": ahora},
         "$push": {"bitacora_solicitudes": registro}})
     await db.alertas.insert_one({"id": str(uuid.uuid4()), "tipo": "reenvio_co_rs",
-        "mensaje": f"📤 Carta Oferta + Resolución Serviu de {nombre} reenviadas automáticamente a "
+        "mensaje": f"📤 Documentos completos de {nombre} ({tipo_txt}) reenviados automáticamente a "
                    f"{', '.join(destinos)} ({len(adjuntos)} adjunto(s))",
         "fecha": ahora, "leida": False})
     await _sync_adn(fd["id"])
-    return {"ok": True, "para": destinos, "adjuntos": [a["filename"] for a in adjuntos]}
+    return {"ok": True, "para": destinos, "documentos": elegidos,
+            "adjuntos": [a["filename"] for a in adjuntos]}
+
+
+async def _marcar_doc_llegada(fd, hito, e):
+    """CUENTA DE BARRIDO: al detectar la llegada de un documento solicitado lo marca
+    🔵 azul (recibido — pendiente verificación manual). Nunca confirma sola."""
+    actual = _estado_doc(fd, hito)
+    if actual in _DOCS_CONFIRMADOS or actual == _PEND_VERIF:
+        return False
+    ahora = _now()
+    await db.folders.update_one({"id": fd["id"]}, {"$set": {
+        f"estados_manuales.{hito}": {"estado": _PEND_VERIF, "por": "cuenta de barrido",
+                                     "en": ahora, "via": "barrido", "anterior": actual},
+        "updated_at": ahora}})
+    await db.alertas.insert_one({"id": str(uuid.uuid4()), "tipo": "doc_recibido",
+        "mensaje": f"🔵 {_DOC_LABEL.get(hito, hito)} de {fd.get('nombre')} recibido — "
+                   f"pendiente verificación manual (asunto: {(e.get('subject') or '')[:70]})",
+        "fecha": ahora, "leida": False})
+    await _sync_adn(fd["id"])
+    return True
 
 
 async def reenvio_co_rs_loop():
@@ -2588,12 +2845,11 @@ async def reenvio_co_rs_loop():
         try:
             async for fd in db.folders.find({
                     "co_rs_reenviado_at": {"$exists": False},
-                    "estados_manuales.carta_oferta.estado": {"$in": list(_PRES_CO_RS)},
-                    "estados_manuales.serviu.estado": {"$in": list(_PRES_CO_RS)}}):
+                    "estados_manuales": {"$exists": True}}):
                 if not fd.get("oculto_supercarpeta"):
                     await _reenvio_co_rs(fd)
         except Exception as e:
-            logging.warning(f"reenvio co+rs loop: {e}")
+            logging.warning(f"reenvio docs loop: {e}")
 
 
 # ── RESUMEN SEMANAL A GERENCIA (lunes): avances y cuellos de botella de la Flota ──
@@ -2734,9 +2990,10 @@ async def resumen_gerencia_enviar(payload: dict, request: Request):
 
 
 @supercarpeta.get("/solicitud-doc/{fid}")
-async def solicitud_doc_preview(fid: str, request: Request):
-    """VISTA PREVIA OBLIGATORIA de la solicitud Carta Oferta + Resolución Serviu.
-    Selección automática del destinatario por inmobiliaria + proyecto específico."""
+async def solicitud_doc_preview(fid: str, request: Request, doc: str = ""):
+    """VISTA PREVIA OBLIGATORIA. MATRIZ POR TIPO: nueva c/sub → CO+RS (inmobiliaria/proyecto);
+    nueva s/sub → CO; usada c/sub → Compromiso+Cert Subsidio (vendedor);
+    usada s/sub → Compromiso O Carta Pie (elige el ejecutivo, vendedor)."""
     _exigir_gerencia(request)
     import adn_clientes as _adn
     fd = await db.folders.find_one({"id": fid})
@@ -2750,9 +3007,10 @@ async def solicitud_doc_preview(fid: str, request: Request):
                   or (reg.get("resolucion_serviu") or {}).get("numero", "")
                   if isinstance(reg.get("resolucion_serviu"), dict)
                   else fd.get("resolucion_serviu") or reg.get("resolucion_serviu") or "")
+    con_sub = await _con_subsidio_fd(fd)
+    tipo = _tipo_cliente(fd, con_sub)
     inmo, contacto = await _contacto_para(fd, proyecto)
-    # VIVIENDA USADA: la solicitud de Compromiso de Compraventa va al VENDEDOR directo del cliente
-    usada = inmo == "Casa Usada"
+    usada = tipo.startswith("usada")
     if usada:
         v = fd.get("vendedor_usada") or {}
         contacto = ({"contacto": v.get("nombre") or "", "email": v.get("email") or ""}
@@ -2760,43 +3018,61 @@ async def solicitud_doc_preview(fid: str, request: Request):
     encargado = (contacto or {}).get("contacto") or ""
     saludo = _saludo_genero(encargado)
     rut = fd.get("rut") or ""
+    nombre = fd.get("nombre") or ""
     faltantes = []
     if not rut:
         faltantes.append("RUT del cliente")
-    if not usada:
-        if not proyecto:
-            faltantes.append("Nombre del proyecto")
-        if not resolucion:
-            faltantes.append("Resolución SERVIU")
+    if not usada and not proyecto:
+        faltantes.append("Nombre del proyecto")
+    if tipo == "nueva_con_subsidio" and not resolucion:
+        faltantes.append("Resolución SERVIU")
     cc = [x["email"] for x in await _cc_globales() if x.get("activo") and x.get("email")]
-    if usada:
-        asunto = f"Compromiso de Compraventa - {fd.get('nombre')}"
-        cuerpo = (f"{saludo} {encargado or '[nombre del vendedor]'},\n\n"
-                  f"Solicito por medio de la presente el Compromiso de Compraventa firmado de:\n\n"
-                  f"Cliente comprador: {fd.get('nombre')}\n"
-                  f"RUT: {rut or '[RUT del cliente]'}\n"
-                  f"Propiedad: {proyecto or '[Dirección de la propiedad]'}\n\n"
-                  f"Agradeciendo su buena disposición,\n"
-                  f"Atentamente,\nCentral Mutuos")
-    else:
-        asunto = f"Carta Oferta - {fd.get('nombre')} - {proyecto or '[Nombre del proyecto]'}"
+    pie_datos = (f"Cliente: {nombre}\nRUT: {rut or '[RUT del cliente]'}\n")
+    doc_sel = doc if doc in ("promesa", "carta_pie") else "promesa"
+    alternativas = None
+    if tipo == "nueva_con_subsidio":
+        docs_hitos = ["carta_oferta", "serviu"]
+        asunto = f"Carta Oferta - {nombre} - {proyecto or '[Nombre del proyecto]'}"
         cuerpo = (f"{saludo} {encargado or '[nombre del destinatario]'},\n\n"
-                  f"Solicito por medio de la presente carta oferta de:\n\n"
-                  f"Cliente: {fd.get('nombre')}\n"
-                  f"RUT: {rut or '[RUT del cliente]'}\n"
+                  f"Solicito por medio de la presente carta oferta de:\n\n{pie_datos}"
                   f"Proyecto: {proyecto or '[Nombre del proyecto]'}\n"
-                  f"Resolución SERVIU: {resolucion or '[Número de resolución SERVIU]'}\n\n"
-                  f"Agradeciendo su buena disposición,\n"
-                  f"Atentamente,\nCentral Mutuos")
+                  f"Resolución SERVIU: {resolucion or '[Número de resolución SERVIU]'}\n")
+    elif tipo == "nueva_sin_subsidio":
+        docs_hitos = ["carta_oferta"]
+        asunto = f"Carta Oferta - {nombre} - {proyecto or '[Nombre del proyecto]'}"
+        cuerpo = (f"{saludo} {encargado or '[nombre del destinatario]'},\n\n"
+                  f"Solicito por medio de la presente carta oferta de:\n\n{pie_datos}"
+                  f"Proyecto: {proyecto or '[Nombre del proyecto]'}\n")
+    elif tipo == "usada_con_subsidio":
+        docs_hitos = ["promesa", "cert_subsidio"]
+        asunto = f"Compromiso de Compraventa y Certificado de Subsidio - {nombre}"
+        cuerpo = (f"{saludo} {encargado or '[nombre del vendedor]'},\n\n"
+                  f"Solicito por medio de la presente los siguientes documentos:\n\n"
+                  f"1. Compromiso de Compraventa firmado\n"
+                  f"2. Certificado de Subsidio\n\n"
+                  f"Cliente comprador: {nombre}\nRUT: {rut or '[RUT del cliente]'}\n"
+                  f"Propiedad: {proyecto or '[Dirección de la propiedad]'}\n")
+    else:  # usada_sin_subsidio — el ejecutivo elige
+        docs_hitos = [doc_sel]
+        alternativas = ["promesa", "carta_pie"]
+        asunto = f"{_DOC_LABEL[doc_sel]} - {nombre}"
+        cuerpo = (f"{saludo} {encargado or '[nombre del vendedor]'},\n\n"
+                  f"Solicito por medio de la presente {'el Compromiso de Compraventa firmado' if doc_sel == 'promesa' else 'la Carta Pie'} de:\n\n"
+                  f"Cliente comprador: {nombre}\nRUT: {rut or '[RUT del cliente]'}\n"
+                  f"Propiedad: {proyecto or '[Dirección de la propiedad]'}\n")
+    cuerpo += "\nAgradeciendo su buena disposición,\nAtentamente,\nCentral Mutuos"
     desde = ""
     for a in mail.ACCOUNTS:
         if a["rol"] == "secundaria":
             desde = a["user"]
     if not desde and mail.ACCOUNTS:
         desde = mail.ACCOUNTS[0]["user"]
-    return {"cliente": fd.get("nombre"), "rut": rut, "inmobiliaria": inmo,
+    return {"cliente": nombre, "rut": rut, "inmobiliaria": inmo,
             "proyecto": proyecto, "resolucion_serviu": resolucion,
-            "usada": usada, "tipo": "compromiso_compraventa" if usada else "carta_oferta+resolucion_serviu",
+            "usada": usada, "tipo_cliente": tipo, "doc_elegido": doc_sel if alternativas else "",
+            "alternativas": alternativas, "requiere_resolucion": tipo == "nueva_con_subsidio",
+            "docs_solicitados": [_DOC_LABEL[h] for h in docs_hitos],
+            "tipo": "+".join(docs_hitos),
             "encargado": encargado, "para": (contacto or {}).get("email") or "",
             "configurada": bool((contacto or {}).get("email")), "cc": cc,
             "faltantes": faltantes, "asunto": asunto, "cuerpo": cuerpo, "desde": desde}
@@ -2812,26 +3088,32 @@ async def solicitud_doc_enviar(fid: str, payload: dict, request: Request):
     if not fd:
         raise HTTPException(status_code=404, detail="Carpeta no encontrada")
     para = (payload.get("para") or "").strip()
-    usada = _inmo_de_folder(fd) == "Casa Usada"
+    con_sub = await _con_subsidio_fd(fd)
+    tipo = _tipo_cliente(fd, con_sub)
+    usada = tipo.startswith("usada")
     if "@" not in para:
         raise HTTPException(status_code=400,
-                            detail="Configure el vendedor del cliente (botón 🏢 Contactos → Vendedores)" if usada
-                            else "Configure el contacto de la inmobiliaria/proyecto (botón 🏢 Contactos)")
+                            detail="Configure el vendedor del cliente (botón 🏢 Fuentes → Vendedores)" if usada
+                            else "Configure el contacto de la inmobiliaria/proyecto (botón 🏢 Fuentes)")
     # VALIDACIÓN BLOQUEANTE: indica exactamente qué campo falta
     rut = (payload.get("rut") or fd.get("rut") or "").strip()
     proyecto = (payload.get("proyecto") or fd.get("proyecto") or "").strip()
     resolucion = str(payload.get("resolucion_serviu") or fd.get("resolucion_serviu") or "").strip()
-    if usada:
-        faltantes = ["RUT del cliente"] if not rut else []
-    else:
-        faltantes = [n for v, n in ((rut, "RUT del cliente"), (proyecto, "Nombre del proyecto"),
-                                    (resolucion, "Resolución SERVIU")) if not v]
+    faltantes = [] if rut else ["RUT del cliente"]
+    if not usada and not proyecto:
+        faltantes.append("Nombre del proyecto")
+    if tipo == "nueva_con_subsidio" and not resolucion:
+        faltantes.append("Resolución SERVIU")
     if faltantes:
         raise HTTPException(status_code=400,
                             detail="ENVÍO BLOQUEADO — falta: " + ", ".join(faltantes))
+    doc_sel = payload.get("doc_elegido") if payload.get("doc_elegido") in ("promesa", "carta_pie") else "promesa"
+    hitos_marca = {"nueva_con_subsidio": ("carta_oferta", "serviu"),
+                   "nueva_sin_subsidio": ("carta_oferta",),
+                   "usada_con_subsidio": ("promesa", "cert_subsidio"),
+                   "usada_sin_subsidio": (doc_sel,)}[tipo]
     asunto = (payload.get("asunto") or "").strip() or (
-        f"Compromiso de Compraventa - {fd.get('nombre')}" if usada
-        else f"Carta Oferta - {fd.get('nombre')} - {proyecto}")
+        " y ".join(_DOC_LABEL[h] for h in hitos_marca) + f" - {fd.get('nombre')}")
     cuerpo = (payload.get("cuerpo") or "").strip()
     if not cuerpo:
         raise HTTPException(status_code=400, detail="El cuerpo del correo no puede ir vacío")
@@ -2853,14 +3135,37 @@ async def solicitud_doc_enviar(fid: str, payload: dict, request: Request):
         lambda: mail.send_mail(para, asunto, html, desde="secundaria", cc=cc))
     if not res.get("success"):
         raise HTTPException(status_code=502, detail=res.get("error") or "Error de envío SMTP")
+    # APRENDIZAJE AUTOMÁTICO: si el Admin editó el destinatario en la confirmación,
+    # queda guardado en el panel de fuentes para ese origen (precargado la próxima vez)
+    try:
+        inmo_ap = _inmo_de_folder(fd)
+        if usada:
+            v = fd.get("vendedor_usada") or {}
+            if para.lower() != (v.get("email") or "").lower():
+                v.update({"nombre": (payload.get("encargado") or v.get("nombre") or "").strip(),
+                          "email": para, "activo": True, "actualizado": _now(),
+                          "por": "aprendizaje automático (editado en confirmación)"})
+                await db.folders.update_one({"id": fid}, {"$set": {"vendedor_usada": v}})
+        else:
+            _, cont_prev = await _contacto_para(fd, proyecto)
+            if para.lower() != ((cont_prev or {}).get("email") or "").lower():
+                await db.contactos_carta.update_one(
+                    {"inmobiliaria_norm": _norm_inmo(inmo_ap), "proyecto_norm": _norm_inmo(proyecto)},
+                    {"$set": {"inmobiliaria": inmo_ap, "inmobiliaria_norm": _norm_inmo(inmo_ap),
+                              "proyecto": proyecto, "proyecto_norm": _norm_inmo(proyecto),
+                              "contacto": (payload.get("encargado") or "").strip(), "email": para,
+                              "activo": True, "actualizado": _now(),
+                              "origen": "aprendizaje automático (editado en confirmación)"},
+                     "$setOnInsert": {"id": str(uuid.uuid4())}}, upsert=True)
+    except Exception as ex:
+        logging.warning(f"aprendizaje contacto: {ex}")
     em = fd.get("estados_manuales") or {}
-    hitos_marca = ("promesa",) if usada else ("carta_oferta", "serviu")
     for h in hitos_marca:
         if not (em.get(h) or {}).get("estado"):
             em[h] = {"estado": "Solicitada", "por": user.get("sub") or "",
                      "en": _now(), "via": "solicitud_email"}
-    registro = {"tipo": "compromiso_compraventa" if usada else "carta_oferta+resolucion_serviu",
-                "para": para, "cc": cc,
+    registro = {"tipo": "+".join(hitos_marca), "tipo_cliente": tipo,
+                "documentos": [_DOC_LABEL[h] for h in hitos_marca], "para": para, "cc": cc,
                 "asunto": asunto, "en": _now(), "por": user.get("sub") or "",
                 "estado": "enviado", "smtp_code": res.get("smtp_code")}
     await db.folders.update_one({"id": fid}, {
@@ -3546,6 +3851,62 @@ async def cuenta_barrido_barrer(request: Request, dias: int = 7):
             "seguimiento": "GET /api/supercarpeta/cuenta-barrido"}
 
 
+async def _auto_envio_aprobaciones():
+    """ENVÍO AUTOMÁTICO EXCLUSIVO PARA APROBACIONES DE MESA: simulación PDF de
+    aprobaciones@centralmutuos.cl → extrae CBR (2ª página) → correo ajustado con gastos
+    operacionales a gerardo.ext@centralmutuos.cl SIN confirmación. Todo lo demás
+    (carta oferta, RS, compromiso, etc.) mantiene el confirm manual obligatorio."""
+    import hashlib
+    correos = await asyncio.to_thread(mail.fetch_simulacion_attachments, 12,
+                                      "aprobaciones@centralmutuos.cl", None)
+    vb = (await db.config.find_one({"_key": "valores_base_operacionales"}) or {})
+    tas_uf, est_uf = float(vb.get("tasacion_uf") or 2.5), float(vb.get("estudio_titulos_uf") or 2.0)
+    for c in (correos or [])[:10]:
+        eid = hashlib.sha1(f"{c.get('subject','')}|{c.get('date','')}".encode()).hexdigest()
+        if await db.auto_envios_aprobaciones.find_one({"email_id": eid}):
+            continue
+        pdf = (c.get("pdfs") or [{}])[0]
+        gastos = _extraer_gastos_pdf(pdf.get("content_bytes") or b"") or {}
+        cbr = gastos.get("valor_cbr") or {}
+        registro = {"id": str(uuid.uuid4()), "email_id": eid, "asunto": c.get("subject") or "",
+                    "fecha_correo": c.get("date") or "", "archivo": pdf.get("filename") or "",
+                    "en": _now()}
+        if not cbr.get("valor"):
+            # REGLA: sin CBR legible en el PDF → NO se envía; alerta al Admin General
+            registro["estado"] = "sin_cbr_alertado"
+            await db.auto_envios_aprobaciones.insert_one(registro)
+            await db.alertas.insert_one({"id": str(uuid.uuid4()), "tipo": "auto_envio_aprobaciones",
+                "mensaje": f"⚠️ Simulación de aprobaciones@ SIN datos CBR legibles en la 2ª página "
+                           f"({pdf.get('filename') or 'sin PDF'} — {c.get('subject','')[:70]}). "
+                           f"Revisión manual requerida — NO se envió correo automático.",
+                "fecha": _now(), "leida": False})
+            continue
+        moneda = cbr.get("moneda") or "UF"
+        val_cbr = cbr.get("valor")
+        total_uf = round((val_cbr if moneda == "UF" else 0) + tas_uf + est_uf, 2)
+        html = (f"<p>Estimado,</p>"
+                f"<p>Simulación de Mesa procesada automáticamente (correo de aprobaciones@centralmutuos.cl):</p>"
+                f"<ul>"
+                f"<li><b>Asunto original:</b> {c.get('subject') or ''}</li>"
+                f"<li><b>Valor CBR (Inscripción Registro Propiedad + Hipoteca):</b> {val_cbr} {moneda}"
+                f" (página {cbr.get('pagina') or 2} del PDF)</li>"
+                f"<li><b>Tasación (valor base):</b> {tas_uf} UF</li>"
+                f"<li><b>Estudio de Títulos (valor base):</b> {est_uf} UF</li>"
+                f"<li><b>Total gastos operacionales:</b> {total_uf} UF"
+                f"{' (+ CBR en ' + moneda + ')' if moneda != 'UF' else ''}</li>"
+                f"</ul><p>Se adjunta el PDF de la simulación procesada.</p>"
+                f"<p>Central Mutuos — envío automático (barrido de aprobaciones)</p>")
+        adj = [{"filename": pdf.get("filename") or "simulacion.pdf",
+                "content_b64": base64.b64encode(pdf["content_bytes"]).decode()}]
+        res = await asyncio.to_thread(
+            lambda: mail.send_mail("gerardo.ext@centralmutuos.cl",
+                                   f"⚙️ Simulación procesada + Gastos Operacionales — {c.get('subject','')[:70]}",
+                                   html, attachments=adj, desde="principal"))
+        registro["estado"] = "enviado" if res.get("success") else f"error: {res.get('error','')[:80]}"
+        registro["cbr"] = cbr
+        await db.auto_envios_aprobaciones.insert_one(registro)
+
+
 async def cuenta_barrido_loop():
     """Cada 20 min barre la cuenta designada (solo lectura) y persiste cada hallazgo
     en la carpeta y la Bóveda ADN (estados, PDFs firmados, RUTs, notaría)."""
@@ -3555,6 +3916,10 @@ async def cuenta_barrido_loop():
             cfg = await db.config.find_one({"_key": "cuenta_barrido"}) or {}
             if cfg.get("rol") and cfg.get("activo", True):
                 await _ejecutar_barrido_cuenta(2, "automatico")
+                try:
+                    await _auto_envio_aprobaciones()
+                except Exception as ex:
+                    logging.warning(f"auto envio aprobaciones: {ex}")
         except Exception as e:
             logging.warning(f"cuenta barrido loop: {e}")
         await asyncio.sleep(1200)
