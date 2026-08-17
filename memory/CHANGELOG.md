@@ -1196,3 +1196,11 @@ Constitución VERSION 19 (nuevas reglas #55, #56, #57).
   Kanela Ibáñez, Marioli Montero, Rubén Zabala, Yuritza Bravo.
 - Aprendizaje: la búsqueda genérica from:aprobaciones@ + descarga total era demasiado lenta (>10 min,
   colgaba el reload); la búsqueda dirigida por nombre la baja a ~2-4 min.
+
+## Sesión 2026-08-17 (cont.) — CBR: edición manual + totales
+- POST /api/supercarpeta/cbr/manual (solo Admin General): edita valor_cbr o comision por cliente,
+  marca origen "manual" y guarda de inmediato en db.folders + ADN_CLIENTES_360 (costo_CBR / comision).
+- UI: doble clic en Valor CBR y Comisión → input inline (Enter/blur guarda, Escape cancela).
+  Gris = automático, azul = manual. Fila TOTAL fija (total_cbr, total_comision) recalculada por backend.
+- Excel: fila TOTAL al final. REGLA: totales solo suman filas con dato (auto o manual).
+- Verificado e2e: manual Kanela 14,5 UF y Paula comisión 20 UF → ADN actualizado, totales 171,34/171,23 UF.

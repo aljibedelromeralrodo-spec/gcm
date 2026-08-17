@@ -91,6 +91,7 @@ export default function SupercarpetaModule() {
   const [avanceModal, setAvanceModal] = useState(null);
   const [remitentesModal, setRemitentesModal] = useState(null);
   const [cbrModal, setCbrModal] = useState(null);
+  const [cbrEdit, setCbrEdit] = useState(null);
   // ACCESO EXCLUSIVO: módulo Comisiones/CBR solo para el Administrador General
   const esAdminGeneral = ["admin", "maestro"].includes((secureGet("user") || {}).rol);
   const [guardando, setGuardando] = useState(false);
@@ -325,6 +326,16 @@ export default function SupercarpetaModule() {
       a.click();
       URL.revokeObjectURL(url);
     } catch { window.alert("Aún no hay resultados CBR para exportar — ejecute primero la extracción"); }
+  };
+
+  const guardarCbrManual = async () => {
+    if (!cbrEdit) return;
+    const { fila, campo, valor } = cbrEdit;
+    setCbrEdit(null);
+    try {
+      await axios.post(`${API}/api/supercarpeta/cbr/manual`, { cliente: fila.cliente, campo, valor });
+      await refrescarCbr();
+    } catch (e) { window.alert(e.response?.data?.detail || "Error al guardar el valor manual"); }
   };
 
   const clientes = (data?.clientes || []).filter(c => !solo24 || c.recien_24h);
@@ -731,10 +742,30 @@ export default function SupercarpetaModule() {
                         <td style={{ padding: "6px 8px", color: "#94a3b8" }}>{r.broker || "—"}</td>
                         <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>
                           {r.monto_credito !== "" && r.monto_credito != null ? Number(r.monto_credito).toLocaleString("es-CL") : "—"}</td>
-                        <td style={{ padding: "6px 8px", fontWeight: 800, color: "#d4af37" }} title={r.linea}>
-                          {r.valor_cbr !== "" ? Number(r.valor_cbr).toLocaleString("es-CL") : ""}</td>
-                        <td style={{ padding: "6px 8px", fontWeight: 800, color: "#4ade80", whiteSpace: "nowrap" }}>
-                          {r.comision !== "" && r.comision != null ? `${Number(r.comision).toLocaleString("es-CL")} UF` : "—"}</td>
+                        <td data-testid={`cbr-valor-${i}`} title="Doble clic para editar (gris = automático, azul = manual)"
+                          onDoubleClick={() => setCbrEdit({ fila: r, campo: "valor_cbr", valor: r.valor_cbr ?? "" })}
+                          style={{ padding: "6px 8px", fontWeight: 800, cursor: "cell",
+                            color: r.valor_cbr_origen === "manual" ? "#93c5fd" : "#cbd5e1",
+                            background: r.valor_cbr_origen === "manual" ? "rgba(59,130,246,0.14)" : "rgba(148,163,184,0.08)" }}>
+                          {cbrEdit && cbrEdit.fila.cliente === r.cliente && cbrEdit.campo === "valor_cbr" ? (
+                            <input data-testid={`cbr-valor-input-${i}`} autoFocus value={cbrEdit.valor}
+                              onChange={e => setCbrEdit({ ...cbrEdit, valor: e.target.value })}
+                              onBlur={guardarCbrManual}
+                              onKeyDown={e => { if (e.key === "Enter") guardarCbrManual(); if (e.key === "Escape") setCbrEdit(null); }}
+                              style={{ width: 70, background: "#0f172a", color: "#e2e8f0", border: "1px solid #3b82f6", borderRadius: 4, padding: "2px 4px", fontSize: "0.64rem" }} />
+                          ) : (r.valor_cbr !== "" && r.valor_cbr != null ? Number(r.valor_cbr).toLocaleString("es-CL") : "—")}</td>
+                        <td data-testid={`cbr-comision-${i}`} title="Doble clic para editar (gris = automático, azul = manual)"
+                          onDoubleClick={() => setCbrEdit({ fila: r, campo: "comision", valor: r.comision ?? "" })}
+                          style={{ padding: "6px 8px", fontWeight: 800, whiteSpace: "nowrap", cursor: "cell",
+                            color: r.comision_origen === "manual" ? "#93c5fd" : "#cbd5e1",
+                            background: r.comision_origen === "manual" ? "rgba(59,130,246,0.14)" : "rgba(148,163,184,0.08)" }}>
+                          {cbrEdit && cbrEdit.fila.cliente === r.cliente && cbrEdit.campo === "comision" ? (
+                            <input data-testid={`cbr-comision-input-${i}`} autoFocus value={cbrEdit.valor}
+                              onChange={e => setCbrEdit({ ...cbrEdit, valor: e.target.value })}
+                              onBlur={guardarCbrManual}
+                              onKeyDown={e => { if (e.key === "Enter") guardarCbrManual(); if (e.key === "Escape") setCbrEdit(null); }}
+                              style={{ width: 70, background: "#0f172a", color: "#e2e8f0", border: "1px solid #3b82f6", borderRadius: 4, padding: "2px 4px", fontSize: "0.64rem" }} />
+                          ) : (r.comision !== "" && r.comision != null ? `${Number(r.comision).toLocaleString("es-CL")} UF` : "—")}</td>
                         <td style={{ padding: "6px 8px", fontSize: "0.58rem",
                           color: String(r.pct_aplicado || "").includes("REVISAR") ? "#facc15" : "#e2e8f0",
                           fontWeight: String(r.pct_aplicado || "").includes("REVISAR") ? 800 : 400 }}>{r.pct_aplicado || "—"}</td>
@@ -744,6 +775,16 @@ export default function SupercarpetaModule() {
                           <b style={{ color: r.estado === "ENCONTRADO" ? "#4ade80" : "#f87171" }}>{r.estado}</b></td>
                       </tr>
                     ))}
+                    <tr data-testid="cbr-totales" style={{ borderTop: "2px solid #d4af37", background: "rgba(212,175,55,0.10)" }}>
+                      <td style={{ padding: "8px", fontWeight: 900, color: "#d4af37" }}>TOTAL</td>
+                      <td colSpan={2} />
+                      <td data-testid="cbr-total-cbr" style={{ padding: "8px", fontWeight: 900, color: "#d4af37" }}>
+                        {Number(cbrModal.total_cbr || 0).toLocaleString("es-CL")}</td>
+                      <td data-testid="cbr-total-comision" style={{ padding: "8px", fontWeight: 900, color: "#4ade80", whiteSpace: "nowrap" }}>
+                        {Number(cbrModal.total_comision || 0).toLocaleString("es-CL")} UF</td>
+                      <td colSpan={4} style={{ padding: "8px", color: "#94a3b8", fontSize: "0.56rem" }}>
+                        solo suman filas con dato</td>
+                    </tr>
                   </tbody>
                 </table>
               )}

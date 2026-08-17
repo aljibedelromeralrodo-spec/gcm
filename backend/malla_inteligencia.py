@@ -2335,11 +2335,73 @@ def _exigir_admin_general(request):
             detail="Acceso denegado: módulo de Comisiones y CBR exclusivo del Administrador General")
 
 
+def _cbr_totales(res):
+    """REGLA: solo suman las filas que efectivamente tienen dato (auto o manual)."""
+    def _suma(vals):
+        tot = 0.0
+        for v in vals:
+            if v in ("", None):
+                continue
+            try:
+                tot += float(v)
+            except (TypeError, ValueError):
+                continue
+        return round(tot, 2)
+    return {"total_cbr": _suma([r.get("valor_cbr") for r in res]),
+            "total_comision": _suma([r.get("comision") for r in res])}
+
+
 @supercarpeta.get("/cbr/estado")
 async def cbr_estado(request: Request):
     _exigir_admin_general(request)
-    return (await db.config.find_one({"_key": "cbr_extraccion"}, {"_id": 0})
-            or {"estado": "nunca_ejecutado", "resultados": []})
+    d = (await db.config.find_one({"_key": "cbr_extraccion"}, {"_id": 0})
+         or {"estado": "nunca_ejecutado", "resultados": []})
+    d.update(_cbr_totales(d.get("resultados") or []))
+    return d
+
+
+@supercarpeta.post("/cbr/manual")
+async def cbr_manual(request: Request, payload: dict):
+    """Edición manual del Admin General: guarda de inmediato en ADN_CLIENTES_360."""
+    _exigir_admin_general(request)
+    import adn_clientes as _adn
+    campo = payload.get("campo")
+    if campo not in ("valor_cbr", "comision"):
+        raise HTTPException(status_code=400, detail="campo inválido: use valor_cbr o comision")
+    bruto = str(payload.get("valor") if payload.get("valor") is not None else "").strip().replace(",", ".")
+    valor = ""
+    if bruto:
+        try:
+            valor = round(float(bruto), 2)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="valor numérico inválido")
+    cfg = await db.config.find_one({"_key": "cbr_extraccion"}) or {}
+    res = cfg.get("resultados") or []
+    cliente = (payload.get("cliente") or "").strip().upper()
+    fila = next((r for r in res if (r.get("cliente") or "").strip().upper() == cliente), None)
+    if not fila:
+        raise HTTPException(status_code=404, detail="cliente no está en el reporte CBR")
+    fila[campo] = valor
+    fila[f"{campo}_origen"] = "manual" if valor != "" else ""
+    if campo == "valor_cbr" and valor != "" and not fila.get("moneda"):
+        fila["moneda"] = "UF"
+    await db.config.update_one({"_key": "cbr_extraccion"}, {"$set": {"resultados": res}})
+    fd = await db.folders.find_one({"nombre": fila["cliente"]})
+    if fd:
+        if campo == "valor_cbr":
+            doc_cbr = {**(fd.get("costo_CBR") or {}), "valor": valor,
+                       "moneda": fila.get("moneda") or "UF", "origen": "manual", "extraido": _now()}
+            await db.folders.update_one({"id": fd["id"]}, {"$set": {
+                "costo_CBR": doc_cbr, "updated_at": _now()}})
+            await _sync_adn(fd["id"])
+            if fd.get("rut"):
+                await db.adn_clientes_360.update_one(
+                    {"rut_norm": _adn._norm_rut(fd["rut"])}, {"$set": {"costo_CBR": doc_cbr}})
+        elif fd.get("rut"):
+            await db.adn_clientes_360.update_one(
+                {"rut_norm": _adn._norm_rut(fd["rut"])}, {"$set": {"comision": {
+                    "valor": valor, "moneda": "UF", "origen": "manual", "actualizado": _now()}}})
+    return {"ok": True, **_cbr_totales(res)}
 
 
 @supercarpeta.post("/cbr/extraer")
@@ -2382,6 +2444,11 @@ async def cbr_excel(request: Request):
                    r.get("moneda", ""), r.get("fecha_correo", ""), r.get("estado", "")])
         ws.cell(row=ws.max_row, column=9).font = Font(
             bold=True, color="15803D" if r.get("estado") == "ENCONTRADO" else "B91C1C")
+    tot = _cbr_totales(res)
+    ws.append(["TOTAL", "", "", tot["total_cbr"], tot["total_comision"], "", "UF", "", ""])
+    for c in ws[ws.max_row]:
+        c.font = Font(bold=True, color="FFFFFF")
+        c.fill = PatternFill("solid", fgColor="B45309")
     for col, w in zip("ABCDEFGHI", (34, 24, 20, 26, 22, 20, 10, 18, 16)):
         ws.column_dimensions[col].width = w
     buf = _io.BytesIO()
