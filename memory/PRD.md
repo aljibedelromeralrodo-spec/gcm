@@ -909,3 +909,22 @@ Constitución v16 (Reglas #34-#38, #41, #43, #49, #52, #53, #54). Módulo Broker
   alerta roja 🔴 en el panel. Workers reiniciados; login 200 en ~0.16s sostenido.
 - Deploy blocker corregido (deployment_agent): eliminado delete_many({"codigo":"rene"}) del
   arranque (operación destructiva en startup bloqueaba el readiness).
+
+## Actualización 2026-06 (fork, 4h) — Vista de Tarjetas Supercarpeta (rediseño navegación)
+- NUEVO /app/frontend/src/pages/SupercarpetaCards.js: una tarjeta por cliente apiladas
+  verticalmente (sin scroll horizontal). Encabezado: correlativo + nombre 19px, inmobiliaria ·
+  proyecto, barra de avance, badge 📝 si hay notas. Notas SIEMPRE visibles con fecha/hora.
+  Botón "📝 Agregar nota" desde cualquier estado (selector hito + textarea → POST /nota/{fid}).
+  Cuerpo expandible: campos editables con doble clic ("Agregar..." si vacío, un toque) vía
+  POST /manual/{fid}; fila de hitos semáforo ✅🟡🔴; tocar hito expande estado editable
+  (POST /estado/{fid}) + notas del hito + botón Panel completo. Barra superior sticky:
+  buscador, filtros todos/con notas/pendientes/completados, contador.
+- Toggle "📋 Ver Tabla" / "🗂️ Ver Tarjetas" en header (localStorage supercarpeta_vista,
+  default tarjetas). Vista tabla clásica intacta (regresión verificada).
+- Backend: campo "notas" (lista plana de notas_estados con hito) agregado al payload de
+  /api/supercarpeta clientes.
+- testing_agent iteración 37: backend 6/6 PASS, frontend 100% PASS. Fix posterior:
+  Escape en CampoEditable ya no dispara guardado accidental (useRef cancelado).
+- NOTA OPERATIVA: el hot-reload de uvicorn a veces queda pegado tras editar malla_inteligencia
+  (proceso viejo termina, nuevo no arranca — hilos de LiteLLM/SMTP en atexit).
+  Solución: sudo supervisorctl restart backend.

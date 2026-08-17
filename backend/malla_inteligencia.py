@@ -1991,6 +1991,10 @@ async def supercarpeta_vista(mes: str = ""):
                                          "fecha": str(fd.get("set_credito_at") or "")[:19]},
                          "manual": man, "conflicto": conf,
                          "bitacora": bit,
+                         "notas": sorted([{**n, "hito": h}
+                                          for h, lst in (fd.get("notas_estados") or {}).items()
+                                          for n in (lst or [])],
+                                         key=lambda n: n.get("en") or "", reverse=True),
                          "en_adn": bool(reg),
                          "recien_24h": any(f >= limite24 for f in fechas)})
     if mes_sel == "2026-08":

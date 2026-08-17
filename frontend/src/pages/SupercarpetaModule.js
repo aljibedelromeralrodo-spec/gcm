@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { secureGet } from "../utils/secureStore";
+import { SupercarpetaCards } from "./SupercarpetaCards";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 const ESTADOS = ["Tasación Piloto", "Solicitada", "En Proceso", "Con Observaciones", "Aprobada", "Rechazada"];
@@ -100,6 +101,9 @@ export default function SupercarpetaModule() {
   const [vbEdit, setVbEdit] = useState(null);
   const [inmoModal, setInmoModal] = useState(null);
   const [solicitudModal, setSolicitudModal] = useState(null);
+  // VISTA: tarjetas (por defecto) o tabla clásica — preferencia recordada
+  const [vista, setVista] = useState(localStorage.getItem("supercarpeta_vista") || "tarjetas");
+  const cambiarVista = (v) => { setVista(v); localStorage.setItem("supercarpeta_vista", v); };
   // ACCESO EXCLUSIVO: módulo Comisiones/CBR solo para el Administrador General
   const esAdminGeneral = ["admin", "maestro"].includes((secureGet("user") || {}).rol);
   const [guardando, setGuardando] = useState(false);
@@ -648,6 +652,10 @@ export default function SupercarpetaModule() {
           nombre: "", inmobiliaria: "", proyecto: "", ciudad: "", broker: "Mutuaria y Leasing Limitada",
           tipo_propiedad: "nueva", subsidio: "Sin Subsidio", monto_uf: "" })}
           className="maserati-btn" style={{ minHeight: 38 }}>➕ Agregar Cliente</button>
+        <button data-testid="toggle-vista-btn" onClick={() => cambiarVista(vista === "tarjetas" ? "tabla" : "tarjetas")}
+          title="Alternar entre vista de tarjetas verticales y tabla clásica"
+          className="maserati-btn" style={{ minHeight: 38 }}>
+          {vista === "tarjetas" ? "📋 Ver Tabla" : "🗂️ Ver Tarjetas"}</button>
         <button data-testid="filtro-recien-24h" onClick={() => setSolo24(v => !v)}
           className={`maserati-btn ${solo24 ? "" : "neon"}`} style={{ minHeight: 38 }}>
           🟢 Recién llegados 24h ({data?.recien_llegados ?? 0}) {solo24 ? "· quitar filtro" : ""}
@@ -693,7 +701,11 @@ export default function SupercarpetaModule() {
           </div>
         </div>
       )}
-      {isMobile ? (
+      {vista === "tarjetas" ? (
+        /* 🗂️ VISTA TARJETAS: una tarjeta por cliente, apiladas verticalmente (por defecto) */
+        <SupercarpetaCards clientes={clientes} recargar={recargar} abrirPanel={abrirPanel}
+          abrirSolicitud={abrirSolicitud} setAvanceModal={setAvanceModal} manejar409={manejar409} />
+      ) : isMobile ? (
         /* 📱 VISTA MÓVIL: tarjetas apiladas por cliente (la tabla queda intacta en escritorio) */
         <div data-testid="supercarpeta-cards" style={{ display: "grid", gap: 10 }}>
           {clientes.map((c, idx) => (
