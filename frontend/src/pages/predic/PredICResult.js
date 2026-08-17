@@ -39,7 +39,7 @@ export function PredICResult({ result, onExportPDF, form }) {
                 <i className="fa fa-exclamation-triangle" style={{ marginRight: "0.3rem" }}></i> Por que no es viable
               </div>
               {result.razones.map((r, i) => (
-                <div key={i} style={{ fontSize: "0.82rem", color: COLORS.text, paddingLeft: "0.75rem", marginTop: "0.35rem", borderLeft: `3px solid ${COLORS.red}` }}>
+                <div key={`${r}-${i}`} style={{ fontSize: "0.82rem", color: COLORS.text, paddingLeft: "0.75rem", marginTop: "0.35rem", borderLeft: `3px solid ${COLORS.red}` }}>
                   {r}
                 </div>
               ))}
@@ -53,7 +53,7 @@ export function PredICResult({ result, onExportPDF, form }) {
                 <i className="fa fa-lightbulb-o" style={{ marginRight: "0.3rem" }}></i> Que se puede ajustar
               </div>
               {result.sugerencias_optimizacion.map((s, i) => (
-                <div key={i} style={{ fontSize: "0.8rem", color: COLORS.text, paddingLeft: "0.75rem", marginTop: "0.3rem", borderLeft: `3px solid ${COLORS.accentLight}` }}>{s}</div>
+                <div key={`${s}-${i}`} style={{ fontSize: "0.8rem", color: COLORS.text, paddingLeft: "0.75rem", marginTop: "0.3rem", borderLeft: `3px solid ${COLORS.accentLight}` }}>{s}</div>
               ))}
             </div>
           )}

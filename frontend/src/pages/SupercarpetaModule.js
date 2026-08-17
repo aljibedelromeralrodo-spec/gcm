@@ -739,7 +739,7 @@ export default function SupercarpetaModule() {
               <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8, flexWrap: "wrap" }}>
                 <div title={c.docs_co_rs?.detalle || ""} style={{ display: "flex", gap: 5, flexWrap: "wrap", cursor: "help" }}>
                   {(c.docs_co_rs?.documentos || []).map((d, di) => (
-                    <span key={di} title={`${d.label}: ${d.estado}`} style={{ fontSize: 10, fontWeight: 800,
+                    <span key={d.hito || di} title={`${d.label}: ${d.estado}`} style={{ fontSize: 10, fontWeight: 800,
                       color: { verde: "#4ade80", azul: "#93c5fd", amarillo: "#facc15", rojo: "#f87171" }[d.color] }}>
                       {d.icono} {d.label.split(" / ")[0]}</span>
                   ))}
@@ -897,7 +897,7 @@ export default function SupercarpetaModule() {
                   <div data-testid={`docs-co-rs-${c.id}`} title={c.docs_co_rs?.detalle || ""}
                     style={{ display: "flex", flexDirection: "column", gap: 1, marginTop: 2, cursor: "help" }}>
                     {(c.docs_co_rs?.documentos || []).map((d, di) => (
-                      <span key={di} data-testid={`doc-badge-${d.hito}-${c.id}`}
+                      <span key={d.hito || di} data-testid={`doc-badge-${d.hito}-${c.id}`}
                         title={`${d.label}: ${d.estado}`}
                         style={{ fontSize: "0.54rem", fontWeight: 800, textAlign: "center",
                           color: { verde: "#4ade80", azul: "#93c5fd", amarillo: "#facc15", rojo: "#f87171" }[d.color] }}>
@@ -1224,7 +1224,7 @@ export default function SupercarpetaModule() {
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.62rem", marginTop: 6, color: "#e2e8f0" }}>
                 <tbody>
                   {(inmoModal.generales || []).map((g, i) => (
-                    <tr key={i} data-testid={`general-fila-${i}`} style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                    <tr key={g.inmobiliaria || i} data-testid={`general-fila-${i}`} style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
                       <td style={{ padding: "3px 6px", fontWeight: 800, color: "#f8fafc", width: 200 }}>{g.inmobiliaria}</td>
                       <td style={{ padding: "3px 6px", color: "#94a3b8" }}>Correo general:</td>
                       <td style={{ padding: "3px 6px" }}>
@@ -1889,7 +1889,7 @@ export default function SupercarpetaModule() {
                 <div style={{ marginTop: 10 }}>
                   <b style={{ color: "#d4af37", fontSize: "0.66rem" }}>Campos poblados desde la bóveda:</b>
                   {(r.detalle_campos || []).slice(0, 30).map((x, i) => (
-                    <div key={i} style={{ color: "#e2e8f0", fontSize: "0.6rem", marginTop: 2 }}>
+                    <div key={`${x.cliente}-${x.campo}-${i}`} style={{ color: "#e2e8f0", fontSize: "0.6rem", marginTop: 2 }}>
                       {x.cliente}: <b>{x.campo}</b> → {String(x.valor)}</div>
                   ))}
                 </div>
@@ -2117,7 +2117,7 @@ export default function SupercarpetaModule() {
                 {(panel.data?.correos_detectados || []).length === 0 &&
                   <i style={{ color: "#94a3b8", fontSize: "0.62rem" }}>Sin correos detectados aún</i>}
                 {(panel.data?.correos_detectados || []).map((m, i) => (
-                  <div key={i} style={{ padding: "0.4rem 0.6rem", background: "rgba(30,41,59,0.7)", borderRadius: 8, fontSize: "0.6rem" }}>
+                  <div key={m.id || `${m.hito}-${m.fecha || m.creado}-${i}`} style={{ padding: "0.4rem 0.6rem", background: "rgba(30,41,59,0.7)", borderRadius: 8, fontSize: "0.6rem" }}>
                     <b style={{ color: "#7dd3fc" }}>{m.hito}</b> · <span style={{ color: "#94a3b8" }}>{(m.fecha || m.creado || "").slice(0, 16).replace("T", " ")}</span>
                     <div style={{ color: "#e2e8f0" }}>{m.asunto}</div>
                     <span style={{ color: "#64748b" }}>{m.fuente} · {m.direccion}</span>
@@ -2128,7 +2128,7 @@ export default function SupercarpetaModule() {
             <div style={{ marginTop: 14 }}>
               <b style={{ color: "#f5d76e", fontSize: "0.64rem" }}>📝 NOTAS MANUALES</b>
               {(panel.data?.notas || []).map((n, i) => (
-                <div key={i} style={{ marginTop: 4, fontSize: "0.62rem", color: "#e2e8f0", padding: "0.35rem 0.6rem",
+                <div key={n.en || i} style={{ marginTop: 4, fontSize: "0.62rem", color: "#e2e8f0", padding: "0.35rem 0.6rem",
                   background: "rgba(212,175,55,0.08)", borderLeft: "2px solid #d4af37", borderRadius: 6 }}>
                   {n.texto} <span style={{ color: "#64748b" }}>— {n.por} · {(n.en || "").slice(0, 16).replace("T", " ")}</span>
                 </div>
@@ -2147,7 +2147,7 @@ export default function SupercarpetaModule() {
               {(panel.data?.bitacora_cambios || []).length === 0 &&
                 <div><i style={{ color: "#94a3b8", fontSize: "0.62rem" }}>Sin cambios manuales registrados</i></div>}
               {(panel.data?.bitacora_cambios || []).map((l, i) => (
-                <div key={i} style={{ marginTop: 4, fontSize: "0.6rem", color: "#cbd5e1" }}>
+                <div key={`${l.fecha}-${i}`} style={{ marginTop: 4, fontSize: "0.6rem", color: "#cbd5e1" }}>
                   • {(l.fecha || "").slice(0, 16).replace("T", " ")} — <b>{l.por}</b>:{" "}
                   {l.accion_conflicto ? `conflicto → ${l.accion_conflicto}` : `"${l.estado_anterior}" → "${l.estado_nuevo}"`}
                 </div>

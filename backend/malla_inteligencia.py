@@ -547,6 +547,7 @@ async def _procesar_hito(correo, dom, info, direccion, por_rut, texto, email_id=
     asunto = correo.get("subject") or ""
     _raw = f"{dom}|{direccion}|{asunto}|{correo.get('date','')}".encode()
     clave = hashlib.sha256(_raw).hexdigest()
+    # _legacy: clave de deduplicación histórica (MD5 no criptográfico, solo lectura de compatibilidad)
     _legacy = hashlib.md5(_raw, usedforsecurity=False).hexdigest()
     if (await db.hitos_externos.find_one({"clave": {"$in": [clave, _legacy]}})
             or await db.hitos_descartados.find_one({"clave": {"$in": [clave, _legacy]}})):

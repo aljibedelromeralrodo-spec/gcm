@@ -881,3 +881,16 @@ Constitución v16 (Reglas #34-#38, #41, #43, #49, #52, #53, #54). Módulo Broker
     último valor conocido sin sobrescribir. Probados los 3 escenarios con mocks.
   * P2 bodega_concreces.py: import now_iso desde criterios_data — alerta de lectura de bóveda funcional.
 - Barrido final ruff F821: 0 variables indefinidas en los 29 archivos del backend.
+
+## Actualización 2026-06 (fork, 4f) — 2ª pasada revisión de código
+- Keys de React estabilizadas en listas dinámicas: SupercarpetaModule (badges doc por hito,
+  generales, detalle_campos, correos, notas, bitácora), PredICWidgets (razones, factores,
+  historial), PredICResult (razones, sugerencias). Se mantuvo índice SOLO donde es correcto:
+  headers/totales estáticos y filas de formulario editables append-only (cc, proyectos) —
+  keys por contenido romperían el foco al escribir.
+- Comentarios "no criptográfico" agregados a los MD5 legados (malla + grid _hash_file).
+- Incidente resuelto: hot-reload de uvicorn quedó colgado (proceso viejo cerró, nuevo no
+  arrancó) → supervisorctl restart backend lo recuperó. Si vuelve a pasar: reiniciar backend.
+- Verificado: Supercarpeta renderiza flota completa con UF SII en vivo (screenshot OK).
+- NO aplicados (riesgo/regla eficiencia): hook dependencies masivas, división de componentes
+  gigantes (ClientesModule 3.675 líneas, CentralChat), refactors de complejidad backend.

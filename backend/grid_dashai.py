@@ -65,6 +65,7 @@ _VOLATILES = {"_id", "updated_at", "ac_status", "prob_aprobacion"}
 
 
 def _hash_file(p: Path, algo="sha256"):
+    """Firma de archivo para la bóveda. MD5 solo como lectura de firmas históricas (no criptográfico)."""
     h = hashlib.sha256() if algo == "sha256" else hashlib.md5(usedforsecurity=False)
     with open(p, "rb") as fh:
         for chunk in iter(lambda: fh.read(65536), b""):

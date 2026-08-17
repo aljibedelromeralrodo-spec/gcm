@@ -36,7 +36,7 @@ export function EvalBadge({ label, result, razones }) {
       </div>
       {razones && razones.length > 0 && (
         <div style={{ marginTop: "0.3rem" }}>
-          {razones.slice(0, 2).map((r, i) => <div key={i} style={{ fontSize: "0.65rem", color: na ? COLORS.textMuted : COLORS.red, lineHeight: 1.3 }}>{r}</div>)}
+          {razones.slice(0, 2).map((r, i) => <div key={`${r}-${i}`} style={{ fontSize: "0.65rem", color: na ? COLORS.textMuted : COLORS.red, lineHeight: 1.3 }}>{r}</div>)}
         </div>
       )}
     </div>
@@ -68,7 +68,7 @@ export function CentralScorePanel({ score }) {
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
         {score.factors.map((f, i) => (
-          <div key={i} style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.72rem" }}>
+          <div key={f.factor || i} style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.72rem" }}>
             <div style={{ width: "90px", color: COLORS.textMuted, flexShrink: 0 }}>{f.factor}</div>
             <div style={{ flex: 1, height: "6px", borderRadius: "0px", background: COLORS.border, overflow: "hidden" }}>
               <div style={{ width: `${Math.max(0, (f.score / 25) * 100)}%`, height: "100%", borderRadius: "0px", background: f.score >= 15 ? "#00b894" : f.score >= 8 ? "#fdcb6e" : "#e17055", transition: "width 0.5s ease" }} />
@@ -108,7 +108,7 @@ export function ScoreHistory({ clientName, apiUrl }) {
             const color = riskColors[h.risk_level] || COLORS.textMuted;
             const date = new Date(h.timestamp).toLocaleDateString("es-CL", { day: "2-digit", month: "short", year: "numeric" });
             return (
-              <div key={i} style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.4rem 0.6rem", borderRadius: "0px", background: i === 0 ? "rgba(108,92,231,0.06)" : "transparent" }}>
+              <div key={h.timestamp || i} style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.4rem 0.6rem", borderRadius: "0px", background: i === 0 ? "rgba(108,92,231,0.06)" : "transparent" }}>
                 <div style={{ width: "36px", height: "36px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: "0.85rem", color: color, border: `2px solid ${color}`, flexShrink: 0 }}>
                   {h.score}
                 </div>
