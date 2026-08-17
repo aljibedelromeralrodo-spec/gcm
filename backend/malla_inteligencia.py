@@ -545,7 +545,7 @@ async def _archivar_adjuntos(fd, email_id, prefijo, subdir="07_estudio_titulo"):
 async def _procesar_hito(correo, dom, info, direccion, por_rut, texto, email_id=None):
     """REGLA DE HIERRO #34: el RUT es el pegamento. Sin RUT válido → NO se marca hito."""
     asunto = correo.get("subject") or ""
-    clave = hashlib.md5(f"{dom}|{direccion}|{asunto}|{correo.get('date','')}".encode()).hexdigest()
+    clave = hashlib.md5(f"{dom}|{direccion}|{asunto}|{correo.get('date','')}".encode(), usedforsecurity=False).hexdigest()
     if await db.hitos_externos.find_one({"clave": clave}) or await db.hitos_descartados.find_one({"clave": clave}):
         return "duplicado"
     m = RUT_RE.search(texto or "")
@@ -623,7 +623,7 @@ async def malla_scan():
         # 1) Fuente TRANSITORIA: documentos del vendedor de una usada → carpeta vinculada
         fd_v = next((vendedores[em] for em in vendedores if em and em in de), None)
         if fd_v:
-            clave = "vend-" + hashlib.md5(f"{de}|{asunto}|{e.get('date','')}".encode()).hexdigest()
+            clave = "vend-" + hashlib.md5(f"{de}|{asunto}|{e.get('date','')}".encode(), usedforsecurity=False).hexdigest()
             if not await db.hitos_externos.find_one({"clave": clave}):
                 archivados = await _archivar_adjuntos(fd_v, e.get("id"), "VENDEDOR") if e.get("id") else 0
                 await db.hitos_externos.insert_one({
@@ -636,7 +636,7 @@ async def malla_scan():
                 res["marcados"] += 1
         # 2) MOTOR DE REPAROS (DashAI): "reparo" en correos de los abogados
         if "reparo" in texto.lower() and any(r in de for r in REPARO_REMITENTES):
-            clave = "rep-" + hashlib.md5(f"{de}|{asunto}|{e.get('date','')}".encode()).hexdigest()
+            clave = "rep-" + hashlib.md5(f"{de}|{asunto}|{e.get('date','')}".encode(), usedforsecurity=False).hexdigest()
             if await db.hitos_externos.find_one({"clave": clave}) or await db.hitos_descartados.find_one({"clave": clave}):
                 continue
             m = RUT_RE.search(texto)
@@ -1132,7 +1132,7 @@ async def _auditar_lote(correos):
             if re.search(r"resoluci", asunto_l):
                 await _marcar_doc_llegada(fd, "serviu", e)
             continue
-        clave = "aud-" + hashlib.md5(f"{de}|{asunto}|{e.get('date','')}".encode()).hexdigest()
+        clave = "aud-" + hashlib.md5(f"{de}|{asunto}|{e.get('date','')}".encode(), usedforsecurity=False).hexdigest()
         if await db.hitos_externos.find_one({"clave": clave}):
             continue
         if es_set:
@@ -1532,7 +1532,7 @@ async def buzon_aprendizaje_loop():
                                                       cfg["email"], _dec_aes(cfg["cred_enc"]))
                     nuevos = 0
                     for c in correos or []:
-                        clave_h = hashlib.md5(f"{c['de']}|{c['asunto']}|{c['fecha']}".encode()).hexdigest()
+                        clave_h = hashlib.md5(f"{c['de']}|{c['asunto']}|{c['fecha']}".encode(), usedforsecurity=False).hexdigest()
                         if await db.buzon_aprendizaje.find_one({"clave": clave_h}):
                             continue
                         t = c["asunto"].lower()

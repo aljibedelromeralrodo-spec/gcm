@@ -65,7 +65,7 @@ _VOLATILES = {"_id", "updated_at", "ac_status", "prob_aprobacion"}
 
 
 def _md5_file(p: Path):
-    h = hashlib.md5()
+    h = hashlib.md5(usedforsecurity=False)
     with open(p, "rb") as fh:
         for chunk in iter(lambda: fh.read(65536), b""):
             h.update(chunk)
@@ -171,7 +171,7 @@ async def resync():
 
 def _hash_folder_doc(fd):
     limpio = {k: v for k, v in fd.items() if k not in _VOLATILES}
-    return hashlib.md5(json.dumps(limpio, default=str, sort_keys=True).encode()).hexdigest()
+    return hashlib.md5(json.dumps(limpio, default=str, sort_keys=True).encode(), usedforsecurity=False).hexdigest()
 
 
 async def _detectar_cambios_clientes():

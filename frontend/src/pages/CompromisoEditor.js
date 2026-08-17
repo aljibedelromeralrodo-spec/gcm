@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
+import DOMPurify from "dompurify";
 import { API_URL } from "../utils/formatters";
 
 const ORO = "#d4af37";
@@ -190,7 +191,7 @@ export default function CompromisoEditor({ folder, onClose }) {
       setTimeout(() => {
         // ELIMINACIÓN DE CACHÉ: el documento SIEMPRE nace del formulario, nunca de clausulas_html guardado
         if (docRef.current) {
-          docRef.current.innerHTML = buildCompromisoHTML(d, uf);
+          docRef.current.innerHTML = DOMPurify.sanitize(buildCompromisoHTML(d, uf));
           setManualDirty(false);
         }
       }, 50);
@@ -201,14 +202,14 @@ export default function CompromisoEditor({ folder, onClose }) {
   const set = (sec, k, v) => {
     setDatos(prev => {
       const next = { ...prev, [sec]: { ...prev[sec], [k]: v } };
-      if (!manualDirty && docRef.current) docRef.current.innerHTML = buildCompromisoHTML(next, ufHoy);
+      if (!manualDirty && docRef.current) docRef.current.innerHTML = DOMPurify.sanitize(buildCompromisoHTML(next, ufHoy));
       return next;
     });
   };
 
   const regenerar = () => {
     if (manualDirty && !window.confirm("↻ Regenerar el documento desde el formulario reemplazará sus ediciones manuales. ¿Continuar?")) return;
-    if (docRef.current) docRef.current.innerHTML = buildCompromisoHTML(datos, ufHoy);
+    if (docRef.current) docRef.current.innerHTML = DOMPurify.sanitize(buildCompromisoHTML(datos, ufHoy));
     setManualDirty(false);
   };
 
@@ -238,7 +239,7 @@ export default function CompromisoEditor({ folder, onClose }) {
       setUfHoy(ufFinal);
       // SINCRONIZACIÓN ATÓMICA: reconstrucción total desde el formulario, ignora manualDirty
       const htmlFinal = sobrio(buildCompromisoHTML(datos, ufFinal));
-      if (docRef.current) docRef.current.innerHTML = htmlFinal;
+      if (docRef.current) docRef.current.innerHTML = DOMPurify.sanitize(htmlFinal);
       setManualDirty(false);
       const r = await axios.post(`${API_URL}/api/compromiso/${folder.id}/pdf`,
         { html: htmlFinal }, { responseType: "blob" });

@@ -857,3 +857,15 @@ Constitución v16 (Reglas #34-#38, #41, #43, #49, #52, #53, #54). Módulo Broker
   2. Resolución SERVIU". requiere_resolucion=False siempre (el input del modal ya no aparece).
 - ENVIADO REAL: solicitud CO+RS de Carlos Salgado a Celinda Soria (csoria@boetsch.cl),
   CC Victoria + Daniela, SMTP 250 OK.
+
+## Actualización 2026-06 (fork, 4d) — Revisión de código aplicada (quirúrgica)
+- XSS CompromisoEditor.js: 4 asignaciones innerHTML (líneas 193/204/211/241 originales) ahora
+  pasan por DOMPurify.sanitize (dompurify@3.4.13 ya instalado). Verificado: compila y login OK.
+- MD5 backend: 7 usos en malla_inteligencia.py y grid_dashai.py marcados usedforsecurity=False
+  (son claves de deduplicación, NO criptografía; cambiar a SHA-256 rompería los registros de
+  dedup y podría reenviar correos — NO cambiar el algoritmo).
+- Falsos positivos del reporte (NO tocar): los 12 dangerouslySetInnerHTML ya usaban
+  DOMPurify.sanitize; los 139 "is" son `is None`/`is False` (idioma correcto de Python).
+- Refactors masivos (dividir ClientesModule 3.675 líneas, CentralChat, 108 hook deps,
+  114 array keys) NO aplicados: violan la Regla de Eficiencia de la Constitución (alto riesgo
+  de regresión en sistema productivo).
