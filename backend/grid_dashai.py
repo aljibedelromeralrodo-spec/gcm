@@ -64,8 +64,8 @@ _now = lambda: datetime.now(timezone.utc).isoformat()
 _VOLATILES = {"_id", "updated_at", "ac_status", "prob_aprobacion"}
 
 
-def _md5_file(p: Path):
-    h = hashlib.md5(usedforsecurity=False)
+def _hash_file(p: Path, algo="sha256"):
+    h = hashlib.sha256() if algo == "sha256" else hashlib.md5(usedforsecurity=False)
     with open(p, "rb") as fh:
         for chunk in iter(lambda: fh.read(65536), b""):
             h.update(chunk)
@@ -131,19 +131,23 @@ async def resync():
         if not prev and mtime < limite_2h:
             alerta_2h.append(ruta)
         try:
-            md5 = await asyncio.to_thread(_md5_file, p)
+            firma = await asyncio.to_thread(_hash_file, p)
         except Exception:
             continue
-        if not prev or prev.get("md5") != md5:
+        prev_f = (prev or {}).get("md5") or ""
+        # compatibilidad hacia atrás: firmas históricas MD5 (32 hex) se comparan con MD5
+        mismo = prev_f == firma or (len(prev_f) == 32
+                                    and prev_f == await asyncio.to_thread(_hash_file, p, "md5"))
+        if not prev or not mismo:
             cambiados += 1
         cloud_path = (prev or {}).get("cloud_path", "")
-        if not cloud_path or not prev or prev.get("md5") != md5:
+        if not cloud_path or not prev or not mismo:
             try:  # BÓVEDA EXTERNA: delta a Object Storage (la BD se mantiene liviana)
                 cloud_path = await asyncio.to_thread(_subir_nube, ruta, p.read_bytes())
             except Exception as e:
                 logging.warning(f"bóveda externa {ruta}: {e}")
         await db.espejo_concreces_cloud.update_one({"ruta": ruta}, {"$set": {
-            "ruta": ruta, "md5": md5, "size": size, "mtime": mtime,
+            "ruta": ruta, "md5": firma, "size": size, "mtime": mtime,
             "cloud_path": cloud_path, "verificado": _now()}}, upsert=True)
     borrados = 0
     for ruta in list(idx):
@@ -169,9 +173,11 @@ async def resync():
     return estado
 
 
-def _hash_folder_doc(fd):
+def _hash_folder_doc(fd, algo="sha256"):
     limpio = {k: v for k, v in fd.items() if k not in _VOLATILES}
-    return hashlib.md5(json.dumps(limpio, default=str, sort_keys=True).encode(), usedforsecurity=False).hexdigest()
+    data = json.dumps(limpio, default=str, sort_keys=True).encode()
+    return (hashlib.sha256(data).hexdigest() if algo == "sha256"
+            else hashlib.md5(data, usedforsecurity=False).hexdigest())
 
 
 async def _detectar_cambios_clientes():
@@ -179,7 +185,13 @@ async def _detectar_cambios_clientes():
     async for fd in db.folders.find({}):
         h = _hash_folder_doc(fd)
         prev = await db.grid_dochash.find_one({"folder_id": fd["id"]})
-        if prev and prev.get("hash") == h:
+        prev_h = (prev or {}).get("hash") or ""
+        if prev and prev_h == h:
+            continue
+        if prev and len(prev_h) == 32 and prev_h == _hash_folder_doc(fd, "md5"):
+            # migración silenciosa MD5→SHA-256: sin emitir evento (no hubo cambio real)
+            await db.grid_dochash.update_one({"folder_id": fd["id"]},
+                                             {"$set": {"hash": h, "fecha": _now()}})
             continue
         await db.grid_dochash.update_one({"folder_id": fd["id"]},
                                          {"$set": {"hash": h, "fecha": _now()}}, upsert=True)
