@@ -277,6 +277,8 @@ async def startup():
     asyncio.create_task(_task_blindada(_malla.cuenta_barrido_loop, "cuenta_barrido"))
     asyncio.create_task(_task_blindada(_malla.migracion_reset_firmas, "reset_firmas"))
     asyncio.create_task(_task_blindada(_malla.avance_snapshot_loop, "avance_snapshot"))
+    asyncio.create_task(_task_blindada(_malla.reenvio_co_rs_loop, "reenvio_co_rs"))
+    asyncio.create_task(_task_blindada(_malla.resumen_gerencia_loop, "resumen_gerencia"))
     import gestion_ejecutivos as _gest
     asyncio.create_task(_task_blindada(_gest.gestion_harvest_loop, "gestion_ejecutivos"))
     asyncio.create_task(_task_blindada(_malla.buzon_aprendizaje_loop, "buzon_aprendizaje"))

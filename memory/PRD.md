@@ -812,12 +812,17 @@ Constitución v16 (Reglas #34-#38, #41, #43, #49, #52, #53, #54). Módulo Broker
   por inmobiliaria (se cargan desde el botón 🏢 Inmobiliarias).
 
 ## Actualización 2026-06 (fork) — Verificación IA Promesa + Numeración correlativa
-- Verificación de Firma del Compromiso/Promesa de Compraventa con IA: IMPLEMENTADO y testeado
-  (firmado→verde "Firmada (verificada IA)"; duda/sin firma→azul "Pendiente verificación manual";
-  override manual Admin operativo). Solo correos nuevos, sin retroactivo. Ver CHANGELOG.md.
-- Numeración correlativa de clientes (solo lectura, auto-recalculada): Supercarpeta (columna N°
-  sticky), tabla CBR + Excel CBR (primera columna), y Gastos Operacionales (envíos, cobros,
-  historial). Verificado UI + Excel.
-- Backlog pendiente: Resumen Semanal lunes a Gerencia (P1), % comisión Word/Urbanizate/Maestra
-  (espera usuario), Twilio keys (espera usuario), optimización móvil iPhone (P2), alerta
-  cumpleaños (P2).
+- Verificación IA de firma en Compromiso/Promesa (verde alta confianza / azul duda) + numeración
+  correlativa (Supercarpeta, CBR, Excel, Gastos Op). Ver CHANGELOG.md.
+
+## Actualización 2026-06 (fork, 2) — Flujo definitivo CO+RS + Resumen Gerencia + Móvil + Comisiones
+- Comisiones: Maestra 0,5%/1% (sin/con subsidio), Ecomac 0,8% con subsidio / 1% sin. TESTEADO.
+- CO+RS Parte 1: contactos semilla Boetsch (Celinda/Quintero/Salazar), usada→vendedor directo
+  por cliente (panel Vendedores). Parte 2: reenvío automático a Victoria/Daniela SOLO con ambos
+  documentos confirmados (hook estado manual + loop 30 min), nunca parciales. Parte 4: marcado
+  4 colores con estado de reenvío. TESTEADO (send_mail simulado + curl).
+- Resumen Semanal Gerencia: lunes 08:00 Chile, avances + cuellos de botella Flota, destinatarios
+  editables (default rodrigoibanez + Victoria + Daniela). Preview probado, sin envío real aún.
+- Vista móvil (≤768px): tarjetas apiladas en Supercarpeta y Gerencia. Verificado 390x844.
+- Backlog: % comisión Word/Urbanizate (espera usuario), correos de Celinda Soria/Rodrigo Salazar/
+  Maestra/Ecomac (espera usuario — cargar en 🏢), Twilio keys, alerta cumpleaños (P2).

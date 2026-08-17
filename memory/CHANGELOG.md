@@ -1273,3 +1273,30 @@ Constitución VERSION 19 (nuevas reglas #55, #56, #57).
   Operacionales: números en Envíos y Seguimiento de Pagos (gastos-log-numero-{i}), Cobros de
   Tasación (cobro-numero-{i}) e Historial mensual. Verificado: UI 1-18 Supercarpeta, 1-10 Gastos,
   Excel openpyxl OK.
+
+## 2026-06 (fork) — Flujo definitivo CO+RS + Resumen Gerencia + Vista Móvil + Comisiones
+- **COMISIONES (reglas del dueño)**: Maestra 0,5% sin subsidio (Claudia Zurita) / 1% con subsidio;
+  Ecomac 0,8% con subsidio / 1% sin subsidio. `_comision_cliente(fd, monto, con_subsidio)`. 6/6 PASS.
+- **PARTE 1 CO+RS**: semilla contactos (Boetsch→Celinda Soria general, Rodrigo Quintero→Las Uvas y
+  el Viento, Rodrigo Salazar→Fuchslocker, Maestra/Ecomac a configurar — correos vacíos = alerta
+  bloqueante). `_contacto_para` tolera Boetch/Boetsch (contención). VIVIENDA USADA: solicitud de
+  Compromiso de Compraventa al VENDEDOR directo del cliente (folder.vendedor_usada), asunto/cuerpo
+  propios, sin exigir proyecto/resolución. GET/POST /supercarpeta/vendedores-usada.
+- **PARTE 2 Reenvío automático**: `_reenvio_co_rs` — SOLO cuando carta_oferta Y serviu están en
+  (Recibida|Aprobada) reenvía JUNTOS a destinatarios globales activos (Victoria/Daniela) con
+  adjuntos detectados en la carpeta (regex carta.oferta / serviu|resoluc). Nunca parciales, nunca
+  duplica (co_rs_reenviado_at). Hook en POST /supercarpeta/estado + loop 30 min (reenvio_co_rs_loop,
+  blindado en server.py). 3/3 PASS con send_mail simulado.
+- **PARTE 4 Marcado**: _marcado_docs ahora indica en verde si el reenvío fue ejecutado o está en curso;
+  azul (verificación manual) NO reenvía.
+- **RESUMEN SEMANAL GERENCIA**: lunes ≥08:00 Chile (resumen_gerencia_loop, dedupe semana ISO) —
+  avance % por cliente de la Flota, proyección UF vs meta y cuellos de botella (_cuellos_cliente:
+  faltantes, tasación +48h, reparos, promesa sin verificar, CO+RS incompletos, sin fecha de firma,
+  set pendiente). Destinatarios editables (default rodrigoibanez + cc globales). Endpoints:
+  GET /supercarpeta/resumen-gerencia, POST .../config, POST .../enviar (preview confirm:false OK).
+- **VISTA MÓVIL (≤768px)**: Supercarpeta y Gerencia Comercial renderizan TARJETAS apiladas
+  (N°, cliente, RUT, monto, avance, chips de estados clicables → panel, pedir CO+RS/Compromiso,
+  fecha firma, reclamos). Tabla intacta en escritorio. Verificado con screenshots 390x844.
+- **UI**: modal 🏢 con sección "Vendedores — Vivienda Usada" (alerta sin configurar); modal de
+  solicitud adaptado a usada (título Compromiso CV, sin campos serviu, PARA=vendedor); botón por
+  fila "📨 Pedir Compromiso CV" en clientes Casa Usada.

@@ -59,6 +59,13 @@ export default function GerenciaComercialModule() {
     }
   };
   const [filtro, setFiltro] = useState({ broker: "", desde: "", hasta: "", docs: "", tipo: "" });
+  const [isMobile, setIsMobile] = useState(window.matchMedia("(max-width: 768px)").matches);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 768px)");
+    const fn = e => setIsMobile(e.matches);
+    mq.addEventListener("change", fn);
+    return () => mq.removeEventListener("change", fn);
+  }, []);
 
   const recargar = useCallback(() => {
     axios.get(`${API}/api/gerencia/cartera`).then(r => setData(r.data)).catch(() => setData({ cartera: [] }));
@@ -199,6 +206,65 @@ export default function GerenciaComercialModule() {
         </div>
       )}
 
+      {isMobile ? (
+        /* 📱 VISTA MÓVIL: tarjetas apiladas (la tabla queda intacta en escritorio) */
+        <div data-testid="gerencia-cards-mobile" style={{ display: "grid", gap: 10 }}>
+          {cartera.map((f, idx) => (
+            <div key={f.folder_id} data-testid={`gerencia-card-${f.folder_id}`}
+              style={{ ...glass, padding: "0.8rem", background: f.datos_incompletos ? "rgba(94,26,26,0.45)" : (idx % 2 === 0 ? "#1E2A3A" : "#253347") }}>
+              <div style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
+                <b style={{ color: "#D4AF37" }}>{idx + 1}</b>
+                <b style={{ color: "#fff", fontSize: 15, flex: 1, overflowWrap: "anywhere" }}>{f.cliente}</b>
+                <span style={{ color: "#B0BEC5", fontFamily: "monospace", fontSize: 12 }}>{f.rut || "—"}</span>
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 4, fontSize: 12, color: "#90A4AE", alignItems: "center" }}>
+                <span>{f.inmobiliaria || f.origen || "⚠️ Sin inmobiliaria"}</span>
+                {f.tipo_operacion && <span style={{ fontSize: 10, fontWeight: 800, padding: "1px 8px", borderRadius: 6,
+                  background: f.tipo_operacion === "USADA" ? "rgba(34,197,94,0.15)" : "rgba(56,189,248,0.15)",
+                  color: f.tipo_operacion === "USADA" ? "#22c55e" : "#38bdf8" }}>{f.tipo_operacion}</span>}
+                <span style={{ color: f.subsidio ? "#4ade80" : "#94a3b8", fontSize: 11 }}>{f.subsidio ? "Con Subsidio" : "Sin Subsidio"}</span>
+                <b style={{ marginLeft: "auto", color: "#D4AF37" }}>{f.monto_credito_uf ? `${Number(f.monto_credito_uf).toLocaleString("es-CL")} UF` : "—"}</b>
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 8, fontSize: 11 }}>
+                <BotonEstado estado={f.documentacion} label={`Docs: ${f.documentacion === "ok" ? "✅" : f.documentacion === "proceso" ? "⏳" : "❌"}`} />
+                <BotonEstado estado={f.tasacion_estado} label={`Tasación: ${f.tasacion_estado === "ok" ? "✅" : f.tasacion_estado === "proceso" ? "⏳" : "Pend."}`} />
+                <BotonEstado estado={f.estudio_estado} label={`Estudio: ${f.estudio_estado === "ok" ? "✅" : f.estudio_estado === "proceso" ? "⏳" : "Pend."}`} />
+                <BotonEstado estado={f.firma_set} label={`Set: ${f.firma_set === "ok" ? "✅" : f.firma_set === "proceso" ? "⏳" : "Pend."}`} />
+                {f.escritura_firmada
+                  ? <span style={{ color: "#FFD700", fontWeight: 900, fontSize: 12 }}>🏆 ESCRITURA FIRMADA</span>
+                  : <BotonEstado estado="pendiente" label="Escritura: Pend." />}
+              </div>
+              {f.reparos_pendientes > 0 && (
+                <button onClick={() => verReparos(f)} style={{ marginTop: 6, cursor: "pointer", border: "none",
+                  borderRadius: 6, fontWeight: 800, fontSize: 11, padding: "3px 10px",
+                  background: "rgba(239,68,68,0.18)", color: "#ef4444" }}>⚠️ {f.reparos_pendientes} reparo(s)</button>
+              )}
+              <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8, flexWrap: "wrap" }}>
+                <label style={{ fontSize: 11, color: "#94a3b8" }}>📅 Firma:</label>
+                <input type="date" defaultValue={f.fecha_firma || ""} onBlur={e => fecharFirma(f.folder_id, e.target.value)}
+                  style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(148,163,184,0.25)",
+                    color: "#e2e8f0", borderRadius: 6, padding: "0.25rem 0.4rem", fontSize: 13, width: 140 }} />
+                <span style={{ fontSize: 11, color: "#78909C", marginLeft: "auto" }}>{f.notaria_nombre || "Notaría por asignar"}</span>
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 8 }}>
+                {RECLAMOS_UI.filter(([, , cond]) => cond(f)).map(([tipo, label, , color]) => {
+                  const hecho = f.reclamos?.[tipo];
+                  return (
+                    <button key={tipo} className={`maserati-btn ${hecho ? "mb-hecho" : color}`}
+                      disabled={busyRec === `${f.folder_id}-${tipo}`}
+                      style={{ minHeight: 28, padding: "0.25rem 0.5rem", fontSize: "0.58rem", borderRadius: 8 }}
+                      onClick={() => reclamar(f.folder_id, tipo, hecho?.fecha)}>
+                      {busyRec === `${f.folder_id}-${tipo}` ? "Enviando…" : hecho ? `✓ ${label.replace("📩 ", "")}` : label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+          {!data && <p style={{ color: "#94a3b8", textAlign: "center", padding: "2rem" }}>Cargando cartera…</p>}
+          {data && cartera.length === 0 && <p style={{ color: "#94a3b8", textAlign: "center", padding: "2rem" }}>Sin operaciones con los filtros aplicados.</p>}
+        </div>
+      ) : (
       <div style={{ ...glass, overflow: "auto", maxHeight: "calc(100vh - 130px)" }}>
         <table data-testid="gerencia-tabla" style={{ width: "100%", borderCollapse: "collapse", fontSize: 14, color: "#e2e8f0", minWidth: 1900 }}>
           <thead>
@@ -326,6 +392,7 @@ export default function GerenciaComercialModule() {
         {!data && <p style={{ color: "#94a3b8", textAlign: "center", padding: "2rem" }}>Cargando cartera…</p>}
         {data && cartera.length === 0 && <p style={{ color: "#94a3b8", textAlign: "center", padding: "2rem" }}>Sin operaciones con los filtros aplicados.</p>}
       </div>
+      )}
       <p data-testid="costo-desarrollo" style={{ color: "#64748b", fontSize: "0.68rem", marginTop: 12 }}>
         ⚡ Costo de Desarrollo del mes: <b style={{ color: "#d4af37" }}>{data?.costo_desarrollo_creditos ?? 0} créditos</b> (estimado por consumo real de IA — Ley de Eficiencia #23)
         · Cada clic queda en el Log de Gestión Gerencial (Regla #52)

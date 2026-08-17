@@ -1949,7 +1949,8 @@ async def supercarpeta_vista(mes: str = ""):
                                          "firmado": bool(pv.get("firmado")),
                                          "fecha": str(pv.get("fecha") or "")[:10]} if pv else None),
                          "carta_oferta": est_carta,
-                         "docs_co_rs": _marcado_docs(est_carta, est_serviu),
+                         "docs_co_rs": _marcado_docs(est_carta, est_serviu,
+                                                     bool(fd.get("co_rs_reenviado_at"))),
                          "carpeta_notaria": est_carpeta, "escritura": est_escritura,
                          "fecha_firma": fd.get("fecha_firma") or fd.get("fecha_firma_detectada") or "",
                          "con_subsidio": "con" in subsidio_v.lower(),
@@ -2006,14 +2007,16 @@ HITOS_VALIDOS = ("tasacion", "estudio", "cesion", "set_credito",
 _PEND_VERIF = "Pendiente verificación manual"
 
 
-def _marcado_docs(est_carta, est_serviu):
+def _marcado_docs(est_carta, est_serviu, reenviado=False):
     """Marcado ficha cliente: ✅ verde ambos, 🟡 falta uno, 🔴 ninguno, 🔵 verificación manual."""
     pres = lambda e: e in ("Recibida", "Aprobada")
     llego = lambda e: pres(e) or e == _PEND_VERIF
     if pres(est_carta) and pres(est_serviu):
-        return {"color": "verde", "icono": "✅", "detalle": "Carta Oferta y Resolución Serviu completas"}
+        det = ("Carta Oferta y Resolución Serviu completas — reenviadas ✓ a los destinatarios globales"
+               if reenviado else "Carta Oferta y Resolución Serviu completas — reenvío automático en curso")
+        return {"color": "verde", "icono": "✅", "detalle": det, "reenviado": reenviado}
     if llego(est_carta) and llego(est_serviu):
-        return {"color": "azul", "icono": "🔵", "detalle": "Ambos documentos llegaron — hay verificación manual pendiente"}
+        return {"color": "azul", "icono": "🔵", "detalle": "Ambos documentos llegaron — hay verificación manual pendiente (no se reenvía hasta confirmar)"}
     if llego(est_carta):
         return {"color": "amarillo", "icono": "🟡", "detalle": "Falta la Resolución Serviu"}
     if llego(est_serviu):
@@ -2116,6 +2119,14 @@ async def supercarpeta_estado_manual(fid: str, payload: dict, request: Request):
                                      "en": ahora, "anterior": anterior},
         "updated_at": ahora}})
     await _sync_adn(fid)
+    # PARTE 2: si con este estado quedan CO+RS ambas confirmadas → reenvío automático
+    if hito in ("carta_oferta", "serviu"):
+        try:
+            fd2 = await db.folders.find_one({"id": fid})
+            if fd2:
+                await _reenvio_co_rs(fd2)
+        except Exception as ex:
+            logging.warning(f"reenvio co+rs tras estado manual: {ex}")
     return {"ok": True, "hito": hito, "estado": estado, "anterior": anterior,
             "marca": "✏️ manual", "bitacora": "estado_manual_log (inmutable)"}
 
@@ -2348,9 +2359,35 @@ async def cc_globales_set(payload: dict, request: Request):
 
 
 # ── CONTACTOS CARTA OFERTA: por INMOBILIARIA + PROYECTO específico ──────────
+_CONTACTOS_SEMILLA = [
+    {"inmobiliaria": "Boetsch", "proyecto": "", "contacto": "Celinda Soria", "email": ""},
+    {"inmobiliaria": "Boetsch", "proyecto": "Las Uvas y el Viento", "contacto": "Rodrigo Quintero", "email": ""},
+    {"inmobiliaria": "Boetsch", "proyecto": "Fuchslocker", "contacto": "Rodrigo Salazar", "email": ""},
+    {"inmobiliaria": "Maestra", "proyecto": "", "contacto": "", "email": ""},
+    {"inmobiliaria": "Ecomac", "proyecto": "", "contacto": "", "email": ""},
+]
+
+
+async def _seed_contactos_conocidos():
+    """Semilla de contactos conocidos (correo vacío = a configurar → alerta antes de enviar)."""
+    for s in _CONTACTOS_SEMILLA:
+        existe = await db.contactos_carta.find_one({
+            "inmobiliaria_norm": {"$in": [_norm_inmo(s["inmobiliaria"]),
+                                          _norm_inmo(s["inmobiliaria"]).replace("boetsch", "boetch")]},
+            "proyecto_norm": _norm_inmo(s["proyecto"])})
+        if not existe:
+            await db.contactos_carta.insert_one({
+                "id": str(uuid.uuid4()), "inmobiliaria": s["inmobiliaria"],
+                "inmobiliaria_norm": _norm_inmo(s["inmobiliaria"]),
+                "proyecto": s["proyecto"], "proyecto_norm": _norm_inmo(s["proyecto"]),
+                "contacto": s["contacto"], "email": s["email"],
+                "activo": True, "actualizado": _now(), "origen": "semilla"})
+
+
 @supercarpeta.get("/contactos-carta")
 async def contactos_carta_get(request: Request):
     _exigir_gerencia(request)
+    await _seed_contactos_conocidos()
     contactos = [c async for c in db.contactos_carta.find({}, {"_id": 0}).sort(
         [("inmobiliaria", 1), ("proyecto", 1)])]
     if not contactos:
@@ -2400,8 +2437,11 @@ async def _contacto_para(fd, proyecto):
     """LÓGICA DE SELECCIÓN: inmobiliaria+proyecto exacto → contacto general → legado → nada."""
     inmo = _inmo_de_folder(fd) or ""
     inmo_n, proy_n = _norm_inmo(inmo), _norm_inmo(proyecto)
-    cands = [c async for c in db.contactos_carta.find(
-        {"inmobiliaria_norm": inmo_n, "activo": {"$ne": False}})]
+    # tolerancia de escritura (Boetch/Boetsch): match exacto o por contención
+    cands = [c async for c in db.contactos_carta.find({"activo": {"$ne": False}})
+             if inmo_n and (c.get("inmobiliaria_norm") == inmo_n
+                            or inmo_n in (c.get("inmobiliaria_norm") or "zzz")
+                            or (c.get("inmobiliaria_norm") or "zzz") in inmo_n)]
     if proy_n:
         for c in cands:
             pn = c.get("proyecto_norm") or ""
@@ -2416,9 +2456,281 @@ async def _contacto_para(fd, proyecto):
     return inmo, None
 
 
+# ── VENDEDORES (VIVIENDA USADA): cada cliente usada tiene su vendedor directo ──
+@supercarpeta.get("/vendedores-usada")
+async def vendedores_usada_get(request: Request):
+    _exigir_gerencia(request)
+    out = []
+    async for fd in db.folders.find({}, {"id": 1, "nombre": 1, "rut": 1, "tipo_operacion": 1,
+                                         "inmobiliaria": 1, "vendedor_usada": 1, "oculto_supercarpeta": 1}):
+        if fd.get("oculto_supercarpeta") or _inmo_de_folder(fd) != "Casa Usada":
+            continue
+        v = fd.get("vendedor_usada") or {}
+        out.append({"fid": fd["id"], "cliente": fd.get("nombre") or "", "rut": fd.get("rut") or "",
+                    "vendedor": v.get("nombre") or "", "email": v.get("email") or "",
+                    "telefono": v.get("telefono") or "",
+                    "activo": v.get("activo", True) is not False,
+                    "configurado": bool(v.get("email"))})
+    return {"vendedores": sorted(out, key=lambda x: x["cliente"])}
+
+
+@supercarpeta.post("/vendedores-usada")
+async def vendedores_usada_set(payload: dict, request: Request):
+    """Edición del vendedor directo por cliente usada (nunca se elimina — solo se desactiva)."""
+    user = _exigir_gerencia(request)
+    fid = (payload.get("fid") or "").strip()
+    fd = await db.folders.find_one({"id": fid})
+    if not fd:
+        raise HTTPException(status_code=404, detail="Carpeta no existe")
+    email_v = (payload.get("email") or "").strip()
+    if email_v and "@" not in email_v:
+        raise HTTPException(status_code=400, detail="Correo del vendedor inválido")
+    v = fd.get("vendedor_usada") or {}
+    v.update({"nombre": (payload.get("vendedor") or payload.get("nombre") or "").strip(),
+              "email": email_v, "activo": bool(payload.get("activo", v.get("activo", True))),
+              "actualizado": _now(), "por": user.get("sub") or ""})
+    if payload.get("telefono") is not None:
+        v["telefono"] = (payload.get("telefono") or "").strip()
+    await db.folders.update_one({"id": fid}, {"$set": {"vendedor_usada": v, "updated_at": _now()}})
+    await _sync_adn(fid)
+    return {"ok": True, "vendedor_usada": v}
+
+
 def _saludo_genero(nombre):
     primer = (nombre or "").strip().split(" ")[0]
     return "Estimada" if primer.lower().endswith("a") else "Estimado"
+
+
+async def _firma_html():
+    """Firma formal de los correos salientes: logo + firma personal (solo 'Central Mutuos')."""
+    html = ""
+    firma = await db.config.find_one({"_key": "firma_correo"}) or {}
+    if firma.get("url"):
+        html += (f'<br><img src="{firma["url"]}" alt="Central Mutuos" '
+                 f'width="340" style="max-width:340px;border-radius:6px;display:block;">')
+    html += ('<div style="margin-top:10px;font-family:Georgia,\'Times New Roman\',serif;'
+             'color:#1e293b;font-size:14px;line-height:1.5;">'
+             '<b style="color:#0f2557;">Gerardo Barrera P.</b><br>'
+             '<span style="color:#8a6d1d;">Asesor Jefe Externo</span><br>'
+             'Canal Inmobiliarias y Brokers<br>'
+             '<span style="color:#0f2557;font-weight:bold;">Central Mutuos</span>'
+             '</div>')
+    return html
+
+
+# ── PARTE 2: REENVÍO AUTOMÁTICO CO+RS a los destinatarios globales ──────────
+_PRES_CO_RS = ("Recibida", "Aprobada")
+
+
+async def _reenvio_co_rs(fd):
+    """ÚNICA automatización de envío permitida (REGLA ABSOLUTA): cuando Carta Oferta Y
+    Resolución Serviu están ambas RECIBIDAS Y CONFIRMADAS, se reenvían JUNTAS a los
+    destinatarios globales activos (Victoria/Daniela). Con uno solo, JAMÁS reenvía."""
+    if fd.get("co_rs_reenviado_at"):
+        return {"ok": False, "motivo": "ya reenviado"}
+    em = fd.get("estados_manuales") or {}
+    est_c = (em.get("carta_oferta") or {}).get("estado") or ""
+    est_s = (em.get("serviu") or {}).get("estado") or ""
+    if est_c not in _PRES_CO_RS or est_s not in _PRES_CO_RS:
+        return {"ok": False, "motivo": "espera: ambos documentos deben estar recibidos y confirmados"}
+    destinos = [x["email"] for x in await _cc_globales() if x.get("activo") and x.get("email")]
+    if not destinos:
+        return {"ok": False, "motivo": "sin destinatarios globales activos"}
+    adjuntos, tiene = [], {"Carta Oferta": False, "Resolución Serviu": False}
+    try:
+        base = fsvc.folder_dir(fd.get("nombre") or "")
+        for p in sorted(base.rglob("*.pdf")):
+            n = mail._sin_acentos(p.name.lower())
+            if re.search(r"carta.?oferta|cartaoferta|oferta", n) and not tiene["Carta Oferta"]:
+                adjuntos.append({"filename": p.name, "content_b64": base64.b64encode(p.read_bytes()).decode()})
+                tiene["Carta Oferta"] = True
+            elif re.search(r"serviu|resoluc", n) and not tiene["Resolución Serviu"]:
+                adjuntos.append({"filename": p.name, "content_b64": base64.b64encode(p.read_bytes()).decode()})
+                tiene["Resolución Serviu"] = True
+    except Exception as ex:
+        logging.warning(f"reenvio co+rs adjuntos {fd.get('nombre')}: {ex}")
+    nombre, rut = fd.get("nombre") or "", fd.get("rut") or ""
+    filas = "".join(f"<li><b>{d}</b>: {'adjunto ✓' if ok else 'confirmado en sistema (archivo no localizado en la carpeta digital)'}</li>"
+                    for d, ok in tiene.items())
+    html = (f"<p>Estimadas,</p>"
+            f"<p>Se reenvían de forma automática los documentos completos del cliente "
+            f"<b>{nombre}</b> (RUT {rut or 'por confirmar'}):</p>"
+            f"<ul>{filas}</ul>"
+            f"<p>Ambos documentos fueron recibidos y confirmados en el sistema "
+            f"(Carta Oferta: {est_c} · Resolución Serviu: {est_s}).</p>"
+            f"<p>Atentamente,<br>Central Mutuos — reenvío automático</p>")
+    html += await _firma_html()
+    asunto = f"Carta Oferta + Resolución Serviu — {nombre}" + (f" ({rut})" if rut else "")
+    res = await asyncio.to_thread(
+        lambda: mail.send_mail(destinos, asunto, html, attachments=adjuntos, desde="secundaria"))
+    if not res.get("success"):
+        logging.warning(f"reenvio co+rs {nombre}: {res.get('error')}")
+        return {"ok": False, "motivo": res.get("error") or "error SMTP"}
+    ahora = _now()
+    registro = {"tipo": "reenvio_automatico_co_rs", "para": destinos,
+                "adjuntos": [a["filename"] for a in adjuntos], "asunto": asunto,
+                "en": ahora, "por": "sistema (automático)", "estado": "enviado"}
+    await db.folders.update_one({"id": fd["id"]}, {
+        "$set": {"co_rs_reenviado_at": ahora, "co_rs_reenvio": registro, "updated_at": ahora},
+        "$push": {"bitacora_solicitudes": registro}})
+    await db.alertas.insert_one({"id": str(uuid.uuid4()), "tipo": "reenvio_co_rs",
+        "mensaje": f"📤 Carta Oferta + Resolución Serviu de {nombre} reenviadas automáticamente a "
+                   f"{', '.join(destinos)} ({len(adjuntos)} adjunto(s))",
+        "fecha": ahora, "leida": False})
+    await _sync_adn(fd["id"])
+    return {"ok": True, "para": destinos, "adjuntos": [a["filename"] for a in adjuntos]}
+
+
+async def reenvio_co_rs_loop():
+    """Red de seguridad cada 30 min: reenvía los casos que quedaron completos."""
+    while True:
+        await asyncio.sleep(1800)
+        try:
+            async for fd in db.folders.find({
+                    "co_rs_reenviado_at": {"$exists": False},
+                    "estados_manuales.carta_oferta.estado": {"$in": list(_PRES_CO_RS)},
+                    "estados_manuales.serviu.estado": {"$in": list(_PRES_CO_RS)}}):
+                if not fd.get("oculto_supercarpeta"):
+                    await _reenvio_co_rs(fd)
+        except Exception as e:
+            logging.warning(f"reenvio co+rs loop: {e}")
+
+
+# ── RESUMEN SEMANAL A GERENCIA (lunes): avances y cuellos de botella de la Flota ──
+async def _resumen_gerencia_destinatarios():
+    cfg = await db.config.find_one({"_key": "resumen_gerencia"}) or {}
+    dest = cfg.get("destinatarios")
+    if not dest:
+        dest = sorted({"rodrigoibanez@centralmutuos.cl"}
+                      | {x["email"] for x in await _cc_globales() if x.get("activo") and x.get("email")})
+        await db.config.update_one({"_key": "resumen_gerencia"}, {"$set": {
+            "destinatarios": dest, "actualizado": _now()}}, upsert=True)
+    return dest
+
+
+def _cuellos_cliente(c):
+    cb = []
+    for f in (c.get("faltantes") or []):
+        cb.append(f"Dato faltante: {f}")
+    if ((c.get("bitacora") or {}).get("tasacion") or {}).get("demora_48h"):
+        cb.append("Tasación +48h sin respuesta")
+    if c.get("estudio_titulos") == "Con Reparos" or c.get("alerta_reparos"):
+        cb.append("Estudio de Títulos con reparos pendientes")
+    if c.get("promesa") == _PEND_VERIF:
+        cb.append("Promesa/Compromiso pendiente de verificación manual")
+    docs = c.get("docs_co_rs") or {}
+    if docs.get("color") in ("rojo", "amarillo", "azul"):
+        cb.append(f"CO+RS: {docs.get('detalle')}")
+    if not c.get("fecha_firma") and (c.get("avance") or {}).get("pct", 0) >= 70:
+        cb.append("Sin fecha de firma agendada pese al avance")
+    if (c.get("set_credito") or {}).get("estado") == "verificacion_pendiente":
+        cb.append("Set de Crédito con verificación de firmas pendiente")
+    return cb
+
+
+async def _resumen_gerencia_html(mes: str = ""):
+    data = await supercarpeta_vista(mes)
+    p = data.get("proyeccion") or {}
+    filas = []
+    for i, c in enumerate(sorted(data["clientes"], key=lambda x: (x.get("cliente") or "")), 1):
+        cb = _cuellos_cliente(c)
+        pct = (c.get("avance") or {}).get("pct", 0)
+        color = "#15803d" if pct >= 90 else "#b45309" if pct >= 40 else "#b91c1c"
+        filas.append(
+            f"<tr style='border-bottom:1px solid #e2e8f0'>"
+            f"<td style='padding:6px 8px;color:#64748b;font-weight:bold'>{i}</td>"
+            f"<td style='padding:6px 8px;font-weight:bold'>{c.get('cliente') or ''}"
+            f"<div style='color:#64748b;font-weight:normal;font-size:11px'>{c.get('rut') or ''}</div></td>"
+            f"<td style='padding:6px 8px;text-align:right'>{c.get('monto_uf') or '—'}</td>"
+            f"<td style='padding:6px 8px;text-align:center;color:{color};font-weight:bold'>{pct}%</td>"
+            f"<td style='padding:6px 8px;font-size:12px;color:#7c2d12'>"
+            + ("<br>".join("⚠ " + x for x in cb) if cb else "<span style='color:#15803d'>Sin cuellos de botella</span>")
+            + "</td></tr>")
+    hoy = _now()[:10]
+    html = (
+        f"<div style='font-family:Georgia,serif;max-width:760px;margin:auto;color:#1e293b'>"
+        f"<div style='background:#1a1f2e;color:#d4af37;padding:16px 22px;border-radius:8px 8px 0 0'>"
+        f"<h2 style='margin:0;font-size:19px'>Resumen Semanal — Gerencia</h2>"
+        f"<div style='color:#94a3b8;font-size:12px'>Central Mutuos · Flota {data.get('mes_proyeccion')} · {hoy}</div></div>"
+        f"<div style='border:1px solid #e2e8f0;border-top:none;padding:16px 22px'>"
+        f"<p style='font-size:13px'><b>Proyección:</b> {p.get('suma_uf')} / {p.get('meta_uf')} UF "
+        f"({p.get('avance_pct')}%) · Avance promedio de etapas: <b>{p.get('avance_promedio')}%</b> · "
+        f"UF en avance (&gt;50%): <b>{p.get('uf_en_avance')}</b> · UF cerradas: <b>{p.get('uf_cerradas')}</b></p>"
+        f"<table style='width:100%;border-collapse:collapse;font-size:13px'>"
+        f"<tr style='background:#f1f5f9;color:#0f2557;text-transform:uppercase;font-size:11px'>"
+        f"<th style='padding:6px 8px;text-align:left'>N°</th><th style='padding:6px 8px;text-align:left'>Cliente</th>"
+        f"<th style='padding:6px 8px;text-align:right'>Monto UF</th><th style='padding:6px 8px'>Avance</th>"
+        f"<th style='padding:6px 8px;text-align:left'>Cuellos de botella</th></tr>"
+        + "".join(filas) + "</table>"
+        f"<p style='color:#64748b;font-size:11px;margin-top:14px'>Generado automáticamente desde la "
+        f"Supercarpeta (Bóveda ADN_CLIENTES_360). Los estados manuales de Gerencia prevalecen.</p></div></div>")
+    return html + await _firma_html()
+
+
+async def _enviar_resumen_gerencia():
+    dest = await _resumen_gerencia_destinatarios()
+    html = await _resumen_gerencia_html()
+    hoy = datetime.now(timezone.utc).strftime("%d-%m-%Y")
+    res = await asyncio.to_thread(
+        lambda: mail.send_mail(dest, f"📊 Resumen Semanal Gerencia — Flota Supercarpeta — {hoy}",
+                               html, desde="secundaria"))
+    return res, dest
+
+
+async def resumen_gerencia_loop():
+    """Cada lunes ≥ 08:00 (hora Chile): resumen de avances y cuellos de botella a Gerencia."""
+    from zoneinfo import ZoneInfo
+    while True:
+        await asyncio.sleep(1800)
+        try:
+            ahora = datetime.now(ZoneInfo("America/Santiago"))
+            if ahora.weekday() != 0 or ahora.hour < 8:
+                continue
+            semana_key = ahora.strftime("%G-W%V")
+            cfg = await db.config.find_one({"_key": "resumen_gerencia"}) or {}
+            if cfg.get("last_sent_week") == semana_key:
+                continue
+            res, dest = await _enviar_resumen_gerencia()
+            if res.get("success"):
+                await db.config.update_one({"_key": "resumen_gerencia"}, {"$set": {
+                    "last_sent_week": semana_key, "last_sent_at": _now(),
+                    "ultimo_envio_a": dest}}, upsert=True)
+        except Exception as e:
+            logging.warning(f"resumen gerencia: {e}")
+
+
+@supercarpeta.get("/resumen-gerencia")
+async def resumen_gerencia_get(request: Request):
+    _exigir_gerencia(request)
+    cfg = await db.config.find_one({"_key": "resumen_gerencia"}, {"_id": 0}) or {}
+    return {"destinatarios": await _resumen_gerencia_destinatarios(),
+            "last_sent_at": cfg.get("last_sent_at") or "", "programado": "Lunes 08:00 (hora Chile)"}
+
+
+@supercarpeta.post("/resumen-gerencia/config")
+async def resumen_gerencia_config(payload: dict, request: Request):
+    _exigir_gerencia(request)
+    dest = [d.strip().lower() for d in (payload.get("destinatarios") or []) if "@" in str(d)]
+    if not dest:
+        raise HTTPException(status_code=400, detail="Debe indicar al menos un correo válido")
+    await db.config.update_one({"_key": "resumen_gerencia"}, {"$set": {
+        "destinatarios": dest, "actualizado": _now()}}, upsert=True)
+    return {"ok": True, "destinatarios": dest}
+
+
+@supercarpeta.post("/resumen-gerencia/enviar")
+async def resumen_gerencia_enviar(payload: dict, request: Request):
+    """Envío manual con vista previa (confirm:false = solo preview)."""
+    _exigir_gerencia(request)
+    if not (payload or {}).get("confirm"):
+        return {"body": await _resumen_gerencia_html(),
+                "destinatarios": await _resumen_gerencia_destinatarios()}
+    res, dest = await _enviar_resumen_gerencia()
+    if not res.get("success"):
+        raise HTTPException(status_code=502, detail=res.get("error") or "Error de envío SMTP")
+    await db.config.update_one({"_key": "resumen_gerencia"}, {"$set": {
+        "last_sent_at": _now(), "ultimo_envio_a": dest}}, upsert=True)
+    return {"ok": True, "destinatarios": dest}
 
 
 @supercarpeta.get("/solicitud-doc/{fid}")
@@ -2439,26 +2751,43 @@ async def solicitud_doc_preview(fid: str, request: Request):
                   if isinstance(reg.get("resolucion_serviu"), dict)
                   else fd.get("resolucion_serviu") or reg.get("resolucion_serviu") or "")
     inmo, contacto = await _contacto_para(fd, proyecto)
+    # VIVIENDA USADA: la solicitud de Compromiso de Compraventa va al VENDEDOR directo del cliente
+    usada = inmo == "Casa Usada"
+    if usada:
+        v = fd.get("vendedor_usada") or {}
+        contacto = ({"contacto": v.get("nombre") or "", "email": v.get("email") or ""}
+                    if v.get("email") and v.get("activo", True) is not False else None)
     encargado = (contacto or {}).get("contacto") or ""
     saludo = _saludo_genero(encargado)
     rut = fd.get("rut") or ""
     faltantes = []
     if not rut:
         faltantes.append("RUT del cliente")
-    if not proyecto:
-        faltantes.append("Nombre del proyecto")
-    if not resolucion:
-        faltantes.append("Resolución SERVIU")
+    if not usada:
+        if not proyecto:
+            faltantes.append("Nombre del proyecto")
+        if not resolucion:
+            faltantes.append("Resolución SERVIU")
     cc = [x["email"] for x in await _cc_globales() if x.get("activo") and x.get("email")]
-    asunto = f"Carta Oferta - {fd.get('nombre')} - {proyecto or '[Nombre del proyecto]'}"
-    cuerpo = (f"{saludo} {encargado or '[nombre del destinatario]'},\n\n"
-              f"Solicito por medio de la presente carta oferta de:\n\n"
-              f"Cliente: {fd.get('nombre')}\n"
-              f"RUT: {rut or '[RUT del cliente]'}\n"
-              f"Proyecto: {proyecto or '[Nombre del proyecto]'}\n"
-              f"Resolución SERVIU: {resolucion or '[Número de resolución SERVIU]'}\n\n"
-              f"Agradeciendo su buena disposición,\n"
-              f"Atentamente,\nCentral Mutuos")
+    if usada:
+        asunto = f"Compromiso de Compraventa - {fd.get('nombre')}"
+        cuerpo = (f"{saludo} {encargado or '[nombre del vendedor]'},\n\n"
+                  f"Solicito por medio de la presente el Compromiso de Compraventa firmado de:\n\n"
+                  f"Cliente comprador: {fd.get('nombre')}\n"
+                  f"RUT: {rut or '[RUT del cliente]'}\n"
+                  f"Propiedad: {proyecto or '[Dirección de la propiedad]'}\n\n"
+                  f"Agradeciendo su buena disposición,\n"
+                  f"Atentamente,\nCentral Mutuos")
+    else:
+        asunto = f"Carta Oferta - {fd.get('nombre')} - {proyecto or '[Nombre del proyecto]'}"
+        cuerpo = (f"{saludo} {encargado or '[nombre del destinatario]'},\n\n"
+                  f"Solicito por medio de la presente carta oferta de:\n\n"
+                  f"Cliente: {fd.get('nombre')}\n"
+                  f"RUT: {rut or '[RUT del cliente]'}\n"
+                  f"Proyecto: {proyecto or '[Nombre del proyecto]'}\n"
+                  f"Resolución SERVIU: {resolucion or '[Número de resolución SERVIU]'}\n\n"
+                  f"Agradeciendo su buena disposición,\n"
+                  f"Atentamente,\nCentral Mutuos")
     desde = ""
     for a in mail.ACCOUNTS:
         if a["rol"] == "secundaria":
@@ -2467,6 +2796,7 @@ async def solicitud_doc_preview(fid: str, request: Request):
         desde = mail.ACCOUNTS[0]["user"]
     return {"cliente": fd.get("nombre"), "rut": rut, "inmobiliaria": inmo,
             "proyecto": proyecto, "resolucion_serviu": resolucion,
+            "usada": usada, "tipo": "compromiso_compraventa" if usada else "carta_oferta+resolucion_serviu",
             "encargado": encargado, "para": (contacto or {}).get("email") or "",
             "configurada": bool((contacto or {}).get("email")), "cc": cc,
             "faltantes": faltantes, "asunto": asunto, "cuerpo": cuerpo, "desde": desde}
@@ -2482,19 +2812,26 @@ async def solicitud_doc_enviar(fid: str, payload: dict, request: Request):
     if not fd:
         raise HTTPException(status_code=404, detail="Carpeta no encontrada")
     para = (payload.get("para") or "").strip()
+    usada = _inmo_de_folder(fd) == "Casa Usada"
     if "@" not in para:
         raise HTTPException(status_code=400,
-                            detail="Configure el contacto de la inmobiliaria/proyecto (botón 🏢 Contactos)")
+                            detail="Configure el vendedor del cliente (botón 🏢 Contactos → Vendedores)" if usada
+                            else "Configure el contacto de la inmobiliaria/proyecto (botón 🏢 Contactos)")
     # VALIDACIÓN BLOQUEANTE: indica exactamente qué campo falta
     rut = (payload.get("rut") or fd.get("rut") or "").strip()
     proyecto = (payload.get("proyecto") or fd.get("proyecto") or "").strip()
     resolucion = str(payload.get("resolucion_serviu") or fd.get("resolucion_serviu") or "").strip()
-    faltantes = [n for v, n in ((rut, "RUT del cliente"), (proyecto, "Nombre del proyecto"),
-                                (resolucion, "Resolución SERVIU")) if not v]
+    if usada:
+        faltantes = ["RUT del cliente"] if not rut else []
+    else:
+        faltantes = [n for v, n in ((rut, "RUT del cliente"), (proyecto, "Nombre del proyecto"),
+                                    (resolucion, "Resolución SERVIU")) if not v]
     if faltantes:
         raise HTTPException(status_code=400,
                             detail="ENVÍO BLOQUEADO — falta: " + ", ".join(faltantes))
-    asunto = (payload.get("asunto") or "").strip() or f"Carta Oferta - {fd.get('nombre')} - {proyecto}"
+    asunto = (payload.get("asunto") or "").strip() or (
+        f"Compromiso de Compraventa - {fd.get('nombre')}" if usada
+        else f"Carta Oferta - {fd.get('nombre')} - {proyecto}")
     cuerpo = (payload.get("cuerpo") or "").strip()
     if not cuerpo:
         raise HTTPException(status_code=400, detail="El cuerpo del correo no puede ir vacío")
@@ -2511,28 +2848,19 @@ async def solicitud_doc_enviar(fid: str, payload: dict, request: Request):
     cc = [x["email"] for x in await _cc_globales()
           if x.get("activo") and x.get("email") and x["email"].lower() != para.lower()]
     html = "<p>" + cuerpo.replace("\n", "<br>") + "</p>"
-    firma = await db.config.find_one({"_key": "firma_correo"}) or {}
-    if firma.get("url"):
-        html += (f'<br><img src="{firma["url"]}" alt="Central Mutuos" '
-                 f'width="340" style="max-width:340px;border-radius:6px;display:block;">')
-    # FIRMA PERSONAL del Administrador General (texto: solo "Central Mutuos")
-    html += ('<div style="margin-top:10px;font-family:Georgia,\'Times New Roman\',serif;'
-             'color:#1e293b;font-size:14px;line-height:1.5;">'
-             '<b style="color:#0f2557;">Gerardo Barrera P.</b><br>'
-             '<span style="color:#8a6d1d;">Asesor Jefe Externo</span><br>'
-             'Canal Inmobiliarias y Brokers<br>'
-             '<span style="color:#0f2557;font-weight:bold;">Central Mutuos</span>'
-             '</div>')
+    html += await _firma_html()
     res = await asyncio.to_thread(
         lambda: mail.send_mail(para, asunto, html, desde="secundaria", cc=cc))
     if not res.get("success"):
         raise HTTPException(status_code=502, detail=res.get("error") or "Error de envío SMTP")
     em = fd.get("estados_manuales") or {}
-    for h in ("carta_oferta", "serviu"):
+    hitos_marca = ("promesa",) if usada else ("carta_oferta", "serviu")
+    for h in hitos_marca:
         if not (em.get(h) or {}).get("estado"):
             em[h] = {"estado": "Solicitada", "por": user.get("sub") or "",
                      "en": _now(), "via": "solicitud_email"}
-    registro = {"tipo": "carta_oferta+resolucion_serviu", "para": para, "cc": cc,
+    registro = {"tipo": "compromiso_compraventa" if usada else "carta_oferta+resolucion_serviu",
+                "para": para, "cc": cc,
                 "asunto": asunto, "en": _now(), "por": user.get("sub") or "",
                 "estado": "enviado", "smtp_code": res.get("smtp_code")}
     await db.folders.update_one({"id": fid}, {
@@ -2662,12 +2990,21 @@ _COMISION_PCT = {"boetsch": 1.0, "boetch": 1.0, "ecomac": 1.0, "poch": 1.0,
                  "comod": 0.8, "usada": 0.5}
 
 
-def _comision_cliente(fd, monto_uf):
-    """Regla de cálculo: % sobre el monto del crédito según broker. Sin regla → revisar."""
+def _comision_cliente(fd, monto_uf, con_subsidio=None):
+    """Regla de cálculo: % sobre el monto del crédito según broker. Sin regla → revisar.
+    MAESTRA (regla del dueño): 0,5% sin subsidio (caso Claudia Zurita) / 1% con subsidio.
+    ECOMAC (regla del dueño): 0,8% con subsidio / 1% sin subsidio."""
     tipo = (fd.get("tipo_operacion") or "").lower()
     b = mail._sin_acentos((fd.get("inmobiliaria") or fd.get("broker_origen") or "").lower())
-    pct = 0.5 if ("usad" in tipo or "usada" in b) else next(
-        (p for k, p in _COMISION_PCT.items() if k in b), None)
+    if "maestra" in b:
+        if con_subsidio is None:
+            return None, "REVISAR CON GERENCIA (Maestra: falta saber si es con o sin subsidio)"
+        pct = 1.0 if con_subsidio else 0.5
+    elif "ecomac" in b:
+        pct = 0.8 if con_subsidio else 1.0
+    else:
+        pct = 0.5 if ("usad" in tipo or "usada" in b) else next(
+            (p for k, p in _COMISION_PCT.items() if k in b), None)
     if pct is None:
         return None, "REVISAR CON GERENCIA"
     com = round(float(monto_uf or 0) * pct / 100, 2) if monto_uf else ""
@@ -2731,7 +3068,10 @@ async def _ejecutar_cbr():
             reg = adn_map.get(_adn._norm_rut(fd.get("rut"))) if fd.get("rut") else None
             monto_uf = (fd.get("proyeccion_uf")
                         or ((reg or {}).get("financiero") or {}).get("monto_credito_uf") or "")
-            comision, pct_txt = _comision_cliente(fd, monto_uf)
+            subsidio_txt = (fd.get("subsidio_proyeccion")
+                            or ("Con Subsidio" if ((reg or {}).get("financiero") or {}).get("con_subsidio")
+                                else "Sin Subsidio"))
+            comision, pct_txt = _comision_cliente(fd, monto_uf, "con" in subsidio_txt.lower())
             fila = {
                 "fid": fd["id"],
                 "cliente": fd.get("nombre") or "",
@@ -2740,9 +3080,7 @@ async def _ejecutar_cbr():
                 "proyecto": (fd.get("proyecto")
                              or ((reg or {}).get("propiedad") or {}).get("proyecto") or ""),
                 "tipo_propiedad": fd.get("tipo_operacion") or "",
-                "subsidio": (fd.get("subsidio_proyeccion")
-                             or ("Con Subsidio" if ((reg or {}).get("financiero") or {}).get("con_subsidio")
-                                 else "Sin Subsidio")),
+                "subsidio": subsidio_txt,
                 "monto_credito": monto_uf,
                 "comision": comision if comision is not None else "",
                 "pct_aplicado": pct_txt,

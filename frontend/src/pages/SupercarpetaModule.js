@@ -100,6 +100,13 @@ export default function SupercarpetaModule() {
   // ACCESO EXCLUSIVO: módulo Comisiones/CBR solo para el Administrador General
   const esAdminGeneral = ["admin", "maestro"].includes((secureGet("user") || {}).rol);
   const [guardando, setGuardando] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.matchMedia("(max-width: 768px)").matches);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 768px)");
+    const fn = e => setIsMobile(e.matches);
+    mq.addEventListener("change", fn);
+    return () => mq.removeEventListener("change", fn);
+  }, []);
 
   const abrirPanel = async (c, hito) => {
     setPanel({ fid: c.id, cliente: c.cliente, hito, loading: true, nota: "", nuevoEstado: "" });
@@ -369,11 +376,13 @@ export default function SupercarpetaModule() {
   const abrirInmobiliarias = async () => {
     setInmoModal({ loading: true });
     try {
-      const [rc, rg] = await Promise.all([
+      const [rc, rg, rv] = await Promise.all([
         axios.get(`${API}/api/supercarpeta/contactos-carta`),
-        axios.get(`${API}/api/supercarpeta/cc-globales`)]);
+        axios.get(`${API}/api/supercarpeta/cc-globales`),
+        axios.get(`${API}/api/supercarpeta/vendedores-usada`)]);
       setInmoModal({ loading: false, contactos: rc.data.contactos || [],
         detectadas: rc.data.inmobiliarias_detectadas || [], cc: rg.data.lista || [],
+        vendedores: rv.data.vendedores || [],
         nuevo: { inmobiliaria: "", proyecto: "", contacto: "", email: "" },
         nuevoCc: { nombre: "", email: "" } });
     } catch (e) { setInmoModal(null); window.alert(e.response?.data?.detail || "Error al cargar contactos"); }
@@ -394,6 +403,14 @@ export default function SupercarpetaModule() {
   };
   const editarCc = (i, campo, valor) => setInmoModal(m => ({
     ...m, cc: m.cc.map((x, j) => j === i ? { ...x, [campo]: valor } : x) }));
+  const guardarVendedor = async (v) => {
+    try {
+      await axios.post(`${API}/api/supercarpeta/vendedores-usada`, v);
+      await abrirInmobiliarias();
+    } catch (e) { window.alert(e.response?.data?.detail || "Error al guardar el vendedor"); }
+  };
+  const editarVendedor = (i, campo, valor) => setInmoModal(m => ({
+    ...m, vendedores: m.vendedores.map((x, j) => j === i ? { ...x, [campo]: valor } : x) }));
 
   const abrirSolicitud = async (c) => {
     setSolicitudModal({ loading: true, fid: c.id });
@@ -619,6 +636,65 @@ export default function SupercarpetaModule() {
           </div>
         </div>
       )}
+      {isMobile ? (
+        /* 📱 VISTA MÓVIL: tarjetas apiladas por cliente (la tabla queda intacta en escritorio) */
+        <div data-testid="supercarpeta-cards" style={{ display: "grid", gap: 10 }}>
+          {clientes.map((c, idx) => (
+            <div key={c.id} data-testid={`super-card-${c.id}`}
+              style={{ background: idx % 2 === 0 ? "#1E2A3A" : "#253347",
+                border: "1px solid rgba(212,175,55,0.35)", borderRadius: 12, padding: "0.8rem" }}>
+              <div style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
+                <b data-testid={`super-card-numero-${c.id}`} style={{ color: "#D4AF37", fontSize: 15 }}>{idx + 1}</b>
+                <b style={{ color: "#fff", fontSize: 15, flex: 1, overflowWrap: "anywhere" }}>{c.cliente}</b>
+                <span style={{ color: "#B0BEC5", fontFamily: "monospace", fontSize: 12 }}>{c.rut || "—"}</span>
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 4, fontSize: 12, color: "#90A4AE", alignItems: "center" }}>
+                <span>{c.inmobiliaria}</span>
+                {c.proyecto && <span>· {c.proyecto}</span>}
+                {c.subsidio && <span style={{ background: c.subsidio.toLowerCase().startsWith("con") ? "#2E7D32" : "#37474F",
+                  color: "#fff", borderRadius: 999, padding: "1px 8px", fontSize: 11 }}>{c.subsidio}</span>}
+                <b style={{ marginLeft: "auto", color: "#D4AF37" }}>{c.monto_uf ? `${Number(c.monto_uf).toLocaleString("es-CL")} UF` : "—"}</b>
+              </div>
+              <div style={{ marginTop: 8 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#cbd5e1" }}>
+                  <span>Avance</span><b style={{ color: (c.avance?.pct || 0) >= 100 ? "#FFD700" : "#f8fafc" }}>{c.avance?.pct ?? 0}%</b>
+                </div>
+                <div style={{ marginTop: 3, height: 7, background: "rgba(0,0,0,0.35)", borderRadius: 99, overflow: "hidden" }}
+                  onClick={() => setAvanceModal(c)}>
+                  <div style={{ width: `${Math.min(c.avance?.pct || 0, 100)}%`, height: "100%", borderRadius: 99,
+                    background: colorAvance(c.avance?.pct || 0) }} />
+                </div>
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 8 }}>
+                {[["tasacion", c.estado_tasacion], ["estudio", c.estudio_titulos],
+                  ["serviu", c.con_subsidio ? c.serviu : null],
+                  ["carta_oferta", c.carta_oferta], ["promesa", c.promesa],
+                  ["set_credito", SET_LABEL[c.set_credito?.estado] || c.set_credito?.estado || "Pendiente"],
+                  ["carpeta_notaria", c.carpeta_notaria], ["escritura", c.escritura]]
+                  .filter(([, est]) => est !== null).map(([h, est]) => (
+                    <button key={h} data-testid={`card-${h}-${c.id}`} onClick={() => abrirPanel(c, h)}
+                      style={{ ...estadoBg(est, c.manual?.[h]), border: "none", borderRadius: 999,
+                        padding: "4px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", maxWidth: "100%" }}>
+                      {HITO_LABEL[h]}: {est || "Pendiente"}
+                    </button>
+                  ))}
+              </div>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8, flexWrap: "wrap" }}>
+                <span title={c.docs_co_rs?.detalle || ""} style={{ fontSize: 14 }}>{c.docs_co_rs?.icono || ""}</span>
+                <button data-testid={`card-solicitar-${c.id}`} onClick={() => abrirSolicitud(c)}
+                  style={{ ...btnPdf, display: "inline-block", marginTop: 0, background: "rgba(96,165,250,0.15)",
+                    border: "1px solid rgba(96,165,250,0.6)", color: "#60a5fa" }}>
+                  {c.inmobiliaria === "Casa Usada" ? "📨 Pedir Compromiso CV" : "📨 Pedir CO+RS"}</button>
+                {c.promesa_ia && <span style={{ fontSize: 11, color: c.promesa_ia.firmado ? "#4ade80" : "#93c5fd" }}
+                  title={c.promesa_ia.evidencia}>🤖 {c.promesa_ia.firmado ? "Firma verificada" : "Revisar firma"}</span>}
+                <span style={{ marginLeft: "auto", fontSize: 11, color: c.fecha_firma ? "#FFD700" : "#64748b" }}>
+                  📅 {c.fecha_firma ? String(c.fecha_firma).slice(0, 10) : "sin fecha"}</span>
+              </div>
+            </div>
+          ))}
+          {data && clientes.length === 0 && <p style={{ color: "#94a3b8", textAlign: "center", padding: "1.5rem" }}>Sin clientes en la vista.</p>}
+        </div>
+      ) : (
       <div style={{ background: "rgba(15,23,42,0.6)", border: "1px solid rgba(212,175,55,0.3)", borderRadius: 14, overflow: "auto", maxHeight: "calc(100vh - 130px)" }}>
         <table data-testid="supercarpeta-tabla" style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.72rem", color: "#e2e8f0", minWidth: 1450 }}>
           <thead>
@@ -759,9 +835,12 @@ export default function SupercarpetaModule() {
                     style={{ fontSize: "0.7rem", display: "block", textAlign: "center" }}>
                     {c.docs_co_rs?.icono || ""}</span>
                   <button data-testid={`solicitar-co-rs-${c.id}`} onClick={() => abrirSolicitud(c)}
-                    title="Pedir por correo la Carta Oferta y la Resolución Serviu (vista previa antes de enviar, CC automática a Victoria y Daniela)"
+                    title={c.inmobiliaria === "Casa Usada"
+                      ? "Pedir por correo el Compromiso de Compraventa al vendedor directo del cliente (vista previa antes de enviar)"
+                      : "Pedir por correo la Carta Oferta y la Resolución Serviu (vista previa antes de enviar, CC automática a Victoria y Daniela)"}
                     style={{ ...btnPdf, background: "rgba(96,165,250,0.15)", border: "1px solid rgba(96,165,250,0.6)",
-                      color: "#60a5fa", width: "100%" }}>📨 Pedir CO+RS</button>
+                      color: "#60a5fa", width: "100%" }}>
+                    {c.inmobiliaria === "Casa Usada" ? "📨 Pedir Compromiso CV" : "📨 Pedir CO+RS"}</button>
                 </>) })}
                 {celdaEstado(c, "promesa", c.promesa, { naSinSubsidio: true, extra: c.promesa_ia ? (
                   <div data-testid={`promesa-ia-${c.id}`}
@@ -830,6 +909,7 @@ export default function SupercarpetaModule() {
         </table>
         {data && clientes.length === 0 && <p style={{ color: "#94a3b8", textAlign: "center", padding: "1.5rem" }}>Sin clientes {solo24 ? "con informes en las últimas 24h" : "en el mes corriente"}.</p>}
       </div>
+      )}
 
       {cbrModal && (
         <div data-testid="cbr-modal" onClick={() => setCbrModal(null)} style={modalBg}>
@@ -1029,6 +1109,48 @@ export default function SupercarpetaModule() {
                 </tbody>
               </table>
 
+              <h4 style={{ margin: "18px 0 0", color: "#d4af37", fontSize: "0.78rem" }}>🏠 Vendedores — Vivienda Usada (compromiso de compraventa por cliente)</h4>
+              <p style={{ color: "#94a3b8", fontSize: "0.6rem", margin: "4px 0 0" }}>
+                Cada cliente de casa usada tiene su vendedor directo: la solicitud del Compromiso de Compraventa
+                se envía a este contacto. No se eliminan: solo se desactivan.</p>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.64rem", marginTop: 8, color: "#e2e8f0" }}>
+                <thead>
+                  <tr style={{ color: "#d4af37", textTransform: "uppercase", fontSize: "0.56rem", letterSpacing: 1 }}>
+                    {["Cliente (usada)", "Vendedor", "Correo del vendedor", "Activo", ""].map((h, j) =>
+                      <th key={j} style={{ textAlign: "left", padding: "6px 8px", borderBottom: "1px solid rgba(212,175,55,0.4)" }}>{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {(inmoModal.vendedores || []).length === 0 && (
+                    <tr><td colSpan={5} style={{ padding: "8px", color: "#94a3b8", fontStyle: "italic" }}>Sin clientes de vivienda usada en la vista.</td></tr>
+                  )}
+                  {(inmoModal.vendedores || []).map((v, i) => (
+                    <tr key={v.fid} data-testid={`vendedor-fila-${i}`} style={{ borderBottom: "1px solid rgba(255,255,255,0.08)", opacity: v.activo === false ? 0.45 : 1 }}>
+                      <td style={{ padding: "4px 6px", color: "#f8fafc", fontWeight: 700 }}>
+                        {v.cliente}
+                        {!v.configurado && <div style={{ color: "#facc15", fontSize: "0.54rem", fontWeight: 800 }}>⚠️ Sin vendedor configurado</div>}
+                      </td>
+                      {["vendedor", "email"].map(campo => (
+                        <td key={campo} style={{ padding: "4px 6px" }}>
+                          <input data-testid={`vendedor-${campo}-${i}`} value={v[campo] || ""}
+                            onChange={e => editarVendedor(i, campo, e.target.value)}
+                            placeholder={campo === "email" ? "vendedor@correo.cl" : "Nombre del vendedor"}
+                            style={{ ...inputStyle, marginTop: 0, padding: "0.32rem 0.5rem", fontSize: "0.62rem" }} /></td>
+                      ))}
+                      <td style={{ padding: "4px 6px", textAlign: "center" }}>
+                        <button data-testid={`vendedor-activo-${i}`}
+                          onClick={() => guardarVendedor({ ...v, activo: v.activo === false })}
+                          title={v.activo === false ? "Reactivar" : "Desactivar (no se elimina)"}
+                          style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.9rem" }}>
+                          {v.activo === false ? "🚫" : "🟢"}</button></td>
+                      <td style={{ padding: "4px 6px" }}>
+                        <button data-testid={`vendedor-guardar-${i}`} onClick={() => guardarVendedor(v)}
+                          className="maserati-btn" style={{ minHeight: 28, fontSize: "0.58rem" }}>💾</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
               <h4 style={{ margin: "18px 0 0", color: "#d4af37", fontSize: "0.78rem" }}>📋 Destinatarios Globales — CC obligatoria en todos los envíos</h4>
               <p style={{ color: "#94a3b8", fontSize: "0.6rem", margin: "4px 0 0" }}>
                 Van con copia en cada correo del sistema. No se eliminan: solo se desactivan.</p>
@@ -1081,17 +1203,21 @@ export default function SupercarpetaModule() {
         <div data-testid="solicitud-modal" onClick={() => setSolicitudModal(null)} style={modalBg}>
           <div onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 640 }}>
             <h4 style={{ margin: 0, color: "#d4af37", fontSize: "0.9rem" }}>
-              📨 Solicitud Carta Oferta + Resolución Serviu — {solicitudModal.cliente || ""}</h4>
+              {solicitudModal.usada ? "📨 Solicitud Compromiso de Compraventa (Vivienda Usada)"
+                : "📨 Solicitud Carta Oferta + Resolución Serviu"} — {solicitudModal.cliente || ""}</h4>
             {solicitudModal.loading ? <p style={{ color: "#94a3b8", fontSize: "0.7rem" }}>Preparando vista previa…</p> : (<>
               <p style={{ color: "#94a3b8", fontSize: "0.62rem", margin: "6px 0 0" }}>
-                Inmobiliaria detectada: <b style={{ color: "#f8fafc" }}>{solicitudModal.inmobiliaria}</b>
-                {solicitudModal.encargado ? <> · Encargado: <b style={{ color: "#f8fafc" }}>{solicitudModal.encargado}</b></> : ""}
+                {solicitudModal.usada ? <>Vivienda Usada — va al <b style={{ color: "#f8fafc" }}>vendedor directo</b> del cliente</>
+                  : <>Inmobiliaria detectada: <b style={{ color: "#f8fafc" }}>{solicitudModal.inmobiliaria}</b></>}
+                {solicitudModal.encargado ? <> · {solicitudModal.usada ? "Vendedor" : "Encargado"}: <b style={{ color: "#f8fafc" }}>{solicitudModal.encargado}</b></> : ""}
                 {" "}· Se envía desde: <b style={{ color: "#60a5fa" }}>{solicitudModal.desde}</b>
               </p>
               {!solicitudModal.configurada && (
                 <div data-testid="solicitud-sin-encargado" style={{ marginTop: 8, padding: "0.6rem 0.8rem",
                   background: "rgba(250,204,21,0.10)", borderLeft: "3px solid #facc15", borderRadius: 8 }}>
-                  <b style={{ color: "#facc15", fontSize: "0.66rem" }}>⚠️ No hay contacto configurado para esta inmobiliaria/proyecto.</b>
+                  <b style={{ color: "#facc15", fontSize: "0.66rem" }}>
+                    ⚠️ {solicitudModal.usada ? "No hay vendedor configurado para este cliente."
+                      : "No hay contacto configurado para esta inmobiliaria/proyecto."}</b>
                   <button onClick={() => { setSolicitudModal(null); abrirInmobiliarias(); }}
                     className="maserati-btn" style={{ marginLeft: 8, minHeight: 26, fontSize: "0.58rem" }}>🏢 Configurar ahora</button>
                 </div>
@@ -1111,19 +1237,21 @@ export default function SupercarpetaModule() {
                     style={{ ...inputStyle, marginTop: 3 }} />
                 </div>
                 <div style={{ flex: 1 }}>
-                  <label style={{ color: "#94a3b8", fontSize: "0.58rem" }}>PROYECTO *</label>
+                  <label style={{ color: "#94a3b8", fontSize: "0.58rem" }}>{solicitudModal.usada ? "PROPIEDAD (opcional)" : "PROYECTO *"}</label>
                   <input data-testid="solicitud-proyecto" value={solicitudModal.proyecto || ""}
                     onChange={e => setSolicitudModal(m => ({ ...m, proyecto: e.target.value }))}
                     style={{ ...inputStyle, marginTop: 3 }} />
                 </div>
+                {!solicitudModal.usada && (
                 <div style={{ flex: 1 }}>
                   <label style={{ color: "#94a3b8", fontSize: "0.58rem" }}>RESOLUCIÓN SERVIU *</label>
                   <input data-testid="solicitud-resolucion" value={solicitudModal.resolucion_serviu || ""}
                     onChange={e => setSolicitudModal(m => ({ ...m, resolucion_serviu: e.target.value }))}
                     placeholder="N° resolución" style={{ ...inputStyle, marginTop: 3 }} />
-                </div>
+                </div>)}
               </div>
-              <label style={{ color: "#94a3b8", fontSize: "0.58rem", display: "block", marginTop: 10 }}>PARA (correo del encargado)</label>
+              <label style={{ color: "#94a3b8", fontSize: "0.58rem", display: "block", marginTop: 10 }}>
+                PARA (correo del {solicitudModal.usada ? "vendedor" : "encargado"})</label>
               <input data-testid="solicitud-para" value={solicitudModal.para || ""}
                 onChange={e => setSolicitudModal(m => ({ ...m, para: e.target.value }))}
                 placeholder="correo@inmobiliaria.cl" style={{ ...inputStyle, marginTop: 3 }} />
@@ -1142,10 +1270,11 @@ export default function SupercarpetaModule() {
               <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
                 <button data-testid="solicitud-enviar" onClick={enviarSolicitud}
                   disabled={solicitudModal.enviando || !(solicitudModal.para || "").includes("@")
-                    || !solicitudModal.rut || !solicitudModal.proyecto || !solicitudModal.resolucion_serviu}
+                    || !solicitudModal.rut
+                    || (!solicitudModal.usada && (!solicitudModal.proyecto || !solicitudModal.resolucion_serviu))}
                   className="maserati-btn" style={{ minHeight: 36,
                     opacity: ((solicitudModal.para || "").includes("@") && solicitudModal.rut
-                      && solicitudModal.proyecto && solicitudModal.resolucion_serviu) ? 1 : 0.5 }}>
+                      && (solicitudModal.usada || (solicitudModal.proyecto && solicitudModal.resolucion_serviu))) ? 1 : 0.5 }}>
                   {solicitudModal.enviando ? "✉️ Enviando…" : "✉️ Confirmar y Enviar"}</button>
                 <button data-testid="solicitud-cancelar" onClick={() => setSolicitudModal(null)}
                   className="maserati-btn" style={{ minHeight: 36 }}>Cancelar</button>
