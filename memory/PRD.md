@@ -967,3 +967,17 @@ Constitución v16 (Reglas #34-#38, #41, #43, #49, #52, #53, #54). Módulo Broker
   Catalina→Origen (contacto@valueproperty.cl, parseado de "Nombre <correo>"). Screenshot OK.
 - Pendiente usuario (ask_human abierta): cargar correos reales de Estudio por inmobiliaria
   (opción a: copiar contacto carta; b: usuario entrega correos; c: mixto) y vendedores usada.
+
+## Actualización 2026-06 (fork, 4l) — Autoaprendizaje Estudio de Título (aprobado por usuario)
+- Usuario confirmó: usadas → usar origen + edición total + pregunta previa + AUTOAPRENDIZAJE
+  ("seguirle el hilo al cliente todo el proceso, sobre todo vivienda usada"). Inmobiliarias:
+  el contacto de estudio NO es el mismo de carta — se aprende al confirmar, no se copia.
+- Implementado en POST /estudio-titulo/enviar (tras envío confirmado):
+  * usada → guarda destinatario confirmado como vendedor_usada del cliente (con "por:
+    aprendizaje automático (estudio de título)") → próximos previews resuelven nivel 2.
+  * nueva → upsert estudio_nombre/estudio_email en contactos_carta (inmobiliaria+proyecto)
+    sin pisar el contacto de carta ($setOnInsert para registros nuevos).
+- Probado con SMTP mockeado: Catalina (usada sin vendedor) → tras confirmar envío al origen
+  (contacto@valueproperty.cl) quedó como su Vendedor directo y el preview cambió de
+  "Origen (sugerido)" a "Vendedor directo". Flags de envío simulados limpiados; vendedor
+  aprendido conservado (dato real: Value Property fue el origen de su solicitud).

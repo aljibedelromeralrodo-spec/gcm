@@ -7454,6 +7454,37 @@ async def estudio_enviar(payload: dict):
                 "nombre": (payload.get("vendedor_nombre") or "").strip(),
                 "email": (payload.get("vendedor_email") or "").strip(),
                 "telefono": (payload.get("vendedor_telefono") or "").strip()}}})
+        # AUTOAPRENDIZAJE: el destinatario confirmado queda guardado para seguirle
+        # el hilo al cliente durante todo el proceso (regla especial vivienda usada)
+        try:
+            import malla_inteligencia as _mi
+            fd_ap = await db.folders.find_one({"id": payload["folder_id"]})
+            if fd_ap and destinos:
+                confirmado = destinos[0].strip()
+                if payload.get("tipo_vivienda") == "usada":
+                    v_ap = fd_ap.get("vendedor_usada") or {}
+                    if confirmado.lower() != (v_ap.get("email") or "").lower():
+                        v_ap.update({"nombre": (payload.get("vendedor_nombre") or v_ap.get("nombre") or "").strip(),
+                                     "email": confirmado, "activo": True, "actualizado": now_iso(),
+                                     "por": "aprendizaje automático (estudio de título)"})
+                        await db.folders.update_one({"id": payload["folder_id"]},
+                                                    {"$set": {"vendedor_usada": v_ap}})
+                elif inmo:
+                    inmo_base = inmo.split(" / ")[0].strip()
+                    proy_ap = (fd_ap.get("proyecto") or "").strip()
+                    await db.contactos_carta.update_one(
+                        {"inmobiliaria_norm": _mi._norm_inmo(inmo_base),
+                         "proyecto_norm": _mi._norm_inmo(proy_ap)},
+                        {"$set": {"estudio_nombre": (payload.get("inmo_contacto_nombre") or "").strip(),
+                                  "estudio_email": confirmado, "activo": True, "actualizado": now_iso()},
+                         "$setOnInsert": {"id": str(uuid.uuid4()), "inmobiliaria": inmo_base,
+                                          "inmobiliaria_norm": _mi._norm_inmo(inmo_base),
+                                          "proyecto": proy_ap, "proyecto_norm": _mi._norm_inmo(proy_ap),
+                                          "contacto": "", "email": "",
+                                          "origen": "aprendizaje automático (estudio de título)"}},
+                        upsert=True)
+        except Exception as _e:
+            logging.warning(f"aprendizaje estudio de título: {_e}")
     return {"ok": True, "to": destinos, "subject": subject,
             "attachments": attach_names, "sender": res.get("desde", sender)}
 
