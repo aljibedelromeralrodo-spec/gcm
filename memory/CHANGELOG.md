@@ -1217,3 +1217,20 @@ Constitución VERSION 19 (nuevas reglas #55, #56, #57).
 - Excel 12 columnas + 2 filas de totales por moneda. Celda Total Pagado amarilla si incompleto.
 - Verificado e2e: 12/17, tasación/títulos 3.0 UF extraídos, gran total 340,09 UF, ADN actualizado.
 - Aprendizaje: el backend tarda ~30-60s en reiniciar con hot reload; reintentar login con loop.
+
+## Sesión 2026-08-17 (cont. 3) — Carta Oferta + Inmobiliarias + Solicitud CO/RS + Editabilidad total CBR
+- Columna "Carta Oferta" en Supercarpeta (hito carta_oferta: HITOS_VALIDOS, FUENTES_HITOS, estados
+  manuales, gear de fuentes, mismos colores). Estados: Pendiente/Solicitada/Recibida/Aprobada/Rechazada.
+- Inmobiliarias: GET/POST /api/supercarpeta/inmobiliarias (db.inmobiliarias). Detección automática desde
+  clientes de la Bóveda + alta manual. Cada una con encargado + correo.
+- Solicitud CO+RS (UN solo botón 📨 por fila): GET /solicitud-doc/{fid} (vista previa autocompletada:
+  inmobiliaria detectada, encargado, RUT, proyecto) + POST /solicitud-doc/{fid}/enviar (send_mail desde
+  gerardo.ext/secundaria, SMTP 250 verificado). Al enviar marca carta_oferta y serviu = "Solicitada"
+  con bitácora (bitacora_solicitudes). Sin correo configurado → advertencia + botón deshabilitado.
+- CBR REGLA ABSOLUTA DE EDITABILIDAD: TODOS los campos editables con doble clic (cliente, rut, broker,
+  proyecto, tipo, subsidio, monto, cbr, tasación, títulos, total_pagado, comisión, %, moneda, estado).
+  total_pagado manual = deja de recalcularse (gran total lo respeta — verificado 350,59).
+  pct editado → recalcula comisión si no es manual (verificado 283,6). Persistencia por campo:
+  folder+_sync_adn (rut/broker/proyecto/tipo/subsidio/monto), costo_* docs, adn.comision,
+  adn.total_pagado, adn.cbr_overrides.{campo}. Filas ahora llevan fid.
+- Tabla CBR: 16 columnas + totales sticky doble moneda. Excel usa _cbr_total_fila (override manual).

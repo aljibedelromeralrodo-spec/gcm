@@ -6,11 +6,12 @@ const API = process.env.REACT_APP_BACKEND_URL;
 const ESTADOS = ["Tasación Piloto", "Solicitada", "En Proceso", "Con Observaciones", "Aprobada", "Rechazada"];
 const HITO_LABEL = { tasacion: "Tasación", estudio: "Estudio de Títulos", cesion: "Cesión", set_credito: "Cédula de Crédito (SET)",
   serviu: "Resolución Serviu", promesa: "Promesa de Compraventa", carpeta_notaria: "Carpeta en Notaría", escritura: "Escritura en Notaría",
-  notaria: "Notaría" };
+  notaria: "Notaría", carta_oferta: "Carta Oferta" };
 const ESTADOS_POR = {
   tasacion: ["Pendiente", "Solicitada", "Tasación Piloto", "En Proceso", "Recibida", "Con Observaciones", "Aprobada"],
   estudio: ["Pendiente", "Solicitado", "En Proceso", "Recibido", "Con Reparos", "Aprobado"],
   serviu: ["Pendiente", "Solicitada", "Recibida", "Aprobada", "Rechazada"],
+  carta_oferta: ["Pendiente", "Solicitada", "Recibida", "Aprobada", "Rechazada"],
   promesa: ["Pendiente", "Redactada", "Firmada", "Enviada a Notaría"],
   set_credito: ["Pendiente", "Set Para la Firma", "Verificación Pendiente", "Firmado y Verificado"],
   carpeta_notaria: ["Pendiente", "Preparando Carpeta", "Enviada", "Recibida por Notaría", "En Revisión", "Aprobada"],
@@ -92,6 +93,8 @@ export default function SupercarpetaModule() {
   const [remitentesModal, setRemitentesModal] = useState(null);
   const [cbrModal, setCbrModal] = useState(null);
   const [cbrEdit, setCbrEdit] = useState(null);
+  const [inmoModal, setInmoModal] = useState(null);
+  const [solicitudModal, setSolicitudModal] = useState(null);
   // ACCESO EXCLUSIVO: módulo Comisiones/CBR solo para el Administrador General
   const esAdminGeneral = ["admin", "maestro"].includes((secureGet("user") || {}).rol);
   const [guardando, setGuardando] = useState(false);
@@ -333,37 +336,82 @@ export default function SupercarpetaModule() {
     const { fila, campo, valor } = cbrEdit;
     setCbrEdit(null);
     try {
-      await axios.post(`${API}/api/supercarpeta/cbr/manual`, { cliente: fila.cliente, campo, valor });
+      await axios.post(`${API}/api/supercarpeta/cbr/manual`, { cliente: fila.cliente, fid: fila.fid, campo, valor });
       await refrescarCbr();
     } catch (e) { window.alert(e.response?.data?.detail || "Error al guardar el valor manual"); }
   };
 
-  const celdaCbrEdit = (r, i, campo, sufijo = "") => {
-    const editando = cbrEdit && cbrEdit.fila.cliente === r.cliente && cbrEdit.campo === campo;
+  const abrirInmobiliarias = async () => {
+    setInmoModal({ loading: true });
+    try {
+      const r = await axios.get(`${API}/api/supercarpeta/inmobiliarias`);
+      setInmoModal({ loading: false, inmobiliarias: r.data.inmobiliarias || [], nueva: { nombre: "", encargado: "", email: "" } });
+    } catch (e) { setInmoModal(null); window.alert(e.response?.data?.detail || "Error al cargar inmobiliarias"); }
+  };
+  const guardarInmobiliaria = async (inm) => {
+    try {
+      await axios.post(`${API}/api/supercarpeta/inmobiliarias`, {
+        nombre: inm.nombre, encargado: inm.encargado, email: inm.email });
+      await abrirInmobiliarias();
+    } catch (e) { window.alert(e.response?.data?.detail || "Error al guardar la inmobiliaria"); }
+  };
+  const editarInmo = (i, campo, valor) => setInmoModal(m => ({
+    ...m, inmobiliarias: m.inmobiliarias.map((x, j) => j === i ? { ...x, [campo]: valor } : x) }));
+
+  const abrirSolicitud = async (c) => {
+    setSolicitudModal({ loading: true, fid: c.id });
+    try {
+      const r = await axios.get(`${API}/api/supercarpeta/solicitud-doc/${c.id}`);
+      setSolicitudModal({ loading: false, fid: c.id, ...r.data });
+    } catch (e) { setSolicitudModal(null); window.alert(e.response?.data?.detail || "Error al preparar la solicitud"); }
+  };
+  const enviarSolicitud = async () => {
+    const m = solicitudModal;
+    setSolicitudModal({ ...m, enviando: true });
+    try {
+      await axios.post(`${API}/api/supercarpeta/solicitud-doc/${m.fid}/enviar`, {
+        para: m.para, asunto: m.asunto, cuerpo: m.cuerpo });
+      setSolicitudModal(null);
+      window.alert(`✅ Solicitud enviada a ${m.para} — Carta Oferta y Resolución Serviu quedan "Solicitada"`);
+      recargar();
+    } catch (e) {
+      setSolicitudModal({ ...m, enviando: false });
+      window.alert(e.response?.data?.detail || "Error al enviar la solicitud");
+    }
+  };
+
+  const celdaCbrEdit = (r, i, campo, opts = {}) => {
+    const editando = cbrEdit && (cbrEdit.fila.fid ? cbrEdit.fila.fid === r.fid : cbrEdit.fila.cliente === r.cliente) && cbrEdit.campo === campo;
     const manual = r[`${campo}_origen`] === "manual";
     const v = r[campo];
+    const mostrar = v !== "" && v != null
+      ? (opts.texto ? String(v) : `${Number(v).toLocaleString("es-CL")}${opts.sufijo || ""}`)
+      : "—";
     return (
-      <td key={campo} data-testid={`cbr-${campo}-${i}`} title="Doble clic para editar (gris = automático, azul = manual)"
+      <td key={campo} data-testid={`cbr-${campo}-${i}`}
+        title="Doble clic para editar (gris = automático, azul = manual). Se guarda al instante en ADN_CLIENTES_360"
         onDoubleClick={() => setCbrEdit({ fila: r, campo, valor: v ?? "" })}
-        style={{ padding: "6px 8px", fontWeight: 800, whiteSpace: "nowrap", cursor: "cell",
-          color: manual ? "#93c5fd" : "#cbd5e1",
-          background: manual ? "rgba(59,130,246,0.14)" : "rgba(148,163,184,0.08)" }}>
+        style={{ padding: "6px 8px", fontWeight: opts.suave ? 500 : 800, whiteSpace: "nowrap", cursor: "cell",
+          color: manual ? "#93c5fd" : (opts.color || "#cbd5e1"),
+          background: manual ? "rgba(59,130,246,0.14)" : "rgba(148,163,184,0.08)", ...(opts.estilo || {}) }}>
         {editando ? (
           <input data-testid={`cbr-${campo}-input-${i}`} autoFocus value={cbrEdit.valor}
             onChange={e => setCbrEdit({ ...cbrEdit, valor: e.target.value })}
             onBlur={guardarCbrManual}
             onKeyDown={e => { if (e.key === "Enter") guardarCbrManual(); if (e.key === "Escape") setCbrEdit(null); }}
-            style={{ width: 64, background: "#0f172a", color: "#e2e8f0", border: "1px solid #3b82f6", borderRadius: 4, padding: "2px 4px", fontSize: "0.64rem" }} />
-        ) : (v !== "" && v != null ? `${Number(v).toLocaleString("es-CL")}${sufijo}` : "—")}
+            style={{ width: opts.texto ? 110 : 64, background: "#0f172a", color: "#e2e8f0", border: "1px solid #3b82f6", borderRadius: 4, padding: "2px 4px", fontSize: "0.64rem" }} />
+        ) : mostrar}
       </td>
     );
   };
 
   const totalPagadoFila = (r) => {
+    if (r.total_pagado_origen === "manual" && r.total_pagado !== "" && r.total_pagado != null)
+      return { tot: Number(r.total_pagado), hay: true, incompleto: false, manual: true };
     const nums = [r.valor_cbr, r.tasacion, r.est_titulos]
       .filter(x => x !== "" && x != null).map(Number);
     return { tot: Math.round(nums.reduce((a, b) => a + b, 0) * 100) / 100,
-             hay: nums.length > 0, incompleto: nums.length < 3 };
+             hay: nums.length > 0, incompleto: nums.length < 3, manual: false };
   };
 
   const clientes = (data?.clientes || []).filter(c => !solo24 || c.recien_24h);
@@ -478,6 +526,9 @@ export default function SupercarpetaModule() {
         <button data-testid="remitentes-btn" onClick={abrirRemitentes}
           title="Remitentes capturados automáticamente por DashAI — confirmar, reubicar, eliminar o bloquear"
           className="maserati-btn" style={{ minHeight: 38 }}>📡 Remitentes</button>
+        <button data-testid="inmobiliarias-btn" onClick={abrirInmobiliarias}
+          title="Inmobiliarias detectadas con su encargado y correo — a quién se le pide Carta Oferta y Resolución Serviu"
+          className="maserati-btn" style={{ minHeight: 38 }}>🏢 Inmobiliarias</button>
         {esAdminGeneral && <button data-testid="cbr-btn" onClick={abrirCbr}
           title="Buscar los costos CBR en las simulaciones de aprobaciones@centralmutuos.cl y calcular comisiones — EXCLUSIVO Administrador General"
           className="maserati-btn" style={{ minHeight: 38 }}>💰 CBR Mesa</button>}
@@ -546,6 +597,7 @@ export default function SupercarpetaModule() {
               <th style={th}>Tasación {gear("tasacion")}</th>
               <th style={th}>Estudio de Títulos {gear("estudio")}</th>
               <th style={th}>Resolución Serviu {gear("serviu")}</th>
+              <th style={th}>Carta Oferta {gear("carta_oferta")}</th>
               <th style={th}>Promesa CV {gear("promesa")}</th>
               <th style={th}>Cédula Crédito (SET) {gear("set_credito")}</th>
               <th style={th}>Carpeta Notaría {gear("carpeta_notaria")}</th>
@@ -656,6 +708,11 @@ export default function SupercarpetaModule() {
                       <button data-testid={`ver-estudio-${c.id}`} onClick={() => abrir(c.id, c.cliente, c.informes.estudio)} style={btnPdf}>📄 Ver PDF</button>}
                   </> })}
                 {celdaEstado(c, "serviu", c.serviu, { naSinSubsidio: true })}
+                {celdaEstado(c, "carta_oferta", c.carta_oferta, { extra:
+                  <button data-testid={`solicitar-co-rs-${c.id}`} onClick={() => abrirSolicitud(c)}
+                    title="Pedir por correo la Carta Oferta y la Resolución Serviu a la inmobiliaria (vista previa antes de enviar)"
+                    style={{ ...btnPdf, background: "rgba(96,165,250,0.15)", border: "1px solid rgba(96,165,250,0.6)",
+                      color: "#60a5fa", width: "100%" }}>📨 Pedir CO+RS</button> })}
                 {celdaEstado(c, "promesa", c.promesa, { naSinSubsidio: true })}
                 {celdaEstado(c, "set_credito", SET_LABEL[c.set_credito?.estado] || c.set_credito?.estado, { extra:
                     c.set_credito?.fecha ? <div style={{ color: "#cbd5e1", fontSize: "0.55rem" }}>{c.set_credito.fecha.slice(0, 10)}</div> : null })}
@@ -728,7 +785,7 @@ export default function SupercarpetaModule() {
               <button onClick={() => setCbrModal(null)} className="maserati-btn" style={{ marginTop: 14 }}>Cerrar</button>
             </div>
           ) : (
-          <div onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 1260, maxHeight: "84vh", overflowY: "auto" }}>
+          <div onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: "min(96vw, 1500px)", maxHeight: "84vh", overflowY: "auto", overflowX: "auto" }}>
             <h4 style={{ margin: 0, color: "#d4af37", fontSize: "0.9rem" }}>💰 Costos CBR — correos de aprobaciones@centralmutuos.cl</h4>
             <p style={{ color: "#94a3b8", fontSize: "0.62rem", margin: "6px 0 0" }}>
               Busca ÚNICAMENTE los correos de aprobación (remitente aprobaciones@centralmutuos.cl), abre la simulación adjunta
@@ -759,42 +816,59 @@ export default function SupercarpetaModule() {
                 <table data-testid="cbr-tabla" style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.64rem", marginTop: 12, color: "#e2e8f0" }}>
                   <thead>
                     <tr style={{ color: "#d4af37", textTransform: "uppercase", fontSize: "0.56rem", letterSpacing: 1 }}>
-                      {["Cliente", "Broker", "Monto UF", "Valor CBR", "Tasación", "Est. Títulos", "Total Pagado", "Comisión", "% Aplicado", "Moneda", "Fecha correo", "Estado"].map(h =>
+                      {["Cliente", "RUT", "Broker", "Proyecto", "Tipo", "Subsidio", "Monto UF", "Valor CBR", "Tasación", "Est. Títulos", "Total Pagado", "Comisión", "% Aplicado", "Moneda", "Fecha correo", "Estado"].map(h =>
                         <th key={h} style={{ textAlign: "left", padding: "6px 8px", borderBottom: "1px solid rgba(212,175,55,0.4)" }}>{h}</th>)}
                     </tr>
                   </thead>
                   <tbody>
                     {cbrModal.resultados.map((r, i) => {
                       const tp = totalPagadoFila(r);
+                      const editandoTP = cbrEdit && (cbrEdit.fila.fid ? cbrEdit.fila.fid === r.fid : cbrEdit.fila.cliente === r.cliente) && cbrEdit.campo === "total_pagado";
                       return (
-                        <tr key={i} data-testid={`cbr-fila-${i}`} style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-                          <td style={{ padding: "6px 8px", fontWeight: 700 }} title={r.archivo || ""}>{r.cliente}</td>
-                          <td style={{ padding: "6px 8px", color: "#94a3b8" }}>{r.broker || "—"}</td>
-                          <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>
-                            {r.monto_credito !== "" && r.monto_credito != null ? Number(r.monto_credito).toLocaleString("es-CL") : "—"}</td>
-                          {celdaCbrEdit(r, i, "valor_cbr")}
-                          {celdaCbrEdit(r, i, "tasacion")}
-                          {celdaCbrEdit(r, i, "est_titulos")}
-                          <td data-testid={`cbr-total-pagado-${i}`}
-                            title={tp.incompleto ? "Total incompleto: falta CBR, Tasación o Estudio de Títulos" : "CBR + Tasación + Estudio de Títulos"}
-                            style={{ padding: "6px 8px", fontWeight: 900, whiteSpace: "nowrap", color: "#d4af37" }}>
-                            {tp.hay ? Number(tp.tot).toLocaleString("es-CL") : "—"}
-                            {tp.hay && tp.incompleto && <span style={{ color: "#facc15", marginLeft: 4 }}>⚠</span>}</td>
-                          {celdaCbrEdit(r, i, "comision", " UF")}
-                          <td style={{ padding: "6px 8px", fontSize: "0.58rem",
+                        <tr key={r.fid || i} data-testid={`cbr-fila-${i}`} style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+                          {celdaCbrEdit(r, i, "cliente", { texto: true, color: "#f8fafc", estilo: { whiteSpace: "normal", minWidth: 130 } })}
+                          {celdaCbrEdit(r, i, "rut", { texto: true, suave: true, color: "#94a3b8" })}
+                          {celdaCbrEdit(r, i, "broker", { texto: true, suave: true, color: "#94a3b8" })}
+                          {celdaCbrEdit(r, i, "proyecto", { texto: true, suave: true, color: "#94a3b8", estilo: { maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis" } })}
+                          {celdaCbrEdit(r, i, "tipo_propiedad", { texto: true, suave: true, color: "#94a3b8" })}
+                          {celdaCbrEdit(r, i, "subsidio", { texto: true, suave: true, color: "#94a3b8" })}
+                          {celdaCbrEdit(r, i, "monto_credito", {})}
+                          {celdaCbrEdit(r, i, "valor_cbr", {})}
+                          {celdaCbrEdit(r, i, "tasacion", {})}
+                          {celdaCbrEdit(r, i, "est_titulos", {})}
+                          <td data-testid={`cbr-total_pagado-${i}`}
+                            title={tp.manual ? "Sobreescrito manualmente — deja de recalcularse (doble clic para editar)"
+                              : tp.incompleto ? "Total incompleto (⚠): falta CBR, Tasación o Estudio. Doble clic para sobreescribir"
+                              : "CBR + Tasación + Estudio de Títulos. Doble clic para sobreescribir"}
+                            onDoubleClick={() => setCbrEdit({ fila: r, campo: "total_pagado", valor: r.total_pagado ?? (tp.hay ? tp.tot : "") })}
+                            style={{ padding: "6px 8px", fontWeight: 900, whiteSpace: "nowrap", cursor: "cell",
+                              color: tp.manual ? "#93c5fd" : "#d4af37",
+                              background: tp.manual ? "rgba(59,130,246,0.14)" : "rgba(148,163,184,0.08)" }}>
+                            {editandoTP ? (
+                              <input data-testid={`cbr-total_pagado-input-${i}`} autoFocus value={cbrEdit.valor}
+                                onChange={e => setCbrEdit({ ...cbrEdit, valor: e.target.value })}
+                                onBlur={guardarCbrManual}
+                                onKeyDown={e => { if (e.key === "Enter") guardarCbrManual(); if (e.key === "Escape") setCbrEdit(null); }}
+                                style={{ width: 64, background: "#0f172a", color: "#e2e8f0", border: "1px solid #3b82f6", borderRadius: 4, padding: "2px 4px", fontSize: "0.64rem" }} />
+                            ) : (<>
+                              {tp.hay ? Number(tp.tot).toLocaleString("es-CL") : "—"}
+                              {tp.hay && tp.incompleto && <span style={{ color: "#facc15", marginLeft: 4 }}>⚠</span>}
+                            </>)}</td>
+                          {celdaCbrEdit(r, i, "comision", { sufijo: " UF" })}
+                          {celdaCbrEdit(r, i, "pct_aplicado", { texto: true, suave: true,
                             color: String(r.pct_aplicado || "").includes("REVISAR") ? "#facc15" : "#e2e8f0",
-                            fontWeight: String(r.pct_aplicado || "").includes("REVISAR") ? 800 : 400 }}>{r.pct_aplicado || "—"}</td>
-                          <td style={{ padding: "6px 8px" }}>{r.moneda}</td>
+                            estilo: { fontSize: "0.58rem" } })}
+                          {celdaCbrEdit(r, i, "moneda", { texto: true, suave: true })}
                           <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>{r.fecha_correo}</td>
-                          <td style={{ padding: "6px 8px" }}>
-                            <b style={{ color: r.estado === "ENCONTRADO" ? "#4ade80" : "#f87171" }}>{r.estado}</b></td>
+                          {celdaCbrEdit(r, i, "estado", { texto: true,
+                            color: r.estado === "ENCONTRADO" ? "#4ade80" : "#f87171" })}
                         </tr>
                       );
                     })}
                     {/* TOTALES DOBLE MONEDA — fijos al final, UF nunca se mezcla con CLP */}
                     <tr data-testid="cbr-totales-uf">
                       {[
-                        "TOTAL EN UF", "", "",
+                        "TOTAL EN UF", "", "", "", "", "", "",
                         Number(cbrModal.total_cbr_uf || 0).toLocaleString("es-CL"),
                         Number(cbrModal.total_tasacion_uf || 0).toLocaleString("es-CL"),
                         Number(cbrModal.total_titulos_uf || 0).toLocaleString("es-CL"),
@@ -802,15 +876,15 @@ export default function SupercarpetaModule() {
                         Number(cbrModal.total_comision_uf || 0).toLocaleString("es-CL"),
                         "", "UF", "", "solo filas con dato",
                       ].map((v, j) => (
-                        <td key={j} data-testid={j === 3 ? "cbr-total-cbr-uf" : j === 6 ? "cbr-gran-total-uf" : j === 7 ? "cbr-total-comision-uf" : undefined}
+                        <td key={j} data-testid={j === 7 ? "cbr-total-cbr-uf" : j === 10 ? "cbr-gran-total-uf" : j === 11 ? "cbr-total-comision-uf" : undefined}
                           style={{ position: "sticky", bottom: 31, background: "#1e3a8a", color: "#ffffff",
-                            fontWeight: j === 11 ? 400 : 900, fontSize: j === 11 ? "0.54rem" : undefined,
+                            fontWeight: j === 15 ? 400 : 900, fontSize: j === 15 ? "0.54rem" : undefined,
                             padding: "7px 8px", whiteSpace: "nowrap", zIndex: 2 }}>{v}</td>
                       ))}
                     </tr>
                     <tr data-testid="cbr-totales-clp">
                       {[
-                        "TOTAL EN PESOS", "", "",
+                        "TOTAL EN PESOS", "", "", "", "", "", "",
                         Number(cbrModal.total_cbr_clp || 0).toLocaleString("es-CL"),
                         Number(cbrModal.total_tasacion_clp || 0).toLocaleString("es-CL"),
                         Number(cbrModal.total_titulos_clp || 0).toLocaleString("es-CL"),
@@ -818,9 +892,9 @@ export default function SupercarpetaModule() {
                         Number(cbrModal.total_comision_clp || 0).toLocaleString("es-CL"),
                         "", "CLP", "", "sin conversión entre monedas",
                       ].map((v, j) => (
-                        <td key={j} data-testid={j === 3 ? "cbr-total-cbr-clp" : j === 6 ? "cbr-gran-total-clp" : j === 7 ? "cbr-total-comision-clp" : undefined}
+                        <td key={j} data-testid={j === 7 ? "cbr-total-cbr-clp" : j === 10 ? "cbr-gran-total-clp" : j === 11 ? "cbr-total-comision-clp" : undefined}
                           style={{ position: "sticky", bottom: 0, background: "#14532d", color: "#ffffff",
-                            fontWeight: j === 11 ? 400 : 900, fontSize: j === 11 ? "0.54rem" : undefined,
+                            fontWeight: j === 15 ? 400 : 900, fontSize: j === 15 ? "0.54rem" : undefined,
                             padding: "7px 8px", whiteSpace: "nowrap", zIndex: 2 }}>{v}</td>
                       ))}
                     </tr>
@@ -831,6 +905,113 @@ export default function SupercarpetaModule() {
             <button data-testid="cbr-cerrar" onClick={() => setCbrModal(null)} className="maserati-btn" style={{ marginTop: 14 }}>Cerrar</button>
           </div>
           )}
+        </div>
+      )}
+
+      {inmoModal && (
+        <div data-testid="inmobiliarias-modal" onClick={() => setInmoModal(null)} style={modalBg}>
+          <div onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 760, maxHeight: "84vh", overflowY: "auto" }}>
+            <h4 style={{ margin: 0, color: "#d4af37", fontSize: "0.9rem" }}>🏢 Inmobiliarias — encargado y correo de contacto</h4>
+            <p style={{ color: "#94a3b8", fontSize: "0.62rem", margin: "6px 0 0" }}>
+              DashAI detecta las inmobiliarias desde los clientes de la Bóveda. Registra el encargado y su correo:
+              a él se le pedirá la Carta Oferta y la Resolución Serviu con el botón 📨 de cada cliente.
+            </p>
+            {inmoModal.loading ? <p style={{ color: "#94a3b8", fontSize: "0.7rem" }}>Cargando…</p> : (<>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.66rem", marginTop: 12, color: "#e2e8f0" }}>
+                <thead>
+                  <tr style={{ color: "#d4af37", textTransform: "uppercase", fontSize: "0.56rem", letterSpacing: 1 }}>
+                    {["Inmobiliaria", "Encargado", "Correo del encargado", "", ""].map((h, j) =>
+                      <th key={j} style={{ textAlign: "left", padding: "6px 8px", borderBottom: "1px solid rgba(212,175,55,0.4)" }}>{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {(inmoModal.inmobiliarias || []).map((inm, i) => (
+                    <tr key={inm.nombre} data-testid={`inmo-fila-${i}`} style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+                      <td style={{ padding: "6px 8px", fontWeight: 800 }}>{inm.nombre}
+                        {inm.detectada && <span title="Detectada automáticamente desde los clientes" style={{ marginLeft: 5, fontSize: "0.54rem", color: "#4ade80" }}>● auto</span>}</td>
+                      <td style={{ padding: "4px 6px" }}>
+                        <input data-testid={`inmo-encargado-${i}`} value={inm.encargado}
+                          onChange={e => editarInmo(i, "encargado", e.target.value)} placeholder="Nombre encargado"
+                          style={{ ...inputStyle, marginTop: 0, padding: "0.35rem 0.5rem", fontSize: "0.64rem" }} /></td>
+                      <td style={{ padding: "4px 6px" }}>
+                        <input data-testid={`inmo-email-${i}`} value={inm.email}
+                          onChange={e => editarInmo(i, "email", e.target.value)} placeholder="correo@inmobiliaria.cl"
+                          style={{ ...inputStyle, marginTop: 0, padding: "0.35rem 0.5rem", fontSize: "0.64rem" }} /></td>
+                      <td style={{ padding: "4px 6px" }}>
+                        <button data-testid={`inmo-guardar-${i}`} onClick={() => guardarInmobiliaria(inm)}
+                          className="maserati-btn" style={{ minHeight: 30, fontSize: "0.6rem" }}>💾 Guardar</button></td>
+                      <td style={{ padding: "4px 6px", fontSize: "0.7rem" }}>
+                        {inm.configurada ? <span title="Lista para solicitudes" style={{ color: "#4ade80" }}>✅</span>
+                          : <span title="Falta el correo del encargado" style={{ color: "#facc15" }}>⚠️</span>}</td>
+                    </tr>
+                  ))}
+                  <tr data-testid="inmo-nueva">
+                    <td style={{ padding: "4px 6px" }}>
+                      <input data-testid="inmo-nueva-nombre" value={inmoModal.nueva?.nombre || ""} placeholder="Nueva inmobiliaria"
+                        onChange={e => setInmoModal(m => ({ ...m, nueva: { ...m.nueva, nombre: e.target.value } }))}
+                        style={{ ...inputStyle, marginTop: 0, padding: "0.35rem 0.5rem", fontSize: "0.64rem" }} /></td>
+                    <td style={{ padding: "4px 6px" }}>
+                      <input data-testid="inmo-nueva-encargado" value={inmoModal.nueva?.encargado || ""} placeholder="Encargado"
+                        onChange={e => setInmoModal(m => ({ ...m, nueva: { ...m.nueva, encargado: e.target.value } }))}
+                        style={{ ...inputStyle, marginTop: 0, padding: "0.35rem 0.5rem", fontSize: "0.64rem" }} /></td>
+                    <td style={{ padding: "4px 6px" }}>
+                      <input data-testid="inmo-nueva-email" value={inmoModal.nueva?.email || ""} placeholder="correo@…"
+                        onChange={e => setInmoModal(m => ({ ...m, nueva: { ...m.nueva, email: e.target.value } }))}
+                        style={{ ...inputStyle, marginTop: 0, padding: "0.35rem 0.5rem", fontSize: "0.64rem" }} /></td>
+                    <td colSpan={2} style={{ padding: "4px 6px" }}>
+                      <button data-testid="inmo-nueva-guardar" onClick={() => inmoModal.nueva?.nombre && guardarInmobiliaria(inmoModal.nueva)}
+                        className="maserati-btn" style={{ minHeight: 30, fontSize: "0.6rem" }}>➕ Agregar</button></td>
+                  </tr>
+                </tbody>
+              </table>
+            </>)}
+            <button data-testid="inmo-cerrar" onClick={() => setInmoModal(null)} className="maserati-btn" style={{ marginTop: 14 }}>Cerrar</button>
+          </div>
+        </div>
+      )}
+
+      {solicitudModal && (
+        <div data-testid="solicitud-modal" onClick={() => setSolicitudModal(null)} style={modalBg}>
+          <div onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 640 }}>
+            <h4 style={{ margin: 0, color: "#d4af37", fontSize: "0.9rem" }}>
+              📨 Solicitud Carta Oferta + Resolución Serviu — {solicitudModal.cliente || ""}</h4>
+            {solicitudModal.loading ? <p style={{ color: "#94a3b8", fontSize: "0.7rem" }}>Preparando vista previa…</p> : (<>
+              <p style={{ color: "#94a3b8", fontSize: "0.62rem", margin: "6px 0 0" }}>
+                Inmobiliaria detectada: <b style={{ color: "#f8fafc" }}>{solicitudModal.inmobiliaria}</b>
+                {solicitudModal.encargado ? <> · Encargado: <b style={{ color: "#f8fafc" }}>{solicitudModal.encargado}</b></> : ""}
+                {" "}· Se envía desde: <b style={{ color: "#60a5fa" }}>{solicitudModal.desde}</b>
+              </p>
+              {!solicitudModal.configurada && (
+                <div data-testid="solicitud-sin-encargado" style={{ marginTop: 8, padding: "0.6rem 0.8rem",
+                  background: "rgba(250,204,21,0.10)", borderLeft: "3px solid #facc15", borderRadius: 8 }}>
+                  <b style={{ color: "#facc15", fontSize: "0.66rem" }}>⚠️ Esta inmobiliaria no tiene correo de encargado configurado.</b>
+                  <button onClick={() => { setSolicitudModal(null); abrirInmobiliarias(); }}
+                    className="maserati-btn" style={{ marginLeft: 8, minHeight: 26, fontSize: "0.58rem" }}>🏢 Configurar ahora</button>
+                </div>
+              )}
+              <label style={{ color: "#94a3b8", fontSize: "0.58rem", display: "block", marginTop: 10 }}>PARA (correo del encargado)</label>
+              <input data-testid="solicitud-para" value={solicitudModal.para || ""}
+                onChange={e => setSolicitudModal(m => ({ ...m, para: e.target.value }))}
+                placeholder="correo@inmobiliaria.cl" style={{ ...inputStyle, marginTop: 3 }} />
+              <label style={{ color: "#94a3b8", fontSize: "0.58rem", display: "block", marginTop: 8 }}>ASUNTO</label>
+              <input data-testid="solicitud-asunto" value={solicitudModal.asunto || ""}
+                onChange={e => setSolicitudModal(m => ({ ...m, asunto: e.target.value }))}
+                style={{ ...inputStyle, marginTop: 3 }} />
+              <label style={{ color: "#94a3b8", fontSize: "0.58rem", display: "block", marginTop: 8 }}>CUERPO (editable antes de enviar)</label>
+              <textarea data-testid="solicitud-cuerpo" value={solicitudModal.cuerpo || ""} rows={9}
+                onChange={e => setSolicitudModal(m => ({ ...m, cuerpo: e.target.value }))}
+                style={{ ...inputStyle, marginTop: 3, resize: "vertical", fontFamily: "inherit" }} />
+              <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
+                <button data-testid="solicitud-enviar" onClick={enviarSolicitud}
+                  disabled={solicitudModal.enviando || !(solicitudModal.para || "").includes("@")}
+                  className="maserati-btn" style={{ minHeight: 36,
+                    opacity: (solicitudModal.para || "").includes("@") ? 1 : 0.5 }}>
+                  {solicitudModal.enviando ? "✉️ Enviando…" : "✉️ Confirmar y Enviar"}</button>
+                <button data-testid="solicitud-cancelar" onClick={() => setSolicitudModal(null)}
+                  className="maserati-btn" style={{ minHeight: 36 }}>Cancelar</button>
+              </div>
+            </>)}
+          </div>
         </div>
       )}
 

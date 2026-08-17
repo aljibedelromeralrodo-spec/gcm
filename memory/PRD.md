@@ -804,3 +804,9 @@ Constitución v16 (Reglas #34-#38, #41, #43, #49, #52, #53, #54). Módulo Broker
 - PENDIENTE APROBADO POR USUARIO (antes del pivote a CBR): columna "Carta Oferta" en Supercarpeta,
   gestión de Inmobiliarias con encargado+correo, y botón único que solicita por correo Carta Oferta
   + Resolución Serviu (vista previa + confirmar, envío desde el entorno de cada ejecutivo).
+
+## Actualización 2026-08-17 (2)
+- Carta Oferta + Inmobiliarias + botón único solicitud CO/RS por correo: IMPLEMENTADO y probado e2e.
+- CBR: editabilidad absoluta de todos los campos (regla del Admin General): IMPLEMENTADO.
+- Pendiente usuario: porcentajes de comisión Word/Urbanizate/Maestra; correos reales de encargados
+  por inmobiliaria (se cargan desde el botón 🏢 Inmobiliarias).

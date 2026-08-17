@@ -857,7 +857,7 @@ def _match_carpeta(texto, por_rut, folders):
 
 
 FUENTES_HITOS = ("tasacion", "estudio", "cesion", "set_credito", "notaria",
-                 "serviu", "promesa", "carpeta_notaria", "escritura", "fecha_firma")
+                 "serviu", "promesa", "carta_oferta", "carpeta_notaria", "escritura", "fecha_firma")
 
 
 def _norm_fuente(x):
@@ -1736,17 +1736,18 @@ async def supercarpeta_vista(mes: str = ""):
                       "cesion": str(fd.get("firma_cesion_confirmada_at")
                                     or fd.get("escritura_confirmada_at") or ""),
                       "set_credito": str(fd.get("set_credito_at") or ""),
-                      "serviu": "", "promesa": "",
+                      "serviu": "", "promesa": "", "carta_oferta": "",
                       "carpeta_notaria": str(fd.get("escritura_notaria_detectada_at") or ""),
                       "escritura": str(fd.get("escritura_confirmada_at") or "")}
         set_est = fd.get("set_credito_estado") or ""
         est_serviu = est_promesa = "Pendiente"
+        est_carta = "Pendiente"
         est_carpeta = "Enviada" if fd.get("escritura_notaria_detectada_at") else "Pendiente"
         est_escritura = ("Firmada" if fd.get("escritura_confirmada_at")
                          else "Agendada" if (fd.get("fecha_firma") or fd.get("fecha_firma_detectada"))
                          else "Pendiente")
         for h in ("tasacion", "estudio", "cesion", "set_credito",
-                  "serviu", "promesa", "carpeta_notaria", "escritura"):
+                  "serviu", "promesa", "carta_oferta", "carpeta_notaria", "escritura"):
             mh = em.get(h) or {}
             if mh.get("estado"):
                 man[h] = True
@@ -1762,6 +1763,8 @@ async def supercarpeta_vista(mes: str = ""):
                     set_est = mh["estado"]
                 elif h == "serviu":
                     est_serviu = mh["estado"]
+                elif h == "carta_oferta":
+                    est_carta = mh["estado"]
                 elif h == "promesa":
                     est_promesa = mh["estado"]
                 elif h == "carpeta_notaria":
@@ -1875,6 +1878,7 @@ async def supercarpeta_vista(mes: str = ""):
                          "detalle_reparos": detalle_reparos,
                          "cesion": est_ces,
                          "serviu": est_serviu, "promesa": est_promesa,
+                         "carta_oferta": est_carta,
                          "carpeta_notaria": est_carpeta, "escritura": est_escritura,
                          "fecha_firma": fd.get("fecha_firma") or fd.get("fecha_firma_detectada") or "",
                          "con_subsidio": "con" in subsidio_v.lower(),
@@ -1926,7 +1930,7 @@ async def supercarpeta_vista(mes: str = ""):
 
 
 HITOS_VALIDOS = ("tasacion", "estudio", "cesion", "set_credito",
-                 "serviu", "promesa", "carpeta_notaria", "escritura", "notaria")
+                 "serviu", "promesa", "carta_oferta", "carpeta_notaria", "escritura", "notaria")
 
 
 ESTADOS_MANUALES_BASE = ["Tasación Piloto", "Solicitada", "En Proceso",
@@ -2161,6 +2165,121 @@ async def fuentes_doc_cliente(fid: str, payload: dict, request: Request):
     return {"ok": True, "cliente": fd.get("nombre"), "fuentes_doc": fdoc}
 
 
+# ── INMOBILIARIAS (encargado + correo) y SOLICITUD CARTA OFERTA + RES. SERVIU ──
+def _norm_inmo(s):
+    return mail._sin_acentos((s or "").strip().lower())
+
+
+def _inmo_de_folder(fd):
+    if "usad" in (fd.get("tipo_operacion") or "").lower():
+        return "Casa Usada"
+    return (fd.get("inmobiliaria") or "").strip()
+
+
+@supercarpeta.get("/inmobiliarias")
+async def inmobiliarias_get(request: Request):
+    _exigir_gerencia(request)
+    regs = {r["nombre_norm"]: r async for r in db.inmobiliarias.find({}, {"_id": 0})}
+    detectadas = set()
+    async for fd in db.folders.find({}, {"inmobiliaria": 1, "tipo_operacion": 1, "oculto_supercarpeta": 1}):
+        if fd.get("oculto_supercarpeta"):
+            continue
+        n = _inmo_de_folder(fd)
+        if n:
+            detectadas.add(n)
+    out = []
+    for n in sorted(detectadas):
+        r = regs.pop(_norm_inmo(n), None) or {}
+        out.append({"nombre": n, "encargado": r.get("encargado") or "", "email": r.get("email") or "",
+                    "detectada": True, "configurada": bool(r.get("email"))})
+    for r in regs.values():
+        out.append({"nombre": r.get("nombre") or "", "encargado": r.get("encargado") or "",
+                    "email": r.get("email") or "", "detectada": False, "configurada": bool(r.get("email"))})
+    return {"inmobiliarias": out}
+
+
+@supercarpeta.post("/inmobiliarias")
+async def inmobiliarias_set(payload: dict, request: Request):
+    user = _exigir_gerencia(request)
+    nombre = (payload.get("nombre") or "").strip()
+    email_enc = (payload.get("email") or "").strip()
+    if not nombre:
+        raise HTTPException(status_code=400, detail="El nombre de la inmobiliaria es obligatorio")
+    if email_enc and "@" not in email_enc:
+        raise HTTPException(status_code=400, detail="Correo del encargado inválido")
+    await db.inmobiliarias.update_one({"nombre_norm": _norm_inmo(nombre)}, {"$set": {
+        "nombre": nombre, "nombre_norm": _norm_inmo(nombre),
+        "encargado": (payload.get("encargado") or "").strip(),
+        "email": email_enc, "actualizado": _now(), "por": user.get("sub") or ""}}, upsert=True)
+    return {"ok": True}
+
+
+@supercarpeta.get("/solicitud-doc/{fid}")
+async def solicitud_doc_preview(fid: str, request: Request):
+    """Vista previa del correo que pide Carta Oferta + Resolución Serviu (un solo botón).
+    Detecta la inmobiliaria del cliente y autocompleta encargado, RUT y proyecto."""
+    _exigir_gerencia(request)
+    import adn_clientes as _adn
+    fd = await db.folders.find_one({"id": fid})
+    if not fd:
+        raise HTTPException(status_code=404, detail="Carpeta no encontrada")
+    inmo = _inmo_de_folder(fd) or "Directa"
+    r = await db.inmobiliarias.find_one({"nombre_norm": _norm_inmo(inmo)}) or {}
+    reg = (await db.adn_clientes_360.find_one({"rut_norm": _adn._norm_rut(fd["rut"])})
+           if fd.get("rut") else None) or {}
+    proyecto = (fd.get("proyecto") or (reg.get("propiedad") or {}).get("proyecto") or "").strip()
+    encargado = r.get("encargado") or ""
+    asunto = f"Solicitud de Carta Oferta y Resolución Serviu — {fd.get('nombre')} (RUT {fd.get('rut') or 'por confirmar'})"
+    cuerpo = (f"Estimado/a {encargado or 'equipo ' + inmo}:\n\n"
+              f"Por medio de la presente, solicito la CARTA OFERTA y la RESOLUCIÓN SERVIU "
+              f"del cliente {fd.get('nombre')}, RUT {fd.get('rut') or 'por confirmar'}, "
+              f"para el proyecto {proyecto or 'por confirmar'} de la inmobiliaria {inmo}.\n\n"
+              f"Agradeceré su envío a la brevedad para continuar con el proceso de escrituración.\n\n"
+              f"Atentamente,\nGerardo Barrera\nCentral Mutuos")
+    desde = ""
+    for a in mail.ACCOUNTS:
+        if a["rol"] == "secundaria":
+            desde = a["user"]
+    if not desde and mail.ACCOUNTS:
+        desde = mail.ACCOUNTS[0]["user"]
+    return {"cliente": fd.get("nombre"), "rut": fd.get("rut") or "", "inmobiliaria": inmo,
+            "encargado": encargado, "para": r.get("email") or "",
+            "configurada": bool(r.get("email")), "asunto": asunto, "cuerpo": cuerpo, "desde": desde}
+
+
+@supercarpeta.post("/solicitud-doc/{fid}/enviar")
+async def solicitud_doc_enviar(fid: str, payload: dict, request: Request):
+    """Envío confirmado de la solicitud (vista previa aprobada por el ejecutivo).
+    Marca Carta Oferta y Resolución Serviu como 'Solicitada' con bitácora."""
+    user = _exigir_gerencia(request)
+    fd = await db.folders.find_one({"id": fid})
+    if not fd:
+        raise HTTPException(status_code=404, detail="Carpeta no encontrada")
+    para = (payload.get("para") or "").strip()
+    if "@" not in para:
+        raise HTTPException(status_code=400,
+                            detail="Configure el correo del encargado de la inmobiliaria (botón 🏢 Inmobiliarias)")
+    asunto = (payload.get("asunto") or "").strip() or f"Solicitud Carta Oferta y Resolución Serviu — {fd.get('nombre')}"
+    cuerpo = (payload.get("cuerpo") or "").strip()
+    if not cuerpo:
+        raise HTTPException(status_code=400, detail="El cuerpo del correo no puede ir vacío")
+    html = "<p>" + cuerpo.replace("\n", "<br>") + "</p>"
+    res = await asyncio.to_thread(mail.send_mail, para, asunto, html, None, "secundaria")
+    if not res.get("success"):
+        raise HTTPException(status_code=502, detail=res.get("error") or "Error de envío SMTP")
+    em = fd.get("estados_manuales") or {}
+    for h in ("carta_oferta", "serviu"):
+        if not (em.get(h) or {}).get("estado"):
+            em[h] = {"estado": "Solicitada", "por": user.get("sub") or "",
+                     "en": _now(), "via": "solicitud_email"}
+    await db.folders.update_one({"id": fid}, {
+        "$set": {"estados_manuales": em, "updated_at": _now()},
+        "$push": {"bitacora_solicitudes": {
+            "tipo": "carta_oferta+resolucion_serviu", "para": para, "asunto": asunto,
+            "en": _now(), "por": user.get("sub") or "", "smtp_code": res.get("smtp_code")}}})
+    return {"ok": True, "smtp_code": res.get("smtp_code")}
+
+
 # ── COSTOS CBR — extracción desde adjuntos "Simulación" de Mesa ─────────────
 _CBR_FILA_RE = re.compile(r"(\bC\.?\s?B\.?\s?R\.?\b|conservador(?:\s+de)?\s+bienes\s+ra[ií]ces|\bconservador\b)", re.I)
 _CBR_UF_RE = re.compile(r"(?:UF\s*\$?\s*(\d+(?:[.,]\d+)?)|(\d+(?:[.,]\d+)?)\s*UF\b)", re.I)
@@ -2321,11 +2440,20 @@ async def _ejecutar_cbr():
                         or ((reg or {}).get("financiero") or {}).get("monto_credito_uf") or "")
             comision, pct_txt = _comision_cliente(fd, monto_uf)
             fila = {
+                "fid": fd["id"],
                 "cliente": fd.get("nombre") or "",
+                "rut": fd.get("rut") or "",
                 "broker": fd.get("inmobiliaria") or fd.get("broker_origen") or "",
+                "proyecto": (fd.get("proyecto")
+                             or ((reg or {}).get("propiedad") or {}).get("proyecto") or ""),
+                "tipo_propiedad": fd.get("tipo_operacion") or "",
+                "subsidio": (fd.get("subsidio_proyeccion")
+                             or ("Con Subsidio" if ((reg or {}).get("financiero") or {}).get("con_subsidio")
+                                 else "Sin Subsidio")),
                 "monto_credito": monto_uf,
                 "comision": comision if comision is not None else "",
                 "pct_aplicado": pct_txt,
+                "total_pagado": "",
                 "valor_cbr": cbr["valor"] if cbr else "",
                 "moneda": cbr["moneda"] if cbr else "",
                 "tasacion": "", "tasacion_moneda": "",
@@ -2349,19 +2477,17 @@ async def _ejecutar_cbr():
                     fila[mon_key] = doc.get("moneda") or "UF"
                     if doc.get("origen") == "manual":
                         fila[f"{campo}_origen"] = "manual"
-            # preservar valores ingresados manualmente en corridas anteriores
+            # preservar TODOS los valores ingresados manualmente en corridas anteriores
             old = old_map.get(nombre_u) or {}
-            for campo, mon_key, _f in _CBR_CAMPOS:
-                if (old.get(f"{campo}_origen") == "manual"
-                        and old.get(campo) not in ("", None)
-                        and fila.get(campo) in ("", None)):
+            for campo in _CBR_NUM + _CBR_TXT:
+                if old.get(f"{campo}_origen") == "manual" and old.get(campo) not in ("", None):
+                    if campo in ("valor_cbr", "tasacion", "est_titulos") and fila.get(campo) not in ("", None):
+                        continue  # dato fresco del correo manda sobre el manual antiguo
                     fila[campo] = old[campo]
                     fila[f"{campo}_origen"] = "manual"
-                    if old.get(mon_key):
-                        fila[mon_key] = old[mon_key]
-            if old.get("comision_origen") == "manual" and old.get("comision") not in ("", None):
-                fila["comision"] = old["comision"]
-                fila["comision_origen"] = "manual"
+            for _c, mon_key, _f in _CBR_CAMPOS:
+                if fila.get(f"{_c}_origen") == "manual" and old.get(mon_key) and not fila.get(mon_key):
+                    fila[mon_key] = old[mon_key]
             resultados.append(fila)
             # persistencia: carpeta + Bóveda ADN_CLIENTES_360
             sets_f = {}
@@ -2406,6 +2532,33 @@ _CBR_CAMPOS = [("valor_cbr", "moneda", "costo_CBR"),
                ("tasacion", "tasacion_moneda", "costo_tasacion"),
                ("est_titulos", "est_titulos_moneda", "costo_estudio_titulos"),
                ("comision", "comision_moneda", "comision")]
+# REGLA ABSOLUTA DE EDITABILIDAD: todos los campos del módulo, sin excepción
+_CBR_NUM = ("valor_cbr", "tasacion", "est_titulos", "comision", "monto_credito", "total_pagado")
+_CBR_TXT = ("cliente", "rut", "broker", "proyecto", "tipo_propiedad", "subsidio",
+            "pct_aplicado", "moneda", "estado")
+# campos que viven en la carpeta y se propagan a la Bóveda vía _sync_adn
+_CBR_FOLDER_MAP = {"rut": "rut", "broker": "inmobiliaria", "proyecto": "proyecto",
+                   "tipo_propiedad": "tipo_operacion", "subsidio": "subsidio_proyeccion",
+                   "monto_credito": "proyeccion_uf"}
+
+
+def _cbr_total_fila(r):
+    """Total Pagado por fila: manual manda; si no, CBR + Tasación + Est. Títulos."""
+    if r.get("total_pagado_origen") == "manual" and r.get("total_pagado") not in ("", None):
+        try:
+            return float(r["total_pagado"])
+        except (TypeError, ValueError):
+            return None
+    nums = []
+    for k in ("valor_cbr", "tasacion", "est_titulos"):
+        v = r.get(k)
+        if v in ("", None):
+            continue
+        try:
+            nums.append(float(v))
+        except (TypeError, ValueError):
+            pass
+    return sum(nums) if nums else None
 
 
 def _cbr_totales(res):
@@ -2425,8 +2578,13 @@ def _cbr_totales(res):
             suf = "clp" if (r.get(mon_key) or "UF").upper() == "CLP" else "uf"
             tot[f"{prefijos[campo]}_{suf}"] += v
     for s in ("uf", "clp"):
-        tot[f"gran_total_{s}"] = (tot[f"total_cbr_{s}"] + tot[f"total_tasacion_{s}"]
-                                  + tot[f"total_titulos_{s}"])
+        tot[f"gran_total_{s}"] = 0.0
+    for r in res:
+        v = _cbr_total_fila(r)
+        if v is None:
+            continue
+        suf = "clp" if (r.get("moneda") or "UF").upper() == "CLP" else "uf"
+        tot[f"gran_total_{suf}"] += v
     return {k: round(v, 2) for k, v in tot.items()}
 
 
@@ -2441,48 +2599,85 @@ async def cbr_estado(request: Request):
 
 @supercarpeta.post("/cbr/manual")
 async def cbr_manual(request: Request, payload: dict):
-    """Edición manual del Admin General: guarda de inmediato en ADN_CLIENTES_360."""
+    """REGLA ABSOLUTA DE EDITABILIDAD: todos los campos del módulo son editables por el
+    Admin General. Todo cambio se guarda de inmediato en ADN_CLIENTES_360."""
     _exigir_admin_general(request)
     import adn_clientes as _adn
     campo = payload.get("campo")
-    campos_validos = {c: (mk, af) for c, mk, af in _CBR_CAMPOS}
-    if campo not in campos_validos:
-        raise HTTPException(status_code=400,
-                            detail="campo inválido: use valor_cbr, tasacion, est_titulos o comision")
-    bruto = str(payload.get("valor") if payload.get("valor") is not None else "").strip().replace(",", ".")
-    valor = ""
-    if bruto:
-        try:
-            valor = round(float(bruto), 2)
-        except ValueError:
-            raise HTTPException(status_code=400, detail="valor numérico inválido")
+    if campo not in _CBR_NUM + _CBR_TXT:
+        raise HTTPException(status_code=400, detail=f"campo inválido: {campo}")
+    bruto = str(payload.get("valor") if payload.get("valor") is not None else "").strip()
+    if campo in _CBR_NUM:
+        valor = ""
+        if bruto:
+            try:
+                valor = round(float(bruto.replace("%", "").replace(",", ".")), 2)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="valor numérico inválido")
+    else:
+        valor = bruto
     cfg = await db.config.find_one({"_key": "cbr_extraccion"}) or {}
     res = cfg.get("resultados") or []
     cliente = (payload.get("cliente") or "").strip().upper()
-    fila = next((r for r in res if (r.get("cliente") or "").strip().upper() == cliente), None)
+    fila = next((r for r in res
+                 if r.get("fid") == payload.get("fid")
+                 or (r.get("cliente") or "").strip().upper() == cliente), None)
     if not fila:
         raise HTTPException(status_code=404, detail="cliente no está en el reporte CBR")
+    if campo == "cliente":
+        fila.setdefault("cliente_original", fila.get("cliente"))
     fila[campo] = valor
     fila[f"{campo}_origen"] = "manual" if valor != "" else ""
-    mon_key, adn_field = campos_validos[campo]
-    if valor != "" and not fila.get(mon_key):
-        fila[mon_key] = "UF"
+    campos_mon = {c: mk for c, mk, _f in _CBR_CAMPOS}
+    if campo in campos_mon and valor != "" and not fila.get(campos_mon[campo]):
+        fila[campos_mon[campo]] = "UF"
+    # % de comisión editado → recalcular la comisión si no fue sobreescrita manualmente
+    if campo == "pct_aplicado" and fila.get("comision_origen") != "manual":
+        m_pct = re.search(r"(\d+(?:[.,]\d+)?)", valor or "")
+        monto = fila.get("monto_credito")
+        if m_pct and monto not in ("", None):
+            try:
+                fila["comision"] = round(float(monto) * float(m_pct.group(1).replace(",", ".")) / 100, 2)
+            except (TypeError, ValueError):
+                pass
     await db.config.update_one({"_key": "cbr_extraccion"}, {"$set": {"resultados": res}})
-    fd = await db.folders.find_one({"nombre": fila["cliente"]})
+    # ── persistencia inmediata en la Bóveda ADN_CLIENTES_360 ──
+    fd = None
+    if fila.get("fid"):
+        fd = await db.folders.find_one({"id": fila["fid"]})
+    if not fd:
+        fd = await db.folders.find_one({"nombre": fila.get("cliente_original") or fila.get("cliente")})
     if fd:
-        doc = {"valor": valor, "moneda": fila.get(mon_key) or "UF",
-               "origen": "manual", "actualizado": _now()}
-        if campo == "comision":
-            if fd.get("rut"):
-                await db.adn_clientes_360.update_one(
-                    {"rut_norm": _adn._norm_rut(fd["rut"])}, {"$set": {"comision": doc}})
-        else:
-            await db.folders.update_one({"id": fd["id"]}, {"$set": {
-                adn_field: doc, "updated_at": _now()}})
+        rut_n = _adn._norm_rut(fd["rut"]) if fd.get("rut") else None
+        if campo in ("valor_cbr", "tasacion", "est_titulos"):
+            adn_field = dict((c, f) for c, _mk, f in _CBR_CAMPOS)[campo]
+            doc = {"valor": valor, "moneda": fila.get(campos_mon[campo]) or "UF",
+                   "origen": "manual", "actualizado": _now()}
+            await db.folders.update_one({"id": fd["id"]}, {"$set": {adn_field: doc, "updated_at": _now()}})
             await _sync_adn(fd["id"])
-            if fd.get("rut"):
-                await db.adn_clientes_360.update_one(
-                    {"rut_norm": _adn._norm_rut(fd["rut"])}, {"$set": {adn_field: doc}})
+            if rut_n:
+                await db.adn_clientes_360.update_one({"rut_norm": rut_n}, {"$set": {adn_field: doc}})
+        elif campo == "comision":
+            if rut_n:
+                await db.adn_clientes_360.update_one({"rut_norm": rut_n}, {"$set": {"comision": {
+                    "valor": valor, "moneda": "UF", "origen": "manual", "actualizado": _now()}}})
+        elif campo == "total_pagado":
+            if rut_n:
+                await db.adn_clientes_360.update_one({"rut_norm": rut_n}, {"$set": {"total_pagado": {
+                    "valor": valor, "moneda": fila.get("moneda") or "UF",
+                    "origen": "manual", "actualizado": _now()}}})
+        elif campo == "cliente":
+            if rut_n and valor:
+                await db.adn_clientes_360.update_one({"rut_norm": rut_n},
+                                                     {"$set": {"identidad.nombre": valor}})
+        elif campo in _CBR_FOLDER_MAP:
+            await db.folders.update_one({"id": fd["id"]}, {"$set": {
+                _CBR_FOLDER_MAP[campo]: valor, "updated_at": _now()}})
+            await _sync_adn(fd["id"])
+        elif rut_n:
+            # campos del reporte (moneda, estado, pct) → registro de overrides en la Bóveda
+            await db.adn_clientes_360.update_one({"rut_norm": rut_n}, {"$set": {
+                f"cbr_overrides.{campo}": {"valor": valor, "origen": "manual", "actualizado": _now()}}})
     return {"ok": True, **_cbr_totales(res)}
 
 
@@ -2522,10 +2717,10 @@ async def cbr_excel(request: Request):
         c.font = Font(bold=True, color="FFFFFF")
         c.fill = PatternFill("solid", fgColor="1F2937")
     for r in res:
-        vals = [r.get(k) for k in ("valor_cbr", "tasacion", "est_titulos")]
-        nums = [float(v) for v in vals if v not in ("", None)]
-        total_pagado = round(sum(nums), 2) if nums else ""
-        incompleto = len(nums) < 3
+        tp = _cbr_total_fila(r)
+        incompleto = (r.get("total_pagado_origen") != "manual"
+                      and any(r.get(k) in ("", None) for k in ("valor_cbr", "tasacion", "est_titulos")))
+        total_pagado = round(tp, 2) if tp is not None else ""
         ws.append([r.get("cliente", ""), r.get("broker", ""), r.get("monto_credito", ""),
                    r.get("valor_cbr", ""), r.get("tasacion", ""), r.get("est_titulos", ""),
                    f"{total_pagado} ⚠ incompleto" if incompleto and total_pagado != "" else total_pagado,
