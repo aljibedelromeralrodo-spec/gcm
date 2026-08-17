@@ -849,3 +849,11 @@ Constitución v16 (Reglas #34-#38, #41, #43, #49, #52, #53, #54). Módulo Broker
 - Agregado contacto BOETCH / ALTO PARQUE: Celinda Soria (csoria@boetsch.cl) en contactos_carta.
 - Verificado con preview solicitud-doc de Carlos Salgado: destinatario resuelve a csoria@boetsch.cl,
   asunto "Carta Oferta - CARLOS SALGADO - ALTO PARQUE". Sin envío real.
+
+## Actualización 2026-06 (fork, 4c) — Resolución SERVIU es DOCUMENTO + envío Salgado
+- REGLA CORREGIDA (constitución): la Resolución SERVIU es un DOCUMENTO que se solicita a la
+  inmobiliaria junto a la Carta Oferta (nueva con subsidio), NO un número requerido previo.
+  Se eliminó el bloqueo de envío y el campo obligatorio; el correo ahora pide "1. Carta Oferta
+  2. Resolución SERVIU". requiere_resolucion=False siempre (el input del modal ya no aparece).
+- ENVIADO REAL: solicitud CO+RS de Carlos Salgado a Celinda Soria (csoria@boetsch.cl),
+  CC Victoria + Daniela, SMTP 250 OK.

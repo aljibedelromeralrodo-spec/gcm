@@ -3024,19 +3024,18 @@ async def solicitud_doc_preview(fid: str, request: Request, doc: str = ""):
         faltantes.append("RUT del cliente")
     if not usada and not proyecto:
         faltantes.append("Nombre del proyecto")
-    if tipo == "nueva_con_subsidio" and not resolucion:
-        faltantes.append("Resolución SERVIU")
     cc = [x["email"] for x in await _cc_globales() if x.get("activo") and x.get("email")]
     pie_datos = (f"Cliente: {nombre}\nRUT: {rut or '[RUT del cliente]'}\n")
     doc_sel = doc if doc in ("promesa", "carta_pie") else "promesa"
     alternativas = None
     if tipo == "nueva_con_subsidio":
         docs_hitos = ["carta_oferta", "serviu"]
-        asunto = f"Carta Oferta - {nombre} - {proyecto or '[Nombre del proyecto]'}"
+        asunto = f"Carta Oferta y Resolución SERVIU - {nombre} - {proyecto or '[Nombre del proyecto]'}"
         cuerpo = (f"{saludo} {encargado or '[nombre del destinatario]'},\n\n"
-                  f"Solicito por medio de la presente carta oferta de:\n\n{pie_datos}"
-                  f"Proyecto: {proyecto or '[Nombre del proyecto]'}\n"
-                  f"Resolución SERVIU: {resolucion or '[Número de resolución SERVIU]'}\n")
+                  f"Solicito por medio de la presente los siguientes documentos:\n\n"
+                  f"1. Carta Oferta\n"
+                  f"2. Resolución SERVIU\n\n{pie_datos}"
+                  f"Proyecto: {proyecto or '[Nombre del proyecto]'}\n")
     elif tipo == "nueva_sin_subsidio":
         docs_hitos = ["carta_oferta"]
         asunto = f"Carta Oferta - {nombre} - {proyecto or '[Nombre del proyecto]'}"
@@ -3070,7 +3069,7 @@ async def solicitud_doc_preview(fid: str, request: Request, doc: str = ""):
     return {"cliente": nombre, "rut": rut, "inmobiliaria": inmo,
             "proyecto": proyecto, "resolucion_serviu": resolucion,
             "usada": usada, "tipo_cliente": tipo, "doc_elegido": doc_sel if alternativas else "",
-            "alternativas": alternativas, "requiere_resolucion": tipo == "nueva_con_subsidio",
+            "alternativas": alternativas, "requiere_resolucion": False,
             "docs_solicitados": [_DOC_LABEL[h] for h in docs_hitos],
             "tipo": "+".join(docs_hitos),
             "encargado": encargado, "para": (contacto or {}).get("email") or "",
@@ -3102,8 +3101,6 @@ async def solicitud_doc_enviar(fid: str, payload: dict, request: Request):
     faltantes = [] if rut else ["RUT del cliente"]
     if not usada and not proyecto:
         faltantes.append("Nombre del proyecto")
-    if tipo == "nueva_con_subsidio" and not resolucion:
-        faltantes.append("Resolución SERVIU")
     if faltantes:
         raise HTTPException(status_code=400,
                             detail="ENVÍO BLOQUEADO — falta: " + ", ".join(faltantes))
