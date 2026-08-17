@@ -2187,41 +2187,63 @@ def _monto_en_linea(l):
 
 
 def _extraer_cbr_texto(texto):
-    """REGLA DE HIERRO: solo lee la fila CBR/Conservador — jamás inventa valores.
+    """REGLA DE HIERRO: solo lee filas reales — jamás inventa valores.
     Si existe la sección 'Gastos Operacionales', busca desde ahí hacia abajo."""
+    d = _extraer_gastos_texto(texto)
+    return d.get("valor_cbr")
+
+
+_GASTO_FILAS = [
+    ("valor_cbr", _CBR_FILA_RE),
+    ("tasacion", re.compile(r"\btasaci[oó]n\b", re.I)),
+    ("est_titulos", re.compile(r"estudio\s+de\s+t[ií]tulos|\best\.?\s*t[ií]tulos", re.I)),
+]
+
+
+def _extraer_gastos_texto(texto):
     lineas = [l.strip() for l in (texto or "").splitlines() if l.strip()]
     idx = next((i for i, l in enumerate(lineas) if "gastos operacionales" in l.lower()), None)
     ambito = lineas[idx:] if idx is not None else lineas
-    for i, l in enumerate(ambito):
-        if not _CBR_FILA_RE.search(l):
-            continue
-        r = _monto_en_linea(l)
-        if not r and i + 1 < len(ambito):
-            r = _monto_en_linea(ambito[i + 1])
-        if r:
-            return {"valor": r[0], "moneda": r[1], "linea": l[:180]}
-    return None
+    out = {}
+    for campo, rx in _GASTO_FILAS:
+        for i, l in enumerate(ambito):
+            if not rx.search(l):
+                continue
+            r = _monto_en_linea(l)
+            if not r and i + 1 < len(ambito):
+                r = _monto_en_linea(ambito[i + 1])
+            if r:
+                out[campo] = {"valor": r[0], "moneda": r[1], "linea": l[:180]}
+                break
+    return out
 
 
-def _extraer_cbr_pdf(pdf_bytes):
-    """Abre el adjunto: prioriza la SEGUNDA página (Gastos Operacionales), luego el resto."""
+def _extraer_gastos_pdf(pdf_bytes):
+    """Abre el adjunto: prioriza la SEGUNDA página (Gastos Operacionales), luego el resto.
+    Extrae CBR + Tasación + Estudio de Títulos en una sola pasada."""
     import io as _io
     import pdfplumber
+    acumulado = {}
     try:
         with pdfplumber.open(_io.BytesIO(pdf_bytes)) as pdf:
             paginas = pdf.pages
             orden = ([1] if len(paginas) > 1 else []) + [i for i in range(len(paginas)) if i != 1]
             for i in orden:
                 try:
-                    res = _extraer_cbr_texto(paginas[i].extract_text() or "")
+                    d = _extraer_gastos_texto(paginas[i].extract_text() or "")
                 except Exception:
-                    res = None
-                if res:
-                    res["pagina"] = i + 1
-                    return res
+                    d = {}
+                for k, v in d.items():
+                    acumulado.setdefault(k, {**v, "pagina": i + 1})
+                if len(acumulado) == len(_GASTO_FILAS):
+                    break
     except Exception:
         pass
-    return None
+    return acumulado
+
+
+def _extraer_cbr_pdf(pdf_bytes):
+    return (_extraer_gastos_pdf(pdf_bytes) or {}).get("valor_cbr")
 
 
 # COMISIÓN (USO INTERNO — SOLO GERENCIA): % según broker/inmobiliaria
@@ -2264,14 +2286,19 @@ async def _ejecutar_cbr():
         correos = await asyncio.to_thread(mail.fetch_simulacion_attachments, 60,
                                           "aprobaciones@centralmutuos.cl", nombres)
         adn_map = {}
-        async for r in db.adn_clientes_360.find({}, {"rut_norm": 1, "financiero": 1}):
+        async for r in db.adn_clientes_360.find({}, {
+                "rut_norm": 1, "financiero": 1, "costo_CBR": 1,
+                "costo_tasacion": 1, "costo_estudio_titulos": 1, "comision": 1}):
             adn_map[r.get("rut_norm")] = r
+        viejo = await db.config.find_one({"_key": "cbr_extraccion"}) or {}
+        old_map = {(r.get("cliente") or "").strip().upper(): r
+                   for r in viejo.get("resultados") or []}
         resultados = []
         for fd in carpetas:
             nombre_u = (fd.get("nombre") or "").strip().upper()
             toks = [t for t in mail._sin_acentos(nombre_u.lower()).split() if len(t) > 2]
             necesarios = min(2, len(toks)) or 1
-            hallazgo = None
+            gastos, meta = None, None
             for e in correos:  # ya vienen ordenados del más reciente al más antiguo
                 blob = mail._sin_acentos(" ".join(
                     [e.get("subject") or "", e.get("body") or ""]
@@ -2279,40 +2306,79 @@ async def _ejecutar_cbr():
                 if sum(1 for t in toks if t in blob) < necesarios:
                     continue
                 for p in e.get("pdfs") or []:
-                    res = await asyncio.to_thread(_extraer_cbr_pdf, p.get("content_bytes") or b"")
-                    if res:
-                        hallazgo = {**res, "fecha_correo": (e.get("date") or "")[:10],
-                                    "archivo": p.get("filename") or "",
-                                    "fuente": e.get("cuenta") or "correo"}
+                    g = await asyncio.to_thread(_extraer_gastos_pdf, p.get("content_bytes") or b"")
+                    if g:
+                        gastos = g
+                        meta = {"fecha_correo": (e.get("date") or "")[:10],
+                                "archivo": p.get("filename") or "",
+                                "fuente": e.get("cuenta") or "correo"}
                         break
-                if hallazgo:
+                if gastos:
                     break
+            cbr = (gastos or {}).get("valor_cbr")
             reg = adn_map.get(_adn._norm_rut(fd.get("rut"))) if fd.get("rut") else None
             monto_uf = (fd.get("proyeccion_uf")
                         or ((reg or {}).get("financiero") or {}).get("monto_credito_uf") or "")
             comision, pct_txt = _comision_cliente(fd, monto_uf)
-            resultados.append({
+            fila = {
                 "cliente": fd.get("nombre") or "",
                 "broker": fd.get("inmobiliaria") or fd.get("broker_origen") or "",
                 "monto_credito": monto_uf,
                 "comision": comision if comision is not None else "",
                 "pct_aplicado": pct_txt,
-                "valor_cbr": hallazgo["valor"] if hallazgo else "",
-                "moneda": hallazgo["moneda"] if hallazgo else "",
-                "fecha_correo": (hallazgo or {}).get("fecha_correo", ""),
-                "archivo": (hallazgo or {}).get("archivo", ""),
-                "linea": (hallazgo or {}).get("linea", ""),
-                "estado": "ENCONTRADO" if hallazgo else "NO ENCONTRADO"})
-            if hallazgo:
-                doc_cbr = {"valor": hallazgo["valor"], "moneda": hallazgo["moneda"],
-                           "fecha_correo": hallazgo["fecha_correo"], "archivo": hallazgo["archivo"],
-                           "extraido": _now(), "origen": "aprobaciones@centralmutuos.cl"}
+                "valor_cbr": cbr["valor"] if cbr else "",
+                "moneda": cbr["moneda"] if cbr else "",
+                "tasacion": "", "tasacion_moneda": "",
+                "est_titulos": "", "est_titulos_moneda": "",
+                "fecha_correo": (meta or {}).get("fecha_correo", ""),
+                "archivo": (meta or {}).get("archivo", ""),
+                "linea": (cbr or {}).get("linea", ""),
+                "estado": "ENCONTRADO" if cbr else "NO ENCONTRADO"}
+            for campo in ("tasacion", "est_titulos"):
+                g = (gastos or {}).get(campo)
+                if g:
+                    fila[campo] = g["valor"]
+                    fila[f"{campo}_moneda"] = g["moneda"]
+            # respaldo desde la Bóveda ADN si la extracción no trajo el dato
+            for campo, mon_key, adn_f in _CBR_CAMPOS:
+                if campo == "comision" or fila.get(campo) not in ("", None):
+                    continue
+                doc = (reg or {}).get(adn_f) or {}
+                if doc.get("valor") not in ("", None):
+                    fila[campo] = doc["valor"]
+                    fila[mon_key] = doc.get("moneda") or "UF"
+                    if doc.get("origen") == "manual":
+                        fila[f"{campo}_origen"] = "manual"
+            # preservar valores ingresados manualmente en corridas anteriores
+            old = old_map.get(nombre_u) or {}
+            for campo, mon_key, _f in _CBR_CAMPOS:
+                if (old.get(f"{campo}_origen") == "manual"
+                        and old.get(campo) not in ("", None)
+                        and fila.get(campo) in ("", None)):
+                    fila[campo] = old[campo]
+                    fila[f"{campo}_origen"] = "manual"
+                    if old.get(mon_key):
+                        fila[mon_key] = old[mon_key]
+            if old.get("comision_origen") == "manual" and old.get("comision") not in ("", None):
+                fila["comision"] = old["comision"]
+                fila["comision_origen"] = "manual"
+            resultados.append(fila)
+            # persistencia: carpeta + Bóveda ADN_CLIENTES_360
+            sets_f = {}
+            for campo, doc_key in (("valor_cbr", "costo_CBR"), ("tasacion", "costo_tasacion"),
+                                   ("est_titulos", "costo_estudio_titulos")):
+                g = (gastos or {}).get(campo)
+                if g:
+                    sets_f[doc_key] = {"valor": g["valor"], "moneda": g["moneda"],
+                                       "fecha_correo": meta["fecha_correo"], "archivo": meta["archivo"],
+                                       "extraido": _now(), "origen": "aprobaciones@centralmutuos.cl"}
+            if sets_f:
                 await db.folders.update_one({"id": fd["id"]}, {"$set": {
-                    "costo_CBR": doc_cbr, "updated_at": _now()}})
+                    **sets_f, "updated_at": _now()}})
                 await _sync_adn(fd["id"])
                 if fd.get("rut"):
                     await db.adn_clientes_360.update_one(
-                        {"rut_norm": _adn._norm_rut(fd["rut"])}, {"$set": {"costo_CBR": doc_cbr}})
+                        {"rut_norm": _adn._norm_rut(fd["rut"])}, {"$set": sets_f})
         await db.config.update_one({"_key": "cbr_extraccion"}, {"$set": {
             "estado": "completado", "ultima": _now(), "resultados": resultados,
             "remitente": "aprobaciones@centralmutuos.cl",
@@ -2335,20 +2401,33 @@ def _exigir_admin_general(request):
             detail="Acceso denegado: módulo de Comisiones y CBR exclusivo del Administrador General")
 
 
+# campos de gasto: (campo, clave de moneda, campo en ADN/folder)
+_CBR_CAMPOS = [("valor_cbr", "moneda", "costo_CBR"),
+               ("tasacion", "tasacion_moneda", "costo_tasacion"),
+               ("est_titulos", "est_titulos_moneda", "costo_estudio_titulos"),
+               ("comision", "comision_moneda", "comision")]
+
+
 def _cbr_totales(res):
-    """REGLA: solo suman las filas que efectivamente tienen dato (auto o manual)."""
-    def _suma(vals):
-        tot = 0.0
-        for v in vals:
+    """REGLA DE CONVERSIÓN: NUNCA se mezclan monedas — UF suma con UF, CLP con CLP."""
+    prefijos = {"valor_cbr": "total_cbr", "tasacion": "total_tasacion",
+                "est_titulos": "total_titulos", "comision": "total_comision"}
+    tot = {f"{p}_{s}": 0.0 for p in prefijos.values() for s in ("uf", "clp")}
+    for r in res:
+        for campo, mon_key, _ in _CBR_CAMPOS:
+            v = r.get(campo)
             if v in ("", None):
                 continue
             try:
-                tot += float(v)
+                v = float(v)
             except (TypeError, ValueError):
                 continue
-        return round(tot, 2)
-    return {"total_cbr": _suma([r.get("valor_cbr") for r in res]),
-            "total_comision": _suma([r.get("comision") for r in res])}
+            suf = "clp" if (r.get(mon_key) or "UF").upper() == "CLP" else "uf"
+            tot[f"{prefijos[campo]}_{suf}"] += v
+    for s in ("uf", "clp"):
+        tot[f"gran_total_{s}"] = (tot[f"total_cbr_{s}"] + tot[f"total_tasacion_{s}"]
+                                  + tot[f"total_titulos_{s}"])
+    return {k: round(v, 2) for k, v in tot.items()}
 
 
 @supercarpeta.get("/cbr/estado")
@@ -2366,8 +2445,10 @@ async def cbr_manual(request: Request, payload: dict):
     _exigir_admin_general(request)
     import adn_clientes as _adn
     campo = payload.get("campo")
-    if campo not in ("valor_cbr", "comision"):
-        raise HTTPException(status_code=400, detail="campo inválido: use valor_cbr o comision")
+    campos_validos = {c: (mk, af) for c, mk, af in _CBR_CAMPOS}
+    if campo not in campos_validos:
+        raise HTTPException(status_code=400,
+                            detail="campo inválido: use valor_cbr, tasacion, est_titulos o comision")
     bruto = str(payload.get("valor") if payload.get("valor") is not None else "").strip().replace(",", ".")
     valor = ""
     if bruto:
@@ -2383,24 +2464,25 @@ async def cbr_manual(request: Request, payload: dict):
         raise HTTPException(status_code=404, detail="cliente no está en el reporte CBR")
     fila[campo] = valor
     fila[f"{campo}_origen"] = "manual" if valor != "" else ""
-    if campo == "valor_cbr" and valor != "" and not fila.get("moneda"):
-        fila["moneda"] = "UF"
+    mon_key, adn_field = campos_validos[campo]
+    if valor != "" and not fila.get(mon_key):
+        fila[mon_key] = "UF"
     await db.config.update_one({"_key": "cbr_extraccion"}, {"$set": {"resultados": res}})
     fd = await db.folders.find_one({"nombre": fila["cliente"]})
     if fd:
-        if campo == "valor_cbr":
-            doc_cbr = {**(fd.get("costo_CBR") or {}), "valor": valor,
-                       "moneda": fila.get("moneda") or "UF", "origen": "manual", "extraido": _now()}
+        doc = {"valor": valor, "moneda": fila.get(mon_key) or "UF",
+               "origen": "manual", "actualizado": _now()}
+        if campo == "comision":
+            if fd.get("rut"):
+                await db.adn_clientes_360.update_one(
+                    {"rut_norm": _adn._norm_rut(fd["rut"])}, {"$set": {"comision": doc}})
+        else:
             await db.folders.update_one({"id": fd["id"]}, {"$set": {
-                "costo_CBR": doc_cbr, "updated_at": _now()}})
+                adn_field: doc, "updated_at": _now()}})
             await _sync_adn(fd["id"])
             if fd.get("rut"):
                 await db.adn_clientes_360.update_one(
-                    {"rut_norm": _adn._norm_rut(fd["rut"])}, {"$set": {"costo_CBR": doc_cbr}})
-        elif fd.get("rut"):
-            await db.adn_clientes_360.update_one(
-                {"rut_norm": _adn._norm_rut(fd["rut"])}, {"$set": {"comision": {
-                    "valor": valor, "moneda": "UF", "origen": "manual", "actualizado": _now()}}})
+                    {"rut_norm": _adn._norm_rut(fd["rut"])}, {"$set": {adn_field: doc}})
     return {"ok": True, **_cbr_totales(res)}
 
 
@@ -2433,23 +2515,40 @@ async def cbr_excel(request: Request):
     ws.title = "Costos CBR"
     ws.append(["Nombre del cliente", "Broker", "Monto del crédito (UF)",
                "Valor CBR (Inscripción Registro Propiedad + Hipoteca)",
+               "Tasación", "Estudio de Títulos", "Total Pagado",
                "Comisión (monto calculado)", "Porcentaje aplicado",
                "Moneda", "Fecha del correo fuente", "Estado CBR"])
     for c in ws[1]:
         c.font = Font(bold=True, color="FFFFFF")
         c.fill = PatternFill("solid", fgColor="1F2937")
     for r in res:
+        vals = [r.get(k) for k in ("valor_cbr", "tasacion", "est_titulos")]
+        nums = [float(v) for v in vals if v not in ("", None)]
+        total_pagado = round(sum(nums), 2) if nums else ""
+        incompleto = len(nums) < 3
         ws.append([r.get("cliente", ""), r.get("broker", ""), r.get("monto_credito", ""),
-                   r.get("valor_cbr", ""), r.get("comision", ""), r.get("pct_aplicado", ""),
+                   r.get("valor_cbr", ""), r.get("tasacion", ""), r.get("est_titulos", ""),
+                   f"{total_pagado} ⚠ incompleto" if incompleto and total_pagado != "" else total_pagado,
+                   r.get("comision", ""), r.get("pct_aplicado", ""),
                    r.get("moneda", ""), r.get("fecha_correo", ""), r.get("estado", "")])
-        ws.cell(row=ws.max_row, column=9).font = Font(
+        if incompleto:
+            ws.cell(row=ws.max_row, column=7).fill = PatternFill("solid", fgColor="FEF3C7")
+        ws.cell(row=ws.max_row, column=12).font = Font(
             bold=True, color="15803D" if r.get("estado") == "ENCONTRADO" else "B91C1C")
     tot = _cbr_totales(res)
-    ws.append(["TOTAL", "", "", tot["total_cbr"], tot["total_comision"], "", "UF", "", ""])
+    ws.append(["TOTAL EN UF", "", "", tot["total_cbr_uf"], tot["total_tasacion_uf"],
+               tot["total_titulos_uf"], tot["gran_total_uf"], tot["total_comision_uf"],
+               "", "UF", "", ""])
     for c in ws[ws.max_row]:
         c.font = Font(bold=True, color="FFFFFF")
-        c.fill = PatternFill("solid", fgColor="B45309")
-    for col, w in zip("ABCDEFGHI", (34, 24, 20, 26, 22, 20, 10, 18, 16)):
+        c.fill = PatternFill("solid", fgColor="1E3A8A")
+    ws.append(["TOTAL EN PESOS", "", "", tot["total_cbr_clp"], tot["total_tasacion_clp"],
+               tot["total_titulos_clp"], tot["gran_total_clp"], tot["total_comision_clp"],
+               "", "CLP", "", ""])
+    for c in ws[ws.max_row]:
+        c.font = Font(bold=True, color="FFFFFF")
+        c.fill = PatternFill("solid", fgColor="14532D")
+    for col, w in zip("ABCDEFGHIJKL", (34, 24, 18, 24, 12, 16, 16, 20, 18, 9, 16, 16)):
         ws.column_dimensions[col].width = w
     buf = _io.BytesIO()
     wb.save(buf)

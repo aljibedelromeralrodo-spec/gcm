@@ -338,6 +338,34 @@ export default function SupercarpetaModule() {
     } catch (e) { window.alert(e.response?.data?.detail || "Error al guardar el valor manual"); }
   };
 
+  const celdaCbrEdit = (r, i, campo, sufijo = "") => {
+    const editando = cbrEdit && cbrEdit.fila.cliente === r.cliente && cbrEdit.campo === campo;
+    const manual = r[`${campo}_origen`] === "manual";
+    const v = r[campo];
+    return (
+      <td key={campo} data-testid={`cbr-${campo}-${i}`} title="Doble clic para editar (gris = automático, azul = manual)"
+        onDoubleClick={() => setCbrEdit({ fila: r, campo, valor: v ?? "" })}
+        style={{ padding: "6px 8px", fontWeight: 800, whiteSpace: "nowrap", cursor: "cell",
+          color: manual ? "#93c5fd" : "#cbd5e1",
+          background: manual ? "rgba(59,130,246,0.14)" : "rgba(148,163,184,0.08)" }}>
+        {editando ? (
+          <input data-testid={`cbr-${campo}-input-${i}`} autoFocus value={cbrEdit.valor}
+            onChange={e => setCbrEdit({ ...cbrEdit, valor: e.target.value })}
+            onBlur={guardarCbrManual}
+            onKeyDown={e => { if (e.key === "Enter") guardarCbrManual(); if (e.key === "Escape") setCbrEdit(null); }}
+            style={{ width: 64, background: "#0f172a", color: "#e2e8f0", border: "1px solid #3b82f6", borderRadius: 4, padding: "2px 4px", fontSize: "0.64rem" }} />
+        ) : (v !== "" && v != null ? `${Number(v).toLocaleString("es-CL")}${sufijo}` : "—")}
+      </td>
+    );
+  };
+
+  const totalPagadoFila = (r) => {
+    const nums = [r.valor_cbr, r.tasacion, r.est_titulos]
+      .filter(x => x !== "" && x != null).map(Number);
+    return { tot: Math.round(nums.reduce((a, b) => a + b, 0) * 100) / 100,
+             hay: nums.length > 0, incompleto: nums.length < 3 };
+  };
+
   const clientes = (data?.clientes || []).filter(c => !solo24 || c.recien_24h);
   const proy = data?.proyeccion;
 
@@ -700,7 +728,7 @@ export default function SupercarpetaModule() {
               <button onClick={() => setCbrModal(null)} className="maserati-btn" style={{ marginTop: 14 }}>Cerrar</button>
             </div>
           ) : (
-          <div onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 1020, maxHeight: "84vh", overflowY: "auto" }}>
+          <div onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 1260, maxHeight: "84vh", overflowY: "auto" }}>
             <h4 style={{ margin: 0, color: "#d4af37", fontSize: "0.9rem" }}>💰 Costos CBR — correos de aprobaciones@centralmutuos.cl</h4>
             <p style={{ color: "#94a3b8", fontSize: "0.62rem", margin: "6px 0 0" }}>
               Busca ÚNICAMENTE los correos de aprobación (remitente aprobaciones@centralmutuos.cl), abre la simulación adjunta
@@ -731,59 +759,70 @@ export default function SupercarpetaModule() {
                 <table data-testid="cbr-tabla" style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.64rem", marginTop: 12, color: "#e2e8f0" }}>
                   <thead>
                     <tr style={{ color: "#d4af37", textTransform: "uppercase", fontSize: "0.56rem", letterSpacing: 1 }}>
-                      {["Cliente", "Broker", "Monto UF", "Valor CBR", "Comisión", "% Aplicado", "Moneda", "Fecha correo", "Estado"].map(h =>
+                      {["Cliente", "Broker", "Monto UF", "Valor CBR", "Tasación", "Est. Títulos", "Total Pagado", "Comisión", "% Aplicado", "Moneda", "Fecha correo", "Estado"].map(h =>
                         <th key={h} style={{ textAlign: "left", padding: "6px 8px", borderBottom: "1px solid rgba(212,175,55,0.4)" }}>{h}</th>)}
                     </tr>
                   </thead>
                   <tbody>
-                    {cbrModal.resultados.map((r, i) => (
-                      <tr key={i} data-testid={`cbr-fila-${i}`} style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-                        <td style={{ padding: "6px 8px", fontWeight: 700 }} title={r.archivo || ""}>{r.cliente}</td>
-                        <td style={{ padding: "6px 8px", color: "#94a3b8" }}>{r.broker || "—"}</td>
-                        <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>
-                          {r.monto_credito !== "" && r.monto_credito != null ? Number(r.monto_credito).toLocaleString("es-CL") : "—"}</td>
-                        <td data-testid={`cbr-valor-${i}`} title="Doble clic para editar (gris = automático, azul = manual)"
-                          onDoubleClick={() => setCbrEdit({ fila: r, campo: "valor_cbr", valor: r.valor_cbr ?? "" })}
-                          style={{ padding: "6px 8px", fontWeight: 800, cursor: "cell",
-                            color: r.valor_cbr_origen === "manual" ? "#93c5fd" : "#cbd5e1",
-                            background: r.valor_cbr_origen === "manual" ? "rgba(59,130,246,0.14)" : "rgba(148,163,184,0.08)" }}>
-                          {cbrEdit && cbrEdit.fila.cliente === r.cliente && cbrEdit.campo === "valor_cbr" ? (
-                            <input data-testid={`cbr-valor-input-${i}`} autoFocus value={cbrEdit.valor}
-                              onChange={e => setCbrEdit({ ...cbrEdit, valor: e.target.value })}
-                              onBlur={guardarCbrManual}
-                              onKeyDown={e => { if (e.key === "Enter") guardarCbrManual(); if (e.key === "Escape") setCbrEdit(null); }}
-                              style={{ width: 70, background: "#0f172a", color: "#e2e8f0", border: "1px solid #3b82f6", borderRadius: 4, padding: "2px 4px", fontSize: "0.64rem" }} />
-                          ) : (r.valor_cbr !== "" && r.valor_cbr != null ? Number(r.valor_cbr).toLocaleString("es-CL") : "—")}</td>
-                        <td data-testid={`cbr-comision-${i}`} title="Doble clic para editar (gris = automático, azul = manual)"
-                          onDoubleClick={() => setCbrEdit({ fila: r, campo: "comision", valor: r.comision ?? "" })}
-                          style={{ padding: "6px 8px", fontWeight: 800, whiteSpace: "nowrap", cursor: "cell",
-                            color: r.comision_origen === "manual" ? "#93c5fd" : "#cbd5e1",
-                            background: r.comision_origen === "manual" ? "rgba(59,130,246,0.14)" : "rgba(148,163,184,0.08)" }}>
-                          {cbrEdit && cbrEdit.fila.cliente === r.cliente && cbrEdit.campo === "comision" ? (
-                            <input data-testid={`cbr-comision-input-${i}`} autoFocus value={cbrEdit.valor}
-                              onChange={e => setCbrEdit({ ...cbrEdit, valor: e.target.value })}
-                              onBlur={guardarCbrManual}
-                              onKeyDown={e => { if (e.key === "Enter") guardarCbrManual(); if (e.key === "Escape") setCbrEdit(null); }}
-                              style={{ width: 70, background: "#0f172a", color: "#e2e8f0", border: "1px solid #3b82f6", borderRadius: 4, padding: "2px 4px", fontSize: "0.64rem" }} />
-                          ) : (r.comision !== "" && r.comision != null ? `${Number(r.comision).toLocaleString("es-CL")} UF` : "—")}</td>
-                        <td style={{ padding: "6px 8px", fontSize: "0.58rem",
-                          color: String(r.pct_aplicado || "").includes("REVISAR") ? "#facc15" : "#e2e8f0",
-                          fontWeight: String(r.pct_aplicado || "").includes("REVISAR") ? 800 : 400 }}>{r.pct_aplicado || "—"}</td>
-                        <td style={{ padding: "6px 8px" }}>{r.moneda}</td>
-                        <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>{r.fecha_correo}</td>
-                        <td style={{ padding: "6px 8px" }}>
-                          <b style={{ color: r.estado === "ENCONTRADO" ? "#4ade80" : "#f87171" }}>{r.estado}</b></td>
-                      </tr>
-                    ))}
-                    <tr data-testid="cbr-totales" style={{ borderTop: "2px solid #d4af37", background: "rgba(212,175,55,0.10)" }}>
-                      <td style={{ padding: "8px", fontWeight: 900, color: "#d4af37" }}>TOTAL</td>
-                      <td colSpan={2} />
-                      <td data-testid="cbr-total-cbr" style={{ padding: "8px", fontWeight: 900, color: "#d4af37" }}>
-                        {Number(cbrModal.total_cbr || 0).toLocaleString("es-CL")}</td>
-                      <td data-testid="cbr-total-comision" style={{ padding: "8px", fontWeight: 900, color: "#4ade80", whiteSpace: "nowrap" }}>
-                        {Number(cbrModal.total_comision || 0).toLocaleString("es-CL")} UF</td>
-                      <td colSpan={4} style={{ padding: "8px", color: "#94a3b8", fontSize: "0.56rem" }}>
-                        solo suman filas con dato</td>
+                    {cbrModal.resultados.map((r, i) => {
+                      const tp = totalPagadoFila(r);
+                      return (
+                        <tr key={i} data-testid={`cbr-fila-${i}`} style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+                          <td style={{ padding: "6px 8px", fontWeight: 700 }} title={r.archivo || ""}>{r.cliente}</td>
+                          <td style={{ padding: "6px 8px", color: "#94a3b8" }}>{r.broker || "—"}</td>
+                          <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>
+                            {r.monto_credito !== "" && r.monto_credito != null ? Number(r.monto_credito).toLocaleString("es-CL") : "—"}</td>
+                          {celdaCbrEdit(r, i, "valor_cbr")}
+                          {celdaCbrEdit(r, i, "tasacion")}
+                          {celdaCbrEdit(r, i, "est_titulos")}
+                          <td data-testid={`cbr-total-pagado-${i}`}
+                            title={tp.incompleto ? "Total incompleto: falta CBR, Tasación o Estudio de Títulos" : "CBR + Tasación + Estudio de Títulos"}
+                            style={{ padding: "6px 8px", fontWeight: 900, whiteSpace: "nowrap", color: "#d4af37" }}>
+                            {tp.hay ? Number(tp.tot).toLocaleString("es-CL") : "—"}
+                            {tp.hay && tp.incompleto && <span style={{ color: "#facc15", marginLeft: 4 }}>⚠</span>}</td>
+                          {celdaCbrEdit(r, i, "comision", " UF")}
+                          <td style={{ padding: "6px 8px", fontSize: "0.58rem",
+                            color: String(r.pct_aplicado || "").includes("REVISAR") ? "#facc15" : "#e2e8f0",
+                            fontWeight: String(r.pct_aplicado || "").includes("REVISAR") ? 800 : 400 }}>{r.pct_aplicado || "—"}</td>
+                          <td style={{ padding: "6px 8px" }}>{r.moneda}</td>
+                          <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>{r.fecha_correo}</td>
+                          <td style={{ padding: "6px 8px" }}>
+                            <b style={{ color: r.estado === "ENCONTRADO" ? "#4ade80" : "#f87171" }}>{r.estado}</b></td>
+                        </tr>
+                      );
+                    })}
+                    {/* TOTALES DOBLE MONEDA — fijos al final, UF nunca se mezcla con CLP */}
+                    <tr data-testid="cbr-totales-uf">
+                      {[
+                        "TOTAL EN UF", "", "",
+                        Number(cbrModal.total_cbr_uf || 0).toLocaleString("es-CL"),
+                        Number(cbrModal.total_tasacion_uf || 0).toLocaleString("es-CL"),
+                        Number(cbrModal.total_titulos_uf || 0).toLocaleString("es-CL"),
+                        Number(cbrModal.gran_total_uf || 0).toLocaleString("es-CL"),
+                        Number(cbrModal.total_comision_uf || 0).toLocaleString("es-CL"),
+                        "", "UF", "", "solo filas con dato",
+                      ].map((v, j) => (
+                        <td key={j} data-testid={j === 3 ? "cbr-total-cbr-uf" : j === 6 ? "cbr-gran-total-uf" : j === 7 ? "cbr-total-comision-uf" : undefined}
+                          style={{ position: "sticky", bottom: 31, background: "#1e3a8a", color: "#ffffff",
+                            fontWeight: j === 11 ? 400 : 900, fontSize: j === 11 ? "0.54rem" : undefined,
+                            padding: "7px 8px", whiteSpace: "nowrap", zIndex: 2 }}>{v}</td>
+                      ))}
+                    </tr>
+                    <tr data-testid="cbr-totales-clp">
+                      {[
+                        "TOTAL EN PESOS", "", "",
+                        Number(cbrModal.total_cbr_clp || 0).toLocaleString("es-CL"),
+                        Number(cbrModal.total_tasacion_clp || 0).toLocaleString("es-CL"),
+                        Number(cbrModal.total_titulos_clp || 0).toLocaleString("es-CL"),
+                        Number(cbrModal.gran_total_clp || 0).toLocaleString("es-CL"),
+                        Number(cbrModal.total_comision_clp || 0).toLocaleString("es-CL"),
+                        "", "CLP", "", "sin conversión entre monedas",
+                      ].map((v, j) => (
+                        <td key={j} data-testid={j === 3 ? "cbr-total-cbr-clp" : j === 6 ? "cbr-gran-total-clp" : j === 7 ? "cbr-total-comision-clp" : undefined}
+                          style={{ position: "sticky", bottom: 0, background: "#14532d", color: "#ffffff",
+                            fontWeight: j === 11 ? 400 : 900, fontSize: j === 11 ? "0.54rem" : undefined,
+                            padding: "7px 8px", whiteSpace: "nowrap", zIndex: 2 }}>{v}</td>
+                      ))}
                     </tr>
                   </tbody>
                 </table>

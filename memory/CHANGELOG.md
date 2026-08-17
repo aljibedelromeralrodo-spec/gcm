@@ -1204,3 +1204,16 @@ Constitución VERSION 19 (nuevas reglas #55, #56, #57).
   Gris = automático, azul = manual. Fila TOTAL fija (total_cbr, total_comision) recalculada por backend.
 - Excel: fila TOTAL al final. REGLA: totales solo suman filas con dato (auto o manual).
 - Verificado e2e: manual Kanela 14,5 UF y Paula comisión 20 UF → ADN actualizado, totales 171,34/171,23 UF.
+
+## Sesión 2026-08-17 (cont. 2) — CBR: doble moneda + Tasación + Est. Títulos + Total Pagado
+- Extracción ampliada: _extraer_gastos_pdf saca CBR + Tasación + Estudio de Títulos de la misma
+  simulación (2ª página, Gastos Operacionales). Guardados en folders + ADN como costo_CBR,
+  costo_tasacion, costo_estudio_titulos.
+- Columnas editables con doble clic (valor_cbr, tasacion, est_titulos, comision) vía POST /cbr/manual.
+  Manual = azul, automático = gris. Valores manuales se PRESERVAN entre corridas (old_map).
+- Total Pagado por fila = CBR+Tasación+Títulos, con ⚠ si falta algún dato (no editable).
+- Totales doble moneda (REGLA: nunca mezclar UF con CLP): fila TOTAL EN UF (azul #1e3a8a) y
+  TOTAL EN PESOS (verde #14532d), sticky al fondo. Incluye gran_total_uf/clp.
+- Excel 12 columnas + 2 filas de totales por moneda. Celda Total Pagado amarilla si incompleto.
+- Verificado e2e: 12/17, tasación/títulos 3.0 UF extraídos, gran total 340,09 UF, ADN actualizado.
+- Aprendizaje: el backend tarda ~30-60s en reiniciar con hot reload; reintentar login con loop.
