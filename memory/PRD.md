@@ -833,3 +833,14 @@ Constitución v16 (Reglas #34-#38, #41, #43, #49, #52, #53, #54). Módulo Broker
 - Pendiente usuario: correo de Rodrigo Salazar (Fuchslocker); confirmar proyecto de Miguel
   Escalona (¿Uvas y el Viento o La Granja?) y de Carlos Salgado (¿ALTO PARQUE?); % comisión
   Word/Urbanizate; Twilio keys; alerta cumpleaños (P2).
+
+## Actualización 2026-06 (fork, 4) — Fusión Kanela Ibáñez
+- Duplicado resuelto: se fusionaron las 2 carpetas en una sola con nombre
+  "KANELA FERNANDA IBÁÑEZ VALENZUELA" y RUT correcto 20.219.355-2 (confirmado por usuario).
+- Se traspasaron los 5 archivos de la carpeta duplicada (cédula, CPS, Escritura_9965820-7,
+  certificado hipotecas y gravámenes, Carpeta PDF) → carpeta principal ahora tiene 34 archivos.
+- Directorio en disco renombrado a "KANELA FERNANDA IB__EZ VALENZUELA"; duplicado (rut 25790773)
+  eliminado de DB y disco. Descarga de archivos verificada (HTTP 200).
+- Kanela está en Escrituración (is_escrituracion=true), por eso no aparece en la Flota
+  Supercarpeta (16 activos) — comportamiento pre-existente, no cambió con la fusión.
+- Pendientes: Contacto Boetch para Alto Parque (P0), Twilio keys, alerta cumpleaños (P2).
