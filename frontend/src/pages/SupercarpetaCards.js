@@ -78,7 +78,7 @@ const CampoEditable = ({ fid, campo, label, valor, onGuardado, manejar409, testi
 };
 
 // ─── Tarjeta de un cliente ───
-const TarjetaCliente = ({ c, idx, recargar, abrirPanel, abrirSolicitud, setAvanceModal, manejar409 }) => {
+const TarjetaCliente = ({ c, idx, recargar, abrirPanel, abrirSolicitud, abrirEstudio, setAvanceModal, manejar409 }) => {
   const [abierta, setAbierta] = useState(false);
   const [hitoAbierto, setHitoAbierto] = useState(null);
   const [notaForm, setNotaForm] = useState(null);
@@ -248,6 +248,12 @@ const TarjetaCliente = ({ c, idx, recargar, abrirPanel, abrirSolicitud, setAvanc
                       <option key={x} value={x} style={{ background: "#0f172a" }}>{x}</option>)}
                   </select>
                   {c.manual?.[hitoAbierto] && <span style={{ fontSize: 12, color: "#eab308" }}>✍️ manual</span>}
+                  {hitoAbierto === "estudio" && (
+                    <button data-testid={`hito-solicitar-estudio-${c.id}`} onClick={() => abrirEstudio(c)}
+                      style={{ background: "rgba(96,165,250,0.15)", border: "1px solid rgba(96,165,250,0.6)",
+                        color: "#93c5fd", borderRadius: 8, padding: "0.3rem 0.8rem", fontSize: 13,
+                        fontWeight: 800, cursor: "pointer" }}>📨 Solicitar Estudio</button>
+                  )}
                   <button data-testid={`hito-panel-${hitoAbierto}-${c.id}`}
                     onClick={() => abrirPanel(c, hitoAbierto)}
                     style={{ marginLeft: "auto", background: "rgba(96,165,250,0.15)", border: "1px solid rgba(96,165,250,0.6)",
@@ -289,7 +295,7 @@ const TarjetaCliente = ({ c, idx, recargar, abrirPanel, abrirSolicitud, setAvanc
 };
 
 // ─── Vista de tarjetas con barra superior fija ───
-export const SupercarpetaCards = ({ clientes, recargar, abrirPanel, abrirSolicitud, setAvanceModal, manejar409 }) => {
+export const SupercarpetaCards = ({ clientes, recargar, abrirPanel, abrirSolicitud, abrirEstudio, setAvanceModal, manejar409 }) => {
   const [busqueda, setBusqueda] = useState("");
   const [filtro, setFiltro] = useState("todos");
   const conNotas = clientes.filter(c => (c.notas || []).length > 0).length;
@@ -332,7 +338,7 @@ export const SupercarpetaCards = ({ clientes, recargar, abrirPanel, abrirSolicit
       <div style={{ display: "grid", gap: 12 }}>
         {visibles.map((c, idx) => (
           <TarjetaCliente key={c.id} c={c} idx={clientes.indexOf(c)} recargar={recargar}
-            abrirPanel={abrirPanel} abrirSolicitud={abrirSolicitud}
+            abrirPanel={abrirPanel} abrirSolicitud={abrirSolicitud} abrirEstudio={abrirEstudio}
             setAvanceModal={setAvanceModal} manejar409={manejar409} />
         ))}
         {visibles.length === 0 && (

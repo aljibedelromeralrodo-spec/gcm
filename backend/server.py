@@ -7318,6 +7318,53 @@ async def estudio_defaults():
             "docs_nueva": DOCS_ESTUDIO_NUEVA}
 
 
+@api.get("/estudio-titulo/preview-carpeta/{fid}")
+async def estudio_preview_carpeta(fid: str):
+    """SUPERCARPETA — Vista previa del correo de Estudio de Título de una carpeta.
+    Plantilla PROPIA (jamás la de Carta Oferta): nueva = solicitud estándar sin listado;
+    usada = listado oficial I/II/III en HTML profesional."""
+    import malla_inteligencia as _mi
+    fd = await db.folders.find_one({"id": fid})
+    if not fd:
+        raise HTTPException(status_code=404, detail="Carpeta no encontrada")
+    nombre = (fd.get("nombre") or "").strip()
+    rut = (fd.get("rut") or "").strip()
+    usada = (fd.get("tipo_operacion") or "").lower().startswith("usada") \
+        or _mi._inmo_de_folder(fd) == "Casa Usada"
+    tipo = "usada" if usada else "nueva"
+    para, encargado, faltantes = "", "", []
+    p = {"nombre": nombre, "rut": rut, "tipo_vivienda": tipo,
+         "direccion": (fd.get("proyecto") or "") if usada else ""}
+    if usada:
+        v = fd.get("vendedor_usada") or {}
+        para = (v.get("email") or "").strip()
+        encargado = (v.get("nombre") or "").strip()
+        p.update({"vendedor_nombre": encargado, "vendedor_email": para,
+                  "vendedor_telefono": (v.get("telefono") or "").strip()})
+        if not para:
+            faltantes.append("Correo del vendedor (Panel de Fuentes)")
+    else:
+        inmo = _mi._inmo_de_folder(fd)
+        proyecto = (fd.get("proyecto") or "").strip()
+        c = await db.contactos_carta.find_one({
+            "inmobiliaria_norm": _mi._norm_inmo(inmo), "proyecto_norm": _mi._norm_inmo(proyecto),
+            "activo": True, "estudio_email": {"$nin": ["", None]}})
+        if not c:
+            c = await db.contactos_carta.find_one({
+                "inmobiliaria_norm": _mi._norm_inmo(inmo), "activo": True,
+                "estudio_email": {"$nin": ["", None]}})
+        para = ((c or {}).get("estudio_email") or "").strip()
+        encargado = ((c or {}).get("estudio_nombre") or "").strip()
+        p.update({"inmobiliaria": f"{inmo}{' / ' + proyecto if proyecto else ''}",
+                  "inmo_contacto_nombre": encargado, "inmo_contacto_email": para})
+        if not para:
+            faltantes.append("Contacto de Estudio de Títulos de la inmobiliaria (Panel de Fuentes ⚙️)")
+    subject = f"Solicitud de Antecedentes - Estudio de Título - {nombre}" + (f" {rut}" if rut else "")
+    return {"cliente": nombre, "rut": rut, "tipo_vivienda": tipo, "para": para,
+            "encargado": encargado, "cc": ESTUDIO_DEST_DEFAULT, "faltantes": faltantes,
+            "asunto": subject, "body": _estudio_html(p), "payload_envio": p}
+
+
 @api.post("/estudio-titulo/enviar")
 async def estudio_enviar(payload: dict):
     payload = payload or {}
@@ -7341,7 +7388,7 @@ async def estudio_enviar(payload: dict):
     for c in (cc_raw or []):
         if "@" in c and c.lower() not in [d.lower() for d in destinos] and c.lower() not in [x.lower() for x in cc]:
             cc.append(c)
-    subject = f"SOLICITUD ESTUDIO DE TITULOS // {nombre}" + (f" {rut}" if rut else "")
+    subject = f"Solicitud de Antecedentes - Estudio de Título - {nombre}" + (f" {rut}" if rut else "")
     cuerpo = _estudio_html(payload)
     attach_names, attach_paths = [], []
     for rel in payload.get("attach_files") or []:

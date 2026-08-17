@@ -939,3 +939,20 @@ Constitución v16 (Reglas #34-#38, #41, #43, #49, #52, #53, #54). Módulo Broker
   REQUERIDOS" con línea separadora, pie "Central Mutuos" SIN mencionar Concreces.
 - Verificado con previews (confirm=false, sin envío real): 14/14 checks usada OK,
   nueva sin listado OK. defaults: docs_usada=32 ítems planos para el form, docs_nueva=[].
+
+## Actualización 2026-06 (fork, 4j) — Estudio de Título con flujo PROPIO en Supercarpeta
+- ERROR CORREGIDO: la Supercarpeta no tenía flujo propio de Estudio de Título (se usaba
+  "Pedir Documentos" = plantilla Carta Oferta). Ahora están 100% separados: no comparten
+  plantilla ni lógica de envío.
+- Asunto nuevo: "Solicitud de Antecedentes - Estudio de Título - {nombre} {rut}" (server.py;
+  compatible con el detector de respuestas que busca 'estudio de titulo' en el asunto).
+- Nuevo endpoint GET /api/estudio-titulo/preview-carpeta/{fid}: resuelve tipo de vivienda
+  desde la carpeta; usada → vendedor_usada.email; nueva → estudio_email de contactos_carta
+  (proyecto exacto → general). Devuelve para/cc(Victoria)/asunto/body/faltantes.
+- Frontend: modal propio (data-testid estudio-modal) con iframe de vista previa del correo
+  real, PARA editable, faltantes en rojo, CC visible. Botones: panel lateral del hito estudio
+  ("panel-solicitar-estudio"), chip expandido en tarjetas ("hito-solicitar-estudio-{id}") y
+  celda de tabla ("solicitar-estudio-{id}"). Tras enviar marca hito estudio = "Solicitado".
+- Verificado: previews nueva (sin listado, sin mención carta oferta) y usada (listado I/II/III,
+  plazos bold) + screenshot del modal con Catalina Castillo OK. Envío usa el flujo existente
+  /api/estudio-titulo/enviar (con vendedor/inmo aprendizaje y log).

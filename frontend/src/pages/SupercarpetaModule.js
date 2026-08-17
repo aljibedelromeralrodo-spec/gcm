@@ -101,6 +101,7 @@ export default function SupercarpetaModule() {
   const [vbEdit, setVbEdit] = useState(null);
   const [inmoModal, setInmoModal] = useState(null);
   const [solicitudModal, setSolicitudModal] = useState(null);
+  const [estudioModal, setEstudioModal] = useState(null);
   // VISTA: tarjetas (por defecto) o tabla clásica — preferencia recordada
   const [vista, setVista] = useState(localStorage.getItem("supercarpeta_vista") || "tarjetas");
   const cambiarVista = (v) => { setVista(v); localStorage.setItem("supercarpeta_vista", v); };
@@ -472,9 +473,37 @@ export default function SupercarpetaModule() {
   const editarVendedor = (i, campo, valor) => setInmoModal(m => ({
     ...m, vendedores: m.vendedores.map((x, j) => j === i ? { ...x, [campo]: valor } : x) }));
 
-  const abrirSolicitud = async (c, doc = "") => {
-    setSolicitudModal({ loading: true, fid: c.id });
+  // ── ESTUDIO DE TÍTULO: flujo PROPIO, jamás la plantilla de Carta Oferta ──
+  const abrirEstudio = async (c) => {
+    setEstudioModal({ loading: true, fid: c.id });
     try {
+      const r = await axios.get(`${API}/api/estudio-titulo/preview-carpeta/${c.id}`);
+      setEstudioModal({ loading: false, fid: c.id, ...r.data });
+    } catch (e) {
+      setEstudioModal(null);
+      window.alert(e.response?.data?.detail || "Error al preparar el estudio de título");
+    }
+  };
+  const enviarEstudio = async () => {
+    const m = estudioModal;
+    if (!m?.para || !m.para.includes("@")) { window.alert("⚠️ Falta el correo del destinatario"); return; }
+    setGuardando(true);
+    try {
+      const pe = { ...(m.payload_envio || {}) };
+      if (m.tipo_vivienda === "usada") pe.vendedor_email = m.para;
+      else pe.inmo_contacto_email = m.para;
+      await axios.post(`${API}/api/estudio-titulo/enviar`, {
+        ...pe, destinatarios: [m.para], cc: m.cc || [], folder_id: m.fid, confirm: true });
+      try { await axios.post(`${API}/api/supercarpeta/estado/${m.fid}`, { hito: "estudio", estado: "Solicitado" }); } catch { /* estado opcional */ }
+      window.alert(`✅ Solicitud de Antecedentes - Estudio de Título enviada a ${m.para}`);
+      setEstudioModal(null);
+      recargar();
+    } catch (e) { window.alert(e.response?.data?.detail || "Error al enviar el estudio de título"); }
+    setGuardando(false);
+  };
+
+  const abrirSolicitud = async (c, doc = "") => {
+    setSolicitudModal({ loading: true, fid: c.id });    try {
       const r = await axios.get(`${API}/api/supercarpeta/solicitud-doc/${c.id}${doc ? `?doc=${doc}` : ""}`);
       setSolicitudModal({ loading: false, fid: c.id, ...r.data });
     } catch (e) { setSolicitudModal(null); window.alert(e.response?.data?.detail || "Error al preparar la solicitud"); }
@@ -704,7 +733,8 @@ export default function SupercarpetaModule() {
       {vista === "tarjetas" ? (
         /* 🗂️ VISTA TARJETAS: una tarjeta por cliente, apiladas verticalmente (por defecto) */
         <SupercarpetaCards clientes={clientes} recargar={recargar} abrirPanel={abrirPanel}
-          abrirSolicitud={abrirSolicitud} setAvanceModal={setAvanceModal} manejar409={manejar409} />
+          abrirSolicitud={abrirSolicitud} abrirEstudio={abrirEstudio}
+          setAvanceModal={setAvanceModal} manejar409={manejar409} />
       ) : isMobile ? (
         /* 📱 VISTA MÓVIL: tarjetas apiladas por cliente (la tabla queda intacta en escritorio) */
         <div data-testid="supercarpeta-cards" style={{ display: "grid", gap: 10 }}>
@@ -896,6 +926,10 @@ export default function SupercarpetaModule() {
                       <button data-testid={`ver-tasacion-${c.id}`} onClick={() => abrir(c.id, c.cliente, c.informes.tasacion)} style={btnPdf}>📄 Ver PDF</button>}
                   </> })}
                 {celdaEstado(c, "estudio", c.estudio_titulos, { extra: <>
+                    <button data-testid={`solicitar-estudio-${c.id}`} onClick={() => abrirEstudio(c)}
+                      style={{ display: "block", marginTop: 2, cursor: "pointer", background: "rgba(96,165,250,0.2)",
+                        border: "1px solid rgba(96,165,250,0.6)", color: "#93c5fd", borderRadius: 8,
+                        padding: "0.15rem 0.5rem", fontSize: "0.56rem", fontWeight: 800 }}>📨 Solicitar</button>
                     {c.detalle_reparos &&
                       <button data-testid={`super-legal-btn-${c.id}`} onClick={() => setReparoModal({ cliente: c.cliente, texto: c.detalle_reparos })}
                         style={{ display: "block", marginTop: 2, cursor: "pointer", background: "rgba(249,115,22,0.25)",
@@ -1467,6 +1501,54 @@ export default function SupercarpetaModule() {
               </table>
             </>)}
             <button data-testid="inmo-cerrar" onClick={() => setInmoModal(null)} className="maserati-btn" style={{ marginTop: 14 }}>Cerrar</button>
+          </div>
+        </div>
+      )}
+
+      {estudioModal && (
+        <div data-testid="estudio-modal" style={{ position: "fixed", inset: 0, zIndex: 260, background: "rgba(2,6,23,0.85)",
+          display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
+          <div style={{ background: "#0f172a", border: "2px solid #d4af37", borderRadius: 14, width: "min(760px, 96vw)",
+            maxHeight: "92vh", overflowY: "auto", padding: "1.2rem 1.4rem" }}>
+            <h4 style={{ margin: 0, color: "#d4af37", fontSize: "0.95rem" }}>
+              ⚖️ Solicitud de Antecedentes — Estudio de Título</h4>
+            {estudioModal.loading ? <p style={{ color: "#94a3b8" }}>Preparando vista previa…</p> : (<>
+              <div style={{ marginTop: 8, fontSize: "0.72rem", color: "#e2e8f0" }}>
+                <b>{estudioModal.cliente}</b>{estudioModal.rut ? ` · ${estudioModal.rut}` : ""} ·{" "}
+                <span style={{ color: "#93c5fd" }}>{estudioModal.tipo_vivienda === "usada"
+                  ? "Vivienda USADA — incluye listado oficial de documentos"
+                  : "Vivienda NUEVA — solicitud estándar sin listado"}</span>
+              </div>
+              {(estudioModal.faltantes || []).length > 0 && (
+                <div data-testid="estudio-faltantes" style={{ marginTop: 8, background: "rgba(239,68,68,0.12)",
+                  border: "1px solid rgba(239,68,68,0.5)", borderRadius: 8, padding: "0.5rem 0.8rem",
+                  color: "#fca5a5", fontSize: "0.68rem" }}>
+                  ⚠️ Faltantes: {estudioModal.faltantes.join(" · ")}</div>
+              )}
+              <div style={{ marginTop: 10, display: "grid", gap: 6 }}>
+                <label style={{ fontSize: "0.62rem", color: "#94a3b8", fontWeight: 800 }}>PARA (editable)</label>
+                <input data-testid="estudio-para" value={estudioModal.para || ""}
+                  onChange={e => setEstudioModal(m => ({ ...m, para: e.target.value }))}
+                  placeholder="correo@destinatario.cl" style={inputStyle} />
+                <div style={{ fontSize: "0.62rem", color: "#94a3b8" }}>
+                  CC: {(estudioModal.cc || []).join(", ") || "—"}</div>
+                <div style={{ fontSize: "0.66rem", color: "#e2e8f0" }}>
+                  <b style={{ color: "#94a3b8" }}>ASUNTO:</b> {estudioModal.asunto}</div>
+              </div>
+              <div style={{ marginTop: 10 }}>
+                <label style={{ fontSize: "0.62rem", color: "#94a3b8", fontWeight: 800 }}>VISTA PREVIA DEL CORREO</label>
+                <iframe title="preview-estudio" data-testid="estudio-preview-iframe" sandbox=""
+                  srcDoc={estudioModal.body || ""} style={{ width: "100%", height: 380, background: "#fff",
+                    border: "1px solid rgba(212,175,55,0.4)", borderRadius: 10, marginTop: 4 }} />
+              </div>
+              <div style={{ display: "flex", gap: 10, marginTop: 12, justifyContent: "flex-end" }}>
+                <button data-testid="estudio-cancelar" onClick={() => setEstudioModal(null)}
+                  style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.25)", color: "#e2e8f0",
+                    borderRadius: 8, padding: "0.4rem 1rem", cursor: "pointer" }}>Cancelar</button>
+                <button data-testid="estudio-enviar" onClick={enviarEstudio} disabled={guardando}
+                  className="maserati-btn">{guardando ? "Enviando…" : "📨 Enviar Solicitud"}</button>
+              </div>
+            </>)}
           </div>
         </div>
       )}
@@ -2107,6 +2189,14 @@ export default function SupercarpetaModule() {
                   : <i style={{ color: "#ef4444" }}>⚠️ Sin correos fuente configurados — usa el ⚙️</i>}
               </div>
             </div>
+            {panel.hito === "estudio" && (
+              <button data-testid="panel-solicitar-estudio"
+                onClick={() => { const c = clientes.find(x => x.id === panel.fid) || { id: panel.fid }; setPanel(null); abrirEstudio(c); }}
+                style={{ marginTop: 12, width: "100%", cursor: "pointer", background: "rgba(96,165,250,0.15)",
+                  border: "1px solid rgba(96,165,250,0.6)", color: "#93c5fd", borderRadius: 8,
+                  padding: "0.45rem 0.8rem", fontSize: "0.66rem", fontWeight: 800 }}>
+                📨 Solicitar Estudio de Título (plantilla propia)</button>
+            )}
             {panel.hito === "estudio" && panel.data?.detalle_reparos && (
               <div style={{ marginTop: 14, padding: "0.6rem 0.8rem", background: "rgba(124,45,18,0.4)",
                 borderLeft: "3px solid #f97316", borderRadius: 8, fontSize: "0.64rem", color: "#fdba74", whiteSpace: "pre-wrap" }}>
