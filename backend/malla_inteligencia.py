@@ -545,8 +545,11 @@ async def _archivar_adjuntos(fd, email_id, prefijo, subdir="07_estudio_titulo"):
 async def _procesar_hito(correo, dom, info, direccion, por_rut, texto, email_id=None):
     """REGLA DE HIERRO #34: el RUT es el pegamento. Sin RUT válido → NO se marca hito."""
     asunto = correo.get("subject") or ""
-    clave = hashlib.md5(f"{dom}|{direccion}|{asunto}|{correo.get('date','')}".encode(), usedforsecurity=False).hexdigest()
-    if await db.hitos_externos.find_one({"clave": clave}) or await db.hitos_descartados.find_one({"clave": clave}):
+    _raw = f"{dom}|{direccion}|{asunto}|{correo.get('date','')}".encode()
+    clave = hashlib.sha256(_raw).hexdigest()
+    _legacy = hashlib.md5(_raw, usedforsecurity=False).hexdigest()
+    if (await db.hitos_externos.find_one({"clave": {"$in": [clave, _legacy]}})
+            or await db.hitos_descartados.find_one({"clave": {"$in": [clave, _legacy]}})):
         return "duplicado"
     m = RUT_RE.search(texto or "")
     rut_n = _rut_limpio(m.group(1)) if m else ""
@@ -623,8 +626,10 @@ async def malla_scan():
         # 1) Fuente TRANSITORIA: documentos del vendedor de una usada → carpeta vinculada
         fd_v = next((vendedores[em] for em in vendedores if em and em in de), None)
         if fd_v:
-            clave = "vend-" + hashlib.md5(f"{de}|{asunto}|{e.get('date','')}".encode(), usedforsecurity=False).hexdigest()
-            if not await db.hitos_externos.find_one({"clave": clave}):
+            _raw_v = f"{de}|{asunto}|{e.get('date','')}".encode()
+            clave = "vend-" + hashlib.sha256(_raw_v).hexdigest()
+            _legacy_v = "vend-" + hashlib.md5(_raw_v, usedforsecurity=False).hexdigest()
+            if not await db.hitos_externos.find_one({"clave": {"$in": [clave, _legacy_v]}}):
                 archivados = await _archivar_adjuntos(fd_v, e.get("id"), "VENDEDOR") if e.get("id") else 0
                 await db.hitos_externos.insert_one({
                     "id": str(uuid.uuid4()), "clave": clave, "folder_id": fd_v["id"],
@@ -636,8 +641,11 @@ async def malla_scan():
                 res["marcados"] += 1
         # 2) MOTOR DE REPAROS (DashAI): "reparo" en correos de los abogados
         if "reparo" in texto.lower() and any(r in de for r in REPARO_REMITENTES):
-            clave = "rep-" + hashlib.md5(f"{de}|{asunto}|{e.get('date','')}".encode(), usedforsecurity=False).hexdigest()
-            if await db.hitos_externos.find_one({"clave": clave}) or await db.hitos_descartados.find_one({"clave": clave}):
+            _raw_r = f"{de}|{asunto}|{e.get('date','')}".encode()
+            clave = "rep-" + hashlib.sha256(_raw_r).hexdigest()
+            _legacy_r = "rep-" + hashlib.md5(_raw_r, usedforsecurity=False).hexdigest()
+            if (await db.hitos_externos.find_one({"clave": {"$in": [clave, _legacy_r]}})
+                    or await db.hitos_descartados.find_one({"clave": {"$in": [clave, _legacy_r]}})):
                 continue
             m = RUT_RE.search(texto)
             fd_r = por_rut.get(_rut_limpio(m.group(1))) if m else None
@@ -1132,8 +1140,10 @@ async def _auditar_lote(correos):
             if re.search(r"resoluci", asunto_l):
                 await _marcar_doc_llegada(fd, "serviu", e)
             continue
-        clave = "aud-" + hashlib.md5(f"{de}|{asunto}|{e.get('date','')}".encode(), usedforsecurity=False).hexdigest()
-        if await db.hitos_externos.find_one({"clave": clave}):
+        _raw_a = f"{de}|{asunto}|{e.get('date','')}".encode()
+        clave = "aud-" + hashlib.sha256(_raw_a).hexdigest()
+        _legacy_a = "aud-" + hashlib.md5(_raw_a, usedforsecurity=False).hexdigest()
+        if await db.hitos_externos.find_one({"clave": {"$in": [clave, _legacy_a]}}):
             continue
         if es_set:
             # P9 — SET DE CRÉDITO: 'Set Para la Firma' = pendiente; 'Set Firmado' exige
@@ -1532,8 +1542,10 @@ async def buzon_aprendizaje_loop():
                                                       cfg["email"], _dec_aes(cfg["cred_enc"]))
                     nuevos = 0
                     for c in correos or []:
-                        clave_h = hashlib.md5(f"{c['de']}|{c['asunto']}|{c['fecha']}".encode(), usedforsecurity=False).hexdigest()
-                        if await db.buzon_aprendizaje.find_one({"clave": clave_h}):
+                        _raw_b = f"{c['de']}|{c['asunto']}|{c['fecha']}".encode()
+                        clave_h = hashlib.sha256(_raw_b).hexdigest()
+                        _legacy_b = hashlib.md5(_raw_b, usedforsecurity=False).hexdigest()
+                        if await db.buzon_aprendizaje.find_one({"clave": {"$in": [clave_h, _legacy_b]}}):
                             continue
                         t = c["asunto"].lower()
                         clasif = next((v for k, v in _CLASIF if k in t), "otro")
