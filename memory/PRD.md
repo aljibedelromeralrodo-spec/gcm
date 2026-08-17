@@ -844,3 +844,8 @@ Constitución v16 (Reglas #34-#38, #41, #43, #49, #52, #53, #54). Módulo Broker
 - Kanela está en Escrituración (is_escrituracion=true), por eso no aparece en la Flota
   Supercarpeta (16 activos) — comportamiento pre-existente, no cambió con la fusión.
 - Pendientes: Contacto Boetch para Alto Parque (P0), Twilio keys, alerta cumpleaños (P2).
+
+## Actualización 2026-06 (fork, 4b) — Contacto Alto Parque
+- Agregado contacto BOETCH / ALTO PARQUE: Celinda Soria (csoria@boetsch.cl) en contactos_carta.
+- Verificado con preview solicitud-doc de Carlos Salgado: destinatario resuelve a csoria@boetsch.cl,
+  asunto "Carta Oferta - CARLOS SALGADO - ALTO PARQUE". Sin envío real.
