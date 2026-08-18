@@ -225,9 +225,58 @@ async def _task_blindada(coro_fn, nombre):
         await asyncio.sleep(30)
 
 
+# ─── NORMATIVAS FIJAS DASHAI (inamovibles): fuente canónica en código para que
+#     PRODUCCIÓN (base de datos separada) se auto-siembre en el arranque sin
+#     intervención manual. Mismos registros que motivo="normativa" del preview. ───
+NORMATIVAS_FIJAS = [
+    ("SUPERCARPETA", "NORMATIVA FIJA — SUPERCARPETA: vista obligatoria en tarjetas verticales expandibles. Sin tablas ni scroll horizontal. Campos editables con doble clic. Íconos verde/amarillo/rojo por estado."),
+    ("RESUMEN IA", "NORMATIVA FIJA — RESUMEN IA: línea visible en tarjeta con formato [estado actual] + [quién debe el próximo paso] + [fecha último movimiento]. Solo eventos de los últimos 90 días."),
+    ("ESTUDIO DE TÍTULO", "NORMATIVA FIJA — ESTUDIO DE TÍTULO: propiedad usada envía listado legal completo (Títulos, Herencias, Fusiones, CBR, DOM, TGR, SII). Propiedad nueva no lo incluye."),
+    ("PLANTILLAS", "NORMATIVA FIJA — PLANTILLAS: cada módulo tiene plantilla HTML propia e independiente. Carta Oferta, Estudio de Título, Tasación, Resolución SERVIU y Solicitud de Crédito no comparten texto."),
+    ("DISEÑO CORREOS", "NORMATIVA FIJA — DISEÑO CORREOS: fondo blanco, Arial, encabezados grises, datos clave en negrita. Firma siempre 'Central Mutuos'. Nunca mencionar 'Concreces'."),
+    ("DESTINATARIOS ESTUDIO", "NORMATIVA FIJA — DESTINATARIOS ESTUDIO DE TÍTULO: cascada inmobiliaria > vendedor > correo de origen de la solicitud."),
+    ("CC", "NORMATIVA FIJA — CC: solo en correos entrantes procesados por el sistema. Nunca en salientes, bajo ninguna circunstancia."),
+]
+
+
+async def _seed_normativas_fijas():
+    """ARRANQUE (preview y producción): garantiza los 7 registros de normativa en
+    db.dashai_eventos + respaldo en db.config antes de levantar cualquier servicio.
+    Idempotente: solo siembra lo que falte. Prioriza el backup de la DB si existe."""
+    cfg = await db.config.find_one({"_key": "dashai_normativas_fijas"}) or {}
+    patrones_db = cfg.get("normas") or []
+    normas = list(NORMATIVAS_FIJAS)
+    for clave, patron in NORMATIVAS_FIJAS:
+        for p in patrones_db:
+            if clave in p.split(":")[0]:
+                normas[[c for c, _ in NORMATIVAS_FIJAS].index(clave)] = (clave, p)
+                break
+    nivel = ((await db.config.find_one({"_key": "dashai_perpetuo"}) or {}).get("nivel_calibracion")) or 85
+    sembrados = 0
+    for clave, patron in normas:
+        if await db.dashai_eventos.find_one({"motivo": "normativa", "norma_clave": clave}):
+            continue
+        await db.dashai_eventos.insert_one({
+            "id": str(uuid.uuid4()), "motivo": "normativa", "norma_clave": clave,
+            "fecha": now_iso(), "nivel_calibracion": nivel, "patron": patron,
+            "prospectos_sync": 0, "folders_sync": 0, "inamovible": True})
+        sembrados += 1
+    if not cfg:
+        await db.config.update_one({"_key": "dashai_normativas_fijas"}, {"$set": {
+            "normas": [p for _, p in normas], "inamovible": True,
+            "registradas_en": now_iso()}}, upsert=True)
+    logging.info(f"📜 NORMATIVAS FIJAS: {sembrados} sembrada(s) en el arranque, {len(normas) - sembrados} ya presentes")
+    return sembrados
+
+
 @app.on_event("startup")
 async def startup():
     await ensure_seed()
+    # PASO 1 (obligatorio, antes de cualquier servicio): normativas fijas presentes
+    try:
+        await _seed_normativas_fijas()
+    except Exception as e:
+        logging.warning(f"seed normativas: {e}")
     # OPTIMIZACIÓN: índices en colecciones calientes (listas instantáneas)
     try:
         await db.folders.create_index("nombre")
@@ -240,9 +289,13 @@ async def startup():
         await db.set_credito.create_index("nombre")
     except Exception as e:
         logging.warning(f"indices: {e}")
-    # BÚNKER DE ARCHIVOS: si el disco está vacío (pod nuevo), restaurar desde GridFS
+    # PASO 2 — BÚNKER DE ARCHIVOS (disco de producción efímero): antes de servir
+    # peticiones se restaura TODO desde GridFS si el pod es nuevo, y luego se bajan
+    # los archivos faltantes uno a uno (cobertura ante discos parciales).
     try:
-        await asyncio.to_thread(bunker.restaurar_si_vacio)
+        n_full = await asyncio.to_thread(bunker.restaurar_si_vacio)
+        n_falt = await asyncio.to_thread(bunker.restaurar_faltantes)
+        logging.info(f"🏦 BÚNKER arranque: {n_full} restaurados (pod nuevo) + {n_falt} faltantes bajados de GridFS")
     except Exception as e:
         logging.warning(f"BÚNKER restore falló: {e}")
     # Liberar candado obsoleto: ningún procesamiento sobrevive a un reinicio
