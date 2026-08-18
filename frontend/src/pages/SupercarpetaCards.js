@@ -83,7 +83,20 @@ const TarjetaCliente = ({ c, idx, recargar, abrirPanel, abrirSolicitud, abrirEst
   const [hitoAbierto, setHitoAbierto] = useState(null);
   const [notaForm, setNotaForm] = useState(null);
   const [hilo, setHilo] = useState(null);
+  const [resumen, setResumen] = useState(null);
+  const [genResumen, setGenResumen] = useState(false);
   const [guardando, setGuardando] = useState(false);
+  const regenerarResumen = async (e) => {
+    e.stopPropagation();
+    if (genResumen) return;
+    setGenResumen(true);
+    try {
+      const r = await axios.post(`${API}/api/supercarpeta/resumen-hilo/${c.id}`);
+      if (r.data?.texto) setResumen(r.data);
+      else window.alert(r.data?.nota || "Sin correos registrados que resumir");
+    } catch (err) { window.alert(err.response?.data?.detail || "Error al generar el resumen IA"); }
+    setGenResumen(false);
+  };
   const abrirAdjunto = async (ruta) => {
     try {
       const r = await axios.get(`${API}/api/supercarpeta/archivo/${c.id}`,
@@ -164,6 +177,29 @@ const TarjetaCliente = ({ c, idx, recargar, abrirPanel, abrirSolicitud, abrirEst
           </div>
         </div>
       </div>
+
+      {/* ── 🧠 RESUMEN DEL HILO IA: en qué quedó la conversación (siempre visible) ── */}
+      {(() => {
+        const rh = resumen || c.resumen_hilo;
+        return (
+          <div data-testid={`resumen-hilo-${c.id}`} style={{ marginTop: 8, display: "flex", gap: 8,
+            alignItems: "flex-start", background: "rgba(96,165,250,0.08)", borderLeft: "3px solid #60a5fa",
+            borderRadius: 8, padding: "0.4rem 0.7rem" }}>
+            <span style={{ fontSize: 14 }}>🧠</span>
+            <span data-testid={`resumen-hilo-texto-${c.id}`} style={{ flex: 1, fontSize: 14,
+              color: rh?.texto ? "#dbeafe" : "#64748b", fontStyle: rh?.texto ? "normal" : "italic",
+              overflowWrap: "anywhere" }}>
+              {genResumen ? "Generando resumen IA…" : (rh?.texto || "Sin resumen IA aún — se genera solo al detectar correos nuevos")}
+              {rh?.en && !genResumen && <span style={{ color: "#64748b", fontSize: 11 }}> · {fFecha(rh.en)}</span>}
+            </span>
+            <button data-testid={`resumen-hilo-regenerar-${c.id}`} onClick={regenerarResumen} disabled={genResumen}
+              title="Regenerar resumen IA del hilo"
+              style={{ background: "transparent", border: "1px solid rgba(96,165,250,0.5)", color: "#93c5fd",
+                borderRadius: 6, padding: "2px 8px", fontSize: 12, fontWeight: 700,
+                cursor: genResumen ? "wait" : "pointer" }}>{genResumen ? "…" : "🔄"}</button>
+          </div>
+        );
+      })()}
 
       {/* ── NOTAS: siempre visibles, nunca ocultas ── */}
       {notas.length > 0 && (

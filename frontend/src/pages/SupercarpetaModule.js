@@ -487,14 +487,14 @@ export default function SupercarpetaModule() {
   const enviarEstudio = async () => {
     const m = estudioModal;
     if (!m?.para || !m.para.includes("@")) { window.alert("⚠️ Falta el correo del destinatario"); return; }
-    if (!window.confirm(`📨 CONFIRMAR ENVÍO — Estudio de Título\n\nSe enviará a: ${m.para}${m.encargado ? ` (${m.encargado})` : ""}\nFuente: ${m.fuente_destinatario || "manual"}\nCC: ${(m.cc || []).join(", ") || "—"}\n\n¿Despachar ahora?`)) return;
+    if (!window.confirm(`📨 CONFIRMAR ENVÍO — Estudio de Título\n\nSe enviará a: ${m.para}${m.encargado ? ` (${m.encargado})` : ""}\nFuente: ${m.fuente_destinatario || "manual"}\nSin CC (regla fija: los correos salientes no llevan copia)\n\n¿Despachar ahora?`)) return;
     setGuardando(true);
     try {
       const pe = { ...(m.payload_envio || {}) };
       if (m.tipo_vivienda === "usada") pe.vendedor_email = m.para;
       else pe.inmo_contacto_email = m.para;
       await axios.post(`${API}/api/estudio-titulo/enviar`, {
-        ...pe, destinatarios: [m.para], cc: m.cc || [], folder_id: m.fid, confirm: true });
+        ...pe, destinatarios: [m.para], cc: [], folder_id: m.fid, confirm: true });
       try { await axios.post(`${API}/api/supercarpeta/estado/${m.fid}`, { hito: "estudio", estado: "Solicitado" }); } catch { /* estado opcional */ }
       window.alert(`✅ Solicitud de Antecedentes - Estudio de Título enviada a ${m.para}`);
       setEstudioModal(null);

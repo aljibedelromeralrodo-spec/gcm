@@ -287,7 +287,7 @@ export default function CerebroDashAIModule() {
             <span style={{ color: "#6b6b6b", fontFamily: "monospace", fontSize: "0.68rem", whiteSpace: "nowrap" }}>{fmt(e.fecha)}</span>
             <span style={{ fontWeight: 800, fontSize: "0.62rem", letterSpacing: "0.06em", padding: "0.12rem 0.5rem", color: "#0a0a0a",
               background: e.motivo?.startsWith("disparo") ? "linear-gradient(135deg,#2e5ce6,#7da2e8)" : "linear-gradient(135deg,#BF953F,#FCF6BA)" }}>
-              {e.motivo?.startsWith("disparo") ? "⚡ DISPARO" : e.motivo === "manual" ? "MANUAL" : "60 MIN"}
+              {e.motivo === "normativa" ? "📜 NORMATIVA" : e.motivo?.startsWith("disparo") ? "⚡ DISPARO" : e.motivo === "manual" ? "MANUAL" : "60 MIN"}
             </span>
             <span style={{ color: "#cbd5e1" }}>Calibración {e.nivel_calibracion}% · {e.prospectos_sync} prospectos · {e.folders_sync} carpetas</span>
             {e.patron && <span style={{ color: "#9a8c52", flexBasis: "100%", fontSize: "0.7rem", fontStyle: "italic" }}>{e.patron}</span>}

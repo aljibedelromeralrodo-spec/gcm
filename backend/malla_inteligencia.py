@@ -2000,6 +2000,8 @@ async def supercarpeta_vista(mes: str = ""):
                                           for n in (lst or [])],
                                          key=lambda n: n.get("en") or "", reverse=True),
                          "en_adn": bool(reg),
+                         "resumen_hilo": {"texto": (fd.get("resumen_hilo") or {}).get("texto") or "",
+                                          "en": (fd.get("resumen_hilo") or {}).get("en") or ""},
                          "recien_24h": any(f >= limite24 for f in fechas)})
     if mes_sel == "2026-08":
         meta_cfg = await db.config.find_one({"_key": "proyeccion_agosto"}) or {}
@@ -2756,7 +2758,7 @@ async def _firma_html():
     if firma.get("url"):
         html += (f'<br><img src="{firma["url"]}" alt="Central Mutuos" '
                  f'width="340" style="max-width:340px;border-radius:6px;display:block;">')
-    html += ('<div style="margin-top:10px;font-family:Georgia,\'Times New Roman\',serif;'
+    html += ('<div style="margin-top:10px;font-family:Arial,Helvetica,sans-serif;'
              'color:#1e293b;font-size:14px;line-height:1.5;">'
              '<b style="color:#0f2557;">Gerardo Barrera P.</b><br>'
              '<span style="color:#8a6d1d;">Asesor Jefe Externo</span><br>'
@@ -2925,7 +2927,7 @@ async def _resumen_gerencia_html(mes: str = ""):
             + "</td></tr>")
     hoy = _now()[:10]
     html = (
-        f"<div style='font-family:Georgia,serif;max-width:760px;margin:auto;color:#1e293b'>"
+        f"<div style='font-family:Arial,Helvetica,sans-serif;max-width:760px;margin:auto;color:#1e293b'>"
         f"<div style='background:#1a1f2e;color:#d4af37;padding:16px 22px;border-radius:8px 8px 0 0'>"
         f"<h2 style='margin:0;font-size:19px'>Resumen Semanal — Gerencia</h2>"
         f"<div style='color:#94a3b8;font-size:12px'>Central Mutuos · Flota {data.get('mes_proyeccion')} · {hoy}</div></div>"
@@ -4358,13 +4360,8 @@ async def supercarpeta_panel(fid: str, hito: str = "tasacion"):
             "estado_manual": (fd.get("estados_manuales") or {}).get(hito) or {}}
 
 
-@supercarpeta.get("/hilo/{fid}")
-async def supercarpeta_hilo(fid: str, request: Request):
-    """HILO DEL CLIENTE: línea de tiempo unificada de correos enviados y recibidos."""
-    _exigir_gerencia(request)
-    fd = await db.folders.find_one({"id": fid})
-    if not fd:
-        raise HTTPException(status_code=404, detail="Carpeta no existe")
+async def _hilo_eventos(fd):
+    """Construye la línea de tiempo unificada de correos de un cliente (enviados + recibidos)."""
     eventos = []
     # ENVIADOS — solicitudes desde la Supercarpeta (carta oferta / RS / compromiso, etc.)
     for r in (fd.get("bitacora_solicitudes") or []):
@@ -4381,7 +4378,7 @@ async def supercarpeta_hilo(fid: str, request: Request):
                         "con": ", ".join(to) if isinstance(to, list) else str(to),
                         "detalle": "Estudio de Título", "estado": "enviado"})
     # RECIBIDOS — correos detectados por la malla (hitos externos)
-    async for h in db.hitos_externos.find({"folder_id": fid}):
+    async for h in db.hitos_externos.find({"folder_id": fd["id"]}):
         eventos.append({"tipo": "recibido", "en": h.get("creado") or h.get("fecha") or "",
                         "asunto": h.get("asunto") or "", "con": h.get("fuente") or h.get("dominio") or "",
                         "detalle": h.get("hito") or "", "estado": "recibido",
@@ -4408,9 +4405,102 @@ async def supercarpeta_hilo(fid: str, request: Request):
                     ev["adjuntos"] = m
                     ya_vinculados.update(m)
                 break
-    return {"cliente": nombre, "eventos": eventos, "total": len(eventos),
+    return eventos
+
+
+@supercarpeta.get("/hilo/{fid}")
+async def supercarpeta_hilo(fid: str, request: Request):
+    """HILO DEL CLIENTE: línea de tiempo unificada de correos enviados y recibidos."""
+    _exigir_gerencia(request)
+    fd = await db.folders.find_one({"id": fid})
+    if not fd:
+        raise HTTPException(status_code=404, detail="Carpeta no existe")
+    eventos = await _hilo_eventos(fd)
+    return {"cliente": (fd.get("nombre") or "").strip(), "eventos": eventos, "total": len(eventos),
             "enviados": sum(1 for e in eventos if e["tipo"] == "enviado"),
             "recibidos": sum(1 for e in eventos if e["tipo"] == "recibido")}
+
+
+# ─── RESUMEN DEL HILO IA: una línea que dice en qué quedó la conversación ───
+def _firma_eventos(eventos):
+    base = "|".join(f"{e.get('en')}~{e.get('tipo')}~{e.get('asunto')}" for e in eventos[:15])
+    return hashlib.sha256(base.encode()).hexdigest()[:24]
+
+
+async def _resumen_hilo_generar(fd, eventos):
+    """Genera con IA el resumen de una línea del hilo del cliente y lo guarda en la carpeta.
+    NORMATIVA FIJA: solo considera eventos de los últimos 90 días."""
+    key = os.environ.get("EMERGENT_LLM_KEY", "")
+    from datetime import timedelta
+    corte = (datetime.now(timezone.utc) - timedelta(days=90)).isoformat()
+    eventos = [e for e in eventos if str(e.get("en") or "") >= corte]
+    if not key or not eventos:
+        return None
+    lineas = []
+    for e in eventos[:12]:
+        rot = f"ENVIADO a {e.get('con') or '—'}" if e.get("tipo") == "enviado" else f"RECIBIDO de {e.get('con') or '—'}"
+        lineas.append(f"[{str(e.get('en') or '')[:10]}] {rot}: {e.get('asunto') or e.get('detalle') or ''}"
+                      f" ({e.get('detalle') or ''} · {e.get('estado') or ''})")
+    hoy = datetime.now(timezone.utc).strftime("%d/%m/%Y")
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        chat = LlmChat(
+            api_key=key, session_id=f"resumen-hilo-{fd['id']}",
+            system_message=("Eres el asistente de gestión hipotecaria DashAI. Recibes los correos "
+                            "enviados y recibidos de un cliente (del más nuevo al más antiguo). "
+                            "Responde SOLO con UNA línea en español (máx 160 caracteres) que resuma "
+                            "en qué quedó la conversación: estado actual + quién debe el próximo paso "
+                            "+ fecha del último movimiento en formato dd/mm. Ejemplo: 'Esperando "
+                            "respuesta de la inmobiliaria por Carta Oferta desde el 12/06'. "
+                            "Sin comillas, sin viñetas, sin texto adicional.")
+        ).with_model("openai", "gpt-5.4-mini")
+        resp = await asyncio.wait_for(
+            chat.send_message(UserMessage(text=f"HOY: {hoy}\nCLIENTE: {fd.get('nombre') or ''}\n\n" + "\n".join(lineas))),
+            timeout=60)
+        texto = (str(resp) or "").strip().strip('"').replace("\n", " ")[:200]
+    except Exception as e:
+        logging.warning(f"resumen hilo IA ({fd.get('nombre')}): {e}")
+        return None
+    if not texto:
+        return None
+    reg = {"texto": texto, "en": _now(), "firma": _firma_eventos(eventos)}
+    await db.folders.update_one({"id": fd["id"]}, {"$set": {"resumen_hilo": reg}})
+    return reg
+
+
+@supercarpeta.post("/resumen-hilo/{fid}")
+async def supercarpeta_resumen_hilo(fid: str, request: Request):
+    """Botón 'Regenerar': fuerza la actualización del resumen IA del hilo del cliente."""
+    _exigir_gerencia(request)
+    fd = await db.folders.find_one({"id": fid})
+    if not fd:
+        raise HTTPException(status_code=404, detail="Carpeta no existe")
+    eventos = await _hilo_eventos(fd)
+    if not eventos:
+        return {"ok": False, "texto": "", "nota": "Sin correos registrados: no hay hilo que resumir"}
+    reg = await _resumen_hilo_generar(fd, eventos)
+    if not reg:
+        raise HTTPException(status_code=502,
+                            detail="No fue posible generar el resumen (sin correos en los últimos 90 días o error de IA)")
+    return {"ok": True, **reg}
+
+
+async def resumen_hilo_loop():
+    """Cada 15 min: si un cliente tiene correos nuevos en su hilo, regenera el resumen IA."""
+    await asyncio.sleep(420)
+    while True:
+        try:
+            async for fd in db.folders.find({"oculto_supercarpeta": {"$ne": True}}):
+                eventos = await _hilo_eventos(fd)
+                if not eventos:
+                    continue
+                if _firma_eventos(eventos) == (fd.get("resumen_hilo") or {}).get("firma"):
+                    continue
+                await _resumen_hilo_generar(fd, eventos)
+                await asyncio.sleep(3)
+        except Exception as e:
+            logging.warning(f"resumen hilo loop: {e}")
+        await asyncio.sleep(900)
 
 
 @supercarpeta.post("/nota/{fid}")

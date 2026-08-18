@@ -279,6 +279,7 @@ async def startup():
     asyncio.create_task(_task_blindada(_malla.avance_snapshot_loop, "avance_snapshot"))
     asyncio.create_task(_task_blindada(_malla.reenvio_co_rs_loop, "reenvio_co_rs"))
     asyncio.create_task(_task_blindada(_malla.resumen_gerencia_loop, "resumen_gerencia"))
+    asyncio.create_task(_task_blindada(_malla.resumen_hilo_loop, "resumen_hilo_ia"))
     import gestion_ejecutivos as _gest
     asyncio.create_task(_task_blindada(_gest.gestion_harvest_loop, "gestion_ejecutivos"))
     asyncio.create_task(_task_blindada(_malla.buzon_aprendizaje_loop, "buzon_aprendizaje"))
@@ -6538,14 +6539,14 @@ def _num_uf(v):
 
 
 def _marca_wrap(inner, subtitulo=""):
-    sub_html = (f'<div style="color:#e2e8f0;font-size:13px;margin-top:8px;font-weight:600">{subtitulo}</div>'
+    sub_html = (f'<div style="color:#666666;font-size:13px;margin-top:8px;font-weight:600">{subtitulo}</div>'
                 if subtitulo else "")
     # REGLA DE ORO #16 — RESPONSIVIDAD ABSOLUTA: max-width 600px, padding fluido,
     # media query para teléfonos, sin anchos fijos ni desbordes.
     return f"""<!DOCTYPE html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-  body {{ margin:0; padding:0; width:100% !important; background:#f2f4f8; }}
+  body {{ margin:0; padding:0; width:100% !important; background:#ffffff; }}
   .cm-wrap {{ width:100%; max-width:600px; margin:0 auto; }}
   .cm-pad {{ padding:28px 32px; }}
   .cm-body {{ font-size:14px; line-height:1.65; word-break:break-word; overflow-wrap:break-word; }}
@@ -6558,22 +6559,21 @@ def _marca_wrap(inner, subtitulo=""):
   }}
 </style></head>
 <body>
-    <div style="background:#f2f4f8;padding:20px 10px;font-family:Georgia,'Times New Roman',serif">
-      <div class="cm-wrap" style="background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 4px 18px rgba(16,24,40,0.10)">
-        <div class="cm-pad" style="background:#1a1f2e;border-bottom:3px solid #d4af37">
-          <div class="cm-title" style="color:#d4af37;font-size:22px;font-weight:700;letter-spacing:1px">Central Mutuos</div>
-          <div style="color:#9aa3b5;font-size:11px;letter-spacing:3px;margin-top:2px">CON CRECES</div>
+    <div style="background:#ffffff;padding:20px 10px;font-family:Arial,Helvetica,sans-serif">
+      <div class="cm-wrap" style="background:#ffffff;border:1px solid #e2e4e9;border-radius:10px;overflow:hidden">
+        <div class="cm-pad" style="background:#f0f0f0;border-bottom:2px solid #cccccc">
+          <div class="cm-title" style="color:#444444;font-size:22px;font-weight:700;letter-spacing:1px">Central Mutuos</div>
           {sub_html}
         </div>
-        <div class="cm-pad cm-body" style="color:#2b3245">
+        <div class="cm-pad cm-body" style="color:#111111">
           {inner}
         </div>
         <div class="cm-pad" style="padding-top:0">
-          <p style="margin:14px 0 0;color:#1a1f2e;font-size:14px"><b>Central Mutuos</b><br>
-          <span style="color:#6b7280;font-size:12px">Con Creces &middot; Cr&eacute;ditos Hipotecarios</span></p>
+          <p style="margin:14px 0 0;color:#111111;font-size:14px"><b>Central Mutuos</b><br>
+          <span style="color:#6b7280;font-size:12px">Cr&eacute;ditos Hipotecarios</span></p>
         </div>
-        <div class="cm-pad" style="background:#1a1f2e;text-align:center;padding-top:12px;padding-bottom:12px">
-          <span style="color:#9aa3b5;font-size:11px">Este correo contiene informaci&oacute;n confidencial dirigida exclusivamente a su destinatario.</span>
+        <div class="cm-pad" style="background:#f0f0f0;text-align:center;padding-top:12px;padding-bottom:12px">
+          <span style="color:#888888;font-size:11px">Este correo contiene informaci&oacute;n confidencial dirigida exclusivamente a su destinatario.</span>
         </div>
       </div>
     </div>
@@ -6830,7 +6830,7 @@ async def gastos_pagos_scan():
 # ---------------------------------------------------------------------------
 # Solicitud de Tasación (Value Property + Victoria Vilches + inmobiliaria)
 # ---------------------------------------------------------------------------
-TASACION_DEST_DEFAULT = ["contacto@valueproperty.cl", "victoriavilches@centralmutuos.cl"]
+TASACION_DEST_DEFAULT = ["contacto@valueproperty.cl"]
 VICTORIA_EMAIL = "victoriavilches@centralmutuos.cl"
 
 
@@ -6841,8 +6841,8 @@ def _parse_destinatarios(payload, defaults):
     if not dest:
         dest = list(defaults)
     dest = [d for d in dest if "@" in d]
-    if VICTORIA_EMAIL not in [d.lower() for d in dest]:
-        dest.append(VICTORIA_EMAIL)
+    # REGLA CC (norma fija): en correos SALIENTES nadie interno se agrega como copia
+    # encubierta — Victoria/Daniela reciben copia SOLO al procesar correos ENTRANTES.
     vistos, out = set(), []
     for d in dest:
         if d.lower() not in vistos:
@@ -7294,8 +7294,8 @@ def _estudio_html(p):
     # VIVIENDA USADA: listado oficial estructurado con formato cuidado.
     docs_html = _docs_usada_html() if tipo == "usada" else ""
     obs = (p.get("observaciones") or "").strip()
-    intro = (p.get("intro") or "").strip() or ("Solicitamos dar inicio al <b>estudio de títulos</b> del cliente en referencia, "
-                                               "con copia a Victoria Vilches. Se detallan los antecedentes:")
+    intro = (p.get("intro") or "").strip() or ("Solicitamos dar inicio al <b>estudio de títulos</b> del cliente en referencia. "
+                                               "Se detallan los antecedentes:")
     inner = f"""
       <p>Estimados, junto con saludar:</p>
       <p>{intro}</p>
@@ -7382,7 +7382,7 @@ async def estudio_preview_carpeta(fid: str):
             faltantes.append("Sin inmobiliaria, vendedor ni correo de origen — ingrese el destinatario a mano")
     subject = f"Solicitud de Antecedentes - Estudio de Título - {nombre}" + (f" {rut}" if rut else "")
     return {"cliente": nombre, "rut": rut, "tipo_vivienda": tipo, "para": para,
-            "encargado": encargado, "fuente_destinatario": fuente, "cc": ESTUDIO_DEST_DEFAULT,
+            "encargado": encargado, "fuente_destinatario": fuente, "cc": [],
             "faltantes": faltantes, "asunto": subject, "body": _estudio_html(p), "payload_envio": p}
 
 
@@ -7425,7 +7425,9 @@ async def estudio_enviar(payload: dict):
         return {"to": destinos, "cc": cc, "subject": subject, "body": cuerpo,
                 "attachments": attach_names, "sender": sender}
     adjuntos = [{"filename": pth.name, "content_b64": _b64(pth.read_bytes())} for pth in attach_paths]
-    res = await asyncio.to_thread(mail.send_mail, destinos, subject, cuerpo, adjuntos, "secundaria", cc or None)
+    # REGLA CC (norma fija): los correos SALIENTES jamás llevan CC — Victoria/Daniela
+    # reciben copia solo al procesar correos ENTRANTES (reenvíos automáticos).
+    res = await asyncio.to_thread(mail.send_mail, destinos, subject, cuerpo, adjuntos, "secundaria")
     if not res.get("success"):
         raise HTTPException(status_code=502, detail=res.get("error", "Error de envío"))
     # Guardar plantilla de contacto de la inmobiliaria (compartida con tasación)
@@ -7606,11 +7608,8 @@ async def estudio_etapa2(fid: str, payload: dict = None):
       <p>Quedamos atentos a sus comentarios y posibles reparos para continuar con el estudio.</p>
       <p style="margin-top:16px;color:#555">Saludos cordiales,</p>"""
     cuerpo = _marca_wrap(inner, "Estudio de Títulos — Etapa 2: envío de documentos")
-    cc, vistos = [], set()
-    for c in [VICTORIA_EMAIL] + (doc.get("estudio_titulo_cc") or []):
-        if "@" in c and c.lower() not in vistos and c.lower() != abogado.lower():
-            vistos.add(c.lower())
-            cc.append(c)
+    # REGLA CC (norma fija): correo SALIENTE al abogado — sin CC bajo ninguna circunstancia.
+    cc = []
     sender = _sender_por_rol("secundaria")
     if not payload.get("confirm"):
         return {"to": abogado, "cc": cc, "subject": subject, "body": cuerpo,
@@ -7618,7 +7617,7 @@ async def estudio_etapa2(fid: str, payload: dict = None):
     base = fsvc.folder_dir(nombre)
     adjuntos = [{"filename": a["nombre"], "content_b64": _b64((base / a["ruta"]).read_bytes())}
                 for a in docs_estudio]
-    res = await asyncio.to_thread(mail.send_mail, abogado, subject, cuerpo, adjuntos, "secundaria", cc)
+    res = await asyncio.to_thread(mail.send_mail, abogado, subject, cuerpo, adjuntos, "secundaria")
     if not res.get("success"):
         raise HTTPException(status_code=502, detail=res.get("error", "Error de envío"))
     await db.folders.update_one({"id": fid}, {"$set": {
@@ -7695,9 +7694,11 @@ def _reparos_vendedor_de(doc):
     return v.get("nombre", ""), v.get("email", ""), v.get("telefono", "")
 
 
-def _reparos_cc(doc, excluir=None):
-    """CC del hilo de estudio de título — RESPONDER A TODOS: Victoria + copias guardadas +
-    todos los participantes capturados del hilo (remitente y CC de cada respuesta)."""
+def _cc_correo_entrante(doc, excluir=None):
+    """REGLA CC (norma fija): este CC se usa SOLO al procesar correos ENTRANTES
+    (respuestas del abogado capturadas del hilo). Victoria + copias guardadas +
+    participantes del hilo reciben copia únicamente en estos reenvíos de entrada.
+    Los correos SALIENTES del sistema jamás llevan CC."""
     exc = {(e or "").lower() for e in (excluir or [])}
     cc = []
     participantes = list((doc.get("estudio_reparos") or {}).get("participantes") or [])
@@ -7725,7 +7726,7 @@ async def _reparos_enviar_vendedor(doc, rep, nuevos):
         return
     res = await asyncio.to_thread(mail.send_mail, v_email,
                                   f"Reparos Estudio de Título — {doc.get('nombre','')}",
-                                  cuerpo, [], "secundaria", _reparos_cc(doc, [v_email]))
+                                  cuerpo, [], "secundaria", _cc_correo_entrante(doc, [v_email]))
     if res.get("success"):
         rep["reenviado_vendedor_at"] = now_iso()
         rep.pop("reenvio_vendedor_error", None)
@@ -7750,7 +7751,7 @@ async def _reparos_enviar_resuelto(doc, rep):
         destinos.append(v_email)
     res = await asyncio.to_thread(mail.send_mail, destinos,
                                   f"Reparos resueltos — Estudio de Título {doc.get('nombre','')}",
-                                  cuerpo, [], "principal", _reparos_cc(doc, destinos))
+                                  cuerpo, [], "principal", _cc_correo_entrante(doc, destinos))
     rep["aviso_resuelto_at"] = now_iso() if res.get("success") else rep.get("aviso_resuelto_at")
     if not res.get("success"):
         rep["aviso_resuelto_error"] = res.get("error", "Error de envío")
@@ -7779,8 +7780,9 @@ async def _reparos_recordatorio(doc, rep):
     headers = {}
     if rep.get("thread_msgid"):
         headers = {"In-Reply-To": rep["thread_msgid"], "References": rep["thread_msgid"]}
+    # REGLA CC: recordatorio automático SALIENTE — sin CC bajo ninguna circunstancia.
     res = await asyncio.to_thread(mail.send_mail, abogado, subject, cuerpo, [],
-                                  "secundaria", _reparos_cc(doc, [abogado]), headers)
+                                  "secundaria", None, headers)
     if res.get("success"):
         rep["recordatorio_enviado_at"] = now_iso()
         return True
@@ -8192,7 +8194,7 @@ async def escritura_confirmar_post(token: str, request: Request):
         html_not = f"""
         <div style="font-family:Arial,sans-serif;font-size:14px;color:#222;max-width:620px">
           <p>Estimados,</p><p>{detalle}</p>
-          <p style="color:#888;font-size:12px">Central Mutuos — Con Creces</p>
+          <p style="color:#888;font-size:12px">Central Mutuos — Cr&eacute;ditos Hipotecarios</p>
         </div>"""
         await asyncio.to_thread(mail.send_mail, n["email"], subject_int, html_not, [], "secundaria")
     return HTMLResponse(_ESC_PAGE.format(contenido=f"<h2>¡Gracias, {sol.get('nombre','')}!</h2><div class='ok'>Su asistencia quedó confirmada ✅<br/>{fecha} · {hora} hrs<br/><br/>Asistirá: {acomp}</div>"))
@@ -8489,7 +8491,7 @@ def _aprobacion_html(payload):
           <p style="margin:16px 0 0;color:#8a93a3;font-size:12px">Al presionar el bot&oacute;n se abrir&aacute; un correo dirigido a nuestro equipo para coordinar los siguientes pasos.</p>
         </td></tr>
         <tr><td class="cm-footer" style="background:#f4f5f7;border-top:1px solid #e2e4e9;padding:20px 32px">
-          <p style="margin:0;color:#2b3245;font-size:14px"><b>Central Mutuos</b> — Con Creces</p>
+          <p style="margin:0;color:#2b3245;font-size:14px"><b>Central Mutuos</b></p>
           <p style="margin:4px 0 0;color:#6b7280;font-size:12px">Especialistas en cr&eacute;ditos hipotecarios &middot; {contacto}</p>
         </td></tr>
         <tr><td style="background:#111318;padding:12px 24px;text-align:center">
@@ -10903,7 +10905,7 @@ async def _enviar_firmados_interno(doc, correos, asunto=None):
           <ul style="font-size:12px;color:#78350f;margin:0;padding-left:18px">{"".join(f"<li>{p.name}</li>" for p in files)}</ul>
         </div>
 
-        <p style="color:#888;font-size:12px">Central Mutuos — Con Creces</p>
+        <p style="color:#888;font-size:12px">Central Mutuos — Cr&eacute;ditos Hipotecarios</p>
       </div>
     </div>
     """
