@@ -760,9 +760,50 @@ async def gerencia_command_center(request: Request):
         m = str(fd.get("created_at") or "")[:7]
         if m:
             tendencia[m] = tendencia.get(m, 0) + 1
+    # ── CUMPLEAÑOS DE LA SEMANA (campo fecha_nacimiento de la carpeta) ──
+    cumpleanos = []
+    hoy_d = ahora.date()
+    async for fd in db.folders.find({"fecha_nacimiento": {"$exists": True, "$ne": ""},
+                                     "oculto_supercarpeta": {"$ne": True}},
+                                    {"id": 1, "nombre": 1, "fecha_nacimiento": 1, "broker_origen": 1}):
+        try:
+            fn = datetime.fromisoformat(fd["fecha_nacimiento"]).date()
+        except (ValueError, TypeError):
+            continue
+        for anio in (hoy_d.year, hoy_d.year + 1):
+            try:
+                prox = fn.replace(year=anio)
+            except ValueError:
+                prox = fn.replace(year=anio, day=28)
+            delta = (prox - hoy_d).days
+            if 0 <= delta <= 7:
+                cumpleanos.append({"fid": fd["id"], "cliente": fd.get("nombre"),
+                                   "fecha": prox.strftime("%d/%m/%Y"), "dias": delta,
+                                   "broker": fd.get("broker_origen") or ""})
+                break
+    cumpleanos.sort(key=lambda x: x["dias"])
     return {"mes": mes, "zona1": zona1, "brokers": lista_brokers,
             "carga_administrativa": carga, "bandeja": bandeja[:80],
+            "cumpleanos_semana": cumpleanos,
             "serie_mensual": sorted(tendencia.items())[-6:], "generado": _now()}
+
+
+@gpanel.post("/fecha-nacimiento")
+async def gerencia_fecha_nacimiento(payload: dict, request: Request):
+    """Registra la fecha de nacimiento del cliente (para alertas de cumpleaños)."""
+    _exigir(request, ("admin", "maestro", "gerencia", "administracion"))
+    fid = (payload or {}).get("fid") or ""
+    fecha = ((payload or {}).get("fecha") or "").strip()
+    fd = await db.folders.find_one({"id": fid})
+    if not fd:
+        raise HTTPException(status_code=404, detail="Operación no encontrada")
+    m = re.match(r"^(\d{2})/(\d{2})/(\d{4})$", fecha)
+    if m:
+        fecha = f"{m.group(3)}-{m.group(2)}-{m.group(1)}"
+    if not re.match(r"^\d{4}-\d{2}-\d{2}$", fecha):
+        raise HTTPException(status_code=400, detail="Formato de fecha inválido — use DD/MM/AAAA")
+    await db.folders.update_one({"id": fid}, {"$set": {"fecha_nacimiento": fecha}})
+    return {"ok": True, "fid": fid, "fecha_nacimiento": fecha}
 
 
 @gpanel.post("/urgente")

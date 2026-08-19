@@ -1418,3 +1418,12 @@ Constitución VERSION 19 (nuevas reglas #55, #56, #57).
 - Sello circular Doble Arco = ícono oficial WhatsApp + app (ya exportado iOS/Android, PWA aplicado).
 - Normativa inamovible registrada en Cerebro DashAI: "IDENTIDAD VISUAL OFICIAL" (auditada; ahora 14 normativas).
 - Verificado: PDF contiene el nuevo encabezado (pypdf), preview de correos capturado.
+
+## 2026-08-19 (parte 6) — Alerta Hilo Frío + Cumpleaños + Semáforo Fuentes
+- HILO FRÍO: tarjetas Supercarpeta con borde rojo + badge "⚠ HILO FRÍO +7D" cuando el hilo (hitos_externos
+  + bitacora_solicitudes) lleva >7 días sin movimiento. Campos hilo_frio/hilo_ultimo en GET /api/supercarpeta.
+- CUMPLEAÑOS: POST /api/gerencia-panel/fecha-nacimiento (DD/MM/AAAA), panel "🎂 Cumpleaños próximos 7 días"
+  en Command Center + botón 🎂 en cada fila de la bandeja para registrar la fecha.
+- SEMÁFORO FUENTES: GET fuentes-panel devuelve "semaforo" (verde=contacto con correo, amarillo=sin correo,
+  rojo=sin contacto) por origen detectado; chips de color en el Panel de Fuentes de la Supercarpeta.
+- Verificado por curl (4 fríos reales, semáforo con 3 rojos, cumpleaños calculado) + screenshot.

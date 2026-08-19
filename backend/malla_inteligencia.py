@@ -1812,6 +1812,12 @@ async def supercarpeta_vista(mes: str = ""):
                                                  "actualizado": 1, "identidad": 1, "propiedad": 1,
                                                  "financiero": 1, "origen": 1}):
         adn_map[r.get("rut_norm")] = r
+    # ── ALERTA HILO FRÍO: último evento del hilo (recibidos) por carpeta ──
+    hilo_recibidos = {}
+    async for h in db.hitos_externos.aggregate([{"$group": {"_id": "$folder_id", "ult": {"$max": "$creado"}}}]):
+        if h.get("_id"):
+            hilo_recibidos[h["_id"]] = str(h.get("ult") or "")
+    ahora_dt = datetime.now(timezone.utc)
     clientes = []
     async for fd in db.folders.find({}).sort("nombre", 1):
         nombre_u = (fd.get("nombre") or "").strip().upper()
@@ -1978,8 +1984,21 @@ async def supercarpeta_vista(mes: str = ""):
         avance = {"pct": avance_pct,
                   "etapas": [{"clave": k, "etapa": lb, "peso": round(p * 100 / peso_tot, 1),
                               "completada": ok_} for k, lb, p, ok_ in etapas_av]}
+        # ── ALERTA HILO FRÍO: más de 7 días sin movimiento en el hilo de correos ──
+        _evs_hilo = ([hilo_recibidos.get(fd["id"], "")] +
+                     [str(r.get("en") or "") for r in (fd.get("bitacora_solicitudes") or [])])
+        _ult_hilo = max([e for e in _evs_hilo if e] or [""])
+        _ref_frio = _ult_hilo or str(fd.get("created_at") or fd.get("created") or "")
+        try:
+            hilo_frio = (ahora_dt - datetime.fromisoformat(_ref_frio[:19])
+                         .replace(tzinfo=timezone.utc)).days > 7
+        except (ValueError, TypeError):
+            hilo_frio = False
         clientes.append({"id": fd["id"], "cliente": fd.get("nombre"),
                          "avance": avance,
+                         "hilo_frio": hilo_frio,
+                         "hilo_ultimo": _ult_hilo[:10],
+                         "fecha_nacimiento": fd.get("fecha_nacimiento") or "",
                          "rut": _fmt_rut(rut_v) if _vrut(rut_v) else (rut_v or ""),
                          "manual_identidad": list((fd.get("ingreso_manual") or {}).keys()),
                          "arrastre": fd.get("arrastre_desde") or "",
@@ -2696,8 +2715,39 @@ async def fuentes_panel_get(request: Request):
     brokers = [b async for b in db.brokers_fuentes.find({}, {"_id": 0}).sort("nombre", 1)]
     vend = await vendedores_usada_get(request)
     lm = await db.config.find_one({"_key": "lista_maestra_origenes"}, {"_id": 0}) or {}
+    # ── SEMÁFORO FUENTES: proyectos/orígenes detectados en carpetas SIN contacto configurado ──
+    semaforo = []
+    detectadas = {}
+    async for fd in db.folders.find({}, {"inmobiliaria": 1, "tipo_operacion": 1,
+                                         "proyecto": 1, "oculto_supercarpeta": 1}):
+        if fd.get("oculto_supercarpeta"):
+            continue
+        n = _inmo_de_folder(fd)
+        if n:
+            detectadas.setdefault(n, set())
+            if (fd.get("proyecto") or "").strip():
+                detectadas[n].add(fd["proyecto"].strip())
+    for inmo, proys in sorted(detectadas.items()):
+        inmo_n = _norm_inmo(inmo)
+        cts = [c for c in contactos
+               if c.get("activo") is not False and (c.get("inmobiliaria_norm") == inmo_n
+               or inmo_n in (c.get("inmobiliaria_norm") or "") or (c.get("inmobiliaria_norm") or "") in inmo_n)]
+        con_email = [c for c in cts if (c.get("email") or "").strip()]
+        gen = generales.get(inmo_n) or {}
+        if con_email or (gen.get("email") or "").strip():
+            estado = "verde"
+        elif cts:
+            estado = "amarillo"
+        else:
+            estado = "rojo"
+        semaforo.append({"origen": inmo, "proyectos": sorted(proys), "estado": estado,
+                         "detalle": ("Contacto con correo configurado" if estado == "verde"
+                                     else "Contacto registrado SIN correo — complételo antes de enviar"
+                                     if estado == "amarillo"
+                                     else "Sin contacto configurado — bloqueará las cartas oferta")})
     return {"inmobiliarias": [arbol[k] for k in orden], "brokers": brokers,
             "individuales": vend["vendedores"],
+            "semaforo": semaforo,
             "lista_maestra": {"inmobiliarias": lm.get("inmobiliarias") or [],
                               "brokers": lm.get("brokers") or []}}
 

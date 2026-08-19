@@ -406,6 +406,7 @@ export default function SupercarpetaModule() {
         contactos: grupos.flatMap(g => g.proyectos || []),
         generales: grupos.map(g => ({ inmobiliaria: g.inmobiliaria, email: g.correo_general })),
         brokers: rf.data.brokers || [], vendedores: rf.data.individuales || [],
+        semaforo: rf.data.semaforo || [],
         lista_maestra: rf.data.lista_maestra || {}, cc: rg.data.lista || [],
         exp: {}, reg: null,
         nuevo: { inmobiliaria: "", proyecto: "", contacto: "", email: "" },
@@ -1178,6 +1179,22 @@ export default function SupercarpetaModule() {
         <div data-testid="inmobiliarias-modal" onClick={() => setInmoModal(null)} style={modalBg}>
           <div onClick={e => e.stopPropagation()} style={{ ...modalBox, maxWidth: 940, maxHeight: "86vh", overflowY: "auto" }}>
             <h4 style={{ margin: 0, color: "#d4af37", fontSize: "0.9rem" }}>🏢 Panel de Fuentes — Inmobiliarias · Brokers · Fuentes Individuales</h4>
+            {/* ── SEMÁFORO FUENTES: orígenes detectados sin contacto configurado ── */}
+            {(inmoModal.semaforo || []).length > 0 && (
+              <div data-testid="semaforo-fuentes" style={{ display: "flex", gap: 6, flexWrap: "wrap",
+                margin: "10px 0 4px", background: "rgba(2,6,23,0.5)", borderRadius: 8,
+                border: "1px dashed rgba(148,163,184,0.3)", padding: "0.5rem 0.7rem", alignItems: "center" }}>
+                <span style={{ color: "#94a3b8", fontSize: "0.64rem", fontWeight: 800, letterSpacing: 1 }}>SEMÁFORO:</span>
+                {inmoModal.semaforo.map(s => (
+                  <span key={s.origen} data-testid={`semaforo-${s.origen}`} title={s.detalle}
+                    style={{ fontSize: "0.64rem", fontWeight: 800, borderRadius: 999, padding: "3px 10px",
+                      color: s.estado === "verde" ? "#4ade80" : s.estado === "amarillo" ? "#facc15" : "#f87171",
+                      background: s.estado === "verde" ? "rgba(34,197,94,0.1)" : s.estado === "amarillo" ? "rgba(250,204,21,0.1)" : "rgba(239,68,68,0.12)",
+                      border: `1px solid ${s.estado === "verde" ? "#22c55e" : s.estado === "amarillo" ? "#facc15" : "#ef4444"}` }}>
+                    ● {s.origen}</span>
+                ))}
+              </div>
+            )}
             <p style={{ color: "#94a3b8", fontSize: "0.62rem", margin: "6px 0 0" }}>
               Orden de búsqueda del destinatario: <b>1)</b> fuente individual del cliente · <b>2)</b> proyecto dentro de la
               inmobiliaria · <b>3)</b> contacto general de la inmobiliaria · <b>4)</b> broker. Nada se elimina: solo se desactiva.

@@ -141,7 +141,9 @@ const TarjetaCliente = ({ c, idx, recargar, abrirPanel, abrirSolicitud, abrirEst
   return (
     <div data-testid={`tarjeta-cliente-${c.id}`}
       style={{ background: idx % 2 === 0 ? "#1E2A3A" : "#233145", width: "100%",
-        border: "1px solid rgba(212,175,55,0.35)", borderRadius: 14, padding: "1rem 1.1rem" }}>
+        border: `1px solid ${c.hilo_frio ? "rgba(239,68,68,0.75)" : "rgba(212,175,55,0.35)"}`,
+        boxShadow: c.hilo_frio ? "0 0 14px rgba(239,68,68,0.22)" : "none",
+        borderRadius: 14, padding: "1rem 1.1rem" }}>
       {/* ── ENCABEZADO (siempre visible) ── */}
       <div data-testid={`tarjeta-encabezado-${c.id}`} onClick={() => setAbierta(a => !a)}
         style={{ cursor: "pointer" }}>
@@ -149,6 +151,13 @@ const TarjetaCliente = ({ c, idx, recargar, abrirPanel, abrirSolicitud, abrirEst
           <b style={{ color: "#fff", fontSize: 19, overflowWrap: "anywhere", flex: 1 }}>
             <span style={{ color: "#D4AF37" }}>{idx + 1}.</span> {c.cliente}
           </b>
+          {c.hilo_frio && (
+            <span data-testid={`hilo-frio-${c.id}`}
+              title={`Hilo sin movimiento hace más de 7 días${c.hilo_ultimo ? ` (último: ${c.hilo_ultimo})` : ""} — reactivar contacto`}
+              style={{ background: "rgba(239,68,68,0.18)", border: "1px solid rgba(239,68,68,0.7)",
+                color: "#f87171", borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: 900 }}>
+              ⚠ HILO FRÍO +7D</span>
+          )}
           {notas.length > 0 && (
             <span data-testid={`badge-nota-${c.id}`} title={`${notas.length} nota(s)`}
               style={{ background: "rgba(212,175,55,0.2)", border: "1px solid rgba(212,175,55,0.7)",

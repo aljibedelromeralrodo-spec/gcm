@@ -71,6 +71,16 @@ export default function GerenciaCommandCenter({ onNavigate }) {
     } catch (e) { window.alert(e.response?.data?.detail || "No fue posible actualizar la marca de urgencia."); }
   };
 
+  const registrarCumple = async (op) => {
+    const f = window.prompt(`Fecha de nacimiento de ${op.cliente} (DD/MM/AAAA):`, "");
+    if (!f || !f.trim()) return;
+    try {
+      const r = await axios.post(`${API}/api/gerencia-panel/fecha-nacimiento`, { fid: op.fid, fecha: f.trim() });
+      window.alert(`Fecha de nacimiento registrada: ${r.data.fecha_nacimiento}`);
+      cargar();
+    } catch (e) { window.alert(e.response?.data?.detail || "No fue posible registrar la fecha."); }
+  };
+
   if (!d) return <p style={{ color: "#94a3b8", padding: "2rem" }}>Cargando panel de control…</p>;
   if (d.error) return <p style={{ color: "#f87171", padding: "2rem" }}>No fue posible cargar el panel. Actualice la página o verifique su sesión.</p>;
 
@@ -125,6 +135,24 @@ export default function GerenciaCommandCenter({ onNavigate }) {
           </div>
         </div>
       </div>
+
+      {/* ══ CUMPLEAÑOS DE LA SEMANA ══ */}
+      {(d.cumpleanos_semana || []).length > 0 && (
+        <div data-testid="cc-cumpleanos" style={{ ...card, borderColor: "rgba(212,175,55,0.5)" }}>
+          <h3 style={{ ...h2, color: oro, margin: "0 0 8px" }}>🎂 Cumpleaños de Clientes — Próximos 7 días</h3>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            {d.cumpleanos_semana.map(c => (
+              <div key={c.fid} data-testid={`cc-cumple-${c.fid}`} style={{ background: "rgba(2,6,23,0.5)",
+                border: "1px solid rgba(212,175,55,0.35)", borderRadius: 10, padding: "0.6rem 1rem" }}>
+                <b style={{ color: "#f8fafc", fontSize: "0.82rem" }}>{c.cliente}</b>
+                <div style={{ color: oro, fontSize: "0.7rem", fontWeight: 800 }}>
+                  {c.dias === 0 ? "¡HOY!" : `en ${c.dias} día(s)`} · {c.fecha}</div>
+                {c.broker && <div style={{ color: "#64748b", fontSize: "0.62rem" }}>{c.broker}</div>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ══ ZONA 2 — RENDIMIENTO POR BROKER ══ */}
       <div style={card} data-testid="cc-zona-brokers">
@@ -258,6 +286,11 @@ export default function GerenciaCommandCenter({ onNavigate }) {
                     border: "1px solid rgba(239,68,68,0.5)", borderRadius: 7, padding: "0.32rem 0.7rem",
                     fontWeight: 800, cursor: "pointer", fontSize: "0.66rem" }}>
                   ⚑ {op.urgente ? "Quitar urgencia" : "Marcar urgente"}</button>
+                <button data-testid={`cc-cumple-btn-${op.fid}`} onClick={() => registrarCumple(op)}
+                  title="Registrar fecha de nacimiento para alertas de cumpleaños"
+                  style={{ background: "rgba(212,175,55,0.08)", color: oro, border: "1px solid rgba(212,175,55,0.35)",
+                    borderRadius: 7, padding: "0.32rem 0.55rem", fontWeight: 800, cursor: "pointer", fontSize: "0.66rem" }}>
+                  🎂</button>
               </div>
             </div>
           ))}
