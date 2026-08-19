@@ -354,7 +354,7 @@ def _ventana_proyeccion():
         if d.weekday() < 5:
             habiles.append(d)
         d += timedelta(days=1)
-    return hoy in habiles, habiles[-1].strftime("%d-%m-%Y")
+    return hoy in habiles, habiles[-1].strftime("%d/%m/%Y")
 
 
 @broker.post("/proyeccion")
@@ -3024,7 +3024,7 @@ async def _resumen_gerencia_html(mes: str = ""):
 async def _enviar_resumen_gerencia():
     dest = await _resumen_gerencia_destinatarios()
     html = await _resumen_gerencia_html()
-    hoy = datetime.now(timezone.utc).strftime("%d-%m-%Y")
+    hoy = datetime.now(timezone.utc).strftime("%d/%m/%Y")
     res = await asyncio.to_thread(
         lambda: mail.send_mail(dest, f"📊 Resumen Semanal Gerencia — Flota Supercarpeta — {hoy}",
                                html, desde="secundaria"))

@@ -45,7 +45,7 @@ export default function HistorialModule({ valorUF: _valorUF, onLoadSimulation })
           <tbody>
             {simulaciones.map((sim, idx) => (
               <tr key={idx} onClick={() => handleClick(sim)} className="history-row" data-testid={`historial-row-${idx}`}>
-                <td>{new Date(sim.timestamp).toLocaleDateString('es-CL')}</td>
+                <td>{new Date(sim.timestamp).toLocaleDateString('es-CL').replace(/-/g, '/')}</td>
                 <td>{sim.nombre_completo || '-'}</td>
                 <td>{sim.rut || '-'}</td>
                 <td>{sim.credito_solicitado_uf ? formatUF(sim.credito_solicitado_uf) : formatUF(sim.capacidad_credito_uf)}</td>

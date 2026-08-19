@@ -36,6 +36,36 @@ def _exigir(request, roles):
         raise HTTPException(status_code=403, detail="No está autorizado el ingreso a este módulo")
 
 
+# ═══ VALIDACIÓN DE NORMATIVAS (Bloque 7): antes de aprobar/avanzar/enviar ═══
+_normas_val_cache = {"t": None, "datos": []}
+
+
+async def _normativas_vigentes():
+    """Normativas desde la DB con caché máximo de 5 minutos (regla de inmutabilidad)."""
+    ahora = datetime.now(timezone.utc)
+    if _normas_val_cache["t"] and (ahora - _normas_val_cache["t"]).total_seconds() < 300:
+        return _normas_val_cache["datos"]
+    docs = await db.dashai_eventos.find({"motivo": "normativa"}, {"_id": 0}).to_list(200)
+    _normas_val_cache.update({"t": ahora, "datos": docs})
+    return docs
+
+
+async def _validar_normativas_op(texto_saliente="", cc=None, rol="", contexto=""):
+    """Bloquea la operación si incumple una normativa vigente, con el detalle exacto."""
+    normas = {d.get("norma_clave"): d.get("patron") or "" for d in await _normativas_vigentes()}
+    if texto_saliente and "concreces" in texto_saliente.lower() and "DISEÑO CORREOS" in normas:
+        raise HTTPException(status_code=422, detail=(
+            f"Operación bloqueada por incumplimiento de NORMATIVA FIJA 'DISEÑO CORREOS' "
+            f"({contexto or 'correo saliente'}): el texto menciona 'Concreces', lo cual está "
+            f"prohibido. Normativa vigente: {normas['DISEÑO CORREOS']}"))
+    if cc and rol not in ("gerencia", "admin", "maestro") and "CC" in normas \
+            and "nunca en salientes" in normas["CC"].lower():
+        raise HTTPException(status_code=422, detail=(
+            f"Operación bloqueada por incumplimiento de NORMATIVA FIJA 'CC' "
+            f"({contexto or 'correo saliente'}): su rol ({rol or 'sin rol'}) no está autorizado "
+            f"a agregar copias (CC) en correos salientes. Normativa vigente: {normas['CC']}"))
+
+
 def _cifrar(texto):
     from cryptography.fernet import Fernet
     return Fernet(os.environ["CRED_CIPHER_KEY"].encode()).encrypt(texto.encode()).decode()
@@ -504,6 +534,8 @@ async def postventa_avanzar(cid: str, request: Request):
     else:
         msg = (f"Estimado(a) {c.get('cliente')}: ¡felicitaciones! Su proceso de escrituración fue "
                f"completado en su totalidad. Gracias por confiar en Central Mutuos.")
+    await _validar_normativas_op(texto_saliente=msg, rol=_rol(request),
+                                 contexto=f"avance de etapa '{lb[etapa]}'")
     comunicacion = {"etapa": etapa, "texto": msg, "generada": _now(), "estado": "generada"}
     etapas = c.get("etapas") or {}
     etapas[etapa] = {"completada": True, "fecha": _now(), "dias_reales": dias,
@@ -933,6 +965,8 @@ async def gerencia_accion(payload: dict, request: Request):
               f"<p>Gerencia Comercial solicita: <b>{label}</b> para el cliente <b>{cliente}</b>{rut_txt}.</p>"
               f"<p>Agradeceremos gestionar a la brevedad e informar el estado.</p>"
               f"<p style='color:#555'>Saludos cordiales,<br><b>Central Mutuos</b></p></div>")
+    await _validar_normativas_op(texto_saliente=cuerpo, cc=cc, rol=_rol(request),
+                                 contexto=f"acción de Gerencia '{label}'")
     import email_service as mail
     asyncio.create_task(asyncio.to_thread(
         mail.send_mail, destino, f"{label} — {cliente}", cuerpo, [], "secundaria", cc or None))

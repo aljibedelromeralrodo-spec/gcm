@@ -69,7 +69,7 @@ export default function CierresModule() {
     } catch (e) { setMsg("Error: " + (e.response?.data?.detail || e.message)); }
   };
 
-  const fmtF = (iso) => { try { return new Date(iso).toLocaleDateString("es-CL"); } catch { return "—"; } };
+  const fmtF = (iso) => { try { return new Date(iso).toLocaleDateString("es-CL").replace(/-/g, "/"); } catch { return "—"; } };
 
   const grupos = rows.reduce((acc, r) => {
     const k = r.ejecutivo_nombre ? `${r.ejecutivo_nombre}${r.inmobiliaria ? ` — ${r.inmobiliaria}` : ""}` : "Sin ejecutivo asignado";

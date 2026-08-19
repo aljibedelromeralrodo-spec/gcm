@@ -503,7 +503,7 @@ export default function CentralChat({ userName, activeModule }) {
                     <div key={i} className="central-history-item" data-testid={`history-item-${i}`}>
                       <span className="central-history-user">{h.user_name || "Usuario"}</span>
                       <span className="central-history-msg">{(h.user_msg || "").slice(0, 60)}</span>
-                      <span className="central-history-time">{h.timestamp ? new Date(h.timestamp).toLocaleDateString("es-CL") : ""}</span>
+                      <span className="central-history-time">{h.timestamp ? new Date(h.timestamp).toLocaleDateString("es-CL").replace(/-/g, "/") : ""}</span>
                     </div>
                   ))}
                 </div>

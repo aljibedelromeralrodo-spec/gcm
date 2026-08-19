@@ -4,6 +4,7 @@ import GestorFuentesIMAP from "../components/GestorFuentesIMAP";
 import EstadoSalida from "../components/EstadoSalida";
 
 const API = process.env.REACT_APP_BACKEND_URL;
+const fdd = (iso) => (iso ? `${String(iso).slice(8, 10)}/${String(iso).slice(5, 7)}/${String(iso).slice(0, 4)} ${String(iso).slice(11, 16)}`.trim() : "");
 const card = { background: "rgba(30,41,59,0.55)", border: "1px solid rgba(212,175,55,0.3)", borderRadius: 12, padding: "1.1rem", marginTop: 14 };
 const inp = { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(212,175,55,0.3)", color: "#fff", padding: "0.5rem 0.7rem", borderRadius: 8, fontSize: "0.78rem", boxSizing: "border-box" };
 const goldBtn = { background: "linear-gradient(135deg,#BF953F,#FCF6BA,#AA771C)", color: "#0a0a0a", border: "none", borderRadius: 8, padding: "0.5rem 1rem", fontWeight: 800, cursor: "pointer", fontSize: "0.75rem" };
@@ -185,7 +186,7 @@ export default function BrokersModule({ user }) {
         {proys.length > 0 && (
           <div style={{ marginTop: 10, fontSize: "0.7rem", color: "#e2e8f0" }}>
             {proys.map(p => <div key={p.id} data-testid={`broker-proy-${p.id}`} style={{ padding: "0.25rem 0", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-              📄 {p.archivo} · <span style={{ color: "#d4af37" }}>{p.mes}</span> · {(p.subido_en || "").slice(0, 16).replace("T", " ")}</div>)}
+              📄 {p.archivo} · <span style={{ color: "#d4af37" }}>{p.mes}</span> · {fdd(p.subido_en)}</div>)}
           </div>
         )}
       </div>
@@ -282,7 +283,7 @@ export default function BrokersModule({ user }) {
           <div key={a.id} style={{ fontSize: "0.64rem", color: "#94a3b8", padding: "0.2rem 0", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
             <b style={{ color: a.accion === "archivo_rechazado" ? "#ef4444" : "#e2e8f0" }}>{a.accion}</b>
             {" · "}{a.detalle?.archivo || a.detalle?.cliente || ""}{a.detalle?.carpeta ? ` → ${a.detalle.carpeta}` : ""}
-            {" · "}{(a.fecha || "").slice(0, 16).replace("T", " ")}
+            {" · "}{fdd(a.fecha)}
           </div>
         ))}
         {actividad.length === 0 && <p style={{ color: "var(--text-muted)", fontSize: "0.7rem" }}>Sin actividad registrada.</p>}

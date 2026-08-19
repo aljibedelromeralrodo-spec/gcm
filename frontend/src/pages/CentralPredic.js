@@ -312,7 +312,7 @@ function PredICApp({ auth, onLogout }) {
                       <span style={{ padding: "2px 6px", borderRadius: "0px", fontSize: "0.7rem", fontWeight: 700, background: p.viable ? "rgba(0,184,148,0.15)" : "rgba(225,112,85,0.15)", color: p.viable ? COLORS.green : COLORS.red }}>{p.viable ? "VIABLE" : "NO"}</span>
                       <span style={{ fontSize: "0.82rem", color: COLORS.text }}>{formatCLP(p.valor_propiedad_clp || 0)}</span>
                       <span style={{ fontSize: "0.75rem", color: COLORS.textMuted }}>Renta: {formatCLP(p.renta || 0)}</span>
-                      <span style={{ marginLeft: "auto", fontSize: "0.7rem", color: COLORS.textMuted }}>{p.timestamp ? new Date(p.timestamp).toLocaleDateString("es-CL") : ""}</span>
+                      <span style={{ marginLeft: "auto", fontSize: "0.7rem", color: COLORS.textMuted }}>{p.timestamp ? new Date(p.timestamp).toLocaleDateString("es-CL").replace(/-/g, "/") : ""}</span>
                     </div>
                   ))}
                 </div>

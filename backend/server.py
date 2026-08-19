@@ -1514,7 +1514,7 @@ async def _acciones_pendientes():
 @api.get("/central/resumen-diario")
 async def central_resumen_diario():
     acciones = await _acciones_pendientes()
-    hoy = datetime.now(_tz_chile()).strftime("%d-%m-%Y")
+    hoy = datetime.now(_tz_chile()).strftime("%d/%m/%Y")
     if acciones:
         texto = (f"¡Buenos días! Soy Martín ☀️ Resumen de hoy {hoy}:\n\n" + "\n".join(acciones[:12])
                  + ("\n\n…y más carpetas en la lista." if len(acciones) > 12 else ""))
@@ -1567,7 +1567,7 @@ async def _resumen_semanal_html():
         <tr><th style="{th}">Cliente</th><th style="{th}">Mesa</th><th style="{th}">Tasación</th><th style="{th}">E. Título</th><th style="{th}">Escritura</th><th style="{th}">Pendientes</th></tr>
         {filas_carp}
       </table>"""
-    semana = datetime.now(_tz_chile()).strftime("%d-%m-%Y")
+    semana = datetime.now(_tz_chile()).strftime("%d/%m/%Y")
     inner = f"""
       <p>¡Buenos días! Soy <b>Martín</b> ☀️ Este es el resumen semanal al <b>{semana}</b>:</p>
       <div style="color:#1a1f2e;font-size:15px;font-weight:700;border-left:4px solid #d4af37;padding-left:10px;margin:14px 0 8px">Cobros de Tasación — Vivienda Usada (mes {mes})</div>
@@ -1588,7 +1588,7 @@ async def _resumen_semanal_html():
 
 async def _enviar_resumen_semanal():
     cuerpo = await _resumen_semanal_html()
-    semana = datetime.now(_tz_chile()).strftime("%d-%m-%Y")
+    semana = datetime.now(_tz_chile()).strftime("%d/%m/%Y")
     res = await asyncio.to_thread(mail.send_mail, _sender_por_rol("principal"),
                                   f"📊 Resumen Semanal de Martín — {semana}", cuerpo, [], "principal")
     return res
@@ -1662,7 +1662,7 @@ async def _reporte_correos_html():
     pend_html = "".join(li(f"⏳ \"{(p.get('subject') or '')[:60]}\" de {p.get('sender','')} — "
                            f"{'sin leer/procesar' if p.get('status') == 'pendiente' else 'requiere revisión manual'}")
                         for p in pendientes)
-    hoy = datetime.now(_tz_chile()).strftime("%d-%m-%Y")
+    hoy = datetime.now(_tz_chile()).strftime("%d/%m/%Y")
     inner = f"""
       <p>¡Buenos días! Este es el <b>reporte diario de correos</b> al <b>{hoy}</b> (últimas 24 horas):</p>
       {_sec(f"Correos de gestión recibidos ({len(recibidos)})", rec_html, "No se recibieron correos de gestión.")}
@@ -1679,7 +1679,7 @@ async def _reporte_correos_html():
 
 async def _enviar_reporte_correos():
     cuerpo = await _reporte_correos_html()
-    hoy = datetime.now(_tz_chile()).strftime("%d-%m-%Y")
+    hoy = datetime.now(_tz_chile()).strftime("%d/%m/%Y")
     return await asyncio.to_thread(mail.send_mail, _sender_por_rol("principal"),
                                    f"📬 Reporte Diario de Correos — {hoy}", cuerpo, [], "principal")
 
@@ -6218,7 +6218,7 @@ async def _enviar_reporte_diario():
     destino = st_ac.get("destination") or os.environ.get("MAIL2_USER", "")
     tz = _tz_chile()
     hoy = datetime.now(tz)
-    fecha_txt = hoy.strftime("%d-%m-%Y")
+    fecha_txt = hoy.strftime("%d/%m/%Y")
     cuerpo = f"""
     <div style="font-family:Arial,sans-serif;font-size:14px;color:#222">
       <h2 style="color:#6c5ce7;margin:0 0 4px">Reporte diario — {fecha_txt}</h2>
@@ -10299,7 +10299,7 @@ def _informe_vip_pdf(doc, prob):
     c.setFillColor(HexColor("#94a3b8"))
     c.drawString(50, H - 90, "INFORME VIP DE ESTATUS")
     c.setFont("Helvetica", 9)
-    c.drawRightString(W - 50, H - 70, datetime.now(timezone.utc).strftime("%d-%m-%Y"))
+    c.drawRightString(W - 50, H - 70, datetime.now(timezone.utc).strftime("%d/%m/%Y"))
     c.setStrokeColor(ICE)
     c.setLineWidth(2)
     c.line(50, H - 105, 200, H - 105)

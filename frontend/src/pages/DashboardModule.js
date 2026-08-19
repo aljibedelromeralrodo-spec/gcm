@@ -339,7 +339,7 @@ export default function DashboardModule({ valorUF: _valorUF, userName: _userName
               <span className={`dash-recent-status ${s.precalificacion_aprobada ? 'dash-status-ok' : 'dash-status-fail'}`}>
                 {s.precalificacion_aprobada ? "Aprobado" : "Rechazado"}
               </span>
-              <span className="dash-recent-date">{s.timestamp ? new Date(s.timestamp).toLocaleDateString("es-CL") : ""}</span>
+              <span className="dash-recent-date">{s.timestamp ? new Date(s.timestamp).toLocaleDateString("es-CL").replace(/-/g, "/") : ""}</span>
             </div>
           )) : <p style={{ color: "var(--text-muted)", fontSize: "0.82rem" }}>Sin simulaciones recientes</p>}
         </div>

@@ -5,7 +5,7 @@ const API = process.env.REACT_APP_BACKEND_URL;
 
 function formatDate(d) {
   if (!d) return "";
-  try { return new Date(d).toLocaleDateString("es-CL"); } catch { return d; }
+  try { return new Date(d).toLocaleDateString("es-CL").replace(/-/g, "/"); } catch { return d; }
 }
 
 export default function SeguimientoModule() {
@@ -343,7 +343,7 @@ export default function SeguimientoModule() {
                     <h5><i className="fa fa-bar-chart"></i> Simulaciones ({fichaData.simulaciones.length})</h5>
                     {fichaData.simulaciones.map((s, i) => (
                       <div key={i} className="ficha-entry">
-                        <span className="ficha-entry-date">{s.timestamp ? new Date(s.timestamp).toLocaleDateString("es-CL") : ""}</span>
+                        <span className="ficha-entry-date">{s.timestamp ? new Date(s.timestamp).toLocaleDateString("es-CL").replace(/-/g, "/") : ""}</span>
                         <span className={`ficha-entry-estado ${s.precalificacion_aprobada ? '' : 'fail'}`} style={{ color: s.precalificacion_aprobada ? "#10d98e" : "#e11d48" }}>
                           {s.precalificacion_aprobada ? "Aprobado" : "Rechazado"}
                         </span>
@@ -359,7 +359,7 @@ export default function SeguimientoModule() {
                     <h5><i className="fa fa-comments"></i> Conversaciones con Central ({fichaData.conversaciones.length})</h5>
                     {fichaData.conversaciones.slice(0, 5).map((c, i) => (
                       <div key={i} className="ficha-entry">
-                        <span className="ficha-entry-date">{c.timestamp ? new Date(c.timestamp).toLocaleDateString("es-CL") : ""}</span>
+                        <span className="ficha-entry-date">{c.timestamp ? new Date(c.timestamp).toLocaleDateString("es-CL").replace(/-/g, "/") : ""}</span>
                         <span className="ficha-entry-text">{(c.user_msg || "").slice(0, 80)}</span>
                       </div>
                     ))}
@@ -372,7 +372,7 @@ export default function SeguimientoModule() {
                     <h5><i className="fa fa-paper-plane"></i> Comunicaciones Enviadas ({fichaData.comunicaciones.length})</h5>
                     {fichaData.comunicaciones.map((c, i) => (
                       <div key={i} className="ficha-entry ficha-comm-entry">
-                        <span className="ficha-entry-date">{c.sent_at ? new Date(c.sent_at).toLocaleDateString("es-CL") : ""}</span>
+                        <span className="ficha-entry-date">{c.sent_at ? new Date(c.sent_at).toLocaleDateString("es-CL").replace(/-/g, "/") : ""}</span>
                         <div className="ficha-comm-detail">
                           <span className="ficha-comm-to"><i className="fa fa-envelope-o"></i> {c.to}</span>
                           <span className="ficha-comm-subject">{c.subject}</span>

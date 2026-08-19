@@ -1434,3 +1434,19 @@ Constitución VERSION 19 (nuevas reglas #55, #56, #57).
   fecha DD/MM/AAAA, emisor con cargo del Admin, versión/período).
 - Descargable en /manual-marca-central-mutuos.pdf + botón "📘 Manual de Marca" en el panel Estado del Cerebro.
 - Script regenerador: /app/backend/scripts_gen_manual_marca.py.
+
+## 2026-06 (fork) — AUDITORÍA EXHAUSTIVA FINAL (prompt de cierre del usuario)
+- Auditoría de 38 checks backend por curl (scripts /app/tests/audit_2026*.py) + testing agent
+  iteration_39 (21/21 backend, 6/6 roles frontend). Resultado por módulo:
+  - Identidad visual, RBAC 6 roles, gestión usuarios, RUT único, normativas, espejo, dashboards, correos: OK.
+- CORREGIDO: fechas %d-%m-%Y → %d/%m/%Y en backend (14 puntos) y toLocaleDateString es-CL
+  con barras en frontend (14 reemplazos) + timestamps de BrokersModule con fdd().
+- CORREGIDO: etiqueta rol en sidebar (mapa legible; broker ya no muestra "EJECUTIVO").
+  Migración DB: users rol 'ejecutivo'+perfil D → rol 'broker' (broker1, mutuaria).
+- NUEVO: validador de normativas _validar_normativas_op en espejo_postventa.py (cache ≤5 min
+  desde db.dashai_eventos) enganchado a gerencia_accion y postventa_avanzar; bloquea con 422
+  y detalle exacto (mención 'Concreces' en salientes; CC en salientes para roles no autorizados,
+  gerencia/admin exentos — CC libre de Rodrigo intacto).
+- BLOQUEADO (usuario): credenciales IMAP Concreces (espejo responde 400 con mensaje claro),
+  Twilio keys. Dominio www.mutuariasyleasing.cl lo valida el usuario en producción.
+- Tests movidos de /app/backend/tests → /app/tests (evita reload loop). Reporte: iteration_39.json.

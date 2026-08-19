@@ -119,7 +119,7 @@ export default function LearningStatusPanel() {
                   <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>{meta.label}</span>
                   {pat.updated_at && (
                     <span style={{ marginLeft: "auto", fontSize: "0.65rem", color: "var(--text-tertiary)" }}>
-                      {new Date(pat.updated_at).toLocaleDateString("es-CL")}
+                      {new Date(pat.updated_at).toLocaleDateString("es-CL").replace(/-/g, "/")}
                     </span>
                   )}
                 </div>

@@ -315,7 +315,9 @@ function MainApp() {
         </nav>
         <div className="sidebar-user">
           <p className="sidebar-user-name">{user.nombre}</p>
-          <p className="sidebar-user-role">{user.rol}</p>
+          <p className="sidebar-user-role">{({ admin: 'Administrador', maestro: 'Administrador',
+            gerencia: 'Gerencia Comercial', administracion: 'Administración', postventa: 'Postventa',
+            contralor: 'Contralor', broker: 'Broker', ejecutivo: user.perfil === 'D' ? 'Broker' : 'Administración' }[user.rol]) || user.rol}</p>
           {user.cargo && (
             <p data-testid="sidebar-user-cargo" style={{ fontSize: "0.58rem", color: "#b8a04a",
               lineHeight: 1.5, margin: "4px 0 6px" }}>

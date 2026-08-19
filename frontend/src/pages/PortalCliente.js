@@ -87,7 +87,7 @@ export default function PortalCliente() {
                     <InfoRow label="Proyecto" value={op.proyecto || "-"} />
                     <InfoRow label="Ejecutivo" value={op.ejecutivo_cm || "-"} />
                     <InfoRow label="Correos procesados" value={op.total_correos || 0} />
-                    <InfoRow label="Ultima actualizacion" value={op.ultimo_correo ? new Date(op.ultimo_correo).toLocaleDateString("es-CL") : "-"} />
+                    <InfoRow label="Ultima actualizacion" value={op.ultimo_correo ? new Date(op.ultimo_correo).toLocaleDateString("es-CL").replace(/-/g, "/") : "-"} />
                   </div>
                   {op.resumen && (
                     <div style={{ marginTop: "0.75rem", padding: "0.6rem", borderRadius: "0px", background: "rgba(255,255,255,0.03)", fontSize: "0.8rem", color: C.muted, lineHeight: 1.5 }}>
@@ -116,7 +116,7 @@ export default function PortalCliente() {
                     </span>
                     <div style={{ flex: 1, fontSize: "0.82rem", color: C.text }}>{s.nombre_completo}</div>
                     <div style={{ fontSize: "0.78rem", color: C.accent, fontWeight: 600 }}>{(s.capacidad_credito_uf || 0).toFixed(0)} UF</div>
-                    <div style={{ fontSize: "0.72rem", color: C.muted }}>{s.timestamp ? new Date(s.timestamp).toLocaleDateString("es-CL") : ""}</div>
+                    <div style={{ fontSize: "0.72rem", color: C.muted }}>{s.timestamp ? new Date(s.timestamp).toLocaleDateString("es-CL").replace(/-/g, "/") : ""}</div>
                   </div>
                 ))}
               </div>
