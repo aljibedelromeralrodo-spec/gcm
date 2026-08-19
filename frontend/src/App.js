@@ -481,7 +481,7 @@ function MainApp() {
         {activeModule === 'estudio' && <EstudioTituloModule />}
         {activeModule === 'escritura' && <EscrituraModule onNavigate={setActiveModule} />}
         {activeModule === 'contraloria' && <ContraloriaModule />}
-        {activeModule === 'contralor' && <ContralorModule />}
+        {activeModule === 'contralor' && <ContralorModule user={user} />}
         {activeModule === 'postventa' && <PostventaModule user={user} />}
         {activeModule === 'dashai' && <CerebroDashAIModule />}
         {activeModule === 'auditoria' && <AuditoriaForenseModule />}

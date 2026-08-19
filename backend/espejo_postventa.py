@@ -252,6 +252,37 @@ def _extraer_datos_operacion(c):
             "fecha_correo": c.get("fecha") or "", "asunto": (c.get("subject") or "")[:180]}
 
 
+async def _notificar_urgencia(ia, asunto, destino):
+    """Correo urgente detectado por la IA → alerta en la app (Admin + Contralor) y correo al Admin."""
+    cliente = (destino or {}).get("nombre") or "operación sin clasificar"
+    motivo = ia.get("motivo_urgencia") or "; ".join(ia.get("alertas") or []) or "alerta detectada por IA"
+    await db.alertas.insert_one({
+        "id": str(uuid.uuid4()), "tipo": "espejo_urgente", "leida": False, "creado": _now(),
+        "destinatarios": ["admin", "contralor"], "cliente": cliente,
+        "titulo": f"🔴 URGENTE — {cliente}",
+        "mensaje": f"El análisis IA del correo de la matriz detectó: {motivo}",
+        "asunto_correo": (asunto or "")[:180],
+        "resumen_ia": ia.get("resumen_interpretativo") or ""})
+    try:
+        import email_service as mail
+        admin_dest = os.environ.get("MAIL_USER") or ""
+        if admin_dest:
+            # Normativa DISEÑO CORREOS: jamás mencionar el nombre de la matriz en salientes
+            cuerpo = (
+                "<div style='font-family:Arial,Helvetica,sans-serif;background:#fff;color:#111;font-size:14px'>"
+                f"<p>Estimado Administrador:</p>"
+                f"<p>El Algoritmo Espejo detectó una situación <b style='color:#b91c1c'>URGENTE</b> en un "
+                f"correo de la empresa matriz, asociado a: <b>{cliente}</b>.</p>"
+                f"<p><b>Motivo:</b> {motivo}</p>"
+                f"<p><b>Resumen interpretativo (IA):</b> {ia.get('resumen_interpretativo') or '—'}</p>"
+                "<p>El detalle completo está disponible en el panel del Contralor.</p>"
+                "<p style='color:#555'>Saludos cordiales,<br><b>Central Mutuos</b></p></div>")
+            await asyncio.to_thread(mail.send_mail, admin_dest,
+                                    f"🔴 URGENTE Algoritmo Espejo — {cliente}", cuerpo, [], "secundaria")
+    except Exception as e:
+        logging.warning(f"notificación urgencia espejo: {e}")
+
+
 async def _sync_concreces_core():
     import hashlib
     cfg = await db.config.find_one({"_key": "espejo_contralor"}) or {}
@@ -270,6 +301,16 @@ async def _sync_concreces_core():
         if await db.espejo_sync_log.find_one({"firma": firma}):
             continue
         datos = _extraer_datos_operacion(c)
+        # 🧠 CLAUDE (Sonnet 4.6): interpretación completa del correo de la matriz
+        ia = None
+        try:
+            import espejo_ia
+            ia = await espejo_ia.analizar_correo(c.get("subject"), c.get("body"), c.get("fecha"))
+            for k in ("nro_operacion", "rut", "estado", "monto", "observaciones"):
+                if ia.get(k):
+                    datos[k] = ia[k]
+        except Exception as e:
+            logging.warning(f"espejo IA análisis: {e}")
         destino, rut_c = None, _rut_limpio(datos["rut"])
         if rut_c:
             destino = next((f for f in folders if _rut_limpio(f.get("rut")) == rut_c), None)
@@ -284,13 +325,20 @@ async def _sync_concreces_core():
             await db.folders.update_one({"id": destino["id"]}, {"$set": {"concreces": {
                 "nro_operacion": datos["nro_operacion"], "estado": datos["estado"] or "Informado",
                 "monto": datos["monto"], "observaciones": datos["observaciones"],
-                "fecha_correo": datos["fecha_correo"], "sync_at": ahora}}})
+                "fecha_correo": datos["fecha_correo"], "sync_at": ahora,
+                "ia_analisis": ia}}})
             actualizadas += 1
         else:
             await db.espejo_no_clasificados.update_one({"firma": firma}, {"$setOnInsert": {
                 "id": str(uuid.uuid4()), "firma": firma, **datos,
-                "cuerpo": (c.get("body") or "")[:600], "recibido": ahora}}, upsert=True)
+                "cuerpo": (c.get("body") or "")[:600], "recibido": ahora,
+                "ia_analisis": ia}}, upsert=True)
             sin_clasificar += 1
+        if ia:
+            import espejo_ia as _eia
+            await _eia.registrar_interpretacion(db, ia, c.get("subject"), (destino or {}).get("id"))
+            if ia.get("urgente"):
+                await _notificar_urgencia(ia, c.get("subject"), destino)
         await db.espejo_sync_log.insert_one({"firma": firma, "asignado": bool(destino),
                                              "folder_id": (destino or {}).get("id"), "fecha": ahora})
     await db.config.update_one({"_key": "espejo_contralor"}, {"$set": {
@@ -323,10 +371,18 @@ async def espejo_operaciones(request: Request):
     ops = []
     async for fd in db.folders.find({"concreces": {"$exists": True}}).sort("nombre", 1):
         cz = fd.get("concreces") or {}
+        ia = cz.get("ia_analisis") or {}
         ops.append({"fid": fd["id"], "cliente": fd.get("nombre"), "rut": fd.get("rut") or "",
                     "nro_operacion": cz.get("nro_operacion") or "", "estado": cz.get("estado") or "",
                     "monto": cz.get("monto") or "", "observaciones": cz.get("observaciones") or "",
-                    "fecha_correo": cz.get("fecha_correo") or "", "sync_at": cz.get("sync_at") or ""})
+                    "fecha_correo": cz.get("fecha_correo") or "", "sync_at": cz.get("sync_at") or "",
+                    "ia_resumen": ia.get("resumen_interpretativo") or "",
+                    "ia_urgente": bool(ia.get("urgente")), "ia_motivo_urgencia": ia.get("motivo_urgencia") or "",
+                    "ia_ambiguo": bool(ia.get("ambiguo")), "ia_alertas": ia.get("alertas") or [],
+                    "ia_requerimientos": ia.get("requerimientos") or [],
+                    "ia_analizado_en": ia.get("analizado_en") or "",
+                    "ia_correccion": ia.get("correccion") or None,
+                    "simulado": bool(cz.get("simulado"))})
     return {"operaciones": ops, "total": len(ops), "ultima_sync": cfg.get("ultima_sync") or "",
             "resumen": cfg.get("sync_resumen") or {},
             "origen_credencial": cfg.get("sync_origen_credencial") or ""}
@@ -338,6 +394,87 @@ async def espejo_no_clasificados_list(request: Request):
     _exigir(request, ("admin", "maestro", "contralor"))
     docs = await db.espejo_no_clasificados.find({}, {"_id": 0}).sort("recibido", -1).to_list(100)
     return {"correos": docs, "total": len(docs)}
+
+
+@espejo.post("/probar-ia")
+async def espejo_probar_ia(payload: dict, request: Request):
+    """Prueba del pipeline IA con un correo simulado de la matriz (solo Admin)."""
+    if _rol(request) not in ("admin", "maestro"):
+        raise HTTPException(status_code=403, detail="Solo el Administrador puede ejecutar pruebas del análisis IA")
+    asunto = (payload.get("asunto") or "").strip()
+    cuerpo = (payload.get("cuerpo") or "").strip()
+    if not asunto and not cuerpo:
+        raise HTTPException(status_code=400, detail="Indique el asunto y/o el cuerpo del correo simulado")
+    import espejo_ia
+    try:
+        ia = await espejo_ia.analizar_correo(asunto, cuerpo, _now()[:10])
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"El análisis IA no pudo completarse: {str(e)[:150]}")
+    # Ruteo idéntico al sync real, marcado como simulado
+    rut_c = _rut_limpio(ia.get("rut"))
+    destino = None
+    if rut_c:
+        async for fd in db.folders.find({"rut": {"$exists": True, "$ne": ""}}, {"id": 1, "rut": 1, "nombre": 1}):
+            if _rut_limpio(fd.get("rut")) == rut_c:
+                destino = fd
+                break
+    ahora = _now()
+    if destino:
+        await db.folders.update_one({"id": destino["id"]}, {"$set": {"concreces": {
+            "nro_operacion": ia.get("nro_operacion") or "", "estado": ia.get("estado") or "Informado",
+            "monto": ia.get("monto") or "", "observaciones": ia.get("observaciones") or "",
+            "fecha_correo": ia.get("fecha") or "", "sync_at": ahora,
+            "ia_analisis": ia, "simulado": True}}})
+    else:
+        await db.espejo_no_clasificados.update_one({"firma": f"sim-{uuid.uuid4()}"}, {"$setOnInsert": {
+            "id": str(uuid.uuid4()), "asunto": asunto[:180], "estado": ia.get("estado") or "",
+            "nro_operacion": ia.get("nro_operacion") or "", "rut": ia.get("rut") or "",
+            "monto": ia.get("monto") or "", "observaciones": ia.get("observaciones") or "",
+            "cuerpo": cuerpo[:600], "recibido": ahora, "ia_analisis": ia, "simulado": True}}, upsert=True)
+    await espejo_ia.registrar_interpretacion(db, ia, asunto, (destino or {}).get("id"), simulado=True)
+    if ia.get("urgente"):
+        await _notificar_urgencia(ia, asunto, destino)
+    return {"ok": True, "simulado": True, "asignado_a": (destino or {}).get("nombre") or "",
+            "analisis": ia}
+
+
+@espejo.post("/operaciones/{fid}/ia-correccion")
+async def espejo_ia_correccion(fid: str, payload: dict, request: Request):
+    """El Admin revisa/corrige manualmente la interpretación de la IA (queda registrado)."""
+    if _rol(request) not in ("admin", "maestro"):
+        raise HTTPException(status_code=403, detail="Solo el Administrador puede corregir la interpretación de la IA")
+    fd = await db.folders.find_one({"id": fid})
+    if not fd or not fd.get("concreces"):
+        raise HTTPException(status_code=404, detail="Operación sin registro del Algoritmo Espejo")
+    admin = getattr(request.state, "user", {}) or {}
+    cz = fd["concreces"]
+    ia = cz.get("ia_analisis") or {}
+    cambios, anterior = {}, {}
+    for campo in ("nro_operacion", "estado", "monto", "observaciones", "resumen_interpretativo",
+                  "motivo_urgencia"):
+        if campo in (payload or {}):
+            nuevo = str(payload.get(campo) or "").strip()
+            anterior[campo] = ia.get(campo) if campo in ("resumen_interpretativo", "motivo_urgencia") else cz.get(campo)
+            cambios[campo] = nuevo
+    if "urgente" in (payload or {}):
+        anterior["urgente"], cambios["urgente"] = bool(ia.get("urgente")), bool(payload.get("urgente"))
+    if not cambios:
+        raise HTTPException(status_code=400, detail="Indique al menos un campo a corregir")
+    for campo, nuevo in cambios.items():
+        if campo in ("resumen_interpretativo", "motivo_urgencia", "urgente"):
+            ia[campo] = nuevo
+        else:
+            cz[campo] = nuevo
+            if campo in ia:
+                ia[campo] = nuevo
+    ia["correccion"] = {"por": admin.get("nombre") or admin.get("sub") or "", "fecha": _now(),
+                        "campos": list(cambios.keys())}
+    cz["ia_analisis"] = ia
+    await db.folders.update_one({"id": fid}, {"$set": {"concreces": cz}})
+    await db.espejo_ia_log.insert_one({
+        "id": str(uuid.uuid4()), "fecha": _now(), "accion": "correccion_manual", "folder_id": fid,
+        "por": ia["correccion"]["por"], "anterior": anterior, "nuevo": cambios})
+    return {"ok": True, "correccion": ia["correccion"], "campos": list(cambios.keys())}
 
 
 # ═══════════════ ALGORITMO ESPEJO — CAPA B (MANUAL) ═══════════════

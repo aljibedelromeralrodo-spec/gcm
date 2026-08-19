@@ -229,6 +229,14 @@ async def broker_upload(fid: str, request: Request, subcarpeta: str = Form(""),
     destino = fsvc.folder_dir(fd["nombre"]) / subcarpeta
     destino.mkdir(parents=True, exist_ok=True)
     (destino / nombre_arch).write_bytes(contenido)
+    # ☁️ DUAL WRITE: copia persistente en el storage integrado (operación/RUT)
+    try:
+        import media_storage as _ms
+        asyncio.create_task(_ms.registrar_documento(
+            contenido, nombre_arch, fd, origen="broker", subido_por=c.get("sub") or "",
+            rol=c.get("rol") or "", rel=f"{subcarpeta}/{nombre_arch}"))
+    except Exception as _e:
+        logging.warning(f"storage dual broker: {_e}")
     await db.folders.update_one({"id": fid}, {"$addToSet": {"archivos": f"{subcarpeta}/{nombre_arch}"},
                                               "$set": {"updated_at": _now()}})
     await _log_broker(c, "archivo_subido", {"archivo": nombre_arch, "subcarpeta": subcarpeta,

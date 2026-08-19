@@ -37,8 +37,13 @@ const Gauge = ({ pct }) => {
 
 const EstadoCerebro = () => {
   const [ec, setEc] = useState(null);
+  const [aud, setAud] = useState(null);
+  const [audAbierta, setAudAbierta] = useState(false);
+  const [audBusy, setAudBusy] = useState(false);
+  const cargarAud = () => axios.get(`${API_URL}/api/auditoria-eficiencia`).then(r => setAud(r.data)).catch(() => {});
   useEffect(() => {
     axios.get(`${API_URL}/api/dashai/estado-cerebro`).then(r => setEc(r.data)).catch(() => {});
+    cargarAud();
   }, []);
   if (!ec) return null;
   const fdd = (iso) => (iso ? `${String(iso).slice(8, 10)}/${String(iso).slice(5, 7)}/${String(iso).slice(0, 4)} ${String(iso).slice(11, 16)}` : "—");
@@ -66,6 +71,49 @@ const EstadoCerebro = () => {
         <div style={{ color: "#d4af37", fontSize: "0.72rem", fontWeight: 900, letterSpacing: 0.8 }}>MANUAL DE MARCA</div>
         <div style={{ color: "#94a3b8", fontSize: "0.6rem" }}>Descargar PDF oficial v1.0</div>
       </a>
+      {aud && (
+        <div data-testid="panel-auditoria-eficiencia" style={{ ...celda, flex: "1 1 100%" }}>
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <div style={{ color: "#94a3b8", fontSize: "0.64rem", fontWeight: 800, letterSpacing: 1 }}>
+              🔍 AUDITORÍA SEMANAL DE EFICIENCIA — regla permanente (lunes, primer ingreso del Admin)</div>
+            <span style={{ color: aud.activa ? "#4ade80" : "#f87171", fontSize: "0.66rem", fontWeight: 800 }}>
+              {aud.activa ? "● ACTIVA" : "● DESACTIVADA"}</span>
+            <button data-testid="auditoria-ejecutar" disabled={audBusy} onClick={async () => {
+              setAudBusy(true);
+              try { await axios.post(`${API_URL}/api/auditoria-eficiencia/ejecutar`, {}); cargarAud(); } catch { /* noop */ }
+              setAudBusy(false);
+            }} style={{ marginLeft: "auto", background: "rgba(212,175,55,0.12)", color: "#d4af37",
+              border: "1px solid rgba(212,175,55,0.5)", borderRadius: 7, padding: "0.3rem 0.8rem",
+              cursor: "pointer", fontSize: "0.64rem", fontWeight: 800 }}>
+              {audBusy ? "Auditando…" : "▶ Ejecutar ahora"}</button>
+            <button data-testid="auditoria-historial-toggle" onClick={() => setAudAbierta(a => !a)}
+              style={{ background: "none", color: "#94a3b8", border: "1px solid rgba(148,163,184,0.4)",
+                borderRadius: 7, padding: "0.3rem 0.8rem", cursor: "pointer", fontSize: "0.64rem", fontWeight: 800 }}>
+              {audAbierta ? "Ocultar historial" : `Historial (${aud.total})`}</button>
+          </div>
+          {(aud.historial || [])[0] && (
+            <div style={{ color: "#e2e8f0", fontSize: "0.7rem", marginTop: 6 }}>
+              Última: <b style={{ color: aud.historial[0].resultado === "aprobada" ? "#4ade80" : "#facc15" }}>
+                {aud.historial[0].resultado === "aprobada" ? "✅ APROBADA" : `⚠️ ${aud.historial[0].fallas} hallazgo(s)`}</b>
+              {" · "}{fdd(aud.historial[0].fecha)} · semana {aud.historial[0].semana} · {aud.historial[0].trigger}
+            </div>
+          )}
+          {audAbierta && (aud.historial || []).map(h => (
+            <div key={h.id} data-testid={`auditoria-reg-${h.id}`} style={{ borderTop: "1px solid rgba(148,163,184,0.15)",
+              marginTop: 6, paddingTop: 6, fontSize: "0.66rem", color: "#cbd5e1" }}>
+              <b style={{ color: h.resultado === "aprobada" ? "#4ade80" : "#facc15" }}>
+                {h.resultado === "aprobada" ? "✅" : "⚠️"} {h.semana}</b> · {fdd(h.fecha)} · {h.trigger}
+              <div style={{ marginTop: 3, display: "flex", flexWrap: "wrap", gap: 4 }}>
+                {(h.checks || []).map(cq => (
+                  <span key={cq.clave} title={cq.detalle} style={{ background: cq.ok ? "rgba(74,222,128,0.1)" : "rgba(248,113,113,0.12)",
+                    color: cq.ok ? "#4ade80" : "#f87171", borderRadius: 6, padding: "0.05rem 0.4rem", fontSize: "0.58rem" }}>
+                    {cq.ok ? "✓" : "✗"} {cq.clave}</span>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

@@ -3,6 +3,7 @@ import axios from "axios";
 import GestorFuentesIMAP from "../components/GestorFuentesIMAP";
 import EstadoSalida from "../components/EstadoSalida";
 import ConfigEjecutivos, { ConexionConcreces } from "../components/ConfigEjecutivos";
+import DocumentoViewer from "../components/DocumentoViewer";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 const PILL = { validado: "#22c55e", observado: "#f59e0b", pendiente: "#94a3b8", expulsado: "#ef4444" };
@@ -201,6 +202,7 @@ const BandejaSinClasificar = () => {
   const [folders, setFolders] = useState([]);
   const [sel, setSel] = useState({});
   const [msg, setMsg] = useState("");
+  const [visor, setVisor] = useState(null);
   const cargar = () => {
     axios.get(`${API}/api/admin/docs-sin-clasificar`).then(r => setDocs(r.data.documentos || [])).catch(() => {});
     axios.get(`${API}/api/clientes/folders`).then(r => setFolders(r.data.folders || r.data || [])).catch(() => {});
@@ -255,12 +257,16 @@ const BandejaSinClasificar = () => {
             <option value="">— Asignar a operación… —</option>
             {folders.map(fd => <option key={fd.id} value={fd.id}>{fd.nombre}</option>)}
           </select>
+          <button data-testid={`bandeja-ver-${dc.id}`} onClick={() => setVisor({ id: dc.id, nombre_archivo: dc.nombre_archivo })}
+            style={{ background: "none", border: "1px solid rgba(212,175,55,0.5)", color: "#d4af37",
+              borderRadius: 8, padding: "0.35rem 0.7rem", fontWeight: 800, cursor: "pointer", fontSize: "0.66rem" }}>👁 Ver</button>
           <button data-testid={`bandeja-asignar-${dc.id}`} onClick={() => asignar(dc.id)} style={goldBtn}>Asignar</button>
           <button data-testid={`bandeja-eliminar-${dc.id}`} onClick={() => eliminar(dc.id)}
             style={{ background: "rgba(248,113,113,0.12)", border: "1px solid rgba(248,113,113,0.5)", color: "#f87171",
               borderRadius: 8, padding: "0.35rem 0.7rem", fontWeight: 800, cursor: "pointer", fontSize: "0.66rem" }}>🗑</button>
         </div>
       ))}
+      {visor && <DocumentoViewer doc={visor} onClose={() => setVisor(null)} />}
     </div>
   );
 };

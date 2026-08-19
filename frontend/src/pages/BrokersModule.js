@@ -2,12 +2,54 @@ import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import GestorFuentesIMAP from "../components/GestorFuentesIMAP";
 import EstadoSalida from "../components/EstadoSalida";
+import DocumentoViewer from "../components/DocumentoViewer";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 const fdd = (iso) => (iso ? `${String(iso).slice(8, 10)}/${String(iso).slice(5, 7)}/${String(iso).slice(0, 4)} ${String(iso).slice(11, 16)}`.trim() : "");
 const card = { background: "rgba(30,41,59,0.55)", border: "1px solid rgba(212,175,55,0.3)", borderRadius: 12, padding: "1.1rem", marginTop: 14 };
 const inp = { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(212,175,55,0.3)", color: "#fff", padding: "0.5rem 0.7rem", borderRadius: 8, fontSize: "0.78rem", boxSizing: "border-box" };
 const goldBtn = { background: "linear-gradient(135deg,#BF953F,#FCF6BA,#AA771C)", color: "#0a0a0a", border: "none", borderRadius: 8, padding: "0.5rem 1rem", fontWeight: 800, cursor: "pointer", fontSize: "0.75rem" };
+
+// ── DOCUMENTOS EN LA NUBE (storage integrado) — visualización sin descarga ──
+const NubeCarpeta = ({ fid }) => {
+  const [abierto, setAbierto] = useState(false);
+  const [docs, setDocs] = useState(null);
+  const [visor, setVisor] = useState(null);
+  const abrir = async () => {
+    if (!abierto && docs === null) {
+      try {
+        const r = await axios.get(`${API}/api/storage/docs`, { params: { fid } });
+        setDocs(r.data.documentos || []);
+      } catch { setDocs([]); }
+    }
+    setAbierto(a => !a);
+  };
+  return (
+    <div style={{ marginTop: 8 }}>
+      <button data-testid={`nube-toggle-${fid}`} onClick={abrir}
+        style={{ background: "rgba(96,165,250,0.12)", color: "#93c5fd", border: "1px solid rgba(96,165,250,0.4)",
+          borderRadius: 7, padding: "0.25rem 0.7rem", cursor: "pointer", fontSize: "0.64rem", fontWeight: 800 }}>
+        ☁️ {abierto ? "Ocultar documentos en la nube" : "Documentos en la nube"}</button>
+      {abierto && (
+        <div data-testid={`nube-docs-${fid}`} style={{ marginTop: 6, background: "rgba(15,23,42,0.6)", borderRadius: 8, padding: "0.5rem 0.7rem" }}>
+          {(docs || []).length === 0 && <span style={{ color: "#64748b", fontSize: "0.62rem" }}>
+            Sin documentos en el storage aún — los próximos archivos que suba quedarán respaldados aquí automáticamente.</span>}
+          {(docs || []).map(d => (
+            <div key={d.id} style={{ display: "flex", gap: 8, alignItems: "center", padding: "0.2rem 0", fontSize: "0.64rem" }}>
+              <span style={{ color: "#e2e8f0" }}>📄 {d.nombre_archivo}</span>
+              <span style={{ color: "#64748b" }}>{fdd(d.subido_en)}</span>
+              <button data-testid={`nube-ver-${d.id}`} onClick={() => setVisor(d)}
+                style={{ marginLeft: "auto", background: "none", border: "1px solid rgba(212,175,55,0.5)",
+                  color: "#d4af37", borderRadius: 6, padding: "0.1rem 0.55rem", cursor: "pointer",
+                  fontSize: "0.62rem", fontWeight: 800 }}>👁 Ver</button>
+            </div>
+          ))}
+        </div>
+      )}
+      {visor && <DocumentoViewer doc={visor} onClose={() => setVisor(null)} />}
+    </div>
+  );
+};
 
 const CATEGORIAS = [
   ["set_credito", "Set de Crédito (PDF)"],
@@ -273,6 +315,7 @@ export default function BrokersModule({ user }) {
                 </div>
               ))}
             </div>
+            <NubeCarpeta fid={c.id} />
           </div>
         ))}
       </div>

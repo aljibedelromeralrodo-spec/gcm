@@ -526,6 +526,11 @@ async def startup():
         await _seed_normativas_fijas()
     except Exception as e:
         logging.warning(f"seed normativas: {e}")
+    try:
+        import auditoria_eficiencia as _aud
+        await _aud.seed_normativa()
+    except Exception as e:
+        logging.warning(f"seed auditoría eficiencia: {e}")
     # OPTIMIZACIÓN: índices en colecciones calientes (listas instantáneas)
     try:
         await db.folders.create_index("nombre")
@@ -656,6 +661,12 @@ async def auth_login(payload: dict):
     elif user.get("password") != password or not password:
         raise HTTPException(status_code=401, detail="Credenciales invalidas")
     await db.users.update_one({"codigo": user["codigo"]}, {"$set": {"ultimo_acceso": now_iso()}})
+    # REGLA PERMANENTE: auditoría semanal de eficiencia (lunes, primer ingreso del Admin)
+    try:
+        import auditoria_eficiencia as _aud
+        asyncio.create_task(_aud.disparar_si_corresponde(user.get("rol") or ""))
+    except Exception as _e:
+        logging.warning(f"trigger auditoría eficiencia: {_e}")
     return _token_usuario(user)
 
 
@@ -1515,6 +1526,10 @@ async def _acciones_pendientes():
 async def central_resumen_diario():
     acciones = await _acciones_pendientes()
     hoy = datetime.now(_tz_chile()).strftime("%d/%m/%Y")
+    # AUDITORÍA EFICIENCIA: registro idempotente — el resumen se genera 1 sola vez por jornada
+    dia = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    await db.system_log.update_one({"tipo": "resumen_diario_generado", "dia": dia},
+                                   {"$setOnInsert": {"generado": now_iso()}}, upsert=True)
     if acciones:
         texto = (f"¡Buenos días! Soy Martín ☀️ Resumen de hoy {hoy}:\n\n" + "\n".join(acciones[:12])
                  + ("\n\n…y más carpetas en la lista." if len(acciones) > 12 else ""))
@@ -1926,10 +1941,17 @@ async def docs_sin_clasificar_upload(request: Request):
     from pathlib import Path as _P
     nombre = _P(getattr(archivo, "filename", "") or "documento").name
     did = str(uuid.uuid4())
-    (_sc_dir() / f"{did}_{nombre}").write_bytes(await archivo.read())
+    _raw_sc = await archivo.read()
+    (_sc_dir() / f"{did}_{nombre}").write_bytes(_raw_sc)
     reg = {"id": did, "nombre_archivo": nombre, "origen": "carga_manual", "recibido": now_iso(),
            "por": (getattr(request.state, "user", {}) or {}).get("sub") or ""}
     await db.docs_sin_clasificar.insert_one(dict(reg))
+    # ☁️ DUAL WRITE: carpeta separada 'sin_clasificar' del storage integrado
+    try:
+        import media_storage as _ms
+        asyncio.create_task(_ms.registrar_sin_clasificar(_raw_sc, nombre, did, reg["por"]))
+    except Exception as _e:
+        logging.warning(f"storage dual sin clasificar: {_e}")
     return {"ok": True, "documento": {k: v for k, v in reg.items()}}
 
 
@@ -1952,6 +1974,12 @@ async def docs_sin_clasificar_asignar(did: str, payload: dict, request: Request)
     await db.folders.update_one({"id": fd["id"]},
                                 {"$addToSet": {"archivos": f"99_otros/{reg['nombre_archivo']}"}})
     await db.docs_sin_clasificar.delete_one({"id": did})
+    # ☁️ STORAGE: el documento clasificado pasa de 'sin_clasificar' a su operación
+    await db.storage_docs.update_one({"bandeja_id": did, "is_deleted": False}, {"$set": {
+        "origen": "administracion", "folder_id": fd["id"], "cliente": fd.get("nombre") or "",
+        "rut": fd.get("rut") or "", "nro_operacion": str(fd.get("nro_operacion") or ""),
+        "broker_codigo": fd.get("broker_codigo") or "", "clasificado_en": now_iso(),
+        "clasificado_por": (getattr(request.state, "user", {}) or {}).get("sub") or ""}})
     return {"ok": True, "asignado_a": fd.get("nombre"), "archivo": reg["nombre_archivo"]}
 
 
@@ -1964,6 +1992,7 @@ async def docs_sin_clasificar_delete(did: str, request: Request):
         if p.exists():
             p.unlink()
         await db.docs_sin_clasificar.delete_one({"id": did})
+        await db.storage_docs.update_one({"bandeja_id": did}, {"$set": {"is_deleted": True}})
     return {"ok": True}
 
 
@@ -2922,7 +2951,7 @@ async def _rescate_codeudor_bg(doc, cod_nom, cod_rut):
 
 
 @api.post("/clientes/folders/{fid}/upload-file")
-async def folder_upload_file(fid: str, file: UploadFile = File(...), subfolder: str = Form(""),
+async def folder_upload_file(fid: str, request: Request, file: UploadFile = File(...), subfolder: str = Form(""),
                              route_to_codeudor: str = Form(""), categoria: str = Form(""),
                              codeudor_nombre: str = Form("")):
     doc = await _get_folder_doc(fid)
@@ -2948,6 +2977,15 @@ async def folder_upload_file(fid: str, file: UploadFile = File(...), subfolder: 
             nombre_archivo = f"{prefijo}{nombre_archivo}"
     rel = await asyncio.to_thread(fsvc.guardar_archivo, doc.get("nombre", ""),
                                   nombre_archivo, raw, subfolder)
+    # ☁️ DUAL WRITE: copia persistente en el storage integrado (operación/RUT)
+    try:
+        import media_storage as _ms
+        _cl = getattr(request.state, "user", {}) or {}
+        asyncio.create_task(_ms.registrar_documento(
+            raw, nombre_archivo, doc, origen="administracion",
+            subido_por=_cl.get("sub") or "", rol=_cl.get("rol") or "", rel=rel))
+    except Exception as _e:
+        logging.warning(f"storage dual upload-file: {_e}")
     if categoria in ("voucher_tasacion", "voucher_gasto_operacional"):
         await db.folders.update_one({"id": fid}, {"$push": {"vouchers": {
             "tipo": categoria, "archivo": rel, "subido_en": now_iso()}}})
@@ -14450,6 +14488,14 @@ api.include_router(_esp_mod.concreces)
 api.include_router(_esp_mod.postventa)
 api.include_router(_esp_mod.gpanel)
 api.include_router(_esp_mod.brokerx)
+
+# ☁️ FILE & MEDIA STORAGE — documentos por operación/RUT + bandeja sin clasificar
+import media_storage as _ms_mod
+api.include_router(_ms_mod.storage_router)
+
+# 🔍 REGLA PERMANENTE — Auditoría semanal de eficiencia modular (solo Admin)
+import auditoria_eficiencia as _aud_mod
+api.include_router(_aud_mod.auditoria_r)
 
 # Regla #62 (Monitor de Envíos SMTP) + Regla #64 (Perfil Consolidado — verdad DashAI)
 import monitor_envios as _monit_mod

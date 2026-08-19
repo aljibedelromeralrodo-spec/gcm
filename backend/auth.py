@@ -82,7 +82,8 @@ PERFIL_BLOQUEOS = {
 
 # PERFIL D (Brokers): lista blanca — SOLO su propio módulo (Regla de Oro #34)
 PERFIL_PERMITIDOS = {
-    "D": ("/api/broker", "/api/fuentes/broker", "/api/mi-correo", "/api/valor-uf", "/api/auth"),
+    "D": ("/api/broker", "/api/fuentes/broker", "/api/mi-correo", "/api/valor-uf", "/api/auth",
+          "/api/storage"),
 }
 
 # ── SISTEMA DE ROLES: reglas de escritura por rol (lectura pasa libre) ──

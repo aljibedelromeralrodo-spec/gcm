@@ -5,7 +5,8 @@ const API = process.env.REACT_APP_BACKEND_URL;
 const inp = { background: "rgba(2,6,23,0.7)", border: "1px solid rgba(203,213,225,0.35)", color: "#f8fafc",
   borderRadius: 8, padding: "0.5rem 0.7rem", fontSize: "0.85rem", width: "100%", boxSizing: "border-box" };
 
-export default function ContralorModule() {
+export default function ContralorModule({ user }) {
+  const esAdmin = ["admin", "maestro"].includes(user?.rol);
   const [espejo, setEspejo] = useState(null);
   const [criterios, setCriterios] = useState(null);
   const [nuevoCriterio, setNuevoCriterio] = useState("");
@@ -13,6 +14,10 @@ export default function ContralorModule() {
   const [guardando, setGuardando] = useState(false);
   const [ops, setOps] = useState(null);
   const [noClas, setNoClas] = useState([]);
+  const [iaEdit, setIaEdit] = useState(null);
+  const [simForm, setSimForm] = useState({ asunto: "", cuerpo: "" });
+  const [simRes, setSimRes] = useState(null);
+  const [simBusy, setSimBusy] = useState(false);
 
   const cargar = () => {
     axios.get(`${API}/api/contralor/espejo`)
@@ -151,7 +156,7 @@ export default function ContralorModule() {
             <table data-testid="espejo-operaciones-tabla" style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.76rem" }}>
               <thead><tr style={{ color: "#94a3b8", textAlign: "left" }}>
                 <th style={{ padding: "4px 8px" }}>Cliente</th><th>Nº Operación</th><th>Estado Concreces</th>
-                <th>Monto</th><th>Observaciones</th><th>Última lectura</th></tr></thead>
+                <th>Monto</th><th>Observaciones</th><th>🧠 Análisis IA (Claude)</th><th>Última lectura</th></tr></thead>
               <tbody>
                 {(ops.operaciones || []).map(o => (
                   <tr key={o.fid} data-testid={`espejo-op-${o.fid}`} style={{ borderTop: "1px solid rgba(148,163,184,0.15)", color: "#e2e8f0" }}>
@@ -159,9 +164,36 @@ export default function ContralorModule() {
                     <td style={{ fontFamily: "monospace" }}>{o.nro_operacion || "—"}</td>
                     <td><span style={{ fontWeight: 800,
                       color: /aprobad|cursad|escriturad/i.test(o.estado) ? "#4ade80" : /rechazad/i.test(o.estado) ? "#f87171" : "#facc15" }}>
-                      {o.estado || "—"}</span></td>
+                      {o.estado || "—"}</span>
+                      {o.simulado && <div style={{ color: "#818cf8", fontSize: "0.6rem" }}>simulado</div>}</td>
                     <td>{o.monto || "—"}</td>
-                    <td style={{ color: "#94a3b8", maxWidth: 220, overflowWrap: "anywhere" }}>{o.observaciones || "—"}</td>
+                    <td style={{ color: "#94a3b8", maxWidth: 180, overflowWrap: "anywhere" }}>{o.observaciones || "—"}</td>
+                    <td data-testid={`espejo-ia-${o.fid}`} style={{ maxWidth: 280 }}>
+                      {o.ia_resumen ? (
+                        <div>
+                          {o.ia_urgente && <span data-testid={`espejo-urgente-${o.fid}`} style={{ background: "rgba(248,113,113,0.2)",
+                            color: "#f87171", fontWeight: 900, fontSize: "0.62rem", borderRadius: 6,
+                            padding: "0.1rem 0.45rem", marginRight: 5 }}>🔴 URGENTE</span>}
+                          {o.ia_ambiguo && <span style={{ background: "rgba(250,204,21,0.15)", color: "#facc15",
+                            fontWeight: 800, fontSize: "0.62rem", borderRadius: 6, padding: "0.1rem 0.45rem",
+                            marginRight: 5 }}>interpretativo</span>}
+                          <span style={{ color: "#cbd5e1", fontSize: "0.7rem" }} title={o.ia_resumen}>{o.ia_resumen}</span>
+                          {o.ia_urgente && o.ia_motivo_urgencia && (
+                            <div style={{ color: "#f87171", fontSize: "0.64rem", marginTop: 2 }}>⚠ {o.ia_motivo_urgencia}</div>)}
+                          <div style={{ color: "#64748b", fontSize: "0.58rem", marginTop: 2 }}>
+                            IA {String(o.ia_analizado_en || "").slice(0, 16).replace("T", " ")}
+                            {o.ia_correccion && <span style={{ color: "#818cf8" }}> · ✏️ corregido por {o.ia_correccion.por}</span>}
+                            {esAdmin && <button data-testid={`espejo-corregir-${o.fid}`}
+                              onClick={() => setIaEdit({ fid: o.fid, cliente: o.cliente, estado: o.estado,
+                                nro_operacion: o.nro_operacion, monto: o.monto, observaciones: o.observaciones,
+                                resumen_interpretativo: o.ia_resumen, urgente: o.ia_urgente })}
+                              style={{ marginLeft: 6, background: "none", border: "1px solid rgba(129,140,248,0.5)",
+                                color: "#818cf8", borderRadius: 5, padding: "0 0.35rem", cursor: "pointer",
+                                fontSize: "0.58rem", fontWeight: 700 }}>✏️ Corregir</button>}
+                          </div>
+                        </div>
+                      ) : <span style={{ color: "#475569", fontSize: "0.66rem" }}>sin análisis</span>}
+                    </td>
                     <td style={{ color: "#64748b", fontFamily: "monospace", fontSize: "0.66rem" }}>{String(o.sync_at || "").slice(0, 16).replace("T", " ")}</td>
                   </tr>
                 ))}
@@ -183,10 +215,98 @@ export default function ContralorModule() {
               <b style={{ color: "#f8fafc" }}>{nc.asunto || "(sin asunto)"}</b>
               <span style={{ color: "#64748b" }}> · {nc.fecha_correo || nc.recibido}</span>
               {nc.estado && <span style={{ color: "#facc15" }}> · {nc.estado}</span>}
+              {nc.simulado && <span style={{ color: "#818cf8", fontSize: "0.62rem" }}> · simulado</span>}
+              {nc.ia_analisis?.resumen_interpretativo && (
+                <div style={{ color: "#94a3b8", fontSize: "0.66rem", marginTop: 2 }}>
+                  {nc.ia_analisis.urgente && <span style={{ color: "#f87171", fontWeight: 900 }}>🔴 URGENTE · </span>}
+                  🧠 {nc.ia_analisis.resumen_interpretativo}</div>)}
             </div>
           ))}
         </div>
       </div>
+
+      {/* ── PRUEBA DEL ANÁLISIS IA (solo Admin) ── */}
+      {esAdmin && (
+        <div data-testid="espejo-probar-ia" style={{ background: "rgba(15,23,42,0.6)",
+          border: "1px solid rgba(129,140,248,0.35)", borderRadius: 14, padding: "1.2rem 1.6rem" }}>
+          <h3 style={{ color: "#c7d2fe", fontSize: "0.95rem", margin: 0 }}>🧪 Probar análisis IA — correo simulado (Claude Sonnet 4.6)</h3>
+          <p style={{ color: "#94a3b8", fontSize: "0.72rem", marginTop: 6 }}>
+            Ejecuta el pipeline completo con un correo de prueba: extracción, resumen interpretativo,
+            detección de urgencia y notificación. El resultado queda marcado como simulado.</p>
+          <input data-testid="probar-ia-asunto" style={{ ...inp, marginTop: 8 }} placeholder="Asunto (ej: Operación 4521 — observaciones plazo escrituración)"
+            value={simForm.asunto} onChange={e => setSimForm(f => ({ ...f, asunto: e.target.value }))} />
+          <textarea data-testid="probar-ia-cuerpo" style={{ ...inp, marginTop: 8, minHeight: 90 }} placeholder="Cuerpo del correo simulado…"
+            value={simForm.cuerpo} onChange={e => setSimForm(f => ({ ...f, cuerpo: e.target.value }))} />
+          <button data-testid="probar-ia-btn" disabled={simBusy} onClick={async () => {
+            setSimBusy(true); setSimRes(null);
+            try {
+              const r = await axios.post(`${API}/api/contralor/espejo/probar-ia`, simForm);
+              setSimRes(r.data); cargar();
+            } catch (e) { setSimRes({ error: e.response?.data?.detail || "Error en el análisis" }); }
+            setSimBusy(false);
+          }} style={{ marginTop: 8, background: "rgba(129,140,248,0.18)", color: "#c7d2fe",
+            border: "1px solid rgba(129,140,248,0.5)", borderRadius: 8, padding: "0.5rem 1.3rem",
+            fontWeight: 800, cursor: "pointer", fontSize: "0.8rem" }}>
+            {simBusy ? "Analizando con Claude…" : "🧠 Analizar correo simulado"}</button>
+          {simRes && (
+            <div data-testid="probar-ia-resultado" style={{ marginTop: 10, background: "rgba(2,6,23,0.6)",
+              borderRadius: 10, padding: "0.8rem 1rem", fontSize: "0.74rem", color: "#e2e8f0" }}>
+              {simRes.error ? <span style={{ color: "#f87171" }}>{simRes.error}</span> : (
+                <>
+                  {simRes.analisis.urgente && <div style={{ color: "#f87171", fontWeight: 900 }}>🔴 URGENTE — {simRes.analisis.motivo_urgencia}</div>}
+                  <div><b>Resumen:</b> {simRes.analisis.resumen_interpretativo}</div>
+                  <div style={{ color: "#94a3b8", marginTop: 4 }}>
+                    Operación: {simRes.analisis.nro_operacion || "—"} · Estado: {simRes.analisis.estado || "—"} ·
+                    Monto: {simRes.analisis.monto || "—"} · {simRes.asignado_a ? `Asignado a: ${simRes.asignado_a}` : "Sin operación asociada → bandeja no clasificados"}</div>
+                  {(simRes.analisis.alertas || []).length > 0 && (
+                    <div style={{ color: "#facc15", marginTop: 4 }}>Alertas: {simRes.analisis.alertas.join(" · ")}</div>)}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── MODAL CORRECCIÓN MANUAL DEL ADMIN ── */}
+      {iaEdit && (
+        <div data-testid="ia-correccion-modal" onClick={(e) => { if (e.target === e.currentTarget) setIaEdit(null); }}
+          style={{ position: "fixed", inset: 0, zIndex: 1100, background: "rgba(2,6,23,0.8)",
+            display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
+          <div style={{ background: "#0f172a", border: "1px solid rgba(129,140,248,0.5)", borderRadius: 14,
+            padding: "1.4rem", width: "min(560px, 94vw)", maxHeight: "88vh", overflowY: "auto" }}>
+            <h3 style={{ color: "#c7d2fe", margin: "0 0 4px", fontSize: "0.95rem" }}>✏️ Corregir interpretación IA — {iaEdit.cliente}</h3>
+            <p style={{ color: "#64748b", fontSize: "0.68rem", margin: "0 0 10px" }}>
+              La corrección queda registrada con su nombre y marca de tiempo (log inmutable).</p>
+            {["nro_operacion", "estado", "monto", "observaciones", "resumen_interpretativo"].map(campo => (
+              <div key={campo} style={{ marginBottom: 8 }}>
+                <label style={{ color: "#94a3b8", fontSize: "0.66rem", textTransform: "uppercase" }}>{campo.replace(/_/g, " ")}</label>
+                {campo === "resumen_interpretativo" || campo === "observaciones"
+                  ? <textarea data-testid={`ia-edit-${campo}`} style={{ ...inp, minHeight: 50 }} value={iaEdit[campo] || ""}
+                      onChange={e => setIaEdit(s => ({ ...s, [campo]: e.target.value }))} />
+                  : <input data-testid={`ia-edit-${campo}`} style={inp} value={iaEdit[campo] || ""}
+                      onChange={e => setIaEdit(s => ({ ...s, [campo]: e.target.value }))} />}
+              </div>
+            ))}
+            <label style={{ color: "#e2e8f0", fontSize: "0.74rem", display: "flex", gap: 6, alignItems: "center" }}>
+              <input type="checkbox" data-testid="ia-edit-urgente" checked={!!iaEdit.urgente}
+                onChange={e => setIaEdit(s => ({ ...s, urgente: e.target.checked }))} /> Marcar como urgente</label>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 }}>
+              <button onClick={() => setIaEdit(null)} style={{ background: "none", color: "#94a3b8",
+                border: "1px solid rgba(148,163,184,0.4)", borderRadius: 8, padding: "0.45rem 1rem",
+                cursor: "pointer", fontSize: "0.76rem" }}>Cancelar</button>
+              <button data-testid="ia-edit-guardar" onClick={async () => {
+                try {
+                  const { fid, cliente, ...campos } = iaEdit;
+                  await axios.post(`${API}/api/contralor/espejo/operaciones/${fid}/ia-correccion`, campos);
+                  setIaEdit(null); cargar();
+                } catch (e) { alert(e.response?.data?.detail || "No fue posible guardar la corrección"); }
+              }} style={{ background: "rgba(129,140,248,0.2)", color: "#c7d2fe",
+                border: "1px solid rgba(129,140,248,0.6)", borderRadius: 8, padding: "0.45rem 1.2rem",
+                fontWeight: 800, cursor: "pointer", fontSize: "0.76rem" }}>Guardar corrección</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── CAPA B: CRITERIOS MANUALES DEL ADMINISTRADOR ── */}
       <div data-testid="espejo-capa-b" style={{ background: "rgba(15,23,42,0.6)",
