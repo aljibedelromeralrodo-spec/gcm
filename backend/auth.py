@@ -176,5 +176,22 @@ class AuthMiddleware(BaseHTTPMiddleware):
                     return JSONResponse({"detail": regla["mensaje"]}, status_code=403)
             elif any(path.startswith(p) for p in regla.get("bloqueados", ())) and not permitido:
                 return JSONResponse({"detail": regla["mensaje"]}, status_code=403)
+        # 👁 VISTA PREVIA POR ROL: auditoría de acciones del Admin en simulación
+        rol_simulado = request.headers.get("x-simula-rol", "").strip()
+        if es_escritura and rol_simulado and rol in ("admin", "maestro"):
+            try:
+                import uuid as _uuid
+                import asyncio as _asyncio
+                from database import db as _db
+                _asyncio.create_task(_db.simulacion_auditoria.insert_one({
+                    "id": str(_uuid.uuid4()),
+                    "fecha": datetime.now(timezone.utc).isoformat(),
+                    "usuario": claims.get("sub", ""),
+                    "rol_simulado": rol_simulado,
+                    "metodo": method, "ruta": path,
+                    "detalle": f"Acción realizada por Admin en simulación de rol {rol_simulado}",
+                }))
+            except Exception:
+                logging.warning("auditoría de simulación: no fue posible registrar")
         request.state.user = claims
         return await call_next(request)

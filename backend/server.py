@@ -569,6 +569,11 @@ async def startup():
         await _gcom.seed_gerencia_comercial()
     except Exception as e:
         logging.warning(f"seed gerencia comercial: {e}")
+    try:
+        import correo_destinatarios as _cdest
+        await _cdest.seed_correo_destinatarios()
+    except Exception as e:
+        logging.warning(f"seed correo destinatarios: {e}")
     # OPTIMIZACIÓN: índices en colecciones calientes (listas instantáneas)
     try:
         await db.folders.create_index("nombre")
@@ -627,6 +632,10 @@ async def startup():
     asyncio.create_task(_task_blindada(_malla.resumen_hilo_loop, "resumen_hilo_ia"))
     import espejo_postventa as _esp
     asyncio.create_task(_task_blindada(_esp.espejo_loop, "espejo_capa_a"))
+    # 🪞 ALGORITMO ESPEJO HÍBRIDO ADMINISTRATIVO (Victoria · Daniela · Javier)
+    import espejo_hibrido as _hib
+    await _hib.seed_espejo_hibrido()
+    asyncio.create_task(_task_blindada(_hib.espejo_hibrido_loop, "espejo_hibrido"))
     import gestion_ejecutivos as _gest
     asyncio.create_task(_task_blindada(_gest.gestion_harvest_loop, "gestion_ejecutivos"))
     asyncio.create_task(_task_blindada(_malla.buzon_aprendizaje_loop, "buzon_aprendizaje"))
@@ -675,6 +684,52 @@ def _token_usuario(user):
         "cargo": user.get("cargo") or "",
         "first_login": bool(user.get("first_login")),
     }
+
+
+@api.post("/admin/verificar-password")
+async def admin_verificar_password(payload: dict, request: Request):
+    """👁 VISTA PREVIA POR ROL: exclusiva del Admin, exige su propia contraseña."""
+    claims = getattr(request.state, "user", {}) or {}
+    if claims.get("rol") not in ("admin", "maestro"):
+        raise HTTPException(status_code=403, detail="La vista previa por rol es exclusiva e intransferible del Administrador")
+    password = (payload.get("password") or "").strip()
+    u = await db.users.find_one({"codigo": claims.get("sub", "")})
+    if not u:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    ok = (bool(password) and bcrypt.checkpw(password.encode(), u["clave_hash"].encode())
+          if u.get("clave_hash") else bool(password) and u.get("password") == password)
+    if not ok:
+        raise HTTPException(status_code=401, detail="Contraseña de Administrador incorrecta")
+    return {"ok": True}
+
+
+@api.get("/adn-helice/estado")
+async def adn_helice_estado(request: Request):
+    """🧬 HÉLICE DE ADN: estado real del algoritmo (Bóveda ADN 360 + Algoritmo Espejo)."""
+    claims = getattr(request.state, "user", {}) or {}
+    if claims.get("rol") not in ("admin", "maestro", "gerencia"):
+        raise HTTPException(status_code=403, detail="Visualización exclusiva del Admin y Gerencia Comercial")
+    adn = await db.adn_clientes_360.count_documents({})
+    espejo = await db.espejo_ia_log.count_documents({})
+    folders = await db.folders.count_documents({})
+    ult_adn = await db.adn_clientes_360.find_one({}, sort=[("actualizado", -1)]) or {}
+    ult_esp = await db.espejo_ia_log.find_one({}, sort=[("fecha", -1)]) or {}
+    ultimo = max(str(ult_adn.get("actualizado") or ""), str(ult_esp.get("fecha") or ""))
+    procesados = adn + espejo
+    esperados = folders + espejo
+    estado = "en_espera"
+    try:
+        dt = datetime.fromisoformat(ultimo.replace("Z", "+00:00"))
+        if not dt.tzinfo:
+            dt = dt.replace(tzinfo=timezone.utc)
+        seg = (datetime.now(timezone.utc) - dt).total_seconds()
+        estado = "procesando" if seg < 180 else ("activo" if seg < 86400 else "en_espera")
+    except Exception:
+        pass
+    return {"procesados": procesados, "esperados": esperados,
+            "faltantes": max(0, esperados - procesados),
+            "adn_registros": adn, "espejo_procesados": espejo,
+            "ultimo_procesamiento": ultimo, "estado": estado}
 
 
 @api.post("/auth/login")
@@ -14550,6 +14605,14 @@ api.include_router(_cex_mod.export_r)
 # 👑 GERENCIA COMERCIAL — brokers internos, ranking, trackers de pasos
 import gerencia_comercial as _gcom_mod
 api.include_router(_gcom_mod.gcom)
+
+# 📧 DESTINATARIOS DE CORREO POR ACCIÓN — panel Admin/Gerencia Comercial
+import correo_destinatarios as _cdest_mod
+api.include_router(_cdest_mod.correo_dest)
+
+# 🪞 ALGORITMO ESPEJO HÍBRIDO ADMINISTRATIVO — estado de fuentes y barridos
+import espejo_hibrido as _hib_mod
+api.include_router(_hib_mod.hibrido)
 
 # Regla #62 (Monitor de Envíos SMTP) + Regla #64 (Perfil Consolidado — verdad DashAI)
 import monitor_envios as _monit_mod

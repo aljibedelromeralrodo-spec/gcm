@@ -1,4 +1,6 @@
 import { useState, useEffect, lazy, Suspense } from "react";
+import VistaPreviaRol from "./components/VistaPreviaRol";
+import HeliceADN from "./components/HeliceADN";
 import axios from "axios";
 import "./App.css";
 import { API_URL, formatCurrency } from "./utils/formatters";
@@ -129,6 +131,11 @@ function App() {
 function MainApp() {
   const [user, setUser] = useState(null);
   const [activeModule, setActiveModule] = useState("dashboard");
+  // 👁 VISTA PREVIA POR ROL — exclusiva del Admin (sesión de fondo intacta)
+  const [previewRol, setPreviewRol] = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem("preview_rol") || "null"); } catch { return null; }
+  });
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [valorUF, setValorUF] = useState(39842);
   const [ufMeta, setUfMeta] = useState(null);
   const [loadedSimulation, setLoadedSimulation] = useState(null);
@@ -217,8 +224,19 @@ function MainApp() {
   }, [user]);
 
   useEffect(() => {
-    if (user?.perfil === 'D' || user?.rol === 'broker') setActiveModule('brokers');
-  }, [user]);
+    if (user?.perfil === 'D' || user?.rol === 'broker' || previewRol?.rol === 'broker') setActiveModule('brokers');
+  }, [user, previewRol]);
+
+  useEffect(() => {
+    // Los cambios en simulación viajan con esta cabecera → log de auditoría backend
+    if (previewRol) {
+      axios.defaults.headers.common["X-Simula-Rol"] = previewRol.label;
+      sessionStorage.setItem("preview_rol", JSON.stringify(previewRol));
+    } else {
+      delete axios.defaults.headers.common["X-Simula-Rol"];
+      sessionStorage.removeItem("preview_rol");
+    }
+  }, [previewRol]);
 
   const cargarSaldoEnergia = () => {
     const s = parseFloat(saldoInput);
@@ -238,6 +256,11 @@ function MainApp() {
     secureRemove("user");
     setUser(null);
   };
+
+  const esAdminReal = ["admin", "maestro"].includes(user?.rol || "");
+  const uEff = (user && previewRol && esAdminReal)
+    ? { ...user, rol: previewRol.rol, perfil: previewRol.perfil || "", _sim: previewRol.label }
+    : user;
 
   if (!user) return <LoginPage onLogin={setUser} />;
 
@@ -281,11 +304,24 @@ function MainApp() {
     { key: 'brokers', icon: 'fa-briefcase', label: 'Panel Broker' },
     { key: 'micorreo', icon: 'fa-envelope', label: 'Mi Correo' },
   ];
-  const acceso = accesoModulo(user, activeModule);
+  const acceso = accesoModulo(uEff, activeModule);
 
   return (
     <>
-    <div className="dashboard-layout" data-testid="dashboard">
+    {uEff?._sim && (
+      <div data-testid="preview-bar" style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 4000,
+        background: "linear-gradient(135deg,#BF953F,#FCF6BA,#AA771C)", color: "#0a0a0a",
+        display: "flex", alignItems: "center", gap: 12, padding: "0.45rem 1rem",
+        fontWeight: 900, fontSize: "0.76rem", letterSpacing: 0.5, boxShadow: "0 2px 14px rgba(0,0,0,0.45)" }}>
+        <i className="fa fa-eye"></i>
+        <span>MODO VISTA PREVIA — Simulando rol: {uEff._sim} · sesión Admin activa · sus cambios quedan auditados</span>
+        <button data-testid="preview-volver-admin" onClick={() => setPreviewRol(null)}
+          style={{ marginLeft: "auto", background: "#0a0a0a", color: "#FCF6BA", border: "none",
+            borderRadius: 8, padding: "0.35rem 1rem", fontWeight: 900, cursor: "pointer",
+            fontSize: "0.7rem", whiteSpace: "nowrap" }}>⬅ Volver a Admin</button>
+      </div>
+    )}
+    <div className="dashboard-layout" data-testid="dashboard" style={uEff?._sim ? { paddingTop: 40 } : undefined}>
       {sidebarOpen && (
         <div
           className="mobile-backdrop"
@@ -318,7 +354,8 @@ function MainApp() {
           <p className="sidebar-user-name">{user.nombre}</p>
           <p className="sidebar-user-role">{({ admin: 'Administrador', maestro: 'Administrador',
             gerencia: 'Gerencia Comercial', administracion: 'Administración', postventa: 'Postventa',
-            contralor: 'Contralor', broker: 'Broker', ejecutivo: user.perfil === 'D' ? 'Broker' : 'Administración' }[user.rol]) || user.rol}</p>
+            contralor: 'Contralor', broker: 'Broker', ejecutivo: uEff.perfil === 'D' ? 'Broker' : 'Administración' }[uEff.rol]) || uEff.rol}
+            {uEff._sim && <span style={{ display: "block", color: "#d4af37", fontSize: "0.56rem", fontWeight: 900 }}>👁 SIMULACIÓN</span>}</p>
           {user.cargo && (
             <p data-testid="sidebar-user-cargo" style={{ fontSize: "0.58rem", color: "#b8a04a",
               lineHeight: 1.5, margin: "4px 0 6px" }}>
@@ -383,6 +420,15 @@ function MainApp() {
               </button>
             )}
             {whatsappStatus?.isReady && <span className="topbar-wa-badge" data-testid="wa-status">WhatsApp Conectado</span>}
+            {esAdminReal && !previewRol && (
+              <button data-testid="btn-vista-previa-rol" onClick={() => setShowPreviewModal(true)}
+                title="Vista previa por rol — exclusivo del Administrador"
+                style={{ background: "rgba(212,175,55,0.12)", border: "1px solid rgba(212,175,55,0.5)",
+                  color: "#d4af37", borderRadius: 20, padding: "0.28rem 0.75rem", cursor: "pointer",
+                  fontSize: "0.68rem", fontWeight: 800, whiteSpace: "nowrap" }}>
+                <i className="fa fa-eye" style={{ marginRight: 5 }}></i>Vista previa por rol
+              </button>
+            )}
             <button data-testid="energia-indicador" onClick={() => setShowCargarSaldo(true)} title="Reserva de funcionamiento — clic para cargar saldo"
               style={{ background: energia?.nivel === "critico" ? "rgba(239,68,68,0.18)" : energia?.nivel === "bajo" ? "rgba(245,158,11,0.16)" : "rgba(16,201,138,0.12)",
                 border: `1px solid ${energia?.nivel === "critico" ? "#ef4444" : energia?.nivel === "bajo" ? "#f59e0b" : "#10c98a"}`,
@@ -430,7 +476,12 @@ function MainApp() {
           </div>
         )}
 
-        <BriefingMananero user={user} />
+        {showPreviewModal && esAdminReal && (
+          <VistaPreviaRol onClose={() => setShowPreviewModal(false)}
+            onActivar={(r) => { setPreviewRol(r); setShowPreviewModal(false); setActiveModule("dashboard"); }} />
+        )}
+
+        <BriefingMananero user={uEff} />
         <Suspense fallback={<div style={{ textAlign: "center", padding: "4rem" }}><i className="fa fa-spinner fa-spin" style={{ fontSize: "2rem", color: "var(--gold)" }}></i></div>}>
         {acceso === 'bloqueado' ? (
           <div data-testid="no-autorizado" style={{ display: "grid", placeItems: "center", minHeight: "50vh" }}>
@@ -439,7 +490,7 @@ function MainApp() {
               <i className="fa fa-lock" style={{ fontSize: 40, color: "#f87171" }}></i>
               <h2 style={{ color: "#f8fafc", fontSize: "1.15rem", marginTop: 14 }}>No está autorizado el ingreso a este módulo</h2>
               <p style={{ color: "#94a3b8", fontSize: "0.85rem", marginTop: 8 }}>
-                Su rol ({user.rol}) no tiene permisos sobre este módulo. Si necesita acceso, contacte al Administrador.</p>
+                Su rol ({uEff.rol}) no tiene permisos sobre este módulo. Si necesita acceso, contacte al Administrador.</p>
             </div>
           </div>
         ) : (<>
@@ -448,14 +499,15 @@ function MainApp() {
             borderRadius: 10, padding: "0.5rem 1rem", marginBottom: 12, color: "#e2e8f0", fontSize: "0.8rem", fontWeight: 700 }}>
             👁 MODO LECTURA — su rol puede visualizar este módulo pero no ejercer cambios.</div>
         )}
+        {activeModule === 'dashboard' && ['admin', 'maestro', 'gerencia'].includes(uEff.rol) && <HeliceADN />}
         {activeModule === 'dashboard' && (
-          ['gerencia', 'administracion', 'postventa', 'contralor', 'broker'].includes(user.rol)
+          ['gerencia', 'administracion', 'postventa', 'contralor', 'broker'].includes(uEff.rol)
             ? <>
-                {user.rol === 'gerencia' && <FrentePrincipal rol={user.rol} />}
-                <RoleDashboard rol={user.rol} nombre={user.nombre} onNavigate={setActiveModule} />
+                {uEff.rol === 'gerencia' && <FrentePrincipal rol={uEff.rol} />}
+                <RoleDashboard rol={uEff.rol} nombre={user.nombre} onNavigate={setActiveModule} />
               </>
             : <>
-                <FrentePrincipal rol={user.rol} />
+                <FrentePrincipal rol={uEff.rol} />
                 <DashboardModule valorUF={valorUF} userName={user?.nombre} onNavigate={setActiveModule} />
               </>)}
         {activeModule === 'simulador' && <SimuladorModule valorUF={valorUF} loadedSimulation={loadedSimulation} />}
@@ -467,9 +519,9 @@ function MainApp() {
         {activeModule === 'usuarios' && <UsuariosModule />}
         {activeModule === 'gerencia' && <GerenciaComercialModule />}
         {activeModule === 'gestion-ejecutivos' && <GestionEjecutivosModule />}
-        {activeModule === 'administracion' && <AdministracionModule user={user} />}
-        {activeModule === 'brokers' && <BrokersModule user={user} />}
-        {activeModule === 'micorreo' && <MiCorreoModule user={user} />}
+        {activeModule === 'administracion' && <AdministracionModule user={uEff} />}
+        {activeModule === 'brokers' && <BrokersModule user={uEff} />}
+        {activeModule === 'micorreo' && <MiCorreoModule user={uEff} />}
         {activeModule === 'supercarpeta' && <SupercarpetaModule />}
         {activeModule === 'basehistorica' && <BaseHistoricaModule />}
         {activeModule === 'criterios' && <CriteriosModule />}
@@ -488,8 +540,8 @@ function MainApp() {
         {activeModule === 'estudio' && <EstudioTituloModule />}
         {activeModule === 'escritura' && <EscrituraModule onNavigate={setActiveModule} />}
         {activeModule === 'contraloria' && <ContraloriaModule />}
-        {activeModule === 'contralor' && <ContralorModule user={user} />}
-        {activeModule === 'postventa' && <PostventaModule user={user} />}
+        {activeModule === 'contralor' && <ContralorModule user={uEff} />}
+        {activeModule === 'postventa' && <PostventaModule user={uEff} />}
         {activeModule === 'dashai' && <CerebroDashAIModule />}
         {activeModule === 'auditoria' && <AuditoriaForenseModule />}
         {activeModule === 'despacho' && <DespachoModule />}

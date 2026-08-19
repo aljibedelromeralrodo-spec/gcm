@@ -1,0 +1,62 @@
+{
+  "summary": "Sesión 7 (7 tareas nuevas). BACKEND: 15/15 pytest PASS cubriendo vision-operaciones, ejecutivos-desempeno + PUT (200 admin, 403 administracion), correo-destinatarios (lista/permanente/email inválido/RBAC), admin/verificar-password (ok/401/403), adn-helice/estado (200 admin+gerencia, 403 administracion) y espejo-hibrido/estado+barrido (3 fuentes EN ESPERA, sin errores). FRONTEND: bloqueado — Briefing Mañanero + Welcome Tour se superponen en loop tras login y no permiten acceder al dashboard; los data-testid del dashboard sí existen en el DOM (helice-panel, btn-helice-reproducir, btn-vista-previa-rol, nav-gerencia, nav-administracion se detectan), pero los clicks resultantes NO abren los modales/overlays esperados porque el overlay del tour/briefing intercepta los eventos.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "BriefingMananero.js",
+        "issue": "Bug de comparación en secureGet(clave,false): retorna JSON-stringified value con comillas ('\"2026-08-19\"') que nunca iguala a hoy ('2026-08-19'), por lo que la useEffect siempre reabre el modal. Además, race condition: axios.get inflight puede setVisible(true) DESPUÉS de cerrar(). Resultado: el Briefing reaparece varias veces por sesión, tapando otros modales incluido el Welcome Tour.",
+        "selector": "[data-testid=\"briefing-mananero\"]",
+        "priority": "HIGH"
+      },
+      {
+        "component": "WelcomeTour.js + BriefingMananero coexistencia",
+        "issue": "Ambos overlays (zIndex 300 briefing y .tour-overlay del welcome tour) compiten. El testing E2E automatizado no logra acceder al dashboard porque hasta que el usuario complete manualmente 5 pasos del tour + Comenzar jornada, cualquier click al dashboard queda interceptado. Falta un mecanismo de 'skip todo' o test hook para saltar overlays.",
+        "selector": ".tour-overlay",
+        "priority": "MEDIUM"
+      },
+      {
+        "component": "Dashboard React key warning",
+        "issue": "Se emiten repetidamente warnings 'Encountered two children with the same key, 2026-W34' (semana ISO) en la vista principal. Indica un .map con key duplicada; puede omitir renderizado de un ítem.",
+        "selector": "N/A (consola)",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "E2E completo iteración 41 (helice / vista previa por rol / módulo Gerencia / módulo Administración)",
+        "issue": "No se pudo verificar visualmente ninguno de los 7 flujos frontend porque el par Briefing+Tour bloqueó todas las interacciones. Se intentó: (a) preseed localStorage tour_done/welcome_tour_done/briefing_administrador; (b) click programático a 'Comenzar jornada' y 'Saltar' hasta 4 veces; (c) preseed cifrado XOR de la clave briefing_administrador vía secureSet en el navegador; (d) inyección de CSS `display:none !important` sobre [data-testid=briefing-mananero] y .tour-overlay con MutationObserver. En todos los casos el overlay reaparecía o el CSS no aplicaba.",
+        "affected_selectors": ["btn-helice-reproducir","helice-overlay","btn-vista-previa-rol","preview-password","preview-rol-*","preview-bar","nav-gerencia","filtro-*","gc-*","panel-ejecutivos-desempeno","ejecutivo-card-*","nav-administracion","panel-destinatarios-correo","panel-espejo-hibrido","espejo-barrido-manual","dest-input-*","dest-agregar-*","dest-guardar-*"]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter41.py",
+    "/app/test_reports/pytest/iter41.xml"
+  ],
+  "action_items": [
+    "Arreglar BriefingMananero.js: cambiar `secureGet(clave, false) === hoy` por `secureGet(clave) === hoy` (parseJson=true) o comparar contra JSON.stringify(hoy). Alternativa: guardar sin JSON.stringify. Esto elimina la reapertura infinita del modal.",
+    "Añadir guard en el useEffect para no llamar setVisible(true) si el clave ya fue cerrado en esta sesión (protección contra la race con axios inflight).",
+    "Considerar agregar data-testid=\"welcome-tour\" a .tour-overlay para permitir su cierre programático en tests. Idealmente, respetar localStorage.getItem('tour_done')==='1' para no renderizar en absoluto.",
+    "Resolver React duplicate key 2026-W34 en la vista principal del dashboard (buscar .map con key={semana} donde la semana se repite).",
+    "Una vez arreglado el Briefing, re-testear los 7 flujos E2E: helice (btn/overlay/pie/ESC), vista previa por rol (6 selectores + preview-bar + volver), Gerencia (6 filtros cartera + limpiar + sumatoria, sección Visión Comercial completa), panel-ejecutivos-desempeno con 3 tarjetas + historial, Administración (destinatarios y espejo-hibrido)."
+  ],
+  "critical_code_review_comments": [
+    "BriefingMananero.js L15: bug funcional grave — la clave `parseJson=false` produce comparación asimétrica con `hoy`, garantizando reapertura del modal cada montaje. Además el clave depende de `user?.codigo` que puede cambiar de 'u' a 'administrador' entre renders, retriggerando la useEffect y borrando el efecto del secureSet previo.",
+    "WelcomeTour.js: no persiste 'tour_done' en localStorage al finalizar; por eso cada sesión de test vuelve a mostrarlo aunque el usuario ya lo completó. Sugerido: en onClose, localStorage.setItem('tour_done','1') y renderizar null si ya está seteado.",
+    "Dashboard: warning 'duplicate key 2026-W34' — investigar componentes que iteren semanas ISO.",
+    "Backend correo_destinatarios.py: la ruta usa /{accion_id} en URL — es más limpio, pero la API devuelve tanto `id` (uuid) como `accion_id` (código). Se sugiere documentar en OpenAPI cuál usar en PUT/DELETE para evitar 404s (nuestro test inicial usó `id` y falló con 404). No es bug, es DX."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter41.py (nuevo)",
+    "/app/test_reports/pytest/iter41.xml (nuevo)"
+  ],
+  "success_rate": {"backend": "100% (15/15)", "frontend": "0% — bloqueado por overlays, no se pudo verificar flujos visualmente"},
+  "test_credentials": "administrador/141617575 usado con éxito en backend y login frontend. Otros roles verificados por backend: gerencia/Gerencia2026, administracion/Administracion2026.",
+  "seed_data_creation": "El test PUT /api/gerencia-comercial/ejecutivos-modulo/victoria dejó una tarea de prueba {id:t1, titulo:'Test', estado:'pendiente'} en el registro de Victoria. Se sugiere limpiar si contamina el panel real (main agent puede sobrescribir con la lista original).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend: 15/15 pytest PASS en /app/backend/tests/test_iter41.py — usar como regresión. El bloqueo del E2E frontend es un bug real de BriefingMananero.js (comparación secureGet(k,false) vs string plano) que hace reaparecer el modal en loop, cubriendo también al Welcome Tour. Cualquier agente que intente E2E automatizado en admin quedará bloqueado hasta que main agent aplique el fix del secureGet. Todos los data-testid del dashboard admin (helice-panel, btn-helice-reproducir, btn-vista-previa-rol, nav-gerencia, nav-administracion) SÍ existen en el DOM detrás del overlay, así que el trabajo del main agent no es agregar testids sino desbloquear el overlay.",
+  "rca of the issue": "BriefingMananero.js línea 15: `if (secureGet(clave, false) === hoy) return;` — secureGet con parseJson=false devuelve el string XOR desencriptado tal cual, que es la salida de JSON.stringify(hoy) => con comillas ('\"2026-08-19\"'). La comparación === '2026-08-19' (hoy sin comillas) siempre es false, y useEffect vuelve a llamar a /api/correos/briefing y setVisible(true) en cada montaje. Además, la clave depende de user?.codigo — que inicialmente es undefined ('u') y luego 'administrador', re-disparando la effect. Fix: usar `secureGet(clave)` (parseJson por defecto true) o comparar contra JSON.stringify(hoy)."
+}

@@ -12,8 +12,14 @@ export default function BriefingMananero({ user }) {
   const clave = `briefing_${user?.codigo || user?.nombre || "u"}`;
 
   useEffect(() => {
-    if (secureGet(clave, false) === hoy) return;
-    axios.get(`${API}/api/correos/briefing`).then(r => { setData(r.data); setVisible(true); }).catch(() => {});
+    const v = secureGet(clave, false);
+    if (v === hoy || v === JSON.stringify(hoy)) return;
+    let cancelado = false;
+    axios.get(`${API}/api/correos/briefing`).then(r => {
+      const v2 = secureGet(clave, false);
+      if (!cancelado && v2 !== hoy && v2 !== JSON.stringify(hoy)) { setData(r.data); setVisible(true); }
+    }).catch(() => {});
+    return () => { cancelado = true; };
   }, [clave, hoy]);
 
   const cerrar = () => { secureSet(clave, hoy); setVisible(false); };

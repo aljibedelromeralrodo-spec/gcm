@@ -24,6 +24,8 @@ Responde ÚNICAMENTE con un JSON válido (sin markdown, sin texto extra) con est
   "requerimientos": ["lista de requerimientos o documentos solicitados, implícitos o explícitos"],
   "alertas": ["alertas de riesgo, plazos vencidos o menciones a normativas detectadas"],
   "urgente": true/false,
+  "resolucion_serviu": true/false/null (true SOLO si el correo menciona resolución SERVIU emitida/aprobada; false si la menciona como pendiente, en trámite o rechazada; null si no se menciona),
+  "tipo_vivienda": "nueva" | "usada" | "" (solo si el correo indica si la propiedad es nueva o usada),
   "motivo_urgencia": "por qué es urgente (mención a normativas, plazos vencidos o riesgo), sino ''",
   "ambiguo": true/false,
   "resumen_interpretativo": "si el correo es ambiguo o incompleto, resumen interpretativo claro de 2-3 frases para el Contralor; si es claro, resumen ejecutivo de 1 frase"
@@ -71,6 +73,9 @@ async def analizar_correo(asunto, cuerpo, fecha_correo=""):
         "requerimientos": [str(x)[:200] for x in (d.get("requerimientos") or []) if x][:10],
         "alertas": [str(x)[:200] for x in (d.get("alertas") or []) if x][:10],
         "urgente": bool(d.get("urgente")),
+        "resolucion_serviu": d.get("resolucion_serviu") if isinstance(d.get("resolucion_serviu"), bool) else None,
+        "tipo_vivienda": (str(d.get("tipo_vivienda") or "").strip().lower()
+                          if str(d.get("tipo_vivienda") or "").strip().lower() in ("nueva", "usada") else ""),
         "motivo_urgencia": str(d.get("motivo_urgencia") or "").strip()[:300],
         "ambiguo": bool(d.get("ambiguo")),
         "resumen_interpretativo": str(d.get("resumen_interpretativo") or "").strip()[:600],

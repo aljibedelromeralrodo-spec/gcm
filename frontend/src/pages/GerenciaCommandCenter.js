@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
+import EjecutivosDesempeno from "../components/EjecutivosDesempeno";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 const oro = "#d4af37";
@@ -346,29 +347,50 @@ const BrokerCard = ({ b, interno }) => (
 export function PanelComercial() {
   const [p, setP] = useState(null);
   const [vista, setVista] = useState("general");
+  const [vd, setVd] = useState(null);
+  const [fSub, setFSub] = useState("");
+  const [fServ, setFServ] = useState("");
+  const [fViv, setFViv] = useState("");
+  const [fInmo, setFInmo] = useState("");
+  const [fProy, setFProy] = useState("");
   useEffect(() => {
     axios.get(`${API}/api/gerencia-comercial/panel`).then(r => setP(r.data)).catch(() => {});
+    axios.get(`${API}/api/gerencia-comercial/vision-operaciones`).then(r => setVd(r.data)).catch(() => {});
   }, []);
   if (!p) return null;
   const todos = [...p.brokers_internos, ...p.brokers_externos];
   const sel = vista === "general" ? null : todos.find(b => b.codigo === vista);
+  const opsAll = vd?.operaciones || [];
+  const scopeAll = sel ? opsAll.filter(o => matchBroker(o, sel)) : opsAll;
+  const scopeF = scopeAll.filter(o =>
+    (!fInmo || o.inmobiliaria === fInmo) &&
+    (!fProy || o.proyecto === fProy) &&
+    (!fSub || (fSub === "con" ? o.con_subsidio : !o.con_subsidio)) &&
+    (!fServ || (fServ === "con" ? o.resolucion_serviu : !o.resolucion_serviu)) &&
+    (!fViv || o.tipo_vivienda === fViv));
+  const inmobiliarias = [...new Set(scopeAll.map(o => o.inmobiliaria).filter(Boolean))].sort();
+  const proyectos = fInmo
+    ? [...new Set(scopeAll.filter(o => o.inmobiliaria === fInmo).map(o => o.proyecto).filter(Boolean))].sort()
+    : [];
+  const limpiarFiltros = () => { setFSub(""); setFServ(""); setFViv(""); setFInmo(""); setFProy(""); setVista("general"); };
+  const metaScope = sel ? (vd?.proyecciones_mes?.[sel.codigo] || 0)
+    : Object.values(vd?.proyecciones_mes || {}).reduce((s, n) => s + n, 0);
+  const filtrosActivos = !!(fSub || fServ || fViv || fInmo || fProy || sel);
   return (
     <div data-testid="gc-panel-comercial" style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 4 }}>
       <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
         <h2 style={{ ...h2, margin: 0 }}>👑 Visión Comercial</h2>
-        <select data-testid="gc-vista-selector" value={vista} onChange={e => setVista(e.target.value)}
-          style={{ background: "#0f172a", color: "#f8fafc", border: "1px solid rgba(212,175,55,0.4)",
-            borderRadius: 8, padding: "0.35rem 0.7rem", fontSize: "0.74rem", fontWeight: 700 }}>
-          <option value="general">Vista general — todas las operaciones</option>
-          <optgroup label="Brokers Internos">
-            {p.brokers_internos.map(b => <option key={b.codigo} value={b.codigo}>{b.nombre}</option>)}
-          </optgroup>
-          <optgroup label="Brokers Externos">
-            {p.brokers_externos.map(b => <option key={b.codigo} value={b.codigo}>{b.nombre}</option>)}
-          </optgroup>
-        </select>
       </div>
+      <FiltrosVision vista={vista} setVista={setVista}
+        internos={p.brokers_internos} externos={p.brokers_externos}
+        inmobiliarias={inmobiliarias} proyectos={proyectos}
+        fInmo={fInmo} setFInmo={setFInmo} fProy={fProy} setFProy={setFProy}
+        fSub={fSub} setFSub={setFSub} fServ={fServ} setFServ={setFServ}
+        fViv={fViv} setFViv={setFViv} total={scopeF.length}
+        uf={scopeF.reduce((s, o) => s + (o.monto_uf || 0), 0)} activos={filtrosActivos}
+        onLimpiar={limpiarFiltros} />
       {sel ? (
+        <>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }} data-testid="gc-vista-particular">
           <BrokerCard b={sel} interno={p.brokers_internos.some(b => b.codigo === sel.codigo)} />
           <div style={{ ...card, flex: "1 1 240px" }}>
@@ -379,6 +401,11 @@ export function PanelComercial() {
               de {p.ranking.length} brokers del período · {sel.proyecciones_total} proyecciones históricas</div>
           </div>
         </div>
+        <SubdivisionBroker ops={scopeF} meta={metaScope} mes={vd?.mes} />
+        <SumatoriasComparativos ops={scopeAll} seleccion={scopeF} activos={filtrosActivos}
+          meta={metaScope} mes={vd?.mes} mesAnt={vd?.mes_anterior}
+          titulo={`Sumatoria y comparativos — ${sel.nombre}`} />
+        </>
       ) : (
       <>
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
@@ -439,8 +466,240 @@ export function PanelComercial() {
           ))}
         </div>
       </div>
+      <SumatoriasComparativos ops={scopeAll} seleccion={scopeF} activos={filtrosActivos}
+        meta={metaScope} mes={vd?.mes} mesAnt={vd?.mes_anterior}
+        titulo="Sumatoria y comparativos — vista general" />
+      <EjecutivosDesempeno />
       </>
       )}
+    </div>
+  );
+}
+
+// ═══ FILTROS GLOBALES COMBINABLES: subsidio · resolución SERVIU · vivienda nueva/usada ═══
+const matchBroker = (o, b) => !!b && (o.broker_codigo === b.codigo ||
+  (o.broker_nombre || "").trim().toLowerCase() === (b.nombre || "").trim().toLowerCase());
+
+const chipSt = (activo) => ({ fontSize: "0.62rem", fontWeight: 800, borderRadius: 999, padding: "3px 11px",
+  cursor: "pointer", background: activo ? "rgba(212,175,55,0.22)" : "transparent",
+  color: activo ? "#FCF6BA" : "#94a3b8", border: `1px solid ${activo ? oro : "rgba(148,163,184,0.35)"}` });
+
+function FiltrosVision({ vista, setVista, internos, externos, inmobiliarias, proyectos,
+  fInmo, setFInmo, fProy, setFProy, fSub, setFSub, fServ, setFServ, fViv, setFViv,
+  total, uf, activos, onLimpiar }) {
+  const lbSt = { color: "#94a3b8", fontSize: "0.54rem", fontWeight: 900, letterSpacing: 1.2, marginBottom: 4 };
+  const selSt = { background: "#0f172a", color: "#f8fafc", border: "1px solid rgba(212,175,55,0.4)",
+    borderRadius: 8, padding: "0.35rem 0.6rem", fontSize: "0.7rem", fontWeight: 700, maxWidth: 230 };
+  const chips = [
+    ["vivienda", "TIPO DE VIVIENDA", fViv, setFViv, [["", "Todas"], ["nueva", "Nueva"], ["usada", "Usada"]]],
+    ["subsidio", "SUBSIDIO", fSub, setFSub, [["", "Todos"], ["con", "Con subsidio"], ["sin", "Sin subsidio"]]],
+    ["serviu", "RESOLUCIÓN SERVIU", fServ, setFServ, [["", "Todos"], ["con", "Con resolución"], ["sin", "Sin resolución"]]],
+  ];
+  return (
+    <div data-testid="gc-filtros-vision" style={{ ...card, padding: "0.8rem 1rem", display: "flex",
+      gap: 18, flexWrap: "wrap", alignItems: "flex-end" }}>
+      <div>
+        <div style={lbSt}>BROKER</div>
+        <select data-testid="gc-vista-selector" value={vista} onChange={e => setVista(e.target.value)} style={selSt}>
+          <option value="general">Todos los brokers</option>
+          <optgroup label="Brokers Internos">
+            {internos.map(b => <option key={b.codigo} value={b.codigo}>{b.nombre}</option>)}
+          </optgroup>
+          <optgroup label="Brokers Externos">
+            {externos.map(b => <option key={b.codigo} value={b.codigo}>{b.nombre}</option>)}
+          </optgroup>
+        </select>
+      </div>
+      <div>
+        <div style={lbSt}>INMOBILIARIA</div>
+        <select data-testid="gc-filtro-inmobiliaria" value={fInmo}
+          onChange={e => { setFInmo(e.target.value); setFProy(""); }} style={selSt}>
+          <option value="">Todas</option>
+          {inmobiliarias.map(i => <option key={i} value={i}>{i}</option>)}
+        </select>
+      </div>
+      <div>
+        <div style={lbSt}>PROYECTO</div>
+        <select data-testid="gc-filtro-proyecto" value={fProy} disabled={!fInmo}
+          onChange={e => setFProy(e.target.value)} style={{ ...selSt, opacity: fInmo ? 1 : 0.45 }}>
+          <option value="">{fInmo ? "Todos los proyectos" : "Elija una inmobiliaria"}</option>
+          {proyectos.map(pr => <option key={pr} value={pr}>{pr}</option>)}
+        </select>
+      </div>
+      {chips.map(([k, lb, val, set, ops]) => (
+        <div key={k}>
+          <div style={lbSt}>{lb}</div>
+          <div style={{ display: "flex", gap: 5 }}>
+            {ops.map(([v, l]) => (
+              <button key={v || "todos"} data-testid={`gc-filtro-${k}-${v || "todos"}`}
+                onClick={() => set(v)} style={chipSt(val === v)}>{l}</button>
+            ))}
+          </div>
+        </div>
+      ))}
+      <button data-testid="gc-limpiar-filtros" onClick={onLimpiar}
+        style={{ background: "rgba(239,68,68,0.12)", color: "#f87171", border: "1px solid rgba(239,68,68,0.5)",
+          borderRadius: 8, padding: "0.4rem 0.9rem", fontWeight: 800, cursor: "pointer", fontSize: "0.66rem" }}>
+        ✕ Limpiar filtros</button>
+      <div data-testid="gc-filtros-resumen" style={{ marginLeft: "auto", textAlign: "right" }}>
+        <div style={{ color: activos ? oro : "#94a3b8", fontSize: "0.6rem", fontWeight: 900, letterSpacing: 1 }}>
+          {activos ? "Σ RESULTADO CON FILTROS" : "Σ TOTAL DEL PERÍODO"}</div>
+        <div style={{ color: "#f8fafc", fontWeight: 900, fontSize: "0.95rem" }}>
+          {total} operaciones · <span style={{ color: oro }}>UF {Math.round(uf).toLocaleString("es-CL")}</span></div>
+      </div>
+    </div>
+  );
+}
+
+// ═══ SUBDIVISIÓN POR BROKER: Inmobiliaria → Proyecto ═══
+const nodoStats = (arr, meta, mes) => {
+  const activas = arr.filter(o => o.activa);
+  const monto = activas.reduce((s, o) => s + (o.monto_uf || 0), 0);
+  const estado = activas.some(o => o.dias_sin_mov >= 14) ? "rojo"
+    : activas.some(o => o.dias_sin_mov >= 7) ? "amarillo" : "verde";
+  const nuevas = arr.filter(o => o.mes_creacion === mes).length;
+  const ratio = meta ? Math.round((nuevas / meta) * 100) : null;
+  return { activas: activas.length, monto, estado, nuevas, ratio };
+};
+
+const NodoMetricas = ({ s }) => (
+  <span style={{ display: "inline-flex", gap: 14, alignItems: "baseline", flexWrap: "wrap" }}>
+    <span style={{ color: "#e2e8f0", fontSize: "0.68rem" }}><b style={{ color: "#f8fafc" }}>{s.activas}</b> activas</span>
+    <span style={{ color: oro, fontSize: "0.68rem", fontWeight: 800 }}>UF {Math.round(s.monto).toLocaleString("es-CL")}</span>
+    <span title={`Estado general: ${s.estado}`} style={{ display: "inline-block", width: 10, height: 10, borderRadius: "50%",
+      background: SEMAF[s.estado], boxShadow: `0 0 7px ${SEMAF[s.estado]}` }} />
+    <span style={{ fontSize: "0.64rem", fontWeight: 800,
+      color: s.ratio === null ? "#64748b" : s.ratio >= 100 ? "#22c55e" : s.ratio >= 60 ? "#facc15" : "#ef4444" }}>
+      {s.ratio === null ? "sin proyección" : `${s.ratio}% proy.`}</span>
+  </span>
+);
+
+function SubdivisionBroker({ ops, meta, mes }) {
+  const grupos = {};
+  ops.forEach(o => {
+    const g = grupos[o.inmobiliaria] = grupos[o.inmobiliaria] || {};
+    (g[o.proyecto] = g[o.proyecto] || []).push(o);
+  });
+  const inmos = Object.keys(grupos).sort((a, b) =>
+    Object.values(grupos[b]).flat().length - Object.values(grupos[a]).flat().length);
+  return (
+    <div style={card} data-testid="gc-subdivision-broker">
+      <h2 style={h2}>🏗 Subdivisión — Inmobiliaria → Proyecto</h2>
+      {inmos.length === 0 && <p style={{ color: "#64748b", fontSize: "0.7rem", fontStyle: "italic" }}>
+        Sin operaciones para los filtros seleccionados.</p>}
+      {inmos.map(inmo => {
+        const opsInmo = Object.values(grupos[inmo]).flat();
+        const sI = nodoStats(opsInmo, meta, mes);
+        return (
+          <div key={inmo} data-testid={`gc-inmo-${inmo}`} style={{ borderTop: "1px solid rgba(148,163,184,0.14)", padding: "8px 0" }}>
+            <div style={{ display: "flex", gap: 12, alignItems: "baseline", flexWrap: "wrap" }}>
+              <b style={{ color: "#f8fafc", fontSize: "0.82rem" }}>🏢 {inmo}</b>
+              <span style={{ color: "#64748b", fontSize: "0.6rem" }}>{opsInmo.length} operación(es)</span>
+              <span style={{ marginLeft: "auto" }}><NodoMetricas s={sI} /></span>
+            </div>
+            {Object.keys(grupos[inmo]).sort().map(proy => {
+              const sP = nodoStats(grupos[inmo][proy], meta, mes);
+              return (
+                <div key={proy} data-testid={`gc-proyecto-${inmo}-${proy}`}
+                  style={{ display: "flex", gap: 10, alignItems: "baseline", flexWrap: "wrap",
+                    margin: "4px 0 0 22px", padding: "3px 0",
+                    borderLeft: "2px solid rgba(212,175,55,0.25)", paddingLeft: 10 }}>
+                  <span style={{ color: "#cbd5e1", fontSize: "0.72rem", fontWeight: 700 }}>📐 {proy}</span>
+                  <span style={{ color: "#64748b", fontSize: "0.58rem" }}>{grupos[inmo][proy].length} op.</span>
+                  <span style={{ marginLeft: "auto" }}><NodoMetricas s={sP} /></span>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ═══ SUMATORIAS POR CATEGORÍA + COMPARATIVOS (mes anterior y proyección) ═══
+function SumatoriasComparativos({ ops, seleccion, activos, meta, mes, mesAnt, titulo }) {
+  const cat = (fn) => {
+    const l = ops.filter(fn);
+    return { n: l.length, uf: l.reduce((s, o) => s + (o.monto_uf || 0), 0) };
+  };
+  const cats = [
+    ["con-subsidio", "Con subsidio", cat(o => o.con_subsidio)],
+    ["sin-subsidio", "Sin subsidio", cat(o => !o.con_subsidio)],
+    ["con-serviu", "Con resolución SERVIU", cat(o => o.resolucion_serviu)],
+    ["sin-serviu", "Sin resolución SERVIU", cat(o => !o.resolucion_serviu)],
+    ["nueva", "Vivienda nueva", cat(o => o.tipo_vivienda === "nueva")],
+    ["usada", "Vivienda usada", cat(o => o.tipo_vivienda === "usada")],
+  ];
+  const opsMes = ops.filter(o => o.mes_creacion === mes);
+  const opsAnt = ops.filter(o => o.mes_creacion === mesAnt);
+  const mMes = opsMes.reduce((s, o) => s + (o.monto_uf || 0), 0);
+  const mAnt = opsAnt.reduce((s, o) => s + (o.monto_uf || 0), 0);
+  const difN = opsMes.length - opsAnt.length;
+  const pctN = opsAnt.length ? Math.round((difN / opsAnt.length) * 100) : null;
+  const difM = mMes - mAnt;
+  const pctM = mAnt ? Math.round((difM / mAnt) * 100) : null;
+  const ratioProy = meta ? Math.round((opsMes.length / meta) * 100) : null;
+  const col = (v) => v > 0 ? "#4ade80" : v < 0 ? "#f87171" : "#94a3b8";
+  const signo = (v) => `${v > 0 ? "+" : ""}${v}`;
+  return (
+    <div style={card} data-testid="gc-sumatorias">
+      <h2 style={h2}>Σ {titulo}</h2>
+      {activos && (
+        <p style={{ color: oro, fontSize: "0.62rem", fontWeight: 800, margin: "0 0 6px" }}>
+          Selección filtrada actual: {seleccion.length} operaciones · UF {Math.round(seleccion.reduce((s, o) => s + (o.monto_uf || 0), 0)).toLocaleString("es-CL")}</p>
+      )}
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        {cats.map(([k, lb, v]) => (
+          <div key={k} data-testid={`gc-suma-${k}`} style={{ flex: "1 1 150px", minWidth: 145,
+            background: "rgba(2,6,23,0.5)", border: "1px solid rgba(148,163,184,0.18)", borderRadius: 10, padding: "0.55rem 0.8rem" }}>
+            <div style={{ color: "#94a3b8", fontSize: "0.54rem", fontWeight: 900, letterSpacing: 0.8 }}>{lb.toUpperCase()}</div>
+            <div style={{ color: "#f8fafc", fontWeight: 900, fontSize: "1.15rem" }}>{v.n} <span style={{ fontSize: "0.6rem", color: "#94a3b8", fontWeight: 700 }}>ops</span></div>
+            <div style={{ color: oro, fontSize: "0.62rem", fontWeight: 800 }}>UF {Math.round(v.uf).toLocaleString("es-CL")}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 12 }}>
+        <div data-testid="gc-comparativo-mes" style={{ flex: "1 1 300px", background: "rgba(2,6,23,0.5)",
+          border: "1px solid rgba(96,165,250,0.28)", borderRadius: 10, padding: "0.7rem 1rem" }}>
+          <div style={{ color: "#93c5fd", fontSize: "0.58rem", fontWeight: 900, letterSpacing: 1 }}>
+            COMPARATIVO CON EL MES ANTERIOR ({(mesAnt || "").slice(5)}/{(mesAnt || "").slice(0, 4)})</div>
+          <div style={{ display: "flex", gap: 22, marginTop: 6, flexWrap: "wrap" }}>
+            <div>
+              <div style={{ color: "#94a3b8", fontSize: "0.54rem", fontWeight: 800 }}>OPERACIONES</div>
+              <div style={{ color: "#f8fafc", fontWeight: 900, fontSize: "1rem" }}>{opsMes.length} <span style={{ color: "#64748b", fontSize: "0.62rem" }}>vs {opsAnt.length}</span></div>
+              <div style={{ color: col(difN), fontSize: "0.66rem", fontWeight: 900 }}>
+                {signo(difN)} op. {pctN !== null && `(${signo(pctN)}%)`}</div>
+            </div>
+            <div>
+              <div style={{ color: "#94a3b8", fontSize: "0.54rem", fontWeight: 800 }}>MONTO UF</div>
+              <div style={{ color: "#f8fafc", fontWeight: 900, fontSize: "1rem" }}>{Math.round(mMes).toLocaleString("es-CL")} <span style={{ color: "#64748b", fontSize: "0.62rem" }}>vs {Math.round(mAnt).toLocaleString("es-CL")}</span></div>
+              <div style={{ color: col(difM), fontSize: "0.66rem", fontWeight: 900 }}>
+                {signo(Math.round(difM))} UF {pctM !== null && `(${signo(pctM)}%)`}</div>
+            </div>
+          </div>
+        </div>
+        <div data-testid="gc-comparativo-proyeccion" style={{ flex: "1 1 300px", background: "rgba(2,6,23,0.5)",
+          border: "1px solid rgba(212,175,55,0.3)", borderRadius: 10, padding: "0.7rem 1rem" }}>
+          <div style={{ color: oro, fontSize: "0.58rem", fontWeight: 900, letterSpacing: 1 }}>COMPARATIVO CON LA PROYECCIÓN</div>
+          <div style={{ display: "flex", gap: 22, marginTop: 6, alignItems: "baseline", flexWrap: "wrap" }}>
+            <div>
+              <div style={{ color: "#94a3b8", fontSize: "0.54rem", fontWeight: 800 }}>PROYECTADO ({(mes || "").slice(5)}/{(mes || "").slice(0, 4)})</div>
+              <div style={{ color: "#f8fafc", fontWeight: 900, fontSize: "1rem" }}>{meta || 0} op.</div>
+            </div>
+            <div>
+              <div style={{ color: "#94a3b8", fontSize: "0.54rem", fontWeight: 800 }}>LLEVA</div>
+              <div style={{ color: "#f8fafc", fontWeight: 900, fontSize: "1rem" }}>{opsMes.length} op.</div>
+            </div>
+            <div>
+              <div style={{ color: "#94a3b8", fontSize: "0.54rem", fontWeight: 800 }}>CUMPLIMIENTO</div>
+              <div style={{ fontWeight: 900, fontSize: "1.3rem",
+                color: ratioProy === null ? "#64748b" : ratioProy >= 100 ? "#22c55e" : ratioProy >= 60 ? "#facc15" : "#ef4444" }}>
+                {ratioProy === null ? "sin proyección" : `${ratioProy}%`}</div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

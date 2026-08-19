@@ -29,6 +29,16 @@ TRACKER_ESCRITURA = [
     {"id": "cierre_definitivo", "label": "Cierre definitivo", "plazo_habiles": 5},
 ]
 
+# ASIGNACIONES PERMANENTES DE MÓDULO (tareas distintas por ejecutivo, editables por Admin/Gerencia)
+EJECUTIVOS_MODULO = [
+    {"codigo": "victoria", "nombre": "Victoria Vílchez", "modulo": "administrativo",
+     "tareas": ["Validación documental y control de carpetas", "Gestión de documentos faltantes"]},
+    {"codigo": "daniela", "nombre": "Daniela Galindo", "modulo": "administrativo",
+     "tareas": ["Tramitación administrativa y envío a mesa", "Coordinación de instrucciones de escrituración"]},
+    {"codigo": "postventa", "nombre": "Javier Urrutia", "modulo": "postventa",
+     "tareas": ["Seguimiento paso a paso de escritura y postventa"]},
+]
+
 TRACKER_ADMINISTRATIVO = [
     {"id": "recepcion_carpeta", "label": "Recepción de carpeta"},
     {"id": "validacion_documental", "label": "Validación documental"},
@@ -70,7 +80,10 @@ async def seed_gerencia_comercial():
                 not any("plazo_habiles" in p for p in cfg.get("pasos", [])):
             await db.config.update_one({"_key": f"tracker_plantilla_{tipo}"},
                                        {"$set": {"pasos": pasos, "modificado": _now()}})
-    logging.info("👑 Gerencia Comercial: brokers internos y plantillas de tracker sembrados")
+    for e in EJECUTIVOS_MODULO:
+        await db.ejecutivos_modulo.update_one({"codigo": e["codigo"]}, {"$setOnInsert": {
+            "id": str(uuid.uuid4()), **e, "permanente": True, "creado": _now()}}, upsert=True)
+    logging.info("👑 Gerencia Comercial: brokers internos, plantillas de tracker y ejecutivos por módulo sembrados")
 
 
 # ═══ PANEL PRINCIPAL ═══
@@ -177,6 +190,67 @@ async def gcom_panel(request: Request):
             "ranking": ranking[:10], "ejecutivos": ejecutivos}
 
 
+@gcom.get("/vision-operaciones")
+async def vision_operaciones(request: Request):
+    """VISIÓN COMERCIAL — operaciones con categorías filtrables (subsidio, SERVIU,
+    vivienda nueva/usada) + subdivisión inmobiliaria/proyecto y comparativos."""
+    _exigir(request, ("gerencia", "admin", "maestro", "contralor"))
+    ahora = datetime.now(timezone.utc)
+    mes = ahora.strftime("%Y-%m")
+    mes_anterior = (ahora.replace(day=1) - timedelta(days=1)).strftime("%Y-%m")
+    folders = await db.folders.find({}, {"_id": 0, "id": 1, "nombre": 1, "broker_codigo": 1,
+                                         "broker_nombre": 1, "is_escrituracion": 1, "credit_request": 1,
+                                         "datos_financieros": 1, "created_at": 1, "updated_at": 1}).to_list(2000)
+    proy_mes = {}
+    for p in await db.broker_proyecciones.find({"mes": mes}, {"_id": 0, "broker_codigo": 1}).to_list(1000):
+        proy_mes[p["broker_codigo"]] = proy_mes.get(p["broker_codigo"], 0) + 1
+
+    def _monto_op(df, cr):
+        for src, k in ((df, "monto_credito"), (cr, "monto_credito_uf"), (cr, "monto_uf"),
+                       (cr, "monto_credito"), (cr, "monto")):
+            v = src.get(k)
+            if v in (None, "", 0):
+                continue
+            try:
+                if isinstance(v, str):
+                    v = float(v.replace(".", "").replace(",", "."))
+                v = float(v)
+                if v > 0:
+                    return round(v, 1)
+            except Exception:
+                continue
+        return 0.0
+
+    ops = []
+    for f in folders:
+        df = f.get("datos_financieros") or {}
+        cr = f.get("credit_request") or {}
+        con_sub = df.get("con_subsidio")
+        if con_sub is None:
+            con_sub = (cr.get("subsidy") or {}).get("tipo") == "con_subsidio"
+        tv = str(df.get("tipo_vivienda") or "").strip().lower()
+        if tv not in ("nueva", "usada"):
+            tv = "nueva"  # DEFAULT INSTITUCIONAL: vivienda nueva
+        try:
+            dt = datetime.fromisoformat(str(f.get("updated_at") or f.get("created_at") or "").replace("Z", "+00:00"))
+            dias = (ahora - (dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc))).days
+        except Exception:
+            dias = 0
+        activa = not f.get("is_escrituracion")
+        ops.append({"fid": f.get("id"), "cliente": f.get("nombre"),
+                    "broker_codigo": f.get("broker_codigo") or "", "broker_nombre": f.get("broker_nombre") or "",
+                    "inmobiliaria": (df.get("inmobiliaria") or "").strip() or "Sin inmobiliaria",
+                    "proyecto": (df.get("proyecto") or "").strip() or "Sin proyecto",
+                    "activa": activa, "monto_uf": _monto_op(df, cr),
+                    "mes_creacion": str(f.get("created_at") or "")[:7],
+                    "con_subsidio": bool(con_sub),
+                    "resolucion_serviu": bool(df.get("resolucion_serviu")),  # DEFAULT: sin resolución
+                    "tipo_vivienda": tv, "dias_sin_mov": dias,
+                    "semaforo": ("verde" if not activa or dias < 7 else "amarillo" if dias < 14 else "rojo")})
+    return {"mes": mes, "mes_anterior": mes_anterior, "actualizado": _now(),
+            "proyecciones_mes": proy_mes, "operaciones": ops}
+
+
 @gcom.get("/dashboard-principal")
 async def dashboard_principal(request: Request):
     """BLOQUE 1 — Frente principal en vivo: SOLO Admin y Gerencia Comercial."""
@@ -251,6 +325,122 @@ async def indices_admin(request: Request):
             "formaciones": {"usuarios_total": len(usuarios),
                             "pendientes_activacion": pend_activacion,
                             "activos": sum(1 for u in usuarios if u.get("activo", True) and not u.get("first_login"))}}
+
+
+# ═══ GESTIÓN DE EJECUTIVOS POR MÓDULO — desempeño en tiempo real ═══
+@gcom.put("/ejecutivos-modulo/{codigo}")
+async def ejecutivos_modulo_editar(codigo: str, payload: dict, request: Request):
+    c = _exigir(request, ("admin", "maestro", "gerencia"))
+    doc = await db.ejecutivos_modulo.find_one({"codigo": codigo})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Ejecutivo no encontrado")
+    tareas = [str(t).strip()[:200] for t in (payload or {}).get("tareas") or [] if str(t).strip()]
+    await db.ejecutivos_modulo.update_one({"codigo": codigo}, {"$set": {
+        "tareas": tareas, "modificado": _now(), "por": c.get("nombre") or c.get("sub")}})
+    return {"ok": True, "codigo": codigo, "tareas": tareas}
+
+
+@gcom.get("/ejecutivos-desempeno")
+async def ejecutivos_desempeno(request: Request):
+    """Indicadores por ejecutivo: cumplimiento de plazos, pendientes, vencidas,
+    historial mensual y alertas. Solo Admin y Gerencia Comercial."""
+    _exigir(request, ("admin", "maestro", "gerencia"))
+    ahora = datetime.now(timezone.utc)
+    asigs = await db.ejecutivos_modulo.find({}, {"_id": 0}).to_list(10)
+    plantillas = {"escritura": await _plantilla("escritura"), "administrativo": await _plantilla("administrativo")}
+    tipo_por_modulo = {"administrativo": "administrativo", "postventa": "escritura"}
+    trackers = {t: await db.trackers.find({"tipo": t}, {"_id": 0}).to_list(1000)
+                for t in ("escritura", "administrativo")}
+
+    def _eval(tipo, st):
+        pasos_st = st.get("pasos") or {}
+        previo, en_curso_visto = None, False
+        res = {"pendientes": 0, "vencidas": 0, "completadas": []}
+        for p in plantillas[tipo]:
+            e = pasos_st.get(p["id"]) or {}
+            plazo = p.get("plazo_habiles")
+            if e.get("completado"):
+                item = {"fecha": e.get("fecha") or "", "responsable": e.get("responsable") or "", "a_tiempo": None}
+                if plazo and previo and item["fecha"]:
+                    try:
+                        ini = datetime.fromisoformat(str(previo).replace("Z", "+00:00"))
+                        fin = datetime.fromisoformat(str(item["fecha"]).replace("Z", "+00:00"))
+                        item["a_tiempo"] = _dias_habiles_desde(ini, fin) <= plazo
+                    except Exception:
+                        pass
+                res["completadas"].append(item)
+                previo = e.get("fecha") or previo
+            else:
+                res["pendientes"] += 1
+                if not en_curso_visto:
+                    en_curso_visto = True
+                    if plazo and previo:
+                        try:
+                            ini = datetime.fromisoformat(str(previo).replace("Z", "+00:00"))
+                            if _dias_habiles_desde(ini, ahora) > plazo:
+                                res["vencidas"] += 1
+                        except Exception:
+                            pass
+        return res
+
+    activas_admin = await db.folders.count_documents({"is_escrituracion": {"$ne": True}})
+    pv_activos = await db.postventa_casos.count_documents({})
+    hoy = ahora.strftime("%Y-%m-%d")
+    salida = []
+    for a in asigs:
+        tipo = tipo_por_modulo.get(a["modulo"], "administrativo")
+        evs = [_eval(tipo, st) for st in trackers[tipo]]
+        pend = sum(e["pendientes"] for e in evs)
+        venc = sum(e["vencidas"] for e in evs)
+        mismo_modulo = [x for x in asigs if x["modulo"] == a["modulo"]]
+        nom = a["nombre"].lower().split()[0]
+        if len(mismo_modulo) == 1:
+            comp = [c for e in evs for c in e["completadas"]]
+        else:
+            comp = [c for e in evs for c in e["completadas"] if nom in (c["responsable"] or "").lower()]
+        con_plazo = [c for c in comp if c["a_tiempo"] is not None]
+        a_tiempo = sum(1 for c in con_plazo if c["a_tiempo"])
+        ratio = round(a_tiempo / len(con_plazo) * 100) if con_plazo else None
+        hist = {}
+        for c in comp:
+            m = (c["fecha"] or "")[:7]
+            if not m:
+                continue
+            h = hist.setdefault(m, {"completadas": 0, "a_tiempo": 0, "atrasadas": 0})
+            h["completadas"] += 1
+            if c["a_tiempo"] is True:
+                h["a_tiempo"] += 1
+            elif c["a_tiempo"] is False:
+                h["atrasadas"] += 1
+        historial = [{"mes": m, **v} for m, v in sorted(hist.items(), reverse=True)[:6]]
+        # ALERTA AUTOMÁTICA: tareas vencidas sin resolver (1 por día por ejecutivo)
+        if venc > 0:
+            existe = await db.alertas.find_one({"tipo": "ejecutivo_vencidas", "ejecutivo": a["codigo"],
+                                                "creado": {"$gte": hoy}})
+            if not existe:
+                await db.alertas.insert_one({
+                    "id": str(uuid.uuid4()), "tipo": "ejecutivo_vencidas", "ejecutivo": a["codigo"],
+                    "leida": False, "creado": _now(), "destinatarios": ["admin", "gerencia"],
+                    "titulo": f"🚨 {a['nombre']}: {venc} tarea(s) vencida(s) sin resolver",
+                    "mensaje": f"El módulo {a['modulo']} registra {venc} tarea(s) fuera de plazo sin completar."})
+        alertas_abiertas = await db.alertas.count_documents({
+            "leida": False,
+            "$or": [{"tipo": "ejecutivo_vencidas", "ejecutivo": a["codigo"]},
+                    {"tipo": "tracker_vencido", "mensaje": {"$regex": f"Tracker {tipo}"}}]})
+        salida.append({"codigo": a["codigo"], "nombre": a["nombre"], "modulo": a["modulo"],
+                       "tareas": a.get("tareas") or [],
+                       "ops_activas": pv_activos if a["modulo"] == "postventa" else activas_admin,
+                       "tareas_pendientes": pend, "tareas_vencidas": venc,
+                       "completadas_total": len(comp), "a_tiempo": a_tiempo,
+                       "atrasadas": len(con_plazo) - a_tiempo,
+                       "con_plazo_evaluadas": len(con_plazo), "ratio_cumplimiento": ratio,
+                       "historial_mensual": historial, "alertas_sin_resolver": alertas_abiertas,
+                       "plazos_definidos": any(p.get("plazo_habiles") for p in plantillas[tipo])})
+    return {"actualizado": _now(), "ejecutivos": salida,
+            "consolidado": {"tareas_pendientes": sum(x["tareas_pendientes"] for x in salida),
+                            "tareas_vencidas": sum(x["tareas_vencidas"] for x in salida),
+                            "alertas_sin_resolver": sum(x["alertas_sin_resolver"] for x in salida),
+                            "completadas_total": sum(x["completadas_total"] for x in salida)}}
 
 
 # ═══ TRACKERS DE PASOS (escritura / administrativo) ═══

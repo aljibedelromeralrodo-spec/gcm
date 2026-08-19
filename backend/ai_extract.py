@@ -207,6 +207,10 @@ async def extraer_datos_financieros(texto, cliente=""):
             "número o null), "
             "edad (edad en años calculada desde la fecha de nacimiento si aparece, número o null), "
             "con_subsidio (true si se menciona subsidio habitacional DS19/DS49/DS01, si no null), "
+            "resolucion_serviu (true si se menciona resolución SERVIU emitida o aprobada, "
+            "false si se menciona como pendiente/en trámite/rechazada, null si no se menciona), "
+            "tipo_vivienda ('nueva' si la propiedad es nueva/en verde/en blanco de inmobiliaria, "
+            "'usada' si es vivienda usada, null si no se indica), "
             "monto_credito (monto del crédito hipotecario en UF si aparece en carta de "
             "aprobación o simulación, número o null). "
             "REGLA INVIOLABLE — PROHIBIDO INVENTAR: si un dato no aparece literalmente en el "
@@ -231,6 +235,11 @@ async def extraer_datos_financieros(texto, cliente=""):
                     base[k] = v.strip()
             if isinstance(data.get("con_subsidio"), bool):
                 base["con_subsidio"] = data["con_subsidio"]
+            if isinstance(data.get("resolucion_serviu"), bool):
+                base["resolucion_serviu"] = data["resolucion_serviu"]
+            _tv = str(data.get("tipo_vivienda") or "").strip().lower()
+            if _tv in ("nueva", "usada"):
+                base["tipo_vivienda"] = _tv
             base["metodo"] = "ia"
     except Exception as e:
         base["error"] = str(e)[:200]

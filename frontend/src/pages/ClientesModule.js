@@ -812,6 +812,8 @@ export default function ClientesModule({ onNavigate }) {
       proyecto: df.proyecto || "",
       inmobiliaria: df.inmobiliaria || "",
       con_subsidio: df.con_subsidio ?? (folder.credit_request?.subsidy?.tipo === "con_subsidio"),
+      resolucion_serviu: df.resolucion_serviu ?? false,
+      tipo_vivienda: df.tipo_vivienda || "nueva",
       tipo_propiedad: df.tipo_propiedad || "",
       valor_propiedad: df.valor_propiedad ?? "",
       monto_subsidio: df.monto_subsidio ?? "",
@@ -860,6 +862,8 @@ export default function ClientesModule({ onNavigate }) {
         proyecto: ex.proyecto || prev.proyecto,
         inmobiliaria: ex.inmobiliaria || prev.inmobiliaria,
         con_subsidio: ex.con_subsidio ?? prev.con_subsidio,
+        resolucion_serviu: ex.resolucion_serviu ?? prev.resolucion_serviu,
+        tipo_vivienda: ex.tipo_vivienda || prev.tipo_vivienda,
         tipo_propiedad: ex.tipo_propiedad || prev.tipo_propiedad,
         valor_propiedad: ex.valor_propiedad ?? prev.valor_propiedad,
         monto_subsidio: ex.monto_subsidio ?? prev.monto_subsidio,
@@ -1899,6 +1903,19 @@ export default function ClientesModule({ onNavigate }) {
               <i className="fa fa-arrow-left"></i> Volver
             </button>
             <h3><i className="fa fa-folder-open"></i> {currentFolder.nombre}</h3>
+            {/* PRIMERA CATEGORÍA VISIBLE: resolución SERVIU (solo ventas con subsidio) */}
+            {(() => {
+              const df = currentFolder.datos_financieros || {};
+              const conSub = df.con_subsidio ?? (currentFolder.credit_request?.subsidy?.tipo === "con_subsidio");
+              const st = { display: "inline-block", padding: "0.35rem 0.9rem", borderRadius: 8, fontWeight: 900, fontSize: 13, letterSpacing: 0.5, whiteSpace: "nowrap" };
+              if (!conSub) return (
+                <span data-testid="badge-serviu" title="La resolución SERVIU aplica solo a ventas con subsidio"
+                  style={{ ...st, background: "rgba(148,163,184,0.12)", color: "#94a3b8", border: "1px dashed #64748b" }}>
+                  SIN SUBSIDIO · SERVIU NO APLICA</span>);
+              return df.resolucion_serviu
+                ? <span data-testid="badge-serviu" style={{ ...st, background: "rgba(34,197,94,0.18)", color: "#22c55e", border: "1px solid #22c55e" }}>✅ CON RESOLUCIÓN SERVIU</span>
+                : <span data-testid="badge-serviu" style={{ ...st, background: "rgba(239,68,68,0.18)", color: "#f87171", border: "1px solid #ef4444" }}>⛔ SIN RESOLUCIÓN SERVIU</span>;
+            })()}
             <div className="clientes-detail-actions">
               <button className="docs-btn secondary" onClick={saveAllAttachments} disabled={loading} data-testid="btn-fetch-attachments">
                 <i className={`fa ${loading ? "fa-spinner fa-spin" : "fa-envelope"}`}></i> Buscar Adjuntos
@@ -2103,6 +2120,20 @@ export default function ClientesModule({ onNavigate }) {
                   <select value={finDraft.con_subsidio ? "con" : "sin"} onChange={(e) => setFinDraft({ ...finDraft, con_subsidio: e.target.value === "con" })} style={{ width: "100%", padding: "0.4rem 0.5rem", borderRadius: 0, border: "1px solid #94a3b8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }}>
                     <option value="con">CON subsidio (DS1 / DS19)</option>
                     <option value="sin">SIN subsidio</option>
+                  </select>
+                </label>
+                {finDraft.con_subsidio && (
+                  <label style={{ fontSize: 12, color: "#be123c", fontWeight: 700 }}><b style={{ display: "block", color: "#be123c", fontWeight: 800 }}>Resolución SERVIU</b>
+                    <select data-testid="fin-resolucion-serviu" value={finDraft.resolucion_serviu ? "con" : "sin"} onChange={(e) => setFinDraft({ ...finDraft, resolucion_serviu: e.target.value === "con" })} style={{ width: "100%", padding: "0.4rem 0.5rem", borderRadius: 0, border: "1px solid #94a3b8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }}>
+                      <option value="con">CON resolución SERVIU</option>
+                      <option value="sin">SIN resolución SERVIU</option>
+                    </select>
+                  </label>
+                )}
+                <label style={{ fontSize: 12, color: "#be123c", fontWeight: 700 }}><b style={{ display: "block", color: "#be123c", fontWeight: 800 }}>Vivienda</b>
+                  <select data-testid="fin-tipo-vivienda" value={finDraft.tipo_vivienda || "nueva"} onChange={(e) => setFinDraft({ ...finDraft, tipo_vivienda: e.target.value })} style={{ width: "100%", padding: "0.4rem 0.5rem", borderRadius: 0, border: "1px solid #94a3b8", fontSize: 13, color: "#000", fontWeight: 600, background: "#fff" }}>
+                    <option value="nueva">Vivienda nueva</option>
+                    <option value="usada">Vivienda usada</option>
                   </select>
                 </label>
                 <label style={{ fontSize: 12, color: "#be123c", fontWeight: 700 }}><b style={{ display: "block", color: "#be123c", fontWeight: 800 }}>Tipo propiedad</b>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import TrackerPasos from "../components/TrackerPasos";
+import EspejoHibrido from "../components/EspejoHibrido";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 const inp = { background: "rgba(2,6,23,0.7)", border: "1px solid rgba(240,171,252,0.35)", color: "#f8fafc",
@@ -52,6 +53,7 @@ export default function PostventaModule({ user }) {
   if (!data) return <p style={{ color: "#94a3b8" }}>Cargando Postventa…</p>;
   return (
     <div data-testid="modulo-postventa" style={{ display: "grid", gap: 14 }}>
+      <EspejoHibrido />
       <div style={{ background: "linear-gradient(135deg,#2a0f2e,#3b1740)", border: "1px solid rgba(240,171,252,0.35)",
         borderLeft: "5px solid #f0abfc", borderRadius: 14, padding: "1.2rem 1.5rem" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>

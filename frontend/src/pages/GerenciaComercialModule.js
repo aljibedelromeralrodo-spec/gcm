@@ -42,6 +42,8 @@ const RECLAMOS_UI = [
   ["movimiento", "📩 Reclamar Movimiento", f => !!f.inactivo_96h, "mb-naranja"],
 ];
 
+const FILTRO0 = { broker: "", inmo: "", proy: "", viv: "", sub: "", serviu: "" };
+
 export default function GerenciaComercialModule() {
   const [data, setData] = useState(null);
   const [busyRec, setBusyRec] = useState("");
@@ -59,7 +61,7 @@ export default function GerenciaComercialModule() {
       setReparosModal({ cliente: f.cliente, loading: false, reparos: [], error: e.response?.data?.detail || "Error" });
     }
   };
-  const [filtro, setFiltro] = useState({ broker: "", desde: "", hasta: "", docs: "", tipo: "" });
+  const [filtro, setFiltro] = useState(FILTRO0);
   const [isMobile, setIsMobile] = useState(window.matchMedia("(max-width: 768px)").matches);
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 768px)");
@@ -107,26 +109,32 @@ export default function GerenciaComercialModule() {
     setBusyRec("");
   };
 
-  // CENTRO DE FILTRADO MULTI-VARIABLE (instantáneo, en memoria — Regla #54)
+  // CENTRO DE FILTRADO (instantáneo, en memoria — Regla #54): SOLO los 6 filtros oficiales
   const cartera = useMemo(() => {
     let fs = data?.cartera || [];
-    if (filtro.broker) fs = fs.filter(f => (f.origen || "") === filtro.broker);
-    if (filtro.desde) fs = fs.filter(f => (f.actualizado || "") >= filtro.desde);
-    if (filtro.hasta) fs = fs.filter(f => (f.actualizado || "") <= filtro.hasta);
-    if (filtro.docs === "completo") fs = fs.filter(f => f.documentacion === "ok" && f.doc20?.estado === "ok");
-    if (filtro.docs === "incompleto") fs = fs.filter(f => !(f.documentacion === "ok" && f.doc20?.estado === "ok"));
-    if (filtro.tipo === "subsidio") fs = fs.filter(f => f.subsidio);
-    if (filtro.tipo === "sin_subsidio") fs = fs.filter(f => !f.subsidio);
-    if (filtro.tipo === "inmobiliaria") fs = fs.filter(f => f.tipo_operacion === "INMOBILIARIA");
+    if (filtro.broker) fs = fs.filter(f => (f.broker_origen || "") === filtro.broker);
+    if (filtro.inmo) fs = fs.filter(f => (f.inmobiliaria || f.origen || "") === filtro.inmo);
+    if (filtro.proy) fs = fs.filter(f => (f.proyecto || "") === filtro.proy);
+    if (filtro.viv) fs = fs.filter(f => (f.tipo_vivienda || "nueva") === filtro.viv);
+    if (filtro.sub === "con") fs = fs.filter(f => f.subsidio);
+    if (filtro.sub === "sin") fs = fs.filter(f => !f.subsidio);
+    if (filtro.serviu === "con") fs = fs.filter(f => f.resolucion_serviu);
+    if (filtro.serviu === "sin") fs = fs.filter(f => !f.resolucion_serviu);
     return fs;
   }, [data, filtro]);
+  const ufFiltrado = useMemo(() => cartera.reduce((s, f) => s + (Number(f.monto_credito_uf) || 0), 0), [cartera]);
+  const brokersOpc = useMemo(() => [...new Set((data?.cartera || []).map(f => f.broker_origen).filter(Boolean))].sort(), [data]);
+  const inmosOpc = useMemo(() => [...new Set((data?.cartera || []).map(f => f.inmobiliaria || f.origen).filter(Boolean))].sort(), [data]);
+  const proysOpc = useMemo(() => filtro.inmo
+    ? [...new Set((data?.cartera || []).filter(f => (f.inmobiliaria || f.origen) === filtro.inmo).map(f => f.proyecto).filter(Boolean))].sort()
+    : [], [data, filtro.inmo]);
 
   const glass = { background: "rgba(30,41,59,0.55)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)",
     border: "1px solid rgba(148,163,184,0.18)", borderRadius: 14 };
   const res = data?.resumen || {};
 
-  const Tarjeta = ({ k, titulo, val, activo }) => (
-    <button data-testid={`gerencia-card-${k}`} onClick={() => setFiltro({ ...filtro, tipo: activo ? "" : k })}
+  const Tarjeta = ({ k, titulo, val, activo, onClick }) => (
+    <button data-testid={`gerencia-card-${k}`} onClick={onClick}
       className="maserati-btn" style={{ flexDirection: "column", alignItems: "flex-start", gap: 2, minWidth: 160,
         borderColor: activo ? "#d4af37" : undefined, background: activo ? "rgba(212,175,55,0.12)" : undefined }}>
       <span style={{ fontSize: "0.58rem", color: "#94a3b8", letterSpacing: "0.12em" }}>{titulo}</span>
@@ -156,45 +164,71 @@ export default function GerenciaComercialModule() {
 
       {/* CABECERA SEGMENTADA: sumatorias con filtrado dinámico */}
       <div className="gerencia-filtros" data-testid="gerencia-cards" style={{ marginBottom: 12 }}>
-        <Tarjeta k="subsidio" titulo="CON SUBSIDIO" val={res.subsidio} activo={filtro.tipo === "subsidio"} />
-        <Tarjeta k="sin_subsidio" titulo="SIN SUBSIDIO" val={res.sin_subsidio} activo={filtro.tipo === "sin_subsidio"} />
-        <Tarjeta k="inmobiliaria" titulo="INMOBILIARIA" val={{ n: (data?.cartera || []).filter(f => f.tipo_operacion === "INMOBILIARIA").length, uf: 0 }} activo={filtro.tipo === "inmobiliaria"} />
-        <button data-testid="gerencia-card-total" onClick={() => setFiltro({ broker: "", desde: "", hasta: "", docs: "", tipo: "" })}
+        <Tarjeta k="subsidio" titulo="CON SUBSIDIO" val={res.subsidio} activo={filtro.sub === "con"}
+          onClick={() => setFiltro({ ...filtro, sub: filtro.sub === "con" ? "" : "con" })} />
+        <Tarjeta k="sin_subsidio" titulo="SIN SUBSIDIO" val={res.sin_subsidio} activo={filtro.sub === "sin"}
+          onClick={() => setFiltro({ ...filtro, sub: filtro.sub === "sin" ? "" : "sin" })} />
+        <div data-testid="gerencia-card-filtrado" className="maserati-btn" style={{ flexDirection: "column",
+          alignItems: "flex-start", gap: 2, minWidth: 180, cursor: "default", borderColor: "#d4af37" }}>
+          <span style={{ fontSize: "0.58rem", color: "#d4af37", letterSpacing: "0.12em" }}>Σ RESULTADO FILTRADO</span>
+          <span style={{ fontSize: "0.9rem", color: "#FCF6BA" }}>{cartera.length} ops · {Math.round(ufFiltrado).toLocaleString("es-CL")} UF</span>
+        </div>
+        <button data-testid="gerencia-card-total" onClick={() => setFiltro(FILTRO0)}
           className="maserati-btn neon" style={{ flexDirection: "column", alignItems: "flex-start", gap: 2, minWidth: 160 }}>
           <span style={{ fontSize: "0.58rem", color: "#94a3b8", letterSpacing: "0.12em" }}>TOTAL (limpiar filtros)</span>
           <span style={{ fontSize: "0.9rem" }}>{res.total?.n ?? 0} ops · {Number(res.total?.uf ?? 0).toLocaleString("es-CL")} UF</span>
         </button>
       </div>
 
-      {/* CENTRO DE FILTRADO MULTI-VARIABLE */}
-      <div className="gerencia-filtros" data-testid="gerencia-filtros" style={{ ...glass, padding: "0.7rem 0.9rem", marginBottom: 12 }}>
-        <label style={{ color: "#94a3b8", fontSize: "0.62rem" }}>Inmobiliaria / Origen<br />
+      {/* CENTRO DE FILTRADO — SOLO: Broker · Inmobiliaria · Proyecto · Vivienda · Subsidio · SERVIU */}
+      <div className="gerencia-filtros" data-testid="gerencia-filtros" style={{ ...glass, padding: "0.7rem 0.9rem", marginBottom: 12, alignItems: "flex-end" }}>
+        <label style={{ color: "#94a3b8", fontSize: "0.62rem" }}>Broker<br />
           <select data-testid="filtro-broker" style={selEstilo} value={filtro.broker} onChange={e => setFiltro({ ...filtro, broker: e.target.value })}>
             <option value="">Todos</option>
-            {(data?.brokers || []).map(b => <option key={b} value={b}>{b}</option>)}
+            {brokersOpc.map(b => <option key={b} value={b}>{b}</option>)}
           </select>
         </label>
-        <label style={{ color: "#94a3b8", fontSize: "0.62rem" }}>Desde<br />
-          <input data-testid="filtro-desde" type="date" style={selEstilo} value={filtro.desde} onChange={e => setFiltro({ ...filtro, desde: e.target.value })} />
-        </label>
-        <label style={{ color: "#94a3b8", fontSize: "0.62rem" }}>Hasta<br />
-          <input data-testid="filtro-hasta" type="date" style={selEstilo} value={filtro.hasta} onChange={e => setFiltro({ ...filtro, hasta: e.target.value })} />
-        </label>
-        <label style={{ color: "#94a3b8", fontSize: "0.62rem" }}>Estado documental<br />
-          <select data-testid="filtro-docs" style={selEstilo} value={filtro.docs} onChange={e => setFiltro({ ...filtro, docs: e.target.value })}>
-            <option value="">Todos</option>
-            <option value="completo">Completo</option>
-            <option value="incompleto">Incompleto</option>
-          </select>
-        </label>
-        <label style={{ color: "#94a3b8", fontSize: "0.62rem" }}>Tipo operación<br />
-          <select data-testid="filtro-tipo" style={selEstilo} value={filtro.tipo} onChange={e => setFiltro({ ...filtro, tipo: e.target.value })}>
+        <label style={{ color: "#94a3b8", fontSize: "0.62rem" }}>Inmobiliaria<br />
+          <select data-testid="filtro-inmobiliaria" style={selEstilo} value={filtro.inmo}
+            onChange={e => setFiltro({ ...filtro, inmo: e.target.value, proy: "" })}>
             <option value="">Todas</option>
-            <option value="subsidio">Subsidio</option>
-            <option value="sin_subsidio">Sin Subsidio</option>
-            <option value="inmobiliaria">Inmobiliaria</option>
+            {inmosOpc.map(i => <option key={i} value={i}>{i}</option>)}
           </select>
         </label>
+        <label style={{ color: "#94a3b8", fontSize: "0.62rem" }}>Proyecto<br />
+          <select data-testid="filtro-proyecto" style={{ ...selEstilo, opacity: filtro.inmo ? 1 : 0.45 }}
+            disabled={!filtro.inmo} value={filtro.proy} onChange={e => setFiltro({ ...filtro, proy: e.target.value })}>
+            <option value="">{filtro.inmo ? "Todos" : "Elija inmobiliaria"}</option>
+            {proysOpc.map(pr => <option key={pr} value={pr}>{pr}</option>)}
+          </select>
+        </label>
+        <label style={{ color: "#94a3b8", fontSize: "0.62rem" }}>Tipo de vivienda<br />
+          <select data-testid="filtro-vivienda" style={selEstilo} value={filtro.viv} onChange={e => setFiltro({ ...filtro, viv: e.target.value })}>
+            <option value="">Todas</option>
+            <option value="nueva">Nueva</option>
+            <option value="usada">Usada</option>
+          </select>
+        </label>
+        <label style={{ color: "#94a3b8", fontSize: "0.62rem" }}>Subsidio<br />
+          <select data-testid="filtro-subsidio" style={selEstilo} value={filtro.sub} onChange={e => setFiltro({ ...filtro, sub: e.target.value })}>
+            <option value="">Todos</option>
+            <option value="con">Con subsidio</option>
+            <option value="sin">Sin subsidio</option>
+          </select>
+        </label>
+        <label style={{ color: "#94a3b8", fontSize: "0.62rem" }}>Resolución SERVIU<br />
+          <select data-testid="filtro-serviu" style={selEstilo} value={filtro.serviu} onChange={e => setFiltro({ ...filtro, serviu: e.target.value })}>
+            <option value="">Todos</option>
+            <option value="con">Con resolución</option>
+            <option value="sin">Sin resolución</option>
+          </select>
+        </label>
+        <button data-testid="filtro-limpiar" onClick={() => setFiltro(FILTRO0)}
+          style={{ background: "rgba(239,68,68,0.12)", color: "#f87171", border: "1px solid rgba(239,68,68,0.5)",
+            borderRadius: 10, padding: "0.45rem 0.9rem", fontWeight: 800, cursor: "pointer", fontSize: "0.64rem" }}>
+          ✕ Limpiar filtros</button>
+        <span data-testid="filtro-sumatoria" style={{ marginLeft: "auto", color: "#d4af37", fontSize: "0.72rem", fontWeight: 900 }}>
+          Σ {cartera.length} operaciones · UF {Math.round(ufFiltrado).toLocaleString("es-CL")}</span>
       </div>
 
       {(data?.alertas_notaria || 0) > 0 && (

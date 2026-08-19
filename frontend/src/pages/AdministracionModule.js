@@ -3,6 +3,8 @@ import axios from "axios";
 import GestorFuentesIMAP from "../components/GestorFuentesIMAP";
 import EstadoSalida from "../components/EstadoSalida";
 import ConfigEjecutivos, { ConexionConcreces } from "../components/ConfigEjecutivos";
+import DestinatariosCorreo from "../components/DestinatariosCorreo";
+import EspejoHibrido from "../components/EspejoHibrido";
 import DocumentoViewer from "../components/DocumentoViewer";
 import TrackerPasos from "../components/TrackerPasos";
 
@@ -342,6 +344,10 @@ export default function AdministracionModule({ user }) {
         <ConfigEjecutivos />
         <ConexionConcreces />
       </>)}
+      {/* 📧 DESTINATARIOS DE CORREO POR ACCIÓN — Admin y Gerencia Comercial */}
+      {["admin", "maestro", "gerencia"].includes(user?.rol) && <DestinatariosCorreo />}
+      {/* 🪞 ESPEJO HÍBRIDO — estado de fuentes (los ejecutivos ven solo la propia) */}
+      <EspejoHibrido />
       {/* Bandeja visible para Daniela, Victoria y el Admin */}
       {["admin", "maestro", "administracion"].includes(user?.rol) && <BandejaSinClasificar />}
       {["admin", "maestro", "administracion"].includes(user?.rol) && <TrackerAdministrativo />}

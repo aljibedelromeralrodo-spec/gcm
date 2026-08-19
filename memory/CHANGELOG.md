@@ -1528,3 +1528,61 @@ Constitución VERSION 19 (nuevas reglas #55, #56, #57).
   en PostventaModule (toggle por caso), TrackerAdministrativo en AdministracionModule (selector carpeta).
 - Verificado: curl 100% endpoints + RBAC 403s, screenshots OK (Frente Principal, Panel Comercial,
   vista particular, índices admin). PENDIENTE: testing agent E2E frontend de estos flujos.
+
+
+## Actualización 2026-08 (fork 5) — Lote de 7 tareas Gerencia/Config/Espejo (iteración 41: backend 15/15 PASS + E2E visual OK)
+### A. Filtros y Subdivisión Visión Comercial
+- Nuevos campos de negocio: `resolucion_serviu` (bool, default False) y `tipo_vivienda` (nueva/usada, default nueva)
+  en datos_financieros; editables en panel financiero de la ficha (fin-resolucion-serviu solo si con subsidio, fin-tipo-vivienda).
+- GET /api/gerencia-comercial/vision-operaciones: ops con categorías + proyecciones_mes.
+- PanelComercial (GerenciaCommandCenter.js): FiltrosVision (Broker, Inmobiliaria, Proyecto dependiente,
+  Vivienda, Subsidio, SERVIU + limpiar + Σ ops/UF), SubdivisionBroker (Inmobiliaria→Proyecto con activas/monto/semáforo/ratio),
+  SumatoriasComparativos (6 categorías + comparativo mes anterior abs/% + proyección vs avance).
+- Badge SERVIU primera categoría visible en ficha cliente (badge-serviu; solo aplica a ventas con subsidio).
+- Espejo/ai_extract: Claude ahora detecta resolucion_serviu y tipo_vivienda en correos.
+### B. Panel Destinatarios de Correo por Acción (correo_destinatarios.py + DestinatariosCorreo.js en Administración)
+- 6 acciones base seed; respuestas_brokers = REGLA PERMANENTE (to: Victoria+Daniela, no puede quedar vacía).
+- CRUD admin/gerencia (403 resto), validación de emails, acciones custom (crear admin/gerencia, eliminar solo admin),
+  botón "Enviar prueba" (SMTP real vía email_service). Helper destinatarios_de() para wiring futuro.
+### C. Gestión de Ejecutivos por Módulo (gerencia_comercial.py + EjecutivosDesempeno.js)
+- Seed ejecutivos_modulo permanente: Victoria/Daniela→administrativo (tareas distintas editables), Javier→postventa.
+- GET /ejecutivos-desempeno: ops activas, pendientes, vencidas, ratio cumplimiento (pasos con plazo),
+  historial mensual (6m), alertas automáticas ejecutivo_vencidas (1/día). PUT /ejecutivos-modulo/{codigo} edita tareas.
+- Panel en Visión Comercial: vista consolidada + individual con historial. NOTA: plazos del tracker administrativo
+  quedaron "por definir" (usuario: "lo haremos mañana") → ratio muestra "Plazos por definir".
+### D. Corrección panel de filtros cartera (GerenciaComercialModule.js)
+- SOLO 6 filtros oficiales (filtro-broker/inmobiliaria/proyecto/vivienda/subsidio/serviu) + filtro-limpiar +
+  filtro-sumatoria (Σ ops·UF reactiva). ELIMINADOS: Desde/Hasta/Estado documental/Tipo operación y tarjeta INMOBILIARIA.
+- Backend cartera (bodega_concreces.py) expone resolucion_serviu y tipo_vivienda por fila.
+### E. Vista Previa por Rol (exclusiva Admin)
+- Botón topbar btn-vista-previa-rol → modal VistaPreviaRol.js: re-verificación de contraseña
+  (POST /api/admin/verificar-password) → 6 roles (Gerencia, Administrativo, Postventa, Ejecutivo, Broker Int/Ext).
+- App.js: uEff (rol simulado solo en rendering; JWT sigue admin), barra dorada fija preview-bar + Volver a Admin,
+  sessionStorage preview_rol, header axios X-Simula-Rol.
+- auth.py middleware: mutaciones con X-Simula-Rol + rol admin → db.simulacion_auditoria
+  ("Acción realizada por Admin en simulación de rol X"). Verificado E2E.
+### F. Hélice de ADN (HeliceADN.js + GET /api/adn-helice/estado)
+- Panel en Dashboard (admin/maestro/gerencia) + botón Reproducir visualización → overlay Canvas fullscreen
+  (negro profundo, hélice dorado mate desde el centro, loop, salir con tecla/clic, zIndex 99999).
+- Pie dorado: bloques procesados (ADN 360 + espejo_ia_log), último procesamiento, estado (procesando/activo/en_espera).
+- Auto-apertura cuando estado=procesando (sessionStorage helice_auto por timestamp).
+### G. Algoritmo Espejo Híbrido Administrativo (espejo_hibrido.py)
+- 3 fuentes oficiales seed: victoriavilches@ (PRIMARIA), danielagalindo@ (COMPLEMENTARIA), javierurrutia@ (POSTVENTA).
+- 12 env vars vacías en backend/.env: IMAP_{VICTORIA,DANIELA,JAVIER}_{HOST,PORT,USER,PASS} (credenciales llegan mañana).
+- Orden credenciales: entorno → panel Admin (Fernet CRED_CIPHER_KEY) → sin credenciales = EN ESPERA sin errores.
+- Loop cada 5 min + POST /barrido manual (admin). Claude clasifica capa aprobacion/administrativa/postventa,
+  extrae tipo/nºoperación/estado/requerimientos/alertas/plazos; discrepancia → operación EN REVISIÓN
+  (alerta espejo_revision + folder.espejo_revision, NO procesa) — gate consultar_cerebro obligatorio.
+- Auditoría espejo_barridos (timestamp, correos procesados, ops actualizadas, discrepancias, duración).
+- GET /estado con RBAC: admin/gerencia/contralor ven todo; victoria/daniela/postventa SOLO su fuente; nunca credenciales.
+- Panel EspejoHibrido.js en Administración y Postventa (fuentes + bitácora + barrido manual admin).
+### Bugs corregidos
+- BriefingMananero.js: secureGet con parseJson lanzaba excepción con fechas planas → modal reaparecía en loop
+  (bloqueaba E2E). Fix: comparación robusta v===hoy||v===JSON.stringify(hoy) + guard de race con cancelado.
+- WelcomeTour: data-testid="welcome-tour" agregado. FrentePrincipal: key duplicada 2026-W34 → key semana+fecha.
+- Datos de prueba del testing agent en tareas de Victoria restaurados.
+### Testing
+- /app/test_reports/iteration_41.json: backend 15/15 pytest PASS (/app/backend/tests/test_iter41.py como regresión).
+- E2E visual propio post-fix: filtros cartera 8/8, sumatoria reactiva, subdivisión+sumatorias+comparativos,
+  panel ejecutivos 3 tarjetas, destinatarios+regla permanente, espejo híbrido 3 fuentes EN ESPERA,
+  vista previa por rol completa (activar/simular/volver), hélice fullscreen + cierre, badge SERVIU en ficha.

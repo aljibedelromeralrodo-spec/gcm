@@ -19,7 +19,7 @@ export default function WelcomeTour({ onClose }) {
   const step = steps[tourStep];
 
   return (
-    <div className="tour-overlay">
+    <div className="tour-overlay" data-testid="welcome-tour">
       <div className="tour-modal" data-testid="tour-modal">
         <div className="tour-step">
           <div className="tour-icon"><i className={`fa ${step.icon}`}></i></div>

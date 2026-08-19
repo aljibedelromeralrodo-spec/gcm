@@ -174,6 +174,10 @@ async def _hitos(fd, cache=None):
         "origen": _origen_folder(fd),  # Regla #58: nunca 'Directo'
         "monto_credito_uf": monto_v,
         "subsidio": sub_v,
+        "resolucion_serviu": bool(df.get("resolucion_serviu")),
+        "tipo_vivienda": (str(df.get("tipo_vivienda") or "").lower()
+                          if str(df.get("tipo_vivienda") or "").lower() in ("nueva", "usada")
+                          else ("usada" if (fd.get("tipo_operacion") or "").lower() == "usada" else "nueva")),
         "inmobiliaria": inmob_v,
         "proyecto": proyecto_v,
         "ciudad": ciudad_v,

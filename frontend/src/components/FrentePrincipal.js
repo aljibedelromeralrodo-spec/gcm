@@ -91,8 +91,8 @@ export default function FrentePrincipal({ rol }) {
               <KPI v={idx.administrativo.trackers_administrativos} label="TRACKERS ADMIN." />
             </div>
             <div style={{ marginTop: 6 }}>
-              {idx.administrativo.auditorias_recientes.map(a => (
-                <div key={a.semana} style={{ color: "#94a3b8", fontSize: "0.64rem" }}>
+              {idx.administrativo.auditorias_recientes.map((a, i) => (
+                <div key={`${a.semana}-${a.fecha || i}`} style={{ color: "#94a3b8", fontSize: "0.64rem" }}>
                   {a.resultado === "aprobada" ? "✅" : "⚠️"} Auditoría {a.semana} · {fdd(a.fecha)} · {a.fallas} hallazgos</div>
               ))}
             </div>

@@ -1003,3 +1003,18 @@ Constitución v16 (Reglas #34-#38, #41, #43, #49, #52, #53, #54). Módulo Broker
   el PDF vía /api/supercarpeta/archivo/{fid}?ruta= (blob → nueva pestaña).
 - Verificado: Catalina 18 PDFs vinculados a su último "Informe Estudio de Títulos Recibido";
   apertura del PDF responde 200.
+
+
+## Estado y Backlog al cierre 2026-08 (fork 5)
+- HECHO en este fork: filtros/subdivisión Visión Comercial, panel Destinatarios de Correo,
+  Gestión de Ejecutivos por Módulo, corrección panel de filtros cartera (6 oficiales),
+  Vista Previa por Rol (Admin), Hélice de ADN fullscreen, Espejo Híbrido IMAP (arquitectura lista).
+  Detalle completo en CHANGELOG.md.
+- P0 (mañana, confirmado por usuario): credenciales IMAP reales en IMAP_{VICTORIA,DANIELA,JAVIER}_* de backend/.env
+  (o panel Admin) → el barrido del Espejo Híbrido se activa solo; definir PLAZOS del Tracker Administrativo
+  ("lo haremos mañana") para que el ratio de cumplimiento de Victoria/Daniela deje de mostrar "Plazos por definir";
+  definir tareas específicas distintas de Victoria vs Daniela (editables vía PUT /api/gerencia-comercial/ejecutivos-modulo/{codigo}).
+- P1: wiring de envíos del sistema a destinatarios_de() de correo_destinatarios (usuario lo dejó "por defecto");
+  Twilio keys pendientes; deployment bloqueado por filtro de seguridad (esperando soporte Emergent).
+- P2 backlog: Reactivar Hilo Frío (botón en tarjetas sin movimiento 7+ días), Recordatorio Fuentes Rojas
+  (email semanal a Administración), alertas cumpleaños, optimización móvil.
