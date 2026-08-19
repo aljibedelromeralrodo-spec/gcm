@@ -1450,3 +1450,36 @@ Constitución VERSION 19 (nuevas reglas #55, #56, #57).
 - BLOQUEADO (usuario): credenciales IMAP Concreces (espejo responde 400 con mensaje claro),
   Twilio keys. Dominio www.mutuariasyleasing.cl lo valida el usuario en producción.
 - Tests movidos de /app/backend/tests → /app/tests (evita reload loop). Reporte: iteration_39.json.
+
+## 2026-06 — INTEGRACIONES STORAGE + CLAUDE IA + AUDITORÍA SEMANAL + CATÁLOGO MAESTRO
+- FILE & MEDIA STORAGE (media_storage.py): dual write de documentos (broker upload, admin upload-file,
+  bandeja sin clasificar) a Emergent Object Storage organizado por operacion_{nro}/{rut}. Visor inline
+  GET /api/storage/ver/{id} (acepta id o bandeja_id) con RBAC estricto; listados desde db.storage_docs
+  (sin tocar storage). Broker perfil D: se agregó /api/storage a PERFIL_PERMITIDOS en auth.py.
+- CLAUDE IA ESPEJO (espejo_ia.py, claude-sonnet-4-6, Emergent LLM Key): análisis por correo nuevo en
+  _sync_concreces_core (merge sobre regex), registro espejo_ia_log con timestamp, urgencias → db.alertas
+  (admin+contralor) + email admin (sin mencionar Concreces). Endpoints: POST /contralor/espejo/probar-ia
+  (admin, simulado), POST /contralor/espejo/operaciones/{fid}/ia-correccion (admin, log inmutable).
+  UI ContralorModule: columna IA, badges URGENTE/interpretativo, modal corrección, panel probar-ia (admin).
+- AUDITORÍA SEMANAL EFICIENCIA (auditoria_eficiencia.py): regla permanente, trigger lunes al primer
+  login admin, 9 checks (storage sin cargas anticipadas/metrics gets vs gets_demanda, claude solo correo
+  nuevo/contexto mínimo/validación DB primero, resumen diario 1x, informe manual). Normativa inamovible
+  sembrada (15ª+). Endpoints /api/auditoria-eficiencia (GET historial, POST ejecutar, POST config, solo
+  admin). Panel en CerebroDashAIModule. Testing iteration_40: 100% PASS frontend+backend.
+- CATÁLOGO MAESTRO DEFINITIVO (catalogo_maestro.py): unificación de TODAS las reglas — 47 Reglas de Oro
+  + 6 Eficiencia (db.config constitucion_maestra v26, ya existían), 15 Normativas Maestras, 10 Reglas
+  Operativas OP-1..OP-10 MIGRADAS en esta sesión a dashai_eventos (motivo regla_operativa, inamovibles).
+  TOTAL 78 reglas en 5 categorías. GET /api/dashai/catalogo-maestro (admin). Panel visible en Cerebro.
+- NOTA: constitucion.py contiene la Constitución Maestra canónica (REGLAS_ORO). NUNCA borrar.
+
+## 2026-06 — CONSTITUCIÓN OFICIAL ARCHIVADA (83 reglas en dashai_eventos)
+- Auditoría histórica de órdenes: descubiertas 5 REGLAS INVIOLABLES en código sin archivo formal
+  (INV-1 prohibido inventar IA, INV-2 blindaje simulaciones 1 pág/0586, INV-3 mínimo 2.000 UF sin
+  subsidio, INV-4 cartas aprobación intactas, INV-5 VIP solo prepara).
+- archivar_constitucion_completa() en catalogo_maestro.py: 83 reglas archivadas en db.dashai_eventos
+  (47 regla_oro ORO-n, 6 regla_eficiencia EF-n, 10 regla_operativa OP-n, 5 regla_inviolable INV-n,
+  15 normativa) todas con inamovible+inviolable+estado. Idempotente (upsert, 0 duplicados verificado).
+  Corre en startup. Estado del Cerebro extendido con constitucion_oficial (total, detalle, archivado).
+- Números de Regla de Oro no recuperables (nunca en constitución v26): 26-30, 33, 39, 40, 42, 44-48,
+  50, 51, 59, 60, 61 — solo el Admin puede confirmar si existieron en chats antiguos.
+- Panel frontend renombrado: "CONSTITUCIÓN OFICIAL DEL SISTEMA — 83 REGLAS ARCHIVADAS".

@@ -492,7 +492,16 @@ async def estado_cerebro(request: Request):
     normas = await normativas_activas(force=True)
     ult_aud = await db.normativas_auditoria.find_one({}, sort=[("fecha", -1)])
     perp = await db.config.find_one({"_key": "dashai_perpetuo"}) or {}
+    arch = await db.config.find_one({"_key": "constitucion_oficial_archivo"}) or {}
+    cons_counts = {}
+    for m in ("regla_oro", "regla_eficiencia", "regla_operativa", "regla_inviolable", "normativa"):
+        cons_counts[m] = await db.dashai_eventos.count_documents({"motivo": m})
     return {"normativas_activas": len(normas),
+            "constitucion_oficial": {
+                "total_archivadas": sum(cons_counts.values()),
+                "detalle": cons_counts,
+                "ultimo_archivado": arch.get("archivado") or "",
+                "estado": "inamovible e inviolable" if arch else "pendiente"},
             "ultima_modificacion": (ult_aud or {}).get("fecha") or "",
             "modificada_por": (ult_aud or {}).get("administrador") or "",
             "ultima_validacion": perp.get("ultima_sync") or "",
@@ -531,6 +540,12 @@ async def startup():
         await _aud.seed_normativa()
     except Exception as e:
         logging.warning(f"seed auditoría eficiencia: {e}")
+    try:
+        import catalogo_maestro as _cat
+        await _cat.seed_operativas()
+        await _cat.archivar_constitucion_completa()
+    except Exception as e:
+        logging.warning(f"seed catálogo maestro: {e}")
     # OPTIMIZACIÓN: índices en colecciones calientes (listas instantáneas)
     try:
         await db.folders.create_index("nombre")
@@ -14496,6 +14511,10 @@ api.include_router(_ms_mod.storage_router)
 # 🔍 REGLA PERMANENTE — Auditoría semanal de eficiencia modular (solo Admin)
 import auditoria_eficiencia as _aud_mod
 api.include_router(_aud_mod.auditoria_r)
+
+# 📜 CATÁLOGO MAESTRO DEFINITIVO — todas las reglas unificadas en el Cerebro
+import catalogo_maestro as _cat_mod
+api.include_router(_cat_mod.catalogo_r)
 
 # Regla #62 (Monitor de Envíos SMTP) + Regla #64 (Perfil Consolidado — verdad DashAI)
 import monitor_envios as _monit_mod

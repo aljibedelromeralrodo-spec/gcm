@@ -35,6 +35,49 @@ const Gauge = ({ pct }) => {
   );
 };
 
+const CatalogoMaestro = () => {
+  const [cat, setCat] = useState(null);
+  const [abierto, setAbierto] = useState({});
+  useEffect(() => {
+    axios.get(`${API_URL}/api/dashai/catalogo-maestro`).then(r => setCat(r.data)).catch(() => {});
+  }, []);
+  if (!cat) return null;
+  return (
+    <div data-testid="catalogo-maestro" style={{ background: "rgba(15,23,42,0.6)",
+      border: "1px solid rgba(212,175,55,0.4)", borderRadius: 14, padding: "1.2rem 1.6rem", marginBottom: "1.1rem" }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
+        <h3 style={{ color: "#d4af37", fontSize: "1rem", margin: 0, letterSpacing: 1 }}>
+          📜 CONSTITUCIÓN OFICIAL DEL SISTEMA — {cat.total_reglas} REGLAS ARCHIVADAS</h3>
+        <span style={{ color: "#4ade80", fontSize: "0.62rem", fontWeight: 800 }}>● INAMOVIBLE E INVIOLABLE</span>
+        <span style={{ color: "#64748b", fontSize: "0.64rem" }}>
+          Constitución v{cat.version_constitucion} · {cat.resumen.reglas_oro} Reglas de Oro ·
+          {" "}{cat.resumen.reglas_eficiencia} Eficiencia · {cat.resumen.normativas_maestras} Normativas ·
+          {" "}{cat.resumen.reglas_operativas} Operativas · {cat.resumen.reglas_inviolables} Inviolables</span>
+      </div>
+      {cat.categorias.map(g => (
+        <div key={g.clave} style={{ marginTop: 10 }}>
+          <button data-testid={`catalogo-cat-${g.clave}`} onClick={() => setAbierto(a => ({ ...a, [g.clave]: !a[g.clave] }))}
+            style={{ width: "100%", textAlign: "left", background: "rgba(2,6,23,0.5)", color: "#FCF6BA",
+              border: "1px solid rgba(212,175,55,0.25)", borderRadius: 9, padding: "0.55rem 0.9rem",
+              cursor: "pointer", fontWeight: 800, fontSize: "0.76rem", letterSpacing: 0.6 }}>
+            {abierto[g.clave] ? "▾" : "▸"} {g.nombre} — {g.total} reglas</button>
+          {abierto[g.clave] && g.reglas.map(r => (
+            <div key={r.num} style={{ borderLeft: "2px solid rgba(212,175,55,0.35)", margin: "6px 0 6px 10px",
+              padding: "4px 10px", fontSize: "0.7rem" }}>
+              <b style={{ color: "#d4af37" }}>{r.num}</b>
+              <b style={{ color: "#f8fafc" }}> · {r.titulo}</b>
+              <span style={{ color: "#4ade80", fontSize: "0.6rem", marginLeft: 6 }}>● {r.estado}</span>
+              <div style={{ color: "#94a3b8", marginTop: 2 }}>{r.descripcion}</div>
+              <div style={{ color: "#475569", fontSize: "0.6rem", marginTop: 2 }}>
+                Módulo: {r.modulo} · Fuente: {r.fuente}</div>
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+};
+
 const EstadoCerebro = () => {
   const [ec, setEc] = useState(null);
   const [aud, setAud] = useState(null);
@@ -198,6 +241,7 @@ export default function CerebroDashAIModule() {
       {msg && <div data-testid="dashai-msg" style={{ ...panel, padding: "0.7rem 1rem", fontSize: "0.82rem", color: "#F5E7B8", marginBottom: "1.1rem" }}>{msg}</div>}
 
       <EstadoCerebro />
+      <CatalogoMaestro />
 
       <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "1.2rem", marginBottom: "1.2rem", alignItems: "stretch" }}>
         <div style={{ ...panel, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }} data-testid="dashai-panel-calibracion">
