@@ -293,9 +293,14 @@ function MainApp() {
         />
       )}
       <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`} data-testid="sidebar">
-        <div className="sidebar-brand">
-          <h2 className="sidebar-title">Central Mutuos</h2>
-          <p className="sidebar-sub">Con Creces</p>
+        <div className="sidebar-brand" style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <img src="/logo-cm.png" alt="Logo Central Mutuos" data-testid="sidebar-logo"
+            style={{ width: 46, height: 46, borderRadius: "50%", flexShrink: 0,
+              boxShadow: "0 0 0 1px rgba(212,175,55,0.45)" }} />
+          <div>
+            <h2 className="sidebar-title">Central Mutuos</h2>
+            <p className="sidebar-sub">Con Creces</p>
+          </div>
         </div>
         <nav className="sidebar-nav">
           {navItems.map(item => (

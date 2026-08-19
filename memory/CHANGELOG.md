@@ -1375,3 +1375,16 @@ Constitución VERSION 19 (nuevas reglas #55, #56, #57).
   (`confirmacion_clave`) para config avanzada (ejecutivos IMAP, Concreces, espejo contralor).
 - Login ahora acepta código O email y registra `ultimo_acceso`. Usuarios seed: victoria/Victoria2026, daniela/Daniela2026.
 - Testing: backend 100% vía curl (10 flujos), frontend 100% testing agent (iteration_38.json).
+
+## 2026-08-19 (parte 2) — Pulido Usuarios, cargo oficial del Admin y logo corporativo
+- **Módulo Usuarios**: filas con más aire (padding 16px, fuente 0.9rem), formulario de creación en MODAL superpuesto
+  (no empuja la tabla), columna Correo con fallback (código si es email / "No disponible"), etiquetas de rol reales
+  (legacy "ejecutivo" se muestra como Broker/Administración según perfil), fechas DD/MM/AAAA.
+- **Cargo oficial del Administrador (Ethan)**: "Jefe Externo, Asesor Business Development | Canal Inmobiliarias y
+  Brokers | Central Mutuos". Sembrado idempotente, visible en sidebar (perfil), editable SOLO por el admin
+  (endpoint /api/auth/mi-cargo, 403 para otros roles con mensaje oficial). Incluido en firma de correos salientes
+  (_marca_wrap y _email_institucional) y en el pie de los PDF exportables (_build_pdf). Cache _cargo_admin_cache.
+- **Logo corporativo**: monograma CM dorado generado con IA (/public/logo-cm.png), aplicado en login, sidebar,
+  íconos PWA (icon-192/512) y favicon.ico. NO se usa en correos (Bloque 6: sin imágenes externas).
+- Endpoints nuevos: GET /api/auth/mi-perfil, POST /api/auth/mi-cargo.
+- Verificado por curl (403 gerencia, perfil admin, cargo presente en PDF) y screenshots (login + sidebar).

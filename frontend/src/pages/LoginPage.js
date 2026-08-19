@@ -62,6 +62,9 @@ export default function LoginPage({ onLogin }) {
     <div className="login-bg" data-testid="login-page">
       <div className="login-card">
         <div className="login-header">
+          <img src="/logo-cm.png" alt="Logo Central Mutuos" data-testid="login-logo"
+            style={{ width: 84, height: 84, borderRadius: "50%", margin: "0 auto 12px",
+              display: "block", boxShadow: "0 0 0 1px rgba(212,175,55,0.45), 0 8px 28px rgba(0,0,0,0.5)" }} />
           <h1 className="login-title">Central Mutuos</h1>
           <p className="login-subtitle">Plataforma de Gestión Crediticia</p>
         </div>
