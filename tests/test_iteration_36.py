@@ -12,7 +12,7 @@ import os
 import pytest
 import requests
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://risk-assess-17.preview.emergentagent.com").rstrip("/")
+BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://espejo-hibrido.preview.emergentagent.com").rstrip("/")
 
 CARLOS_FID = "111e1299-e6d6-4295-9bb1-14304fd37500"
 LUIS_FID = "f60cc0fc-f4d5-4ac8-b881-441331d8587e"  # LUIS GUERRERO usada sin subsidio

@@ -16,7 +16,7 @@ export default function UsuariosModule() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState({ codigo: "", nombre: "", email: "", rol: esVictoria ? "broker" : "broker" });
+  const [form, setForm] = useState({ codigo: "", nombre: "", email: "", rol: esVictoria ? "broker" : "broker", clave: "" });
   const [error, setError] = useState("");
   const [resultado, setResultado] = useState(null);
 
@@ -39,7 +39,7 @@ export default function UsuariosModule() {
     try {
       const r = await axios.post(`${API}/api/admin/users`, form);
       setResultado(r.data);
-      setForm({ codigo: "", nombre: "", email: "", rol: "broker" });
+      setForm({ codigo: "", nombre: "", email: "", rol: "broker", clave: "" });
       setShowCreate(false);
       await loadUsers();
     } catch (err) { setError(err.response?.data?.detail || "Error al crear usuario"); }
@@ -54,9 +54,11 @@ export default function UsuariosModule() {
   };
 
   const resetClave = async (u) => {
-    if (!window.confirm(`¿Forzar reseteo de contraseña de "${u.nombre}"?\nSe generará una nueva clave provisoria, se enviará por correo y deberá repetir la configuración inicial.`)) return;
+    const clave = window.prompt(
+      `Reseteo de contraseña de "${u.nombre}".\nEscriba la clave inicial que desea asignar (mínimo 6 caracteres) o deje vacío para generar una automática.\nSe enviará por correo y el usuario deberá cambiarla en su primer ingreso.`);
+    if (clave === null) return;
     try {
-      const r = await axios.post(`${API}/api/admin/users/${u.codigo}/reset-clave`, {});
+      const r = await axios.post(`${API}/api/admin/users/${u.codigo}/reset-clave`, { clave: clave.trim() });
       setResultado(r.data);
       await loadUsers();
     } catch (err) { alert(err.response?.data?.detail || "Error al resetear"); }
@@ -123,7 +125,7 @@ export default function UsuariosModule() {
               boxShadow: "0 24px 60px rgba(0,0,0,0.55)" }}>
             <h4>Crear Nuevo Usuario</h4>
           <p style={{ color: "var(--text-secondary)", fontSize: "0.72rem", margin: "0 0 8px" }}>
-            El sistema genera una contraseña provisoria aleatoria de 10 caracteres y la envía al correo del usuario.</p>
+            El sistema envía la clave inicial y el enlace de acceso al correo del usuario. Puede definir la clave o dejar que se genere automáticamente. El usuario deberá cambiarla en su primer ingreso.</p>
           <div className="clientes-form-grid">
             <div className="clientes-field">
               <label>Nombre Completo *</label>
@@ -145,6 +147,11 @@ export default function UsuariosModule() {
               <select value={form.rol} onChange={e => setForm({ ...form, rol: e.target.value })} data-testid="select-user-rol">
                 {rolesDisponibles.map(([k, lb]) => <option key={k} value={k}>{lb}</option>)}
               </select>
+            </div>
+            <div className="clientes-field">
+              <label>Clave inicial (opcional — si se omite, se genera automática)</label>
+              <input type="text" value={form.clave} onChange={e => setForm({ ...form, clave: e.target.value })}
+                placeholder="Mínimo 6 caracteres" data-testid="input-user-clave" />
             </div>
           </div>
           {error && <p style={{ color: "#e11d48", fontSize: "0.85rem", margin: "0.5rem 0" }} data-testid="user-error">{error}</p>}

@@ -9,7 +9,7 @@ import sys
 from datetime import datetime
 
 # Backend URL from frontend/.env
-BASE_URL = "https://risk-assess-17.preview.emergentagent.com/api"
+BASE_URL = "https://espejo-hibrido.preview.emergentagent.com/api"
 
 def log(msg):
     """Log with timestamp"""

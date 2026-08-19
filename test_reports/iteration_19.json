@@ -15,5 +15,5 @@
   "seed_data_creation": "Patrón aprendido de teléfono para Melisa Rivera (+56 9 1234 5678) SE MANTIENE (indicado por E1). Link de firma VIP para Melisa Rivera creado en db.firma_links (idempotente por cliente_norm). Archivo .docx de prueba subido y ELIMINADO exitosamente vía delete-file {file_path}.",
   "retest_needed": false,
   "main_agent_can_self_test": true,
-  "context_for_next_testing_agent": "Todo el lote iter19 PASS. Correr con: `REACT_APP_BACKEND_URL=https://risk-assess-17.preview.emergentagent.com pytest /app/tests/test_iter19_features.py -v --tb=short -p no:xdist`. Melisa Rivera fid=ed93f803-9dee-4da6-9e7f-fef3f5e6f6b9. En frontend, el input de autocompletado de Aprobación Cliente requiere SELECCIONAR la sugerencia del dropdown (no basta con typing + Tab) para disparar los bordes de color."
+  "context_for_next_testing_agent": "Todo el lote iter19 PASS. Correr con: `REACT_APP_BACKEND_URL=https://espejo-hibrido.preview.emergentagent.com pytest /app/tests/test_iter19_features.py -v --tb=short -p no:xdist`. Melisa Rivera fid=espejo-hibrido. En frontend, el input de autocompletado de Aprobación Cliente requiere SELECCIONAR la sugerencia del dropdown (no basta con typing + Tab) para disparar los bordes de color."
 }

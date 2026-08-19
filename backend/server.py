@@ -1885,6 +1885,7 @@ def _email_institucional(nombre, cuerpo_html, firmante="Sistema de Gestión Cent
 
 def _enviar_credenciales(email_destino, clave, nombre=""):
     import email_service as mail
+    enlace = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
     cuerpo = (
         f"<p style='margin:0 0 14px'>Le damos la bienvenida a la plataforma de Gestión Central Mutuos. "
         f"A continuación encontrará sus credenciales de acceso:</p>"
@@ -1892,9 +1893,15 @@ def _enviar_credenciales(email_destino, clave, nombre=""):
         f"style='background:#f8f6ef;border:1px solid #d4af37;border-radius:6px;margin:0 0 14px'>"
         f"<tr><td style='padding:14px 18px;font-size:14px;color:#1f2937'>"
         f"Nombre de usuario: <b>{email_destino}</b><br>"
-        f"Contraseña temporal: <b style='font-family:monospace'>{clave}</b></td></tr></table>"
-        f"<p style='margin:0'>Por seguridad, deberá cambiar esta contraseña y configurar su cuenta de correo "
-        f"en el primer inicio de sesión.</p>")
+        f"Contraseña inicial: <b style='font-family:monospace'>{clave}</b></td></tr></table>"
+        f"<p style='margin:0 0 16px'>Por seguridad, el sistema le solicitará cambiar esta contraseña "
+        f"en su primer inicio de sesión.</p>"
+        f"<table role='presentation' cellpadding='0' cellspacing='0' style='margin:0 auto 6px'>"
+        f"<tr><td style='background:#0a0a0a;border-radius:6px'>"
+        f"<a href='{enlace}' style='display:inline-block;padding:12px 30px;color:#C9A227;"
+        f"font-weight:bold;font-size:14px;text-decoration:none;letter-spacing:1px'>"
+        f"INGRESAR A LA PLATAFORMA</a></td></tr></table>"
+        f"<p style='margin:0;text-align:center;font-size:12px;color:#6b7280'>{enlace}</p>")
     mail.send_mail(email_destino, "Bienvenido/a a Gestión Central Mutuos - Credenciales de acceso",
                    _email_institucional(nombre or email_destino, cuerpo), [], "secundaria")
 
@@ -1929,7 +1936,9 @@ async def create_user(payload: dict, request: Request):
             "Solo puede crear usuarios tipo C: brokers y personal administrativo"))
     if await db.users.find_one({"$or": [{"codigo": codigo}, {"email": email}]}):
         raise HTTPException(status_code=400, detail="El código o correo ya existe")
-    clave = _clave_provisoria()
+    clave = (payload.get("clave") or "").strip() or _clave_provisoria()
+    if len(clave) < 6:
+        raise HTTPException(status_code=400, detail="La clave inicial debe tener al menos 6 caracteres")
     perfil = payload.get("perfil") or ("D" if rol == "broker" else "")
     await db.users.insert_one({
         "codigo": codigo, "nombre": nombre, "email": email, "rol": rol, "perfil": perfil,
@@ -1947,15 +1956,17 @@ async def create_user(payload: dict, request: Request):
 
 
 @api.post("/admin/users/{codigo}/reset-clave")
-async def user_forzar_reset(codigo: str, request: Request):
-    """Reseteo forzado del Admin: nueva clave provisoria + first_login=true + correo al usuario."""
+async def user_forzar_reset(codigo: str, request: Request, payload: dict = None):
+    """Reseteo forzado del Admin: clave inicial (definida o generada) + first_login=true + correo."""
     _solo_maestro(request)
     user = await db.users.find_one({"codigo": codigo})
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no existe")
     if codigo in ("admin", "administrador"):
         raise HTTPException(status_code=400, detail="No se puede resetear al administrador")
-    clave = _clave_provisoria()
+    clave = ((payload or {}).get("clave") or "").strip() or _clave_provisoria()
+    if len(clave) < 6:
+        raise HTTPException(status_code=400, detail="La clave inicial debe tener al menos 6 caracteres")
     await db.users.update_one({"codigo": codigo}, {"$set": {
         "clave_hash": bcrypt.hashpw(clave.encode(), bcrypt.gensalt()).decode(),
         "first_login": True}, "$unset": {"primer_paso_clave": "", "password": ""}})

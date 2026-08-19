@@ -860,7 +860,7 @@
 - Cerebro DashAI (pestaña 🧠): gauge de calibración (98%), último patrón aprendido, bitácora, sync manual + loop perpetuo (full cada 60 min, vigilancia cada 5 min de correos MESA/documentos → disparo inmediato), scores persistidos en db.prospectos (prob_mesa) y db.folders (dashai_score). Endpoints GET /api/dashai/estado, POST /api/dashai/sync.
 - Saneamiento verificado: headers completos (HSTS/CSP/COOP/Permissions), DOMPurify en todos los innerHTML, secureStore, ESLint 100% limpio (hooks incluidos).
 - NOTA OPERATIVA: el hot-reload de server.py a veces cuelga uvicorn (502) → sudo supervisorctl restart backend.
-- Prospecto de prueba del usuario: Yerile Barrera id=69bd18cc-ff8a-4118-b0e5-9ec46f3a8210 (status invitacion_enviada) — NO borrar.
+- Prospecto de prueba del usuario: Yerile Barrera id=espejo-hibrido (status invitacion_enviada) — NO borrar.
 - Forense AUTOMÁTICO al recibir respuesta de MESA: _forense_caso_automatico() se dispara en los 2 puntos de ingesta de seguimiento (rescate histórico + process-emails). Audita el caso al instante con los 5 checks de ultra-precisión, deduplica contra "Errores MESA detectados", suma al contador de nuevos y envía alerta 🚨 a Gerardo (MAIL2_USER). Probado E2E: dedupe OK, caso sintético agregó 3 hallazgos + alerta.
 
 ## 2026-06 (continuación) — Ley Suprema, Radar 280d, UF SII, WhatsApp Meta, Anclaje
@@ -1586,3 +1586,11 @@ Constitución VERSION 19 (nuevas reglas #55, #56, #57).
 - E2E visual propio post-fix: filtros cartera 8/8, sumatoria reactiva, subdivisión+sumatorias+comparativos,
   panel ejecutivos 3 tarjetas, destinatarios+regla permanente, espejo híbrido 3 fuentes EN ESPERA,
   vista previa por rol completa (activar/simular/volver), hélice fullscreen + cierre, badge SERVIU en ficha.
+
+## 19/06/2026 — Alta de usuarios reales + clave inicial definida por Admin
+- Victoria (`victoria`) y Daniela (`daniela`): reset con clave provisoria nueva, first_login=true y correo de bienvenida enviado (email_enviado=true).
+- Javier Urrutia creado: codigo `javier`, javierurrutia@centralmutuos.cl, rol postventa, correo enviado.
+- Rodrigo (Gerencia Comercial) POSPUESTO por el usuario: falta confirmar su correo.
+- POST /api/admin/users y /reset-clave ahora aceptan `clave` opcional definida por el Admin (min 6 chars); si se omite, se genera automática.
+- Correo de bienvenida ahora incluye botón "INGRESAR A LA PLATAFORMA" con enlace PUBLIC_BASE_URL (producción).
+- UsuariosModule.js: campo "Clave inicial (opcional)" en crear usuario (data-testid input-user-clave) + prompt de clave en resetear.

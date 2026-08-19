@@ -7,7 +7,7 @@ import requests
 import time
 import json
 
-BASE_URL = "https://risk-assess-17.preview.emergentagent.com/api"
+BASE_URL = "https://espejo-hibrido.preview.emergentagent.com/api"
 ADMIN_USER = "admin"
 ADMIN_PASS = "0586"
 SLOW_TIMEOUT = 120

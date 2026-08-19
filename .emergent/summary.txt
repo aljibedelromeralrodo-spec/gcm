@@ -1,0 +1,152 @@
+<analysis>**original_problem_statement**: The user wants a highly secure, role-based real estate loan tracking platform (Central Mutuos). Key requirements include strict immutable business rules (Constitución / Cerebro DashAI), hybrid IMAP email syncing (Algoritmo Espejo) powered by Claude AI, dual document storage, and specific dashboards for 6 roles, particularly a powerful Gerencia Comercial command center with SLA-driven writing trackers. PRODUCT REQUIREMENTS: Secure RBAC, immutable system rules enforced by a central AI gate, responsive HTML emails, dual cloud/local storage, strict data isolation, real-time filters, DNA helix visualizations for data state, role simulation for Admin, and email recipient routing panels.
+
+**User's preferred language**: Spanish (El próximo agente DEBE responder ÚNICAMENTE en español).
+
+**what currently exists?** A mature React+FastAPI+MongoDB platform. It features a fully audited 6-tier RBAC, dual File Storage (local + Emergent Object Store), an AI-powered email parser (Claude Sonnet 4.6), a highly secure Cerebro DashAI enforcing 83 immutable rules, a PIN-protected export system, Gerencia Comercial Dashboard with real-time filters, Admin role simulation, email recipient configurations, executive performance tracking, and a full-screen DNA helix data visualization reflecting the real-time algorithm state.
+
+**Last working item**:
+    - Last item agent was working: Completing a massive batch of 7 tasks including the Gerencia Comercial unified real-time filters, Admin role simulation (Vista Previa por Rol), DNA Helix visualization, Algoritmo Espejo Híbrido architecture setup (with env vars), email recipient configuration, and executive performance modules. Tested and fixed minor frontend UI state bugs (BriefingMananero loop). Updated PRD and Changelog.
+    - Status: USER VERIFICATION PENDING
+    - Agent Testing Done: Y
+    - Which testing method agent to use?: Frontend testing agent / screenshot tool. 
+    - User Testing Done: N
+
+**All Pending/In progress Issue list**:
+  Issue 1: Deployment Blocked by Moderation Filter (P1)
+     - Attempted fixes: The custom domain () was removed from the code previously.
+     - Next debug checklist: The user has to wait for Emergent Support to unblock the deployment pipeline (flagged due to financial login forms). The app currently runs perfectly on the default emergent host. No code changes needed here.
+     - Why fix this issue and what will be achieved with the fix?: Allows updates to reach production.
+     - Status: BLOCKED
+     - Is recurring issue? Y
+     - Should Test frontend/backend/both after fix?: NA
+     - Blocked on other issue: Emergent Support & Google Safe Browsing.
+
+  Issue 2: Missing Twilio API Credentials (P2)
+     - Attempted fixes: Waiting for  variables.
+     - Next debug checklist: Check  for , , and .
+     - Why fix this issue and what will be achieved with the fix?: Unlocks SMS/WhatsApp alerts.
+     - Status: BLOCKED
+     - Is recurring issue? N
+     - Should Test frontend/backend/both after fix?: Backend
+     - Blocked on other issue: User providing keys.
+
+  Issue 3: Pending Executive & Concreces Credentials (IMAP) (P1)
+     - Attempted fixes: Built the Espejo Híbrido architecture and added empty  variables (, etc.).
+     - Next debug checklist: Wait for user to input IMAP app passwords in the Admin panel / environment variables.
+     - Why fix this issue and what will be achieved with the fix?: Activates the Algoritmo Espejo Híbrido and Claude AI parsing on real emails from Victoria, Daniela, and Javier.
+     - Status: BLOCKED
+     - Is recurring issue? N
+     - Should Test frontend/backend/both after fix?: Backend
+     - Blocked on other issue: User providing credentials.
+
+**In progress Task List**:
+  None.
+
+**Upcoming and Future Tasks**:
+  - Task 1: Reactivar Hilo Frío (P1). Add a button on cold cards (cards without movement for 7+ days) that sends a follow-up email.
+  - Task 2: Configurar plazos administrativos por defecto (P1). Set default deadlines in days for administrative tasks (Recepción de carpeta: 1, Validación documental: 2, Solicitud estudio de título: 2, Envío a mesa: 2, Aprobación: 5, Instrucciones de escrituración: 2, Archivo y cierre: 3). Deferred to the next day per user instructions.
+  - Task 3: Conectar envíos del sistema a la tabla de DestinatariosCorreo (P1). Turn the system's hardcoded email logic to read recipients dynamically from the newly created  DB collection.
+  - Task 4: Recordatorio Fuentes Rojas (P2). Weekly email alert to Administration regarding sources missing contacts.
+  - Task 5: Alertas de cumpleaños y optimización móvil (P2).
+
+**Completed work in this session**:
+- Implemented real-time combinable filters for Gerencia Comercial (Broker, Inmobiliaria, Proyecto, Tipo vivienda, Subsidio, Resolución SERVIU) with sumatorias (DONE).
+- Created  and  for dynamic email recipient management (DONE).
+- Created  and the executive assignment module for Victoria, Daniela, and Javier (DONE).
+- Created  allowing the Admin to simulate roles securely while logging actions (DONE).
+- Created  full-screen Canvas animation reflecting real data processing state (DONE).
+- Setup  architecture with empty  keys for Victoria, Daniela, and Javier IMAP polling (DONE).
+- Fixed  parsing bug in  causing a loop in  component (DONE).
+
+**Earlier issues found/mentioned but not fixed**:
+   None.
+
+**Known issue recurrence from previous fork**:
+  - Issue recurrence in previous fork: 0
+  - Recurrence count: 0
+  - Status: RESOLVED
+
+**Code Architecture**:
+- : React SPA (Tailwind). Key routing based on  (). Components: , , , , , .
+- : FastAPI backend.
+  - : Core routing and middleware logic.
+  - : Hybrid IMAP sync polling.
+  - : Claude integration logic.
+  - : Dynamic email recipient routing logic.
+- Database: MongoDB.
+
+**Key Technical Concepts**:
+React SPA, FastAPI, MongoDB, Emergent Object Storage, LiteLLM (Claude), Role-Based Access Control (JWT), Canvas/SVG animations, IMAP polling.
+
+**key DB schema**:
+  - : 83 immutable rules (Constitución).
+  - : Credentials, roles.
+  - : Main client data (Supercarpeta).
+  - : Recipient configurations for email actions.
+
+**changes in tech stack**:
+  - None new in this session.
+
+**All files of reference**:
+  -  (Email recipients UI)
+  -  (Performance tracking UI)
+  -  (Role simulation overlay)
+  -  (Canvas DNA Animation)
+  -  (DB routing for emails)
+  -  (Architecture for polling emails)
+  -  (Core)
+  -  (Local storage obfuscation utilities)
+
+**Areas that need refactoring**:
+   is extremely large. **WARNING**: The user's Efficiency Rule strictly forbids rewriting this file from scratch. Use  for surgical edits. DO NOT REFACTOR entirely.
+
+**key api endpoints**:
+  - : Fetches portfolio for Gerencia (updated with new unified filters).
+  - : Fetches current IMAP polling status.
+
+**Critical Info for New Agent**:
+- **Language Lock**: Strictly Spanish ().
+- **Efficiency Rule**: Never rebuild a component from scratch. Only make surgical, minimal edits using .
+- **Admin Role Simulation**: The system now has an admin Vista Previa feature. Ensure any new component logic respects  permissions robustly, as the simulation uses a  state variable on the frontend but keeps the backend token as Admin.
+- **Local Storage parsing**:  in  was patched to prevent JSON decode errors on plain string retrieval. If any auth/tour looping issues arise again, check local storage parsing.
+
+**documents and test reports created in this job**:
+  - 
+  -  (Updated)
+  -  (Updated)
+
+**Last 10 User Messages and any pending HUMAN messages**:
+ - User requested to restrict Gerencia filters strictly to Broker, Inmobiliaria, Proyecto, Tipo de vivienda, Subsidio, Resolución SERVIU.
+ - Agent asked for clarification on which filter zone to modify.
+ - User confirmed to modify both visual zones.
+ - User requested Vista previa por rol for the Admin to simulate roles.
+ - User requested a full-screen DNA helix animation reflecting algorithm processing states.
+ - Agent clarified data mappings and visual specs. User confirmed.
+ - User requested Algoritmo Espejo Híbrido setup for Victoria, Daniela, and Javier with empty env vars ready for tomorrow.
+ - Agent clarified implementation steps. User confirmed.
+ - User recharged credits after agent utilized the testing agent.
+ - User responded ok to the agent's explanation of fixes applied (Briefing component loop).
+
+**Project Health Check:**
+  - Broken: Deployment to production currently blocked by platform safety filter (awaiting support resolution).
+  - Mocked: Twilio SMS (Waiting for keys). IMAP connections for executives (Waiting for user  input).
+
+**3rd Party Integrations**:
+  - Claude Sonnet 4.6 (Email Analysis) — uses Emergent LLM Key
+  - Emergent Object Store (File Storage) — uses Emergent integrations
+  - Gemini 3.1 Flash Image (Image Generation) — uses Emergent LLM Key
+  - Twilio SMS — requires User API Key (keys pending)
+  - External Email Providers (IMAP/SMTP) — requires User App Passwords
+
+**Testing status**:
+  - Testing agent used after significant changes: YES (Iteration 41).
+  - Troubleshoot agent used after agent stuck in loop: NO.
+  - Test files created: None explicitly named, tests run from internal backend scripts.
+  - Known regressions: None.
+
+**Credentials to test flow**:
+  - App Login:  /  (rol admin, MASTER_PIN: )
+  - Secondary Roles: , , 
+
+**What agent forgot to execute**:
+  The agent successfully completed all 7 immediate requests from the user. Tasks regarding default administrative deadlines and the Hilo Frío button remain in the backlog per user's instructions to defer them.</analysis>
