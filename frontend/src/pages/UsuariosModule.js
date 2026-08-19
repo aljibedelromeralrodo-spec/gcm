@@ -70,7 +70,14 @@ export default function UsuariosModule() {
     } catch (err) { alert(err.response?.data?.detail || "Error al eliminar"); }
   };
 
-  const rolLabel = (r) => (ROLES.find(([k]) => k === r) || [r, r])[1];
+  const rolLabel = (r, perfil) => {
+    const f = ROLES.find(([k]) => k === r);
+    if (f) return f[1];
+    if (r === "ejecutivo") return perfil === "D" ? "Broker" : "Administración";
+    return r ? r.charAt(0).toUpperCase() + r.slice(1) : "No disponible";
+  };
+  const fdd = (iso) => (iso ? `${String(iso).slice(8, 10)}/${String(iso).slice(5, 7)}/${String(iso).slice(0, 4)}` : "—");
+  const fddHora = (iso) => (iso ? `${fdd(iso)} ${String(iso).slice(11, 16)}` : "—");
 
   return (
     <div className="module-content" data-testid="usuarios-module">
@@ -106,8 +113,15 @@ export default function UsuariosModule() {
       )}
 
       {showCreate && (
-        <div className="clientes-create-form" data-testid="create-user-form" style={{ marginTop: "1rem" }}>
-          <h4>Crear Nuevo Usuario</h4>
+        <div data-testid="create-user-overlay"
+          onClick={(e) => { if (e.target === e.currentTarget) { setShowCreate(false); setError(""); } }}
+          style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(2,6,23,0.75)",
+            backdropFilter: "blur(4px)", display: "flex", alignItems: "center",
+            justifyContent: "center", padding: "1rem" }}>
+          <div className="clientes-create-form" data-testid="create-user-form"
+            style={{ width: "min(680px, 96vw)", maxHeight: "88vh", overflowY: "auto", margin: 0,
+              boxShadow: "0 24px 60px rgba(0,0,0,0.55)" }}>
+            <h4>Crear Nuevo Usuario</h4>
           <p style={{ color: "var(--text-secondary)", fontSize: "0.72rem", margin: "0 0 8px" }}>
             El sistema genera una contraseña provisoria aleatoria de 10 caracteres y la envía al correo del usuario.</p>
           <div className="clientes-form-grid">
@@ -140,6 +154,7 @@ export default function UsuariosModule() {
               {loading ? "Creando..." : "Crear Usuario y Enviar Credenciales"}
             </button>
           </div>
+          </div>
         </div>
       )}
 
@@ -148,6 +163,10 @@ export default function UsuariosModule() {
           <p style={{ color: "var(--text-secondary)", textAlign: "center", padding: "2rem" }}>Cargando usuarios...</p>
         ) : (
           <table className="history-table" data-testid="users-table">
+            <style>{`
+              [data-testid="users-table"] th { padding: 12px 14px; font-size: 0.74rem; letter-spacing: 0.5px; }
+              [data-testid="users-table"] td { padding: 16px 14px; font-size: 0.9rem; vertical-align: middle; }
+            `}</style>
             <thead>
               <tr>
                 <th>Nombre</th>
@@ -162,21 +181,19 @@ export default function UsuariosModule() {
             <tbody>
               {users.map(u => (
                 <tr key={u.codigo} data-testid={`user-row-${u.codigo}`}>
-                  <td><b>{u.nombre}</b><div style={{ fontFamily: "monospace", fontSize: "0.65rem", color: "var(--text-secondary)" }}>{u.codigo}</div></td>
+                  <td><b style={{ fontSize: "0.92rem" }}>{u.nombre}</b><div style={{ fontFamily: "monospace", fontSize: "0.7rem", color: "var(--text-secondary)", marginTop: 3 }}>{u.codigo}</div></td>
                   <td>
-                    <span className="status-pill" style={{ fontSize: "0.7rem", background: "rgba(212,175,55,0.12)", color: "var(--gold)", border: "1px solid rgba(212,175,55,0.4)" }}>
-                      {rolLabel(u.rol)}</span>
-                    {u.first_login && <div style={{ color: "#fbbf24", fontSize: "0.6rem", fontWeight: 800, marginTop: 2 }}>⏳ CONFIG. INICIAL PENDIENTE</div>}
+                    <span className="status-pill" style={{ fontSize: "0.74rem", padding: "4px 10px", background: "rgba(212,175,55,0.12)", color: "var(--gold)", border: "1px solid rgba(212,175,55,0.4)" }}>
+                      {rolLabel(u.rol, u.perfil)}</span>
+                    {u.first_login && <div style={{ color: "#fbbf24", fontSize: "0.62rem", fontWeight: 800, marginTop: 4 }}>⏳ CONFIG. INICIAL PENDIENTE</div>}
                   </td>
-                  <td style={{ fontSize: "0.78rem" }}>{u.email || <span style={{ color: "var(--text-muted)" }}>—</span>}</td>
+                  <td style={{ fontSize: "0.84rem" }}>{u.email || <span style={{ color: "var(--text-muted)", fontStyle: "italic" }}>No disponible</span>}</td>
                   <td>
-                    <span style={{ color: u.activo ? "#22c55e" : "#ef4444", fontWeight: 800, fontSize: "0.72rem" }}
+                    <span style={{ color: u.activo ? "#22c55e" : "#ef4444", fontWeight: 800, fontSize: "0.78rem" }}
                       data-testid={`estado-user-${u.codigo}`}>{u.activo ? "● Activo" : "● Inactivo"}</span>
                   </td>
-                  <td style={{ fontSize: "0.76rem", color: "var(--text-secondary)" }}>
-                    {u.created ? new Date(u.created).toLocaleDateString("es-CL") : "-"}</td>
-                  <td style={{ fontSize: "0.76rem", color: "var(--text-secondary)" }}>
-                    {u.ultimo_acceso ? new Date(u.ultimo_acceso).toLocaleString("es-CL", { dateStyle: "short", timeStyle: "short" }) : "—"}</td>
+                  <td style={{ fontSize: "0.82rem", color: "var(--text-secondary)" }}>{fdd(u.created)}</td>
+                  <td style={{ fontSize: "0.82rem", color: "var(--text-secondary)" }}>{fddHora(u.ultimo_acceso)}</td>
                   <td style={{ whiteSpace: "nowrap" }}>
                     {u.codigo !== "administrador" && !esVictoria && (
                       <>

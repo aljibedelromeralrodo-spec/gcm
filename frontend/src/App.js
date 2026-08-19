@@ -2,7 +2,7 @@ import { useState, useEffect, lazy, Suspense } from "react";
 import axios from "axios";
 import "./App.css";
 import { API_URL, formatCurrency } from "./utils/formatters";
-import { secureGet, secureRemove } from "./utils/secureStore";
+import { secureGet, secureSet, secureRemove } from "./utils/secureStore";
 import LoginPage from "./pages/LoginPage";
 import CentralPredic from "./pages/CentralPredic";
 import PortalCliente from "./pages/PortalCliente";
@@ -144,9 +144,30 @@ function MainApp() {
 
   useEffect(() => {
     const saved = secureGet("user");
-    if (saved) setUser(saved);
+    if (saved) {
+      setUser(saved);
+      // Hidratar el cargo oficial desde el backend (sesiones anteriores sin el campo)
+      axios.get(`${API_URL}/api/auth/mi-perfil`).then(r => {
+        if (r.data?.cargo && r.data.cargo !== saved.cargo) {
+          const nu = { ...saved, cargo: r.data.cargo };
+          setUser(nu);
+          secureSet("user", nu);
+        }
+      }).catch(() => {});
+    }
     if (!localStorage.getItem("tour_done")) setShowTour(true);
   }, []);
+
+  const editarCargo = async () => {
+    const nuevo = window.prompt("Cargo oficial del Administrador (fijo e inamovible por otros usuarios):", user?.cargo || "");
+    if (!nuevo || !nuevo.trim()) return;
+    try {
+      const r = await axios.post(`${API_URL}/api/auth/mi-cargo`, { cargo: nuevo.trim() });
+      const nu = { ...user, cargo: r.data.cargo };
+      setUser(nu);
+      secureSet("user", nu);
+    } catch (e) { window.alert(e.response?.data?.detail || "No fue posible actualizar el cargo. Intente nuevamente."); }
+  };
 
   // Close mobile sidebar on resize to desktop
   useEffect(() => {
@@ -286,6 +307,18 @@ function MainApp() {
         <div className="sidebar-user">
           <p className="sidebar-user-name">{user.nombre}</p>
           <p className="sidebar-user-role">{user.rol}</p>
+          {user.cargo && (
+            <p data-testid="sidebar-user-cargo" style={{ fontSize: "0.58rem", color: "#b8a04a",
+              lineHeight: 1.5, margin: "4px 0 6px" }}>
+              {user.cargo}
+              {(user.rol === "admin" || user.rol === "maestro") && (
+                <button data-testid="btn-editar-cargo" onClick={editarCargo}
+                  title="Editar cargo oficial (solo el Administrador)"
+                  style={{ background: "none", border: "none", color: "#d4af37",
+                    cursor: "pointer", fontSize: "0.66rem", marginLeft: 4, padding: 0 }}>✎</button>
+              )}
+            </p>
+          )}
           <button onClick={logout} className="sidebar-logout" data-testid="btn-logout">Cerrar Sesión</button>
         </div>
       </aside>

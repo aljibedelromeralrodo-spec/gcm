@@ -81,6 +81,11 @@ def clean(doc):
     return doc
 
 
+CARGO_ADMIN_DEFAULT = ("Jefe Externo, Asesor Business Development | "
+                       "Canal Inmobiliarias y Brokers | Central Mutuos")
+_cargo_admin_cache = {"v": CARGO_ADMIN_DEFAULT}
+
+
 async def ensure_seed():
     # Garantizar SIEMPRE los usuarios administradores
     for u in [
@@ -112,6 +117,12 @@ async def ensure_seed():
                 "codigo": codigo, "nombre": nombre, "rol": rol, "perfil": perfil,
                 "clave_hash": bcrypt.hashpw(clave.encode(), bcrypt.gensalt()).decode(),
                 "activo": True, "created": now_iso()})
+    # ── CARGO OFICIAL DEL ADMINISTRADOR (Ethan): fijo e inamovible por otros usuarios ──
+    await db.users.update_many(
+        {"codigo": {"$in": ["admin", "administrador"]}, "cargo": {"$exists": False}},
+        {"$set": {"cargo": CARGO_ADMIN_DEFAULT}})
+    u_adm = await db.users.find_one({"codigo": "administrador"}) or {}
+    _cargo_admin_cache["v"] = u_adm.get("cargo") or CARGO_ADMIN_DEFAULT
     # ── CONFIGURACIÓN DE EJECUTIVOS (IMAP): 3 registros vacíos, listos para completar.
     #    El sistema NO se conecta a ningún correo hasta que se guarden credenciales. ──
     for eid, nombre in [("daniela_galindo", "Daniela Galindo"),
@@ -618,6 +629,7 @@ def _token_usuario(user):
         "nombre": user.get("nombre", user["codigo"]),
         "rol": rol,
         "perfil": perfil,
+        "cargo": user.get("cargo") or "",
         "first_login": bool(user.get("first_login")),
     }
 
@@ -667,6 +679,35 @@ async def auth_crear_clave(payload: dict):
         "fecha": now_iso(), "leida": False})
     user["clave_hash"] = h
     return _token_usuario(user)
+
+
+# ── PERFIL DEL USUARIO Y CARGO OFICIAL DEL ADMINISTRADOR ──
+@api.get("/auth/mi-perfil")
+async def mi_perfil(request: Request):
+    sub = (getattr(request.state, "user", {}) or {}).get("sub") or ""
+    user = await db.users.find_one({"codigo": sub})
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    return {"codigo": user["codigo"], "nombre": user.get("nombre"), "rol": user.get("rol"),
+            "email": user.get("email") or "", "perfil": user.get("perfil") or "",
+            "cargo": user.get("cargo") or ""}
+
+
+@api.post("/auth/mi-cargo")
+async def actualizar_mi_cargo(payload: dict, request: Request):
+    """Cargo oficial del Administrador: fijo e inamovible por cualquier otro usuario."""
+    claims = getattr(request.state, "user", {}) or {}
+    if claims.get("rol") not in ("admin", "maestro"):
+        raise HTTPException(status_code=403, detail=(
+            "El cargo del Administrador es fijo e inamovible: solo el Administrador "
+            "puede modificarlo desde su perfil."))
+    cargo = (payload.get("cargo") or "").strip()
+    if not cargo:
+        raise HTTPException(status_code=400, detail="Indique el cargo oficial completo")
+    await db.users.update_many({"codigo": {"$in": ["admin", "administrador"]}},
+                               {"$set": {"cargo": cargo}})
+    _cargo_admin_cache["v"] = cargo
+    return {"ok": True, "cargo": cargo}
 
 
 # ── PRIMER INICIO DE SESIÓN OBLIGATORIO: cambio de clave + configuración IMAP ──
@@ -1038,6 +1079,7 @@ def _build_pdf(title, lines):
             y = h - 3 * cm
     c.setFont("Helvetica-Oblique", 8)
     c.setFillColorRGB(0.4, 0.4, 0.4)
+    c.drawString(2 * cm, 1.9 * cm, f"Firmado por el Administrador: {_cargo_admin_cache['v']}")
     c.drawString(2 * cm, 1.5 * cm, "Documento referencial. No constituye preaprobacion ni aprobacion crediticia. Con Creces.")
     c.showPage()
     c.save()
@@ -1712,7 +1754,9 @@ def _email_institucional(nombre, cuerpo_html, firmante="Sistema de Gestión Cent
 <tr><td style="padding:26px 28px;color:#1f2937;font-size:14px;line-height:1.65;text-align:justify">
   <p style="margin:0 0 14px">Estimado/a <b>{nombre}</b>,</p>
   {cuerpo_html}
-  <p style="margin:20px 0 0">Atentamente,<br><b>{firmante}</b> | Central Mutuos | {hoy}</p></td></tr>
+  <p style="margin:20px 0 0">Atentamente,<br><b>{firmante}</b><br>
+  <span style="color:#6b7280;font-size:12px">{_cargo_admin_cache["v"]}</span><br>
+  <span style="color:#6b7280;font-size:12px">Central Mutuos | {hoy}</span></p></td></tr>
 <tr><td style="background:#f0f0f0;padding:14px 28px;color:#6b7280;font-size:11px;line-height:1.5;text-align:justify">
   Este correo es confidencial y está dirigido exclusivamente a su destinatario. Si lo recibió por error,
   por favor notifíquelo al remitente y elimínelo de inmediato. Central Mutuos opera bajo las normativas
@@ -1741,7 +1785,8 @@ async def list_users(request: Request):
     _gestor_usuarios(request)
     docs = await db.users.find().to_list(300)
     return {"users": [{"codigo": d["codigo"], "nombre": d.get("nombre"), "rol": d.get("rol"),
-                       "email": d.get("email") or "", "perfil": d.get("perfil") or "",
+                       "email": d.get("email") or ("" if "@" not in d["codigo"] else d["codigo"]),
+                       "perfil": d.get("perfil") or "",
                        "activo": d.get("activo") is not False, "created": d.get("created"),
                        "ultimo_acceso": d.get("ultimo_acceso") or "",
                        "first_login": bool(d.get("first_login"))} for d in docs]}
@@ -7131,6 +7176,7 @@ def _marca_wrap(inner, subtitulo=""):
         </div>
         <div class="cm-pad" style="padding-top:0">
           <p style="margin:14px 0 0;color:#111111;font-size:14px"><b>Central Mutuos</b><br>
+          <span style="color:#6b7280;font-size:12px">{_cargo_admin_cache["v"]}</span><br>
           <span style="color:#6b7280;font-size:12px">Cr&eacute;ditos Hipotecarios</span></p>
         </div>
         <div class="cm-pad" style="background:#f0f0f0;text-align:center;padding-top:12px;padding-bottom:12px">
