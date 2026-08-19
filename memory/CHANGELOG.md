@@ -1403,3 +1403,10 @@ Constitución VERSION 19 (nuevas reglas #55, #56, #57).
 - **Páginas de referencia visual** (public/): firma-preview.html, logo-opciones.html, logo-oficial.html,
   avatar-opciones.html (12 opciones de avatar circular WhatsApp — PENDIENTE de aprobación del usuario).
 - Al aprobarse un avatar: usarlo como app icon iOS/Android (exportar tamaños) — TAREA PENDIENTE.
+
+## 2026-08-19 (parte 4) — Avatar Opción 4 aprobado y aplicado como app icon
+- Avatar "Doble Arco Completo" (Opción 4) renderizado en 1024x1024 (public/app-icon-1024.png).
+- WhatsApp: avatar-whatsapp-640.png (cuadrado para subir) + avatar-whatsapp-circular.png (con alpha).
+- iOS (public/app-icons/ios/): 1024 AppStore, 180, 167, 152, 120.
+- Android (public/app-icons/android/): 512 PlayStore, 192, 144, 96, 72, 48.
+- APLICADO como ícono oficial PWA: icon-192.png, icon-512.png y favicon.ico sobrescritos (manifest ya los referencia).

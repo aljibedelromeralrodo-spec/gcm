@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>App Icon oficial — Central Mutuos</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; background:#333; }
+  #logo { width:1024px; height:1024px; background:#0a0a0a; position:relative;
+          display:flex; align-items:center; justify-content:center; }
+  .grad { background:linear-gradient(135deg,#BF953F,#E8D48A,#B38728,#D9C06B,#AA771C);
+          -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+  svg text { font-family:'Playfair Display', serif; }
+</style>
+</head>
+<body>
+<div id="logo">
+  <svg viewBox="0 0 1024 1024" style="position:absolute;inset:0">
+    <defs>
+      <path id="arcT" d="M 119 512 A 393 393 0 0 1 905 512"/>
+      <path id="arcB" d="M 162 512 A 350 350 0 0 0 862 512"/>
+    </defs>
+    <text font-size="73" letter-spacing="16" fill="#C9A227" font-weight="600">
+      <textPath href="#arcT" startOffset="50%" text-anchor="middle">CENTRAL MUTUOS</textPath></text>
+    <text font-size="59" letter-spacing="21" fill="#8a6d1f" font-weight="600">
+      <textPath href="#arcB" startOffset="50%" text-anchor="middle">CON CRECES</textPath></text>
+  </svg>
+  <div class="grad" style="font-family:'Playfair Display',serif;font-size:302px;font-weight:700;line-height:1">CM</div>
+</div>
+</body>
+</html>
