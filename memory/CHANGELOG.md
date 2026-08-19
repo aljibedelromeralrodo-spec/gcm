@@ -1483,3 +1483,13 @@ Constitución VERSION 19 (nuevas reglas #55, #56, #57).
 - Números de Regla de Oro no recuperables (nunca en constitución v26): 26-30, 33, 39, 40, 42, 44-48,
   50, 51, 59, 60, 61 — solo el Admin puede confirmar si existieron en chats antiguos.
 - Panel frontend renombrado: "CONSTITUCIÓN OFICIAL DEL SISTEMA — 83 REGLAS ARCHIVADAS".
+
+## 2026-06 — AUTORIDAD SUPREMA DEL CEREBRO (consultar_cerebro)
+- constitucion.py: consultar_cerebro(db, accion, texto_ia, modulo) — puerta única obligatoria:
+  integridad Constitución (autocuración re-siembra si <78, verificado 72→83), blindaje anti-inyección
+  (regex _INYECCION sobre salidas de IA), huella en db.cerebro_consultas.
+- Gates activos: ai_extract._enviar (toda extracción), espejo_ia.analizar_correo, malla resumen hilos,
+  server chat asistente + clasificación cobro. OCR (folders_service) NO gateado a propósito: su salida
+  fluye a ai_extract que sí está gateado (evita falsos positivos en transcripciones legales).
+- estado-cerebro extendido: autoridad_suprema (módulos gateados, consultas/bloqueos 24h).
+- Probado: inyección bloqueada, flujo normal autorizado, autocuración, probar-ia e2e OK con gate.

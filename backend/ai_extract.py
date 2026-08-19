@@ -17,13 +17,18 @@ def _llm_key():
 
 
 async def _enviar(chat, um):
-    """TIMEOUT ANTI-CONGELAMIENTO: toda llamada LLM se cancela a los 60s."""
+    """TIMEOUT ANTI-CONGELAMIENTO: toda llamada LLM se cancela a los 60s.
+    AUTORIDAD SUPREMA: toda salida de IA pasa por el Cerebro DashAI antes de usarse."""
     try:
         import energia as _energia
         await _energia.registrar_llm(1)
     except Exception:
         pass
-    return await asyncio.wait_for(chat.send_message(um), timeout=60)
+    resp = await asyncio.wait_for(chat.send_message(um), timeout=60)
+    from database import db as _db
+    from constitucion import consultar_cerebro
+    await consultar_cerebro(_db, "extraccion_ia", texto_ia=str(resp), modulo="ai_extract.py")
+    return resp
 
 TIPOS = ["cedula", "liquidacion", "cotizacion_afp", "certificado_afp",
          "certificado_smf", "boleta_honorarios", "impuesto_renta",

@@ -211,6 +211,55 @@ def protege(*reglas):
     return deco
 
 
+# ═══ AUTORIDAD SUPREMA — CONSULTA OBLIGATORIA AL CEREBRO DASHAI ═════════════
+# Toda acción de la IA que afecte operaciones, roles, permisos, identidad visual
+# o flujos de negocio DEBE pasar por consultar_cerebro() ANTES de aplicarse.
+_INYECCION = re.compile(
+    r"(ignora|ignorar|omite|omitir|desactiva|desactivar|elimina|eliminar|modifica|modificar|"
+    r"sobrescribe|sobrescribir|anula|anular|salta|saltar)[^.\n]{0,80}"
+    r"(regla|normativa|constituci[oó]n|instrucci[oó]n|cerebro|dashai|system prompt)", re.I)
+_cerebro_gate = {"t": None, "total": 0}
+
+
+async def consultar_cerebro(db, accion, texto_ia="", modulo=""):
+    """Puerta única del Cerebro DashAI (autoridad suprema).
+    1) Verifica la integridad de la Constitución archivada (autocuración si falta).
+    2) Blindaje anti-inyección: ninguna salida de IA puede traer instrucciones que
+       sobrescriban, modifiquen o ignoren una normativa archivada.
+    3) Deja huella auditable en db.cerebro_consultas.
+    Lanza ViolacionConstitucional si el Cerebro no autoriza la acción."""
+    from datetime import datetime, timezone
+    ahora = datetime.now(timezone.utc)
+    if not _cerebro_gate["t"] or (ahora - _cerebro_gate["t"]).total_seconds() > 300:
+        total = await db.dashai_eventos.count_documents({"inviolable": True})
+        if total < 78:
+            logging.error(f"⛔ Constitución incompleta ({total} reglas): re-sembrando automáticamente")
+            try:
+                import catalogo_maestro as _cat
+                await _cat.archivar_constitucion_completa()
+                total = await db.dashai_eventos.count_documents({"inviolable": True})
+            except Exception as e:
+                logging.error(f"⛔ Re-siembra de la Constitución falló: {e}")
+        _cerebro_gate.update({"t": ahora, "total": total})
+    autorizada, detalle = True, ""
+    if texto_ia and _INYECCION.search(texto_ia):
+        autorizada = False
+        detalle = "la salida de la IA contiene instrucciones que intentan alterar o ignorar reglas del sistema"
+    try:
+        await db.cerebro_consultas.insert_one({
+            "accion": accion, "modulo": modulo, "fecha": ahora.isoformat(),
+            "reglas_vigentes": _cerebro_gate["total"], "autorizada": autorizada,
+            "detalle": detalle})
+    except Exception:
+        pass
+    if not autorizada:
+        logging.error(f"⛔ Cerebro DashAI bloqueó '{accion}': {detalle}")
+        raise ViolacionConstitucional(
+            f"El Cerebro DashAI bloqueó la acción '{accion}': {detalle}. "
+            f"Ninguna instrucción de IA puede sobrescribir una normativa archivada.")
+    return True
+
+
 async def seed_constitucion(db):
     """Graba/actualiza la Constitución SOLO si falta o cambió la versión. Nunca
     pisa personalizaciones del dueño una vez creada su versión vigente."""

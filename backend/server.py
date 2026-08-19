@@ -496,7 +496,18 @@ async def estado_cerebro(request: Request):
     cons_counts = {}
     for m in ("regla_oro", "regla_eficiencia", "regla_operativa", "regla_inviolable", "normativa"):
         cons_counts[m] = await db.dashai_eventos.count_documents({"motivo": m})
+    hace24 = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+    consultas_24h = await db.cerebro_consultas.count_documents({"fecha": {"$gte": hace24}})
+    bloqueadas_24h = await db.cerebro_consultas.count_documents({"fecha": {"$gte": hace24}, "autorizada": False})
     return {"normativas_activas": len(normas),
+            "autoridad_suprema": {
+                "mecanismo": "consultar_cerebro() — consulta obligatoria previa de la IA",
+                "modulos_gateados": ["ai_extract.py (toda extracción)", "espejo_ia.py (análisis Claude)",
+                                     "malla_inteligencia.py (resumen hilos)", "server.py (asistente + cobro)",
+                                     "espejo_postventa.py (normativas pre-operación)",
+                                     "email_service/bodega/pdf (exigir: responsividad, purificación, sobriedad)"],
+                "consultas_24h": consultas_24h, "bloqueadas_24h": bloqueadas_24h,
+                "autocuracion": "re-siembra automática si la Constitución baja de 78 reglas"},
             "constitucion_oficial": {
                 "total_archivadas": sum(cons_counts.values()),
                 "detalle": cons_counts,
@@ -1486,6 +1497,8 @@ async def central_chat(payload: dict):
         from emergentintegrations.llm.chat import LlmChat, UserMessage
         chat = LlmChat(api_key=key, session_id=session, system_message=system).with_model("openai", "gpt-5.4-mini")
         resp = await _llm_con_timeout(chat, UserMessage(text=msg))
+        import constitucion as _const
+        await _const.consultar_cerebro(db, "chat_central_ia", texto_ia=str(resp), modulo="server.py (asistente)")
     except Exception as e:
         resp = f"Tuve un problema para responder ({str(e)[:80]}). Intenta de nuevo."
     await db.conversaciones.insert_one({
@@ -6422,6 +6435,8 @@ async def _cobro_ai_clasificar(texto, subject=""):
             "y cliente (nombre del cliente/comprador si se menciona, o '').")
         ).with_model("openai", "gpt-5.4-mini")
         resp = await _llm_con_timeout(chat, UserMessage(text=f"ASUNTO: {subject}\n\n{(texto or '')[:4000]}"))
+        import constitucion as _const
+        await _const.consultar_cerebro(db, "clasificacion_cobro_ia", texto_ia=str(resp), modulo="server.py (cobro tasación)")
         m = re.search(r"\{.*\}", str(resp), re.S)
         if m:
             import json as _json

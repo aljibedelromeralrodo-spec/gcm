@@ -4541,6 +4541,8 @@ async def _resumen_hilo_generar(fd, eventos):
             chat.send_message(UserMessage(text=f"HOY: {hoy}\nCLIENTE: {fd.get('nombre') or ''}\n\n" + "\n".join(lineas))),
             timeout=60)
         texto = (str(resp) or "").strip().strip('"').replace("\n", " ")[:200]
+        from constitucion import consultar_cerebro
+        await consultar_cerebro(db, "resumen_hilo_ia", texto_ia=texto, modulo="malla_inteligencia.py")
     except Exception as e:
         logging.warning(f"resumen hilo IA ({fd.get('nombre')}): {e}")
         return None

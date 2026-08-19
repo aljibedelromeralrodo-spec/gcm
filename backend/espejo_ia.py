@@ -61,7 +61,7 @@ async def analizar_correo(asunto, cuerpo, fecha_correo=""):
         d = json.loads(raw[ini:fin + 1]) if ini >= 0 and fin > ini else {}
     if not isinstance(d, dict):
         d = {}
-    return {
+    salida = {
         "nro_operacion": str(d.get("nro_operacion") or "").strip(),
         "rut": str(d.get("rut") or "").strip(),
         "estado": str(d.get("estado") or "").strip(),
@@ -76,6 +76,12 @@ async def analizar_correo(asunto, cuerpo, fecha_correo=""):
         "resumen_interpretativo": str(d.get("resumen_interpretativo") or "").strip()[:600],
         "modelo": MODELO, "analizado_en": _now(), "contexto_chars": _ctx_chars,
     }
+    # AUTORIDAD SUPREMA: el Cerebro DashAI autoriza el análisis antes de aplicarse
+    from database import db
+    from constitucion import consultar_cerebro
+    await consultar_cerebro(db, "espejo_analisis_ia",
+                            texto_ia=json.dumps(salida, ensure_ascii=False), modulo="espejo_ia.py")
+    return salida
 
 
 async def registrar_interpretacion(db, ia, asunto, folder_id="", simulado=False):
