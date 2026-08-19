@@ -1388,3 +1388,18 @@ Constitución VERSION 19 (nuevas reglas #55, #56, #57).
   íconos PWA (icon-192/512) y favicon.ico. NO se usa en correos (Bloque 6: sin imágenes externas).
 - Endpoints nuevos: GET /api/auth/mi-perfil, POST /api/auth/mi-cargo.
 - Verificado por curl (403 gerencia, perfil admin, cargo presente en PDF) y screenshots (login + sidebar).
+
+## 2026-08-19 (parte 3) — Command Center Gerencia, logo oficial Opción 2 y avatares WhatsApp
+- **Dashboard unificado de Gerencia (GerenciaCommandCenter.js)**: 4 zonas en una sola vista —
+  Zona 1 Command Center (6 métricas con tendencia + gráfico mensual), Zona 2 Rendimiento por Broker
+  (tabla ordenable, semáforo, 🏆 mejor del mes), Zona 3 Carga Administrativa Daniela/Victoria
+  (docs, correos, operaciones, horas resolución, indicador Alta/Media/Normal), Zona 4 Bandeja de Gestión
+  (80 operaciones, alerta >5 días hábiles, botones Enviar correo con CC libre / Ver carpeta / Marcar urgente).
+  Backend: GET /api/gerencia-panel/command-center + POST /urgente + tipo acción "seguimiento".
+- **Logo oficial aplicado — Opción 2 "Horizontal Ejecutiva"** (aprobada por el usuario, CON CRECES +10%):
+  CENTRAL MUTUOS una línea Playfair 700 degradado dorado + línea dorada + CON CRECES. Fondo negro absoluto.
+  Aplicado en login y sidebar. Asset PNG: /public/logo-horizontal.png. Subtítulo "Plataforma de Gestión
+  Crediticia" ELIMINADO por orden del usuario (logo = solo 3 elementos). Ícono PWA sigue con monograma CM.
+- **Páginas de referencia visual** (public/): firma-preview.html, logo-opciones.html, logo-oficial.html,
+  avatar-opciones.html (12 opciones de avatar circular WhatsApp — PENDIENTE de aprobación del usuario).
+- Al aprobarse un avatar: usarlo como app icon iOS/Android (exportar tamaños) — TAREA PENDIENTE.

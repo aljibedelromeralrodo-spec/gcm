@@ -293,14 +293,18 @@ function MainApp() {
         />
       )}
       <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`} data-testid="sidebar">
-        <div className="sidebar-brand" style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <img src="/logo-cm.png" alt="Logo Central Mutuos" data-testid="sidebar-logo"
-            style={{ width: 46, height: 46, borderRadius: "50%", flexShrink: 0,
-              boxShadow: "0 0 0 1px rgba(212,175,55,0.45)" }} />
-          <div>
-            <h2 className="sidebar-title">Central Mutuos</h2>
-            <p className="sidebar-sub">Con Creces</p>
-          </div>
+        <div className="sidebar-brand" data-testid="sidebar-logo" style={{ background: "#0a0a0a",
+          borderRadius: 10, padding: "0.95rem 0.5rem", textAlign: "center",
+          border: "1px solid rgba(212,175,55,0.25)" }}>
+          <div style={{ fontFamily: "'Playfair Display', serif", fontWeight: 700, fontSize: "1.06rem",
+            letterSpacing: 2, whiteSpace: "nowrap",
+            background: "linear-gradient(135deg,#BF953F,#FCF6BA,#B38728,#FBF5B7,#AA771C)",
+            WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent",
+            filter: "drop-shadow(0 1px 12px rgba(191,149,63,0.55))" }}>CENTRAL MUTUOS</div>
+          <div style={{ height: 1.5, margin: "7px auto 5px", width: "92%",
+            background: "linear-gradient(90deg,transparent,#d4af37 20%,#d4af37 80%,transparent)" }} />
+          <div style={{ fontFamily: "'Playfair Display', serif", color: "#d4af37",
+            fontSize: "0.44rem", letterSpacing: 4.5, fontWeight: 400 }}>CON CRECES</div>
         </div>
         <nav className="sidebar-nav">
           {navItems.map(item => (

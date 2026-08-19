@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Avatares WhatsApp — Central Mutuos</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700;900&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; background:#10141f; font-family:'Inter',Arial,sans-serif; padding:26px; }
+  .grid { display:grid; grid-template-columns:repeat(4, 1fr); gap:22px; max-width:1330px; margin:0 auto; }
+  .card { background:#171c2a; border:1px solid rgba(212,175,55,0.22); border-radius:14px; padding:16px 12px; text-align:center; }
+  .num { color:#94a3b8; font-size:11px; letter-spacing:1.2px; font-weight:800; margin-bottom:10px; }
+  .fila { display:flex; align-items:center; justify-content:center; gap:14px; }
+  .ava { width:190px; height:190px; border-radius:50%; background:#0a0a0a; position:relative;
+         display:flex; flex-direction:column; align-items:center; justify-content:center; overflow:hidden; flex-shrink:0; }
+  .mini { width:48px; height:48px; border-radius:50%; overflow:hidden; flex-shrink:0; position:relative; }
+  .mini .ava { transform:scale(0.2526); transform-origin:top left; position:absolute; top:0; left:0; }
+  .pf { font-family:'Playfair Display', serif; }
+  .oro { color:#C9A227; }
+  .grad { background:linear-gradient(135deg,#BF953F,#E8D48A,#B38728,#D9C06B,#AA771C);
+          -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+  .linea { height:1.5px; background:linear-gradient(90deg,transparent,#C9A227 22%,#C9A227 78%,transparent); }
+  .desc { color:#64748b; font-size:10.5px; margin-top:9px; line-height:1.45; min-height:28px; }
+  svg text { font-family:'Playfair Display', serif; }
+</style>
+</head>
+<body>
+<h2 class="pf" style="color:#C9A227;letter-spacing:2px;text-align:center">AVATARES CIRCULARES PARA WHATSAPP — 12 OPCIONES</h2>
+<p style="color:#94a3b8;text-align:center;font-size:12px;margin-top:-10px">Fondo negro absoluto · Playfair Display · dorado mate · cada opción con vista real a 48px (tamaño WhatsApp)</p>
+<div class="grid" id="grid">
+
+<div class="card"><div class="num">OPCIÓN 1 — CM + LÍNEA + CC</div><div class="fila"><div class="ava">
+  <div class="pf grad" style="font-size:74px;font-weight:700;letter-spacing:2px;line-height:1">CM</div>
+  <div class="linea" style="width:96px;margin:8px 0 6px"></div>
+  <div class="pf oro" style="font-size:20px;letter-spacing:6px;font-weight:600">CC</div>
+</div></div><div class="desc">Iniciales grandes, línea dorada y "CC" pequeño debajo. Máxima legibilidad en miniatura.</div></div>
+
+<div class="card"><div class="num">OPCIÓN 2 — CM + LÍNEA + CON CRECES</div><div class="fila"><div class="ava">
+  <div class="pf grad" style="font-size:70px;font-weight:700;letter-spacing:2px;line-height:1">CM</div>
+  <div class="linea" style="width:104px;margin:8px 0 7px"></div>
+  <div class="pf oro" style="font-size:11.5px;letter-spacing:3.5px;font-weight:600">CON CRECES</div>
+</div></div><div class="desc">Réplica directa de la Opción 2 aprobada, condensada al círculo.</div></div>
+
+<div class="card"><div class="num">OPCIÓN 3 — TEXTO CURVO SUPERIOR</div><div class="fila"><div class="ava">
+  <svg viewBox="0 0 190 190" style="position:absolute;inset:0">
+    <defs><path id="arc3" d="M 24 95 A 71 71 0 0 1 166 95"/></defs>
+    <text font-size="14.5" letter-spacing="3.4" fill="#C9A227" font-weight="600"><textPath href="#arc3" startOffset="50%" text-anchor="middle">CENTRAL MUTUOS</textPath></text>
+  </svg>
+  <div class="pf grad" style="font-size:64px;font-weight:700;line-height:1;margin-top:22px">CM</div>
+</div></div><div class="desc">"CENTRAL MUTUOS" curvado en el borde superior + iniciales al centro.</div></div>
+
+<div class="card"><div class="num">OPCIÓN 4 — DOBLE ARCO COMPLETO</div><div class="fila"><div class="ava">
+  <svg viewBox="0 0 190 190" style="position:absolute;inset:0">
+    <defs><path id="arc4t" d="M 22 95 A 73 73 0 0 1 168 95"/><path id="arc4b" d="M 30 95 A 65 65 0 0 0 160 95"/></defs>
+    <text font-size="13.5" letter-spacing="3" fill="#C9A227" font-weight="600"><textPath href="#arc4t" startOffset="50%" text-anchor="middle">CENTRAL MUTUOS</textPath></text>
+    <text font-size="11" letter-spacing="4" fill="#8a6d1f" font-weight="600"><textPath href="#arc4b" startOffset="50%" text-anchor="middle">CON CRECES</textPath></text>
+  </svg>
+  <div class="pf grad" style="font-size:56px;font-weight:700;line-height:1">CM</div>
+</div></div><div class="desc">Nombre arriba y "CON CRECES" curvado abajo, CM al centro. Estilo sello clásico.</div></div>
+
+<div class="card"><div class="num">OPCIÓN 5 — MONOGRAMA + DIAMANTE</div><div class="fila"><div class="ava">
+  <div class="pf grad" style="font-size:80px;font-weight:700;line-height:1">CM</div>
+  <div style="display:flex;align-items:center;gap:8px;margin-top:9px">
+    <div class="linea" style="width:34px"></div>
+    <div style="width:8px;height:8px;background:#C9A227;transform:rotate(45deg)"></div>
+    <div class="linea" style="width:34px"></div>
+  </div>
+</div></div><div class="desc">Monograma puro con diamante dorado central. Sin texto adicional.</div></div>
+
+<div class="card"><div class="num">OPCIÓN 6 — MONOGRAMA ENTRELAZADO</div><div class="fila"><div class="ava">
+  <div class="pf" style="font-size:96px;font-weight:900;line-height:1;letter-spacing:-14px;margin-left:-10px">
+    <span class="grad">C</span><span style="color:#8a6d1f;opacity:0.92;font-weight:700">M</span></div>
+</div></div><div class="desc">Letras superpuestas en dos tonos de dorado mate. Minimalista absoluto.</div></div>
+
+<div class="card"><div class="num">OPCIÓN 7 — ANILLO FINO + CM</div><div class="fila"><div class="ava">
+  <div style="position:absolute;inset:10px;border:1.5px solid rgba(201,162,39,0.75);border-radius:50%"></div>
+  <div class="pf grad" style="font-size:72px;font-weight:700;line-height:1">CM</div>
+</div></div><div class="desc">Iniciales dentro de un anillo dorado fino. Sobrio y directo.</div></div>
+
+<div class="card"><div class="num">OPCIÓN 8 — DOBLE ANILLO + CC</div><div class="fila"><div class="ava">
+  <div style="position:absolute;inset:8px;border:1px solid rgba(201,162,39,0.55);border-radius:50%"></div>
+  <div style="position:absolute;inset:15px;border:2px solid rgba(201,162,39,0.85);border-radius:50%"></div>
+  <div class="pf grad" style="font-size:62px;font-weight:700;line-height:1">CM</div>
+  <div class="linea" style="width:80px;margin:7px 0 5px"></div>
+  <div class="pf oro" style="font-size:16px;letter-spacing:5px;font-weight:600">CC</div>
+</div></div><div class="desc">Doble anillo tipo medalla con CM, línea y CC. El más ceremonial.</div></div>
+
+<div class="card"><div class="num">OPCIÓN 9 — C | M SEPARADO</div><div class="fila"><div class="ava">
+  <div style="display:flex;align-items:center;gap:14px">
+    <div class="pf grad" style="font-size:76px;font-weight:700;line-height:1">C</div>
+    <div style="width:1.5px;height:84px;background:linear-gradient(180deg,transparent,#C9A227,transparent)"></div>
+    <div class="pf grad" style="font-size:76px;font-weight:700;line-height:1">M</div>
+  </div>
+</div></div><div class="desc">Iniciales separadas por línea dorada vertical. Composición editorial.</div></div>
+
+<div class="card"><div class="num">OPCIÓN 10 — DIAMANTES ARRIBA Y ABAJO</div><div class="fila"><div class="ava">
+  <div style="width:7px;height:7px;background:#C9A227;transform:rotate(45deg);margin-bottom:8px"></div>
+  <div class="pf grad" style="font-size:70px;font-weight:700;line-height:1">CM</div>
+  <div style="width:7px;height:7px;background:#C9A227;transform:rotate(45deg);margin-top:10px"></div>
+</div></div><div class="desc">Monograma escoltado por dos diamantes dorados. Simetría vertical.</div></div>
+
+<div class="card"><div class="num">OPCIÓN 11 — LOGO OFICIAL MINIATURA</div><div class="fila"><div class="ava">
+  <div class="pf grad" style="font-size:19.5px;font-weight:700;letter-spacing:1.5px;white-space:nowrap">CENTRAL MUTUOS</div>
+  <div class="linea" style="width:120px;margin:7px 0 6px"></div>
+  <div class="pf oro" style="font-size:9.5px;letter-spacing:4px;font-weight:400">CON CRECES</div>
+</div></div><div class="desc">El logo horizontal aprobado adaptado al círculo. Fiel a la marca, menos legible en 48px.</div></div>
+
+<div class="card"><div class="num">OPCIÓN 12 — DORADO MATE PLANO</div><div class="fila"><div class="ava">
+  <div class="pf" style="font-size:78px;font-weight:600;line-height:1;color:#C9A227">CM</div>
+  <div style="width:70px;height:1.5px;background:#C9A227;margin:9px 0 6px"></div>
+  <div class="pf" style="font-size:17px;letter-spacing:5px;font-weight:600;color:#8a6d1f">CC</div>
+</div></div><div class="desc">Sin degradado: oro mate plano de una sola tinta. El más "mate" de todos.</div></div>
+
+</div>
+<script>
+  document.querySelectorAll('.card').forEach(c => {
+    const ava = c.querySelector('.ava');
+    const mini = document.createElement('div');
+    mini.className = 'mini';
+    mini.appendChild(ava.cloneNode(true));
+    c.querySelector('.fila').appendChild(mini);
+  });
+</script>
+</body>
+</html>

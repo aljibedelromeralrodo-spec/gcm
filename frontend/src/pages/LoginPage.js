@@ -62,11 +62,19 @@ export default function LoginPage({ onLogin }) {
     <div className="login-bg" data-testid="login-page">
       <div className="login-card">
         <div className="login-header">
-          <img src="/logo-cm.png" alt="Logo Central Mutuos" data-testid="login-logo"
-            style={{ width: 84, height: 84, borderRadius: "50%", margin: "0 auto 12px",
-              display: "block", boxShadow: "0 0 0 1px rgba(212,175,55,0.45), 0 8px 28px rgba(0,0,0,0.5)" }} />
-          <h1 className="login-title">Central Mutuos</h1>
-          <p className="login-subtitle">Plataforma de Gestión Crediticia</p>
+          <div data-testid="login-logo" style={{ background: "#0a0a0a", borderRadius: 12,
+            padding: "1.4rem 1rem 1.2rem", margin: "0 0 12px",
+            border: "1px solid rgba(212,175,55,0.25)", textAlign: "center" }}>
+            <div style={{ fontFamily: "'Playfair Display', serif", fontWeight: 700, fontSize: "2rem",
+              letterSpacing: 4, whiteSpace: "nowrap",
+              background: "linear-gradient(135deg,#BF953F,#FCF6BA,#B38728,#FBF5B7,#AA771C)",
+              WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent",
+              filter: "drop-shadow(0 1px 12px rgba(191,149,63,0.55))" }}>CENTRAL MUTUOS</div>
+            <div style={{ height: 1.5, margin: "12px auto 9px", width: "88%",
+              background: "linear-gradient(90deg,transparent,#d4af37 20%,#d4af37 80%,transparent)" }} />
+            <div style={{ fontFamily: "'Playfair Display', serif", color: "#d4af37",
+              fontSize: "0.81rem", letterSpacing: 10, fontWeight: 400 }}>CON CRECES</div>
+          </div>
         </div>
         {!crearClave ? (
           <form onSubmit={handleSubmit} className="login-form">
