@@ -12,7 +12,7 @@ import re
 import uuid
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, HTTPException, Request
 from database import db
 
@@ -601,6 +601,182 @@ async def gerencia_panel_rol(request: Request):
                             "variacion_pct": round((sem_actual - sem_previa) * 100 / sem_previa, 1) if sem_previa else None}}
 
 
+def _dias_habiles_desde(iso):
+    try:
+        d0 = datetime.fromisoformat(str(iso)[:19]).date()
+    except Exception:
+        return None
+    hoy, n, d = datetime.now(timezone.utc).date(), 0, None
+    d = d0
+    while d < hoy:
+        d += timedelta(days=1)
+        if d.weekday() < 5:
+            n += 1
+    return n
+
+
+@gpanel.get("/command-center")
+async def gerencia_command_center(request: Request):
+    """DASHBOARD UNIFICADO DE GERENCIA: Command Center, Brokers, Carga Administrativa y Bandeja."""
+    _exigir(request, ("admin", "maestro", "gerencia", "contralor"))
+    ahora = datetime.now(timezone.utc)
+    mes = ahora.strftime("%Y-%m")
+    mes_prev = (ahora.replace(day=1) - timedelta(days=1)).strftime("%Y-%m")
+    uf_cfg = await db.config.find_one({"_key": "uf"}) or {}
+    valor_uf = float(uf_cfg.get("valor_uf") or 0)
+    activas, cerradas_mes, cerradas_prev, dias_cierre = 0, 0, 0, []
+    bloqueadas, monto_uf = 0, 0.0
+    nuevas_mes, nuevas_prev = 0, 0
+    brokers, bandeja = {}, []
+    async for fd in db.folders.find({"oculto_supercarpeta": {"$ne": True}}):
+        brk = (fd.get("broker_origen") or fd.get("broker_codigo") or "Directo").strip() or "Directo"
+        b = brokers.setdefault(brk, {"broker": brk, "clientes": 0, "tramitacion": 0,
+                                     "cerradas_mes": 0, "cerradas_total": 0, "monto_uf": 0.0,
+                                     "dias_resp": []})
+        b["clientes"] += 1
+        creado = str(fd.get("created_at") or fd.get("created") or "")
+        if creado[:7] == mes:
+            nuevas_mes += 1
+        elif creado[:7] == mes_prev:
+            nuevas_prev += 1
+        cerrada_at = str(fd.get("escritura_confirmada_at") or "")
+        if cerrada_at:
+            b["cerradas_total"] += 1
+            if cerrada_at[:7] == mes:
+                cerradas_mes += 1
+                b["cerradas_mes"] += 1
+            elif cerrada_at[:7] == mes_prev:
+                cerradas_prev += 1
+            try:
+                dias_cierre.append(max((datetime.fromisoformat(cerrada_at[:19])
+                                        - datetime.fromisoformat(creado[:19])).days, 0))
+            except Exception:
+                pass
+            continue
+        activas += 1
+        b["tramitacion"] += 1
+        p_uf = float(fd.get("proyeccion_uf") or 0)
+        b["monto_uf"] += p_uf
+        monto_uf += p_uf
+        faltan = fd.get("faltantes_auto_lista") or []
+        if faltan:
+            bloqueadas += 1
+        ult = str(fd.get("updated_at") or creado or "")
+        dh = _dias_habiles_desde(ult)
+        if dh is not None:
+            b["dias_resp"].append(dh)
+        s = (fd.get("subsidio_proyeccion") or "").upper()
+        tipo = ("DS49" if "49" in s else "DS1" if "DS1" in s or "DS 1" in s
+                else "SERVIU" if "SERVIU" in s else "")
+        if not tipo:
+            tipo = "Vivienda usada" if "usad" in (fd.get("tipo_operacion") or "").lower() else "Mutuo hipotecario"
+        estado = ("Estudio aprobado" if fd.get("estudio_recibido_at")
+                  else "Tasación recibida" if fd.get("tasacion_informe_recibido_at")
+                  else "SET emitido" if fd.get("set_credito_at") else "En tramitación")
+        if faltan:
+            estado = f"Bloqueada por normativa · {len(faltan)} doc. faltante(s)"
+        bandeja.append({"fid": fd["id"], "cliente": fd.get("nombre"), "rut": fd.get("rut") or "",
+                        "broker": brk, "tipo": tipo, "estado": estado,
+                        "ultimo_movimiento": ult[:10] or "No disponible",
+                        "dias_sin_movimiento": dh,
+                        "alerta": bool(dh is not None and dh > 5),
+                        "urgente": bool(fd.get("urgente"))})
+    bandeja.sort(key=lambda x: (not x["urgente"], -(x["dias_sin_movimiento"] or 0)))
+    lista_brokers = []
+    for b in brokers.values():
+        b["monto_uf"] = round(b["monto_uf"], 1)
+        b["tasa_cierre"] = round(b["cerradas_total"] * 100 / b["clientes"]) if b["clientes"] else 0
+        dr = b.pop("dias_resp")
+        b["dias_respuesta"] = round(sum(dr) / len(dr), 1) if dr else None
+        b["semaforo"] = ("verde" if (b["cerradas_mes"] > 0 or b["tasa_cierre"] >= 40
+                                     or (b["dias_respuesta"] is not None and b["dias_respuesta"] <= 5))
+                         else "amarillo" if (b["dias_respuesta"] is not None and b["dias_respuesta"] <= 10)
+                         else "rojo")
+        lista_brokers.append(b)
+    lista_brokers.sort(key=lambda x: (-x["cerradas_mes"], -x["tasa_cierre"], -x["clientes"]))
+    if lista_brokers:
+        lista_brokers[0]["mejor_mes"] = True
+    # ZONA 3: carga administrativa real del mes
+    ini_mes = f"{mes}-01"
+    equipo = {"Daniela Galindo": {"docs": 0, "correos": 0, "ops": set()},
+              "Victoria Vilchez": {"docs": 0, "correos": 0, "ops": set()}}
+    emails_eq = {"Daniela Galindo": "danielagalindo@centralmutuos.cl",
+                 "Victoria Vilchez": "victoriavilches@centralmutuos.cl"}
+    tiempos = {k: {} for k in equipo}
+    async for r in db.estado_manual_log.find({"fecha": {"$gte": ini_mes}}):
+        por = (r.get("por") or "").lower()
+        key = ("Victoria Vilchez" if "victoria" in por or "vilche" in por else
+               "Daniela Galindo" if "daniela" in por or "galindo" in por else None)
+        if not key:
+            continue
+        equipo[key]["docs"] += 1
+        if r.get("folder_id"):
+            equipo[key]["ops"].add(r["folder_id"])
+            tiempos[key].setdefault(r["folder_id"], []).append(str(r.get("fecha") or ""))
+    async for r in db.correos_smtp_log.find({"fecha": {"$gte": ini_mes}}):
+        blob = str(r).lower()
+        for key, em in emails_eq.items():
+            if em in blob:
+                equipo[key]["correos"] += 1
+    carga = {}
+    for key, e in equipo.items():
+        horas_ops = []
+        for fechas in tiempos[key].values():
+            fs = sorted(f for f in fechas if f)
+            if len(fs) >= 2:
+                try:
+                    horas_ops.append((datetime.fromisoformat(fs[-1][:19])
+                                      - datetime.fromisoformat(fs[0][:19])).total_seconds() / 3600)
+                except Exception:
+                    pass
+        carga[key] = {"documentos_procesados": e["docs"], "correos_gestionados": e["correos"],
+                      "operaciones_tramitadas": len(e["ops"]),
+                      "horas_promedio_resolucion": round(sum(horas_ops) / len(horas_ops), 1) if horas_ops else None}
+    total_docs = sum(c["documentos_procesados"] for c in carga.values())
+    for c in carga.values():
+        share = c["documentos_procesados"] / total_docs if total_docs else 0
+        vol = c["documentos_procesados"] + c["correos_gestionados"]
+        c["indicador_carga"] = "Alta" if (vol >= 40 or share >= 0.65) else ("Media" if vol >= 15 else "Normal")
+    # ZONA 1
+    base_mes = activas + cerradas_mes
+    base_prev = activas + cerradas_prev
+    tasa_mes = round(cerradas_mes * 100 / base_mes, 1) if base_mes else 0
+    tasa_prev = round(cerradas_prev * 100 / base_prev, 1) if base_prev else 0
+    zona1 = {
+        "operaciones_activas": {"valor": activas, "tendencia": nuevas_mes - nuevas_prev,
+                                "nuevas_mes": nuevas_mes, "nuevas_mes_anterior": nuevas_prev},
+        "monto_tramitacion": {"uf": round(monto_uf, 1), "clp": round(monto_uf * valor_uf),
+                              "valor_uf_dia": valor_uf},
+        "tasa_cierre": {"mes_actual": tasa_mes, "mes_anterior": tasa_prev,
+                        "tendencia": round(tasa_mes - tasa_prev, 1),
+                        "cierres_mes": cerradas_mes, "cierres_mes_anterior": cerradas_prev},
+        "tiempo_promedio_cierre_dias": round(sum(dias_cierre) / len(dias_cierre)) if dias_cierre else None,
+        "bloqueadas_normativa": {"n": bloqueadas,
+                                 "pct": round(bloqueadas * 100 / activas, 1) if activas else 0},
+        "docs_sin_clasificar": await db.docs_sin_clasificar.count_documents({}),
+    }
+    tendencia = {}
+    async for fd in db.folders.find({}, {"created_at": 1}):
+        m = str(fd.get("created_at") or "")[:7]
+        if m:
+            tendencia[m] = tendencia.get(m, 0) + 1
+    return {"mes": mes, "zona1": zona1, "brokers": lista_brokers,
+            "carga_administrativa": carga, "bandeja": bandeja[:80],
+            "serie_mensual": sorted(tendencia.items())[-6:], "generado": _now()}
+
+
+@gpanel.post("/urgente")
+async def gerencia_marcar_urgente(payload: dict, request: Request):
+    _exigir(request, ("admin", "maestro", "gerencia"))
+    fid = (payload or {}).get("fid") or ""
+    fd = await db.folders.find_one({"id": fid})
+    if not fd:
+        raise HTTPException(status_code=404, detail="Operación no encontrada")
+    nuevo = not fd.get("urgente")
+    await db.folders.update_one({"id": fid}, {"$set": {"urgente": nuevo}})
+    return {"ok": True, "fid": fid, "urgente": nuevo}
+
+
 @gpanel.get("/inteligencia")
 async def gerencia_inteligencia(request: Request, broker: str = ""):
     """CENTRO DE INTELIGENCIA COMERCIAL: panel por cliente (docs + fechas + preview),
@@ -683,7 +859,8 @@ async def gerencia_accion(payload: dict, request: Request):
     fid, tipo = (payload.get("fid") or ""), (payload.get("tipo") or "")
     ACC = {"tasacion": ("Solicitar tasación al broker", "broker"),
            "estudio": ("Consultar estudio de título", "administrativo"),
-           "docs": ("Pedir actualización de documentos", "administrativo")}
+           "docs": ("Pedir actualización de documentos", "administrativo"),
+           "seguimiento": ("Solicitar estado y seguimiento de la operación", "administrativo")}
     if tipo not in ACC:
         raise HTTPException(status_code=400, detail="Acción inválida")
     fd = await db.folders.find_one({"id": fid})

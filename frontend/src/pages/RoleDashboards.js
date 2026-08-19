@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
+import GerenciaCommandCenter from "./GerenciaCommandCenter";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -58,7 +59,7 @@ export default function RoleDashboard({ rol, nombre, onNavigate }) {
           </button>
         ))}
       </div>
-      {rol === "gerencia" && <GerenciaPanel />}
+      {rol === "gerencia" && <GerenciaCommandCenter onNavigate={onNavigate} />}
     </div>
   );
 }
@@ -73,6 +74,7 @@ const Barra = ({ label, valor, max, color }) => (
   </div>
 );
 
+// eslint-disable-next-line no-unused-vars
 const GerenciaPanel = () => {
   const [d, setD] = useState(null);
   const [intel, setIntel] = useState(null);
