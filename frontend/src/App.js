@@ -46,6 +46,7 @@ const CerebroDashAIModule = lazy(() => import("./pages/CerebroDashAIModule"));
 const ContralorModule = lazy(() => import("./pages/ContralorModule"));
 const PostventaModule = lazy(() => import("./pages/PostventaModule"));
 const RoleDashboard = lazy(() => import("./pages/RoleDashboards"));
+const FrentePrincipal = lazy(() => import("./components/FrentePrincipal"));
 const AuditoriaForenseModule = lazy(() => import("./pages/AuditoriaForenseModule"));
 const DespachoModule = lazy(() => import("./pages/DespachoModule"));
 const GlobalSearch = lazy(() => import("./components/GlobalSearch"));
@@ -449,8 +450,14 @@ function MainApp() {
         )}
         {activeModule === 'dashboard' && (
           ['gerencia', 'administracion', 'postventa', 'contralor', 'broker'].includes(user.rol)
-            ? <RoleDashboard rol={user.rol} nombre={user.nombre} onNavigate={setActiveModule} />
-            : <DashboardModule valorUF={valorUF} userName={user?.nombre} onNavigate={setActiveModule} />)}
+            ? <>
+                {user.rol === 'gerencia' && <FrentePrincipal rol={user.rol} />}
+                <RoleDashboard rol={user.rol} nombre={user.nombre} onNavigate={setActiveModule} />
+              </>
+            : <>
+                <FrentePrincipal rol={user.rol} />
+                <DashboardModule valorUF={valorUF} userName={user?.nombre} onNavigate={setActiveModule} />
+              </>)}
         {activeModule === 'simulador' && <SimuladorModule valorUF={valorUF} loadedSimulation={loadedSimulation} />}
         {activeModule === 'historial' && <HistorialModule valorUF={valorUF} onLoadSimulation={handleLoadSimulation} />}
         {activeModule === 'calculadora' && <CalculadoraModule valorUF={valorUF} />}

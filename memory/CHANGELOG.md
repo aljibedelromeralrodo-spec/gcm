@@ -1510,3 +1510,21 @@ Constitución VERSION 19 (nuevas reglas #55, #56, #57).
 - Archivo oficial: /app/backend/exports/constitucion-oficial.{json,pdf} (83 reglas).
 - Verificación 4 PASOS: P1 export OK, P2 seguridad 28/28, P3 funcional 13/13 (41/41 total sin brechas),
   P4 deployment_agent: PASS deployment-ready. Falta que el usuario pulse Deploy y valide dominio.
+
+## 2026-06 — GERENCIA COMERCIAL POTENCIADA (4 BLOQUES) + TRACKERS CON PLAZOS
+- gerencia_comercial.py (nuevo): brokers internos sembrados (Mutuaria y Leasing Ilimitada [mutuaria],
+  De Manet Servicios Financieros [demanet], José María [josemaria]) en db.brokers_internos.
+- Endpoints: GET /gerencia-comercial/panel (internos/externos, ranking, proyección vs real, ejecutivos),
+  GET /dashboard-principal (BLOQUE 1, admin+gerencia: operaciones/financiero/espejo/postventa/documentos),
+  GET /indices-admin (BLOQUE 4, solo admin: Índice Administrativo + Formaciones),
+  trackers: plantillas configurables (POST solo admin), GET/POST tracker/{tipo}/{ref} con PLAZOS
+  HÁBILES (escritura 10 pasos: 2,2,2,2cond,3,2,5,3,5), estados pendiente/en_curso/completado/vencido,
+  días restantes/vencidos, alerta automática a admin+gerencia al vencer (db.alertas tracker_vencido,
+  dedupe en trackers.alertas_enviadas). Escribe: escritura=admin/gerencia/postventa; administrativo=
+  admin/administracion; contralor solo lectura.
+- Frontend: FrentePrincipal.js (dashboard admin+gerencia, negro/dorado, semáforo), PanelComercial
+  exportado de GerenciaCommandCenter (vista general/particular con selector) montado también en
+  GerenciaComercialModule (nav 'gerencia'), TrackerPasos.js con semáforo/plazos, tracker escritura
+  en PostventaModule (toggle por caso), TrackerAdministrativo en AdministracionModule (selector carpeta).
+- Verificado: curl 100% endpoints + RBAC 403s, screenshots OK (Frente Principal, Panel Comercial,
+  vista particular, índices admin). PENDIENTE: testing agent E2E frontend de estos flujos.

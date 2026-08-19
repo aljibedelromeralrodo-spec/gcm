@@ -299,6 +299,148 @@ export default function GerenciaCommandCenter({ onNavigate }) {
           )}
         </div>
       </div>
+      <PanelComercial />
+    </div>
+  );
+}
+
+// ═══ VISIÓN GERENCIAL: BROKERS INTERNOS · RANKING · PROYECCIÓN VS REAL · EJECUTIVOS ═══
+const Ratio = ({ v }) => v === null || v === undefined
+  ? <span style={{ color: "#64748b", fontSize: "0.7rem" }}>sin proyección</span>
+  : <span style={{ fontWeight: 900, fontSize: "1.05rem",
+      color: v >= 100 ? "#22c55e" : v >= 60 ? "#facc15" : "#ef4444" }}>{v}%</span>;
+
+const BrokerCard = ({ b, interno }) => (
+  <div data-testid={`gc-broker-${b.codigo}`} style={{ ...card, flex: "1 1 300px", minWidth: 280,
+    borderColor: interno ? "rgba(212,175,55,0.5)" : "rgba(148,163,184,0.25)" }}>
+    <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+      <b style={{ color: "#f8fafc", fontSize: "0.9rem" }}>{b.nombre}</b>
+      <span style={{ fontSize: "0.56rem", fontWeight: 900, letterSpacing: 1, borderRadius: 5,
+        padding: "0.1rem 0.45rem", color: interno ? "#0a0a0a" : "#94a3b8",
+        background: interno ? oro : "rgba(148,163,184,0.15)" }}>{interno ? "INTERNO" : "EXTERNO"}</span>
+    </div>
+    <div style={{ display: "flex", gap: 16, marginTop: 8, flexWrap: "wrap" }}>
+      <div><div style={{ color: "#94a3b8", fontSize: "0.58rem", fontWeight: 800 }}>ACTIVAS</div>
+        <div style={{ color: "#f8fafc", fontSize: "1.5rem", fontWeight: 900 }}>{b.activas}</div></div>
+      <div><div style={{ color: "#94a3b8", fontSize: "0.58rem", fontWeight: 800 }}>CERRADAS</div>
+        <div style={{ color: "#22c55e", fontSize: "1.5rem", fontWeight: 900 }}>{b.cerradas}</div></div>
+      <div><div style={{ color: "#94a3b8", fontSize: "0.58rem", fontWeight: 800 }}>MONTO UF</div>
+        <div style={{ color: oro, fontSize: "1.5rem", fontWeight: 900 }}>{Math.round(b.monto_uf).toLocaleString("es-CL")}</div></div>
+      <div><div style={{ color: "#94a3b8", fontSize: "0.58rem", fontWeight: 800 }}>CUMPLIMIENTO</div>
+        <div><Ratio v={b.ratio_cumplimiento} /></div>
+        <div style={{ color: "#64748b", fontSize: "0.56rem" }}>{b.operaciones_nuevas_mes} real / {b.proyecciones_mes} proy.</div></div>
+    </div>
+    <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+      {[["Ingreso", b.etapas.ingreso, "#94a3b8"], ["Evaluación", b.etapas.evaluacion, "#facc15"],
+        ["Escrituración", b.etapas.escrituracion, "#22c55e"]].map(([lb, n, col]) => (
+        <span key={lb} style={{ fontSize: "0.62rem", fontWeight: 800, color: col,
+          border: `1px solid ${col}44`, borderRadius: 999, padding: "2px 9px" }}>{lb}: {n}</span>))}
+      {b.en_riesgo > 0 && <span style={{ fontSize: "0.62rem", fontWeight: 900, color: "#facc15",
+        border: "1px solid #facc1566", borderRadius: 999, padding: "2px 9px" }}>⚠ {b.en_riesgo} en riesgo</span>}
+      {b.atrasadas > 0 && <span style={{ fontSize: "0.62rem", fontWeight: 900, color: "#ef4444",
+        border: "1px solid #ef444466", borderRadius: 999, padding: "2px 9px" }}>🚨 {b.atrasadas} atrasadas</span>}
+    </div>
+  </div>
+);
+
+export function PanelComercial() {
+  const [p, setP] = useState(null);
+  const [vista, setVista] = useState("general");
+  useEffect(() => {
+    axios.get(`${API}/api/gerencia-comercial/panel`).then(r => setP(r.data)).catch(() => {});
+  }, []);
+  if (!p) return null;
+  const todos = [...p.brokers_internos, ...p.brokers_externos];
+  const sel = vista === "general" ? null : todos.find(b => b.codigo === vista);
+  return (
+    <div data-testid="gc-panel-comercial" style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 4 }}>
+      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+        <h2 style={{ ...h2, margin: 0 }}>👑 Visión Comercial</h2>
+        <select data-testid="gc-vista-selector" value={vista} onChange={e => setVista(e.target.value)}
+          style={{ background: "#0f172a", color: "#f8fafc", border: "1px solid rgba(212,175,55,0.4)",
+            borderRadius: 8, padding: "0.35rem 0.7rem", fontSize: "0.74rem", fontWeight: 700 }}>
+          <option value="general">Vista general — todas las operaciones</option>
+          <optgroup label="Brokers Internos">
+            {p.brokers_internos.map(b => <option key={b.codigo} value={b.codigo}>{b.nombre}</option>)}
+          </optgroup>
+          <optgroup label="Brokers Externos">
+            {p.brokers_externos.map(b => <option key={b.codigo} value={b.codigo}>{b.nombre}</option>)}
+          </optgroup>
+        </select>
+      </div>
+      {sel ? (
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }} data-testid="gc-vista-particular">
+          <BrokerCard b={sel} interno={p.brokers_internos.some(b => b.codigo === sel.codigo)} />
+          <div style={{ ...card, flex: "1 1 240px" }}>
+            <h2 style={h2}>Posición en ranking</h2>
+            <div style={{ color: oro, fontSize: "2.4rem", fontWeight: 900 }}>
+              #{p.ranking.findIndex(r => r.codigo === sel.codigo) + 1 || "—"}</div>
+            <div style={{ color: "#94a3b8", fontSize: "0.68rem" }}>
+              de {p.ranking.length} brokers del período · {sel.proyecciones_total} proyecciones históricas</div>
+          </div>
+        </div>
+      ) : (
+      <>
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+        <Metrica id="gc-riesgo" titulo="OPERACIONES EN RIESGO" valor={p.kpis.en_riesgo} color="#facc15"
+          sub="7-14 días sin movimiento" />
+        <Metrica id="gc-atrasadas" titulo="OPERACIONES ATRASADAS" valor={p.kpis.atrasadas} color="#ef4444"
+          sub="+14 días sin movimiento" />
+        <Metrica id="gc-cerradas" titulo="CERRADAS EXITOSAMENTE" valor={p.kpis.cerradas_exitosas} color="#22c55e"
+          sub="en escrituración" />
+        <Metrica id="gc-monto" titulo="MONTO GESTIONADO (UF)" valor={Math.round(p.kpis.monto_total_uf).toLocaleString("es-CL")}
+          color={oro} sub={`período ${p.mes}`} />
+      </div>
+      <div style={card} data-testid="gc-brokers-internos">
+        <h2 style={h2}>👑 Brokers Internos</h2>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          {p.brokers_internos.map(b => <BrokerCard key={b.codigo} b={b} interno />)}
+        </div>
+      </div>
+      <div style={card} data-testid="gc-brokers-externos">
+        <h2 style={h2}>🌐 Brokers Externos</h2>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          {p.brokers_externos.length === 0 && <p style={{ color: "#64748b", fontSize: "0.74rem" }}>Sin brokers externos registrados.</p>}
+          {p.brokers_externos.map(b => <BrokerCard key={b.codigo} b={b} />)}
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+        <div style={{ ...card, flex: "2 1 420px" }} data-testid="gc-ranking">
+          <h2 style={h2}>🏆 Ranking de Brokers — volumen y monto</h2>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.76rem" }}>
+            <thead><tr style={{ color: "#94a3b8", textAlign: "left" }}>
+              <th style={{ padding: "4px 6px" }}>#</th><th>Broker</th><th>Operaciones</th><th>Monto UF</th><th>Cumplimiento</th></tr></thead>
+            <tbody>{p.ranking.map((b, i) => (
+              <tr key={b.codigo} style={{ borderTop: "1px solid rgba(148,163,184,0.12)", color: "#e2e8f0" }}>
+                <td style={{ padding: "5px 6px", color: i < 3 ? oro : "#64748b", fontWeight: 900 }}>{i + 1}</td>
+                <td style={{ fontWeight: 800 }}>{b.nombre}</td>
+                <td>{b.operaciones}</td>
+                <td style={{ color: oro, fontWeight: 800 }}>{Math.round(b.monto_uf).toLocaleString("es-CL")}</td>
+                <td><Ratio v={b.ratio_cumplimiento} /></td>
+              </tr>))}
+            </tbody>
+          </table>
+        </div>
+        <div style={{ ...card, flex: "1 1 300px" }} data-testid="gc-ejecutivos">
+          <h2 style={h2}>🧭 Panel Ejecutivo</h2>
+          {p.ejecutivos.map(e => (
+            <div key={e.nombre} style={{ borderTop: "1px solid rgba(148,163,184,0.1)", padding: "6px 0" }}>
+              <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
+                <b style={{ color: "#f8fafc", fontSize: "0.8rem" }}>{e.nombre}</b>
+                <span style={{ color: "#94a3b8", fontSize: "0.6rem", textTransform: "uppercase" }}>{e.rol}</span>
+                <span style={{ marginLeft: "auto", color: oro, fontWeight: 900 }}>{e.ratio_avance}%</span>
+              </div>
+              <div style={{ color: "#94a3b8", fontSize: "0.64rem" }}>
+                {e.ops_activas} activas · {e.completadas} completadas · aporte {e.aporte_pct}% del objetivo</div>
+              <div style={{ height: 5, background: "rgba(148,163,184,0.15)", borderRadius: 4, marginTop: 3 }}>
+                <div style={{ width: `${e.ratio_avance}%`, height: "100%", borderRadius: 4,
+                  background: `linear-gradient(90deg,#8a6d1a,${oro})` }} /></div>
+            </div>
+          ))}
+        </div>
+      </div>
+      </>
+      )}
     </div>
   );
 }

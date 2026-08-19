@@ -4,6 +4,7 @@ import GestorFuentesIMAP from "../components/GestorFuentesIMAP";
 import EstadoSalida from "../components/EstadoSalida";
 import ConfigEjecutivos, { ConexionConcreces } from "../components/ConfigEjecutivos";
 import DocumentoViewer from "../components/DocumentoViewer";
+import TrackerPasos from "../components/TrackerPasos";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 const PILL = { validado: "#22c55e", observado: "#f59e0b", pendiente: "#94a3b8", expulsado: "#ef4444" };
@@ -197,6 +198,30 @@ const GridEstado = () => {
 };
 
 // ── BANDEJA DE DOCUMENTOS SIN CLASIFICAR (Daniela, Victoria y el Admin) ──
+const TrackerAdministrativo = () => {
+  const [folders, setFolders] = useState([]);
+  const [sel, setSel] = useState("");
+  useEffect(() => {
+    axios.get(`${API}/api/clientes/folders`).then(r =>
+      setFolders((r.data.folders || r.data || []).slice(0, 200))).catch(() => {});
+  }, []);
+  return (
+    <div data-testid="tracker-administrativo-panel" style={{ background: "rgba(15,23,42,0.6)",
+      border: "1px solid rgba(212,175,55,0.3)", borderRadius: 14, padding: "1rem 1.3rem", marginTop: 14 }}>
+      <h3 style={{ color: "#d4af37", fontSize: "0.85rem", margin: "0 0 8px", letterSpacing: 1 }}>
+        🗂 TRACKER ADMINISTRATIVO — hitos del proceso interno</h3>
+      <select data-testid="tracker-admin-selector" value={sel} onChange={e => setSel(e.target.value)}
+        style={{ background: "#0f172a", color: "#f8fafc", border: "1px solid rgba(212,175,55,0.4)",
+          borderRadius: 8, padding: "0.4rem 0.7rem", fontSize: "0.76rem", minWidth: 260 }}>
+        <option value="">Seleccione una operación…</option>
+        {folders.map(f => <option key={f.id} value={f.id}>{f.nombre} {f.rut ? `(${f.rut})` : ""}</option>)}
+      </select>
+      {sel && <div style={{ marginTop: 10 }}>
+        <TrackerPasos tipo="administrativo" refId={sel} /></div>}
+    </div>
+  );
+};
+
 const BandejaSinClasificar = () => {
   const [docs, setDocs] = useState([]);
   const [folders, setFolders] = useState([]);
@@ -319,6 +344,7 @@ export default function AdministracionModule({ user }) {
       </>)}
       {/* Bandeja visible para Daniela, Victoria y el Admin */}
       {["admin", "maestro", "administracion"].includes(user?.rol) && <BandejaSinClasificar />}
+      {["admin", "maestro", "administracion"].includes(user?.rol) && <TrackerAdministrativo />}
       {/* DIVISIÓN OPERATIVA (Regla #32) + Postventa */}
       <div style={{ display: "flex", gap: 10, marginTop: 14, flexWrap: "wrap" }}>
         {PANELES.map(([k, t, s]) => (

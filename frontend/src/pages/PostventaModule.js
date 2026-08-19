@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
+import TrackerPasos from "../components/TrackerPasos";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 const inp = { background: "rgba(2,6,23,0.7)", border: "1px solid rgba(240,171,252,0.35)", color: "#f8fafc",
@@ -12,6 +13,7 @@ export default function PostventaModule({ user }) {
   const [nuevo, setNuevo] = useState({ cliente: "", email: "" });
   const [plazosForm, setPlazosForm] = useState(null);
   const [busy, setBusy] = useState("");
+  const [trackerOpen, setTrackerOpen] = useState({});
   const esAdmin = ["admin", "maestro"].includes(user?.rol);
 
   const cargar = () => axios.get(`${API}/api/postventa/panel`).then(r => {
@@ -130,6 +132,17 @@ export default function PostventaModule({ user }) {
               ))}
             </div>
           )}
+          <div style={{ marginTop: 10 }}>
+            <button data-testid={`pv-tracker-toggle-${c.id}`} onClick={() => setTrackerOpen(t => ({ ...t, [c.id]: !t[c.id] }))}
+              style={{ background: "rgba(212,175,55,0.1)", color: "#d4af37", border: "1px solid rgba(212,175,55,0.4)",
+                borderRadius: 8, padding: "0.32rem 0.85rem", cursor: "pointer", fontWeight: 800, fontSize: "0.68rem" }}>
+              📜 {trackerOpen[c.id] ? "Ocultar" : "Tracker de Escritura"}</button>
+            {trackerOpen[c.id] && (
+              <div style={{ marginTop: 8 }}>
+                <TrackerPasos tipo="escritura" refId={c.id} readOnly={user?.rol === "contralor"} />
+              </div>
+            )}
+          </div>
         </div>
       ))}
     </div>

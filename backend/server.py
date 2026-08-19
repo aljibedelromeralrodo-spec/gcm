@@ -564,6 +564,11 @@ async def startup():
         await _cat.archivar_constitucion_completa()
     except Exception as e:
         logging.warning(f"seed catálogo maestro: {e}")
+    try:
+        import gerencia_comercial as _gcom
+        await _gcom.seed_gerencia_comercial()
+    except Exception as e:
+        logging.warning(f"seed gerencia comercial: {e}")
     # OPTIMIZACIÓN: índices en colecciones calientes (listas instantáneas)
     try:
         await db.folders.create_index("nombre")
@@ -14541,6 +14546,10 @@ api.include_router(_cat_mod.catalogo_r)
 # 🔐 EXPORTACIÓN BLINDADA DE LA CONSTITUCIÓN (PIN maestro + auditoría)
 import cerebro_export as _cex_mod
 api.include_router(_cex_mod.export_r)
+
+# 👑 GERENCIA COMERCIAL — brokers internos, ranking, trackers de pasos
+import gerencia_comercial as _gcom_mod
+api.include_router(_gcom_mod.gcom)
 
 # Regla #62 (Monitor de Envíos SMTP) + Regla #64 (Perfil Consolidado — verdad DashAI)
 import monitor_envios as _monit_mod

@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import axios from "axios";
+import { PanelComercial } from "./GerenciaCommandCenter";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 const selEstilo = { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(148,163,184,0.3)",
@@ -135,6 +136,7 @@ export default function GerenciaComercialModule() {
 
   return (
     <div className="module-content seamless-scope" data-testid="gerencia-module" style={{ minHeight: "100%", padding: "1.2rem", borderRadius: 12 }}>
+      <PanelComercial />
       <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", marginBottom: 14 }}>
         <h3 style={{ margin: 0, color: "#f8fafc", fontSize: "1.05rem" }}>
           <i className="fa fa-line-chart" style={{ color: "#d4af37", marginRight: 8 }} />Gerencia Comercial — Centro de Mando Estratégico
