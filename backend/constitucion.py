@@ -46,9 +46,9 @@ REGLAS_ORO = [
     {"n": 17, "id": "privacidad_cerebro", "titulo": "Privacidad del Cerebro exportable",
      "ley": "El Cerebro DashAI se exporta sin datos privados de clientes: solo inteligencia y casos anonimizados."},
     {"n": 18, "id": "mando_unico", "titulo": "Mando único",
-     "ley": "El sistema responde únicamente a Gerardo Barrera (rol admin) y al Master PIN 0586. No existen otros administradores maestros."},
-    {"n": 19, "id": "master_pin", "titulo": "Master PIN 0586",
-     "ley": "El Master PIN 0586 es la autoridad suprema de override del sistema."},
+     "ley": "El sistema responde únicamente a Gerardo Barrera (rol admin) y al Master PIN (MASTER_PIN protegido en variables de entorno). No existen otros administradores maestros."},
+    {"n": 19, "id": "master_pin", "titulo": "Master PIN (MASTER_PIN protegido en variables de entorno)",
+     "ley": "El Master PIN (MASTER_PIN protegido en variables de entorno) es la autoridad suprema de override del sistema."},
     {"n": 20, "id": "consulta_de_ley", "titulo": "Consulta de Ley obligatoria",
      "ley": "Antes de aplicar cualquier arreglo de bug o cambio de código, el agente consulta la Constitución en DashAI y verifica que no rompe una Regla de Oro. Si DashAI no lo autoriza, no se publica."},
     {"n": 21, "id": "whatsapp_twilio", "titulo": "Motor WhatsApp oficial: Twilio",
@@ -74,7 +74,7 @@ REGLAS_ORO = [
     {"n": 37, "id": "fuentes_transitorias_permanentes", "titulo": "Fuentes Transitorias vs Permanentes",
      "ley": "Las fuentes de datos se dividen en Transitorias (Vendedores) y Permanentes (Inmobiliarias). DashAI debe archivar la información siguiendo este flujo. REGLA DE HIERRO: el RUT del cliente es el único eje que une al vendedor de una usada con el estudio del abogado, para evitar cruces de carpetas."},
     {"n": 38, "id": "salud_buzon_trazabilidad_broker", "titulo": "Salud del buzón y trazabilidad del Broker",
-     "ley": "Cada ejecutivo es responsable de la salud técnica de su buzón. El sistema garantiza la trazabilidad del Broker desde el ingreso hasta la entrega final. REGLA DE HIERRO: si una clave de aplicación falla, el sistema notifica '⚠️ Su conexión de correo necesita actualización' en lugar de detener todo el Maserati. Las credenciales se cifran con AES-256 y solo el dueño o Gerardo (PIN 0586) acceden."},
+     "ley": "Cada ejecutivo es responsable de la salud técnica de su buzón. El sistema garantiza la trazabilidad del Broker desde el ingreso hasta la entrega final. REGLA DE HIERRO: si una clave de aplicación falla, el sistema notifica '⚠️ Su conexión de correo necesita actualización' en lugar de detener todo el Maserati. Las credenciales se cifran con AES-256 y solo el dueño o Gerardo (PIN maestro (env)) acceden."},
     {"n": 41, "id": "sincronizacion_forzada_grid", "titulo": "Sincronización Forzada GRID-DASHAI",
      "ley": "La información en Central Mutuos es única y universal. Todo cambio en un módulo debe propagarse a toda la red local y nube de forma inmediata y forzada. REGLA DE HIERRO: si un computador está en línea, su carpeta de clientes debe ser un espejo exacto del servidor (firmas MD5); no se permiten versiones distintas de un mismo archivo, y está PROHIBIDO cualquier interruptor que detenga la sincronización."},
     {"n": 43, "id": "escrituracion_flujo_real", "titulo": "Escrituración nutrida del flujo real de correos",
@@ -116,7 +116,7 @@ REGLAS_EFICIENCIA = [
     {"id": "estimacion_previa", "ley": "Estimación Previa: antes de construir, calcular la ruta de menor costo de créditos según DashAI."},
 ]
 
-VERSION = 26  # + Regla de Oro de Eficiencia (perpetua): reutilizar, cambios quirúrgicos, arranque liviano
+VERSION = 27  # PIN maestro redactado del texto legal: vive SOLO en variable de entorno protegida
 
 
 class ViolacionConstitucional(Exception):
@@ -268,7 +268,7 @@ async def seed_constitucion(db):
         await db.config.update_one({"_key": "constitucion_maestra"}, {"$set": {
             "version": VERSION, "reglas": REGLAS_ORO, "reglas_eficiencia": REGLAS_EFICIENCIA,
             "mando": "Gerardo Barrera",
-            "master_pin_ref": "MASTER_PIN (0586)",
+            "master_pin_ref": "MASTER_PIN (variable de entorno protegida)",
             "aprendizaje": {
                 "fuente_primaria": "buzones IMAP operativos",
                 "fuente_secundaria_solo_lectura": (doc or {}).get("aprendizaje", {}).get("fuente_secundaria_solo_lectura", ""),

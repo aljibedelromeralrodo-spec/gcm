@@ -35,6 +35,141 @@ const Gauge = ({ pct }) => {
   );
 };
 
+const ExportarConstitucion = () => {
+  const [estado, setEstado] = useState(null);
+  const [dialogo, setDialogo] = useState(false);
+  const [pin, setPin] = useState("");
+  const [pinOk, setPinOk] = useState(false);
+  const [err, setErr] = useState("");
+  const [cfgPin, setCfgPin] = useState(null);
+  const cargar = () => axios.get(`${API_URL}/api/cerebro-export/estado`).then(r => {
+    setEstado(r.data);
+    if (r.data.pendiente) setDialogo(true);
+  }).catch(() => {});
+  useEffect(() => { cargar(); }, []);
+  const verificar = async () => {
+    setErr("");
+    try {
+      await axios.post(`${API_URL}/api/cerebro-export/verificar-pin`, { pin });
+      setPinOk(true);
+    } catch (e) { setErr(e.response?.data?.detail || "PIN incorrecto"); setPin(""); }
+  };
+  const descargar = (formato) => {
+    window.open(`${API_URL}/api/cerebro-export/${formato}?pin=${encodeURIComponent(pin)}`, "_blank");
+    setTimeout(() => { setDialogo(false); setPinOk(false); setPin(""); cargar(); }, 1200);
+  };
+  if (!estado) return null;
+  return (
+    <div data-testid="exportar-constitucion" style={{ background: "rgba(15,23,42,0.6)",
+      border: "1px solid rgba(212,175,55,0.4)", borderRadius: 14, padding: "1rem 1.6rem", marginBottom: "1.1rem" }}>
+      {estado.pendiente && (
+        <div data-testid="export-recordatorio" style={{ background: "rgba(250,204,21,0.1)",
+          border: "1px solid rgba(250,204,21,0.5)", borderRadius: 10, padding: "0.6rem 1rem",
+          marginBottom: 10, color: "#facc15", fontSize: "0.74rem", fontWeight: 800 }}>
+          ⚠️ EXPORTACIÓN PENDIENTE — {estado.motivo} ({fdd(estado.fecha)}). El Cerebro fue
+          actualizado: exporte la nueva versión de la Constitución a su computador.
+        </div>
+      )}
+      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+        <span style={{ color: "#94a3b8", fontSize: "0.64rem", fontWeight: 800, letterSpacing: 1 }}>
+          🔐 EXPORTACIÓN DE LA CONSTITUCIÓN — protegida por PIN maestro</span>
+        {estado.ultima_export && <span style={{ color: "#4ade80", fontSize: "0.62rem" }}>
+          Última exportación: {fdd(estado.ultima_export)}</span>}
+        <button data-testid="btn-exportar-constitucion" onClick={() => { setDialogo(true); setPinOk(false); setPin(""); setErr(""); }}
+          style={{ marginLeft: "auto", background: "rgba(212,175,55,0.14)", color: "#d4af37",
+            border: "1px solid rgba(212,175,55,0.5)", borderRadius: 8, padding: "0.4rem 1.1rem",
+            cursor: "pointer", fontSize: "0.7rem", fontWeight: 800 }}>⬇ Exportar Constitución</button>
+        <button data-testid="btn-config-pin" onClick={() => setCfgPin({ pin_actual: "", pin_nuevo: "" })}
+          style={{ background: "none", color: "#94a3b8", border: "1px solid rgba(148,163,184,0.4)",
+            borderRadius: 8, padding: "0.4rem 0.9rem", cursor: "pointer", fontSize: "0.7rem", fontWeight: 800 }}>
+          Cambiar PIN</button>
+      </div>
+
+      {dialogo && (
+        <div data-testid="export-dialogo" onClick={(e) => { if (e.target === e.currentTarget) setDialogo(false); }}
+          style={{ position: "fixed", inset: 0, zIndex: 1150, background: "rgba(2,6,23,0.82)",
+            display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
+          <div style={{ background: "#0f172a", border: "1px solid rgba(212,175,55,0.5)", borderRadius: 14,
+            padding: "1.5rem 1.7rem", width: "min(440px, 94vw)" }}>
+            <h3 style={{ color: "#d4af37", margin: 0, fontSize: "0.95rem" }}>
+              {estado.pendiente ? "⚠️ El Cerebro DashAI fue actualizado" : "🔐 Exportar Constitución"}</h3>
+            <p style={{ color: "#94a3b8", fontSize: "0.72rem", marginTop: 6 }}>
+              {estado.pendiente ? `${estado.motivo}. Ingrese el PIN maestro para exportar la nueva versión a su computador, o posponga (quedará un recordatorio visible).`
+                : "Ingrese el PIN maestro para habilitar las opciones de descarga."}</p>
+            {!pinOk ? (
+              <>
+                <input data-testid="export-pin-input" type="password" inputMode="numeric" placeholder="PIN maestro"
+                  value={pin} onChange={e => setPin(e.target.value)} autoFocus
+                  onKeyDown={e => { if (e.key === "Enter") verificar(); }}
+                  style={{ width: "100%", background: "rgba(2,6,23,0.7)", border: "1px solid rgba(212,175,55,0.4)",
+                    borderRadius: 8, padding: "0.55rem 0.8rem", color: "#f8fafc", fontSize: "1rem",
+                    letterSpacing: 6, textAlign: "center", marginTop: 6 }} />
+                {err && <div data-testid="export-pin-error" style={{ color: "#f87171", fontSize: "0.68rem", marginTop: 6 }}>⛔ {err}</div>}
+                <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 }}>
+                  <button data-testid="export-posponer" onClick={() => setDialogo(false)}
+                    style={{ background: "none", color: "#94a3b8", border: "1px solid rgba(148,163,184,0.4)",
+                      borderRadius: 8, padding: "0.45rem 1rem", cursor: "pointer", fontSize: "0.74rem" }}>Posponer</button>
+                  <button data-testid="export-verificar" onClick={verificar}
+                    style={{ background: "rgba(212,175,55,0.18)", color: "#d4af37", fontWeight: 800,
+                      border: "1px solid rgba(212,175,55,0.6)", borderRadius: 8, padding: "0.45rem 1.2rem",
+                      cursor: "pointer", fontSize: "0.74rem" }}>Verificar PIN</button>
+                </div>
+              </>
+            ) : (
+              <div data-testid="export-opciones" style={{ marginTop: 10 }}>
+                <div style={{ color: "#4ade80", fontSize: "0.72rem", fontWeight: 800 }}>✅ PIN correcto — elija el formato:</div>
+                <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
+                  <button data-testid="export-json" onClick={() => descargar("json")}
+                    style={{ flex: 1, background: "rgba(96,165,250,0.15)", color: "#93c5fd", fontWeight: 800,
+                      border: "1px solid rgba(96,165,250,0.5)", borderRadius: 8, padding: "0.6rem", cursor: "pointer" }}>
+                    ⬇ JSON</button>
+                  <button data-testid="export-pdf" onClick={() => descargar("pdf")}
+                    style={{ flex: 1, background: "rgba(212,175,55,0.15)", color: "#d4af37", fontWeight: 800,
+                      border: "1px solid rgba(212,175,55,0.5)", borderRadius: 8, padding: "0.6rem", cursor: "pointer" }}>
+                    ⬇ PDF</button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {cfgPin && (
+        <div data-testid="configpin-modal" onClick={(e) => { if (e.target === e.currentTarget) setCfgPin(null); }}
+          style={{ position: "fixed", inset: 0, zIndex: 1150, background: "rgba(2,6,23,0.82)",
+            display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
+          <div style={{ background: "#0f172a", border: "1px solid rgba(148,163,184,0.4)", borderRadius: 14,
+            padding: "1.5rem 1.7rem", width: "min(420px, 94vw)" }}>
+            <h3 style={{ color: "#f8fafc", margin: 0, fontSize: "0.9rem" }}>Cambiar PIN maestro</h3>
+            <p style={{ color: "#64748b", fontSize: "0.66rem" }}>Se guarda como hash protegido (SHA-256), nunca en el código.</p>
+            <input data-testid="configpin-actual" type="password" placeholder="PIN actual" value={cfgPin.pin_actual}
+              onChange={e => setCfgPin(s => ({ ...s, pin_actual: e.target.value }))}
+              style={{ width: "100%", background: "rgba(2,6,23,0.7)", border: "1px solid rgba(148,163,184,0.4)",
+                borderRadius: 8, padding: "0.5rem 0.8rem", color: "#f8fafc", marginTop: 6 }} />
+            <input data-testid="configpin-nuevo" type="password" placeholder="PIN nuevo (mín. 4 dígitos)" value={cfgPin.pin_nuevo}
+              onChange={e => setCfgPin(s => ({ ...s, pin_nuevo: e.target.value }))}
+              style={{ width: "100%", background: "rgba(2,6,23,0.7)", border: "1px solid rgba(148,163,184,0.4)",
+                borderRadius: 8, padding: "0.5rem 0.8rem", color: "#f8fafc", marginTop: 8 }} />
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 }}>
+              <button onClick={() => setCfgPin(null)} style={{ background: "none", color: "#94a3b8",
+                border: "1px solid rgba(148,163,184,0.4)", borderRadius: 8, padding: "0.45rem 1rem",
+                cursor: "pointer", fontSize: "0.74rem" }}>Cancelar</button>
+              <button data-testid="configpin-guardar" onClick={async () => {
+                try {
+                  const r = await axios.post(`${API_URL}/api/cerebro-export/config-pin`, cfgPin);
+                  alert(r.data.mensaje); setCfgPin(null);
+                } catch (e) { alert(e.response?.data?.detail || "No fue posible cambiar el PIN"); }
+              }} style={{ background: "rgba(212,175,55,0.18)", color: "#d4af37", fontWeight: 800,
+                border: "1px solid rgba(212,175,55,0.6)", borderRadius: 8, padding: "0.45rem 1.2rem",
+                cursor: "pointer", fontSize: "0.74rem" }}>Guardar</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const CatalogoMaestro = () => {
   const [cat, setCat] = useState(null);
   const [abierto, setAbierto] = useState({});
@@ -241,6 +376,7 @@ export default function CerebroDashAIModule() {
       {msg && <div data-testid="dashai-msg" style={{ ...panel, padding: "0.7rem 1rem", fontSize: "0.82rem", color: "#F5E7B8", marginBottom: "1.1rem" }}>{msg}</div>}
 
       <EstadoCerebro />
+      <ExportarConstitucion />
       <CatalogoMaestro />
 
       <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "1.2rem", marginBottom: "1.2rem", alignItems: "stretch" }}>
@@ -294,7 +430,7 @@ export default function CerebroDashAIModule() {
         <div style={{ ...panel, marginBottom: "1.2rem", borderColor: "rgba(212,175,55,0.55)" }} data-testid="dashai-reglas-estilo">
           <div style={{ color: ORO, fontSize: "0.7rem", letterSpacing: "0.18em", textTransform: "uppercase", marginBottom: 10 }}>⚖️ Constitución DashAI · Ley de Jerarquía Suprema</div>
           <div data-testid="dashai-constitucion" style={{ display: "flex", gap: 12, alignItems: "baseline", fontSize: "0.8rem", padding: "0.4rem 0", borderBottom: "1px solid rgba(255,255,255,0.06)", marginBottom: 6 }}>
-            <span style={{ fontWeight: 800, color: "#0a0a0a", background: "linear-gradient(135deg,#e11d48,#fb7185)", padding: "0.15rem 0.6rem", fontSize: "0.66rem", whiteSpace: "nowrap" }}>LEY MADRE · CLAVE 0586</span>
+            <span style={{ fontWeight: 800, color: "#0a0a0a", background: "linear-gradient(135deg,#e11d48,#fb7185)", padding: "0.15rem 0.6rem", fontSize: "0.66rem", whiteSpace: "nowrap" }}>LEY MADRE · CLAVE PIN maestro</span>
             <span style={{ color: "#e2e8f0", lineHeight: 1.65 }}>DashAI (Bóveda de Criterios) es la ÚNICA fuente de verdad: viabilidad, forense, Set de Crédito y Simulador consultan sus parámetros antes de cada decisión. Sin conexión a la Constitución, las decisiones se bloquean.</span>
           </div>
           <div style={{ color: ORO, fontSize: "0.68rem", letterSpacing: "0.14em", textTransform: "uppercase", margin: "8px 0 4px" }}>📐 Reglas de Estilo Inamovibles</div>

@@ -463,7 +463,11 @@ async def normativas_upsert(payload: dict, request: Request):
     await _auditar_normativa(admin, clave, (prev or {}).get("patron"), patron,
                              "modificacion" if prev else "creacion")
     await normativas_activas(force=True)
-    return {"ok": True, "clave": clave, "accion": "modificada" if prev else "creada"}
+    # EXPORTACIÓN AUTOMÁTICA: el Cerebro cambió → queda pendiente hasta que el Admin exporte
+    import cerebro_export as _cex
+    await _cex.marcar_pendiente(f"Normativa {clave} {'modificada' if prev else 'creada'}")
+    return {"ok": True, "clave": clave, "accion": "modificada" if prev else "creada",
+            "export_pendiente": True}
 
 
 @api.delete("/dashai/normativas/{clave}")
@@ -475,7 +479,9 @@ async def normativas_delete(clave: str, request: Request):
     await db.dashai_eventos.delete_one({"id": prev["id"]})
     await _auditar_normativa(admin, clave.upper(), prev.get("patron"), "", "eliminacion")
     await normativas_activas(force=True)
-    return {"ok": True, "clave": clave.upper()}
+    import cerebro_export as _cex
+    await _cex.marcar_pendiente(f"Normativa {clave.upper()} eliminada")
+    return {"ok": True, "clave": clave.upper(), "export_pendiente": True}
 
 
 @api.get("/dashai/normativas/auditoria")
@@ -973,7 +979,7 @@ def _solo_maestro(request: Request):
 
 
 async def _validar_clave_rene(clave):
-    """MANDO ÚNICO: la Bóveda se protege con el Master PIN (0586) del administrador."""
+    """MANDO ÚNICO: la Bóveda se protege con el Master PIN (variable de entorno protegida) del administrador."""
     pin = os.environ.get("MASTER_PIN", "")
     if pin and str(clave) == pin:
         return {"nombre": "Gerardo Barrera", "rol": "admin"}
@@ -13750,7 +13756,7 @@ async def _dashai_perpetuo_loop():
 
 
 async def _constitucion_dashai():
-    """LEY DE JERARQUÍA SUPREMA (protegida por clave 0586): enchufe obligatorio.
+    """LEY DE JERARQUÍA SUPREMA (protegida por clave maestra (MASTER_PIN)): enchufe obligatorio.
     Si la Constitución DashAI no responde → 503 y decisiones bloqueadas."""
     try:
         return await asyncio.to_thread(mesa_brain.enchufe_dashai)
@@ -13771,7 +13777,7 @@ LEY_JERARQUIA_SUPREMA = ("DashAI (Bóveda de Criterios) es la ÚNICA fuente de v
 async def dashai_constitucion_get():
     doc = await db.config.find_one({"_key": "dashai_constitucion"}, {"_id": 0})
     if not doc:
-        doc = {"ley": LEY_JERARQUIA_SUPREMA, "protegida_por": "clave 0586",
+        doc = {"ley": LEY_JERARQUIA_SUPREMA, "protegida_por": "clave maestra (MASTER_PIN)",
                "inamovible": True, "creada_en": now_iso()}
         await db.config.update_one({"_key": "dashai_constitucion"}, {"$set": doc}, upsert=True)
     return doc
@@ -13780,7 +13786,7 @@ async def dashai_constitucion_get():
 @api.post("/dashai/constitucion")
 async def dashai_constitucion_set(payload: dict):
     if str(payload.get("clave") or "") != os.environ.get("MASTER_PIN", ""):
-        raise HTTPException(status_code=403, detail="⚖️ REGLA PERPETUA: la Constitución DashAI solo puede alterarse con la clave 0586.")
+        raise HTTPException(status_code=403, detail="⚖️ REGLA PERPETUA: la Constitución DashAI solo puede alterarse con la clave maestra (MASTER_PIN).")
     await db.config.update_one({"_key": "dashai_constitucion"}, {"$set": {
         "ley": payload.get("ley") or LEY_JERARQUIA_SUPREMA,
         "actualizada_en": now_iso()}}, upsert=True)
@@ -14531,6 +14537,10 @@ api.include_router(_aud_mod.auditoria_r)
 # 📜 CATÁLOGO MAESTRO DEFINITIVO — todas las reglas unificadas en el Cerebro
 import catalogo_maestro as _cat_mod
 api.include_router(_cat_mod.catalogo_r)
+
+# 🔐 EXPORTACIÓN BLINDADA DE LA CONSTITUCIÓN (PIN maestro + auditoría)
+import cerebro_export as _cex_mod
+api.include_router(_cex_mod.export_r)
 
 # Regla #62 (Monitor de Envíos SMTP) + Regla #64 (Perfil Consolidado — verdad DashAI)
 import monitor_envios as _monit_mod

@@ -103,7 +103,7 @@ REGLAS_INVIOLABLES = [
      "ley": "REGLA INVIOLABLE: la IA tiene PROHIBIDO inventar o estimar datos. Si un dato no aparece literalmente en la fuente, el campo queda vacío o marcado para revisión manual. Aplica a toda extracción, resumen e inteligencia comercial.",
      "categoria": "auditoria_trazabilidad", "modulo": "ai_extract.py"},
     {"num": "INV-2", "titulo": "Blindaje final de simulaciones",
-     "ley": "REGLA INVIOLABLE: ninguna simulación sale del sistema con más de 1 página (sin otros plazos ni gastos operacionales). Se aplica a TODO envío (aprobación cliente, autocorreo, etc.). Solo la clave maestra 0586 permite omitirlo.",
+     "ley": "REGLA INVIOLABLE: ninguna simulación sale del sistema con más de 1 página (sin otros plazos ni gastos operacionales). Se aplica a TODO envío (aprobación cliente, autocorreo, etc.). Solo la clave maestra (MASTER_PIN) permite omitirlo.",
      "categoria": "identidad_visual", "modulo": "email_service.py (_blindaje_simulaciones)"},
     {"num": "INV-3", "titulo": "Crédito mínimo 2.000 UF sin subsidio",
      "ley": "REGLA INVIOLABLE DEL DUEÑO: sin subsidio, el crédito mínimo es 2.000 UF (tope duro MONTO_MIN_UF_SIN_SUBSIDIO_HARD). Ninguna evaluación puede aprobarse bajo ese monto.",

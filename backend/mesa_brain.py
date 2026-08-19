@@ -175,7 +175,7 @@ class ConstitucionError(RuntimeError):
 
 
 def enchufe_dashai():
-    """LEY DE JERARQUÍA SUPREMA (protegida por clave 0586): enchufe obligatorio a la
+    """LEY DE JERARQUÍA SUPREMA (protegida por clave maestra (MASTER_PIN)): enchufe obligatorio a la
     Constitución DashAI. ÚNICA fuente de verdad para umbrales de decisión.
     Si la Bóveda es inaccesible, lanza ConstitucionError y el sistema debe bloquear."""
     try:

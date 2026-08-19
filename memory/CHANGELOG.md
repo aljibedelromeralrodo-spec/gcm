@@ -1498,3 +1498,15 @@ Constitución VERSION 19 (nuevas reglas #55, #56, #57).
 - GET /api/dashai/normativas ahora exige rol admin/maestro (antes gerencia podía leer).
 - Verificado: admin 200, gerencia 403, contralor 403. Regresión command-center gerencia OK.
 - Estado final: ver y cambiar CUALQUIER regla del sistema = exclusivo del Administrador.
+
+## 2026-06 — EXPORTACIÓN BLINDADA + CIERRE 4 PASOS PRE-DEPLOY
+- cerebro_export.py: PIN maestro (env MASTER_PIN + override hash SHA-256 en db.config master_pin_cfg
+  configurable desde panel), verificar-pin, export JSON/PDF (reportlab), export_pendiente al
+  crear/modificar/eliminar normativas + recordatorio en panel hasta completar, auditoría de intentos
+  (PIN_INCORRECTO/EXPORTADA/PIN_ACTUALIZADO en normativas_auditoria).
+- UI CerebroDashAIModule: ExportarConstitucion (diálogo PIN, posponer, banner recordatorio, cambio PIN).
+- BRECHA CORREGIDA: PIN literal redactado de TODO el código (constitucion VERSION 27, DB propagada,
+  0 literales). Vive solo en env.
+- Archivo oficial: /app/backend/exports/constitucion-oficial.{json,pdf} (83 reglas).
+- Verificación 4 PASOS: P1 export OK, P2 seguridad 28/28, P3 funcional 13/13 (41/41 total sin brechas),
+  P4 deployment_agent: PASS deployment-ready. Falta que el usuario pulse Deploy y valide dominio.

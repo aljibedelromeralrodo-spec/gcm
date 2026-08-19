@@ -1462,7 +1462,7 @@ async def micorreo_configurar(payload: dict, request: Request):
 
 @micorreo.post("/revelar")
 async def micorreo_revelar(payload: dict, request: Request):
-    """Acceso a la credencial: SOLO el dueño del módulo o Gerardo vía PIN 0586."""
+    """Acceso a la credencial: SOLO el dueño del módulo o Gerardo vía PIN maestro (env)."""
     c = _claims(request)
     propio = c.get("sub") or ""
     objetivo = (payload.get("codigo") or propio).strip()

@@ -1178,7 +1178,7 @@ CLAVE_MAESTRA = os.environ.get("MASTER_PIN", "")
 def _blindaje_simulaciones(attachments, clave=""):
     """REGLA INVIOLABLE (blindaje final): NINGUNA simulación sale del sistema con más
     de 1 página (sin otros plazos ni gastos operacionales). Se aplica a TODO envío
-    (aprobación cliente, autocorreo, etc.). Solo la clave maestra 0586 permite omitirlo.
+    (aprobación cliente, autocorreo, etc.). Solo la clave maestra (MASTER_PIN) permite omitirlo.
     Devuelve (attachments_seguros, nombres_ajustados)."""
     if clave and clave == CLAVE_MAESTRA:
         return attachments or [], []
@@ -1199,15 +1199,15 @@ def _blindaje_simulaciones(attachments, clave=""):
                     att = {**att, "content_b64": base64.b64encode(buf.getvalue()).decode()}
                     ajustados.append(fn)
                     reader = PdfReader(io.BytesIO(buf.getvalue()))
-                # REGLA DE ORO 0586: si la simulación AÚN contiene 'Gastos
-                # Operacionales', el envío se BLOQUEA (solo la clave 0586 lo permite).
+                # REGLA DE ORO MASTER_PIN: si la simulación AÚN contiene 'Gastos
+                # Operacionales', el envío se BLOQUEA (solo la clave maestra (MASTER_PIN) lo permite).
                 try:
                     texto_p1 = reader.pages[0].extract_text() or ""
                 except Exception:
                     texto_p1 = ""
                 if re.search(r"gastos?\s+operacionales", texto_p1, re.I):
                     raise ValueError(
-                        f"REGLA DE ORO 0586: '{fn}' contiene Gastos Operacionales — "
+                        f"REGLA DE ORO MASTER_PIN: '{fn}' contiene Gastos Operacionales — "
                         "envío BLOQUEADO. Suba la Simulación Ajustada o use la clave maestra.")
             except ValueError:
                 raise
@@ -1396,7 +1396,7 @@ def send_mail(to, subject, body_html, attachments=None, desde="secundaria", cc=N
         from datetime import datetime, timezone as _tz
         err = {"success": False, "error": str(e), "smtp_code": None}
         _log_smtp({"fecha": datetime.now(_tz.utc).isoformat(), "to": str(to),
-                   "subject": subject, "error": str(e), "regla": "oro_0586"})
+                   "subject": subject, "error": str(e), "regla": "oro_master_pin"})
         return err
     for att in attachments or []:
         try:
