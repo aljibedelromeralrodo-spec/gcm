@@ -1410,3 +1410,11 @@ Constitución VERSION 19 (nuevas reglas #55, #56, #57).
 - iOS (public/app-icons/ios/): 1024 AppStore, 180, 167, 152, 120.
 - Android (public/app-icons/android/): 512 PlayStore, 192, 144, 96, 72, 48.
 - APLICADO como ícono oficial PWA: icon-192.png, icon-512.png y favicon.ico sobrescritos (manifest ya los referencia).
+
+## 2026-08-19 (parte 5) — Identidad visual definitiva aplicada y blindada
+- Logo horizontal oficial aplicado también en: encabezados de TODOS los correos (_marca_wrap y
+  _email_institucional, en HTML/CSS puro serif Georgia — sin imágenes externas, cumple Bloque 6)
+  y encabezado de PDF exportables (_build_pdf: fondo negro, Times-Bold dorado, línea, CON CRECES).
+- Sello circular Doble Arco = ícono oficial WhatsApp + app (ya exportado iOS/Android, PWA aplicado).
+- Normativa inamovible registrada en Cerebro DashAI: "IDENTIDAD VISUAL OFICIAL" (auditada; ahora 14 normativas).
+- Verificado: PDF contiene el nuevo encabezado (pypdf), preview de correos capturado.

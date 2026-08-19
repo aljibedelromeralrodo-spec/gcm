@@ -1058,13 +1058,20 @@ def _build_pdf(title, lines):
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)
     w, h = A4
-    c.setFillColorRGB(0.42, 0.36, 0.90)
-    c.rect(0, h - 2.2 * cm, w, 2.2 * cm, fill=1, stroke=0)
-    c.setFillColorRGB(1, 1, 1)
-    c.setFont("Helvetica-Bold", 18)
-    c.drawString(2 * cm, h - 1.5 * cm, "Central Mutuos")
-    c.setFont("Helvetica", 10)
-    c.drawString(2 * cm, h - 2.0 * cm, title)
+    # ENCABEZADO INSTITUCIONAL: logo horizontal oficial (fondo negro, serif dorado)
+    c.setFillColorRGB(0.039, 0.039, 0.039)
+    c.rect(0, h - 2.6 * cm, w, 2.6 * cm, fill=1, stroke=0)
+    c.setFillColorRGB(0.788, 0.635, 0.153)
+    c.setFont("Times-Bold", 20)
+    c.drawCentredString(w / 2, h - 1.15 * cm, "C E N T R A L   M U T U O S")
+    c.setStrokeColorRGB(0.788, 0.635, 0.153)
+    c.setLineWidth(1)
+    c.line(w * 0.3, h - 1.45 * cm, w * 0.7, h - 1.45 * cm)
+    c.setFont("Times-Bold", 9)
+    c.drawCentredString(w / 2, h - 1.83 * cm, "C O N   C R E C E S")
+    c.setFillColorRGB(0.62, 0.62, 0.62)
+    c.setFont("Helvetica", 9)
+    c.drawCentredString(w / 2, h - 2.32 * cm, title)
     c.setFillColorRGB(0.1, 0.1, 0.1)
     y = h - 3.5 * cm
     c.setFont("Helvetica", 11)
@@ -1749,8 +1756,10 @@ def _email_institucional(nombre, cuerpo_html, firmante="Sistema de Gestión Cent
 <tr><td align="center">
 <table role="presentation" width="600" cellpadding="0" cellspacing="0"
   style="max-width:600px;width:100%;background:#ffffff;border-radius:8px;overflow:hidden;font-family:Arial,Helvetica,sans-serif">
-<tr><td style="background:#1a1f2e;padding:22px 28px;text-align:center">
-  <span style="color:#d4af37;font-size:22px;font-weight:bold;letter-spacing:2px">CENTRAL MUTUOS</span></td></tr>
+<tr><td style="background:#0a0a0a;padding:24px 28px;text-align:center">
+  <span style="color:#C9A227;font-family:Georgia,'Times New Roman',serif;font-size:24px;font-weight:bold;letter-spacing:3px">CENTRAL MUTUOS</span>
+  <div style="height:1px;background:#C9A227;width:72%;margin:9px auto 7px"></div>
+  <span style="color:#C9A227;font-family:Georgia,'Times New Roman',serif;font-size:11px;letter-spacing:6px">CON CRECES</span></td></tr>
 <tr><td style="padding:26px 28px;color:#1f2937;font-size:14px;line-height:1.65;text-align:justify">
   <p style="margin:0 0 14px">Estimado/a <b>{nombre}</b>,</p>
   {cuerpo_html}
@@ -7145,7 +7154,7 @@ def _num_uf(v):
 
 
 def _marca_wrap(inner, subtitulo=""):
-    sub_html = (f'<div style="color:#666666;font-size:13px;margin-top:8px;font-weight:600">{subtitulo}</div>'
+    sub_html = (f'<div style="color:#9ca3af;font-size:12px;margin-top:10px;font-weight:600">{subtitulo}</div>'
                 if subtitulo else "")
     # REGLA DE ORO #16 — RESPONSIVIDAD ABSOLUTA: max-width 600px, padding fluido,
     # media query para teléfonos, sin anchos fijos ni desbordes.
@@ -7167,8 +7176,10 @@ def _marca_wrap(inner, subtitulo=""):
 <body>
     <div style="background:#ffffff;padding:20px 10px;font-family:Arial,Helvetica,sans-serif">
       <div class="cm-wrap" style="background:#ffffff;border:1px solid #e2e4e9;border-radius:10px;overflow:hidden">
-        <div class="cm-pad" style="background:#f0f0f0;border-bottom:2px solid #cccccc">
-          <div class="cm-title" style="color:#444444;font-size:22px;font-weight:700;letter-spacing:1px">Central Mutuos</div>
+        <div class="cm-pad" style="background:#0a0a0a;border-bottom:2px solid #C9A227;text-align:center">
+          <div class="cm-title" style="color:#C9A227;font-family:Georgia,'Times New Roman',serif;font-size:24px;font-weight:700;letter-spacing:3px">CENTRAL MUTUOS</div>
+          <div style="height:1px;background:#C9A227;width:70%;margin:9px auto 7px"></div>
+          <div style="color:#C9A227;font-family:Georgia,'Times New Roman',serif;font-size:11px;letter-spacing:6px">CON CRECES</div>
           {sub_html}
         </div>
         <div class="cm-pad cm-body" style="color:#111111">
