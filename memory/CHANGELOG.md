@@ -1493,3 +1493,8 @@ Constitución VERSION 19 (nuevas reglas #55, #56, #57).
   fluye a ai_extract que sí está gateado (evita falsos positivos en transcripciones legales).
 - estado-cerebro extendido: autoridad_suprema (módulos gateados, consultas/bloqueos 24h).
 - Probado: inyección bloqueada, flujo normal autorizado, autocuración, probar-ia e2e OK con gate.
+
+## 2026-06 — Lectura de normativas cerrada: SOLO Admin
+- GET /api/dashai/normativas ahora exige rol admin/maestro (antes gerencia podía leer).
+- Verificado: admin 200, gerencia 403, contralor 403. Regresión command-center gerencia OK.
+- Estado final: ver y cambiar CUALQUIER regla del sistema = exclusivo del Administrador.

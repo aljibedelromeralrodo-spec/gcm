@@ -439,6 +439,7 @@ async def _auditar_normativa(admin, clave, anterior, nuevo, accion):
 
 @api.get("/dashai/normativas")
 async def normativas_list(request: Request):
+    _exigir_roles(request, ("admin", "maestro"))  # SOLO el Administrador ve las normativas
     docs = await normativas_activas(force=True)
     return {"normativas": [{"clave": d.get("norma_clave"), "patron": d.get("patron"),
                             "fecha": d.get("fecha"), "inamovible": bool(d.get("inamovible"))}
