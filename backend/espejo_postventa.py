@@ -1,0 +1,866 @@
+"""ALGORITMO ESPEJO HÍBRIDO (Contralor) · CONEXIÓN CONCRECES · MÓDULO POSTVENTA.
+
+- Espejo Capa A (automática): lee el buzón IMAP de resoluciones de Concreces, extrae
+  patrones (aprobación/rechazo, plazos, secuencia de documentos) y calibra el módulo.
+- Espejo Capa B (manual): criterios ingresados por el Administrador. REGLA DE ORO:
+  una regla manual JAMÁS se sobreescribe con una automática sin confirmación del admin.
+- Postventa: seguimiento de escritura por etapas con plazos, alertas, comunicaciones
+  automáticas al cliente y aprendizaje progresivo de plazos reales.
+"""
+import os
+import re
+import uuid
+import asyncio
+import logging
+from datetime import datetime, timezone
+from fastapi import APIRouter, HTTPException, Request
+from database import db
+
+espejo = APIRouter(prefix="/contralor/espejo")
+concreces = APIRouter(prefix="/config/concreces")
+postventa = APIRouter(prefix="/postventa")
+gpanel = APIRouter(prefix="/gerencia-panel")
+brokerx = APIRouter(prefix="/broker")
+
+
+def _now():
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _rol(request):
+    return (getattr(request.state, "user", {}) or {}).get("rol", "")
+
+
+def _exigir(request, roles):
+    if _rol(request) not in roles:
+        raise HTTPException(status_code=403, detail="No está autorizado el ingreso a este módulo")
+
+
+def _cifrar(texto):
+    from cryptography.fernet import Fernet
+    return Fernet(os.environ["CRED_CIPHER_KEY"].encode()).encrypt(texto.encode()).decode()
+
+
+def _descifrar(token):
+    from cryptography.fernet import Fernet
+    return Fernet(os.environ["CRED_CIPHER_KEY"].encode()).decrypt(token.encode()).decode()
+
+
+# ═══════════════ ALGORITMO ESPEJO — CAPA A (AUTOMÁTICA, IMAP) ═══════════════
+DOCS_CONOCIDOS = ["carta oferta", "resolución serviu", "resolucion serviu", "promesa",
+                  "tasación", "tasacion", "estudio de título", "estudio de titulo",
+                  "set de crédito", "set de credito", "escritura", "pagaré", "pagare", "cbr"]
+
+
+def _scan_imap_sync(correo, clave, servidor, maxn=30):
+    """Lee las últimas resoluciones del buzón (solo lectura, no marca ni borra)."""
+    import imaplib
+    import email as emlib
+    from email.header import decode_header
+    M = imaplib.IMAP4_SSL(servidor, timeout=25)
+    M.login(correo, clave)
+    M.select("INBOX", readonly=True)
+    _, data = M.search(None, "ALL")
+    ids = (data[0].split() or [])[-maxn:]
+    out = []
+    for i in reversed(ids):
+        try:
+            _, msg_data = M.fetch(i, "(RFC822)")
+            msg = emlib.message_from_bytes(msg_data[0][1])
+            subj = ""
+            for part, enc in decode_header(msg.get("Subject") or ""):
+                subj += part.decode(enc or "utf-8", "ignore") if isinstance(part, bytes) else part
+            body = ""
+            for part in msg.walk():
+                if part.get_content_type() == "text/plain":
+                    body = part.get_payload(decode=True).decode(part.get_content_charset() or "utf-8", "ignore")
+                    break
+            out.append({"subject": subj, "body": body[:4000], "fecha": msg.get("Date") or ""})
+        except Exception:
+            continue
+    M.logout()
+    return out
+
+
+def _extraer_patrones(correos):
+    """Heurística de calibración: aprobaciones, rechazos+motivo, plazos y secuencia de docs."""
+    patrones = []
+    for c in correos:
+        texto = f"{c['subject']}\n{c['body']}".lower()
+        if not any(k in texto for k in ("resoluc", "aprobad", "rechaz", "curse", "mesa")):
+            continue
+        tipo = "aprobacion" if ("aprobad" in texto or "curse favorable" in texto) else (
+            "rechazo" if "rechaz" in texto else "criterio")
+        motivo = ""
+        if tipo == "rechazo":
+            m = re.search(r"(?:rechaz|motivo)[^.\n]{0,160}", texto)
+            motivo = (m.group(0).strip() if m else "")[:200]
+        plazos = re.findall(r"(\d{1,3})\s*d[ií]as?(?:\s*h[áa]biles)?", texto)[:3]
+        docs = [d for d in DOCS_CONOCIDOS if d in texto][:6]
+        patrones.append({
+            "tipo": tipo, "asunto": c["subject"][:180], "motivo": motivo,
+            "plazos_dias": [int(p) for p in plazos], "documentos": docs,
+            "clave": (motivo or c["subject"][:60] or tipo).strip().lower()[:60]})
+    return patrones
+
+
+@espejo.post("/escanear")
+async def espejo_escanear(request: Request):
+    """CAPA A: escaneo bajo demanda del buzón de resoluciones + calibración automática."""
+    _exigir(request, ("admin", "maestro", "contralor"))
+    cfg = await db.config.find_one({"_key": "espejo_contralor"}) or {}
+    if not cfg.get("email") or not cfg.get("clave_enc"):
+        raise HTTPException(status_code=400, detail="Sin credenciales del buzón: complete correo y clave de aplicación primero")
+    if not cfg.get("activo"):
+        raise HTTPException(status_code=400, detail="La conexión está desactivada: active el buzón antes de escanear")
+    try:
+        clave = _descifrar(cfg["clave_enc"])
+        correos = await asyncio.to_thread(_scan_imap_sync, cfg["email"], clave,
+                                          cfg.get("servidor") or "imap.gmail.com")
+    except Exception as e:
+        await db.config.update_one({"_key": "espejo_contralor"}, {"$set": {
+            "estado": "error_conexion", "ultimo_error": str(e)[:200], "ultimo_scan": _now()}})
+        raise HTTPException(status_code=502, detail=f"No fue posible conectar al buzón: {str(e)[:150]}")
+    patrones = _extraer_patrones(correos)
+    nuevos, pendientes = 0, 0
+    for p in patrones:
+        if await db.espejo_bitacora.find_one({"clave": p["clave"], "origen": "capa_a"}):
+            continue
+        # REGLA DE ORO: si choca con una regla MANUAL activa → queda pendiente de confirmación
+        manual = await db.espejo_criterios.find_one({"clave": p["clave"], "origen": "manual", "estado": "activo"})
+        reg = {"id": str(uuid.uuid4()), "origen": "capa_a", "fecha": _now(), **p,
+               "patron": f"[{p['tipo'].upper()}] {p['asunto']}" + (f" · Motivo: {p['motivo']}" if p['motivo'] else "")
+                         + (f" · Plazos: {p['plazos_dias']} días" if p['plazos_dias'] else "")
+                         + (f" · Docs: {', '.join(p['documentos'])}" if p['documentos'] else "")}
+        await db.espejo_bitacora.insert_one(dict(reg))
+        nuevos += 1
+        if manual:
+            await db.espejo_criterios.insert_one({
+                "id": str(uuid.uuid4()), "clave": p["clave"], "criterio": p["asunto"][:120],
+                "detalle": reg["patron"], "origen": "auto", "estado": "pendiente_confirmacion",
+                "conflicto_con": manual["id"], "fecha": _now()})
+            pendientes += 1
+    total = await db.espejo_bitacora.count_documents({"origen": "capa_a"})
+    pct = min(100, total * 10)
+    await db.config.update_one({"_key": "espejo_contralor"}, {"$set": {
+        "estado": "conectado", "calibracion_pct": pct, "ultimo_scan": _now(),
+        "correos_leidos": len(correos), "ultimo_error": ""}})
+    return {"ok": True, "correos_leidos": len(correos), "patrones_nuevos": nuevos,
+            "conflictos_pendientes": pendientes, "calibracion_pct": pct, "estado": "conectado"}
+
+
+async def espejo_loop():
+    """CAPA A automática: escaneo cada 30 min SOLO si hay credenciales y conexión activa."""
+    await asyncio.sleep(600)
+    while True:
+        try:
+            cfg = await db.config.find_one({"_key": "espejo_contralor"}) or {}
+            if cfg.get("activo") and cfg.get("email") and cfg.get("clave_enc"):
+                clave = _descifrar(cfg["clave_enc"])
+                correos = await asyncio.to_thread(_scan_imap_sync, cfg["email"], clave,
+                                                  cfg.get("servidor") or "imap.gmail.com")
+                for p in _extraer_patrones(correos):
+                    if await db.espejo_bitacora.find_one({"clave": p["clave"], "origen": "capa_a"}):
+                        continue
+                    manual = await db.espejo_criterios.find_one(
+                        {"clave": p["clave"], "origen": "manual", "estado": "activo"})
+                    await db.espejo_bitacora.insert_one({
+                        "id": str(uuid.uuid4()), "origen": "capa_a", "fecha": _now(), **p,
+                        "patron": f"[{p['tipo'].upper()}] {p['asunto']}"})
+                    if manual:
+                        await db.espejo_criterios.insert_one({
+                            "id": str(uuid.uuid4()), "clave": p["clave"], "criterio": p["asunto"][:120],
+                            "detalle": p.get("motivo") or p["asunto"], "origen": "auto",
+                            "estado": "pendiente_confirmacion", "conflicto_con": manual["id"], "fecha": _now()})
+                total = await db.espejo_bitacora.count_documents({"origen": "capa_a"})
+                await db.config.update_one({"_key": "espejo_contralor"}, {"$set": {
+                    "estado": "conectado", "calibracion_pct": min(100, total * 10), "ultimo_scan": _now()}})
+        except Exception as e:
+            logging.warning(f"espejo loop: {e}")
+        try:
+            cfg_s = await db.config.find_one({"_key": "espejo_contralor"}) or {}
+            if _creds_concreces_imap(cfg_s):
+                await _sync_concreces_core()
+        except Exception as e:
+            logging.warning(f"sync concreces loop: {e}")
+        await asyncio.sleep(1800)
+
+
+# ═══════════════ SINCRONIZACIÓN CONCRECES → OPERACIONES (Algoritmo Espejo, núcleo) ═══════════════
+ESTADOS_CONCRECES = [("aprobad", "Aprobada"), ("rechazad", "Rechazada"), ("cursad", "Cursada"),
+                     ("escriturad", "Escriturada"), ("observa", "Con Observaciones"),
+                     ("en estudio", "En Estudio"), ("pendiente", "Pendiente")]
+
+
+def _creds_concreces_imap(cfg):
+    """Secrets del entorno primero (norma fija); si no, credenciales guardadas en el panel."""
+    user = os.environ.get("CONCRECES_IMAP_USER") or ""
+    pwd = os.environ.get("CONCRECES_IMAP_PASSWORD") or ""
+    if user and pwd:
+        return os.environ.get("CONCRECES_IMAP_HOST") or "imap.gmail.com", user, pwd, "secrets"
+    if cfg.get("email") and cfg.get("clave_enc") and cfg.get("activo"):
+        return cfg.get("servidor") or "imap.gmail.com", cfg["email"], _descifrar(cfg["clave_enc"]), "panel"
+    return None
+
+
+def _rut_limpio(t):
+    return re.sub(r"[^0-9kK]", "", t or "").lower()
+
+
+def _extraer_datos_operacion(c):
+    """Datos estructurados del correo Concreces: nº operación, estado, monto, observaciones, fecha."""
+    texto = f"{c.get('subject') or ''}\n{c.get('body') or ''}"
+    low = texto.lower()
+    nro = re.search(r"operaci[oó]n\s*(?:n[°ºo]?\.?\s*)?[:#]?\s*(\d{2,10})", low)
+    rut = re.search(r"(\d{1,2}\.?\d{3}\.?\d{3}-?[\dkK])", texto)
+    estado = next((lb for k, lb in ESTADOS_CONCRECES if k in low), "")
+    monto = re.search(r"(?:uf|monto)\s*:?\s*\$?\s*([\d.,]+)", low)
+    obs_m = re.search(r"observaci[oó]n(?:es)?\s*:?\s*([^\n]{5,200})", low)
+    return {"nro_operacion": nro.group(1) if nro else "", "rut": rut.group(1) if rut else "",
+            "estado": estado, "monto": monto.group(1) if monto else "",
+            "observaciones": obs_m.group(1).strip() if obs_m else "",
+            "fecha_correo": c.get("fecha") or "", "asunto": (c.get("subject") or "")[:180]}
+
+
+async def _sync_concreces_core():
+    import hashlib
+    cfg = await db.config.find_one({"_key": "espejo_contralor"}) or {}
+    creds = _creds_concreces_imap(cfg)
+    if not creds:
+        raise ValueError("Sin credenciales del buzón Concreces: configure CONCRECES_IMAP_USER/"
+                         "CONCRECES_IMAP_PASSWORD en los secrets o active el buzón en el panel")
+    host, user, pwd, origen_cred = creds
+    # BLOQUE 7: consultar SIEMPRE las normativas activas en cada ciclo (sin caché vieja)
+    normas_activas = await db.dashai_eventos.count_documents({"motivo": "normativa"})
+    correos = await asyncio.to_thread(_scan_imap_sync, user, pwd, host, 50)
+    folders = await db.folders.find({}, {"id": 1, "nombre": 1, "rut": 1, "nro_operacion": 1}).to_list(1500)
+    actualizadas, sin_clasificar, ahora = 0, 0, _now()
+    for c in correos:
+        firma = hashlib.md5(f"{c.get('subject')}|{c.get('fecha')}".encode()).hexdigest()
+        if await db.espejo_sync_log.find_one({"firma": firma}):
+            continue
+        datos = _extraer_datos_operacion(c)
+        destino, rut_c = None, _rut_limpio(datos["rut"])
+        if rut_c:
+            destino = next((f for f in folders if _rut_limpio(f.get("rut")) == rut_c), None)
+        if not destino and datos["nro_operacion"]:
+            destino = next((f for f in folders
+                            if str(f.get("nro_operacion") or "") == datos["nro_operacion"]), None)
+        if not destino:
+            up = f"{c.get('subject') or ''} {c.get('body') or ''}".upper()
+            destino = next((f for f in folders if f.get("nombre")
+                            and len(f["nombre"].split()) >= 2 and f["nombre"].upper() in up), None)
+        if destino:
+            await db.folders.update_one({"id": destino["id"]}, {"$set": {"concreces": {
+                "nro_operacion": datos["nro_operacion"], "estado": datos["estado"] or "Informado",
+                "monto": datos["monto"], "observaciones": datos["observaciones"],
+                "fecha_correo": datos["fecha_correo"], "sync_at": ahora}}})
+            actualizadas += 1
+        else:
+            await db.espejo_no_clasificados.update_one({"firma": firma}, {"$setOnInsert": {
+                "id": str(uuid.uuid4()), "firma": firma, **datos,
+                "cuerpo": (c.get("body") or "")[:600], "recibido": ahora}}, upsert=True)
+            sin_clasificar += 1
+        await db.espejo_sync_log.insert_one({"firma": firma, "asignado": bool(destino),
+                                             "folder_id": (destino or {}).get("id"), "fecha": ahora})
+    await db.config.update_one({"_key": "espejo_contralor"}, {"$set": {
+        "ultima_sync": ahora, "sync_origen_credencial": origen_cred,
+        "sync_resumen": {"correos": len(correos), "actualizadas": actualizadas,
+                         "sin_clasificar": sin_clasificar,
+                         "normativas_consultadas": normas_activas}}}, upsert=True)
+    return {"correos_leidos": len(correos), "operaciones_actualizadas": actualizadas,
+            "no_clasificados_nuevos": sin_clasificar, "ultima_sync": ahora}
+
+
+@espejo.post("/sincronizar")
+async def espejo_sincronizar(request: Request):
+    """Botón 'Sincronizar ahora' del Contralor (también corre automático cada 30 min)."""
+    _exigir(request, ("admin", "maestro", "contralor"))
+    try:
+        r = await _sync_concreces_core()
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"No fue posible conectar al buzón Concreces: {str(e)[:150]}")
+    return {"ok": True, **r}
+
+
+@espejo.get("/operaciones")
+async def espejo_operaciones(request: Request):
+    """Estado de operaciones según Concreces (solo lectura) con marca de tiempo de última lectura."""
+    _exigir(request, ("admin", "maestro", "contralor", "gerencia", "administracion", "postventa"))
+    cfg = await db.config.find_one({"_key": "espejo_contralor"}) or {}
+    ops = []
+    async for fd in db.folders.find({"concreces": {"$exists": True}}).sort("nombre", 1):
+        cz = fd.get("concreces") or {}
+        ops.append({"fid": fd["id"], "cliente": fd.get("nombre"), "rut": fd.get("rut") or "",
+                    "nro_operacion": cz.get("nro_operacion") or "", "estado": cz.get("estado") or "",
+                    "monto": cz.get("monto") or "", "observaciones": cz.get("observaciones") or "",
+                    "fecha_correo": cz.get("fecha_correo") or "", "sync_at": cz.get("sync_at") or ""})
+    return {"operaciones": ops, "total": len(ops), "ultima_sync": cfg.get("ultima_sync") or "",
+            "resumen": cfg.get("sync_resumen") or {},
+            "origen_credencial": cfg.get("sync_origen_credencial") or ""}
+
+
+@espejo.get("/no-clasificados")
+async def espejo_no_clasificados_list(request: Request):
+    """Correos de Concreces sin operación asociada: SOLO Admin y Contralor."""
+    _exigir(request, ("admin", "maestro", "contralor"))
+    docs = await db.espejo_no_clasificados.find({}, {"_id": 0}).sort("recibido", -1).to_list(100)
+    return {"correos": docs, "total": len(docs)}
+
+
+# ═══════════════ ALGORITMO ESPEJO — CAPA B (MANUAL) ═══════════════
+@espejo.get("/criterios")
+async def espejo_criterios_list(request: Request):
+    _exigir(request, ("admin", "maestro", "contralor", "gerencia", "administracion", "postventa"))
+    regs = await db.espejo_criterios.find({}, {"_id": 0}).sort("fecha", -1).to_list(100)
+    return {"criterios": regs, "total": len(regs),
+            "pendientes": sum(1 for r in regs if r.get("estado") == "pendiente_confirmacion")}
+
+
+@espejo.post("/criterios")
+async def espejo_criterios_add(payload: dict, request: Request):
+    """CAPA B: criterio humano manual — solo el Administrador."""
+    _exigir(request, ("admin", "maestro"))
+    criterio = (payload.get("criterio") or "").strip()
+    if not criterio:
+        raise HTTPException(status_code=400, detail="Falta el texto del criterio")
+    reg = {"id": str(uuid.uuid4()), "clave": criterio.lower()[:60], "criterio": criterio[:200],
+           "detalle": (payload.get("detalle") or "").strip()[:500], "origen": "manual",
+           "estado": "activo", "fecha": _now(),
+           "por": (getattr(request.state, "user", {}) or {}).get("sub") or "admin"}
+    await db.espejo_criterios.insert_one(dict(reg))
+    await db.espejo_bitacora.insert_one({"id": str(uuid.uuid4()), "origen": "capa_b",
+                                         "fecha": _now(), "clave": reg["clave"], "tipo": "criterio_manual",
+                                         "patron": f"[MANUAL] {criterio[:160]}"})
+    return {"ok": True, "criterio": reg}
+
+
+@espejo.post("/criterios/{cid}/resolver")
+async def espejo_criterio_resolver(cid: str, payload: dict, request: Request):
+    """Conflicto auto vs manual: SOLO el admin confirma (aplicar) o rechaza la regla automática."""
+    _exigir(request, ("admin", "maestro"))
+    accion = (payload.get("accion") or "").strip()
+    reg = await db.espejo_criterios.find_one({"id": cid})
+    if not reg or reg.get("estado") != "pendiente_confirmacion":
+        raise HTTPException(status_code=404, detail="Criterio pendiente no encontrado")
+    if accion == "confirmar":
+        await db.espejo_criterios.update_one({"id": cid}, {"$set": {"estado": "activo", "confirmado_en": _now()}})
+        if reg.get("conflicto_con"):
+            await db.espejo_criterios.update_one({"id": reg["conflicto_con"]},
+                                                 {"$set": {"estado": "reemplazado", "reemplazado_en": _now()}})
+        return {"ok": True, "accion": "confirmado", "nota": "Regla automática aplicada con autorización del administrador"}
+    await db.espejo_criterios.update_one({"id": cid}, {"$set": {"estado": "rechazado", "rechazado_en": _now()}})
+    return {"ok": True, "accion": "rechazado", "nota": "La regla manual se mantiene intacta"}
+
+
+# ═══════════════ CONEXIÓN CONCRECES (empresas vinculadas legalmente) ═══════════════
+@concreces.get("")
+async def concreces_get(request: Request):
+    _exigir(request, ("admin", "maestro", "gerencia", "contralor"))
+    cfg = await db.config.find_one({"_key": "conexion_concreces"}, {"_id": 0, "clave_enc": 0}) or {}
+    tiene = bool((await db.config.find_one({"_key": "conexion_concreces"}) or {}).get("clave_enc"))
+    return {"usuario": cfg.get("usuario") or "", "url": cfg.get("url") or "",
+            "tiene_clave": tiene, "activo": bool(cfg.get("activo")),
+            "estado": ("Credenciales guardadas — sin conexión activa" if tiene else "Pendiente de credenciales"),
+            "nota": "Conexión dentro de la normativa de empresas vinculadas legalmente. No se conecta hasta que el administrador lo autorice."}
+
+
+async def _reconfirmar_identidad_local(request, payload):
+    """Configuración avanzada (Bloque 7): reingreso de contraseña obligatorio."""
+    import bcrypt as _b
+    clave = ((payload or {}).get("confirmacion_clave") or "").strip()
+    sub = (getattr(request.state, "user", {}) or {}).get("sub") or ""
+    user = await db.users.find_one({"codigo": sub})
+    ok = False
+    if user and clave:
+        if user.get("clave_hash"):
+            ok = _b.checkpw(clave.encode(), user["clave_hash"].encode())
+        else:
+            ok = user.get("password") == clave
+    if not ok:
+        raise HTTPException(status_code=403, detail=(
+            "Confirmación de identidad requerida: reingrese su contraseña para "
+            "modificar la configuración avanzada."))
+
+
+@concreces.post("")
+async def concreces_save(payload: dict, request: Request):
+    _exigir(request, ("admin", "maestro"))
+    await _reconfirmar_identidad_local(request, payload)
+    cambios = {"actualizado": _now(), "activo": False}
+    if "usuario" in payload:
+        cambios["usuario"] = (payload.get("usuario") or "").strip()
+    if "url" in payload:
+        cambios["url"] = (payload.get("url") or "").strip()
+    if payload.get("clave"):
+        cambios["clave_enc"] = _cifrar(str(payload["clave"]).strip())
+    await db.config.update_one({"_key": "conexion_concreces"}, {"$set": cambios}, upsert=True)
+    cfg = await db.config.find_one({"_key": "conexion_concreces"}) or {}
+    return {"ok": True, "tiene_clave": bool(cfg.get("clave_enc")),
+            "estado": "Credenciales guardadas — sin conexión activa"}
+
+
+# ═══════════════ MÓDULO POSTVENTA REFORZADO ═══════════════
+ETAPAS_PV = [("firma", "Firma"), ("escritura", "Escritura"),
+             ("entrega_pagare", "Entrega de Pagaré"), ("doc_posterior", "Documentación Posterior")]
+PLAZOS_DEFAULT = {"firma": 7, "escritura": 15, "entrega_pagare": 7, "doc_posterior": 10}
+RESPONSABLE_PV = "Javier Urrutia"
+
+
+async def _plazos_pv():
+    cfg = await db.config.find_one({"_key": "postventa_plazos"}) or {}
+    return {k: int(cfg.get(k) or v) for k, v in PLAZOS_DEFAULT.items()}
+
+
+async def _aprendizaje_pv():
+    """Aprendizaje progresivo: promedio de días reales por etapa (escrituras completadas)."""
+    agg = {}
+    async for r in db.postventa_aprendizaje.find({}):
+        for k, dias in (r.get("duraciones") or {}).items():
+            agg.setdefault(k, []).append(dias)
+    return {k: round(sum(v) / len(v), 1) for k, v in agg.items() if v}
+
+
+def _dias_desde(iso):
+    try:
+        d = datetime.fromisoformat(iso)
+        if d.tzinfo is None:
+            d = d.replace(tzinfo=timezone.utc)
+        return round((datetime.now(timezone.utc) - d).total_seconds() / 86400, 1)
+    except Exception:
+        return 0
+
+
+@postventa.get("/panel")
+async def postventa_panel(request: Request):
+    """Vista de control: etapa de cada cliente, plazos, alertas y cumplimiento del responsable."""
+    plazos = await _plazos_pv()
+    aprendido = await _aprendizaje_pv()
+    casos, alertas = [], 0
+    async for c in db.postventa_casos.find({}).sort("creado", -1):
+        etapa = c.get("etapa_actual") or ""
+        dias = _dias_desde(c.get("inicio_etapa") or c.get("creado") or "")
+        atrasada = bool(etapa and etapa != "completado" and dias > plazos.get(etapa, 99))
+        if atrasada:
+            alertas += 1
+        detalle = []
+        for k, lb in ETAPAS_PV:
+            e = (c.get("etapas") or {}).get(k) or {}
+            detalle.append({"clave": k, "etapa": lb, "plazo_dias": plazos[k],
+                            "plazo_estimado_aprendido": aprendido.get(k),
+                            "completada": bool(e.get("completada")),
+                            "fecha": e.get("fecha") or "", "dias_reales": e.get("dias_reales"),
+                            "en_tiempo_y_forma": e.get("en_plazo"),
+                            "en_curso": k == etapa,
+                            "dias_en_curso": dias if k == etapa else None,
+                            "atrasada": atrasada if k == etapa else False})
+        casos.append({"id": c["id"], "cliente": c.get("cliente"), "email": c.get("email") or "",
+                      "responsable": RESPONSABLE_PV, "etapa_actual": etapa,
+                      "etapa_label": dict(ETAPAS_PV).get(etapa, "✅ Completado"),
+                      "dias_en_etapa": dias, "atrasada": atrasada, "etapas": detalle,
+                      "comunicaciones": (c.get("comunicaciones") or [])[-4:], "creado": c.get("creado")})
+    return {"casos": casos, "total": len(casos), "alertas_atraso": alertas,
+            "plazos": plazos, "plazos_aprendidos": aprendido,
+            "escrituras_completadas": await db.postventa_aprendizaje.count_documents({}),
+            "responsable": RESPONSABLE_PV, "etapas": [{"clave": k, "label": lb} for k, lb in ETAPAS_PV]}
+
+
+@postventa.post("/casos")
+async def postventa_crear(payload: dict, request: Request):
+    _exigir(request, ("admin", "maestro", "postventa", "gerencia"))
+    cliente = (payload.get("cliente") or "").strip()
+    if not cliente:
+        raise HTTPException(status_code=400, detail="Falta el nombre del cliente")
+    reg = {"id": str(uuid.uuid4()), "cliente": cliente, "email": (payload.get("email") or "").strip(),
+           "etapa_actual": "firma", "inicio_etapa": _now(), "etapas": {}, "comunicaciones": [],
+           "responsable": RESPONSABLE_PV, "creado": _now()}
+    await db.postventa_casos.insert_one(dict(reg))
+    return {"ok": True, "caso": {k: v for k, v in reg.items()}}
+
+
+@postventa.post("/casos/{cid}/avanzar")
+async def postventa_avanzar(cid: str, request: Request):
+    """Completa la etapa actual, genera la comunicación al cliente y aprende plazos reales."""
+    _exigir(request, ("admin", "maestro", "postventa", "gerencia"))
+    c = await db.postventa_casos.find_one({"id": cid})
+    if not c:
+        raise HTTPException(status_code=404, detail="Caso no encontrado")
+    etapa = c.get("etapa_actual")
+    claves = [k for k, _ in ETAPAS_PV]
+    if etapa not in claves:
+        raise HTTPException(status_code=400, detail="El caso ya está completado")
+    plazos = await _plazos_pv()
+    dias = _dias_desde(c.get("inicio_etapa") or c.get("creado"))
+    idx = claves.index(etapa)
+    siguiente = claves[idx + 1] if idx + 1 < len(claves) else "completado"
+    lb = dict(ETAPAS_PV)
+    # Comunicación automática al cliente (texto generado al avanzar la etapa)
+    if siguiente != "completado":
+        msg = (f"Estimado(a) {c.get('cliente')}: le informamos que la etapa '{lb[etapa]}' de su proceso "
+               f"de escrituración fue completada con éxito. La siguiente etapa es '{lb[siguiente]}' "
+               f"(plazo estimado: {plazos[siguiente]} días). Le mantendremos informado(a). — Central Mutuos")
+    else:
+        msg = (f"Estimado(a) {c.get('cliente')}: ¡felicitaciones! Su proceso de escrituración fue "
+               f"completado en su totalidad. Gracias por confiar en Central Mutuos.")
+    comunicacion = {"etapa": etapa, "texto": msg, "generada": _now(), "estado": "generada"}
+    etapas = c.get("etapas") or {}
+    etapas[etapa] = {"completada": True, "fecha": _now(), "dias_reales": dias,
+                     "en_plazo": dias <= plazos.get(etapa, 99), "por": RESPONSABLE_PV}
+    await db.postventa_casos.update_one({"id": cid}, {"$set": {
+        "etapas": etapas, "etapa_actual": siguiente, "inicio_etapa": _now()},
+        "$push": {"comunicaciones": comunicacion}})
+    # APRENDIZAJE PROGRESIVO: la escritura completada alimenta los plazos futuros
+    if siguiente == "completado":
+        await db.postventa_aprendizaje.insert_one({
+            "id": str(uuid.uuid4()), "caso_id": cid, "cliente": c.get("cliente"),
+            "duraciones": {k: (etapas.get(k) or {}).get("dias_reales", 0) for k in claves},
+            "fecha": _now()})
+    return {"ok": True, "etapa_completada": lb[etapa], "dias_reales": dias,
+            "en_plazo": dias <= plazos.get(etapa, 99), "siguiente": siguiente,
+            "comunicacion_cliente": msg}
+
+
+@postventa.post("/plazos")
+async def postventa_plazos_set(payload: dict, request: Request):
+    """Plazos por etapa: configurables SOLO por el Administrador."""
+    _exigir(request, ("admin", "maestro"))
+    cambios = {}
+    for k, _ in ETAPAS_PV:
+        if k in payload:
+            try:
+                v = int(payload[k])
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=400, detail=f"Plazo inválido para {k}")
+            if not 1 <= v <= 365:
+                raise HTTPException(status_code=400, detail=f"El plazo de {k} debe estar entre 1 y 365 días")
+            cambios[k] = v
+    if not cambios:
+        raise HTTPException(status_code=400, detail="Sin plazos para actualizar")
+    cambios["actualizado"] = _now()
+    await db.config.update_one({"_key": "postventa_plazos"}, {"$set": cambios}, upsert=True)
+    return {"ok": True, "plazos": await _plazos_pv()}
+
+
+# ═══════════════ DASHBOARD GERENCIA COMERCIAL (indicadores) ═══════════════
+@gpanel.get("/rol")
+async def gerencia_panel_rol(request: Request):
+    _exigir(request, ("admin", "maestro", "gerencia", "contralor"))
+    from datetime import timedelta
+    hoy = datetime.now(timezone.utc)
+    h7 = (hoy - timedelta(days=7)).isoformat()
+    h14 = (hoy - timedelta(days=14)).isoformat()
+    por_inmo, por_proy, por_broker, carpetas = {}, {}, {}, []
+    async for fd in db.folders.find({"oculto_supercarpeta": {"$ne": True}}):
+        inmo = (fd.get("inmobiliaria") or ("Casa Usada" if "usad" in (fd.get("tipo_operacion") or "") else "Directa")).strip()
+        proy = (fd.get("proyecto") or "—").strip() or "—"
+        brk = (fd.get("broker_origen") or fd.get("broker_codigo") or fd.get("broker_nombre") or "Directo").strip() or "Directo"
+        for d, k in ((por_inmo, inmo), (por_proy, proy), (por_broker, brk)):
+            d[k] = d.get(k, 0) + 1
+        if len(carpetas) < 40:
+            carpetas.append({"cliente": fd.get("nombre"), "inmobiliaria": inmo, "proyecto": proy,
+                             "broker_origen": brk,
+                             "estado": ("Escriturada" if fd.get("escritura_confirmada_at")
+                                        else "Estudio aprobado" if fd.get("estudio_recibido_at")
+                                        else "Tasación recibida" if fd.get("tasacion_informe_recibido_at")
+                                        else "En proceso")})
+    # Actividad del equipo administrativo (volumen operativo, no cierres)
+    equipo = {"Victoria Vilchez": {"hoy": 0, "semana": 0}, "Daniela Galindo": {"hoy": 0, "semana": 0}, "Otros": {"hoy": 0, "semana": 0}}
+    _ops_eq = {k: set() for k in equipo}
+    dia_hoy = hoy.strftime("%Y-%m-%d")
+    async for r in db.estado_manual_log.find({"fecha": {"$gte": h7}}):
+        por = (r.get("por") or "").lower()
+        key = "Victoria Vilchez" if "victoria" in por or "vilche" in por else (
+            "Daniela Galindo" if "daniela" in por or "galindo" in por else "Otros")
+        equipo[key]["semana"] += 1
+        if r.get("folder_id"):
+            _ops_eq[key].add(r["folder_id"])
+        if str(r.get("fecha") or "").startswith(dia_hoy):
+            equipo[key]["hoy"] += 1
+    for k in equipo:
+        equipo[k]["operaciones"] = len(_ops_eq[k])
+    # Volumen diario (7 días): gestiones + correos detectados + envíos
+    volumen = {}
+    for col, campo in ((db.estado_manual_log, "fecha"), (db.hitos_externos, "creado"), (db.correos_smtp_log, "fecha")):
+        async for r in col.find({campo: {"$gte": h7}}, {campo: 1}):
+            d = str(r.get(campo) or "")[:10]
+            if d:
+                volumen[d] = volumen.get(d, 0) + 1
+    # Comparativa semanal del equipo
+    sem_actual = await db.estado_manual_log.count_documents({"fecha": {"$gte": h7}}) + \
+        await db.hitos_externos.count_documents({"creado": {"$gte": h7}})
+    sem_previa = (await db.estado_manual_log.count_documents({"fecha": {"$gte": h14, "$lt": h7}}) +
+                  await db.hitos_externos.count_documents({"creado": {"$gte": h14, "$lt": h7}}))
+    return {"por_inmobiliaria": sorted(por_inmo.items(), key=lambda x: -x[1]),
+            "por_proyecto": sorted(por_proy.items(), key=lambda x: -x[1])[:10],
+            "por_broker": sorted(por_broker.items(), key=lambda x: -x[1]),
+            "carpetas": carpetas, "equipo": equipo,
+            "volumen_diario": sorted(volumen.items()),
+            "comparativa": {"semana_actual": sem_actual, "semana_anterior": sem_previa,
+                            "variacion_pct": round((sem_actual - sem_previa) * 100 / sem_previa, 1) if sem_previa else None}}
+
+
+@gpanel.get("/inteligencia")
+async def gerencia_inteligencia(request: Request, broker: str = ""):
+    """CENTRO DE INTELIGENCIA COMERCIAL: panel por cliente (docs + fechas + preview),
+    estadísticas por broker/inmobiliaria, subsidios y real vs proyectado."""
+    _exigir(request, ("admin", "maestro", "gerencia", "contralor"))
+    mes = datetime.now(timezone.utc).strftime("%Y-%m")
+    clientes, stats_broker, subsidios, real_uf = [], {}, {}, 0.0
+    q = {"oculto_supercarpeta": {"$ne": True}}
+    async for fd in db.folders.find(q).sort("nombre", 1):
+        brk = (fd.get("broker_origen") or fd.get("broker_codigo") or "Directo").strip() or "Directo"
+        if broker and broker.lower() not in brk.lower():
+            continue
+        arch = [a if isinstance(a, str) else (a.get("ruta") or a.get("nombre") or "")
+                for a in (fd.get("archivos") or [])]
+
+        def _ruta(prefs):
+            return next((a for a in arch if any(a.startswith(p) for p in prefs)), "")
+        docs = [
+            {"doc": "Tasación",
+             "estado": "Recibida" if fd.get("tasacion_informe_recibido_at") else ("Solicitada" if fd.get("tasacion_solicitada_at") else "Pendiente"),
+             "fecha": str(fd.get("tasacion_informe_recibido_at") or fd.get("tasacion_solicitada_at") or "")[:10],
+             "ruta": _ruta(["99_otros/TASACION_"]), "accion": "tasacion"},
+            {"doc": "Estudio de Título",
+             "estado": "Con Observaciones" if (fd.get("reparos_alertas") or []) else ("Recibido" if fd.get("estudio_recibido_at") else "Pendiente"),
+             "fecha": str(fd.get("estudio_recibido_at") or "")[:10],
+             "ruta": _ruta(["07_estudio_titulo/"]), "accion": "estudio"},
+            {"doc": "Cédula de Crédito (SET)",
+             "estado": fd.get("set_credito_estado") or "Pendiente",
+             "fecha": str(fd.get("set_credito_at") or "")[:10], "ruta": "", "accion": ""},
+            {"doc": "DPS", "estado": "Recibido" if fd.get("dps_recibido_at") else "Pendiente",
+             "fecha": str(fd.get("dps_recibido_at") or "")[:10], "ruta": "", "accion": ""},
+            {"doc": "Actualización de Documentos",
+             "estado": "Actualizados" if fd.get("datos_financieros_ocr_fecha") else "Pendiente",
+             "fecha": str(fd.get("datos_financieros_ocr_fecha") or "")[:10], "ruta": "", "accion": "docs"},
+        ]
+        clientes.append({"fid": fd["id"], "cliente": fd.get("nombre"), "rut": fd.get("rut") or "",
+                         "rut_propiedad": (fd.get("rut_propiedad") or fd.get("rol_propiedad") or ""),
+                         "broker": brk, "inmobiliaria": fd.get("inmobiliaria") or "Directa",
+                         "proyecto": fd.get("proyecto") or "", "docs": docs})
+        # Estadísticas
+        sb = stats_broker.setdefault(brk, {"clientes": 0, "aprobadas": 0, "cerradas": 0, "dias_cierre": []})
+        sb["clientes"] += 1
+        if fd.get("set_credito_at") or fd.get("escritura_confirmada_at"):
+            sb["aprobadas"] += 1
+        if fd.get("escritura_confirmada_at"):
+            sb["cerradas"] += 1
+            try:
+                ini = datetime.fromisoformat(str(fd.get("created") or fd.get("created_at"))[:19])
+                fin = datetime.fromisoformat(str(fd.get("escritura_confirmada_at"))[:19])
+                sb["dias_cierre"].append((fin - ini).days)
+            except Exception:
+                pass
+        s = (fd.get("subsidio_proyeccion") or "").upper()
+        tipo_s = ("DS49" if "49" in s else "DS1" if "DS1" in s or "DS 1" in s
+                  else "SERVIU" if "SERVIU" in s else "Con Subsidio (otro)" if "CON" in s else "Sin Subsidio")
+        subsidios[tipo_s] = subsidios.get(tipo_s, 0) + 1
+        if (fd.get("mes_proyeccion") or mes) == mes:
+            real_uf += float(fd.get("proyeccion_uf") or 0)
+    brokers_out = []
+    for b, s in sorted(stats_broker.items(), key=lambda x: -x[1]["clientes"]):
+        brokers_out.append({"broker": b, "clientes": s["clientes"],
+                            "avance_pct": round(s["aprobadas"] * 100 / s["clientes"]) if s["clientes"] else 0,
+                            "tasa_aprobacion": round(s["aprobadas"] * 100 / s["clientes"]) if s["clientes"] else 0,
+                            "cierres": s["cerradas"],
+                            "dias_promedio_cierre": round(sum(s["dias_cierre"]) / len(s["dias_cierre"])) if s["dias_cierre"] else None})
+    meta_cfg = await db.config.find_one({"_key": f"proyeccion_{mes}"}) or await db.config.find_one({"_key": "proyeccion_agosto"}) or {}
+    ratios_cfg = await db.config.find_one({"_key": "gerencia_ratios"}, {"_id": 0}) or {}
+    return {"clientes": clientes, "total": len(clientes), "brokers": brokers_out,
+            "subsidios": sorted(subsidios.items(), key=lambda x: -x[1]),
+            "proyeccion": {"mes": mes, "meta_uf": meta_cfg.get("meta_uf") or 0,
+                           "real_uf": round(real_uf, 1),
+                           "cumplimiento_pct": round(real_uf * 100 / meta_cfg["meta_uf"], 1) if meta_cfg.get("meta_uf") else 0},
+            "ratios_configurables": ratios_cfg.get("ratios") or []}
+
+
+@gpanel.post("/accion")
+async def gerencia_accion(payload: dict, request: Request):
+    """Botones de acción por cliente: correo al destinatario con CC de libre elección (Gerencia)."""
+    _exigir(request, ("admin", "maestro", "gerencia"))
+    fid, tipo = (payload.get("fid") or ""), (payload.get("tipo") or "")
+    ACC = {"tasacion": ("Solicitar tasación al broker", "broker"),
+           "estudio": ("Consultar estudio de título", "administrativo"),
+           "docs": ("Pedir actualización de documentos", "administrativo")}
+    if tipo not in ACC:
+        raise HTTPException(status_code=400, detail="Acción inválida")
+    fd = await db.folders.find_one({"id": fid})
+    if not fd:
+        raise HTTPException(status_code=404, detail="Carpeta no existe")
+    label, destino_tipo = ACC[tipo]
+    destino = ""
+    if destino_tipo == "broker":
+        bk = await db.brokers_fuentes.find_one({"$or": [{"codigo": fd.get("broker_codigo")},
+                                                        {"nombre": fd.get("broker_origen")}]}) or {}
+        destino = bk.get("email") or bk.get("correo") or ""
+    else:
+        async for e in db.ejecutivos_correo.find({"email": {"$ne": ""}}):
+            destino = e["email"]
+            break
+    destino = destino or os.environ.get("MAIL2_USER", "")
+    if not destino:
+        raise HTTPException(status_code=400, detail="Sin destinatario configurado para esta acción")
+    # CC LIBRE (Gerencia Comercial): Daniela, Victoria, ambas u otros — sin restricción bloqueante
+    cc = payload.get("cc") or []
+    if isinstance(cc, str):
+        cc = [cc]
+    cc = [c.strip() for c in cc if isinstance(c, str) and "@" in c
+          and c.strip().lower() != destino.lower()]
+    cliente = fd.get("nombre") or ""
+    rut_txt = f" (RUT {fd.get('rut')})" if fd.get("rut") else ""
+    cuerpo = (f"<div style='font-family:Arial,Helvetica,sans-serif;background:#fff;color:#111;font-size:14px'>"
+              f"<p>Estimados, junto con saludar:</p>"
+              f"<p>Gerencia Comercial solicita: <b>{label}</b> para el cliente <b>{cliente}</b>{rut_txt}.</p>"
+              f"<p>Agradeceremos gestionar a la brevedad e informar el estado.</p>"
+              f"<p style='color:#555'>Saludos cordiales,<br><b>Central Mutuos</b></p></div>")
+    import email_service as mail
+    asyncio.create_task(asyncio.to_thread(
+        mail.send_mail, destino, f"{label} — {cliente}", cuerpo, [], "secundaria", cc or None))
+    await db.folders.update_one({"id": fid}, {"$push": {"bitacora_solicitudes": {
+        "tipo": f"gerencia_{tipo}", "asunto": f"{label} — {cliente}", "para": destino, "cc": cc,
+        "en": _now(), "estado": "en_envio", "documentos": [label]}}})
+    return {"ok": True, "accion": label, "para": destino, "cc": cc,
+            "nota": ("Correo generado y despachado en segundo plano"
+                     + (f" con copia a: {', '.join(cc)}" if cc else " (sin copias)"))}
+
+
+@gpanel.get("/cc-opciones")
+async def gerencia_cc_opciones(request: Request):
+    """Destinatarios disponibles para copiar (CC) en los correos de Gerencia."""
+    _exigir(request, ("admin", "maestro", "gerencia"))
+    vistos, opciones = set(), []
+    for nombre, email in [("Daniela Galindo", "danielagalindo@centralmutuos.cl"),
+                          ("Victoria Vilchez", "victoriavilches@centralmutuos.cl")]:
+        opciones.append({"nombre": nombre, "email": email})
+        vistos.add(email)
+    async for e in db.ejecutivos_correo.find({"email": {"$ne": ""}}):
+        if e.get("email") and e["email"] not in vistos:
+            opciones.append({"nombre": e.get("nombre") or e["email"], "email": e["email"]})
+            vistos.add(e["email"])
+    async for u in db.users.find({"email": {"$exists": True, "$nin": ["", None]}}):
+        if u.get("email") and u["email"] not in vistos:
+            opciones.append({"nombre": u.get("nombre") or u["email"], "email": u["email"]})
+            vistos.add(u["email"])
+    return {"opciones": opciones}
+
+
+# ═══════════════ MÓDULO BROKER — EXCEL OFICIAL DE PROYECCIÓN ═══════════════
+COLS_EXCEL = ["Nombre Cliente", "RUT", "Inmobiliaria", "Proyecto", "Ciudad", "Notaría",
+              "Monto UF", "Subsidio (Con/Sin)", "Estudio de Títulos", "Tasación",
+              "Actualización de Documentos", "Fecha Firma Estimada (AAAA-MM-DD)"]
+
+
+@brokerx.get("/ventana-proyeccion")
+async def broker_ventana_proyeccion(request: Request):
+    """Estado de la ventana de carga (día 1 al 5° hábil del mes)."""
+    from malla_inteligencia import _ventana_proyeccion
+    abierta, limite = _ventana_proyeccion()
+    return {"abierta": abierta, "limite": limite,
+            "mensaje": "" if abierta else ("La ventana de carga de proyecciones está cerrada. "
+                                           "Disponible entre el día 1 y 5 hábil de cada mes.")}
+
+
+@brokerx.get("/formato-excel")
+async def broker_formato_excel(request: Request):
+    """Formato oficial generado desde las columnas de la Supercarpeta (pre-llenado con sus clientes)."""
+    from fastapi.responses import Response as _Resp
+    import io
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill
+    sub = (getattr(request.state, "user", {}) or {}).get("sub") or ""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Proyección"
+    ws.append(COLS_EXCEL)
+    for cell in ws[1]:
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill("solid", fgColor="14263F")
+    async for fd in db.folders.find({"broker_codigo": sub, "oculto_supercarpeta": {"$ne": True}}).sort("nombre", 1):
+        em = fd.get("estados_manuales") or {}
+        ws.append([fd.get("nombre") or "", fd.get("rut") or "", fd.get("inmobiliaria") or "",
+                   fd.get("proyecto") or "", fd.get("ciudad") or "", fd.get("notaria") or "",
+                   fd.get("proyeccion_uf") or "", fd.get("subsidio_proyeccion") or "",
+                   (em.get("estudio") or {}).get("estado") or "", (em.get("tasacion") or {}).get("estado") or "",
+                   "", str(fd.get("fecha_firma") or "")[:10]])
+    for i, w in enumerate([28, 14, 18, 22, 14, 16, 10, 16, 18, 16, 24, 26], start=1):
+        ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = w
+    buf = io.BytesIO()
+    wb.save(buf)
+    return _Resp(content=buf.getvalue(),
+                 media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                 headers={"Content-Disposition": 'attachment; filename="FORMATO_PROYECCION_SUPERCARPETA.xlsx"'})
+
+
+@brokerx.post("/cargar-excel")
+async def broker_cargar_excel(request: Request):
+    """Sube el Excel oficial → alimenta directamente las carpetas de la Supercarpeta.
+    Ventana: solo del día 1 al 5° día hábil del mes."""
+    from malla_inteligencia import _ventana_proyeccion
+    claims = getattr(request.state, "user", {}) or {}
+    sub = claims.get("sub") or ""
+    abierta, limite = _ventana_proyeccion()
+    if not abierta and claims.get("rol") not in ("admin", "maestro"):
+        raise HTTPException(status_code=423, detail=(
+            f"⛔ Ventana de carga cerrada: la proyección solo se puede subir entre el día 1 y el "
+            f"5° día hábil de cada mes (última fecha de este mes: {limite})."))
+    form = await request.form()
+    archivo = form.get("archivo")
+    if archivo is None:
+        raise HTTPException(status_code=400, detail="Adjunte el archivo Excel del formato oficial")
+    import io
+    from openpyxl import load_workbook
+    try:
+        wb = load_workbook(io.BytesIO(await archivo.read()), data_only=True)
+        ws = wb.active
+    except Exception:
+        raise HTTPException(status_code=400, detail="El archivo no es un Excel válido (.xlsx del formato oficial)")
+    mes_actual = datetime.now(timezone.utc).strftime("%Y-%m")
+    creados, actualizados, errores = 0, 0, []
+    for idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+        vals = [str(v).strip() if v is not None else "" for v in (list(row) + [""] * 12)[:12]]
+        nombre, rut, inmo, proy, ciudad, notaria, monto, subsidio, estudio, tasacion, _docs, ffirma = vals
+        if not nombre:
+            continue
+        try:
+            monto_v = float(str(monto).replace(".", "").replace(",", ".")) if monto else None
+        except ValueError:
+            monto_v = None
+        q = {"$or": [{"rut": rut}, {"nombre": {"$regex": f"^{re.escape(nombre)}$", "$options": "i"}}]} if rut \
+            else {"nombre": {"$regex": f"^{re.escape(nombre)}$", "$options": "i"}}
+        fd = await db.folders.find_one(q)
+        # REGLA RUT ÚNICO: el primer broker que registró el RUT lo retiene permanentemente
+        if fd and rut and (fd.get("broker_codigo") or "") not in ("", sub) \
+                and claims.get("rol") not in ("admin", "maestro"):
+            errores.append(f"Fila {idx} — {nombre}: Este RUT ya está registrado en el sistema por otro ejecutivo.")
+            continue
+        setd = {"broker_codigo": sub, "broker_origen": claims.get("nombre") or sub, "updated_at": _now()}
+        for k, v in (("rut", rut), ("inmobiliaria", inmo), ("proyecto", proy), ("ciudad", ciudad),
+                     ("notaria", notaria), ("subsidio_proyeccion", subsidio), ("fecha_firma", ffirma)):
+            if v:
+                setd[k] = v
+        if monto_v:
+            setd["proyeccion_uf"] = monto_v
+        est_man = {}
+        for hito, val in (("estudio", estudio), ("tasacion", tasacion)):
+            if val:
+                est_man[hito] = {"estado": val, "en": _now(), "por": f"broker:{sub}"}
+        if fd:
+            upd = dict(setd)
+            for h, v in est_man.items():
+                upd[f"estados_manuales.{h}"] = v
+            await db.folders.update_one({"id": fd["id"]}, {"$set": upd})
+            actualizados += 1
+        else:
+            nuevo = {"id": str(uuid.uuid4()), "nombre": nombre.upper(),
+                     "mes_proyeccion": mes_actual, "created": _now(), **setd}
+            if est_man:
+                nuevo["estados_manuales"] = est_man
+            await db.folders.insert_one(nuevo)
+            creados += 1
+    await db.broker_activity_log.insert_one({
+        "id": str(uuid.uuid4()), "broker_codigo": sub, "accion": "carga_excel_proyeccion",
+        "detalle": {"creados": creados, "actualizados": actualizados}, "fecha": _now()})
+    return {"ok": True, "creados": creados, "actualizados": actualizados,
+            "errores": errores, "nota": "Las carpetas de la Supercarpeta fueron alimentadas sin ingreso manual"}

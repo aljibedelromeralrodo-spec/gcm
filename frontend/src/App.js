@@ -43,6 +43,9 @@ const EstudioTituloModule = lazy(() => import("./pages/EstudioTituloModule"));
 const EscrituraModule = lazy(() => import("./pages/EscrituraModule"));
 const ContraloriaModule = lazy(() => import("./pages/ContraloriaModule"));
 const CerebroDashAIModule = lazy(() => import("./pages/CerebroDashAIModule"));
+const ContralorModule = lazy(() => import("./pages/ContralorModule"));
+const PostventaModule = lazy(() => import("./pages/PostventaModule"));
+const RoleDashboard = lazy(() => import("./pages/RoleDashboards"));
 const AuditoriaForenseModule = lazy(() => import("./pages/AuditoriaForenseModule"));
 const DespachoModule = lazy(() => import("./pages/DespachoModule"));
 const GlobalSearch = lazy(() => import("./components/GlobalSearch"));
@@ -74,7 +77,45 @@ const MODULE_TITLES = {
   cierres: 'Cierres — Seguimiento de Aprobaciones',
   aprendizaje: 'Aprendizaje IA — Flujo Comercial',
   oportunidades: 'Centro de Ventas VIP — José Martín',
+  postventa: 'Postventa — Seguimiento de Escritura',
+  contralor: 'Módulo Contralor — Algoritmo Espejo',
+  gerencia: 'Gerencia Comercial',
+  supercarpeta: 'Supercarpeta',
+  administracion: 'Administración',
 };
+
+// ═══ SISTEMA DE ROLES: acceso por módulo ('total' | 'lectura' | 'bloqueado') ═══
+const MODS_ADMINISTRATIVOS = ['administracion', 'usuarios', 'criterios', 'whatsapp', 'autocorreo',
+  'procesamiento', 'basehistorica', 'gastos', 'setcredito', 'formato', 'clientes', 'simulador',
+  'historial', 'calculadora', 'seguimiento', 'aprobacion', 'tasacion', 'estudio', 'escritura',
+  'cierres', 'salud', 'rescate', 'aprendizaje', 'oportunidades', 'dashai', 'auditoria', 'despacho'];
+const MODS_TODOS = ['dashboard', ...MODS_ADMINISTRATIVOS, 'gerencia', 'gestion-ejecutivos',
+  'supercarpeta', 'brokers', 'micorreo', 'postventa', 'contraloria', 'contralor'];
+const ACCESOS_ROL = {
+  gerencia: { total: ['dashboard', 'gerencia', 'gestion-ejecutivos', 'supercarpeta', 'postventa', 'micorreo'], lectura: MODS_ADMINISTRATIVOS },
+  administracion: { total: ['dashboard', ...MODS_ADMINISTRATIVOS, 'micorreo'], lectura: ['contralor'] },
+  postventa: { total: ['dashboard', 'postventa', 'micorreo'], lectura: ['contralor'] },
+  broker: { total: ['dashboard', 'brokers', 'micorreo'], lectura: [] },
+  contralor: { total: ['contralor', 'dashboard'], lectura: MODS_TODOS },
+};
+const PERMISOS_LEGADO = {
+  A: ['dashboard', 'clientes', 'simulador', 'historial', 'calculadora', 'formato', 'setcredito', 'micorreo'],
+  B: ['dashboard', 'contraloria', 'criterios', 'seguimiento', 'gerencia', 'gestion-ejecutivos', 'supercarpeta', 'administracion', 'salud', 'micorreo'],
+  D: ['brokers', 'micorreo'],
+};
+
+function accesoModulo(user, key) {
+  if (key === 'contraloria') return 'lectura'; // MÓDULO CONTROL: solo lectura SIN EXCEPCIÓN
+  if (['admin', 'maestro'].includes(user.rol)) return 'total';
+  const A = ACCESOS_ROL[user.rol];
+  if (!A) {
+    if (!user.perfil) return 'total';
+    return (PERMISOS_LEGADO[user.perfil] || []).includes(key) ? 'total' : 'bloqueado';
+  }
+  if (A.total.includes(key)) return 'total';
+  if (A.lectura.includes(key)) return 'lectura';
+  return 'bloqueado';
+}
 
 function App() {
   const path = window.location.pathname;
@@ -154,7 +195,7 @@ function MainApp() {
   }, [user]);
 
   useEffect(() => {
-    if (user?.perfil === 'D') setActiveModule('brokers');
+    if (user?.perfil === 'D' || user?.rol === 'broker') setActiveModule('brokers');
   }, [user]);
 
   const cargarSaldoEnergia = () => {
@@ -178,6 +219,8 @@ function MainApp() {
 
   if (!user) return <LoginPage onLogin={setUser} />;
 
+  // REGLA UNIVERSAL: todos los roles ven TODOS los módulos en el menú.
+  // El ingreso a un módulo no autorizado muestra el aviso, jamás un error técnico.
   const navItems = [
     { key: 'dashboard', icon: 'fa-th-large', label: 'Dashboard' },
     { key: 'clientes', icon: 'fa-folder-open', label: 'Carpeta Clientes' },
@@ -191,41 +234,32 @@ function MainApp() {
     { key: 'tasacion', icon: 'fa-home', label: 'Tasación' },
     { key: 'estudio', icon: 'fa-balance-scale', label: 'Estudio de Títulos' },
     { key: 'escritura', icon: 'fa-pencil-square-o', label: 'Escritura' },
-    { key: 'contraloria', icon: 'fa-search', label: 'Contraloría' },
+    { key: 'contraloria', icon: 'fa-search', label: 'Módulo Control 👁' },
+    { key: 'contralor', icon: 'fa-eye', label: 'Módulo Contralor' },
+    { key: 'postventa', icon: 'fa-heart', label: 'Postventa' },
     { key: 'dashai', icon: 'fa-lightbulb-o', label: '🧠 Cerebro DashAI' },
     { key: 'auditoria', icon: 'fa-balance-scale', label: '📋 Auditoría Forense' },
     { key: 'despacho', icon: 'fa-rocket', label: '🚀 Despacho Veloz' },
     { key: 'cierres', icon: 'fa-handshake-o', label: 'Cierres' },
-    ...(['admin', 'maestro'].includes(user.rol) ? [{ key: 'oportunidades', icon: 'fa-diamond', label: 'Centro de Ventas VIP' }] : []),
+    { key: 'oportunidades', icon: 'fa-diamond', label: 'Centro de Ventas VIP' },
     { key: 'salud', icon: 'fa-heartbeat', label: 'Panel de Salud' },
     { key: 'rescate', icon: 'fa-life-ring', label: 'Por Clasificar' },
-    ...(['admin', 'maestro'].includes(user.rol) ? [{ key: 'aprendizaje', icon: 'fa-graduation-cap', label: 'Aprendizaje IA' }] : []),
+    { key: 'aprendizaje', icon: 'fa-graduation-cap', label: 'Aprendizaje IA' },
     { key: 'setcredito', icon: 'fa-pencil-square-o', label: 'Set de Crédito' },
-    ...(['admin', 'maestro'].includes(user.rol) ? [{ key: 'usuarios', icon: 'fa-user-plus', label: 'Usuarios' }] : []),
-    ...(['admin', 'maestro'].includes(user.rol) ? [{ key: 'criterios', icon: 'fa-shield', label: 'Criterios' }] : []),
-    ...(['admin', 'maestro'].includes(user.rol) ? [{ key: 'whatsapp', icon: 'fa-whatsapp', label: 'WhatsApp' }] : []),
-    ...(['admin', 'maestro'].includes(user.rol) ? [{ key: 'autocorreo', icon: 'fa-envelope-o', label: 'Correo a Mesa' }] : []),
-    ...(['admin', 'maestro'].includes(user.rol) ? [{ key: 'procesamiento', icon: 'fa-inbox', label: 'Procesamiento Correo' }] : []),
-    ...(['admin', 'maestro'].includes(user.rol) ? [{ key: 'basehistorica', icon: 'fa-university', label: 'Base de Datos Histórica' }] : []),
-    ...(['admin', 'maestro'].includes(user.rol) || user.perfil === 'B' ? [
-      { key: 'gerencia', icon: 'fa-line-chart', label: 'Gerencia Comercial' },
-      { key: 'gestion-ejecutivos', icon: 'fa-users', label: 'Gestión Ejecutivos' },
-      { key: 'supercarpeta', icon: 'fa-folder-open', label: 'Supercarpeta' },
-      { key: 'administracion', icon: 'fa-database', label: 'Administración' },
-    ] : []),
-    ...(['admin', 'maestro'].includes(user.rol) || user.perfil === 'D' ? [
-      { key: 'brokers', icon: 'fa-briefcase', label: 'Panel Broker' },
-    ] : []),
+    { key: 'usuarios', icon: 'fa-user-plus', label: 'Usuarios' },
+    { key: 'criterios', icon: 'fa-shield', label: 'Criterios' },
+    { key: 'whatsapp', icon: 'fa-whatsapp', label: 'WhatsApp' },
+    { key: 'autocorreo', icon: 'fa-envelope-o', label: 'Correo a Mesa' },
+    { key: 'procesamiento', icon: 'fa-inbox', label: 'Procesamiento Correo' },
+    { key: 'basehistorica', icon: 'fa-university', label: 'Base de Datos Histórica' },
+    { key: 'gerencia', icon: 'fa-line-chart', label: 'Gerencia Comercial' },
+    { key: 'gestion-ejecutivos', icon: 'fa-users', label: 'Gestión Ejecutivos' },
+    { key: 'supercarpeta', icon: 'fa-folder-open', label: 'Supercarpeta' },
+    { key: 'administracion', icon: 'fa-database', label: 'Administración' },
+    { key: 'brokers', icon: 'fa-briefcase', label: 'Panel Broker' },
     { key: 'micorreo', icon: 'fa-envelope', label: 'Mi Correo' },
-  ].filter(item => {
-    if (['admin', 'maestro'].includes(user.rol) || !user.perfil) return true;
-    const PERMISOS = {
-      A: ['dashboard', 'clientes', 'simulador', 'historial', 'calculadora', 'formato', 'setcredito', 'micorreo'],
-      B: ['dashboard', 'contraloria', 'criterios', 'seguimiento', 'gerencia', 'gestion-ejecutivos', 'supercarpeta', 'administracion', 'salud', 'micorreo'],
-      D: ['brokers', 'micorreo'],
-    };
-    return (PERMISOS[user.perfil] || []).includes(item.key);
-  });
+  ];
+  const acceso = accesoModulo(user, activeModule);
 
   return (
     <>
@@ -353,7 +387,26 @@ function MainApp() {
 
         <BriefingMananero user={user} />
         <Suspense fallback={<div style={{ textAlign: "center", padding: "4rem" }}><i className="fa fa-spinner fa-spin" style={{ fontSize: "2rem", color: "var(--gold)" }}></i></div>}>
-        {activeModule === 'dashboard' && <DashboardModule valorUF={valorUF} userName={user?.nombre} onNavigate={setActiveModule} />}
+        {acceso === 'bloqueado' ? (
+          <div data-testid="no-autorizado" style={{ display: "grid", placeItems: "center", minHeight: "50vh" }}>
+            <div style={{ textAlign: "center", background: "rgba(30,41,59,0.6)", border: "1px solid rgba(248,113,113,0.4)",
+              borderRadius: 16, padding: "2.5rem 3rem", maxWidth: 480 }}>
+              <i className="fa fa-lock" style={{ fontSize: 40, color: "#f87171" }}></i>
+              <h2 style={{ color: "#f8fafc", fontSize: "1.15rem", marginTop: 14 }}>No está autorizado el ingreso a este módulo</h2>
+              <p style={{ color: "#94a3b8", fontSize: "0.85rem", marginTop: 8 }}>
+                Su rol ({user.rol}) no tiene permisos sobre este módulo. Si necesita acceso, contacte al Administrador.</p>
+            </div>
+          </div>
+        ) : (<>
+        {acceso === 'lectura' && (
+          <div data-testid="banner-lectura" style={{ background: "rgba(203,213,225,0.1)", border: "1px dashed #cbd5e1",
+            borderRadius: 10, padding: "0.5rem 1rem", marginBottom: 12, color: "#e2e8f0", fontSize: "0.8rem", fontWeight: 700 }}>
+            👁 MODO LECTURA — su rol puede visualizar este módulo pero no ejercer cambios.</div>
+        )}
+        {activeModule === 'dashboard' && (
+          ['gerencia', 'administracion', 'postventa', 'contralor', 'broker'].includes(user.rol)
+            ? <RoleDashboard rol={user.rol} nombre={user.nombre} onNavigate={setActiveModule} />
+            : <DashboardModule valorUF={valorUF} userName={user?.nombre} onNavigate={setActiveModule} />)}
         {activeModule === 'simulador' && <SimuladorModule valorUF={valorUF} loadedSimulation={loadedSimulation} />}
         {activeModule === 'historial' && <HistorialModule valorUF={valorUF} onLoadSimulation={handleLoadSimulation} />}
         {activeModule === 'calculadora' && <CalculadoraModule valorUF={valorUF} />}
@@ -384,9 +437,12 @@ function MainApp() {
         {activeModule === 'estudio' && <EstudioTituloModule />}
         {activeModule === 'escritura' && <EscrituraModule onNavigate={setActiveModule} />}
         {activeModule === 'contraloria' && <ContraloriaModule />}
+        {activeModule === 'contralor' && <ContralorModule />}
+        {activeModule === 'postventa' && <PostventaModule user={user} />}
         {activeModule === 'dashai' && <CerebroDashAIModule />}
         {activeModule === 'auditoria' && <AuditoriaForenseModule />}
         {activeModule === 'despacho' && <DespachoModule />}
+        </>)}
         </Suspense>
       </main>
     </div>

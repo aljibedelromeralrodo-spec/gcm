@@ -85,6 +85,28 @@ PERFIL_PERMITIDOS = {
     "D": ("/api/broker", "/api/fuentes/broker", "/api/mi-correo", "/api/valor-uf", "/api/auth"),
 }
 
+# ── SISTEMA DE ROLES: reglas de escritura por rol (lectura pasa libre) ──
+# contralor: SOLO LECTURA absoluta (lista blanca: su propio módulo espejo)
+# postventa/broker: escriben solo en sus módulos propios (lista blanca)
+# gerencia: módulos de administración en MODO LECTURA (lista negra de escritura)
+# administracion: sin escritura en módulos de gerencia/broker/contralor
+ROL_BLOQUEO_ESCRITURA = {
+    "contralor": {"lista_blanca": True, "permitidos": ("/api/contralor/",),
+                  "mensaje": "Rol Contralor: solo lectura y auditoría absoluta — no puede ejercer cambios"},
+    "postventa": {"lista_blanca": True, "permitidos": ("/api/postventa", "/api/mi-correo"),
+                  "mensaje": "No está autorizado el ingreso a este módulo"},
+    "broker": {"lista_blanca": True, "permitidos": ("/api/broker", "/api/fuentes/broker", "/api/mi-correo"),
+               "mensaje": "No está autorizado el ingreso a este módulo"},
+    "gerencia": {"lista_blanca": False, "permitidos": (),
+                 "bloqueados": ("/api/admin", "/api/criterios", "/api/config/ejecutivos",
+                                "/api/autocorreo", "/api/whatsapp", "/api/contralor/"),
+                 "mensaje": "Su rol accede a este módulo en modo lectura — cambios no autorizados"},
+    "administracion": {"lista_blanca": False, "permitidos": (),
+                       "bloqueados": ("/api/supercarpeta", "/api/gerencia", "/api/gestion",
+                                      "/api/broker", "/api/contralor/", "/api/oportunidades"),
+                       "mensaje": "No está autorizado el ingreso a este módulo"},
+}
+
 
 class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
@@ -111,6 +133,11 @@ class AuthMiddleware(BaseHTTPMiddleware):
             return JSONResponse({"detail": "Sesión expirada — vuelva a ingresar"}, status_code=401)
         except jwt.InvalidTokenError:
             return JSONResponse({"detail": "Token inválido"}, status_code=401)
+        # PRIMER INGRESO OBLIGATORIO: sin acceso al sistema hasta completar la configuración
+        if claims.get("first_login") and not path.startswith("/api/auth"):
+            return JSONResponse({"detail": ("Configuración inicial pendiente: debe cambiar su "
+                                            "contraseña y configurar su correo antes de acceder")},
+                                status_code=428)
         scope = claims.get("scope")
         if path.startswith(INMO_PREFIX):
             if scope not in ("inmobiliaria", "terminal"):
@@ -133,5 +160,20 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 return JSONResponse(
                     {"detail": f"Módulo restringido para su perfil {perfil} (Regla de Oro #22 — DashAI monitorea este acceso)"},
                     status_code=403)
+        # ── SISTEMA DE ROLES (norma fija) ─────────────────────────────────
+        rol = claims.get("rol", "")
+        es_escritura = method in ("POST", "PUT", "PATCH", "DELETE")
+        # MÓDULO CONTROL (Contraloría): solo lectura SIN EXCEPCIÓN, para todos los roles
+        if path.startswith("/api/contraloria") and es_escritura:
+            return JSONResponse({"detail": "El Módulo Control es de solo lectura sin excepción"},
+                                status_code=403)
+        if es_escritura and rol in ROL_BLOQUEO_ESCRITURA and not path.startswith("/api/auth"):
+            regla = ROL_BLOQUEO_ESCRITURA[rol]
+            permitido = any(path.startswith(p) for p in regla["permitidos"])
+            if regla.get("lista_blanca"):
+                if not permitido:
+                    return JSONResponse({"detail": regla["mensaje"]}, status_code=403)
+            elif any(path.startswith(p) for p in regla.get("bloqueados", ())) and not permitido:
+                return JSONResponse({"detail": regla["mensaje"]}, status_code=403)
         request.state.user = claims
         return await call_next(request)

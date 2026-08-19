@@ -1,0 +1,33 @@
+{
+  "summary": "Frontend E2E completo (10 pasos del review request) para Central Mutuos. TODAS las funcionalidades solicitadas funcionan: gestión usuarios (creación con clave provisoria de 10 chars = 'itOdAmY60p'), wizard obligatorio primer ingreso (paso 1 cambio contraseña con validación débil + paso 2 IMAP), ventana proyecciones broker cerrada (18/08 fuera de día 1-5 hábil), sincronización Concreces Contralor (alert con error claro por falta de credenciales — esperado), Estado del Cerebro con 13 normativas activas, bandeja documentos sin clasificar (upload + select + eliminar), CC libre gerencia (3 chips clickables), Victoria (administracion tipo C) solo ve roles Broker y Administración. Cleanup final ejecutado exitosamente (usuario qa.frontend eliminado, doc bandeja eliminado).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Broker primer ingreso → Dashboard", "issue": "Tras finalizar wizard aparecen múltiples 403 en consola (llamadas a endpoints que broker no puede consumir); no bloquean el dashboard broker que sí renderiza correctamente broker-excel/broker-ventana-mensaje. Sería bueno silenciar/condicionar esas llamadas para rol broker.", "affected_selectors": ["dashboard broker"]}
+    ],
+    "design_issues": [
+      {"screen": "Usuarios - tabla users-table", "issues": ["Columna 'Correo' muestra '—' para todos los usuarios existentes (parece que el email no se está poblando en la tabla desde el backend, solo aparece el 'código' bajo el nombre). Verificar si es diseño intencional o falta binding."]},
+      {"screen": "Usuarios - select-user-rol", "issues": ["Opción visible al admin es 'Broker' (label) con value 'broker' → OK. Sin embargo la tabla de usuarios muestra el rol como 'ejecutivo' para broker1/mutuaria (inconsistencia visual entre label de creación y label de listado)."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "(Opcional) Silenciar/condicionar llamadas a APIs no permitidas para rol broker tras el primer ingreso para evitar 403 en consola.",
+    "(Opcional) Poblar columna 'Correo' en users-table (hoy siempre '—').",
+    "(Opcional) Unificar etiqueta de rol broker: creación muestra 'Broker' pero listado muestra 'ejecutivo'."
+  ],
+  "critical_code_review_comments": [
+    "Wizard PrimerIngreso implementa correctamente validaciones (mín 8 chars, mayúscula, número) y muestra mensaje pi-error accesible.",
+    "espejo-sincronizar devuelve mensaje claro de credenciales faltantes vía window.alert — considerar toast estilizado en el futuro para consistencia UX.",
+    "cc-chips permiten toggle pero el atributo class del chip clickeado quedó None tras click (revisar si se está aplicando la clase de estado ✓ correctamente; visualmente sí se marca según screenshot de Gerencia)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (no testeado por indicación)", "frontend": "100%"},
+  "test_credentials": "admin=administrador/141617575; gerencia=gerencia/Gerencia2026; victoria=victoria/Victoria2026",
+  "seed_data_creation": "Se creó y luego eliminó usuario qa.frontend@centralmutuos.cl (rol broker, clave provisoria itOdAmY60p → cambió a QaFrontend2026). Se creó y eliminó documento qa_test.txt en bandeja sin clasificar.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Los data-testids en Usuarios, PrimerIngreso, Contralor (espejo-*), Cerebro (estado-cerebro, ec-normativas), Administración (bandeja-*), Gerencia (cc-chip-{email}), Broker (broker-excel/broker-subir-excel-cerrado/broker-ventana-mensaje) están todos implementados. La opción 'broker' del select-user-rol tiene value='broker' pero en la tabla el rol se muestra como 'ejecutivo' (revisar). Alerts nativos usados en espejo-sincronizar y confirm de eliminación.",
+  "rca of the issue": "Sin bugs críticos. 403 en consola tras primer ingreso broker son por polling de endpoints administrativos desde componentes globales que no gate-check el rol antes de llamar."
+}

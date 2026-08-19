@@ -55,6 +55,11 @@ export default function BrokersModule({ user }) {
     cargar();
   };
 
+  const [ventana, setVentana] = useState(null);
+  useEffect(() => {
+    axios.get(`${API}/api/broker/ventana-proyeccion`).then(r => setVentana(r.data)).catch(() => {});
+  }, []);
+
   const subirArchivo = async (fid, subcarpeta, archivo) => {
     const fd = new FormData();
     fd.append("subcarpeta", subcarpeta);
@@ -107,6 +112,47 @@ export default function BrokersModule({ user }) {
           Usuario D · Sello de origen en cada carpeta (Regla #38) · Solo ve sus propias carpetas
         </span>
         <EstadoSalida />
+      </div>
+      {/* 📊 PROYECCIÓN MENSUAL: formato Excel oficial (ventana días 1 a 5 hábiles) */}
+      <div data-testid="broker-excel" style={{ background: "rgba(30,41,59,0.55)", border: "1px solid rgba(251,191,36,0.4)",
+        borderRadius: 12, padding: "0.9rem 1.1rem", marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+        <b style={{ color: "#fbbf24", fontSize: "0.8rem" }}>📊 Proyección Mensual (Excel oficial · ventana: día 1 al 5° hábil)</b>
+        <button data-testid="broker-descargar-formato" onClick={async () => {
+          try {
+            const r = await axios.get(`${API}/api/broker/formato-excel`, { responseType: "blob" });
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(new Blob([r.data]));
+            a.download = "FORMATO_PROYECCION_SUPERCARPETA.xlsx"; a.click();
+          } catch { window.alert("Error al descargar el formato"); }
+        }} style={{ background: "rgba(251,191,36,0.15)", border: "1px solid rgba(251,191,36,0.5)", color: "#fbbf24",
+          borderRadius: 8, padding: "0.4rem 1rem", fontWeight: 800, cursor: "pointer", fontSize: "0.72rem" }}>
+          ⬇ Descargar formato oficial</button>
+        {ventana && !ventana.abierta ? (
+          <button data-testid="broker-subir-excel-cerrado" disabled
+            style={{ background: "rgba(148,163,184,0.12)", border: "1px solid rgba(148,163,184,0.4)", color: "#64748b",
+              borderRadius: 8, padding: "0.4rem 1rem", fontWeight: 800, cursor: "not-allowed", fontSize: "0.72rem" }}>
+            🔒 Subir Excel (ventana cerrada)</button>
+        ) : (
+          <label style={{ background: "rgba(74,222,128,0.12)", border: "1px solid rgba(74,222,128,0.5)", color: "#4ade80",
+            borderRadius: 8, padding: "0.4rem 1rem", fontWeight: 800, cursor: "pointer", fontSize: "0.72rem" }}>
+            ⬆ Subir Excel completado
+            <input data-testid="broker-subir-excel" type="file" accept=".xlsx" style={{ display: "none" }}
+              onChange={async (e) => {
+                const f = e.target.files?.[0]; if (!f) return;
+                const fd = new FormData(); fd.append("archivo", f);
+                try {
+                  const r = await axios.post(`${API}/api/broker/cargar-excel`, fd);
+                  const errs = (r.data.errores || []).length ? `\n⚠️ ${r.data.errores.join("\n")}` : "";
+                  window.alert(`✅ Supercarpeta alimentada sin ingreso manual: ${r.data.creados} carpeta(s) nueva(s), ${r.data.actualizados} actualizada(s)${errs}`);
+                } catch (er) { window.alert(er.response?.data?.detail || "Error al cargar el Excel"); }
+                e.target.value = "";
+              }} />
+          </label>
+        )}
+        {ventana && !ventana.abierta && (
+          <span data-testid="broker-ventana-mensaje" style={{ flexBasis: "100%", color: "#f87171",
+            fontSize: "0.7rem", fontWeight: 700 }}>{ventana.mensaje}</span>
+        )}
       </div>
       {msg && <div data-testid="broker-msg" style={{ marginTop: 10, color: msg.startsWith("✅") ? "#22c55e" : "#ef4444", fontSize: "0.74rem", fontWeight: 700 }}>{msg}</div>}
 

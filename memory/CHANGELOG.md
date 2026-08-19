@@ -1342,3 +1342,36 @@ Constitución VERSION 19 (nuevas reglas #55, #56, #57).
 - 2026-08-18: DISEÑO CORREOS — _marca_wrap ahora fondo blanco + Arial + encabezado gris (#f0f0f0/#444); eliminado "Con Creces/CON CRECES" de todos los correos (server 8195/8492/10906 + wrapper); _firma_html y resumen gerencia en Arial. Firma solo "Central Mutuos".
 - 2026-08-18: CEREBRO DASHAI — 7 normativas registradas como eventos 📜 NORMATIVA en la Bitácora de Aprendizaje Perpetuo (db.dashai_eventos, motivo=normativa, inamovible) + config dashai_normativas_fijas + RECALIBRAR manual ejecutado (nivel 98%). Badge NORMATIVA agregado en CerebroDashAIModule. Normativa completa en /app/memory/normativa_correos.md.
 - 2026-08-18: FIX login curl: el endpoint /api/auth/login usa campo "rut" (no "username").
+- 2026-08-18 (SESIÓN ROLES): SISTEMA 6 ROLES + dashboards propios (RoleDashboards.js), menú universal, gate "No está autorizado el ingreso a este módulo", Módulo Control (contraloria) solo lectura SIN excepción (middleware auth.py ROL_BLOQUEO_ESCRITURA). Usuarios seed: gerencia/administracion/postventa/contralor/broker (ver test_credentials.md).
+- 2026-08-18: PANEL ADMIN — Configuración de Ejecutivos (Daniela/Victoria/Javier, IMAP vacíos, claves Fernet CRED_CIPHER_KEY, GET/POST /api/config/ejecutivos) + Conexión Concreces (/api/config/concreces, sin conexión activa).
+- 2026-08-18: ALGORITMO ESPEJO HÍBRIDO (espejo_postventa.py): Capa A IMAP escaneo+loop 30min (solo con credenciales+activo), Capa B criterios manuales admin, conflictos pendiente_confirmacion (jamás sobreescribe manual), bitácora, calibración 0%.
+- 2026-08-18: POSTVENTA REFORZADO (/api/postventa): etapas firma→escritura→pagaré→doc_posterior, plazos config admin, alertas atraso, comunicación auto al cliente, aprendizaje progresivo (postventa_aprendizaje). UI PostventaModule.js.
+- 2026-08-18: MÓDULO BROKER: aislamiento total (admin en modo broker ve solo los suyos), ventana carga día 1-5 hábil (423 fuera de ventana), formato Excel oficial (/api/broker/formato-excel) y carga (/api/broker/cargar-excel) que alimenta Supercarpeta (upsert folders + estados anidados fix).
+- 2026-08-18: CENTRO INTELIGENCIA COMERCIAL Gerencia (/api/gerencia-panel/rol e /inteligencia + /accion): panel por cliente (docs+fechas+preview PDF), botones acción con correo async sin CC, stats broker/subsidios/real-vs-proyectado, navegación por broker, equipo Victoria/Daniela + comparativa semanal.
+- 2026-08-18: FIX visual global: select option fondo azul #14263f (letras visibles) en App.css.
+- 2026-08-18: 6 normativas nuevas registradas en Cerebro DashAI (inamovible=True) + recalibración 98%. NOTA: probado por curl+screenshots; testing_agent de flujos frontend por rol queda pendiente.
+
+## 2026-08-19 — Bloques 1-7: Gestión de usuarios, primer ingreso, RUT único, bandeja docs, sync Concreces, blindaje normativas
+- **Gestión de Usuarios completa** (`/api/admin/users`): creación con clave provisoria aleatoria de 10 caracteres,
+  correo HTML responsivo institucional (Bloque 6), lista con nombre/rol/correo/estado/creación/último acceso,
+  desactivar/reactivar/eliminar y reseteo forzado de clave (`/reset-clave`). Victoria solo crea tipo C (broker/administración);
+  Daniela NO gestiona usuarios; Admin crea cualquier rol.
+- **Primer inicio de sesión obligatorio** (`first_login=true`): middleware bloquea todo con HTTP 428 salvo /api/auth.
+  Wizard 2 pasos (`PrimerIngreso.js`): cambio de contraseña (mín 8, mayúscula, número) + configuración IMAP cifrada.
+- **Regla RUT único**: rechazo 409 "Este RUT ya está registrado en el sistema por otro ejecutivo." en
+  /api/broker/carpetas, /api/clientes/folders y carga Excel broker (RUT normalizado).
+- **Bandeja Documentos sin clasificar** (`/api/admin/docs-sin-clasificar`): upload, asignación manual a operación
+  (mueve a 99_otros), eliminación. Visible para Daniela, Victoria y Admin (AdministracionModule).
+- **CC libre Gerencia**: `/api/gerencia-panel/accion` acepta lista cc; chips selector en RoleDashboards
+  (`/api/gerencia-panel/cc-opciones`). La norma "CC solo entrantes" sigue para ejecutivos automáticos, NO para Rodrigo.
+- **Sincronización Concreces (Algoritmo Espejo núcleo)**: `/api/contralor/espejo/sincronizar` (botón "Sincronizar ahora"),
+  `/operaciones` (tabla solo lectura con timestamp), `/no-clasificados` (solo Admin+Contralor). Credenciales por secrets
+  CONCRECES_IMAP_HOST/USER/PASSWORD (vacías, pendientes del usuario) con fallback al panel. Loop automático cada 30 min.
+- **Ventana proyecciones broker**: GET `/api/broker/ventana-proyeccion`; botón deshabilitado + mensaje oficial fuera del día 1-5 hábil.
+- **Bloque 6**: helper `_email_institucional` (HTML responsivo, saludo formal, cierre DD/MM/AAAA, pie confidencialidad fijo).
+- **Bloque 7 — Blindaje normativas**: CRUD solo Admin (403 con mensaje oficial para otros roles), log de auditoría
+  INMUTABLE (db.normativas_auditoria, sin endpoint de borrado), caché máx 5 min (`normativas_activas`), panel
+  "Estado del Cerebro" en Cerebro DashAI (`/api/dashai/estado-cerebro`), reconfirmación de contraseña
+  (`confirmacion_clave`) para config avanzada (ejecutivos IMAP, Concreces, espejo contralor).
+- Login ahora acepta código O email y registra `ultimo_acceso`. Usuarios seed: victoria/Victoria2026, daniela/Daniela2026.
+- Testing: backend 100% vía curl (10 flujos), frontend 100% testing agent (iteration_38.json).

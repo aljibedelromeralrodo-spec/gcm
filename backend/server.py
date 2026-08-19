@@ -97,6 +97,33 @@ async def ensure_seed():
     # RESTABLECIMIENTO DE AUTORIDAD: mando único de Gerardo Barrera. René Osa fue eliminado
     # en su momento; el borrado destructivo se retiró del arranque (bloqueaba el deploy).
     await db.users.update_many({"rol": "maestro"}, {"$set": {"rol": "admin"}})
+    # ── SISTEMA DE ROLES (6 roles): siembra idempotente — solo si no existen ──
+    for codigo, nombre, rol, clave, perfil in [
+        ("gerencia", "Gerencia Comercial", "gerencia", "Gerencia2026", ""),
+        ("administracion", "Administración", "administracion", "Administracion2026", ""),
+        ("postventa", "Postventa", "postventa", "Postventa2026", ""),
+        ("contralor", "Contralor", "contralor", "Contralor2026", ""),
+        ("broker", "Broker Demo", "broker", "Broker2026", "D"),
+        ("victoria", "Victoria Vilchez", "administracion", "Victoria2026", ""),
+        ("daniela", "Daniela Galindo", "administracion", "Daniela2026", ""),
+    ]:
+        if not await db.users.find_one({"codigo": codigo}):
+            await db.users.insert_one({
+                "codigo": codigo, "nombre": nombre, "rol": rol, "perfil": perfil,
+                "clave_hash": bcrypt.hashpw(clave.encode(), bcrypt.gensalt()).decode(),
+                "activo": True, "created": now_iso()})
+    # ── CONFIGURACIÓN DE EJECUTIVOS (IMAP): 3 registros vacíos, listos para completar.
+    #    El sistema NO se conecta a ningún correo hasta que se guarden credenciales. ──
+    for eid, nombre in [("daniela_galindo", "Daniela Galindo"),
+                        ("victoria_vilchez", "Victoria Vilchez"),
+                        ("javier_urrutia", "Javier Urrutia")]:
+        await db.ejecutivos_correo.update_one({"eid": eid}, {"$setOnInsert": {
+            "eid": eid, "nombre": nombre, "email": "", "servidor": "imap.gmail.com",
+            "clave_enc": "", "activo": False, "actualizado": "", "creado": now_iso()}}, upsert=True)
+    # ── ALGORITMO ESPEJO (Contralor): esqueleto desconectado, calibración 0% ──
+    await db.config.update_one({"_key": "espejo_contralor"}, {"$setOnInsert": {
+        "email": "", "servidor": "imap.gmail.com", "clave_enc": "", "activo": False,
+        "estado": "desconectado", "calibracion_pct": 0, "creado": now_iso()}}, upsert=True)
     # CONSTITUCIÓN MAESTRA: 15 Reglas de Oro (fuente de verdad inmutable)
     try:
         import constitucion as _const
@@ -112,6 +139,106 @@ async def ensure_seed():
         await db.config.insert_one({"_key": "criterios", **DEFAULT_CRITERIOS})
     if await db.config.count_documents({"_key": "uf"}) == 0:
         await db.config.insert_one({"_key": "uf", "valor_uf": DEFAULT_UF})
+
+
+# ═══ SISTEMA DE ROLES · CONFIGURACIÓN DE EJECUTIVOS · ALGORITMO ESPEJO ═══
+def _cred_cifrar(texto):
+    """Credenciales IMAP SIEMPRE cifradas (Fernet) — jamás en texto plano en la DB."""
+    from cryptography.fernet import Fernet
+    return Fernet(os.environ["CRED_CIPHER_KEY"].encode()).encrypt(texto.encode()).decode()
+
+
+def _rol_de(request):
+    return (getattr(request.state, "user", {}) or {}).get("rol", "")
+
+
+def _exigir_roles(request, roles):
+    if _rol_de(request) not in roles:
+        raise HTTPException(status_code=403, detail="No está autorizado el ingreso a este módulo")
+
+
+def _estado_ejecutivo(e):
+    if not e.get("email") or not e.get("clave_enc"):
+        return "Sin credenciales"
+    return "Activo" if e.get("activo") else "Inactivo"
+
+
+@api.get("/config/ejecutivos")
+async def config_ejecutivos_list(request: Request):
+    """Panel del Administrador: estado de conexión visible, claves JAMÁS expuestas."""
+    _exigir_roles(request, ("admin", "maestro", "gerencia", "contralor"))
+    out = []
+    async for e in db.ejecutivos_correo.find({}).sort("nombre", 1):
+        out.append({"eid": e["eid"], "nombre": e["nombre"], "email": e.get("email") or "",
+                    "servidor": e.get("servidor") or "imap.gmail.com",
+                    "activo": bool(e.get("activo")), "tiene_clave": bool(e.get("clave_enc")),
+                    "estado": _estado_ejecutivo(e), "actualizado": e.get("actualizado") or ""})
+    return {"ejecutivos": out, "total": len(out),
+            "nota": "El sistema NO se conecta a ningún correo hasta que el ejecutivo guarde sus credenciales"}
+
+
+@api.post("/config/ejecutivos/{eid}")
+async def config_ejecutivos_save(eid: str, payload: dict, request: Request):
+    _exigir_roles(request, ("admin", "maestro"))
+    await _reconfirmar_identidad(request, payload)
+    e = await db.ejecutivos_correo.find_one({"eid": eid})
+    if not e:
+        raise HTTPException(status_code=404, detail="Ejecutivo no registrado")
+    cambios = {"actualizado": now_iso()}
+    if "email" in payload:
+        email = (payload.get("email") or "").strip()
+        if email and "@" not in email:
+            raise HTTPException(status_code=400, detail="Correo inválido")
+        cambios["email"] = email
+    if payload.get("clave"):
+        cambios["clave_enc"] = _cred_cifrar(str(payload["clave"]).strip())
+    if "servidor" in payload:
+        cambios["servidor"] = (payload.get("servidor") or "imap.gmail.com").strip() or "imap.gmail.com"
+    if "activo" in payload:
+        cambios["activo"] = bool(payload["activo"])
+    await db.ejecutivos_correo.update_one({"eid": eid}, {"$set": cambios})
+    e = await db.ejecutivos_correo.find_one({"eid": eid})
+    # IMPORTANTE: aquí NO se intenta ninguna conexión IMAP — solo se guarda la configuración
+    return {"ok": True, "eid": eid, "estado": _estado_ejecutivo(e),
+            "activo": bool(e.get("activo")), "tiene_clave": bool(e.get("clave_enc"))}
+
+
+@api.get("/contralor/espejo")
+async def contralor_espejo_get(request: Request):
+    """ALGORITMO ESPEJO (esqueleto): buzón IMAP de lectura + bitácora de calibración."""
+    _exigir_roles(request, ("admin", "maestro", "contralor", "administracion", "postventa"))
+    cfg = await db.config.find_one({"_key": "espejo_contralor"}, {"_id": 0, "clave_enc": 0}) or {}
+    bitacora = await db.espejo_bitacora.find({}, {"_id": 0}).sort("fecha", -1).to_list(50)
+    return {"email": cfg.get("email") or "", "servidor": cfg.get("servidor") or "imap.gmail.com",
+            "activo": bool(cfg.get("activo")), "estado": cfg.get("estado") or "desconectado",
+            "tiene_clave": bool(await db.config.find_one({"_key": "espejo_contralor", "clave_enc": {"$ne": ""}})),
+            "calibracion_pct": cfg.get("calibracion_pct") or 0,
+            "bitacora": bitacora, "total_bitacora": len(bitacora)}
+
+
+@api.post("/contralor/espejo")
+async def contralor_espejo_save(payload: dict, request: Request):
+    _exigir_roles(request, ("admin", "maestro", "contralor"))
+    await _reconfirmar_identidad(request, payload)
+    cambios = {"actualizado": now_iso()}
+    if "email" in payload:
+        email = (payload.get("email") or "").strip()
+        if email and "@" not in email:
+            raise HTTPException(status_code=400, detail="Correo inválido")
+        cambios["email"] = email
+    if payload.get("clave"):
+        cambios["clave_enc"] = _cred_cifrar(str(payload["clave"]).strip())
+    if "servidor" in payload:
+        cambios["servidor"] = (payload.get("servidor") or "imap.gmail.com").strip() or "imap.gmail.com"
+    if "activo" in payload:
+        cambios["activo"] = bool(payload["activo"])
+    # El estado queda DESCONECTADO: el algoritmo aún no se construye, solo el esqueleto
+    cambios["estado"] = "desconectado"
+    await db.config.update_one({"_key": "espejo_contralor"}, {"$set": cambios}, upsert=True)
+    cfg = await db.config.find_one({"_key": "espejo_contralor"}) or {}
+    return {"ok": True, "estado": "desconectado", "activo": bool(cfg.get("activo")),
+            "tiene_clave": bool(cfg.get("clave_enc")),
+            "nota": "Configuración guardada cifrada. La conexión se activará cuando el algoritmo esté construido."}
 
 
 async def get_config(key, default):
@@ -269,6 +396,117 @@ async def _seed_normativas_fijas():
     return sembrados
 
 
+# ═══ BLOQUE 7 — BLINDAJE DE NORMATIVAS (fuente de verdad del negocio) ═══
+NORMATIVAS_MSG_403 = "No tienes permisos para modificar las normativas del sistema. Contacta al administrador."
+_normas_cache = {"t": None, "datos": []}
+
+
+async def normativas_activas(force=False):
+    """Normativas activas con caché máximo de 5 minutos (regla de inmutabilidad)."""
+    ahora = datetime.now(timezone.utc)
+    if not force and _normas_cache["t"] and (ahora - _normas_cache["t"]).total_seconds() < 300:
+        return _normas_cache["datos"]
+    docs = await db.dashai_eventos.find({"motivo": "normativa"}, {"_id": 0}).sort("norma_clave", 1).to_list(200)
+    _normas_cache.update({"t": ahora, "datos": docs})
+    return docs
+
+
+def _solo_admin_normativas(request):
+    if _rol_de(request) not in ("admin", "maestro"):
+        raise HTTPException(status_code=403, detail=NORMATIVAS_MSG_403)
+    return getattr(request.state, "user", {}) or {}
+
+
+async def _auditar_normativa(admin, clave, anterior, nuevo, accion):
+    """Log de auditoría INMUTABLE: sin endpoint de borrado, ni para el Admin."""
+    await db.normativas_auditoria.insert_one({
+        "id": str(uuid.uuid4()), "fecha": now_iso(),
+        "administrador": admin.get("nombre") or admin.get("sub") or "",
+        "accion": accion, "normativa": clave,
+        "valor_anterior": anterior or "", "valor_nuevo": nuevo or "", "inmutable": True})
+
+
+@api.get("/dashai/normativas")
+async def normativas_list(request: Request):
+    docs = await normativas_activas(force=True)
+    return {"normativas": [{"clave": d.get("norma_clave"), "patron": d.get("patron"),
+                            "fecha": d.get("fecha"), "inamovible": bool(d.get("inamovible"))}
+                           for d in docs], "total": len(docs)}
+
+
+@api.post("/dashai/normativas")
+async def normativas_upsert(payload: dict, request: Request):
+    admin = _solo_admin_normativas(request)
+    clave = (payload.get("clave") or "").strip().upper()
+    patron = (payload.get("patron") or "").strip()
+    if not clave or not patron:
+        raise HTTPException(status_code=400, detail="Indique la clave y el texto completo de la normativa")
+    prev = await db.dashai_eventos.find_one({"motivo": "normativa", "norma_clave": clave})
+    if prev:
+        await db.dashai_eventos.update_one({"id": prev["id"]}, {"$set": {"patron": patron, "fecha": now_iso()}})
+    else:
+        await db.dashai_eventos.insert_one({
+            "id": str(uuid.uuid4()), "motivo": "normativa", "norma_clave": clave,
+            "fecha": now_iso(), "patron": patron, "inamovible": True})
+    await _auditar_normativa(admin, clave, (prev or {}).get("patron"), patron,
+                             "modificacion" if prev else "creacion")
+    await normativas_activas(force=True)
+    return {"ok": True, "clave": clave, "accion": "modificada" if prev else "creada"}
+
+
+@api.delete("/dashai/normativas/{clave}")
+async def normativas_delete(clave: str, request: Request):
+    admin = _solo_admin_normativas(request)
+    prev = await db.dashai_eventos.find_one({"motivo": "normativa", "norma_clave": clave.upper()})
+    if not prev:
+        raise HTTPException(status_code=404, detail="La normativa indicada no existe")
+    await db.dashai_eventos.delete_one({"id": prev["id"]})
+    await _auditar_normativa(admin, clave.upper(), prev.get("patron"), "", "eliminacion")
+    await normativas_activas(force=True)
+    return {"ok": True, "clave": clave.upper()}
+
+
+@api.get("/dashai/normativas/auditoria")
+async def normativas_auditoria_list(request: Request):
+    _solo_admin_normativas(request)
+    regs = await db.normativas_auditoria.find({}, {"_id": 0}).sort("fecha", -1).to_list(200)
+    return {"auditoria": regs, "total": len(regs),
+            "nota": "Registro inmutable: no puede ser eliminado por ningún usuario, incluido el Administrador"}
+
+
+@api.get("/dashai/estado-cerebro")
+async def estado_cerebro(request: Request):
+    """Panel 'Estado del Cerebro' del Administrador (Bloque 7)."""
+    _exigir_roles(request, ("admin", "maestro"))
+    normas = await normativas_activas(force=True)
+    ult_aud = await db.normativas_auditoria.find_one({}, sort=[("fecha", -1)])
+    perp = await db.config.find_one({"_key": "dashai_perpetuo"}) or {}
+    return {"normativas_activas": len(normas),
+            "ultima_modificacion": (ult_aud or {}).get("fecha") or "",
+            "modificada_por": (ult_aud or {}).get("administrador") or "",
+            "ultima_validacion": perp.get("ultima_sync") or "",
+            "resultado_validacion": (f"Calibración {perp.get('nivel_calibracion') or 0}% · "
+                                     f"{perp.get('folders_sync') or 0} operaciones validadas"
+                                     if perp.get("ultima_sync") else "Sin validaciones registradas")}
+
+
+async def _reconfirmar_identidad(request, payload):
+    """Configuración avanzada: exige el reingreso de la contraseña del usuario actual."""
+    clave = ((payload or {}).get("confirmacion_clave") or "").strip()
+    sub = (getattr(request.state, "user", {}) or {}).get("sub") or ""
+    user = await db.users.find_one({"codigo": sub})
+    ok = False
+    if user and clave:
+        if user.get("clave_hash"):
+            ok = bcrypt.checkpw(clave.encode(), user["clave_hash"].encode())
+        else:
+            ok = user.get("password") == clave
+    if not ok:
+        raise HTTPException(status_code=403, detail=(
+            "Confirmación de identidad requerida: reingrese su contraseña para "
+            "modificar la configuración avanzada."))
+
+
 @app.on_event("startup")
 async def startup():
     await ensure_seed()
@@ -333,6 +571,8 @@ async def startup():
     asyncio.create_task(_task_blindada(_malla.reenvio_co_rs_loop, "reenvio_co_rs"))
     asyncio.create_task(_task_blindada(_malla.resumen_gerencia_loop, "resumen_gerencia"))
     asyncio.create_task(_task_blindada(_malla.resumen_hilo_loop, "resumen_hilo_ia"))
+    import espejo_postventa as _esp
+    asyncio.create_task(_task_blindada(_esp.espejo_loop, "espejo_capa_a"))
     import gestion_ejecutivos as _gest
     asyncio.create_task(_task_blindada(_gest.gestion_harvest_loop, "gestion_ejecutivos"))
     asyncio.create_task(_task_blindada(_malla.buzon_aprendizaje_loop, "buzon_aprendizaje"))
@@ -369,14 +609,16 @@ async def startup():
 def _token_usuario(user):
     rol = user.get("rol", "ejecutivo")
     perfil = user.get("perfil", "")
+    extra = {"nombre": user.get("nombre", user["codigo"]), "perfil": perfil}
+    if user.get("first_login"):
+        extra["first_login"] = True
     return {
-        "token": _auth.create_token(user["codigo"], rol=rol, scope="terminal",
-                                    extra={"nombre": user.get("nombre", user["codigo"]),
-                                           "perfil": perfil}),
+        "token": _auth.create_token(user["codigo"], rol=rol, scope="terminal", extra=extra),
         "codigo": user["codigo"],
         "nombre": user.get("nombre", user["codigo"]),
         "rol": rol,
         "perfil": perfil,
+        "first_login": bool(user.get("first_login")),
     }
 
 
@@ -385,8 +627,9 @@ async def auth_login(payload: dict):
     codigo = (payload.get("rut") or payload.get("codigo") or "").strip()
     password = (payload.get("password") or "").strip()
     # Busqueda tolerante a mayusculas/minusculas y espacios en el codigo
-    user = await db.users.find_one({
-        "codigo": {"$regex": f"^{re.escape(codigo)}$", "$options": "i"}})
+    user = await db.users.find_one({"$or": [
+        {"codigo": {"$regex": f"^{re.escape(codigo)}$", "$options": "i"}},
+        {"email": {"$regex": f"^{re.escape(codigo)}$", "$options": "i"}}]})
     if not user:
         raise HTTPException(status_code=401, detail="Credenciales invalidas")
     if user.get("activo") is False:
@@ -400,6 +643,7 @@ async def auth_login(payload: dict):
                 "nombre": user.get("nombre", codigo)}
     elif user.get("password") != password or not password:
         raise HTTPException(status_code=401, detail="Credenciales invalidas")
+    await db.users.update_one({"codigo": user["codigo"]}, {"$set": {"ultimo_acceso": now_iso()}})
     return _token_usuario(user)
 
 
@@ -423,6 +667,67 @@ async def auth_crear_clave(payload: dict):
         "fecha": now_iso(), "leida": False})
     user["clave_hash"] = h
     return _token_usuario(user)
+
+
+# ── PRIMER INICIO DE SESIÓN OBLIGATORIO: cambio de clave + configuración IMAP ──
+def _validar_clave_nueva(clave):
+    if len(clave) < 8 or not re.search(r"[A-Z]", clave) or not re.search(r"\d", clave):
+        raise HTTPException(status_code=400, detail=(
+            "La nueva contraseña debe tener mínimo 8 caracteres, al menos una mayúscula y un número"))
+
+
+async def _usuario_primer_ingreso(request):
+    sub = (getattr(request.state, "user", {}) or {}).get("sub") or ""
+    user = await db.users.find_one({"codigo": sub})
+    if not user or not user.get("first_login"):
+        raise HTTPException(status_code=403, detail="Este usuario no tiene configuración inicial pendiente")
+    return user
+
+
+@api.post("/auth/primer-ingreso/clave")
+async def primer_ingreso_clave(payload: dict, request: Request):
+    """Paso 1: cambio obligatorio de la contraseña provisoria."""
+    user = await _usuario_primer_ingreso(request)
+    actual = (payload.get("clave_actual") or "").strip()
+    nueva = (payload.get("clave_nueva") or "").strip()
+    conf = (payload.get("confirmacion") or "").strip()
+    if not user.get("clave_hash") or not actual or \
+            not bcrypt.checkpw(actual.encode(), user["clave_hash"].encode()):
+        raise HTTPException(status_code=400, detail="La contraseña provisoria no es correcta")
+    if nueva != conf:
+        raise HTTPException(status_code=400, detail="La nueva contraseña y su confirmación no coinciden")
+    _validar_clave_nueva(nueva)
+    if nueva == actual:
+        raise HTTPException(status_code=400, detail="La nueva contraseña debe ser distinta a la provisoria")
+    await db.users.update_one({"codigo": user["codigo"]}, {"$set": {
+        "clave_hash": bcrypt.hashpw(nueva.encode(), bcrypt.gensalt()).decode(),
+        "primer_paso_clave": True}})
+    return {"ok": True, "paso": 1, "siguiente": "Configuración de cuenta de correo IMAP"}
+
+
+@api.post("/auth/primer-ingreso/imap")
+async def primer_ingreso_imap(payload: dict, request: Request):
+    """Paso 2: configuración obligatoria de la cuenta IMAP. Al completar → first_login=false."""
+    user = await _usuario_primer_ingreso(request)
+    if not user.get("primer_paso_clave"):
+        raise HTTPException(status_code=400, detail="Primero debe completar el cambio de contraseña (Paso 1)")
+    servidor = (payload.get("servidor") or "").strip()
+    email_c = (payload.get("email") or "").strip().lower()
+    clave = (payload.get("clave") or "").strip()
+    try:
+        puerto = int(payload.get("puerto") or 0)
+    except (TypeError, ValueError):
+        puerto = 0
+    if not servidor or not email_c or not clave or not (1 <= puerto <= 65535):
+        raise HTTPException(status_code=400, detail="Complete servidor IMAP, puerto, correo y contraseña de correo")
+    if "@" not in email_c:
+        raise HTTPException(status_code=400, detail="Correo electrónico inválido")
+    await db.users.update_one({"codigo": user["codigo"]}, {"$set": {
+        "imap_config": {"servidor": servidor, "puerto": puerto, "email": email_c,
+                        "clave_enc": _cred_cifrar(clave), "guardado": now_iso()},
+        "first_login": False}, "$unset": {"primer_paso_clave": ""}})
+    fresh = await db.users.find_one({"codigo": user["codigo"]})
+    return {"ok": True, "paso": 2, **_token_usuario(fresh)}
 
 
 @api.post("/inmobiliaria/auth/login")
@@ -1366,25 +1671,139 @@ async def reporte_correos_manual(payload: dict = None):
 # ---------------------------------------------------------------------------
 # Admin: users, alertas, learning
 # ---------------------------------------------------------------------------
+ROLES_SISTEMA = ("admin", "gerencia", "administracion", "postventa", "broker", "contralor")
+ROLES_TIPO_C = ("broker", "administracion")
+
+
+def _gestor_usuarios(request):
+    """Admin crea cualquier rol; Victoria Vilchez SOLO usuarios tipo C (brokers y administrativos)."""
+    claims = getattr(request.state, "user", {}) or {}
+    rol = claims.get("rol", "")
+    ident = f"{claims.get('sub') or ''} {claims.get('nombre') or ''}".lower()
+    if rol in ("admin", "maestro"):
+        return claims, "todos"
+    if rol == "administracion" and ("victoria" in ident or "vilche" in ident):
+        return claims, "tipo_c"
+    raise HTTPException(status_code=403, detail="No está autorizado para gestionar usuarios")
+
+
+def _clave_provisoria():
+    import secrets as _sec
+    import string as _str
+    while True:
+        c = "".join(_sec.choice(_str.ascii_letters + _str.digits) for _ in range(10))
+        if any(x.isdigit() for x in c) and any(x.isalpha() for x in c):
+            return c
+
+
+def _email_institucional(nombre, cuerpo_html, firmante="Sistema de Gestión Central Mutuos"):
+    """BLOQUE 6: correo HTML responsivo institucional — encabezado sobrio, saludo formal,
+    cierre con fecha DD/MM/AAAA y pie de confidencialidad fijo."""
+    hoy = datetime.now(timezone.utc).strftime("%d/%m/%Y")
+    return f"""<!DOCTYPE html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background:#f4f4f4">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f4;padding:16px 0">
+<tr><td align="center">
+<table role="presentation" width="600" cellpadding="0" cellspacing="0"
+  style="max-width:600px;width:100%;background:#ffffff;border-radius:8px;overflow:hidden;font-family:Arial,Helvetica,sans-serif">
+<tr><td style="background:#1a1f2e;padding:22px 28px;text-align:center">
+  <span style="color:#d4af37;font-size:22px;font-weight:bold;letter-spacing:2px">CENTRAL MUTUOS</span></td></tr>
+<tr><td style="padding:26px 28px;color:#1f2937;font-size:14px;line-height:1.65;text-align:justify">
+  <p style="margin:0 0 14px">Estimado/a <b>{nombre}</b>,</p>
+  {cuerpo_html}
+  <p style="margin:20px 0 0">Atentamente,<br><b>{firmante}</b> | Central Mutuos | {hoy}</p></td></tr>
+<tr><td style="background:#f0f0f0;padding:14px 28px;color:#6b7280;font-size:11px;line-height:1.5;text-align:justify">
+  Este correo es confidencial y está dirigido exclusivamente a su destinatario. Si lo recibió por error,
+  por favor notifíquelo al remitente y elimínelo de inmediato. Central Mutuos opera bajo las normativas
+  vigentes del mercado hipotecario chileno.</td></tr>
+</table></td></tr></table></body></html>"""
+
+
+def _enviar_credenciales(email_destino, clave, nombre=""):
+    import email_service as mail
+    cuerpo = (
+        f"<p style='margin:0 0 14px'>Le damos la bienvenida a la plataforma de Gestión Central Mutuos. "
+        f"A continuación encontrará sus credenciales de acceso:</p>"
+        f"<table role='presentation' width='100%' cellpadding='0' cellspacing='0' "
+        f"style='background:#f8f6ef;border:1px solid #d4af37;border-radius:6px;margin:0 0 14px'>"
+        f"<tr><td style='padding:14px 18px;font-size:14px;color:#1f2937'>"
+        f"Nombre de usuario: <b>{email_destino}</b><br>"
+        f"Contraseña temporal: <b style='font-family:monospace'>{clave}</b></td></tr></table>"
+        f"<p style='margin:0'>Por seguridad, deberá cambiar esta contraseña y configurar su cuenta de correo "
+        f"en el primer inicio de sesión.</p>")
+    mail.send_mail(email_destino, "Bienvenido/a a Gestión Central Mutuos - Credenciales de acceso",
+                   _email_institucional(nombre or email_destino, cuerpo), [], "secundaria")
+
+
 @api.get("/admin/users")
-async def list_users():
-    docs = await db.users.find().to_list(200)
-    return {"users": [{"codigo": d["codigo"], "nombre": d.get("nombre"),
-                       "rol": d.get("rol"), "created": d.get("created")} for d in docs]}
+async def list_users(request: Request):
+    _gestor_usuarios(request)
+    docs = await db.users.find().to_list(300)
+    return {"users": [{"codigo": d["codigo"], "nombre": d.get("nombre"), "rol": d.get("rol"),
+                       "email": d.get("email") or "", "perfil": d.get("perfil") or "",
+                       "activo": d.get("activo") is not False, "created": d.get("created"),
+                       "ultimo_acceso": d.get("ultimo_acceso") or "",
+                       "first_login": bool(d.get("first_login"))} for d in docs]}
 
 
 @api.post("/admin/users")
-async def create_user(payload: dict):
-    codigo = (payload.get("codigo") or "").strip()
-    if not codigo or not payload.get("nombre") or not payload.get("password"):
-        raise HTTPException(status_code=400, detail="Todos los campos son obligatorios")
-    if await db.users.find_one({"codigo": codigo}):
-        raise HTTPException(status_code=400, detail="El codigo ya existe")
-    doc = {"codigo": codigo, "nombre": payload["nombre"], "password": payload["password"],
-           "rol": payload.get("rol", "ejecutivo"), "perfil": payload.get("perfil", ""),
-           "activo": True, "created": now_iso()}
-    await db.users.insert_one(dict(doc))
-    return {"ok": True, "codigo": codigo, "perfil": payload.get("perfil", "")}
+async def create_user(payload: dict, request: Request):
+    claims, alcance = _gestor_usuarios(request)
+    nombre = (payload.get("nombre") or "").strip()
+    email = (payload.get("email") or "").strip().lower()
+    rol = (payload.get("rol") or "").strip()
+    codigo = (payload.get("codigo") or "").strip() or email
+    if not nombre or not email or not rol:
+        raise HTTPException(status_code=400, detail="Nombre, correo y rol son obligatorios")
+    if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
+        raise HTTPException(status_code=400, detail="Correo electrónico inválido")
+    if rol not in ROLES_SISTEMA:
+        raise HTTPException(status_code=400, detail="Rol inválido")
+    if alcance == "tipo_c" and rol not in ROLES_TIPO_C:
+        raise HTTPException(status_code=403, detail=(
+            "Solo puede crear usuarios tipo C: brokers y personal administrativo"))
+    if await db.users.find_one({"$or": [{"codigo": codigo}, {"email": email}]}):
+        raise HTTPException(status_code=400, detail="El código o correo ya existe")
+    clave = _clave_provisoria()
+    perfil = payload.get("perfil") or ("D" if rol == "broker" else "")
+    await db.users.insert_one({
+        "codigo": codigo, "nombre": nombre, "email": email, "rol": rol, "perfil": perfil,
+        "clave_hash": bcrypt.hashpw(clave.encode(), bcrypt.gensalt()).decode(),
+        "first_login": True, "activo": True, "created": now_iso(),
+        "creado_por": claims.get("sub") or ""})
+    enviado, err_mail = True, ""
+    try:
+        await asyncio.to_thread(_enviar_credenciales, email, clave, nombre)
+    except Exception as e:
+        enviado, err_mail = False, str(e)[:150]
+    return {"ok": True, "codigo": codigo, "clave_provisoria": clave, "email_enviado": enviado,
+            "nota": ("Credenciales enviadas por correo al nuevo usuario" if enviado
+                     else f"No se pudo enviar el correo ({err_mail}) — entregue la clave provisoria manualmente")}
+
+
+@api.post("/admin/users/{codigo}/reset-clave")
+async def user_forzar_reset(codigo: str, request: Request):
+    """Reseteo forzado del Admin: nueva clave provisoria + first_login=true + correo al usuario."""
+    _solo_maestro(request)
+    user = await db.users.find_one({"codigo": codigo})
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no existe")
+    if codigo in ("admin", "administrador"):
+        raise HTTPException(status_code=400, detail="No se puede resetear al administrador")
+    clave = _clave_provisoria()
+    await db.users.update_one({"codigo": codigo}, {"$set": {
+        "clave_hash": bcrypt.hashpw(clave.encode(), bcrypt.gensalt()).decode(),
+        "first_login": True}, "$unset": {"primer_paso_clave": "", "password": ""}})
+    destino = user.get("email") or ""
+    enviado = False
+    if destino:
+        try:
+            await asyncio.to_thread(_enviar_credenciales, destino, clave, user.get("nombre") or "")
+            enviado = True
+        except Exception:
+            enviado = False
+    return {"ok": True, "codigo": codigo, "clave_provisoria": clave, "email_enviado": enviado}
 
 
 @api.post("/admin/users/{codigo}/activo")
@@ -1415,10 +1834,82 @@ async def user_reset_clave(codigo: str, payload: dict, request: Request):
 
 
 @api.delete("/admin/users/{codigo}")
-async def delete_user(codigo: str):
+async def delete_user(codigo: str, request: Request):
+    _solo_maestro(request)
     if codigo in ("admin", "administrador"):
         raise HTTPException(status_code=400, detail="No se puede eliminar el usuario administrador")
     await db.users.delete_one({"codigo": codigo})
+    return {"ok": True}
+
+
+# ── BANDEJA DE DOCUMENTOS SIN CLASIFICAR (Daniela, Victoria y el Admin) ──
+def _sc_dir():
+    from pathlib import Path as _P
+    p = _P(__file__).parent / "storage" / "sin_clasificar"
+    p.mkdir(parents=True, exist_ok=True)
+    return p
+
+
+def _exigir_bandeja(request):
+    if _rol_de(request) not in ("admin", "maestro", "administracion"):
+        raise HTTPException(status_code=403, detail="No está autorizado el ingreso a este módulo")
+
+
+@api.get("/admin/docs-sin-clasificar")
+async def docs_sin_clasificar_list(request: Request):
+    _exigir_bandeja(request)
+    docs = await db.docs_sin_clasificar.find({}, {"_id": 0}).sort("recibido", -1).to_list(300)
+    return {"documentos": docs, "total": len(docs)}
+
+
+@api.post("/admin/docs-sin-clasificar/upload")
+async def docs_sin_clasificar_upload(request: Request):
+    _exigir_bandeja(request)
+    form = await request.form()
+    archivo = form.get("archivo")
+    if archivo is None:
+        raise HTTPException(status_code=400, detail="Adjunte el archivo a la bandeja")
+    from pathlib import Path as _P
+    nombre = _P(getattr(archivo, "filename", "") or "documento").name
+    did = str(uuid.uuid4())
+    (_sc_dir() / f"{did}_{nombre}").write_bytes(await archivo.read())
+    reg = {"id": did, "nombre_archivo": nombre, "origen": "carga_manual", "recibido": now_iso(),
+           "por": (getattr(request.state, "user", {}) or {}).get("sub") or ""}
+    await db.docs_sin_clasificar.insert_one(dict(reg))
+    return {"ok": True, "documento": {k: v for k, v in reg.items()}}
+
+
+@api.post("/admin/docs-sin-clasificar/{did}/asignar")
+async def docs_sin_clasificar_asignar(did: str, payload: dict, request: Request):
+    _exigir_bandeja(request)
+    reg = await db.docs_sin_clasificar.find_one({"id": did})
+    if not reg:
+        raise HTTPException(status_code=404, detail="Documento no encontrado en la bandeja")
+    fd = await db.folders.find_one({"id": (payload or {}).get("fid") or ""})
+    if not fd:
+        raise HTTPException(status_code=404, detail="Operación/carpeta no encontrada")
+    origen = _sc_dir() / f"{did}_{reg['nombre_archivo']}"
+    if not origen.exists():
+        raise HTTPException(status_code=410, detail="El archivo físico ya no existe en la bandeja")
+    carpeta = fsvc.folder_dir(fd.get("nombre") or "") / "99_otros"
+    carpeta.mkdir(parents=True, exist_ok=True)
+    (carpeta / reg["nombre_archivo"]).write_bytes(origen.read_bytes())
+    origen.unlink()
+    await db.folders.update_one({"id": fd["id"]},
+                                {"$addToSet": {"archivos": f"99_otros/{reg['nombre_archivo']}"}})
+    await db.docs_sin_clasificar.delete_one({"id": did})
+    return {"ok": True, "asignado_a": fd.get("nombre"), "archivo": reg["nombre_archivo"]}
+
+
+@api.delete("/admin/docs-sin-clasificar/{did}")
+async def docs_sin_clasificar_delete(did: str, request: Request):
+    _exigir_bandeja(request)
+    reg = await db.docs_sin_clasificar.find_one({"id": did})
+    if reg:
+        p = _sc_dir() / f"{did}_{reg['nombre_archivo']}"
+        if p.exists():
+            p.unlink()
+        await db.docs_sin_clasificar.delete_one({"id": did})
     return {"ok": True}
 
 
@@ -2129,7 +2620,21 @@ async def respaldo_import_finish(payload: dict):
 
 
 @api.post("/clientes/folders")
-async def create_folder(payload: dict):
+async def create_folder(payload: dict, request: Request):
+    claims = getattr(request.state, "user", {}) or {}
+    # REGLA RUT ÚNICO: un RUT registrado por un broker es de ese broker para siempre
+    rut_norm = re.sub(r"[^0-9kK]", "", payload.get("rut") or "").lower()
+    if rut_norm:
+        async for fd in db.folders.find({"rut": {"$exists": True, "$ne": ""}},
+                                        {"rut": 1, "broker_codigo": 1}):
+            if re.sub(r"[^0-9kK]", "", fd.get("rut") or "").lower() == rut_norm:
+                duenio = fd.get("broker_codigo") or ""
+                if duenio and duenio != (claims.get("sub") or ""):
+                    raise HTTPException(status_code=409,
+                                        detail="Este RUT ya está registrado en el sistema por otro ejecutivo.")
+                if claims.get("rol") == "broker":
+                    raise HTTPException(status_code=409,
+                                        detail="Este RUT ya está registrado en el sistema.")
     doc = {
         "id": str(uuid.uuid4()),
         "nombre": payload.get("nombre", ""),
@@ -2139,6 +2644,9 @@ async def create_folder(payload: dict):
         "archivos": [],
         "created_at": now_iso(),
     }
+    if claims.get("rol") == "broker":
+        doc["broker_codigo"] = claims.get("sub") or ""
+        doc["broker_origen"] = claims.get("nombre") or claims.get("sub") or ""
     await db.folders.insert_one(dict(doc))
     fsvc.folder_dir(doc["nombre"]).mkdir(parents=True, exist_ok=True)
     return _folder_public(doc)
@@ -13877,6 +14385,14 @@ api.include_router(_malla_mod.supercarpeta)
 # 🛰 GRID-DASHAI — Sincronización forzada e integral (Regla #41, SIN interruptor)
 import grid_dashai as _grid_mod
 api.include_router(_grid_mod.grid)
+
+# 🪞 ALGORITMO ESPEJO HÍBRIDO · CONEXIÓN CONCRECES · MÓDULO POSTVENTA
+import espejo_postventa as _esp_mod
+api.include_router(_esp_mod.espejo)
+api.include_router(_esp_mod.concreces)
+api.include_router(_esp_mod.postventa)
+api.include_router(_esp_mod.gpanel)
+api.include_router(_esp_mod.brokerx)
 
 # Regla #62 (Monitor de Envíos SMTP) + Regla #64 (Perfil Consolidado — verdad DashAI)
 import monitor_envios as _monit_mod

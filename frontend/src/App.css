@@ -1,5 +1,12 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Playfair+Display:wght@600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap');
 
+/* NORMA VISUAL FIJA: todo desplegable con fondo AZUL y letras siempre visibles
+   (los <option> nativos se pintaban blancos y el texto claro quedaba invisible) */
+select { background-color: #14263f; color: #f8fafc; }
+select option { background-color: #14263f !important; color: #f8fafc !important; }
+select optgroup { background-color: #0d1b30; color: #f8fafc; }
+
+
 :root {
   --bg-dark: #000000;
   --bg-sidebar: #0a0a0a;

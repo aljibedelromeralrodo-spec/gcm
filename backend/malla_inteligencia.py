@@ -170,8 +170,15 @@ async def broker_crear_carpeta(payload: dict, request: Request):
         raise HTTPException(status_code=400, detail="Nombre y RUT del cliente son obligatorios")
     if not _rut_limpio(rut) or len(_rut_limpio(rut)) < 8:
         raise HTTPException(status_code=400, detail="RUT inválido — el RUT es el pegamento del sistema (Regla #34)")
-    if await db.folders.find_one({"rut": {"$regex": f"^{re.escape(rut)}$", "$options": "i"}}):
-        raise HTTPException(status_code=409, detail="Ya existe una carpeta con ese RUT")
+    # REGLA RUT ÚNICO: el primer broker que registró el RUT retiene al cliente permanentemente
+    rutn = _rut_limpio(rut)
+    async for fd0 in db.folders.find({"rut": {"$exists": True, "$ne": ""}},
+                                     {"rut": 1, "broker_codigo": 1}):
+        if _rut_limpio(fd0.get("rut") or "") == rutn:
+            if (fd0.get("broker_codigo") or "") and fd0.get("broker_codigo") != (c.get("sub") or ""):
+                raise HTTPException(status_code=409,
+                                    detail="Este RUT ya está registrado en el sistema por otro ejecutivo.")
+            raise HTTPException(status_code=409, detail="Este RUT ya está registrado en el sistema.")
     doc = {"id": str(uuid.uuid4()), "nombre": nombre, "rut": rut, "archivos": [],
            "broker_codigo": c.get("sub") or "", "broker_nombre": c.get("nombre") or "",
            "broker_origen": c.get("nombre") or c.get("sub") or "",  # SELLO DE ORIGEN (Regla #38)
@@ -338,10 +345,27 @@ async def _aplicar_proyeccion(broker_codigo, broker_nombre, mes, clientes_p):
             "total_uf": total_uf, "faltantes": faltantes, "resumen": resumen}
 
 
+# VENTANA DE PROYECCIÓN: solo del día 1 al 5 HÁBIL de cada mes
+def _ventana_proyeccion():
+    from datetime import timedelta
+    hoy = datetime.now(timezone.utc).date()
+    d, habiles = hoy.replace(day=1), []
+    while len(habiles) < 5:
+        if d.weekday() < 5:
+            habiles.append(d)
+        d += timedelta(days=1)
+    return hoy in habiles, habiles[-1].strftime("%d-%m-%Y")
+
+
 @broker.post("/proyeccion")
 async def broker_proyeccion(request: Request, mes: str = Form(...), archivo: UploadFile = File(...)):
     c = _claims(request)
     codigo = c.get("sub") or ""
+    abierta, limite = _ventana_proyeccion()
+    if not abierta and c.get("rol") not in ("admin", "maestro"):
+        raise HTTPException(status_code=423, detail=(
+            f"⛔ Ventana de carga cerrada: la proyección solo se puede subir entre el día 1 y el "
+            f"5° día hábil de cada mes (última fecha de este mes: {limite})."))
     if not re.match(r"^\d{4}-\d{2}$", mes or ""):
         raise HTTPException(status_code=400, detail="Mes inválido (formato AAAA-MM)")
     nombre_arch = re.sub(r"[^\w.\- ]", "_", archivo.filename or "proyeccion.pdf")
@@ -368,7 +392,8 @@ async def broker_proyeccion(request: Request, mes: str = Form(...), archivo: Upl
 async def broker_estado_situacion(request: Request):
     """ESTADO_DE_SITUACION: el broker solo ve la situación de SUS clientes asociados."""
     c = _claims(request)
-    q = {"broker_codigo": {"$exists": True}} if c.get("rol") in ("admin", "maestro") else {"broker_codigo": c.get("sub") or ""}
+    # AISLAMIENTO TOTAL: cada broker (y el admin en modo broker) ve SOLO sus propios clientes
+    q = {"broker_codigo": c.get("sub") or ""}
     out = []
     async for fd in db.folders.find(q).sort("nombre", 1):
         hitos_r = await db.hitos_externos.find({"folder_id": fd["id"]}, {"_id": 0, "hito": 1, "fecha": 1, "fuente": 1}).sort("creado", -1).to_list(3)

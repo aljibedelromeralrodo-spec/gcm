@@ -2,12 +2,14 @@ import { useState } from "react";
 import axios from "axios";
 import { API_URL } from "../utils/formatters";
 import { secureSet } from "../utils/secureStore";
+import PrimerIngreso from "./PrimerIngreso";
 
 export default function LoginPage({ onLogin }) {
   const [rut, setRut] = useState("");
   const [password, setPassword] = useState("");
   const [clave2, setClave2] = useState("");
   const [crearClave, setCrearClave] = useState(null); // {codigo, nombre}
+  const [primerIngreso, setPrimerIngreso] = useState(null); // flujo obligatorio first_login
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -26,6 +28,10 @@ export default function LoginPage({ onLogin }) {
       if (res.data.requiere_crear_clave) {
         setCrearClave({ codigo: res.data.codigo, nombre: res.data.nombre });
         setPassword(""); setClave2("");
+      } else if (res.data.first_login) {
+        // PRIMER INGRESO OBLIGATORIO: no se permite acceso hasta completar la configuración
+        secureSet("token", res.data.token);
+        setPrimerIngreso(res.data);
       } else {
         entrar(res.data);
       }
@@ -49,6 +55,8 @@ export default function LoginPage({ onLogin }) {
     }
     setLoading(false);
   };
+
+  if (primerIngreso) return <PrimerIngreso data={primerIngreso} onDone={entrar} />;
 
   return (
     <div className="login-bg" data-testid="login-page">

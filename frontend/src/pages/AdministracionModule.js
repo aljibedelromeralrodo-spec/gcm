@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import GestorFuentesIMAP from "../components/GestorFuentesIMAP";
 import EstadoSalida from "../components/EstadoSalida";
+import ConfigEjecutivos, { ConexionConcreces } from "../components/ConfigEjecutivos";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 const PILL = { validado: "#22c55e", observado: "#f59e0b", pendiente: "#94a3b8", expulsado: "#ef4444" };
@@ -194,6 +195,76 @@ const GridEstado = () => {
   );
 };
 
+// ── BANDEJA DE DOCUMENTOS SIN CLASIFICAR (Daniela, Victoria y el Admin) ──
+const BandejaSinClasificar = () => {
+  const [docs, setDocs] = useState([]);
+  const [folders, setFolders] = useState([]);
+  const [sel, setSel] = useState({});
+  const [msg, setMsg] = useState("");
+  const cargar = () => {
+    axios.get(`${API}/api/admin/docs-sin-clasificar`).then(r => setDocs(r.data.documentos || [])).catch(() => {});
+    axios.get(`${API}/api/clientes/folders`).then(r => setFolders(r.data.folders || r.data || [])).catch(() => {});
+  };
+  useEffect(() => { cargar(); }, []);
+  const subir = async (e) => {
+    const f = e.target.files?.[0]; if (!f) return;
+    const fd = new FormData(); fd.append("archivo", f);
+    try {
+      await axios.post(`${API}/api/admin/docs-sin-clasificar/upload`, fd);
+      setMsg(`✅ "${f.name}" agregado a la bandeja de documentos sin clasificar`);
+      cargar();
+    } catch (er) { setMsg(`⛔ ${er.response?.data?.detail || "Error al subir"}`); }
+    e.target.value = "";
+  };
+  const asignar = async (did) => {
+    const fid = sel[did];
+    if (!fid) { setMsg("⛔ Seleccione la operación de destino"); return; }
+    try {
+      const r = await axios.post(`${API}/api/admin/docs-sin-clasificar/${did}/asignar`, { fid });
+      setMsg(`✅ "${r.data.archivo}" asignado a la operación de ${r.data.asignado_a}`);
+      cargar();
+    } catch (er) { setMsg(`⛔ ${er.response?.data?.detail || "Error al asignar"}`); }
+  };
+  const eliminar = async (did) => {
+    if (!window.confirm("¿Eliminar este documento de la bandeja?")) return;
+    try { await axios.delete(`${API}/api/admin/docs-sin-clasificar/${did}`); cargar(); } catch { /* noop */ }
+  };
+  return (
+    <div style={{ ...card, borderColor: "rgba(250,204,21,0.4)" }} data-testid="bandeja-sin-clasificar">
+      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+        <b style={{ color: "#facc15", fontSize: "0.8rem" }}>📥 Documentos sin clasificar ({docs.length})</b>
+        <span style={{ color: "#94a3b8", fontSize: "0.64rem" }}>
+          Todo documento sin operación asociada llega aquí — asígnelo manualmente a la operación que corresponda.</span>
+        <label style={{ ...goldBtn, marginLeft: "auto" }}>
+          ⬆ Subir documento
+          <input data-testid="bandeja-upload" type="file" style={{ display: "none" }} onChange={subir} />
+        </label>
+      </div>
+      {msg && <p data-testid="bandeja-msg" style={{ color: msg.startsWith("✅") ? "#22c55e" : "#ef4444", fontSize: "0.68rem", margin: "6px 0 0" }}>{msg}</p>}
+      {docs.length === 0 ? (
+        <p style={{ color: "#64748b", fontSize: "0.7rem", fontStyle: "italic", margin: "8px 0 0" }}>
+          La bandeja está vacía — no hay documentos pendientes de clasificar.</p>
+      ) : docs.map(dc => (
+        <div key={dc.id} data-testid={`bandeja-doc-${dc.id}`} style={{ display: "flex", gap: 8, alignItems: "center",
+          flexWrap: "wrap", borderTop: "1px solid rgba(148,163,184,0.15)", padding: "0.5rem 0", fontSize: "0.72rem" }}>
+          <b style={{ color: "#f8fafc" }}>📄 {dc.nombre_archivo}</b>
+          <span style={{ color: "#64748b" }}>{dc.origen === "carga_manual" ? "carga manual" : dc.origen} · {String(dc.recibido || "").slice(0, 16).replace("T", " ")}</span>
+          <select data-testid={`bandeja-select-${dc.id}`} value={sel[dc.id] || ""}
+            onChange={e => setSel(s => ({ ...s, [dc.id]: e.target.value }))}
+            style={{ ...inp, marginLeft: "auto", minWidth: 200 }}>
+            <option value="">— Asignar a operación… —</option>
+            {folders.map(fd => <option key={fd.id} value={fd.id}>{fd.nombre}</option>)}
+          </select>
+          <button data-testid={`bandeja-asignar-${dc.id}`} onClick={() => asignar(dc.id)} style={goldBtn}>Asignar</button>
+          <button data-testid={`bandeja-eliminar-${dc.id}`} onClick={() => eliminar(dc.id)}
+            style={{ background: "rgba(248,113,113,0.12)", border: "1px solid rgba(248,113,113,0.5)", color: "#f87171",
+              borderRadius: 8, padding: "0.35rem 0.7rem", fontWeight: 800, cursor: "pointer", fontSize: "0.66rem" }}>🗑</button>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 export default function AdministracionModule({ user }) {
   const nombreU = (user?.nombre || "").toLowerCase();
   const [panel, setPanel] = useState(nombreU.includes("victoria") || nombreU.includes("vilche") ? "victoria" : "daniela");
@@ -235,6 +306,13 @@ export default function AdministracionModule({ user }) {
         <span style={{ color: "var(--text-secondary)", fontSize: "0.72rem" }}>{data?.total ?? 0} registros · Regla de Oro #24: sin contraste RUT/Rol + respaldo OCR, el envío queda bloqueado</span>
         <EstadoSalida />
       </div>
+      {/* ⚙️ PANEL DE CONFIGURACIÓN DEL ADMINISTRADOR */}
+      {["admin", "maestro"].includes(user?.rol) && (<>
+        <ConfigEjecutivos />
+        <ConexionConcreces />
+      </>)}
+      {/* Bandeja visible para Daniela, Victoria y el Admin */}
+      {["admin", "maestro", "administracion"].includes(user?.rol) && <BandejaSinClasificar />}
       {/* DIVISIÓN OPERATIVA (Regla #32) + Postventa */}
       <div style={{ display: "flex", gap: 10, marginTop: 14, flexWrap: "wrap" }}>
         {PANELES.map(([k, t, s]) => (

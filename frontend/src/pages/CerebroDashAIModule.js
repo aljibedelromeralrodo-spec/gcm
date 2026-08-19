@@ -35,6 +35,34 @@ const Gauge = ({ pct }) => {
   );
 };
 
+const EstadoCerebro = () => {
+  const [ec, setEc] = useState(null);
+  useEffect(() => {
+    axios.get(`${API_URL}/api/dashai/estado-cerebro`).then(r => setEc(r.data)).catch(() => {});
+  }, []);
+  if (!ec) return null;
+  const fdd = (iso) => (iso ? `${String(iso).slice(8, 10)}/${String(iso).slice(5, 7)}/${String(iso).slice(0, 4)} ${String(iso).slice(11, 16)}` : "—");
+  const celda = { background: "rgba(15,23,42,0.6)", border: "1px solid rgba(212,175,55,0.3)", borderRadius: 10, padding: "0.8rem 1rem", flex: "1 1 200px" };
+  return (
+    <div data-testid="estado-cerebro" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: "1.1rem" }}>
+      <div style={celda}>
+        <div style={{ color: "#94a3b8", fontSize: "0.64rem", fontWeight: 800, letterSpacing: 1 }}>NORMATIVAS ACTIVAS</div>
+        <div data-testid="ec-normativas" style={{ color: "#d4af37", fontSize: "1.6rem", fontWeight: 900 }}>{ec.normativas_activas}</div>
+      </div>
+      <div style={celda}>
+        <div style={{ color: "#94a3b8", fontSize: "0.64rem", fontWeight: 800, letterSpacing: 1 }}>ÚLTIMA MODIFICACIÓN</div>
+        <div style={{ color: "#f8fafc", fontSize: "0.82rem", fontWeight: 700, marginTop: 6 }}>
+          {ec.ultima_modificacion ? `${fdd(ec.ultima_modificacion)} · ${ec.modificada_por}` : "Sin modificaciones desde la siembra"}</div>
+      </div>
+      <div style={celda}>
+        <div style={{ color: "#94a3b8", fontSize: "0.64rem", fontWeight: 800, letterSpacing: 1 }}>ÚLTIMA VALIDACIÓN</div>
+        <div style={{ color: "#f8fafc", fontSize: "0.82rem", fontWeight: 700, marginTop: 6 }}>{fdd(ec.ultima_validacion)}</div>
+        <div style={{ color: "#8fd9b0", fontSize: "0.7rem", marginTop: 2 }}>{ec.resultado_validacion}</div>
+      </div>
+    </div>
+  );
+};
+
 export default function CerebroDashAIModule() {
   const [d, setD] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -113,6 +141,8 @@ export default function CerebroDashAIModule() {
       </div>
 
       {msg && <div data-testid="dashai-msg" style={{ ...panel, padding: "0.7rem 1rem", fontSize: "0.82rem", color: "#F5E7B8", marginBottom: "1.1rem" }}>{msg}</div>}
+
+      <EstadoCerebro />
 
       <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "1.2rem", marginBottom: "1.2rem", alignItems: "stretch" }}>
         <div style={{ ...panel, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }} data-testid="dashai-panel-calibracion">
