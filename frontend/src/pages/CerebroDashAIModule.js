@@ -59,6 +59,13 @@ const EstadoCerebro = () => {
         <div style={{ color: "#f8fafc", fontSize: "0.82rem", fontWeight: 700, marginTop: 6 }}>{fdd(ec.ultima_validacion)}</div>
         <div style={{ color: "#8fd9b0", fontSize: "0.7rem", marginTop: 2 }}>{ec.resultado_validacion}</div>
       </div>
+      <a href="/manual-marca-central-mutuos.pdf" target="_blank" rel="noreferrer" data-testid="btn-manual-marca"
+        style={{ ...celda, flex: "0 1 190px", textDecoration: "none", display: "flex", flexDirection: "column",
+          justifyContent: "center", cursor: "pointer" }}>
+        <div style={{ color: "#d4af37", fontSize: "1.3rem" }}>📘</div>
+        <div style={{ color: "#d4af37", fontSize: "0.72rem", fontWeight: 900, letterSpacing: 0.8 }}>MANUAL DE MARCA</div>
+        <div style={{ color: "#94a3b8", fontSize: "0.6rem" }}>Descargar PDF oficial v1.0</div>
+      </a>
     </div>
   );
 };

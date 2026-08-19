@@ -1427,3 +1427,10 @@ Constitución VERSION 19 (nuevas reglas #55, #56, #57).
 - SEMÁFORO FUENTES: GET fuentes-panel devuelve "semaforo" (verde=contacto con correo, amarillo=sin correo,
   rojo=sin contacto) por origen detectado; chips de color en el Panel de Fuentes de la Supercarpeta.
 - Verificado por curl (4 fríos reales, semáforo con 3 rojos, cumpleaños calculado) + screenshot.
+
+## 2026-08-19 (parte 7) — Manual de Marca PDF
+- Manual de Identidad Visual v1.0 (3 páginas): formatos oficiales con imágenes reales, paleta de colores
+  con muestras, usos permitidos/prohibidos y regla de inmutabilidad. Cumple Bloque 6 (encabezado institucional,
+  fecha DD/MM/AAAA, emisor con cargo del Admin, versión/período).
+- Descargable en /manual-marca-central-mutuos.pdf + botón "📘 Manual de Marca" en el panel Estado del Cerebro.
+- Script regenerador: /app/backend/scripts_gen_manual_marca.py.
