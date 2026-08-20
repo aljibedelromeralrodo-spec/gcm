@@ -1346,6 +1346,10 @@ def send_mail(to, subject, body_html, attachments=None, desde="secundaria", cc=N
     attachments: [{filename, content_b64}]. desde: 'secundaria' o 'principal'."""
     if not configured():
         return {"success": False, "error": "Correo no configurado"}
+    # REMITENTE PREDETERMINADO: todo correo automático sale desde la cuenta corporativa
+    # (gerardo.ext@centralmutuos.cl); la cuenta principal (gmail) queda solo como respaldo anti auto-envío.
+    if desde == "principal":
+        desde = "secundaria"
     # ANTI AUTO-ENVÍO (1ª capa): destino propio → redirigir al buzón de pruebas corporativo
     to = _anti_autoenvio(to)
     acc = None

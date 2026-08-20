@@ -1,0 +1,25 @@
+{
+  "summary": "Iteración 42 — Verificación INDEPENDIENTE del cambio de remitente predeterminado. 6/6 pruebas PASS (5 en run paralelo + regresión de create_user re-ejecutada en modo secuencial). CONFIRMADO: send_mail(desde='principal') ahora sale desde gerardo.ext@centralmutuos.cl con smtp_code=250, success=true. Envío real a javierurrutia@centralmutuos.cl exitoso (log en correos_smtp_log con desde='gerardo.ext@centralmutuos.cl'). Los últimos 5 registros exitosos de correos_smtp_log tienen desde=corporativa. Anti auto-envío intacto (verificado por inspección: bloque 'ANTI AUTO-ENVÍO (2ª capa)' y helper _anti_autoenvio presentes). Regresión POST /api/admin/users con clave 'PruebaQA123' → clave_provisoria correcta, login con first_login=true, DELETE 200.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter42_remitente.py",
+    "/app/test_reports/pytest/iter42.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "El objeto de retorno de send_mail NO incluye la clave 'desde'; solo aparece en correos_smtp_log. Si el contrato con llamadores/pruebas requiere leer 'desde' en la respuesta, considerar añadirlo: res['desde'] = acc['user']. No es bug, es mejora de DX/testability.",
+    "En paralelo con pytest-xdist, correr un test que hace send_mail real (con lock global _envio_lock + throttling 10s) simultáneamente con otro que hace login rápido causó un timeout de 15s en /api/auth/login del worker paralelo. La API de login no depende del envío, pero uvicorn puede saturarse. No es bug de negocio; solo advertencia para futuros tests: aislar tests que hacen SMTP real."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter42_remitente.py (nuevo)",
+    "/app/test_reports/pytest/iter42.xml (nuevo)"
+  ],
+  "success_rate": {"backend": "100% (6/6)", "frontend": "no aplica (backend only)"},
+  "test_credentials": "administrador/141617575 (para /api/auth/login y admin/users). Envío real: destino javierurrutia@centralmutuos.cl con asunto 'Prueba QA remitente — favor ignorar [<uuid>]'.",
+  "seed_data_creation": "Ninguna. El usuario tempqa se crea y elimina dentro del mismo test. 1 correo real enviado (dentro del máximo permitido de 1-2).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "test_iter42_remitente.py sirve de regresión para: (1) mapeo desde='principal'→'secundaria' en send_mail, (2) anti auto-envío 1ª+2ª capa, (3) integridad de ACCOUNTS (principal=gmail respaldo, secundaria=corporativo), (4) flujo POST/login/DELETE de admin/users. IMPORTANTE: si se corre con pytest-xdist paralelo, el test de send_mail real puede saturar el backend; usar `-o addopts=''` para modo secuencial si se ve timeout en el fixture admin_token. El envío real tiene throttling de 10s + reintento de 60s (dar timeout >=90s para create_user).",
+  "rca of the issue": "N/A — no se detectaron bugs. Se confirmó independientemente el fix del main agent: bloque `if desde == 'principal': desde = 'secundaria'` en send_mail (email_service.py L1351-1352). SMTP entrega OK a través de gerardo.ext@centralmutuos.cl con smtp_code=250. La excepción anti auto-envío (destinatario=corporativa → emisor=respaldo gmail) sigue funcionando y es correcta."
+}

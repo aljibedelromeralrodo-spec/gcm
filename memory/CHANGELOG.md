@@ -1594,3 +1594,9 @@ Constitución VERSION 19 (nuevas reglas #55, #56, #57).
 - POST /api/admin/users y /reset-clave ahora aceptan `clave` opcional definida por el Admin (min 6 chars); si se omite, se genera automática.
 - Correo de bienvenida ahora incluye botón "INGRESAR A LA PLATAFORMA" con enlace PUBLIC_BASE_URL (producción).
 - UsuariosModule.js: campo "Clave inicial (opcional)" en crear usuario (data-testid input-user-clave) + prompt de clave en resetear.
+
+## 19/06/2026 (2) — Remitente predeterminado corporativo
+- email_service.py send_mail: remapeo desde='principal'→'secundaria' → TODO correo automático sale desde gerardo.ext@centralmutuos.cl (gmail queda solo como respaldo anti auto-envío, regla intacta).
+- Prueba real: envío a javierurrutia@centralmutuos.cl con SMTP 250 OK, From=gerardo.ext.
+- Verificado por testing agent iteración 42 (6/6 PASS, /app/backend/tests/test_iter42_remitente.py como regresión).
+- Diagnóstico previo: usuarios nuevos no podían ingresar porque intentaban en PRODUCCIÓN; las cuentas se crearon en la BD de preview. Pendiente decisión del usuario (opciones a/b/c enviadas).
