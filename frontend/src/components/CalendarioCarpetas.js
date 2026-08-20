@@ -9,23 +9,30 @@ const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio",
 const DIAS_SEM = ["LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB", "DOM"];
 const fmt = (n) => Number(n || 0).toLocaleString("es-CL");
 
-const Item = ({ c, rojo }) => (
-  <div data-testid={`cal-carpeta-${c.folder_id}`} style={{
+const Item = ({ c, rojo, onOpen }) => (
+  <div data-testid={`cal-carpeta-${c.folder_id}`}
+    onClick={() => onOpen && onOpen(c.folder_id)}
+    title="Abrir detalle completo de la carpeta"
+    onMouseEnter={e => { e.currentTarget.style.background = rojo ? "rgba(127,29,29,0.55)" : "rgba(212,175,55,0.16)"; }}
+    onMouseLeave={e => { e.currentTarget.style.background = rojo ? "rgba(127,29,29,0.35)" : "rgba(212,175,55,0.06)"; }}
+    style={{
     display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
     padding: "0.55rem 0.8rem", marginTop: 6, borderRadius: 0,
+    cursor: onOpen ? "pointer" : "default", transition: "background-color 0.15s ease",
     background: rojo ? "rgba(127,29,29,0.35)" : "rgba(212,175,55,0.06)",
     border: rojo ? `1.5px solid ${ROJO_OSCURO}` : "1px solid rgba(212,175,55,0.25)",
     borderLeft: rojo ? `5px solid ${ROJO_OSCURO}` : `5px solid ${ORO}` }}>
     <i className="fa fa-folder" style={{ color: rojo ? "#fca5a5" : ORO }} />
-    <b style={{ color: rojo ? "#fecaca" : "var(--white, #fff)", fontSize: 13 }}>{c.nombre}</b>
+    <b style={{ color: rojo ? "#fecaca" : "var(--white, #fff)", fontSize: 13, textDecoration: onOpen ? "underline" : "none", textDecorationColor: rojo ? "#fca5a5" : `${ORO}88`, textUnderlineOffset: 3 }}>{c.nombre}</b>
     <span style={{ fontFamily: "monospace", fontSize: 11.5, color: rojo ? "#fca5a5" : "#94a3b8" }}>{c.rut || "—"}</span>
     {c.monto_uf && <span style={{ fontSize: 11.5, fontWeight: 800, color: rojo ? "#fecaca" : ORO }}>{fmt(c.monto_uf)} UF</span>}
     <span style={{ marginLeft: "auto", fontSize: 10.5, color: rojo ? "#fca5a5" : "#94a3b8" }}>
       Recibida {c.fecha_recepcion}{rojo && c.dias_sin_avance != null ? ` · ${c.dias_sin_avance} día(s) sin avance` : ""}</span>
+    {onOpen && <i className="fa fa-external-link" style={{ fontSize: 11, color: rojo ? "#fca5a5" : ORO }} />}
   </div>
 );
 
-export default function CalendarioCarpetas() {
+export default function CalendarioCarpetas({ onOpenFolder }) {
   const hoy = new Date();
   const [anio, setAnio] = useState(hoy.getFullYear());
   const [mesN, setMesN] = useState(hoy.getMonth());
@@ -104,11 +111,11 @@ export default function CalendarioCarpetas() {
             <>
               <div style={{ color: ORO, fontSize: "0.62rem", fontWeight: 800, letterSpacing: 2, marginTop: 10 }}>
                 CARPETAS DEL DÍA ({(dia.del_dia || []).length})</div>
-              {(dia.del_dia || []).map(c => <Item key={c.folder_id} c={c} rojo={false} />)}
+              {(dia.del_dia || []).map(c => <Item key={c.folder_id} c={c} rojo={false} onOpen={onOpenFolder} />)}
               {(dia.del_dia || []).length === 0 && <p style={{ color: "#7a7a7a", fontSize: "0.7rem", margin: "4px 0" }}>Sin carpetas recibidas este día.</p>}
               <div style={{ color: "#f87171", fontSize: "0.62rem", fontWeight: 800, letterSpacing: 2, marginTop: 14 }}>
                 ⏳ PENDIENTES DE DÍAS ANTERIORES SIN PROCESAR ({(dia.pendientes_anteriores || []).length})</div>
-              {(dia.pendientes_anteriores || []).map(c => <Item key={c.folder_id} c={c} rojo={true} />)}
+              {(dia.pendientes_anteriores || []).map(c => <Item key={c.folder_id} c={c} rojo={true} onOpen={onOpenFolder} />)}
               {(dia.pendientes_anteriores || []).length === 0 && <p style={{ color: "#4ade80", fontSize: "0.7rem", margin: "4px 0" }}>Sin carpetas pendientes acumuladas. ✅</p>}
             </>
           )}

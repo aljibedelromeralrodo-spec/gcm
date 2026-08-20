@@ -1647,7 +1647,7 @@ export default function ClientesModule({ onNavigate }) {
             </button>
           </div>
 
-          {folderTab === "calendario" && <CalendarioCarpetas />}
+          {folderTab === "calendario" && <CalendarioCarpetas onOpenFolder={(id) => openFolder(id)} />}
 
           {showCreate && (
             <div className="clientes-create-form" data-testid="create-folder-form">

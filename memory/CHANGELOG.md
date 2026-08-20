@@ -1657,3 +1657,9 @@ Constitución VERSION 19 (nuevas reglas #55, #56, #57).
   chunks de 4MB, streaming sin guardar el archivo (disco solo 3GB libres), dedupe por message_id,
   barra de progreso con % y correos importados. Testing iteración 48: 100% backend y frontend.
 - Botón pantalla completa en topbar (data-testid btn-fullscreen, Fullscreen API, icono expand/compress).
+
+## 2026-06 — Calendario: clientes clickeables
+- En la vista Calendario (Carpeta Clientes → pestaña Calendario), cada cliente listado al seleccionar un día es ahora un enlace clickeable (subrayado dorado + icono + hover).
+- Al hacer clic se abre el detalle completo de la carpeta en la misma pantalla (openFolder → vista detail): documentos, estado, historial de seguimiento y botones de acción (Considerar/Descartar, Aprobación/Rechazo).
+- Archivos: CalendarioCarpetas.js (prop onOpenFolder), ClientesModule.js (línea del tab calendario).
+- Verificado por screenshot en preview.
