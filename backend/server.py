@@ -14617,6 +14617,10 @@ api.include_router(_cex_mod.export_r)
 import gerencia_comercial as _gcom_mod
 api.include_router(_gcom_mod.gcom)
 
+# 📋 AUDITORÍA DE CRÉDITOS → MESA — recibidos vs enviados (sistema + correo directo)
+import auditoria_mesa as _audim_mod
+api.include_router(_audim_mod.audimesa)
+
 # 📧 DESTINATARIOS DE CORREO POR ACCIÓN — panel Admin/Gerencia Comercial
 import correo_destinatarios as _cdest_mod
 api.include_router(_cdest_mod.correo_dest)

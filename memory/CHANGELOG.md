@@ -1615,3 +1615,14 @@ Constitución VERSION 19 (nuevas reglas #55, #56, #57).
 - Mora definida por el usuario: cliente con DICOM (datos_financieros.morosidad_dicom). Hoy 0 casos.
 - Testing agent iteración 43: backend 8/8 y frontend 25/25 PASS (/app/tests/test_iter43_gerencia_comercial.py).
 - REGLA APRENDIDA: tests SIEMPRE en /app/tests (no /app/backend/tests) para no disparar hot-reload.
+
+## 20/06/2026 (2) — Auditoría de Créditos → Mesa (módulo Correo a Mesa)
+- Nuevo backend /app/backend/auditoria_mesa.py: GET /api/autocorreo/auditoria-mesa?dias=3 y /export-xlsx.
+- Detecta envíos a mesa por DOS vías: sistema (mesa_enviado_at) y CORREO DIRECTO (cruce con colección
+  mesa_enviados del espejo de la casilla de mesa, match por RUT o nombre normalizado sin tildes).
+- Motivos de retención automáticos (7): documentación incompleta (detalle), falta fecha entrega,
+  sin ejecutivo interno, sin monto, contraste Bodega/OCR pendiente (Regla #24), sin actividad 48h+, sin motivo.
+- Frontend: componente AuditoriaCreditos.js embebido al inicio de "Correo a Mesa" — resumen (recibidas/
+  enviadas/pendientes), 2 tablas negro/dorado, selector 3/7/15 días, export Excel 2 hojas.
+- Verificado: curl backend (23 recibidas, 6 correo directo, 17 pendientes con motivos reales) + screenshot UI.
+- BACKLOG: gestor credenciales Crece (pendiente URL del portal y datos a extraer — usuario no respondió aún).

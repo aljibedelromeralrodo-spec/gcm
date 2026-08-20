@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 import { API_URL } from "../utils/formatters";
+import AuditoriaCreditos from "../components/AuditoriaCreditos";
 
 export default function AutocorreoModule() {
   const [data, setData] = useState(null);
@@ -184,6 +185,8 @@ export default function AutocorreoModule() {
           </button>
         </div>
       )}
+
+      <AuditoriaCreditos />
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: "1rem", marginBottom: "1.5rem" }}>
         <StatCard label="Total Enviados" value={data.sent} icon="fa-paper-plane" color="#10d98e" />
