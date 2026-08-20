@@ -143,6 +143,21 @@ function MainApp() {
   const [carpetaAlerts, setCarpetaAlerts] = useState(0);
   const [cierresAvisos, setCierresAvisos] = useState(0);
   const [showSearch, setShowSearch] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
+
+  useEffect(() => {
+    const fn = () => setFullscreen(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", fn);
+    return () => document.removeEventListener("fullscreenchange", fn);
+  }, []);
+
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+    } else {
+      document.documentElement.requestFullscreen().catch(() => {});
+    }
+  };
   const [showTour, setShowTour] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [energia, setEnergia] = useState(null);
@@ -391,6 +406,10 @@ function MainApp() {
             </p>
           </div>
           <div className="topbar-right">
+            <button className="topbar-notif-btn" data-testid="btn-fullscreen" title={fullscreen ? "Salir de pantalla completa (Esc)" : "Pantalla completa"}
+              onClick={toggleFullscreen} style={{ color: "var(--gold, #d4af37)" }}>
+              <i className={`fa ${fullscreen ? "fa-compress" : "fa-expand"}`}></i>
+            </button>
             <div className="global-search-wrap">
               <button className="global-search-trigger" onClick={() => setShowSearch(p => !p)} data-testid="global-search-btn" title="Buscar (Ctrl+K)">
                 <i className="fa fa-search"></i>

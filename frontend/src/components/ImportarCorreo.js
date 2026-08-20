@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
+import MboxImport from "./MboxImport";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -98,6 +99,7 @@ export default function ImportarCorreo({ destino, destinoId, nombre, onDone, lab
                 {importando ? "Importando adjuntos…" : "Importar seleccionados"}
               </button>
             </div>
+            <MboxImport />
           </div>
         </div>
       )}

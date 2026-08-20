@@ -105,6 +105,8 @@ REGLAS_ORO = [
      "ley": "La precisión en la extracción y cruce de datos (RUT, Nombre, Montos) debe ser del 100%. Prohibido dar por válido cualquier dato que presente una discrepancia mínima. REGLA DE HIERRO: si el sistema no tiene certeza absoluta, el campo queda bloqueado y marcado en Rojo para revisión manual. Ninguna actualización puede relajar el estándar del 100% de precisión ni el límite del 79.50% para usadas."},
     {"n": 66, "id": "boveda_adn_clientes", "titulo": "Bóveda de ADN de Clientes",
      "ley": "La Bóveda de ADN de Clientes (ADN_CLIENTES_360) es el registro civil único de Central Mutuos. El acceso a la información es restringido por propiedad de cartera: los ejecutivos solo consultan RUTs de su propia gestión; el administrador y la Gerencia Comercial tienen acceso total y búsqueda global, garantizando la privacidad y la integridad absoluta de los datos. Cada registro contiene el EXPEDIENTE_360 (titular, codeudor amarrado por RUT, propiedad con fojas/número/año, hitos legales y links a los archivos originales de la Bóveda Local). MODO BODEGA SOBERANA: es la fuente primaria y final de consulta; si falta un dato, se succiona del PDF histórico y se guarda para siempre. REGLA DE HIERRO: ningún dato nuevo entra sin pasar el Validador de Dígito Verificador de RUT; el sistema no le pide nada a Gmail si el dato existe en el EXPEDIENTE_360 y la IA tiene prohibido reportar 'datos incompletos' si la información está en la historia documental del cliente."},
+    {"n": 67, "id": "apertura_3_documentos", "titulo": "Apertura de carpetas con 3 documentos mínimos",
+     "ley": "REGLA ABSOLUTA — APERTURA DE CARPETAS: queda estrictamente prohibido crear una carpeta de solicitud de crédito sin que el correo o solicitud contenga al menos 3 de los siguientes documentos: Carnet de Identidad, Certificado AFP, Informe CMF, Boletas de Honorarios, Liquidación de Sueldo o Declaración de Impuestos. Esta regla no admite excepciones: no importa si la solicitud llega por el sistema, por correo electrónico externo, por mensaje o por cualquier otro canal. Sin los 3 documentos mínimos, no se crea carpeta. El sistema bloquea la acción e informa 'Documentación insuficiente' hasta que se completen los requisitos. REGLA DE HIERRO: ningún agente, ejecutivo ni proceso automatizado puede violar esta regla."},
 ]
 
 REGLAS_EFICIENCIA = [
@@ -116,7 +118,7 @@ REGLAS_EFICIENCIA = [
     {"id": "estimacion_previa", "ley": "Estimación Previa: antes de construir, calcular la ruta de menor costo de créditos según DashAI."},
 ]
 
-VERSION = 27  # PIN maestro redactado del texto legal: vive SOLO en variable de entorno protegida
+VERSION = 28  # PIN maestro redactado del texto legal: vive SOLO en variable de entorno protegida
 
 
 class ViolacionConstitucional(Exception):

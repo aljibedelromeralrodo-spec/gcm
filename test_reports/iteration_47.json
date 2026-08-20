@@ -1,0 +1,53 @@
+{
+  "summary": "Iteración 47 (backend+frontend): validación E2E de Regla Constitucional #67, Calendario mensual y flujo 'No Calificó'. 9/9 tests pytest PASS y todas las verificaciones UI (calendario + regresión) OK. Se detectó UN issue de UX en creación manual: el error del backend (422 'Documentación insuficiente') no se expone al usuario — el frontend muestra un alert genérico 'Error creando carpeta'.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "ClientesModule.createFolder", "issue": "Cuando el backend devuelve 422 con detail='Documentación insuficiente — Regla Constitucional #67…' el frontend ejecuta alert('Error creando carpeta') genérico sin exponer err.response.data.detail. El usuario no entiende por qué se bloqueó la creación.", "selector": "[data-testid=btn-confirm-create]", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_results_backend": {
+    "TestRegla67::test_creacion_sin_documentos_devuelve_422": "PASS (422 + detail contiene 'Documentación insuficiente', carpeta NO creada en Mongo)",
+    "TestRegla67::test_constitucion_maestra_v28_regla67": "PASS (db.config _key=constitucion_maestra: version=28, 48 reglas, n=67 id='apertura_3_documentos')",
+    "TestRegla67::test_creacion_con_3_docs_validos_pasa_y_cleanup": "PASS (200 con payload cedula_identidad + liquidacion_sueldo_enero + certificado_afp → 3 categorías; DELETE endpoint + limpieza Mongo OK)",
+    "TestCalendario::test_calendario_mes_agosto": "PASS (mes=2026-08, total_mes>0, mapa dias con datos)",
+    "TestCalendario::test_calendario_dia_2026_08_19": "PASS (del_dia=6, pendientes con dias_sin_avance como esperado)",
+    "TestCalendario::test_calendario_dia_fecha_invalida": "PASS (400 para fecha inválida)",
+    "TestNoCalifico::test_evaluaciones_negativas_mapa": "PASS (200 con estructura 'negativas' vacía por ausencia de simulaciones reales por RUT de carpetas)",
+    "TestNoCalifico::test_flujo_completo_no_califico_con_simulacion_inyectada": "PASS (insertó simulación negativa para RUT de LILIAN NAVARRO, endpoint devolvió carpeta en 'negativas', POST notificar-no-califico envió 1 correo real, destinatarios=['majose.moreno@maestra.cl'], no_califico_notificado_at seteado; simulación y campos limpiados)",
+    "TestNoCalifico::test_notificar_folder_sin_source_email_400": "PASS (400 con mensaje 'La carpeta no tiene ejecutivo/solicitante con correo asociado')"
+  },
+  "test_results_frontend": {
+    "tab_calendario_visible": "PASS ([data-testid=tab-calendario] renderiza [data-testid=calendario-carpetas])",
+    "calendario_agosto_2026_dia_19": "PASS (header 'AGOSTO 2026' con 138 carpetas totales; click en [data-testid=cal-dia-2026-08-19] muestra '6 del día · 49 pendientes anteriores' con secciones 'CARPETAS DEL DÍA' (items dorados) y 'PENDIENTES DE DÍAS ANTERIORES SIN PROCESAR' (items rojo oscuro). 55 items dibujados en el detalle)",
+    "navegacion_mes_prev_next": "PASS (cal-mes-prev → 'JULIO 2026', cal-mes-next OK)",
+    "regla67_manual_UI": "PARCIAL — carpeta NO se creó (correcto, backend devolvió 422), pero UI muestra alert genérico 'Error creando carpeta' en vez de 'Documentación insuficiente'",
+    "regresion_solicitudes_escrituracion": "PASS (134 btn-tasacion + 134 btn-aprobacion en tarjetas; tabs clientes/escrituración/calendario clickables)",
+    "js_pageerrors": 0
+  },
+  "test_report_links": [
+    "/app/tests/test_iter47_regla67_calendario_nocalifico.py",
+    "/app/test_reports/pytest/iter47.xml"
+  ],
+  "action_items": [
+    "Frontend (ClientesModule.js L957-967 createFolder): reemplazar alert('Error creando carpeta') por algo como alert(err?.response?.data?.detail || 'Error creando carpeta') o mostrar el error en una banda visible dentro del form (con [data-testid=create-folder-error]). Es lo único que falta para cumplir el enunciado literal del review."
+  ],
+  "critical_code_review_comments": [
+    "Backend cumple la Regla #67 en TODOS los guards mencionados (create_folder, correos, forzado, broker/martin/prospecto, drive). Excelente.",
+    "El endpoint POST /api/clientes/folders/{fid}/notificar-no-califico usa asyncio.to_thread(mail.send_mail, ...) — bien resuelto para no bloquear el event loop.",
+    "calendario_carpetas.py: la búsqueda pendientes usa desde=fecha-45d, razonable. Nota: _enviado_directo hace escaneo en memoria de mesa_enviados por cada carpeta pendiente (O(n×m)); si la BD crece mucho podría ser lento, pero hoy es aceptable.",
+    "Frontend createFolder no surface el detail del 422 → único hueco de UX en este lote."
+  ],
+  "updated_files": [
+    "/app/tests/test_iter47_regla67_calendario_nocalifico.py"
+  ],
+  "success_rate": {"backend": "100% (9/9)", "frontend": "80% (4/5 puntos verificados; queda el mensaje visible de Regla #67)"},
+  "test_credentials": "administrador / 141617575",
+  "seed_data_creation": "Ninguna persistente. Durante el test se creó y borró la carpeta 'PRUEBA QA DOCS'/22.222.222-2, y se insertó/limpió una simulación negativa para RUT 13252598-6 (LILIAN NAVARRO). Se envió 1 correo real a majose.moreno@maestra.cl como parte del flujo E2E de 'No Calificó'. Todo el estado se restauró (folders.no_califico_notificado_at eliminado, alertas del día borradas).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Los tres módulos del lote (Regla #67, Calendario, No Calificó) están funcionales end-to-end. El único ajuste pendiente es cosmético en el frontend: mostrar el detail del 422 en lugar del alert genérico. La constitución en db.config._key=constitucion_maestra está en version=28 con 48 reglas; regla n=67 id=apertura_3_documentos verificada. Carpeta 'LILIAN NAVARRO' (fid=965788ac-80db-4b5d-82a0-1e31e7a67e81) es un caso útil para probar 'No Calificó' porque tiene source_email 'majose.moreno@maestra.cl'.",
+  "rca of the issue": "Frontend UX: en /app/frontend/src/pages/ClientesModule.js L957-967, el catch de createFolder ignora err.response.data.detail y muestra siempre 'Error creando carpeta'. Fix trivial: reemplazar por alert(err?.response?.data?.detail || 'Error creando carpeta'). Reproducción: login administrador → Carpeta Clientes → Nueva Carpeta → nombre/RUT sin documentos → Crear Carpeta → aparece alert genérico en lugar del texto de la regla constitucional."
+}

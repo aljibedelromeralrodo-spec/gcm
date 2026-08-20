@@ -1,0 +1,19 @@
+{
+  "summary": "E2E completo del importador .mbox streaming. Backend: 4/4 pytest OK (flujo completo con 2 chunks reconstruye mensajes cortados, 400 para total_bytes=0 y >100GB, 403 para broker sin permiso). Frontend: login administrador → Carpeta Clientes → abrir carpeta (btn-open-*) → botón Importar desde correo (importar-correo-btn-carpeta) → sección [data-testid=mbox-import] visible → set_input_files de mbox de 34KB con 30 correos → subir → barra 100% → msg '✅ Procesamiento completo: 30 correos importados a la base de datos'. MongoDB verificado: 30 docs en mbox_correos con message_id qa-mbox-e2e-N y campos de/asunto/cuerpo, sesión con estado=completado. Cleanup total ejecutado (35 correos y 2 sesiones borrados).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/tests/test_iter48_mbox_import.py", "/app/test_reports/pytest/iter48.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "MboxImport.js: al ocurrir un error en mitad del flujo, el remanente {sid}.rem queda huérfano en disco (no se llama a cancelar). Sugerencia: en catch invocar /api/mbox/cancelar/{sid} si sid ya se creó.",
+    "mbox_import.py _procesar_buffer: cuando bytes_recibidos==0 y data comienza con 'From ', se antepone '\\n' — OK. Pero si el primer chunk NO empieza con 'From ' (archivo corrupto), el fragmento inicial se descarta silenciosamente sin log; considerar warning."
+  ],
+  "updated_files": ["/app/tests/test_iter48_mbox_import.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "administrador / 141617575",
+  "seed_data_creation": "mbox temporal /tmp/qa_e2e.mbox (30 correos qa-mbox-e2e-*@test.cl). Insertado y luego borrado de db.mbox_correos y db.mbox_sesiones.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Para reabrir el modal ImportarCorreo en Carpeta Clientes es necesario primero cerrar el tour inicial ('Saltar') Y el briefing mañanero ('Comenzar jornada') Y luego abrir una carpeta con btn-open-<uuid> — el botón 'Importar desde correo' (importar-correo-btn-carpeta) sólo aparece dentro de la vista de detalle de carpeta. El botón 'Ver Correos' del toolbar principal (btn-view-emails) abre otro modal distinto (buzón general), NO el ImportarCorreo. La sección mbox-import está embebida al final del modal ImportarCorreo.",
+  "rca of the issue": "N/A — no bugs encontrados"
+}

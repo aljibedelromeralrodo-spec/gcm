@@ -1643,3 +1643,17 @@ Constitución VERSION 19 (nuevas reglas #55, #56, #57).
 - REGLA DE GOBERNANZA DEL USUARIO (PERMANENTE): antes de modificar cualquier componente visual, módulo o
   funcionalidad existente, mostrar resumen del plan y pedir confirmación explícita del administrador.
   Solo ejecutar lo explícitamente autorizado en el prompt actual.
+
+## 21/06/2026 (2) — Regla #67, Calendario, No Calificó, Importador .mbox, Pantalla completa
+- REGLA CONSTITUCIONAL #67 (apertura con 3 documentos mínimos: CI/AFP/CMF/Boletas/Liquidación/Impuestos)
+  sembrada en constitución v28 y aplicada SIN excepciones en 8 canales de creación de carpetas
+  (manual, correo importado, forzado, procesamiento, broker, martín, prospectos, supercarpeta).
+  422 'Documentación insuficiente'. Testing iteración 47: 9/9 backend PASS + UI OK (fix alert detail aplicado).
+- Calendario mensual en Carpeta Clientes (tab Calendario): carpetas por día + pendientes anteriores en rojo
+  oscuro (sin avance en su día hábil; descuenta envíos por correo directo del espejo de mesa).
+- Etiqueta 'NO CALIFICÓ' (última simulación negativa por RUT, match rut[:8]) + botón notificar al ejecutivo
+  (source_email + email_ejecutivo de proc_queue). E2E verificado con envío real.
+- Importador .mbox hasta 100 GB (backend mbox_import.py + componente MboxImport en modal ImportarCorreo):
+  chunks de 4MB, streaming sin guardar el archivo (disco solo 3GB libres), dedupe por message_id,
+  barra de progreso con % y correos importados. Testing iteración 48: 100% backend y frontend.
+- Botón pantalla completa en topbar (data-testid btn-fullscreen, Fullscreen API, icono expand/compress).

@@ -2437,6 +2437,10 @@ async def _correos_importar_run(payload):
         if not folder:
             if not nombre:
                 raise HTTPException(status_code=404, detail="Carpeta no encontrada — indica el nombre del cliente")
+            # 🔒 REGLA CONSTITUCIONAL #67 — el correo debe traer 3 documentos mínimos para abrir carpeta
+            nombres_pdf = [p.get("filename") or "" for r_ in resultados for p in (r_.get("pdfs") or [])]
+            if len(fsvc.docs_apertura_cats(nombres_pdf)) < 3:
+                raise HTTPException(status_code=422, detail=fsvc.MSG_DOC_INSUFICIENTE)
             folder = {"id": str(uuid.uuid4()), "nombre": nombre.upper(), "rut": "",
                       "archivos": [], "created_at": now_iso(), "origen": "importado_correo"}
             await db.folders.insert_one(dict(folder))
@@ -2533,6 +2537,20 @@ async def _forzar_folder_run(payload):
     if not folder and rut_rx:
         folder = await db.folders.find_one({"rut": {"$regex": rut_rx, "$options": "i"}})
     if not folder:
+        # 🔒 REGLA CONSTITUCIONAL #67 — validar 3 documentos mínimos ANTES de crear la carpeta
+        resultados_pre = None
+        try:
+            mids0 = [m_ for m_ in (payload.get("message_ids") or []) if m_]
+            if mids0:
+                resultados_pre = await asyncio.to_thread(mail.fetch_attachments_by_message_ids, mids0)
+            else:
+                resultados_pre = await asyncio.to_thread(mail.search_attachments_by_person,
+                                                         nombre or rut, 40, rut, None)
+        except Exception:
+            resultados_pre = []
+        nombres_pre = [p.get("filename") or "" for r_ in (resultados_pre or []) for p in (r_.get("pdfs") or [])]
+        if len(fsvc.docs_apertura_cats(nombres_pre)) < 3:
+            raise HTTPException(status_code=422, detail=fsvc.MSG_DOC_INSUFICIENTE)
         folder = {"id": str(uuid.uuid4()), "nombre": (nombre or rut).upper(),
                   "rut": rut, "archivos": [],
                   "created_at": now_iso(), "origen": "forzada_manual"}
@@ -2810,6 +2828,10 @@ async def respaldo_import_finish(payload: dict):
 @api.post("/clientes/folders")
 async def create_folder(payload: dict, request: Request):
     claims = getattr(request.state, "user", {}) or {}
+    # 🔒 REGLA CONSTITUCIONAL #67 — sin 3 documentos mínimos NO se crea carpeta (sin excepciones)
+    docs_nombres = [str(d.get("nombre") or d.get("filename") or d) for d in (payload.get("documentos") or [])]
+    if len(fsvc.docs_apertura_cats(docs_nombres)) < 3:
+        raise HTTPException(status_code=422, detail=fsvc.MSG_DOC_INSUFICIENTE)
     # REGLA RUT ÚNICO: un RUT registrado por un broker es de ese broker para siempre
     rut_norm = re.sub(r"[^0-9kK]", "", payload.get("rut") or "").lower()
     if rut_norm:
@@ -5922,6 +5944,17 @@ async def proc_upload_drive(qid: str, force: bool = False, clave: str = ""):
                 "mensaje": f"🔴 {_msg_hr} — {cliente}: {_monto_hr:g} UF sin subsidio",
                 "fecha": now_iso(), "leida": False})
     if not folder_doc:
+        # 🔒 REGLA CONSTITUCIONAL #67 — apertura bloqueada sin 3 documentos mínimos (sin excepciones, ni con force)
+        cats_ap = fsvc.docs_apertura_cats(uploaded)
+        if len(cats_ap) < 3:
+            await db.proc_queue.update_one({"id": qid}, {"$set": {
+                "status": "documentacion_insuficiente",
+                "regla_67": f"{len(cats_ap)}/3 documentos válidos detectados"}})
+            await db.alertas.insert_one({
+                "id": str(uuid.uuid4()), "tipo": "regla_67", "nivel": "critica", "cliente": cliente,
+                "mensaje": f"🔒 Documentación insuficiente (Regla #67) — {cliente}: solo {len(cats_ap)}/3 documentos válidos. Carpeta NO creada.",
+                "fecha": now_iso(), "leida": False})
+            raise HTTPException(status_code=422, detail=fsvc.MSG_DOC_INSUFICIENTE)
         await db.folders.insert_one({"id": str(uuid.uuid4()), "nombre": cliente,
                                      "rut": cl.get("rut", ""), "archivos": uploaded,
                                      "codeudor_nombre": cod_nombre, "codeudor_rut": cod_rut,
@@ -9997,6 +10030,10 @@ async def martin_abrir_carpeta(payload: dict):
     ya = await db.folders.find_one({"nombre": {"$regex": f"^{re.escape(nombre)}$", "$options": "i"}})
     if ya:
         return {"ok": True, "id": ya["id"], "mensaje": "El cliente ya tenía carpeta en Central Mutuos"}
+    # 🔒 REGLA CONSTITUCIONAL #67 — sin 3 documentos mínimos NO se crea carpeta (ningún canal)
+    docs_lead = [str(d.get("nombre") or d.get("filename") or d) for d in (p.get("documentos") or [])]
+    if len(fsvc.docs_apertura_cats(docs_lead)) < 3:
+        raise HTTPException(status_code=422, detail=fsvc.MSG_DOC_INSUFICIENTE)
     sim = p.get("simulacion") or {}
     fid = str(uuid.uuid4())
     fsvc.folder_dir(nombre).mkdir(parents=True, exist_ok=True)
@@ -10404,6 +10441,10 @@ async def prospecto_promover(pid: str):
         raise HTTPException(status_code=400, detail="El prospecto no tiene nombre")
     fd = await db.folders.find_one({"nombre": nombre})
     if not fd:
+        # 🔒 REGLA CONSTITUCIONAL #67 — sin 3 documentos mínimos NO se crea carpeta (ningún canal)
+        docs_pros = [str(d.get("nombre") or d.get("filename") or d) for d in (p.get("documentos") or [])]
+        if len(fsvc.docs_apertura_cats(docs_pros)) < 3:
+            raise HTTPException(status_code=422, detail=fsvc.MSG_DOC_INSUFICIENTE)
         fd = {"id": str(uuid.uuid4()), "nombre": nombre, "rut": p.get("rut") or "",
               "email": p.get("email") or "", "telefono": p.get("telefono") or "",
               "proyecto": p.get("proyecto") or "", "archivos": [],
@@ -14619,6 +14660,14 @@ api.include_router(_gcom_mod.gcom)
 # 📋 AUDITORÍA DE CRÉDITOS → MESA — recibidos vs enviados (sistema + correo directo)
 import auditoria_mesa as _audim_mod
 api.include_router(_audim_mod.audimesa)
+
+# 📅 CALENDARIO DE CARPETAS + evaluaciones 'No Calificó'
+import calendario_carpetas as _calcarp_mod
+api.include_router(_calcarp_mod.calcarp)
+
+# 📦 IMPORTADOR .MBOX de gran tamaño (streaming por fragmentos)
+import mbox_import as _mbox_mod
+api.include_router(_mbox_mod.mbox)
 
 # 📧 DESTINATARIOS DE CORREO POR ACCIÓN — panel Admin/Gerencia Comercial
 import correo_destinatarios as _cdest_mod

@@ -136,6 +136,24 @@ def cat_de_texto(texto):
     return "extras"
 
 
+# ── REGLA CONSTITUCIONAL #67: apertura de carpeta con 3 documentos mínimos ──
+DOCS_APERTURA_VALIDOS = {"cedula", "afp", "cmf", "boletas", "liquidacion", "imp_renta"}
+MSG_DOC_INSUFICIENTE = ("Documentación insuficiente — Regla Constitucional #67: la apertura de una carpeta "
+                        "de solicitud de crédito exige al menos 3 de estos documentos: Carnet de Identidad, "
+                        "Certificado AFP, Informe CMF, Boletas de Honorarios, Liquidación de Sueldo o "
+                        "Declaración de Impuestos. Esta regla no admite excepciones.")
+
+
+def docs_apertura_cats(nombres):
+    """Categorías de documentos válidos para apertura detectadas en una lista de nombres de archivo."""
+    cats = set()
+    for n in nombres or []:
+        c = cat_de_texto(str(n))
+        if c in DOCS_APERTURA_VALIDOS:
+            cats.add(c)
+    return cats
+
+
 def scan_archivos(nombre):
     base = folder_dir(nombre)
     out = []

@@ -3,6 +3,7 @@ import axios from "axios";
 import DOMPurify from "dompurify";
 import ImportarCorreo from "../components/ImportarCorreo";
 import ConversorUF from "../components/ConversorUF";
+import CalendarioCarpetas from "../components/CalendarioCarpetas";
 import CompromisoEditor from "./CompromisoEditor";
 import { secureGet } from "../utils/secureStore";
 
@@ -214,7 +215,9 @@ export default function ClientesModule({ onNavigate }) {
   const [missingDocsModal, setMissingDocsModal] = useState(null); // { folder, to, extra, preview, sending }
   const [historialModal, setHistorialModal] = useState(null); // { folder, eventos, loading }
   const [_respaldoModal, setRespaldoModal] = useState(null); // { subiendo, progreso, resultado }
-  const [folderTab, setFolderTab] = useState("clientes"); // clientes | escrituracion
+  const [folderTab, setFolderTab] = useState("clientes"); // clientes | escrituracion | calendario
+  const [evalNeg, setEvalNeg] = useState({}); // folder_id → última simulación negativa (No Calificó)
+  const [notificandoNC, setNotificandoNC] = useState("");
   const [enriching, setEnriching] = useState(null); // `${folderId}${modo}` en progreso
   const [forzarModal, setForzarModal] = useState(null); // {nombre, rut, sug, buscando, forzando, msg}
 
@@ -245,6 +248,23 @@ export default function ClientesModule({ onNavigate }) {
   const uploadCtxRef = useRef(null); // { folder_id, subfolder }
 
   useEffect(() => { loadFolders(); loadUf(); }, []);
+  useEffect(() => {
+    axios.get(`${API}/api/clientes/evaluaciones-negativas`)
+      .then(r => setEvalNeg(r.data.negativas || {})).catch(() => setEvalNeg({}));
+  }, []);
+
+  const notificarNoCalifico = async (f) => {
+    if (!window.confirm(`Se enviará un correo al ejecutivo/solicitante asociado informando que ${f.nombre} NO CALIFICÓ en la evaluación. ¿Continuar?`)) return;
+    setNotificandoNC(f.id);
+    try {
+      const r = await axios.post(`${API}/api/clientes/folders/${f.id}/notificar-no-califico`, {});
+      window.alert(`✅ Resultado notificado a: ${(r.data.destinatarios || []).join(", ")}`);
+      loadFolders();
+    } catch (e) {
+      window.alert(e.response?.data?.detail || "No fue posible enviar la notificación");
+    }
+    setNotificandoNC("");
+  };
 
   const loadUf = async () => {
     try {
@@ -942,7 +962,7 @@ export default function ClientesModule({ onNavigate }) {
       setNewFolder({ nombre: "", rut: "", codeudor_nombre: "", codeudor_rut: "" });
       setShowCreate(false);
       await loadFolders();
-    } catch (err) { alert("Error creando carpeta"); }
+    } catch (err) { alert(err?.response?.data?.detail || "Error creando carpeta"); }
     setLoading(false);
   };
 
@@ -1549,7 +1569,7 @@ export default function ClientesModule({ onNavigate }) {
     return `${(bytes / 1048576).toFixed(1)} MB`;
   };
 
-  const filtered = folders.filter(f =>
+  const filtered = folderTab === "calendario" ? [] : folders.filter(f =>
     (!searchQuery || f.nombre.toLowerCase().includes(searchQuery.toLowerCase())) &&
     (folderTab === "escrituracion" ? !!f.is_escrituracion : !f.is_escrituracion)
   );
@@ -1618,7 +1638,16 @@ export default function ClientesModule({ onNavigate }) {
                 color: folderTab === "escrituracion" ? "#2e5ce6" : "#94a3b8" }}>
               <i className="fa fa-pencil-square"></i> Escrituración ({countEscrituracion})
             </button>
+            <button data-testid="tab-calendario" onClick={() => setFolderTab("calendario")}
+              style={{ padding: "0.55rem 1.2rem", borderRadius: 0, fontWeight: 800, fontSize: 13, cursor: "pointer",
+                background: folderTab === "calendario" ? "rgba(212,175,55,0.18)" : "rgba(148,163,184,0.08)",
+                border: folderTab === "calendario" ? "2px solid var(--gold, #d4af37)" : "1.5px solid rgba(148,163,184,0.3)",
+                color: folderTab === "calendario" ? "var(--gold, #d4af37)" : "#94a3b8" }}>
+              <i className="fa fa-calendar"></i> Calendario
+            </button>
           </div>
+
+          {folderTab === "calendario" && <CalendarioCarpetas />}
 
           {showCreate && (
             <div className="clientes-create-form" data-testid="create-folder-form">
@@ -1655,7 +1684,7 @@ export default function ClientesModule({ onNavigate }) {
           )}
 
           <div className="clientes-grid">
-            {filtered.length === 0 && (
+            {filtered.length === 0 && folderTab !== "calendario" && (
               <div className="clientes-empty">
                 <i className="fa fa-folder-open-o"></i>
                 <p>No hay carpetas de clientes{searchQuery ? " que coincidan" : ""}.</p>
@@ -1716,6 +1745,27 @@ export default function ClientesModule({ onNavigate }) {
                             fontSize: 10, padding: "2px 7px", background: "rgba(239,68,68,0.18)", color: "#ef4444" }}>
                           ⚠️ {(f.reparos_alertas || []).length + ((f.estudio_reparos || {}).items || []).length} reparo(s)
                         </button>
+                      )}
+                      {evalNeg[f.id] && (
+                        <>
+                          <span data-testid={`no-califico-${f.id}`}
+                            title={`Última evaluación del Motor (${evalNeg[f.id].fecha}): resultado negativo`}
+                            style={{ background: "#7f1d1d", color: "#fecaca", fontWeight: 900, fontSize: 10,
+                              letterSpacing: 1, padding: "2px 9px", border: "1px solid #ef4444" }}>
+                            ⛔ NO CALIFICÓ
+                          </span>
+                          <button data-testid={`btn-notificar-nc-${f.id}`}
+                            disabled={notificandoNC === f.id}
+                            onClick={(ev) => { ev.stopPropagation(); notificarNoCalifico(f); }}
+                            title={f.no_califico_notificado_at
+                              ? `Ya notificado el ${String(f.no_califico_notificado_at).slice(0, 16).replace("T", " ")}`
+                              : "Enviar correo al ejecutivo/solicitante informando el resultado negativo"}
+                            style={{ cursor: "pointer", border: "1px solid rgba(239,68,68,0.5)", borderRadius: 0,
+                              fontWeight: 800, fontSize: 10, padding: "2px 8px",
+                              background: "transparent", color: "#f87171" }}>
+                            {notificandoNC === f.id ? "Enviando…" : (f.no_califico_notificado_at ? "✓ Notificado" : "📧 Notificar al ejecutivo")}
+                          </button>
+                        </>
                       )}
                     </h4>
                     {f.rut && <span className="clientes-rut">{f.rut}{rutValido(f.rut) &&

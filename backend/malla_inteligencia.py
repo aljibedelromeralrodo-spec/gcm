@@ -170,6 +170,10 @@ async def broker_crear_carpeta(payload: dict, request: Request):
         raise HTTPException(status_code=400, detail="Nombre y RUT del cliente son obligatorios")
     if not _rut_limpio(rut) or len(_rut_limpio(rut)) < 8:
         raise HTTPException(status_code=400, detail="RUT inválido — el RUT es el pegamento del sistema (Regla #34)")
+    # 🔒 REGLA CONSTITUCIONAL #67 — sin 3 documentos mínimos NO se crea carpeta (sin excepciones)
+    docs_bk = [str(d.get("nombre") or d.get("filename") or d) for d in (payload.get("documentos") or [])]
+    if len(fsvc.docs_apertura_cats(docs_bk)) < 3:
+        raise HTTPException(status_code=422, detail=fsvc.MSG_DOC_INSUFICIENTE)
     # REGLA RUT ÚNICO: el primer broker que registró el RUT retiene al cliente permanentemente
     rutn = _rut_limpio(rut)
     async for fd0 in db.folders.find({"rut": {"$exists": True, "$ne": ""}},
@@ -4320,6 +4324,10 @@ async def supercarpeta_cliente_agregar(payload: dict, request: Request):
     nombre = (payload.get("nombre") or "").strip().upper()
     if len(nombre) < 5 or len(nombre.split()) < 2:
         raise HTTPException(status_code=400, detail="Nombre inválido (nombre y apellido)")
+    # 🔒 REGLA CONSTITUCIONAL #67 — sin 3 documentos mínimos NO se crea carpeta (sin excepciones)
+    docs_sc = [str(d.get("nombre") or d.get("filename") or d) for d in (payload.get("documentos") or [])]
+    if len(fsvc.docs_apertura_cats(docs_sc)) < 3:
+        raise HTTPException(status_code=422, detail=fsvc.MSG_DOC_INSUFICIENTE)
     if await db.folders.find_one({"nombre": {"$regex": f"^{re.escape(nombre)}$", "$options": "i"},
                                   "oculto_supercarpeta": {"$exists": False}}):
         raise HTTPException(status_code=409, detail="Ese cliente ya existe en la Supercarpeta")
