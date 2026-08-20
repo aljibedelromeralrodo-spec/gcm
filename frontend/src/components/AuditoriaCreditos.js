@@ -81,14 +81,16 @@ export default function AuditoriaCreditos() {
       {/* ═══ SECCIÓN 1: ENVIADOS A MESA ═══ */}
       <div style={{ ...LBL, color: "#4ade80", marginBottom: 6 }}>✅ Enviados a mesa ({d.enviados.length})</div>
       <div style={{ ...panel, overflow: "auto", marginBottom: 16, maxHeight: 340 }}>
-        <table data-testid="audit-tabla-enviados" style={{ width: "100%", borderCollapse: "collapse", minWidth: 760 }}>
-          <thead><tr>{["Cliente", "RUT", "Monto UF", "Ejecutivo responsable", "Recepción", "Envío a mesa", "Vía"].map(h =>
+        <table data-testid="audit-tabla-enviados" style={{ width: "100%", borderCollapse: "collapse", minWidth: 900 }}>
+          <thead><tr>{["Cliente", "RUT", "Inmobiliaria", "Proyecto", "Monto UF", "Ejecutivo responsable", "Recepción", "Envío a mesa", "Vía"].map(h =>
             <th key={h} style={th}>{h}</th>)}</tr></thead>
           <tbody>
             {d.enviados.map((f, i) => (
               <tr key={f.folder_id || i} style={{ background: i % 2 === 0 ? "#0b0b0b" : "#101010" }}>
                 <td style={{ ...td, color: "#fff", fontWeight: 700 }}>{f.cliente}</td>
                 <td style={{ ...td, fontFamily: "monospace" }}>{f.rut || "—"}</td>
+                <td style={{ ...td, color: "#b8b2a0" }}>{f.inmobiliaria || "—"}</td>
+                <td style={{ ...td, color: "#9a9483" }}>{f.proyecto || "—"}</td>
                 <td style={{ ...td, textAlign: "right", color: ORO_CLARO, fontWeight: 700 }}>{f.monto_uf ? fmt(f.monto_uf) : "—"}</td>
                 <td style={td}>{f.ejecutivo}</td>
                 <td style={{ ...td, whiteSpace: "nowrap" }}>{f.fecha_recepcion}</td>
@@ -98,7 +100,7 @@ export default function AuditoriaCreditos() {
                   color: f.via === "Sistema" ? "#38bdf8" : ORO_CLARO }}>{f.via}</span></td>
               </tr>
             ))}
-            {d.enviados.length === 0 && <tr><td colSpan={7} style={{ ...td, textAlign: "center", color: "#7a7a7a" }}>
+            {d.enviados.length === 0 && <tr><td colSpan={9} style={{ ...td, textAlign: "center", color: "#7a7a7a" }}>
               Sin envíos a mesa en el período.</td></tr>}
           </tbody>
         </table>
@@ -107,14 +109,16 @@ export default function AuditoriaCreditos() {
       {/* ═══ SECCIÓN 2: NO ENVIADOS A MESA ═══ */}
       <div style={{ ...LBL, color: "#ef4444", marginBottom: 6 }}>⏳ No enviados a mesa ({d.pendientes.length})</div>
       <div style={{ ...panel, overflow: "auto", maxHeight: 420, borderColor: d.pendientes.length ? "rgba(239,68,68,0.35)" : BORDE }}>
-        <table data-testid="audit-tabla-pendientes" style={{ width: "100%", borderCollapse: "collapse", minWidth: 760 }}>
-          <thead><tr>{["Cliente", "RUT", "Monto UF", "Ejecutivo responsable", "Recepción", "Motivo de retención"].map(h =>
+        <table data-testid="audit-tabla-pendientes" style={{ width: "100%", borderCollapse: "collapse", minWidth: 900 }}>
+          <thead><tr>{["Cliente", "RUT", "Inmobiliaria", "Proyecto", "Monto UF", "Ejecutivo responsable", "Recepción", "Motivo de retención"].map(h =>
             <th key={h} style={th}>{h}</th>)}</tr></thead>
           <tbody>
             {d.pendientes.map((f, i) => (
               <tr key={f.folder_id || i} style={{ background: i % 2 === 0 ? "#0b0b0b" : "#101010" }}>
                 <td style={{ ...td, color: "#fff", fontWeight: 700 }}>{f.cliente}</td>
                 <td style={{ ...td, fontFamily: "monospace" }}>{f.rut || "—"}</td>
+                <td style={{ ...td, color: "#b8b2a0" }}>{f.inmobiliaria || "—"}</td>
+                <td style={{ ...td, color: "#9a9483" }}>{f.proyecto || "—"}</td>
                 <td style={{ ...td, textAlign: "right", color: ORO_CLARO, fontWeight: 700 }}>{f.monto_uf ? fmt(f.monto_uf) : "—"}</td>
                 <td style={td}>{f.ejecutivo}</td>
                 <td style={{ ...td, whiteSpace: "nowrap" }}>{f.fecha_recepcion}</td>
@@ -125,7 +129,7 @@ export default function AuditoriaCreditos() {
                 </td>
               </tr>
             ))}
-            {d.pendientes.length === 0 && <tr><td colSpan={6} style={{ ...td, textAlign: "center", color: "#4ade80" }}>
+            {d.pendientes.length === 0 && <tr><td colSpan={8} style={{ ...td, textAlign: "center", color: "#4ade80" }}>
               🏆 Todas las solicitudes del período fueron derivadas a mesa.</td></tr>}
           </tbody>
         </table>

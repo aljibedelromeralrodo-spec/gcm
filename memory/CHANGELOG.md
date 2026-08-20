@@ -1626,3 +1626,11 @@ Constitución VERSION 19 (nuevas reglas #55, #56, #57).
   enviadas/pendientes), 2 tablas negro/dorado, selector 3/7/15 días, export Excel 2 hojas.
 - Verificado: curl backend (23 recibidas, 6 correo directo, 17 pendientes con motivos reales) + screenshot UI.
 - BACKLOG: gestor credenciales Crece (pendiente URL del portal y datos a extraer — usuario no respondió aún).
+
+## 20/06/2026 (3) — Auditoría de Créditos: columnas Inmobiliaria y Proyecto
+- Derivación inteligente en cascada (auditoria_mesa.py): carpeta → ADN 360 → df.inmobiliaria validada
+  contra catálogo `inmobiliarias`/`contactos_inmobiliarios` → dominio del correo de origen (ecomac.cl→ECOMAC).
+- Si df.inmobiliaria contiene texto de proyecto (error de extracción IA), se reclasifica como proyecto.
+- Columnas agregadas a ambas tablas de la UI y a las 2 hojas del Excel.
+- HALLAZGO OPERATIVO: el hot-reload de uvicorn queda COLGADO tras editar archivos backend (loops de fondo
+  bloquean el shutdown) → siempre `sudo supervisorctl restart backend` después de editar código backend.

@@ -100,6 +100,53 @@ def _motivos_retencion(f, contraste_map, ahora):
     return motivos
 
 
+DOMINIOS_GENERICOS = ("gmail", "hotmail", "outlook", "yahoo", "centralmutuos", "concreces", "live", "icloud")
+
+
+def _derivar_inmo_proy(f, adn, catalogo):
+    """Inmobiliaria/proyecto en cascada: carpeta → ADN → df (validado contra catálogo)
+    → dominio del correo de origen. df.inmobiliaria con texto de proyecto se reclasifica."""
+    df = f.get("datos_financieros") or {}
+    inmo = (f.get("inmobiliaria") or "").strip() or (adn.get("inmobiliaria") or "").strip()
+    proy = (f.get("proyecto") or "").strip() or (adn.get("proyecto") or "").strip() or (df.get("proyecto") or "").strip()
+    df_inmo = (df.get("inmobiliaria") or "").strip()
+    if df_inmo:
+        low = df_inmo.lower()
+        cat = next((c for c in catalogo if c["norm"] in low or low in c["norm"]), None)
+        if cat:
+            inmo = inmo or cat["nombre"]
+        elif not proy:
+            proy = df_inmo  # la IA guardó el proyecto en el campo inmobiliaria
+    if not inmo:
+        m = re.search(r"@([a-z0-9.-]+)", str(f.get("source_email") or "").lower())
+        if m:
+            dominio = m.group(1)
+            raiz = dominio.split(".")[0]
+            cat = next((c for c in catalogo if c["dominio"] and c["dominio"] in dominio), None)
+            if cat:
+                inmo = cat["nombre"]
+            elif raiz and raiz not in DOMINIOS_GENERICOS:
+                inmo = f"{raiz.capitalize()} ({dominio})"
+    return inmo, proy
+
+
+async def _catalogo_inmobiliarias():
+    cat = []
+    async for d in db.inmobiliarias.find({}, {"_id": 0, "nombre": 1, "nombre_norm": 1, "email": 1}):
+        dominio = ""
+        m = re.search(r"@([a-z0-9.-]+)", (d.get("email") or "").lower())
+        if m:
+            dominio = m.group(1)
+        cat.append({"nombre": d.get("nombre") or "", "norm": (d.get("nombre_norm") or "").lower(),
+                    "dominio": dominio})
+    async for d in db.contactos_inmobiliarios.find({}, {"_id": 0, "inmobiliaria": 1, "email": 1}):
+        nom = (d.get("inmobiliaria") or "").strip()
+        if nom and not any(c["norm"] == nom.lower() for c in cat):
+            m = re.search(r"@([a-z0-9.-]+)", (d.get("email") or "").lower())
+            cat.append({"nombre": nom, "norm": nom.lower(), "dominio": m.group(1) if m else ""})
+    return cat
+
+
 async def _auditoria(dias):
     ahora = datetime.now(timezone.utc)
     dias = max(1, min(int(dias or 3), 30))
@@ -107,7 +154,24 @@ async def _auditoria(dias):
     folders = await db.folders.find({"created_at": {"$gte": corte}}, {
         "_id": 0, "id": 1, "nombre": 1, "rut": 1, "created_at": 1, "updated_at": 1,
         "datos_financieros": 1, "credit_request": 1, "ejecutivo_interno": 1,
-        "broker_nombre": 1, "mesa_enviado_at": 1, "mesa_message_id": 1}).sort("created_at", -1).to_list(1000)
+        "inmobiliaria": 1, "proyecto": 1,
+        "broker_nombre": 1, "mesa_enviado_at": 1, "mesa_message_id": 1,
+        "source_email": 1}).sort("created_at", -1).to_list(1000)
+    catalogo = await _catalogo_inmobiliarias()
+    # Respaldo ADN 360 para inmobiliaria/proyecto cuando la carpeta no lo trae
+    adn_map = {}
+    try:
+        import adn_clientes as _adn
+        ruts = [_adn._norm_rut(f["rut"]) for f in folders if f.get("rut")]
+        async for a in db.adn_clientes_360.find({"rut_norm": {"$in": ruts}},
+                                                {"_id": 0, "rut_norm": 1, "propiedad": 1, "expediente_360": 1}):
+            prop = a.get("propiedad") or {}
+            exp = (a.get("expediente_360") or {}).get("propiedad") or {}
+            adn_map[a["rut_norm"]] = {
+                "inmobiliaria": prop.get("inmobiliaria") or exp.get("inmobiliaria") or "",
+                "proyecto": prop.get("proyecto") or exp.get("proyecto") or ""}
+    except Exception:
+        adn_map = {}
     mesa_docs = await db.mesa_enviados.find({}, {"_id": 0, "cliente": 1, "nombre": 1,
                                                  "rut": 1, "enviado_at": 1}).to_list(5000)
     mesa_idx = [(_norm_tokens(m.get("cliente") or m.get("nombre")), _rut_limpio(m.get("rut")), m)
@@ -116,9 +180,16 @@ async def _auditoria(dias):
                      db.bodega_contraste.find({}, {"_id": 0, "folder_id": 1, "estado": 1})}
     enviados, pendientes = [], []
     for f in folders:
+        try:
+            import adn_clientes as _adn
+            adn = adn_map.get(_adn._norm_rut(f.get("rut") or ""), {})
+        except Exception:
+            adn = {}
+        inmo, proy = _derivar_inmo_proy(f, adn, catalogo)
         base = {
             "folder_id": f.get("id"), "cliente": f.get("nombre") or "—",
             "rut": f.get("rut") or "", "monto_uf": _monto_uf(f),
+            "inmobiliaria": inmo, "proyecto": proy,
             "ejecutivo": (f.get("ejecutivo_interno") or "").strip() or (f.get("broker_nombre") or "").strip() or "—",
             "fecha_recepcion": str(f.get("created_at") or "")[:16].replace("T", " ")}
         via, fecha_envio = None, ""
@@ -178,13 +249,15 @@ async def auditoria_mesa_xlsx(request: Request, dias: int = 3):
             ws.column_dimensions[ws.cell(row=2, column=i).column_letter].width = c[2]
 
     _hoja(wb.active, "Enviados a Mesa",
-          [("Cliente", "cliente", 30), ("RUT", "rut", 15), ("Monto UF", "monto_uf", 12),
+          [("Cliente", "cliente", 30), ("RUT", "rut", 15), ("Inmobiliaria", "inmobiliaria", 20),
+           ("Proyecto", "proyecto", 20), ("Monto UF", "monto_uf", 12),
            ("Ejecutivo responsable", "ejecutivo", 22), ("Fecha recepción", "fecha_recepcion", 18),
            ("Fecha envío a mesa", "fecha_envio_mesa", 18), ("Vía", "via", 14)],
           d["enviados"])
     ws2 = wb.create_sheet()
     _hoja(ws2, "No Enviados",
-          [("Cliente", "cliente", 30), ("RUT", "rut", 15), ("Monto UF", "monto_uf", 12),
+          [("Cliente", "cliente", 30), ("RUT", "rut", 15), ("Inmobiliaria", "inmobiliaria", 20),
+           ("Proyecto", "proyecto", 20), ("Monto UF", "monto_uf", 12),
            ("Ejecutivo responsable", "ejecutivo", 22), ("Fecha recepción", "fecha_recepcion", 18),
            ("Motivo de retención", "motivos_txt", 80)],
           [{**p, "motivos_txt": " | ".join(p["motivos_retencion"])} for p in d["pendientes"]])
