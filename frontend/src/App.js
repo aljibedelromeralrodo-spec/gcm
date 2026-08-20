@@ -22,7 +22,6 @@ const CentralChat = lazy(() => import("./components/CentralChat"));
 const SeguimientoModule = lazy(() => import("./pages/SeguimientoModule"));
 const UsuariosModule = lazy(() => import("./pages/UsuariosModule"));
 const GerenciaComercialModule = lazy(() => import("./pages/GerenciaComercialModule"));
-const GestionEjecutivosModule = lazy(() => import("./pages/GestionEjecutivosModule"));
 const AdministracionModule = lazy(() => import("./pages/AdministracionModule"));
 const BrokersModule = lazy(() => import("./pages/BrokersModule"));
 const MiCorreoModule = lazy(() => import("./pages/MiCorreoModule"));
@@ -92,10 +91,10 @@ const MODS_ADMINISTRATIVOS = ['administracion', 'usuarios', 'criterios', 'whatsa
   'procesamiento', 'basehistorica', 'gastos', 'setcredito', 'formato', 'clientes', 'simulador',
   'historial', 'calculadora', 'seguimiento', 'aprobacion', 'tasacion', 'estudio', 'escritura',
   'cierres', 'salud', 'rescate', 'aprendizaje', 'oportunidades', 'dashai', 'auditoria', 'despacho'];
-const MODS_TODOS = ['dashboard', ...MODS_ADMINISTRATIVOS, 'gerencia', 'gestion-ejecutivos',
+const MODS_TODOS = ['dashboard', ...MODS_ADMINISTRATIVOS, 'gerencia',
   'supercarpeta', 'brokers', 'micorreo', 'postventa', 'contraloria', 'contralor'];
 const ACCESOS_ROL = {
-  gerencia: { total: ['dashboard', 'gerencia', 'gestion-ejecutivos', 'supercarpeta', 'postventa', 'micorreo'], lectura: MODS_ADMINISTRATIVOS },
+  gerencia: { total: ['dashboard', 'gerencia', 'supercarpeta', 'postventa', 'micorreo'], lectura: MODS_ADMINISTRATIVOS },
   administracion: { total: ['dashboard', ...MODS_ADMINISTRATIVOS, 'micorreo'], lectura: ['contralor'] },
   postventa: { total: ['dashboard', 'postventa', 'micorreo'], lectura: ['contralor'] },
   broker: { total: ['dashboard', 'brokers', 'micorreo'], lectura: [] },
@@ -103,7 +102,7 @@ const ACCESOS_ROL = {
 };
 const PERMISOS_LEGADO = {
   A: ['dashboard', 'clientes', 'simulador', 'historial', 'calculadora', 'formato', 'setcredito', 'micorreo'],
-  B: ['dashboard', 'contraloria', 'criterios', 'seguimiento', 'gerencia', 'gestion-ejecutivos', 'supercarpeta', 'administracion', 'salud', 'micorreo'],
+  B: ['dashboard', 'contraloria', 'criterios', 'seguimiento', 'gerencia', 'supercarpeta', 'administracion', 'salud', 'micorreo'],
   D: ['brokers', 'micorreo'],
 };
 
@@ -298,7 +297,6 @@ function MainApp() {
     { key: 'procesamiento', icon: 'fa-inbox', label: 'Procesamiento Correo' },
     { key: 'basehistorica', icon: 'fa-university', label: 'Base de Datos Histórica' },
     { key: 'gerencia', icon: 'fa-line-chart', label: 'Gerencia Comercial' },
-    { key: 'gestion-ejecutivos', icon: 'fa-users', label: 'Gestión Ejecutivos' },
     { key: 'supercarpeta', icon: 'fa-folder-open', label: 'Supercarpeta' },
     { key: 'administracion', icon: 'fa-database', label: 'Administración' },
     { key: 'brokers', icon: 'fa-briefcase', label: 'Panel Broker' },
@@ -518,7 +516,6 @@ function MainApp() {
         {activeModule === 'seguimiento' && <SeguimientoModule />}
         {activeModule === 'usuarios' && <UsuariosModule />}
         {activeModule === 'gerencia' && <GerenciaComercialModule />}
-        {activeModule === 'gestion-ejecutivos' && <GestionEjecutivosModule />}
         {activeModule === 'administracion' && <AdministracionModule user={uEff} />}
         {activeModule === 'brokers' && <BrokersModule user={uEff} />}
         {activeModule === 'micorreo' && <MiCorreoModule user={uEff} />}

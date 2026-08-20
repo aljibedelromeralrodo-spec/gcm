@@ -1,0 +1,25 @@
+{
+  "summary": "Iteración 43 — Refactor Gerencia Comercial (fusión con Gestión Ejecutivos, KPIs, ranking, alertas, ficha ejecutivo, export PDF/Excel). Backend: 8/8 tests pass (centro-mando gerencia/admin OK, broker 403, ficha victoria/inexistente, PDF PIN 0586 y 9999, cartera con creado+dicom). Frontend: 25/25 data-testid presentes en Gerencia Comercial, sin scroll horizontal a 1920px, sidebar sin 'Gestión Ejecutivos'. Ficha ejecutivo modal abre/cierra correctamente. Fuentes modal abre/cierra. Filtro-estado 'Escrituradas' cambia sumatoria 16→0 y filtro-limpiar restaura. PDF descarga con PIN 0586 vía prompt (Reporte_Gerencia_2026-08.pdf). Excel descarga OK. Regresión admin: Gerencia Comercial + Usuarios funcionan.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/tests/test_iter43_gerencia_comercial.py",
+    "/app/test_reports/pytest/iter43_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py sigue en ~14685 líneas (crítico); considerar seguir modularizando (auth, usuarios, exports) para mantenibilidad.",
+    "Login POST /api/auth/login se cuelga tras hot-reload por WatchFiles (ver detalle en RCA). En entornos con múltiples test files se sugiere aislar tests bajo /app/tests (fuera de backend/) para no disparar reloads.",
+    "El backend puede quedar en estado 'shutting down' indefinidamente cuando WatchFiles reinicia con dependencias tardías; añadir timeout de shutdown en uvicorn (--timeout-graceful-shutdown 5) mitigaría el hang."
+  ],
+  "updated_files": [
+    "/app/tests/test_iter43_gerencia_comercial.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "gerencia/Gerencia2026, administrador/141617575, broker/Broker2026 · PIN PDF 0586",
+  "seed_data_creation": "Ninguna. Se usó la data existente (128 ops activas, 3 ejecutivos, 0 DICOM).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "El backend tiene HOT RELOAD con uvicorn --reload que observa /app/backend/**. Poner test files bajo /app/backend/tests provoca que WatchFiles reinicie y el proceso quede en estado 'shutting down' bloqueando POST /api/auth/login por varios segundos/minutos. Regla: colocar test files bajo /app/tests. El nuevo test suite /app/tests/test_iter43_gerencia_comercial.py cubre centro-mando (gerencia/admin/broker), ficha ejecutivo, export PDF y regresión de /api/gerencia/cartera. La respuesta de /api/gerencia/cartera es un dict con key 'cartera' (no 'filas'). El modal 'Briefing Mañanero' reaparece al navegar a Gerencia Comercial; hay que cerrarlo (button:has-text('Comenzar jornada')) tras la navegación además de tras el login.",
+  "rca of the issue": "N/A — no se detectaron bugs. Nota operativa: durante la primera corrida, POST /api/auth/login se colgó porque WatchFiles detectó cambios en backend/tests/*.py y el server quedó en estado 'shutting down' sin completar restart. Al mover los tests a /app/tests/ y reiniciar el backend por supervisorctl, todo pasó a la primera."
+}

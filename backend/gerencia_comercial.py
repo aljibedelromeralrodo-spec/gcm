@@ -546,3 +546,230 @@ async def tracker_toggle(tipo: str, ref: str, payload: dict, request: Request):
         "$set": {f"pasos.{paso_id}": entrada, "actualizado": _now()},
         "$setOnInsert": {"id": str(uuid.uuid4()), "creado": _now()}}, upsert=True)
     return {"ok": True, "paso": paso_id, **entrada}
+
+
+
+# ═══ CENTRO DE MANDO UNIFICADO — fusión Gestión de Ejecutivos + KPIs + Alertas ═══
+def _monto_folder(fd):
+    df = fd.get("datos_financieros") or {}
+    try:
+        v = float(df.get("monto_credito") or 0)
+        if v:
+            return v
+    except (TypeError, ValueError):
+        pass
+    cr = fd.get("credit_request") or {}
+    for k in ("monto_credito_uf", "monto_uf", "monto_credito", "monto"):
+        try:
+            x = float(str(cr.get(k) or 0).replace(",", "."))
+            if x:
+                return x
+        except (TypeError, ValueError):
+            continue
+    return 0.0
+
+
+def _dias_folder(fd, ahora):
+    ts = fd.get("updated_at") or fd.get("created_at") or ""
+    try:
+        dt = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return (ahora - dt).days
+    except (TypeError, ValueError):
+        return 0
+
+
+@gcom.get("/centro-mando")
+async def centro_mando(request: Request):
+    """Panel único de Rodrigo: KPIs, ranking, tabla de ejecutivos con IMAP y alertas inteligentes.
+    Mora = cliente con morosidad vigente en DICOM (datos_financieros.morosidad_dicom)."""
+    _exigir(request, ("gerencia", "admin", "maestro", "contralor"))
+    ahora = datetime.now(timezone.utc)
+    mes = ahora.strftime("%Y-%m")
+    folders = await db.folders.find({}, {
+        "_id": 0, "id": 1, "nombre": 1, "rut": 1, "is_escrituracion": 1, "fecha_firma": 1,
+        "datos_financieros": 1, "credit_request": 1, "created_at": 1, "updated_at": 1}).to_list(3000)
+    total_uf = round(sum(_monto_folder(f) for f in folders), 1)
+    escrituradas = sum(1 for f in folders if f.get("is_escrituracion"))
+    activas = len(folders) - escrituradas
+    nuevas_mes = sum(1 for f in folders if str(f.get("created_at") or "").startswith(mes))
+    mora = [f for f in folders if (f.get("datos_financieros") or {}).get("morosidad_dicom")]
+    mora_uf = round(sum(_monto_folder(f) for f in mora), 1)
+
+    try:
+        desem = await ejecutivos_desempeno(request)
+    except HTTPException:
+        desem = {"ejecutivos": [], "consolidado": {"tareas_vencidas": 0, "tareas_pendientes": 0}}
+    des_por_cod = {e["codigo"]: e for e in desem["ejecutivos"]}
+
+    from espejo_hibrido import FUENTES, _estado_fuente
+    imap_por_cod = {}
+    for fu in FUENTES:
+        st = await _estado_fuente(fu)
+        imap_por_cod[fu["usuario_codigo"]] = {
+            "estado": st["estado"], "email": st["email"],
+            "ultimo_barrido": (st.get("ultimo_barrido") or {}).get("fecha", ""),
+            "correos_totales": st.get("correos_totales", 0)}
+
+    no_esc = [f for f in folders if not f.get("is_escrituracion")]
+    esc = [f for f in folders if f.get("is_escrituracion")]
+    pv_act = await db.postventa_casos.count_documents({})
+    pv_res = await db.postventa_aprendizaje.count_documents({})
+    ejecutivos = []
+    for a in await db.ejecutivos_modulo.find({}, {"_id": 0}).to_list(10):
+        scope = esc if a["modulo"] == "postventa" else no_esc
+        d = des_por_cod.get(a["codigo"], {})
+        if a["modulo"] == "postventa":
+            tasa = round(pv_res / (pv_act + pv_res) * 100) if (pv_act + pv_res) else 0
+        else:
+            tasa = round(escrituradas / len(folders) * 100) if folders else 0
+        mora_gen = sum(1 for f in scope if (f.get("datos_financieros") or {}).get("morosidad_dicom"))
+        ejecutivos.append({
+            "codigo": a["codigo"], "nombre": a["nombre"], "modulo": a["modulo"],
+            "cartera_ops": len(scope), "cartera_uf": round(sum(_monto_folder(f) for f in scope), 1),
+            "ops_activas": d.get("ops_activas", len(scope)), "tasa_cierre": tasa,
+            "mora_generada": mora_gen,
+            "tareas_pendientes": d.get("tareas_pendientes", 0),
+            "tareas_vencidas": d.get("tareas_vencidas", 0),
+            "ratio_cumplimiento": d.get("ratio_cumplimiento"),
+            "completadas_total": d.get("completadas_total", 0),
+            "imap": imap_por_cod.get(a["codigo"], {"estado": "en_espera", "email": ""})})
+    ranking = sorted(ejecutivos, key=lambda e: (
+        -(e["ratio_cumplimiento"] or 0), e["tareas_vencidas"], -e["tasa_cierre"], -e["completadas_total"]))
+
+    sin_act = sorted([{"cliente": f.get("nombre"), "rut": f.get("rut") or "", "dias": _dias_folder(f, ahora)}
+                      for f in no_esc if _dias_folder(f, ahora) >= 7], key=lambda x: -x["dias"])[:12]
+    prox = []
+    for f in folders:
+        ff = str(f.get("fecha_firma") or "")[:10]
+        if not ff:
+            continue
+        try:
+            delta = (datetime.fromisoformat(ff).replace(tzinfo=timezone.utc) - ahora).days
+            if 0 <= delta <= 7 and not f.get("is_escrituracion"):
+                prox.append({"cliente": f.get("nombre"), "fecha_firma": ff, "dias_restantes": delta})
+        except ValueError:
+            continue
+
+    return {"mes": mes, "actualizado": _now(),
+            "kpis": {"cartera_total_uf": total_uf, "cartera_total_ops": len(folders),
+                     "operaciones_activas": activas, "escrituradas": escrituradas,
+                     "nuevas_mes": nuevas_mes,
+                     "mora_vigente": {"n": len(mora), "uf": mora_uf,
+                                      "clientes": [{"cliente": f.get("nombre"), "rut": f.get("rut") or ""}
+                                                   for f in mora[:10]]}},
+            "ranking": ranking, "ejecutivos": ejecutivos,
+            "alertas": {
+                "ejecutivos_mora_alta": [{"nombre": e["nombre"], "mora": e["mora_generada"]}
+                                         for e in ejecutivos if e["mora_generada"] >= 1],
+                "operaciones_vencidas": {"tareas_vencidas": desem["consolidado"].get("tareas_vencidas", 0),
+                                         "firmas_proximas": sorted(prox, key=lambda x: x["dias_restantes"])[:10]},
+                "clientes_sin_actividad": sin_act}}
+
+
+@gcom.get("/ejecutivo/{codigo}/ficha")
+async def ejecutivo_ficha(codigo: str, request: Request):
+    """Ficha completa del ejecutivo: historial de operaciones, métricas y comunicaciones."""
+    _exigir(request, ("gerencia", "admin", "maestro", "contralor"))
+    a = await db.ejecutivos_modulo.find_one({"codigo": codigo}, {"_id": 0})
+    if not a:
+        raise HTTPException(status_code=404, detail="Ejecutivo no encontrado")
+    try:
+        desem = await ejecutivos_desempeno(request)
+        d = next((e for e in desem["ejecutivos"] if e["codigo"] == codigo), {})
+    except HTTPException:
+        d = {}
+    ahora = datetime.now(timezone.utc)
+    q = {"is_escrituracion": True} if a["modulo"] == "postventa" else {"is_escrituracion": {"$ne": True}}
+    ops = []
+    async for f in db.folders.find(q, {"_id": 0, "nombre": 1, "rut": 1, "datos_financieros": 1,
+                                       "credit_request": 1, "updated_at": 1, "created_at": 1,
+                                       "is_escrituracion": 1}).sort("updated_at", -1).limit(30):
+        ops.append({"cliente": f.get("nombre"), "rut": f.get("rut") or "",
+                    "monto_uf": _monto_folder(f),
+                    "dicom": bool((f.get("datos_financieros") or {}).get("morosidad_dicom")),
+                    "etapa": "Escrituración" if f.get("is_escrituracion") else "Administrativa",
+                    "dias_sin_movimiento": _dias_folder(f, ahora),
+                    "actualizado": str(f.get("updated_at") or "")[:10]})
+    from espejo_hibrido import FUENTES
+    fu = next((x for x in FUENTES if x["usuario_codigo"] == codigo), None)
+    email_e = fu["email"] if fu else ""
+    enviadas = []
+    if email_e:
+        async for c in db.correos_smtp_log.find(
+                {"$or": [{"to": {"$regex": email_e, "$options": "i"}},
+                         {"cc": {"$regex": email_e, "$options": "i"}}]},
+                {"_id": 0, "fecha": 1, "subject": 1, "success": 1, "desde": 1}).sort("fecha", -1).limit(15):
+            enviadas.append(c)
+    espejo = []
+    if fu:
+        async for c in db.espejo_hibrido_correos.find(
+                {"fuente": fu["fid"]},
+                {"_id": 0, "fecha": 1, "asunto": 1, "resumen": 1, "tipo_comunicacion": 1}).sort("fecha", -1).limit(10):
+            espejo.append(c)
+    return {"ejecutivo": {**a, "email": email_e}, "metricas": d, "historial_operaciones": ops,
+            "comunicaciones": {"enviadas": enviadas, "espejo": espejo}}
+
+
+@gcom.get("/export-pdf")
+async def gerencia_export_pdf(request: Request, pin: str = ""):
+    """Reporte PDF ejecutivo (KPIs + ranking + ejecutivos). Protegido por PIN maestro."""
+    import os
+    import io
+    _exigir(request, ("gerencia", "admin", "maestro"))
+    if not pin or pin != os.environ.get("MASTER_PIN", ""):
+        raise HTTPException(status_code=403, detail="PIN maestro incorrecto — la exportación PDF está protegida")
+    cm = await centro_mando(request)
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib import colors
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    ORO = colors.HexColor("#C9A227")
+    NEGRO = colors.HexColor("#0a0a0a")
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=letter, topMargin=36, bottomMargin=36)
+    ss = getSampleStyleSheet()
+    titulo = ParagraphStyle("t", parent=ss["Title"], textColor=ORO, fontSize=18, spaceAfter=2)
+    sub = ParagraphStyle("s", parent=ss["Normal"], textColor=colors.HexColor("#555555"), fontSize=9)
+    h2 = ParagraphStyle("h", parent=ss["Heading2"], textColor=NEGRO, fontSize=12, spaceBefore=14)
+    k = cm["kpis"]
+    est_tabla = TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), NEGRO), ("TEXTCOLOR", (0, 0), (-1, 0), ORO),
+        ("FONTSIZE", (0, 0), (-1, -1), 8.5), ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#cccccc")),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f5f2e8")]),
+        ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5)])
+    kpi_tbl = Table([
+        ["Cartera Total (UF)", "Operaciones Activas", "Mora Vigente (DICOM)", "Nuevas del Mes", "Escrituradas"],
+        [f'{k["cartera_total_uf"]:,.0f} UF · {k["cartera_total_ops"]} ops', str(k["operaciones_activas"]),
+         f'{k["mora_vigente"]["n"]} cliente(s) · {k["mora_vigente"]["uf"]:,.0f} UF',
+         str(k["nuevas_mes"]), str(k["escrituradas"])]], colWidths=[110, 100, 130, 90, 90])
+    kpi_tbl.setStyle(est_tabla)
+    rk_filas = [["#", "Ejecutivo", "Módulo", "Cartera", "Ops Activas", "Tasa Cierre", "Mora", "Cumplimiento"]]
+    for i, e in enumerate(cm["ranking"], 1):
+        rk_filas.append([str(i), e["nombre"], e["modulo"], f'{e["cartera_uf"]:,.0f} UF ({e["cartera_ops"]})',
+                         str(e["ops_activas"]), f'{e["tasa_cierre"]}%', str(e["mora_generada"]),
+                         f'{e["ratio_cumplimiento"]}%' if e["ratio_cumplimiento"] is not None else "s/d"])
+    rk_tbl = Table(rk_filas, colWidths=[18, 110, 75, 95, 60, 60, 40, 75])
+    rk_tbl.setStyle(est_tabla)
+    al = cm["alertas"]
+    alertas_txt = (f'Ejecutivos con mora alta: {len(al["ejecutivos_mora_alta"])} · '
+                   f'Tareas vencidas: {al["operaciones_vencidas"]["tareas_vencidas"]} · '
+                   f'Firmas próximas (7 días): {len(al["operaciones_vencidas"]["firmas_proximas"])} · '
+                   f'Clientes sin actividad reciente: {len(al["clientes_sin_actividad"])}')
+    hoy = datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M UTC")
+    doc.build([
+        Paragraph("CENTRAL MUTUOS — GERENCIA COMERCIAL", titulo),
+        Paragraph(f"Centro de Mando · Reporte Ejecutivo · Mes {cm['mes']} · Generado el {hoy}", sub),
+        Paragraph("Indicadores Principales", h2), kpi_tbl,
+        Paragraph("Ranking de Ejecutivos", h2), rk_tbl,
+        Paragraph("Alertas Inteligentes", h2), Paragraph(alertas_txt, ss["Normal"]),
+        Spacer(1, 18),
+        Paragraph("Documento confidencial de uso exclusivo de Gerencia Comercial. "
+                  "Exportación protegida por PIN maestro y registrada en bitácora.", sub)])
+    await db.alertas.insert_one({"id": str(uuid.uuid4()), "tipo": "export_pdf", "leida": True,
+                                 "mensaje": f"📄 Exportación PDF Gerencia por {_claims(request).get('sub')}",
+                                 "fecha": _now()})
+    from fastapi.responses import Response
+    return Response(content=buf.getvalue(), media_type="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="Reporte_Gerencia_{cm["mes"]}.pdf"'})

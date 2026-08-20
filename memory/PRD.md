@@ -795,8 +795,8 @@ Constitución v16 (Reglas #34-#38, #41, #43, #49, #52, #53, #54). Módulo Broker
 
 ## Actualización 2026-08-14
 - Supercarpeta: navegación mensual (2026-08 activo, 2026-09 creado), avance por cliente + meta de proyección, edición inline con bitácora, sticky headers, botones gestión por fila, panel 📡 remitentes, cuenta de barrido en ⚙️.
-- Gerencia Comercial: 14 columnas oficiales + Acciones de Mando (Doc2.0/Firmas/Divergencia/Concreces/Mesa eliminadas a pedido), cumplimiento broker sincronizado.
-- Nuevo módulo: Gestión Ejecutivos (daniela/victoria/postventa) — solo lectura de cabeceras, privacidad absoluta.
+- Gerencia Comercial (rediseñada 20/06/2026 — Centro de Mando negro profundo/dorado mate): KPIs grandes (cartera UF, ops activas, mora DICOM, nuevas del mes), ranking + tabla de ejecutivos con IMAP y fichas, alertas inteligentes, filtros período/estado + oficiales, export Excel y PDF con PIN. Incluye las 14 columnas oficiales + Acciones de Mando, cumplimiento broker sincronizado.
+- Gestión Ejecutivos: FUSIONADO dentro de Gerencia Comercial el 20/06/2026 (módulo separado eliminado del menú); medidores de actividad embebidos, privacidad absoluta.
 - PENDIENTES: Twilio (esperando claves), sincronización contactos Gmail (requiere Google OAuth), meta_uf de meses futuros configurable, resumen semanal lunes, alertas cumpleaños, optimización móvil.
 
 ## Actualización 2026-08-17

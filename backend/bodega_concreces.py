@@ -251,6 +251,8 @@ async def gerencia_cartera():
                 h["inactivo_96h"] = True
             h["reclamos"] = fd.get("reclamos_gerencia") or {}
             h["actualizado"] = str(ult)[:10]
+            h["creado"] = str(fd.get("created_at") or "")[:10]
+            h["dicom"] = bool((fd.get("datos_financieros") or {}).get("morosidad_dicom"))
             filas.append(h)
     # Regla #58: cartera ordenada por Inmobiliaria/Usado, cada inmobiliaria individualizada; alertas al final
     filas.sort(key=lambda f: (f["origen"] == ALERTA_SIN_INMOBILIARIA, f["origen"], f["cliente"]))

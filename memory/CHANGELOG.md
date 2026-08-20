@@ -1600,3 +1600,18 @@ Constitución VERSION 19 (nuevas reglas #55, #56, #57).
 - Prueba real: envío a javierurrutia@centralmutuos.cl con SMTP 250 OK, From=gerardo.ext.
 - Verificado por testing agent iteración 42 (6/6 PASS, /app/backend/tests/test_iter42_remitente.py como regresión).
 - Diagnóstico previo: usuarios nuevos no podían ingresar porque intentaban en PRODUCCIÓN; las cuentas se crearon en la BD de preview. Pendiente decisión del usuario (opciones a/b/c enviadas).
+
+## 20/06/2026 — Fusión Gestión Ejecutivos → Gerencia Comercial + rediseño Centro de Mando
+- Módulo "Gestión Ejecutivos" eliminado del menú; todo integrado en "Gerencia Comercial" (App.js).
+- Rediseño completo en negro profundo + dorado mate (una sola página vertical):
+  KPIs grandes (cartera total UF, ops activas, mora vigente=DICOM, nuevas del mes) + ranking ejecutivos,
+  alertas inteligentes (mora alta, vencidas/firmas próximas, sin actividad 7+ días),
+  tabla ejecutivos expandida (cartera, ops, tasa cierre, mora generada, estado IMAP) con ficha modal
+  (historial ops, métricas, comunicaciones), actividad en tiempo real embebida, filtros nuevos
+  (período, estado de operación) + oficiales, export Excel directo y PDF protegido por PIN maestro.
+- Backend nuevo en gerencia_comercial.py: GET /gerencia-comercial/centro-mando, /ejecutivo/{codigo}/ficha,
+  /export-pdf?pin= (reportlab, MASTER_PIN). Cartera (/gerencia/cartera) ahora incluye creado + dicom.
+- Fix global: .main-content min-width:0 (App.css) — eliminado desborde horizontal de página.
+- Mora definida por el usuario: cliente con DICOM (datos_financieros.morosidad_dicom). Hoy 0 casos.
+- Testing agent iteración 43: backend 8/8 y frontend 25/25 PASS (/app/tests/test_iter43_gerencia_comercial.py).
+- REGLA APRENDIDA: tests SIEMPRE en /app/tests (no /app/backend/tests) para no disparar hot-reload.

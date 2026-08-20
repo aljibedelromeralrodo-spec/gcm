@@ -1,12 +1,21 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import axios from "axios";
 import { PanelComercial } from "./GerenciaCommandCenter";
+import GestionEjecutivosModule from "./GestionEjecutivosModule";
+import CentroMandoGerencia from "../components/CentroMandoGerencia";
 
 const API = process.env.REACT_APP_BACKEND_URL;
-const selEstilo = { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(148,163,184,0.3)",
-  color: "#e2e8f0", padding: "0.45rem 0.6rem", borderRadius: 10, fontSize: "0.7rem" };
 
-// PROBLEMA 5: botones de estado diferenciados con color propio
+// ═══ PALETA CENTRO DE MANDO: negro profundo + dorado mate ═══
+const ORO = "#C9A227";
+const ORO_CLARO = "#E8C96A";
+const FILA_A = "#0b0b0b";
+const FILA_B = "#111111";
+const BORDE = "rgba(201,162,39,0.22)";
+const panel = { background: "#0c0c0c", border: `1px solid ${BORDE}`, borderRadius: 10 };
+const selEstilo = { background: "#080808", border: `1px solid ${BORDE}`,
+  color: "#e8e3d3", padding: "0.45rem 0.6rem", borderRadius: 8, fontSize: "0.7rem" };
+
 const EST_LABEL = {
   ok: "✅ Aprobado", proceso: "⏳ En Proceso", pendiente: "Pendiente",
   pendiente_informacion: "Pendiente de Información", bloqueo: "❌ Bloqueado", alerta: "⚠️ Con Observaciones",
@@ -14,25 +23,24 @@ const EST_LABEL = {
 const estBtnStyle = (estado) => {
   const base = { display: "inline-block", borderRadius: 6, padding: "4px 10px", fontSize: 14,
     fontWeight: 700, boxShadow: "0 1px 3px rgba(0,0,0,0.4)", whiteSpace: "nowrap" };
-  if (estado === "ok") return { ...base, background: "#1A5C2A", color: "#fff" };
-  if (estado === "proceso") return { ...base, background: "#1A3A5C", color: "#fff" };
-  if (estado === "alerta") return { ...base, background: "#7A4A00", color: "#fff" };
-  if (estado === "bloqueo") return { ...base, background: "#5C1A1A", color: "#fff" };
-  if (estado === "manual") return { ...base, background: "#3A3A3A", color: "#fff", border: "1px solid #eab308" };
-  return { ...base, background: "#2A2A2A", color: "#9aa4b2", fontStyle: "italic", border: "1px dashed #555", fontWeight: 500 };
+  if (estado === "ok") return { ...base, background: "#123A1E", color: "#7ee2a0" };
+  if (estado === "proceso") return { ...base, background: "#12283A", color: "#7ec3e2" };
+  if (estado === "alerta") return { ...base, background: "#3A2A08", color: "#e2c37e" };
+  if (estado === "bloqueo") return { ...base, background: "#3A1212", color: "#e27e7e" };
+  if (estado === "manual") return { ...base, background: "#1c1c1c", color: "#fff", border: `1px solid ${ORO}` };
+  return { ...base, background: "#161616", color: "#8a8a8a", fontStyle: "italic", border: "1px dashed #3a3a3a", fontWeight: 500 };
 };
 const BotonEstado = ({ estado, label, title, testid }) => (
   <span data-testid={testid} title={title} style={estBtnStyle(estado)}>{label || EST_LABEL[estado] || EST_LABEL.pendiente}</span>
 );
 
-// PROBLEMA 2/4: encabezados 13px dorados, sticky con fondo dorado 20% y sombra inferior
-const thG = { padding: "14px 16px", textAlign: "left", whiteSpace: "nowrap", fontSize: 13,
-  letterSpacing: 1, textTransform: "uppercase", color: "#D4AF37", height: 48,
-  position: "sticky", top: 0, zIndex: 25,
-  background: "linear-gradient(rgba(212,175,55,0.20), rgba(212,175,55,0.20)), #0f172a",
-  boxShadow: "0 4px 10px rgba(0,0,0,0.45)", borderRight: "1px solid rgba(255,255,255,0.25)" };
+const thG = { padding: "13px 16px", textAlign: "left", whiteSpace: "nowrap", fontSize: 12.5,
+  letterSpacing: 1.5, textTransform: "uppercase", color: ORO, height: 46,
+  position: "sticky", top: 0, zIndex: 25, background: "#0a0a0a",
+  boxShadow: "0 2px 0 rgba(201,162,39,0.4), 0 4px 10px rgba(0,0,0,0.6)",
+  borderRight: "1px solid rgba(255,255,255,0.08)" };
 const tdG = { padding: "8px 14px", fontSize: 14, verticalAlign: "middle",
-  borderRight: "1px solid rgba(255,255,255,0.12)" };
+  borderRight: "1px solid rgba(255,255,255,0.05)" };
 
 const RECLAMOS_UI = [
   ["tasacion", "📩 Reclamar Tasación", f => f.tasacion_estado !== "ok", "mb-azul"],
@@ -42,12 +50,31 @@ const RECLAMOS_UI = [
   ["movimiento", "📩 Reclamar Movimiento", f => !!f.inactivo_96h, "mb-naranja"],
 ];
 
-const FILTRO0 = { broker: "", inmo: "", proy: "", viv: "", sub: "", serviu: "" };
+const FILTRO0 = { broker: "", inmo: "", proy: "", viv: "", sub: "", serviu: "", periodo: "", estado: "" };
+
+const dentroPeriodo = (f, periodo, mes) => {
+  if (!periodo) return true;
+  if (periodo === "mes") return (f.creado || "").startsWith(mes) || (f.actualizado || "").startsWith(mes);
+  const dias = periodo === "30d" ? 30 : 90;
+  const ref = f.actualizado || f.creado || "";
+  if (!ref) return false;
+  return (Date.now() - new Date(ref).getTime()) <= dias * 86400000;
+};
+const enEstado = (f, estado) => {
+  if (!estado) return true;
+  if (estado === "activa") return !f.escritura_firmada;
+  if (estado === "escriturada") return !!f.escritura_firmada;
+  if (estado === "reparos") return (f.reparos_pendientes || 0) > 0;
+  if (estado === "sin_actividad") return !!f.inactivo_96h;
+  if (estado === "dicom") return !!f.dicom;
+  return true;
+};
 
 export default function GerenciaComercialModule() {
   const [data, setData] = useState(null);
   const [busyRec, setBusyRec] = useState("");
   const [reparosModal, setReparosModal] = useState(null);
+  const [busyPdf, setBusyPdf] = useState(false);
 
   const verReparos = async (f) => {
     setReparosModal({ cliente: f.cliente, loading: true, reparos: [] });
@@ -83,6 +110,25 @@ export default function GerenciaComercialModule() {
     URL.revokeObjectURL(url);
   };
 
+  const exportarPdf = async () => {
+    const pin = window.prompt("Exportación PDF protegida.\nIngrese el PIN maestro:");
+    if (!pin) return;
+    setBusyPdf(true);
+    try {
+      const r = await axios.get(`${API}/api/gerencia-comercial/export-pdf`,
+        { params: { pin: pin.trim() }, responseType: "blob" });
+      const url = URL.createObjectURL(r.data);
+      const a = document.createElement("a");
+      a.href = url; a.download = `Reporte_Gerencia_${data?.mes || ""}.pdf`; a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      let det = "Error al generar el PDF";
+      try { det = JSON.parse(await e.response.data.text()).detail || det; } catch { /* blob sin json */ }
+      window.alert(det);
+    }
+    setBusyPdf(false);
+  };
+
   const fecharFirma = async (fid, fecha) => {
     try { await axios.post(`${API}/api/flujos/fecha-firma/${fid}`, { fecha }); recargar(); }
     catch (e) { console.error(e); }
@@ -109,9 +155,12 @@ export default function GerenciaComercialModule() {
     setBusyRec("");
   };
 
-  // CENTRO DE FILTRADO (instantáneo, en memoria — Regla #54): SOLO los 6 filtros oficiales
+  // CENTRO DE FILTRADO en memoria: período · ejecutivo/broker · estado · segmento + oficiales
   const cartera = useMemo(() => {
     let fs = data?.cartera || [];
+    const mes = data?.mes || "";
+    if (filtro.periodo) fs = fs.filter(f => dentroPeriodo(f, filtro.periodo, mes));
+    if (filtro.estado) fs = fs.filter(f => enEstado(f, filtro.estado));
     if (filtro.broker) fs = fs.filter(f => (f.broker_origen || "") === filtro.broker);
     if (filtro.inmo) fs = fs.filter(f => (f.inmobiliaria || f.origen || "") === filtro.inmo);
     if (filtro.proy) fs = fs.filter(f => (f.proyecto || "") === filtro.proy);
@@ -129,94 +178,139 @@ export default function GerenciaComercialModule() {
     ? [...new Set((data?.cartera || []).filter(f => (f.inmobiliaria || f.origen) === filtro.inmo).map(f => f.proyecto).filter(Boolean))].sort()
     : [], [data, filtro.inmo]);
 
-  const glass = { background: "rgba(30,41,59,0.55)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)",
-    border: "1px solid rgba(148,163,184,0.18)", borderRadius: 14 };
   const res = data?.resumen || {};
 
   const Tarjeta = ({ k, titulo, val, activo, onClick }) => (
     <button data-testid={`gerencia-card-${k}`} onClick={onClick}
-      className="maserati-btn" style={{ flexDirection: "column", alignItems: "flex-start", gap: 2, minWidth: 160,
-        borderColor: activo ? "#d4af37" : undefined, background: activo ? "rgba(212,175,55,0.12)" : undefined }}>
-      <span style={{ fontSize: "0.58rem", color: "#94a3b8", letterSpacing: "0.12em" }}>{titulo}</span>
-      <span style={{ fontSize: "0.9rem", color: "#FCF6BA" }}>{val?.n ?? 0} ops · {Number(val?.uf ?? 0).toLocaleString("es-CL")} UF</span>
+      style={{ ...panel, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "flex-start",
+        gap: 2, minWidth: 160, padding: "0.6rem 0.9rem",
+        borderColor: activo ? ORO : BORDE, background: activo ? "rgba(201,162,39,0.1)" : "#0c0c0c" }}>
+      <span style={{ fontSize: "0.56rem", color: "#8a8a8a", letterSpacing: "0.14em", fontWeight: 800 }}>{titulo}</span>
+      <span style={{ fontSize: "0.9rem", color: ORO_CLARO, fontWeight: 800 }}>{val?.n ?? 0} ops · {Number(val?.uf ?? 0).toLocaleString("es-CL")} UF</span>
     </button>
   );
 
+  const lblF = { color: "#8a8a8a", fontSize: "0.6rem", fontWeight: 700, letterSpacing: 1 };
+
   return (
-    <div className="module-content seamless-scope" data-testid="gerencia-module" style={{ minHeight: "100%", padding: "1.2rem", borderRadius: 12 }}>
-      <PanelComercial />
-      <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", marginBottom: 14 }}>
-        <h3 style={{ margin: 0, color: "#f8fafc", fontSize: "1.05rem" }}>
-          <i className="fa fa-line-chart" style={{ color: "#d4af37", marginRight: 8 }} />Gerencia Comercial — Centro de Mando Estratégico
+    <div className="module-content seamless-scope" data-testid="gerencia-module"
+      style={{ minHeight: "100%", padding: "1.2rem", borderRadius: 12, background: "#050505" }}>
+
+      {/* ═══ CABECERA DE MANDO ═══ */}
+      <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", marginBottom: 16,
+        borderBottom: `1px solid ${BORDE}`, paddingBottom: 12 }}>
+        <h3 style={{ margin: 0, color: ORO, fontSize: "1.1rem", letterSpacing: 2, fontFamily: "Georgia, serif" }}>
+          GERENCIA COMERCIAL — CENTRO DE MANDO
         </h3>
-        <span style={{ color: "#94a3b8", fontSize: "0.72rem" }}>Mes {data?.mes || "…"} · {cartera.length}/{data?.total ?? 0} operaciones · Auditoría DashAI: {(data?.ultima_auditoria_dashai || "").slice(0, 16) || "pendiente"}</span>
+        <span style={{ color: "#8a8a8a", fontSize: "0.7rem" }}>
+          Mes {data?.mes || "…"} · {cartera.length}/{data?.total ?? 0} operaciones · Auditoría DashAI: {(data?.ultima_auditoria_dashai || "").slice(0, 16) || "pendiente"}</span>
         {data?.cumplimiento_broker?.actualizado && (
           <span data-testid="gerencia-cumplimiento-broker" title="Sincronizado en tiempo real con la Supercarpeta (Meta de Proyección)"
-            style={{ background: "rgba(212,175,55,0.12)", border: "1px solid rgba(212,175,55,0.5)", color: "#d4af37",
-              borderRadius: 10, padding: "0.35rem 0.7rem", fontWeight: 800, fontSize: "0.72rem" }}>
+            style={{ background: "rgba(201,162,39,0.1)", border: `1px solid ${BORDE}`, color: ORO,
+              borderRadius: 8, padding: "0.35rem 0.7rem", fontWeight: 800, fontSize: "0.7rem" }}>
             📈 Cumplimiento Broker: {data.cumplimiento_broker.pct_global ?? 0}% · UF cerradas {Number(data.cumplimiento_broker.uf_cerradas || 0).toLocaleString("es-CL")} / {Number(data.cumplimiento_broker.meta_uf || 0).toLocaleString("es-CL")}
           </span>
         )}
-        <button data-testid="btn-export-gerencia" onClick={exportar} className="maserati-btn" style={{ marginLeft: "auto" }}>
-          <i className="fa fa-file-excel-o" /> Exportar Reporte Mensual
-        </button>
+        <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+          <button data-testid="btn-export-pdf" onClick={exportarPdf} disabled={busyPdf}
+            style={{ background: "transparent", border: `1px solid ${ORO}`, color: ORO, borderRadius: 8,
+              padding: "0.45rem 1rem", cursor: "pointer", fontWeight: 800, fontSize: "0.68rem", letterSpacing: 1 }}>
+            <i className="fa fa-file-pdf-o" /> {busyPdf ? "GENERANDO…" : "PDF (PIN)"}
+          </button>
+          <button data-testid="btn-export-gerencia" onClick={exportar}
+            style={{ background: ORO, border: "none", color: "#0a0a0a", borderRadius: 8,
+              padding: "0.45rem 1rem", cursor: "pointer", fontWeight: 900, fontSize: "0.68rem", letterSpacing: 1 }}>
+            <i className="fa fa-file-excel-o" /> EXCEL
+          </button>
+        </div>
       </div>
 
-      {/* CABECERA SEGMENTADA: sumatorias con filtrado dinámico */}
-      <div className="gerencia-filtros" data-testid="gerencia-cards" style={{ marginBottom: 12 }}>
+      {/* ═══ KPIs + RANKING + ALERTAS + TABLA EJECUTIVOS (fusión Gestión de Ejecutivos) ═══ */}
+      <CentroMandoGerencia />
+
+      {/* ═══ ACTIVIDAD EN TIEMPO REAL POR EJECUTIVO (ex módulo Gestión Ejecutivos) ═══ */}
+      <div style={{ ...panel, padding: "1rem 1.2rem", marginBottom: 14 }}>
+        <GestionEjecutivosModule />
+      </div>
+
+      {/* ═══ VISIÓN COMERCIAL (subdivisiones, comparativos) ═══ */}
+      <PanelComercial />
+
+      {/* ═══ CABECERA SEGMENTADA: sumatorias con filtrado dinámico ═══ */}
+      <div className="gerencia-filtros" data-testid="gerencia-cards" style={{ margin: "14px 0 12px" }}>
         <Tarjeta k="subsidio" titulo="CON SUBSIDIO" val={res.subsidio} activo={filtro.sub === "con"}
           onClick={() => setFiltro({ ...filtro, sub: filtro.sub === "con" ? "" : "con" })} />
         <Tarjeta k="sin_subsidio" titulo="SIN SUBSIDIO" val={res.sin_subsidio} activo={filtro.sub === "sin"}
           onClick={() => setFiltro({ ...filtro, sub: filtro.sub === "sin" ? "" : "sin" })} />
-        <div data-testid="gerencia-card-filtrado" className="maserati-btn" style={{ flexDirection: "column",
-          alignItems: "flex-start", gap: 2, minWidth: 180, cursor: "default", borderColor: "#d4af37" }}>
-          <span style={{ fontSize: "0.58rem", color: "#d4af37", letterSpacing: "0.12em" }}>Σ RESULTADO FILTRADO</span>
-          <span style={{ fontSize: "0.9rem", color: "#FCF6BA" }}>{cartera.length} ops · {Math.round(ufFiltrado).toLocaleString("es-CL")} UF</span>
+        <div data-testid="gerencia-card-filtrado" style={{ ...panel, display: "flex", flexDirection: "column",
+          alignItems: "flex-start", gap: 2, minWidth: 180, padding: "0.6rem 0.9rem", borderColor: ORO }}>
+          <span style={{ fontSize: "0.56rem", color: ORO, letterSpacing: "0.14em", fontWeight: 800 }}>Σ RESULTADO FILTRADO</span>
+          <span style={{ fontSize: "0.9rem", color: ORO_CLARO, fontWeight: 800 }}>{cartera.length} ops · {Math.round(ufFiltrado).toLocaleString("es-CL")} UF</span>
         </div>
         <button data-testid="gerencia-card-total" onClick={() => setFiltro(FILTRO0)}
-          className="maserati-btn neon" style={{ flexDirection: "column", alignItems: "flex-start", gap: 2, minWidth: 160 }}>
-          <span style={{ fontSize: "0.58rem", color: "#94a3b8", letterSpacing: "0.12em" }}>TOTAL (limpiar filtros)</span>
-          <span style={{ fontSize: "0.9rem" }}>{res.total?.n ?? 0} ops · {Number(res.total?.uf ?? 0).toLocaleString("es-CL")} UF</span>
+          style={{ ...panel, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "flex-start",
+            gap: 2, minWidth: 160, padding: "0.6rem 0.9rem" }}>
+          <span style={{ fontSize: "0.56rem", color: "#8a8a8a", letterSpacing: "0.14em", fontWeight: 800 }}>TOTAL (limpiar filtros)</span>
+          <span style={{ fontSize: "0.9rem", color: "#f5f0e1", fontWeight: 800 }}>{res.total?.n ?? 0} ops · {Number(res.total?.uf ?? 0).toLocaleString("es-CL")} UF</span>
         </button>
       </div>
 
-      {/* CENTRO DE FILTRADO — SOLO: Broker · Inmobiliaria · Proyecto · Vivienda · Subsidio · SERVIU */}
-      <div className="gerencia-filtros" data-testid="gerencia-filtros" style={{ ...glass, padding: "0.7rem 0.9rem", marginBottom: 12, alignItems: "flex-end" }}>
-        <label style={{ color: "#94a3b8", fontSize: "0.62rem" }}>Broker<br />
+      {/* ═══ CENTRO DE FILTRADO: período · ejecutivo · estado · segmento + oficiales ═══ */}
+      <div className="gerencia-filtros" data-testid="gerencia-filtros"
+        style={{ ...panel, padding: "0.7rem 0.9rem", marginBottom: 12, alignItems: "flex-end" }}>
+        <label style={lblF}>Período<br />
+          <select data-testid="filtro-periodo" style={selEstilo} value={filtro.periodo} onChange={e => setFiltro({ ...filtro, periodo: e.target.value })}>
+            <option value="">Todo</option>
+            <option value="mes">Mes actual</option>
+            <option value="30d">Últimos 30 días</option>
+            <option value="90d">Últimos 90 días</option>
+          </select>
+        </label>
+        <label style={lblF}>Estado de operación<br />
+          <select data-testid="filtro-estado" style={selEstilo} value={filtro.estado} onChange={e => setFiltro({ ...filtro, estado: e.target.value })}>
+            <option value="">Todos</option>
+            <option value="activa">Activas</option>
+            <option value="escriturada">Escrituradas</option>
+            <option value="reparos">Con reparos</option>
+            <option value="sin_actividad">Sin actividad 96h</option>
+            <option value="dicom">Con DICOM (mora)</option>
+          </select>
+        </label>
+        <label style={lblF}>Broker / Ejecutivo<br />
           <select data-testid="filtro-broker" style={selEstilo} value={filtro.broker} onChange={e => setFiltro({ ...filtro, broker: e.target.value })}>
             <option value="">Todos</option>
             {brokersOpc.map(b => <option key={b} value={b}>{b}</option>)}
           </select>
         </label>
-        <label style={{ color: "#94a3b8", fontSize: "0.62rem" }}>Inmobiliaria<br />
+        <label style={lblF}>Inmobiliaria<br />
           <select data-testid="filtro-inmobiliaria" style={selEstilo} value={filtro.inmo}
             onChange={e => setFiltro({ ...filtro, inmo: e.target.value, proy: "" })}>
             <option value="">Todas</option>
             {inmosOpc.map(i => <option key={i} value={i}>{i}</option>)}
           </select>
         </label>
-        <label style={{ color: "#94a3b8", fontSize: "0.62rem" }}>Proyecto<br />
+        <label style={lblF}>Proyecto<br />
           <select data-testid="filtro-proyecto" style={{ ...selEstilo, opacity: filtro.inmo ? 1 : 0.45 }}
             disabled={!filtro.inmo} value={filtro.proy} onChange={e => setFiltro({ ...filtro, proy: e.target.value })}>
             <option value="">{filtro.inmo ? "Todos" : "Elija inmobiliaria"}</option>
             {proysOpc.map(pr => <option key={pr} value={pr}>{pr}</option>)}
           </select>
         </label>
-        <label style={{ color: "#94a3b8", fontSize: "0.62rem" }}>Tipo de vivienda<br />
+        <label style={lblF}>Tipo de vivienda<br />
           <select data-testid="filtro-vivienda" style={selEstilo} value={filtro.viv} onChange={e => setFiltro({ ...filtro, viv: e.target.value })}>
             <option value="">Todas</option>
             <option value="nueva">Nueva</option>
             <option value="usada">Usada</option>
           </select>
         </label>
-        <label style={{ color: "#94a3b8", fontSize: "0.62rem" }}>Subsidio<br />
+        <label style={lblF}>Subsidio<br />
           <select data-testid="filtro-subsidio" style={selEstilo} value={filtro.sub} onChange={e => setFiltro({ ...filtro, sub: e.target.value })}>
             <option value="">Todos</option>
             <option value="con">Con subsidio</option>
             <option value="sin">Sin subsidio</option>
           </select>
         </label>
-        <label style={{ color: "#94a3b8", fontSize: "0.62rem" }}>Resolución SERVIU<br />
+        <label style={lblF}>Resolución SERVIU<br />
           <select data-testid="filtro-serviu" style={selEstilo} value={filtro.serviu} onChange={e => setFiltro({ ...filtro, serviu: e.target.value })}>
             <option value="">Todos</option>
             <option value="con">Con resolución</option>
@@ -224,20 +318,20 @@ export default function GerenciaComercialModule() {
           </select>
         </label>
         <button data-testid="filtro-limpiar" onClick={() => setFiltro(FILTRO0)}
-          style={{ background: "rgba(239,68,68,0.12)", color: "#f87171", border: "1px solid rgba(239,68,68,0.5)",
-            borderRadius: 10, padding: "0.45rem 0.9rem", fontWeight: 800, cursor: "pointer", fontSize: "0.64rem" }}>
+          style={{ background: "rgba(239,68,68,0.1)", color: "#f87171", border: "1px solid rgba(239,68,68,0.45)",
+            borderRadius: 8, padding: "0.45rem 0.9rem", fontWeight: 800, cursor: "pointer", fontSize: "0.64rem" }}>
           ✕ Limpiar filtros</button>
-        <span data-testid="filtro-sumatoria" style={{ marginLeft: "auto", color: "#d4af37", fontSize: "0.72rem", fontWeight: 900 }}>
+        <span data-testid="filtro-sumatoria" style={{ marginLeft: "auto", color: ORO, fontSize: "0.72rem", fontWeight: 900 }}>
           Σ {cartera.length} operaciones · UF {Math.round(ufFiltrado).toLocaleString("es-CL")}</span>
       </div>
 
       {(data?.alertas_notaria || 0) > 0 && (
-        <div data-testid="gerencia-alerta-notaria" style={{ ...glass, borderColor: "#ef4444", color: "#fecaca", padding: "0.6rem 1rem", marginBottom: 12, fontSize: "0.78rem", fontWeight: 700 }}>
+        <div data-testid="gerencia-alerta-notaria" style={{ ...panel, borderColor: "#ef4444", color: "#fca5a5", padding: "0.6rem 1rem", marginBottom: 12, fontSize: "0.78rem", fontWeight: 700 }}>
           🚨 {data.alertas_notaria} aviso(s) de notaría sobre firmas faltantes detectados por DashAI
         </div>
       )}
       {(data?.excepciones_recientes || []).length > 0 && (
-        <div data-testid="gerencia-excepciones" style={{ ...glass, borderColor: "#f59e0b", color: "#fde68a", padding: "0.6rem 1rem", marginBottom: 12, fontSize: "0.72rem" }}>
+        <div data-testid="gerencia-excepciones" style={{ ...panel, borderColor: "#f59e0b", color: "#fde68a", padding: "0.6rem 1rem", marginBottom: 12, fontSize: "0.72rem" }}>
           ⚠️ Excepciones autorizadas recientes: {data.excepciones_recientes.map(e => `${e.usuario} (${e.cliente || e.hito})`).join(" · ")}
         </div>
       )}
@@ -247,19 +341,20 @@ export default function GerenciaComercialModule() {
         <div data-testid="gerencia-cards-mobile" style={{ display: "grid", gap: 10 }}>
           {cartera.map((f, idx) => (
             <div key={f.folder_id} data-testid={`gerencia-card-${f.folder_id}`}
-              style={{ ...glass, padding: "0.8rem", background: f.datos_incompletos ? "rgba(94,26,26,0.45)" : (idx % 2 === 0 ? "#1E2A3A" : "#253347") }}>
+              style={{ ...panel, padding: "0.8rem", background: f.datos_incompletos ? "rgba(58,18,18,0.6)" : (idx % 2 === 0 ? FILA_A : FILA_B) }}>
               <div style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
-                <b style={{ color: "#D4AF37" }}>{idx + 1}</b>
+                <b style={{ color: ORO }}>{idx + 1}</b>
                 <b style={{ color: "#fff", fontSize: 15, flex: 1, overflowWrap: "anywhere" }}>{f.cliente}</b>
-                <span style={{ color: "#B0BEC5", fontFamily: "monospace", fontSize: 12 }}>{f.rut || "—"}</span>
+                <span style={{ color: "#9a9483", fontFamily: "monospace", fontSize: 12 }}>{f.rut || "—"}</span>
               </div>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 4, fontSize: 12, color: "#90A4AE", alignItems: "center" }}>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 4, fontSize: 12, color: "#8a8a8a", alignItems: "center" }}>
                 <span>{f.inmobiliaria || f.origen || "⚠️ Sin inmobiliaria"}</span>
                 {f.tipo_operacion && <span style={{ fontSize: 10, fontWeight: 800, padding: "1px 8px", borderRadius: 6,
-                  background: f.tipo_operacion === "USADA" ? "rgba(34,197,94,0.15)" : "rgba(56,189,248,0.15)",
+                  background: f.tipo_operacion === "USADA" ? "rgba(34,197,94,0.12)" : "rgba(56,189,248,0.12)",
                   color: f.tipo_operacion === "USADA" ? "#22c55e" : "#38bdf8" }}>{f.tipo_operacion}</span>}
-                <span style={{ color: f.subsidio ? "#4ade80" : "#94a3b8", fontSize: 11 }}>{f.subsidio ? "Con Subsidio" : "Sin Subsidio"}</span>
-                <b style={{ marginLeft: "auto", color: "#D4AF37" }}>{f.monto_credito_uf ? `${Number(f.monto_credito_uf).toLocaleString("es-CL")} UF` : "—"}</b>
+                <span style={{ color: f.subsidio ? "#4ade80" : "#8a8a8a", fontSize: 11 }}>{f.subsidio ? "Con Subsidio" : "Sin Subsidio"}</span>
+                {f.dicom && <span style={{ color: "#ef4444", fontWeight: 800, fontSize: 11 }}>DICOM</span>}
+                <b style={{ marginLeft: "auto", color: ORO_CLARO }}>{f.monto_credito_uf ? `${Number(f.monto_credito_uf).toLocaleString("es-CL")} UF` : "—"}</b>
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 8, fontSize: 11 }}>
                 <BotonEstado estado={f.documentacion} label={`Docs: ${f.documentacion === "ok" ? "✅" : f.documentacion === "proceso" ? "⏳" : "❌"}`} />
@@ -267,20 +362,20 @@ export default function GerenciaComercialModule() {
                 <BotonEstado estado={f.estudio_estado} label={`Estudio: ${f.estudio_estado === "ok" ? "✅" : f.estudio_estado === "proceso" ? "⏳" : "Pend."}`} />
                 <BotonEstado estado={f.firma_set} label={`Set: ${f.firma_set === "ok" ? "✅" : f.firma_set === "proceso" ? "⏳" : "Pend."}`} />
                 {f.escritura_firmada
-                  ? <span style={{ color: "#FFD700", fontWeight: 900, fontSize: 12 }}>🏆 ESCRITURA FIRMADA</span>
+                  ? <span style={{ color: ORO_CLARO, fontWeight: 900, fontSize: 12 }}>🏆 ESCRITURA FIRMADA</span>
                   : <BotonEstado estado="pendiente" label="Escritura: Pend." />}
               </div>
               {f.reparos_pendientes > 0 && (
                 <button onClick={() => verReparos(f)} style={{ marginTop: 6, cursor: "pointer", border: "none",
                   borderRadius: 6, fontWeight: 800, fontSize: 11, padding: "3px 10px",
-                  background: "rgba(239,68,68,0.18)", color: "#ef4444" }}>⚠️ {f.reparos_pendientes} reparo(s)</button>
+                  background: "rgba(239,68,68,0.15)", color: "#ef4444" }}>⚠️ {f.reparos_pendientes} reparo(s)</button>
               )}
               <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8, flexWrap: "wrap" }}>
-                <label style={{ fontSize: 11, color: "#94a3b8" }}>📅 Firma:</label>
+                <label style={{ fontSize: 11, color: "#8a8a8a" }}>📅 Firma:</label>
                 <input type="date" defaultValue={f.fecha_firma || ""} onBlur={e => fecharFirma(f.folder_id, e.target.value)}
-                  style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(148,163,184,0.25)",
-                    color: "#e2e8f0", borderRadius: 6, padding: "0.25rem 0.4rem", fontSize: 13, width: 140 }} />
-                <span style={{ fontSize: 11, color: "#78909C", marginLeft: "auto" }}>{f.notaria_nombre || "Notaría por asignar"}</span>
+                  style={{ background: "#080808", border: `1px solid ${BORDE}`,
+                    color: "#e8e3d3", borderRadius: 6, padding: "0.25rem 0.4rem", fontSize: 13, width: 140 }} />
+                <span style={{ fontSize: 11, color: "#7a7a7a", marginLeft: "auto" }}>{f.notaria_nombre || "Notaría por asignar"}</span>
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 8 }}>
                 {RECLAMOS_UI.filter(([, , cond]) => cond(f)).map(([tipo, label, , color]) => {
@@ -297,12 +392,12 @@ export default function GerenciaComercialModule() {
               </div>
             </div>
           ))}
-          {!data && <p style={{ color: "#94a3b8", textAlign: "center", padding: "2rem" }}>Cargando cartera…</p>}
-          {data && cartera.length === 0 && <p style={{ color: "#94a3b8", textAlign: "center", padding: "2rem" }}>Sin operaciones con los filtros aplicados.</p>}
+          {!data && <p style={{ color: "#8a8a8a", textAlign: "center", padding: "2rem" }}>Cargando cartera…</p>}
+          {data && cartera.length === 0 && <p style={{ color: "#8a8a8a", textAlign: "center", padding: "2rem" }}>Sin operaciones con los filtros aplicados.</p>}
         </div>
       ) : (
-      <div style={{ ...glass, overflow: "auto", maxHeight: "calc(100vh - 130px)" }}>
-        <table data-testid="gerencia-tabla" style={{ width: "100%", borderCollapse: "collapse", fontSize: 14, color: "#e2e8f0", minWidth: 1900 }}>
+      <div style={{ ...panel, overflow: "auto", maxHeight: "calc(100vh - 130px)" }}>
+        <table data-testid="gerencia-tabla" style={{ width: "100%", borderCollapse: "collapse", fontSize: 14, color: "#e8e3d3", minWidth: 1900 }}>
           <thead>
             <tr>
               {["Cliente", "Inmobiliaria", "Proyecto", "Ciudad", "Broker", "Subsidio", "Monto UF",
@@ -316,40 +411,42 @@ export default function GerenciaComercialModule() {
             {cartera.map((f, idx) => (
               <tr key={f.folder_id} data-testid={`gerencia-fila-${f.folder_id}`}
                 style={{
-                  height: 52, borderBottom: "1px solid rgba(255,255,255,0.4)",
-                  background: f.datos_incompletos ? "rgba(94,26,26,0.45)" : (idx % 2 === 0 ? "#1E2A3A" : "#253347") }}>
+                  height: 52, borderBottom: "1px solid rgba(201,162,39,0.12)",
+                  background: f.datos_incompletos ? "rgba(58,18,18,0.55)" : (idx % 2 === 0 ? FILA_A : FILA_B) }}>
                 {/* 1. CLIENTE (nombre + RUT) */}
                 <td style={{ ...tdG, fontWeight: 700, fontSize: 15, color: "#FFFFFF", whiteSpace: "nowrap" }}>
                   {f.cliente}
-                  <div style={{ fontFamily: "monospace", fontWeight: 400, fontSize: 14, color: "#B0BEC5" }}>{f.rut || "—"}</div>
+                  {f.dicom && <span title="Cliente con morosidad vigente en DICOM" style={{ marginLeft: 6, color: "#ef4444",
+                    fontWeight: 900, fontSize: "0.6rem", border: "1px solid rgba(239,68,68,0.5)", borderRadius: 5, padding: "1px 5px" }}>DICOM</span>}
+                  <div style={{ fontFamily: "monospace", fontWeight: 400, fontSize: 14, color: "#9a9483" }}>{f.rut || "—"}</div>
                   {f.datos_incompletos && <div data-testid={`broker-no-actualizado-${f.folder_id}`} style={{ color: "#ef4444", fontSize: "0.62rem", fontWeight: 800 }}>🔴 Broker no actualizado</div>}
-                  {f.inactivo_96h && !f.datos_incompletos && <div style={{ color: "#94a3b8", fontSize: "0.6rem" }}>⏸ Sin actividad 96h</div>}
+                  {f.inactivo_96h && !f.datos_incompletos && <div style={{ color: "#8a8a8a", fontSize: "0.6rem" }}>⏸ Sin actividad 96h</div>}
                   {f.alerta_notaria && <div title={f.alerta_notaria} style={{ color: "#fb7185", fontSize: "0.62rem", fontWeight: 600,
                     maxWidth: 230, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.alerta_notaria}</div>}
                 </td>
                 {/* 2. INMOBILIARIA */}
                 <td data-testid={`gerencia-origen-${f.folder_id}`} style={{ ...tdG,
-                    color: (!f.inmobiliaria && (f.origen || "").startsWith("⚠️")) ? "#ef4444" : "#B0BEC5", fontWeight: 700 }}
+                    color: (!f.inmobiliaria && (f.origen || "").startsWith("⚠️")) ? "#ef4444" : "#b8b2a0", fontWeight: 700 }}
                   title="Regla #58: prohibido 'Directo' — se prioriza la identidad de la Inmobiliaria">
                   {f.inmobiliaria || f.origen || "⚠️ Falta Identidad de Inmobiliaria"}
                   {f.tipo_operacion && <div data-testid={`gerencia-tipo-${f.folder_id}`} style={{ marginTop: 3 }}>
                     <span style={{ fontSize: "0.6rem", fontWeight: 800, padding: "0.15rem 0.5rem", borderRadius: 6,
-                      background: f.tipo_operacion === "USADA" ? "rgba(34,197,94,0.15)" : "rgba(56,189,248,0.15)",
+                      background: f.tipo_operacion === "USADA" ? "rgba(34,197,94,0.12)" : "rgba(56,189,248,0.12)",
                       color: f.tipo_operacion === "USADA" ? "#22c55e" : "#38bdf8" }}>{f.tipo_operacion}</span></div>}
                 </td>
                 {/* 3. PROYECTO */}
-                <td style={{ ...tdG, color: "#90A4AE" }}>{f.proyecto || <i style={{ color: "#64748b" }}>Pendiente</i>}</td>
+                <td style={{ ...tdG, color: "#9a9483" }}>{f.proyecto || <i style={{ color: "#6a6a6a" }}>Pendiente</i>}</td>
                 {/* 4. CIUDAD */}
-                <td style={{ ...tdG, color: "#78909C" }}>{f.ciudad || <i style={{ color: "#64748b" }}>Por Confirmar</i>}</td>
+                <td style={{ ...tdG, color: "#8a8a8a" }}>{f.ciudad || <i style={{ color: "#6a6a6a" }}>Por Confirmar</i>}</td>
                 {/* 5. BROKER */}
-                <td style={{ ...tdG, color: "#B0BEC5", fontStyle: "italic", whiteSpace: "nowrap" }}>{f.broker_origen || "—"}</td>
+                <td style={{ ...tdG, color: "#b8b2a0", fontStyle: "italic", whiteSpace: "nowrap" }}>{f.broker_origen || "—"}</td>
                 {/* 6. SUBSIDIO */}
                 <td style={{ ...tdG, whiteSpace: "nowrap" }}>{f.subsidio
                   ? <span style={{ color: "#4ade80", fontWeight: 700 }}>Con Subsidio</span>
-                  : <span style={{ color: "#94a3b8" }}>Sin Subsidio</span>}</td>
+                  : <span style={{ color: "#8a8a8a" }}>Sin Subsidio</span>}</td>
                 {/* 7. MONTO UF */}
-                <td style={{ ...tdG, textAlign: "right", fontWeight: 800, color: "#D4AF37", whiteSpace: "nowrap" }}>
-                  {f.monto_credito_uf ? <>{Number(f.monto_credito_uf).toLocaleString("es-CL")} <span style={{ color: "#B0BEC5", fontWeight: 400 }}>UF</span></> : "—"}</td>
+                <td style={{ ...tdG, textAlign: "right", fontWeight: 800, color: ORO, whiteSpace: "nowrap" }}>
+                  {f.monto_credito_uf ? <>{Number(f.monto_credito_uf).toLocaleString("es-CL")} <span style={{ color: "#9a9483", fontWeight: 400 }}>UF</span></> : "—"}</td>
                 {/* 8. DOCUMENTOS COMERCIALES */}
                 <td style={{ ...tdG, textAlign: "center" }}>
                   <BotonEstado testid={`gerencia-docs-${f.folder_id}`} estado={f.documentacion}
@@ -368,7 +465,7 @@ export default function GerenciaComercialModule() {
                       title="⚠️ Reparo detectado — pinche para leer el texto del abogado"
                       style={{ display: "block", margin: "4px auto 0", cursor: "pointer", border: "none",
                         borderRadius: 6, fontWeight: 800, fontSize: "0.62rem", padding: "2px 8px",
-                        background: "rgba(239,68,68,0.18)", color: "#ef4444" }}>
+                        background: "rgba(239,68,68,0.15)", color: "#ef4444" }}>
                       ⚠️ {f.reparos_pendientes} reparo(s)
                     </button>
                   )}
@@ -380,16 +477,16 @@ export default function GerenciaComercialModule() {
                 {/* 12. FECHA DE FIRMA DE ESCRITURA */}
                 <td data-testid={`gerencia-fecha-firma-${f.folder_id}`} style={{ ...tdG }}>
                   <input type="date" defaultValue={f.fecha_firma || ""} onBlur={e => fecharFirma(f.folder_id, e.target.value)}
-                    style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(148,163,184,0.25)",
-                      color: "#e2e8f0", borderRadius: 6, padding: "0.25rem 0.4rem", fontSize: 14, width: 140 }} />
+                    style={{ background: "#080808", border: `1px solid ${BORDE}`,
+                      color: "#e8e3d3", borderRadius: 6, padding: "0.25rem 0.4rem", fontSize: 14, width: 140 }} />
                 </td>
                 {/* 13. NOTARÍA: nombre + estado en dos líneas */}
                 <td data-testid={`gerencia-notaria-${f.folder_id}`} style={{ ...tdG }}>
-                  <div style={{ fontWeight: 700, color: f.notaria_nombre ? "#B0BEC5" : "#78909C",
+                  <div style={{ fontWeight: 700, color: f.notaria_nombre ? "#b8b2a0" : "#8a8a8a",
                     fontStyle: f.notaria_nombre ? "normal" : "italic" }}>{f.notaria_nombre || "Por Asignar"}</div>
                   <div style={{ marginTop: 3, fontSize: 14,
                     color: f.notaria_estado_escritura === "Escritura Lista Para Firmar" ? "#4ade80"
-                      : f.notaria_estado_escritura === "En Preparación" ? "#60a5fa" : "#9aa4b2",
+                      : f.notaria_estado_escritura === "En Preparación" ? "#60a5fa" : "#8a8a8a",
                     fontWeight: f.notaria_estado_escritura === "Pendiente" ? 400 : 700,
                     fontStyle: f.notaria_estado_escritura === "Pendiente" ? "italic" : "normal" }}>
                     {f.notaria_estado_escritura}</div>
@@ -397,7 +494,7 @@ export default function GerenciaComercialModule() {
                 {/* 14. FIRMA DE ESCRITURA EN NOTARÍA — HITO FINAL */}
                 <td data-testid={`gerencia-firma-escritura-${f.folder_id}`} style={{ ...tdG, textAlign: "center" }}>
                   {f.escritura_firmada
-                    ? <span style={{ color: "#FFD700", fontWeight: 900, fontSize: 15, textShadow: "0 0 12px rgba(255,215,0,0.4)" }}>🏆 FIRMADA</span>
+                    ? <span style={{ color: ORO_CLARO, fontWeight: 900, fontSize: 15, textShadow: "0 0 12px rgba(201,162,39,0.4)" }}>🏆 FIRMADA</span>
                     : <span style={estBtnStyle("pendiente")}>Pendiente</span>}
                 </td>
                 <td style={{ ...tdG, padding: "10px 10px" }}>
@@ -425,31 +522,31 @@ export default function GerenciaComercialModule() {
             ))}
           </tbody>
         </table>
-        {!data && <p style={{ color: "#94a3b8", textAlign: "center", padding: "2rem" }}>Cargando cartera…</p>}
-        {data && cartera.length === 0 && <p style={{ color: "#94a3b8", textAlign: "center", padding: "2rem" }}>Sin operaciones con los filtros aplicados.</p>}
+        {!data && <p style={{ color: "#8a8a8a", textAlign: "center", padding: "2rem" }}>Cargando cartera…</p>}
+        {data && cartera.length === 0 && <p style={{ color: "#8a8a8a", textAlign: "center", padding: "2rem" }}>Sin operaciones con los filtros aplicados.</p>}
       </div>
       )}
-      <p data-testid="costo-desarrollo" style={{ color: "#64748b", fontSize: "0.68rem", marginTop: 12 }}>
-        ⚡ Costo de Desarrollo del mes: <b style={{ color: "#d4af37" }}>{data?.costo_desarrollo_creditos ?? 0} créditos</b> (estimado por consumo real de IA — Ley de Eficiencia #23)
+      <p data-testid="costo-desarrollo" style={{ color: "#6a6a6a", fontSize: "0.68rem", marginTop: 12 }}>
+        ⚡ Costo de Desarrollo del mes: <b style={{ color: ORO }}>{data?.costo_desarrollo_creditos ?? 0} créditos</b> (estimado por consumo real de IA — Ley de Eficiencia #23)
         · Cada clic queda en el Log de Gestión Gerencial (Regla #52)
       </p>
       {reparosModal && (
         <div data-testid="gerencia-reparos-modal" onClick={() => setReparosModal(null)}
-          style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(2,6,23,0.8)",
-            backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
+          style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.85)",
+            display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
           <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 560, maxHeight: "80vh", overflowY: "auto",
-            background: "rgba(15,23,42,0.97)", borderRadius: 16, padding: "1.4rem 1.6rem", boxShadow: "0 30px 80px rgba(0,0,0,0.6)" }}>
+            background: "#0a0a0a", border: `1px solid ${BORDE}`, borderRadius: 12, padding: "1.4rem 1.6rem", boxShadow: "0 30px 80px rgba(0,0,0,0.7)" }}>
             <h4 style={{ margin: 0, color: "#ef4444", fontSize: "0.9rem" }}>⚠️ Reparos del abogado — {reparosModal.cliente}</h4>
-            {reparosModal.loading && <p style={{ color: "#94a3b8", fontSize: "0.7rem" }}>Cargando texto íntegro…</p>}
+            {reparosModal.loading && <p style={{ color: "#8a8a8a", fontSize: "0.7rem" }}>Cargando texto íntegro…</p>}
             {reparosModal.error && <p style={{ color: "#ef4444", fontSize: "0.7rem" }}>{reparosModal.error}</p>}
             {!reparosModal.loading && (reparosModal.reparos || []).length === 0 && !reparosModal.error &&
-              <p style={{ color: "#94a3b8", fontSize: "0.7rem" }}>Sin texto de reparos registrado en la carpeta.</p>}
+              <p style={{ color: "#8a8a8a", fontSize: "0.7rem" }}>Sin texto de reparos registrado en la carpeta.</p>}
             {(reparosModal.reparos || []).map((r, i) => (
-              <div key={i} style={{ marginTop: 10, padding: "0.7rem 0.9rem", background: "rgba(239,68,68,0.08)",
+              <div key={i} style={{ marginTop: 10, padding: "0.7rem 0.9rem", background: "rgba(239,68,68,0.07)",
                 borderLeft: "3px solid #ef4444", borderRadius: 8 }}>
-                {(r.texto || r.detalle) && <div style={{ color: "#f8fafc", fontSize: "0.7rem", whiteSpace: "pre-wrap" }}>{r.texto || r.detalle}</div>}
-                {!r.texto && !r.detalle && <div style={{ color: "#f8fafc", fontSize: "0.7rem", whiteSpace: "pre-wrap" }}>{r.asunto || (typeof r === "string" ? r : JSON.stringify(r).slice(0, 300))}</div>}
-                {(r.fecha || r.remitente) && <div style={{ color: "#94a3b8", fontSize: "0.6rem", marginTop: 4 }}>
+                {(r.texto || r.detalle) && <div style={{ color: "#f5f0e1", fontSize: "0.7rem", whiteSpace: "pre-wrap" }}>{r.texto || r.detalle}</div>}
+                {!r.texto && !r.detalle && <div style={{ color: "#f5f0e1", fontSize: "0.7rem", whiteSpace: "pre-wrap" }}>{r.asunto || (typeof r === "string" ? r : JSON.stringify(r).slice(0, 300))}</div>}
+                {(r.fecha || r.remitente) && <div style={{ color: "#8a8a8a", fontSize: "0.6rem", marginTop: 4 }}>
                   {(r.fecha || "").slice(0, 16).replace("T", " ")} {r.remitente ? `· ${r.remitente}` : ""}</div>}
               </div>
             ))}
