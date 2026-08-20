@@ -1,0 +1,56 @@
+{
+  "summary": "Iteración 44 — Verificación exhaustiva de los 8 botones del flujo de crédito en Carpeta Clientes + módulo Tasación. RESULTADO: 6/8 botones funcionan correctamente. 2 botones tienen bug de latencia crítico (Solicitud de Tasación y Solicitud de Estudio de Título) que hace que el usuario perciba que 'no funcionan' — el modal tarda 30-90s en aparecer por endpoints backend lentos/con 502. El módulo Tasación directo funciona OK.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/clientes/folders/{fid}/sync-aprobacion", "issue": "Retorna 502 Bad Gateway tras ~30s (timeout de ingress). Es invocado sincrónicamente por openTasacion() antes de abrir el modal → bloquea la UX del botón Solicitud de Tasación 30s. Sospecha: _sync_docs_aprobacion escanea buzón/archivos y excede el timeout del proxy/ingress.", "priority": "HIGH"},
+      {"endpoint": "GET /api/clientes/folders/{fid}/tasacion-prefill", "issue": "Responde 200 pero tarda ~30s (hace OCR + LLM sobre hasta 12 documentos). Invocado por openTasacion y openEstudio antes de renderizar el modal → 30-60s de espera sin feedback visual.", "priority": "HIGH"}
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "ClientesModule.openTasacion (línea 288-329)", "issue": "El handler realiza 4-5 llamadas axios awaited (sync-aprobacion, folder GET, tasacion-prefill, contactos, brokers) ANTES de hacer setTasacionModal(...). Resultado: entre el clic y la aparición del modal transcurren 30-90s SIN spinner, indicador de carga ni mensaje. El usuario cree que el botón 'no hace nada' y hace más clicks. Reproducido en 3/3 carpetas probadas (Jorge Alcayaga 63s, Karla Guajardo 30s+, Aylem Diaz 30s+). ESTE ES EL BUG QUE REPORTÓ EL USUARIO.", "selector": "[data-testid^='btn-tasacion-']", "priority": "HIGH"},
+      {"component": "ClientesModule.openEstudio (línea 508-549)", "issue": "Mismo patrón: await tasacion-prefill (90s timeout) antes de renderizar modal. Estudio de Título tarda ~30s en abrir sin feedback visual.", "selector": "[data-testid^='btn-estudio-titulo-']", "priority": "HIGH"}
+    ],
+    "integration_issues": [
+      {"flow": "Solicitud de Tasación", "issue": "El botón inicia la cadena sync-aprobacion→tasacion-prefill→contactos→brokers. sync-aprobacion devuelve 502 en preview; el catch lo swallowa y sigue, pero perdemos 30s. Luego tasacion-prefill responde 200 en ~30s. Total 60-90s.", "affected_selectors": ["[data-testid^='btn-tasacion-']", "[data-testid='tasacion-modal']"]}
+    ],
+    "design_issues": [
+      {"screen": "ClientesModule — botones de flujo de crédito", "issues": ["Sin spinner/estado disabled durante los 30-90s de espera de openTasacion/openEstudio: el botón queda visualmente idéntico y clickable, dando la sensación de que 'no funciona'. Debería mostrar 'Preparando…' o desactivar el botón con spinner mientras carga."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "PRIORIDAD ALTA: Diagnosticar por qué POST /api/clientes/folders/{fid}/sync-aprobacion tarda >30s y retorna 502 en preview. Revisar _sync_docs_aprobacion; probablemente escanea todo el buzón. Considerar hacerlo async fire-and-forget (no await en frontend) o incrementar performance.",
+    "PRIORIDAD ALTA: openTasacion (ClientesModule.js:288) y openEstudio (línea 508) deben abrir el modal INMEDIATAMENTE con estado 'loading' y hacer las llamadas de prefill en segundo plano actualizando los campos cuando lleguen. No bloquear el render del modal en axios awaits.",
+    "PRIORIDAD ALTA: Agregar feedback visual (spinner o botón disabled con texto 'Preparando…') mientras openTasacion/openEstudio están en curso para que el usuario no perciba que el botón no funciona.",
+    "PRIORIDAD MEDIA: /api/clientes/folders/{fid}/tasacion-prefill hace OCR + LLM sobre 12 docs sincrónicamente; considerar cachear resultado o limitar a 3-4 docs para respuesta <10s.",
+    "OPCIONAL: Encapsular sync-aprobacion como llamada opcional con try/catch y timeout corto (5s), no 90s."
+  ],
+  "critical_code_review_comments": [
+    "ClientesModule.js openTasacion (líneas 288-329): 5 llamadas axios await consecutivas antes de renderizar modal. Anti-patrón — el usuario espera 60s+ con cero feedback. Refactor: renderizar modal con estado 'cargando prefill' y hacer las fetches en background (useEffect en el modal, o Promise.allSettled después de setTasacionModal).",
+    "ClientesModule.js openEstudio (líneas 508-549): mismo patrón que openTasacion.",
+    "server.py línea 3534 sync-aprobacion: sin timeout server-side; en preview el endpoint no completa en <30s y el ingress retorna 502. Investigar por qué es lento (posible escaneo IMAP en vivo).",
+    "server.py línea 3541 tasacion-prefill: hace OCR + LLM sobre hasta 12 archivos sincrónicamente dentro de la request. Debería paginar o cachear en Mongo el resultado."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skip backend)", "frontend": "75% (6/8 botones OK, 2/8 con bug de UX crítico)"},
+  "test_credentials": "administrador/141617575 (usado); gerencia/Gerencia2026 (verificado tiene acceso a Carpeta Clientes)",
+  "seed_data_creation": "Ninguno. Se usaron carpetas existentes: 579f21a7 (Jorge Alcayaga), 8cb80c6b (Karla Guajardo), 9b27402f (Aylem Diaz).",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "El bug del usuario NO era que los botones no ejecutaban acción, sino que la UX daba esa sensación por la latencia de 30-90s sin feedback. Al esperar 63s el modal de tasación SÍ se abre correctamente con todos los campos prefill (screenshot confirmado). Al arreglar openTasacion/openEstudio (abrir modal inmediatamente + spinner + fetch en background), el bug se debería resolver aunque los endpoints backend sigan siendo lentos. La solución definitiva requiere ambas cosas: (1) frontend no-bloqueante y (2) backend más rápido en sync-aprobacion.",
+  "detailed_button_results": {
+    "btn-aprobacion (Enviar Aprobación Cliente)": "OK — navega instantáneamente a 'ENVÍO APROBACIÓN CLIENTE'",
+    "btn-gastos (Gasto Operacional)": "OK — navega instantáneamente a 'GASTOS OPERACIONALES'",
+    "btn-setcredito (Firma Set de Crédito)": "OK — navega a módulo Set de Crédito con 'NUEVO SET DE CRÉDITO' y lista de 20 sets",
+    "btn-tasacion (Solicitud de Tasación)": "BUG DE LATENCIA — modal aparece tras 63s (sync-aprobacion 502 + tasacion-prefill 30s). Cuando finalmente aparece, contiene todos los datos correctos.",
+    "btn-estudio-titulo (Solicitud de Estudio de Título)": "BUG DE LATENCIA — mismo problema por await de tasacion-prefill",
+    "btn-escritura (Firma de Escritura)": "OK — modal 'FIRMA DE ESCRITURA' aparece rápido con datos correctos",
+    "btn-enriquecer (Enriquecer archivos)": "OK — POST /enriquecer se dispara, botón muestra spinner (fa-spin) durante la carga",
+    "btn-escrituracion-toggle (Enviar a Escrituración)": "OK — window.confirm aparece con texto '⚖️ ENVIAR A ESCRITURACIÓN ¿Enviar la ficha de Jorge Eduardo Alcayaga Flores a Escrituración?'",
+    "modulo-tasacion": "OK — [data-testid=tasacion-module] carga con header 'TASACIÓN', botón Actualizar funciona, muestra 1 ficha (Claudia Zurita)",
+    "gerencia_role": "Tiene acceso a Carpeta Clientes en el menú — misma UX aplica"
+  },
+  "rca of the issue": "CAUSA RAÍZ: Los handlers openTasacion (ClientesModule.js:288) y openEstudio (línea 508) hacen 4-5 axios.await consecutivos ANTES de llamar setTasacionModal/setEstudioModal. Estas llamadas incluyen POST /sync-aprobacion (que en preview retorna 502 tras 30s de timeout de ingress) y GET /tasacion-prefill (que hace OCR + LLM sobre 12 documentos, ~30s). Total: 30-90s de espera SIN spinner, sin cambio visual en el botón, sin modal visible. El usuario clickea el botón y percibe que 'no hace nada'. Sí lo hace, pero el modal aparece 1 minuto después. En producción con datos más completos el problema es aún peor. MITIGACIÓN: (1) Refactor frontend: setTasacionModal({loading:true, folder}) INMEDIATAMENTE, luego hacer los fetches en useEffect/Promise.allSettled y actualizar campos cuando lleguen. (2) Agregar disabled+spinner al botón mientras carga. (3) Optimizar backend: sync-aprobacion no debería tardar >5s, y tasacion-prefill debería cachear o limitar OCR a 3 docs. REPRODUCCIÓN: (a) login administrador/141617575 → Carpeta Clientes; (b) clic en 'Solicitud de Tasación' de cualquier tarjeta; (c) esperar — con timer, el modal aparece ~30-90s después. Sin timer, el usuario asume que el botón no funciona."
+}

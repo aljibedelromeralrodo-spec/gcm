@@ -4,6 +4,7 @@ editables desde el panel, con correo de prueba real antes de activar.
 REGLA PERMANENTE: respuestas de brokers externos → Victoria y Daniela como principales.
 """
 import re
+import os
 import uuid
 import asyncio
 import logging
@@ -164,9 +165,9 @@ async def enviar_prueba(accion_id: str, request: Request):
     quien = c.get("nombre") or c.get("sub") or "Usuario autorizado"
     html = f"""
     <div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;background:#0f172a;border-radius:12px;overflow:hidden">
-      <div style="background:#0a0a0a;padding:18px 24px;text-align:center;border-bottom:2px solid #d4af37">
-        <span style="color:#d4af37;font-size:18px;font-weight:800;letter-spacing:2px">CENTRAL MUTUOS</span>
-        <div style="color:#94a3b8;font-size:10px;letter-spacing:4px;margin-top:2px">CON CRECES</div>
+      <div style="background:#0a0a0a;padding:16px 24px;text-align:center;border-bottom:2px solid #d4af37">
+        <img src="{os.environ.get('PUBLIC_BASE_URL', '').rstrip('/')}/logo-horizontal.png" alt="Central Mutuos — Con Creces"
+          width="220" style="display:block;margin:0 auto;max-width:220px;width:100%;height:auto;border:0" />
       </div>
       <div style="padding:24px;color:#e2e8f0">
         <h2 style="color:#d4af37;font-size:15px;margin:0 0 10px">🧪 Correo de prueba de configuración</h2>

@@ -285,47 +285,66 @@ export default function ClientesModule({ onNavigate }) {
     } catch (e) { alert("Error: " + (e.response?.data?.detail || e.message)); }
   };
 
-  const openTasacion = async (f) => {
-    let archivos = [];
-    // REGLA: la carta de aprobación debe estar SIEMPRE descargada en la carpeta antes de tasar
-    try { await axios.post(`${API}/api/clientes/folders/${f.id}/sync-aprobacion`, {}, { timeout: 90000 }); } catch (_e) { /* best effort */ }
-    try {
-      const r = await axios.get(`${API}/api/clientes/folders/${f.id}`);
-      // Solo la carta de aprobación va preseleccionada — nada más de la carpeta
-      archivos = (r.data.archivos || []).map(a => ({ ...a, sel: /carta|oferta|aprobaci/i.test(a.nombre) }))
-        .sort((a, b) => (b.sel ? 1 : 0) - (a.sel ? 1 : 0));
-    } catch (_e) { /* sin archivos */ }
-    let prefill = {};
-    try {
-      const pf = await axios.get(`${API}/api/clientes/folders/${f.id}/tasacion-prefill`, { timeout: 90000 });
-      prefill = pf.data.prefill || {};
-    } catch (_e) { /* best effort */ }
-    try {
-      const [c, b] = await Promise.all([
-        axios.get(`${API}/api/tasacion/contactos`),
-        axios.get(`${API}/api/brokers`),
-      ]);
-      setTasacionContactos(c.data.contactos || []);
-      setBrokers(b.data.brokers || []);
-    } catch (_e) { setTasacionContactos([]); }
+  const openTasacion = (f) => {
     const df = f.datos_financieros || {};
-    const valorUF = df.valor_propiedad || prefill.valor_propiedad_uf || "";
+    const valorUF0 = df.valor_propiedad || "";
+    // FIX LATENCIA: el modal abre AL INSTANTE; los datos lentos (OCR + IA) llegan en segundo plano
     setTasacionModal({
-      folder: f, archivos, tipo: "Individual",
+      folder: f, archivos: [], tipo: "Individual",
       destinatarios: "contacto@valueproperty.cl, victoriavilches@centralmutuos.cl",
       modalidad: "inmobiliaria", broker_id: "",
-      inmobiliaria: df.inmobiliaria || prefill.inmobiliaria || "",
+      inmobiliaria: df.inmobiliaria || "",
       inmo_contacto_nombre: "", inmo_contacto_email: "",
       intro: "", voucher_nombre: "", fecha_tasacion: f.tasacion_fecha || "",
-      direccion: df.direccion || prefill.direccion || "", comuna: df.comuna || prefill.comuna || "", ciudad: df.ciudad || prefill.ciudad || "",
-      unidad: prefill.unidad || "", rol_avaluo: prefill.rol_avaluo || "",
-      valor_uf: valorUF ? String(valorUF) : "",
-      valor_esperado_uf: valorUF ? String(valorUF) : "",
-      vendedor: prefill.vendedor_nombre || "", vendedor_email: prefill.vendedor_email || "",
-      contacto_nombre: prefill.vendedor_nombre || "", contacto_telefono: prefill.vendedor_telefono || "",
-      contacto_email: prefill.vendedor_email || "",
-      observaciones: "", preview: null, loading: false, msg: "",
+      direccion: df.direccion || "", comuna: df.comuna || "", ciudad: df.ciudad || "",
+      unidad: "", rol_avaluo: "",
+      valor_uf: valorUF0 ? String(valorUF0) : "",
+      valor_esperado_uf: valorUF0 ? String(valorUF0) : "",
+      vendedor: "", vendedor_email: "",
+      contacto_nombre: "", contacto_telefono: "", contacto_email: "",
+      observaciones: "", preview: null, loading: false, msg: "", prefillLoading: true,
     });
+    const mergeSiActual = (updater) => setTasacionModal(prev =>
+      (prev && prev.folder?.id === f.id ? updater(prev) : prev));
+    const cargarArchivos = async () => {
+      try {
+        const r = await axios.get(`${API}/api/clientes/folders/${f.id}`);
+        const archivos = (r.data.archivos || []).map(a => ({ ...a, sel: /carta|oferta|aprobaci/i.test(a.nombre) }))
+          .sort((a, b) => (b.sel ? 1 : 0) - (a.sel ? 1 : 0));
+        mergeSiActual(prev => {
+          const selPrev = Object.fromEntries((prev.archivos || []).map(a => [a.nombre, a.sel]));
+          return { ...prev, archivos: archivos.map(a => (a.nombre in selPrev ? { ...a, sel: selPrev[a.nombre] } : a)) };
+        });
+      } catch (_e) { /* sin archivos */ }
+    };
+    cargarArchivos();
+    // REGLA: la carta de aprobación debe estar SIEMPRE descargada antes de tasar (best effort, en background)
+    axios.post(`${API}/api/clientes/folders/${f.id}/sync-aprobacion`, {}, { timeout: 90000 })
+      .then(cargarArchivos).catch(() => {});
+    Promise.all([axios.get(`${API}/api/tasacion/contactos`), axios.get(`${API}/api/brokers`)])
+      .then(([c, b]) => { setTasacionContactos(c.data.contactos || []); setBrokers(b.data.brokers || []); })
+      .catch(() => setTasacionContactos([]));
+    axios.get(`${API}/api/clientes/folders/${f.id}/tasacion-prefill`, { timeout: 120000 })
+      .then(pf => {
+        const prefill = pf.data.prefill || {};
+        mergeSiActual(prev => {
+          const v = prev.valor_uf || (prefill.valor_propiedad_uf ? String(prefill.valor_propiedad_uf) : "");
+          return { ...prev, prefillLoading: false,
+            inmobiliaria: prev.inmobiliaria || prefill.inmobiliaria || "",
+            direccion: prev.direccion || prefill.direccion || "",
+            comuna: prev.comuna || prefill.comuna || "",
+            ciudad: prev.ciudad || prefill.ciudad || "",
+            unidad: prev.unidad || prefill.unidad || "",
+            rol_avaluo: prev.rol_avaluo || prefill.rol_avaluo || "",
+            valor_uf: v, valor_esperado_uf: prev.valor_esperado_uf || v,
+            vendedor: prev.vendedor || prefill.vendedor_nombre || "",
+            vendedor_email: prev.vendedor_email || prefill.vendedor_email || "",
+            contacto_nombre: prev.contacto_nombre || prefill.vendedor_nombre || "",
+            contacto_telefono: prev.contacto_telefono || prefill.vendedor_telefono || "",
+            contacto_email: prev.contacto_email || prefill.vendedor_email || "" };
+        });
+      })
+      .catch(() => mergeSiActual(prev => ({ ...prev, prefillLoading: false })));
   };
 
   const subirVoucher = async (file) => {
@@ -505,47 +524,53 @@ export default function ClientesModule({ onNavigate }) {
     }
   };
 
-  const openEstudio = async (f) => {
-    let archivos = [];
-    let defaults = { destinatarios: ["contacto@hipotecariogestion.cl", "victoriavilches@centralmutuos.cl"], docs_usada: [] };
-    let prefill = {};
-    try {
-      const pf = await axios.get(`${API}/api/clientes/folders/${f.id}/tasacion-prefill`, { timeout: 90000 });
-      prefill = pf.data.prefill || {};
-    } catch (_e) { /* best effort */ }
-    try {
-      const [r, d] = await Promise.all([
-        axios.get(`${API}/api/clientes/folders/${f.id}`),
-        axios.get(`${API}/api/estudio-titulo/defaults`),
-      ]);
-      archivos = (r.data.archivos || []).map(a => ({ ...a, sel: /carta|oferta|aprobaci/i.test(a.nombre) }))
-        .sort((a, b) => (b.sel ? 1 : 0) - (a.sel ? 1 : 0));
-      defaults = d.data;
-    } catch (_e) { /* defaults */ }
-    reloadBrokers();
-    try {
-      const p = await axios.get(`${API}/api/plantillas?tipo=estudio`);
-      setEstudioPlantillas(p.data.plantillas || []);
-    } catch (e) { console.error(e); }
-    try {
-      const c = await axios.get(`${API}/api/tasacion/contactos`);
-      setTasacionContactos(c.data.contactos || []);
-    } catch (e) { console.error(e); }
+  const openEstudio = (f) => {
+    // FIX LATENCIA: modal instantáneo; prefill OCR/IA y defaults llegan en segundo plano
     setEstudioModal({
-      folder: f, archivos,
-      destinatarios: defaults.destinatarios.join(", "),
+      folder: f, archivos: [],
+      destinatarios: "contacto@hipotecariogestion.cl, victoriavilches@centralmutuos.cl",
       cc: (f.estudio_titulo_cc || []).join(", "),
       tipo_vivienda: "nueva",
-      docs_usada: defaults.docs_usada || [],
-      docs_nueva: defaults.docs_nueva || [],
-      inmobiliaria: f.datos_financieros?.inmobiliaria || prefill.inmobiliaria || "",
+      docs_usada: [], docs_nueva: [],
+      inmobiliaria: f.datos_financieros?.inmobiliaria || "",
       inmo_contacto_nombre: "", inmo_contacto_email: "",
-      vendedor_nombre: prefill.vendedor_nombre || "", vendedor_email: prefill.vendedor_email || "", vendedor_telefono: prefill.vendedor_telefono || "",
+      vendedor_nombre: "", vendedor_email: "", vendedor_telefono: "",
       intro: "",
-      direccion: f.datos_financieros?.direccion || prefill.direccion || "", observaciones: "",
-      docs_texto: (defaults.docs_nueva || []).join("\n"),
-      preview: null, loading: false, msg: "",
+      direccion: f.datos_financieros?.direccion || "", observaciones: "",
+      docs_texto: "",
+      preview: null, loading: false, msg: "", prefillLoading: true,
     });
+    const mergeSiActual = (updater) => setEstudioModal(prev =>
+      (prev && prev.folder?.id === f.id ? updater(prev) : prev));
+    Promise.all([
+      axios.get(`${API}/api/clientes/folders/${f.id}`),
+      axios.get(`${API}/api/estudio-titulo/defaults`),
+    ]).then(([r, d]) => {
+      const archivos = (r.data.archivos || []).map(a => ({ ...a, sel: /carta|oferta|aprobaci/i.test(a.nombre) }))
+        .sort((a, b) => (b.sel ? 1 : 0) - (a.sel ? 1 : 0));
+      const defaults = d.data || {};
+      mergeSiActual(prev => ({ ...prev, archivos,
+        destinatarios: (defaults.destinatarios || []).join(", ") || prev.destinatarios,
+        docs_usada: defaults.docs_usada || [], docs_nueva: defaults.docs_nueva || [],
+        docs_texto: prev.docs_texto || (prev.tipo_vivienda === "usada"
+          ? (defaults.docs_usada || []).join("\n") : (defaults.docs_nueva || []).join("\n")) }));
+    }).catch(() => {});
+    reloadBrokers();
+    axios.get(`${API}/api/plantillas?tipo=estudio`)
+      .then(p => setEstudioPlantillas(p.data.plantillas || [])).catch(e => console.error(e));
+    axios.get(`${API}/api/tasacion/contactos`)
+      .then(c => setTasacionContactos(c.data.contactos || [])).catch(e => console.error(e));
+    axios.get(`${API}/api/clientes/folders/${f.id}/tasacion-prefill`, { timeout: 120000 })
+      .then(pf => {
+        const prefill = pf.data.prefill || {};
+        mergeSiActual(prev => ({ ...prev, prefillLoading: false,
+          inmobiliaria: prev.inmobiliaria || prefill.inmobiliaria || "",
+          direccion: prev.direccion || prefill.direccion || "",
+          vendedor_nombre: prev.vendedor_nombre || prefill.vendedor_nombre || "",
+          vendedor_email: prev.vendedor_email || prefill.vendedor_email || "",
+          vendedor_telefono: prev.vendedor_telefono || prefill.vendedor_telefono || "" }));
+      })
+      .catch(() => mergeSiActual(prev => ({ ...prev, prefillLoading: false })));
   };
 
   const guardarPlantillaEstudio = async () => {
@@ -2833,6 +2858,11 @@ export default function ClientesModule({ onNavigate }) {
                 <button onClick={() => setTasacionModal(null)} data-testid="btn-tasacion-close" style={{ background: "transparent", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 18 }}><i className="fa fa-times" /></button>
               </div>
               <div style={{ padding: "1rem 1.1rem", display: "grid", gap: "0.75rem" }}>
+                {m.prefillLoading && (
+                  <div data-testid="tasacion-prefill-loading" style={{ padding: "0.5rem 0.9rem", background: "rgba(212,175,55,0.1)", border: "1px solid rgba(212,175,55,0.3)", color: "#d4af37", fontSize: 12, fontWeight: 600 }}>
+                    <i className="fa fa-spinner fa-spin" style={{ marginRight: 6 }} />Completando datos automáticamente (OCR + IA)… puedes editar y enviar sin esperar.
+                  </div>
+                )}
                 {m.msg && (
                   <div data-testid="tasacion-msg" style={{ padding: "0.6rem 0.9rem", borderRadius: 0, background: m.msg.startsWith("✅") ? "rgba(16,217,142,0.15)" : "rgba(225,29,72,0.15)", color: m.msg.startsWith("✅") ? "#34eab9" : "#fb7185", fontWeight: 600, fontSize: 13 }}>{m.msg}</div>
                 )}
@@ -3025,6 +3055,11 @@ export default function ClientesModule({ onNavigate }) {
                 <button onClick={() => setEstudioModal(null)} data-testid="btn-estudio-close" style={{ background: "transparent", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 18 }}><i className="fa fa-times" /></button>
               </div>
               <div style={{ padding: "1rem 1.1rem", display: "grid", gap: "0.75rem" }}>
+                {m.prefillLoading && (
+                  <div data-testid="estudio-prefill-loading" style={{ padding: "0.5rem 0.9rem", background: "rgba(45,212,191,0.08)", border: "1px solid rgba(45,212,191,0.3)", color: "#2dd4bf", fontSize: 12, fontWeight: 600 }}>
+                    <i className="fa fa-spinner fa-spin" style={{ marginRight: 6 }} />Completando datos automáticamente (OCR + IA)… puedes editar y enviar sin esperar.
+                  </div>
+                )}
                 {m.msg && (
                   <div data-testid="estudio-msg" style={{ padding: "0.6rem 0.9rem", borderRadius: 0, background: m.msg.startsWith("✅") ? "rgba(16,217,142,0.15)" : "rgba(225,29,72,0.15)", color: m.msg.startsWith("✅") ? "#34eab9" : "#fb7185", fontWeight: 600, fontSize: 13 }}>{m.msg}</div>
                 )}

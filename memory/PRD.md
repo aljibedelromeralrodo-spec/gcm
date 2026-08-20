@@ -1018,3 +1018,10 @@ Constitución v16 (Reglas #34-#38, #41, #43, #49, #52, #53, #54). Módulo Broker
   Twilio keys pendientes; deployment bloqueado por filtro de seguridad (esperando soporte Emergent).
 - P2 backlog: Reactivar Hilo Frío (botón en tarjetas sin movimiento 7+ días), Recordatorio Fuentes Rojas
   (email semanal a Administración), alertas cumpleaños, optimización móvil.
+
+## REGLA DE GOBERNANZA PERMANENTE (21/06/2026 — orden directa del administrador)
+Antes de modificar cualquier componente visual, módulo existente o funcionalidad que ya funciona,
+el agente DEBE mostrar un resumen del plan de cambios y solicitar confirmación explícita del
+administrador antes de ejecutar. Ningún cambio estructural, de diseño o de funcionalidad existente
+puede realizarse sin aprobación previa. Solo se ejecuta lo explícitamente autorizado en el prompt
+actual; todo lo demás permanece intacto.

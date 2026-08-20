@@ -1,0 +1,19 @@
+{
+  "summary": "Iteración 46 (backend only): verificación del fix de logo en plantilla _email_institucional + idioma español + envío real. 6/6 pytest pasan.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/tests/test_iter46_logo_email.py"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py sigue creciendo (14691 líneas) — considerar dividir en módulos. No bloquea este fix.",
+    "_email_institucional depende de os.environ.get('PUBLIC_BASE_URL','').rstrip('/'); si la env var faltara, el src del <img> quedaría como '/logo-cm.png' (relativo) y muchos clientes de correo lo mostrarían roto. Sugerencia: fallback explícito al dominio productivo."
+  ],
+  "updated_files": ["/app/tests/test_iter46_logo_email.py"],
+  "success_rate": {"backend": "100%", "frontend": "N/A (skip)"},
+  "test_credentials": "No requeridas para plantilla. SMTP configurado en /app/backend/.env.",
+  "seed_data_creation": "Ninguna. Se envió 1 correo real a javierurrutia@centralmutuos.cl (Prueba QA logo plantilla — favor ignorar).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Fix del logo en correos automáticos verificado end-to-end. La plantilla _email_institucional (server.py L1858) incluye <img src='{PUBLIC_BASE_URL}/logo-cm.png' width=64/> en el header negro/dorado. correo_destinatarios.py enviar_prueba también incluye el logo (48px) y el import os está presente. _enviar_credenciales está 100% en español. Ambos hosts (risk-assess-17.emergent.host y espejo-hibrido.preview.emergentagent.com) devuelven /logo-cm.png con 200 y content-type image/png. Envío real: success=True, smtp_code=250, desde=gerardo.ext@centralmutuos.cl, message_id emitido por SMTP Gmail.",
+  "rca of the issue": "No hay bug pendiente. Fix aplicado correctamente por E1 en iteración anterior. Antes: el header solo tenía texto → el cliente de correo mostraba icono genérico 'C'. Después: se agregó <img src='{PUBLIC_BASE_URL}/logo-cm.png' ...> justo antes del texto CENTRAL MUTUOS, sin alterar el resto del diseño."
+}

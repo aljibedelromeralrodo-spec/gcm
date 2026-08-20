@@ -1634,3 +1634,12 @@ Constitución VERSION 19 (nuevas reglas #55, #56, #57).
 - Columnas agregadas a ambas tablas de la UI y a las 2 hojas del Excel.
 - HALLAZGO OPERATIVO: el hot-reload de uvicorn queda COLGADO tras editar archivos backend (loops de fondo
   bloquean el shutdown) → siempre `sudo supervisorctl restart backend` después de editar código backend.
+
+## 21/06/2026 — Fix botones flujo de crédito + logo en correos + regla de gobernanza
+- Botones Tasación/Estudio de Título: modales ahora abren en 0.2s con banner "Completando datos (OCR+IA)…"
+  y fetches en background sin pisar lo escrito por el usuario (iteración 44 RCA + iteración 45: 100% PASS).
+- Logo oficial (PUBLIC_BASE_URL/logo-cm.png) agregado al header de _email_institucional (server.py L1858)
+  y al correo de prueba de correo_destinatarios.py. Textos confirmados 100% español (iteración 46: 6/6 PASS).
+- REGLA DE GOBERNANZA DEL USUARIO (PERMANENTE): antes de modificar cualquier componente visual, módulo o
+  funcionalidad existente, mostrar resumen del plan y pedir confirmación explícita del administrador.
+  Solo ejecutar lo explícitamente autorizado en el prompt actual.

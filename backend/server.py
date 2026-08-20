@@ -1866,10 +1866,9 @@ def _email_institucional(nombre, cuerpo_html, firmante="Sistema de Gestión Cent
 <tr><td align="center">
 <table role="presentation" width="600" cellpadding="0" cellspacing="0"
   style="max-width:600px;width:100%;background:#ffffff;border-radius:8px;overflow:hidden;font-family:Arial,Helvetica,sans-serif">
-<tr><td style="background:#0a0a0a;padding:24px 28px;text-align:center">
-  <span style="color:#C9A227;font-family:Georgia,'Times New Roman',serif;font-size:24px;font-weight:bold;letter-spacing:3px">CENTRAL MUTUOS</span>
-  <div style="height:1px;background:#C9A227;width:72%;margin:9px auto 7px"></div>
-  <span style="color:#C9A227;font-family:Georgia,'Times New Roman',serif;font-size:11px;letter-spacing:6px">CON CRECES</span></td></tr>
+<tr><td style="background:#0a0a0a;padding:20px 28px;text-align:center">
+  <img src="{os.environ.get('PUBLIC_BASE_URL', '').rstrip('/')}/logo-horizontal.png" alt="Central Mutuos — Con Creces"
+    width="280" style="display:block;margin:0 auto;max-width:280px;width:100%;height:auto;border:0" /></td></tr>
 <tr><td style="padding:26px 28px;color:#1f2937;font-size:14px;line-height:1.65;text-align:justify">
   <p style="margin:0 0 14px">Estimado/a <b>{nombre}</b>,</p>
   {cuerpo_html}
