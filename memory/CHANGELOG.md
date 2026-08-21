@@ -1800,3 +1800,9 @@ polling GET /api/central/proactive existe vacío en server.py:1526) — usuario 
     (negro/dorado, logo oficial, generado con /app/tests/gen_pdf_brokers.py; regenerar ahí si piden cambios).
     NOTA: app ya DESPLEGADA en producción https://mutuariasyleasing.cl — ante bugs preguntar SIEMPRE
     si ocurre en preview o producción; cambios requieren redeploy del usuario.
+12. /app/frontend/public/template-brokers-concreces.html — template de correo HTML para brokers
+    (tablas inline compatible Gmail/Outlook, negro/dorado, logo circular oficial hosteado en preview,
+    enriquecido con contenido real de centralmutuos.cl: plazos 24h/48h/48h/5 días, comparativo vs
+    tradicional, inmobiliarias Boetsch/Ecomac/Besalco, productos DS19-DS01 y 2.000-12.000 UF,
+    beneficios cesantía/buen pagador, CTA a centralmutuos.cl + contacto@centralmutuos.cl, pie CMF).
+    Enviado de muestra a gerardo.ext@centralmutuos.cl (redirección anti auto-envío). SMTP 250 OK.
