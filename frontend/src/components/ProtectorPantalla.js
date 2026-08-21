@@ -90,12 +90,12 @@ function HeliceProtector() {
   const logoSize = Math.min(Math.floor(window.innerHeight * 0.3), 250);
   return (
     <>
-      <style>{`@keyframes cm-logo-giro { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+      <style>{`@keyframes cm-logo-levita { 0% { transform: translateY(0); } 50% { transform: translateY(-18px); } 100% { transform: translateY(0); } }`}</style>
       <canvas ref={canvasRef} style={{ display: "block", position: "absolute", inset: 0 }} />
       <img ref={logoRef} src="/logo-circular-oficial.png" alt="Central Mutuos" data-testid="protector-logo"
         style={{ position: "absolute", top: "50%", left: "50%", width: logoSize, height: logoSize,
           marginTop: -logoSize / 2, marginLeft: -logoSize / 2, borderRadius: "50%", opacity: 0,
-          animation: "cm-logo-giro 26s linear infinite",
+          animation: "cm-logo-levita 5s ease-in-out infinite",
           boxShadow: "0 0 60px -12px rgba(212,175,55,0.55)" }} />
     </>
   );
