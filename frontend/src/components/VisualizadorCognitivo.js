@@ -7,6 +7,14 @@ const ORO = "212,175,55", MORADO = "139,92,246", VERDE = "16,217,142", ROJO = "2
 const colorCarpeta = (c) => c.alerta || c.resultado === "reprobado" ? ROJO
   : c.resultado === "aprobado" ? VERDE : MORADO;
 
+const hashStr = (s) => (s || "").split("").reduce((a, ch) => a + ch.charCodeAt(0) * 7, 0);
+// disparo neuronal: cada nodo brilla solo, al azar — ataque breve, apagado lento
+const disparo = (h, t) => {
+  const p = 3.5 + (h % 50) / 10;
+  const f = (t + ((h % 97) / 97) * p) % p;
+  return f < 0.18 ? f / 0.18 : Math.max(0, 1 - (f - 0.18) / 2.4);
+};
+
 // Visualizador Cognitivo en Vivo: el sistema como cerebro con nodos y pulsos reales
 export default function VisualizadorCognitivo({ modo = "panel" }) {
   const [datos, setDatos] = useState(null);
@@ -67,19 +75,19 @@ export default function VisualizadorCognitivo({ modo = "panel" }) {
 
       const posEj = (i, n) => {
         const a = (i / Math.max(n, 1)) * Math.PI * 2 - Math.PI / 2;
-        return { x: cx + Math.cos(a) * R1 + Math.sin(t * 0.5 + i) * 4, y: cy + Math.sin(a) * R1 + Math.cos(t * 0.4 + i * 2) * 4 };
+        return { x: cx + Math.cos(a) * R1 + Math.sin(t * 0.22 + i) * 6, y: cy + Math.sin(a) * R1 + Math.cos(t * 0.18 + i * 2) * 6 };
       };
       const posCa = (i, n, id) => {
-        const h = (id || "").split("").reduce((s, ch) => s + ch.charCodeAt(0), 0);
+        const h = hashStr(id);
         const a = (i / Math.max(n, 1)) * Math.PI * 2 + (h % 10) * 0.02;
         const r = R2 + (h % 5) * base * 0.015;
-        let x = cx + Math.cos(a) * r + Math.sin(t * 0.6 + h) * 5, y = cy + Math.sin(a) * r + Math.cos(t * 0.5 + h) * 5;
+        let x = cx + Math.cos(a) * r + Math.sin(t * 0.25 + h) * 7, y = cy + Math.sin(a) * r + Math.cos(t * 0.2 + h) * 7;
         if ((fx.vibraciones[id] || 0) > now) { x += Math.sin(now * 0.09 + h) * 3.5; y += Math.cos(now * 0.11 + h) * 3.5; }
         return { x, y };
       };
       const posCo = (i, n) => {
-        const a = (i / Math.max(n, 1)) * Math.PI * 2 + 0.35 + t * 0.02;
-        return { x: cx + Math.cos(a) * R3, y: cy + Math.sin(a) * R3 };
+        const a = (i / Math.max(n, 1)) * Math.PI * 2 + 0.35 + t * 0.008;
+        return { x: cx + Math.cos(a) * R3 + Math.sin(t * 0.2 + i * 3) * 5, y: cy + Math.sin(a) * R3 + Math.cos(t * 0.24 + i * 2) * 5 };
       };
 
       const linea = (a, b, rgb, alpha, pulso, fase) => {
@@ -97,13 +105,19 @@ export default function VisualizadorCognitivo({ modo = "panel" }) {
           ctx.shadowBlur = 0;
         }
       };
-      const nodo = (p, r, rgb, glow, label, labelCol) => {
-        ctx.globalAlpha = 1;
-        ctx.shadowColor = `rgb(${rgb})`; ctx.shadowBlur = glow;
+      const nodo = (p, r, rgb, glow, label, labelCol, fuego = 0) => {
+        if (fuego > 0.02) {                            // halo orgánico del disparo neuronal
+          ctx.globalAlpha = 0.16 * fuego;
+          ctx.fillStyle = `rgb(${rgb})`;
+          ctx.beginPath(); ctx.arc(p.x, p.y, r + 4 + fuego * 13, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.globalAlpha = 0.55 + 0.45 * fuego;
+        ctx.shadowColor = `rgb(${rgb})`; ctx.shadowBlur = glow + fuego * 22;
         ctx.fillStyle = `rgba(${rgb},0.95)`;
-        ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(p.x, p.y, r * (1 + 0.3 * fuego), 0, Math.PI * 2); ctx.fill();
         ctx.shadowBlur = 0;
         if (label && grande) {
+          ctx.globalAlpha = 1;
           ctx.font = "9px monospace"; ctx.textAlign = "center";
           ctx.fillStyle = labelCol || "rgba(200,190,160,0.75)";
           ctx.fillText(label, p.x, p.y + r + 11);
@@ -124,7 +138,7 @@ export default function VisualizadorCognitivo({ modo = "panel" }) {
       // nodos correo (nacen al llegar)
       d.correos.forEach((c, i) => {
         const p = posCo(i, nM);
-        nodo(p, 3.2, c.fallido ? ROJO : ORO, 6, c.cliente);
+        nodo(p, 3.2, c.fallido ? ROJO : ORO, 4, c.cliente, undefined, disparo(hashStr(c.key), t));
         const nac = fx.nacimientos.find(n => n.key === c.key);
         if (nac) {
           const e = (now - nac.t) / 1500;
@@ -140,11 +154,12 @@ export default function VisualizadorCognitivo({ modo = "panel" }) {
       // nodos carpeta: morado espera · verde aprobado · rojo rechazo/alerta
       d.carpetas.forEach((c, i) => {
         const rgb = colorCarpeta(c);
-        nodo(posCa(i, nC, c.id), 4.6, rgb, (fx.vibraciones[c.id] || 0) > now ? 18 : 8,
-          c.nombre.split(" ")[0], `rgba(${rgb},0.8)`);
+        nodo(posCa(i, nC, c.id), 4.6, rgb, (fx.vibraciones[c.id] || 0) > now ? 16 : 5,
+          c.nombre.split(" ")[0], `rgba(${rgb},0.8)`, disparo(hashStr(c.id), t));
       });
       // nodos ejecutivo
-      d.ejecutivos.forEach((e, i) => nodo(posEj(i, nE), 6, ORO, 10, e.nombre.split(" ")[0], "rgba(231,207,122,0.85)"));
+      d.ejecutivos.forEach((e, i) => nodo(posEj(i, nE), 6, ORO, 6, e.nombre.split(" ")[0],
+        "rgba(231,207,122,0.85)", disparo(hashStr(e.codigo) + 31, t)));
 
       // CEREBRO NORMATIVO al centro, latiendo
       const rB = 13 + Math.sin(t * 2.2) * 2.5;
