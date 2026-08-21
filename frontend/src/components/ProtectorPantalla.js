@@ -2,11 +2,11 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
 import { API_URL } from "../utils/formatters";
 
-const PALETA = ["#8a6d1a", "#b8860b", "#BF953F", "#d4af37", "#B38728", "#FCF6BA"];
 const INACTIVIDAD_MS = 5 * 60 * 1000;
 
 function HeliceProtector() {
   const canvasRef = useRef(null);
+  const logoRef = useRef(null);
   useEffect(() => {
     const cv = canvasRef.current;
     const ctx = cv.getContext("2d");
@@ -14,51 +14,91 @@ function HeliceProtector() {
     const start = performance.now();
     const W = (cv.width = window.innerWidth);
     const H = (cv.height = window.innerHeight);
-    const cx = W / 2, cy = H / 2;
-    const BUILD = 14000;
-    const paso = 9;
-    const maxSeg = Math.ceil((W / 2 - 30) / paso);
-    const amp = Math.min(160, H * 0.2);
+    const cx = W / 2;
+    const yTop = H * 0.12, yBot = H * 0.9;
+    const N = 46;                       // nodos por hebra (estilo poligonal)
+    const amp = Math.min(240, W * 0.16);
+    const FILL_MS = 16000, HOLD_MS = 3000;
+    const MORADO = ["#7c3aed", "#5b6cf0", "#3b82f6"];
+    const ORO = ["#8a6d1a", "#b8860b", "#BF953F", "#d4af37"];
+
     const draw = (now) => {
       const t = now - start;
-      const build = Math.min(1, (t % (BUILD + 4000)) / BUILD); // llenado progresivo en loop
-      const segVisibles = Math.floor(maxSeg * build);
-      const rot = t * 0.0011;
+      const ciclo = t % (FILL_MS + HOLD_MS);
+      const fill = Math.min(1, ciclo / FILL_MS);   // 0→1: el dorado conquista de abajo hacia arriba
+      const rot = t * 0.0009;
+      const yFrontera = yBot - (yBot - yTop) * fill;
       ctx.fillStyle = "#000";
       ctx.fillRect(0, 0, W, H);
-      for (let i = 0; i <= segVisibles; i++) {
-        for (const lado of [-1, 1]) {
-          if (i === 0 && lado === 1) continue;
-          const x = cx + lado * i * paso;
-          const ph = (x - cx) * 0.028 + rot;
-          const y1 = cy + Math.sin(ph) * amp;
-          const y2 = cy + Math.sin(ph + Math.PI) * amp;
-          const prof1 = (Math.cos(ph) + 1) / 2;
-          const prof2 = (Math.cos(ph + Math.PI) + 1) / 2;
-          const c1 = PALETA[i % PALETA.length];
-          const c2 = PALETA[(i + 3) % PALETA.length];
-          if (i % 4 === 0) {
-            ctx.strokeStyle = `rgba(184,134,11,${0.12 + 0.16 * Math.min(prof1, prof2)})`;
-            ctx.lineWidth = 1.4;
-            ctx.beginPath(); ctx.moveTo(x, y1); ctx.lineTo(x, y2); ctx.stroke();
-          }
-          ctx.shadowColor = "#b8860b"; ctx.shadowBlur = 7;
-          ctx.globalAlpha = 0.35 + 0.6 * prof1;
-          ctx.fillStyle = c1;
-          ctx.beginPath(); ctx.arc(x, y1, 2.4 + 1.6 * prof1, 0, Math.PI * 2); ctx.fill();
-          ctx.globalAlpha = 0.35 + 0.6 * prof2;
-          ctx.fillStyle = c2;
-          ctx.beginPath(); ctx.arc(x, y2, 2.4 + 1.6 * prof2, 0, Math.PI * 2); ctx.fill();
-          ctx.globalAlpha = 1;
-          ctx.shadowBlur = 0;
+
+      const nodo = (i, desfase) => {
+        const y = yTop + ((yBot - yTop) * i) / (N - 1);
+        const ph = i * 0.42 + rot + desfase;
+        return { x: cx + Math.sin(ph) * amp, y, prof: (Math.cos(ph) + 1) / 2 };
+      };
+      const colorDe = (y, prof, dorado) => {
+        const pal = dorado ? ORO : MORADO;
+        const c = pal[Math.floor(prof * (pal.length - 1))];
+        const cerca = Math.abs(y - yFrontera) < (yBot - yTop) * 0.045;
+        return { c: cerca && dorado ? "#FCF6BA" : c, a: 0.3 + 0.65 * prof };
+      };
+
+      for (const desfase of [0, Math.PI]) {
+        // hebra poligonal: segmentos rectos entre nodos
+        for (let i = 0; i < N - 1; i++) {
+          const a = nodo(i, desfase), b = nodo(i + 1, desfase);
+          const dor = a.y >= yFrontera;
+          const { c, a: al } = colorDe(a.y, (a.prof + b.prof) / 2, dor);
+          ctx.globalAlpha = al * 0.85;
+          ctx.strokeStyle = c;
+          ctx.lineWidth = 1.6 + 1.8 * a.prof;
+          ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
         }
+        // vértices: rombos geométricos (low-poly)
+        for (let i = 0; i < N; i++) {
+          const p = nodo(i, desfase);
+          const dor = p.y >= yFrontera;
+          const { c, a: al } = colorDe(p.y, p.prof, dor);
+          const r = 3 + 4.5 * p.prof;
+          ctx.globalAlpha = al;
+          ctx.fillStyle = c;
+          ctx.beginPath();
+          ctx.moveTo(p.x, p.y - r); ctx.lineTo(p.x + r, p.y);
+          ctx.lineTo(p.x, p.y + r); ctx.lineTo(p.x - r, p.y);
+          ctx.closePath(); ctx.fill();
+        }
+      }
+      // peldaños rectos entre hebras
+      for (let i = 0; i < N; i += 3) {
+        const a = nodo(i, 0), b = nodo(i, Math.PI);
+        const dor = a.y >= yFrontera;
+        ctx.globalAlpha = 0.16 + 0.2 * Math.min(a.prof, b.prof);
+        ctx.strokeStyle = dor ? "#b8860b" : "#5b6cf0";
+        ctx.lineWidth = 1.2;
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      // el logo emerge en el centro a medida que el dorado conquista la hélice
+      if (logoRef.current) {
+        logoRef.current.style.opacity = Math.max(0, Math.min(1, (fill - 0.3) / 0.35));
       }
       raf = requestAnimationFrame(draw);
     };
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
   }, []);
-  return <canvas ref={canvasRef} style={{ display: "block", position: "absolute", inset: 0 }} />;
+  const logoSize = Math.min(Math.floor(window.innerHeight * 0.3), 250);
+  return (
+    <>
+      <style>{`@keyframes cm-logo-giro { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+      <canvas ref={canvasRef} style={{ display: "block", position: "absolute", inset: 0 }} />
+      <img ref={logoRef} src="/logo-circular-oficial.png" alt="Central Mutuos" data-testid="protector-logo"
+        style={{ position: "absolute", top: "50%", left: "50%", width: logoSize, height: logoSize,
+          marginTop: -logoSize / 2, marginLeft: -logoSize / 2, borderRadius: "50%", opacity: 0,
+          animation: "cm-logo-giro 26s linear infinite",
+          boxShadow: "0 0 60px -12px rgba(212,175,55,0.55)" }} />
+    </>
+  );
 }
 
 export default function ProtectorPantalla({ user }) {

@@ -1680,3 +1680,9 @@ Constitución VERSION 19 (nuevas reglas #55, #56, #57).
 - Token se genera en aprobacion_enviar (server.py, confirm=true) y se guarda en db.escrituracion_confirmaciones.
 - CORRECCIÓN (pedido del usuario): el protector de pantalla debe decir EXACTAMENTE 'Central Mutuos' (no CENTRAL MUTUOS ni otro nombre). NO VOLVER A CAMBIARLO.
 - Testeado: ruta pública 200 sin auth, idempotencia, 404 token inválido, alerta y registro en carpeta OK, preview intacto. Sin correos reales enviados.
+
+## 2026-06 — Protector de pantalla v2 (hélice poligonal + logo oficial)
+- Animación rediseñada: doble hélice VERTICAL estilo poligonal (segmentos rectos + rombos), inicia morado/azul y el dorado mate la conquista de abajo hacia arriba en loop (16s + 3s pausa).
+- Logo circular OFICIAL: /app/frontend/public/logo-circular-oficial.png (círculo negro, CM dorado, 'CENTRAL MUTUOS / CON CRECES'). ⚠️ /logo-cm.png es el avatar de WhatsApp — NO usarlo como logo corporativo.
+- El logo emerge en el centro cuando el llenado pasa 30% y gira lentamente (26s/vuelta).
+- Desbloqueo con PIN maestro sin cambios. Texto superior sigue diciendo exactamente 'Central Mutuos'.
