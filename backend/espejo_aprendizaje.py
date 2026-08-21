@@ -108,6 +108,12 @@ ETIQUETAS = {"monto<1500UF": "Monto solicitado bajo 1.500 UF", "monto1500-3000UF
              "ltv<=70": "Financiamiento ≤70% (LTV)", "ltv71-80": "Financiamiento 71–80% (LTV)", "ltv>80": "Financiamiento >80% (LTV)",
              "carga<=25%": "Carga financiera ≤25%", "carga26-35%": "Carga financiera 26–35%", "carga>35%": "Carga financiera >35%",
              "con_codeudor": "Con codeudor", "sin_codeudor": "Sin codeudor",
+             "edad<30": "Solicitante menor de 30 años", "edad30-45": "Edad 30–45 años",
+             "edad46-60": "Edad 46–60 años", "edad>60": "Edad sobre 60 años",
+             "renta<1M": "Renta bajo $1.000.000", "renta1-2M": "Renta $1M–$2M", "renta>2M": "Renta sobre $2.000.000",
+             "con_subsidio": "Con subsidio estatal", "sin_subsidio": "Sin subsidio",
+             "vivienda_nueva": "Vivienda nueva / entrega futura", "vivienda_usada": "Vivienda usada",
+             "casa": "Propiedad tipo casa", "departamento": "Propiedad tipo departamento",
              "adjuntos_1-3": "Envío con 1–3 adjuntos", "adjuntos_4-6": "Envío con 4–6 adjuntos",
              "adjuntos_7+": "Envío con 7 o más adjuntos"}
 
@@ -141,9 +147,102 @@ def _etiqueta(f):
     return ETIQUETAS.get(f, f)
 
 
-# ── HILOS CON MESA: envío con adjuntos → respuesta de mesa (sin carpetas) ──
-RE_VEREDICTO_OK = re.compile(r"\bpre.?aprobad|\baprobad[oa]|\bviable\b|\bprocede\b", re.I)
-RE_VEREDICTO_NO = re.compile(r"\brechaz|\bno\s+cumple|\bno\s+aprobad|\bdeclinad|\bno\s+califica"
+# ── Datos financieros desde los PDF del hilo (monto, plazo, edad, renta, subsidio, vivienda) ──
+def _bucket_edad(e):
+    if not e:
+        return None
+    return "edad<30" if e < 30 else "edad30-45" if e <= 45 else "edad46-60" if e <= 60 else "edad>60"
+
+
+def _bucket_renta(r):
+    if not r:
+        return None
+    return "renta<1M" if r < 1_000_000 else "renta1-2M" if r <= 2_000_000 else "renta>2M"
+
+
+def _num(s):
+    try:
+        return float(s.replace(".", "").replace(",", "."))
+    except (ValueError, AttributeError):
+        return None
+
+
+def _datos_desde_texto_pdf(texto):
+    t = (texto or "").lower()
+    d = {}
+    m = re.search(r"(?:monto|cr[eé]dito)(?:\s+\w+){0,4}?[:\s]+(?:uf\s*)?([\d.,]+)\s*(?:uf)?", t)
+    if m and (v := _num(m.group(1))) and 100 < v < 20000:
+        d["monto_uf"] = v
+    m = re.search(r"plazo(?:\s+\w+){0,3}?[:\s]+(\d{1,2})\s*a[ñn]os", t)
+    if m:
+        d["plazo_anos"] = int(m.group(1))
+    m = re.search(r"edad(?:\s+\w+){0,2}?[:\s]+(\d{2})", t)
+    if m and 18 <= int(m.group(1)) <= 80:
+        d["edad"] = int(m.group(1))
+    m = re.search(r"renta(?:\s+\w+){0,4}?[:\s]+\$?\s*([\d.,]{6,})", t)
+    if m and (v := _num(m.group(1))):
+        d["renta"] = v
+    d["subsidio"] = "con_subsidio" if re.search(r"subsidio|ds\s?19|ds\s?49|ds\s?1\b|serviu", t) else "sin_subsidio"
+    if re.search(r"vivienda\s+nueva|entrega\s+inmediata|en\s+verde|futura", t):
+        d["vivienda"] = "vivienda_nueva"
+    elif re.search(r"vivienda\s+usada", t):
+        d["vivienda"] = "vivienda_usada"
+    if re.search(r"\bdepartamento\b|\bdepto\b", t):
+        d["tipo_prop"] = "departamento"
+    elif re.search(r"\bcasa\b", t):
+        d["tipo_prop"] = "casa"
+    return d
+
+
+def _features_datos(d):
+    fts = [_bucket_monto(d.get("monto_uf")), _bucket_plazo(d.get("plazo_anos")),
+           _bucket_edad(d.get("edad")), _bucket_renta(d.get("renta")),
+           d.get("subsidio"), d.get("vivienda"), d.get("tipo_prop")]
+    return [f for f in fts if f]
+
+
+async def _enriquecer_hilos(hilos, max_nuevos=12):
+    """Baja los PDF del hilo (con caché en db.espejo_hilos_datos) y agrega los
+    datos financieros como rasgos del caso. Máx N descargas nuevas por corrida
+    para cuidar la cuota IMAP; el resto se completa en corridas siguientes."""
+    nuevos = 0
+    for h in hilos:
+        cache = await db.espejo_hilos_datos.find_one({"clave": h["clave"]})
+        if cache:
+            h["datos"] = cache.get("datos") or {}
+            h["features"] = sorted(set(h["features"] + (cache.get("features") or [])))
+            continue
+        if nuevos >= max_nuevos:
+            continue
+        nuevos += 1
+        nombre = re.sub(r"\(.*", "", h.get("asunto") or "").replace("Re:", "").strip()[:40]
+        datos = {}
+        try:
+            from server import _imap_descargar_adjuntos_cliente
+            import pdf_service as pdfs
+            pares = await asyncio.to_thread(_imap_descargar_adjuntos_cliente, nombre)
+            for _fn, raw in (pares or [])[:4]:
+                try:
+                    texto = await asyncio.to_thread(pdfs.leer_texto, raw, 3)
+                    for k, v in _datos_desde_texto_pdf(texto).items():
+                        datos.setdefault(k, v)
+                except Exception:
+                    continue
+        except Exception as e:
+            logging.warning(f"espejo datos pdf {nombre}: {e}")
+        fts = _features_datos(datos)
+        await db.espejo_hilos_datos.update_one({"clave": h["clave"]}, {"$set": {
+            "clave": h["clave"], "nombre": nombre, "datos": datos, "features": fts,
+            "actualizado": _now()}}, upsert=True)
+        h["datos"] = datos
+        h["features"] = sorted(set(h["features"] + fts))
+    return hilos
+RE_VEREDICTO_OK = re.compile(r"tenemos\s+el\s+agrado\s+de\s+informar|califica\s+para\s+un\s+mutuo\s+hipotecari"
+                             r"|mutuo\s+hipotecario\s+endosable|adjuntamos\s+carta\s+y\s+simulaci[oó]n"
+                             r"|subsidio\s+estatal|\bpre.?aprobad|\baprobad[oa]|\bviable\b|\bprocede\b", re.I)
+RE_VEREDICTO_NO = re.compile(r"no\s+cumple\s+(?:los\s+)?par[aá]metros\s+objetivos\s+m[ií]nimos"
+                             r"|par[aá]metros\s+objetivos\s+m[ií]nimos\s+de\s+aprobaci[oó]n"
+                             r"|\brechaz|\bno\s+cumple|\bno\s+aprobad|\bdeclinad|\bno\s+califica"
                              r"|pasad[oa]\s+en\s+carga|sobre.?endeud|excede\s+(la\s+)?(carga|renta)", re.I)
 RE_LIMPIA_ASUNTO = re.compile(r"^\s*((re|rv|fw|fwd|reenv\w*)\s*:\s*)+", re.I)
 
@@ -344,9 +443,10 @@ async def _reconstruir_casos_capa1():
         logging.warning(f"espejo hilos mesa: {e}")
         hilos = []
     if hilos:
+        hilos = await _enriquecer_hilos(hilos)
         docs = [{"id": str(uuid.uuid4()), "origen": "capa1_hilos",
                  "fecha_caso": h["fecha_caso"], "resultado": h["resultado"],
-                 "features": h["features"], "razones": [],
+                 "features": h["features"], "razones": [], "datos": h.get("datos") or {},
                  "adjuntos": h["adjuntos"], "asunto": h["asunto"],
                  "respuesta_asunto": h["respuesta_asunto"], "rut": ""} for h in hilos]
         await db.espejo_casos.insert_many(docs)
@@ -395,6 +495,7 @@ async def entrenar():
         aprendizajes.append(f"Base de casos: {prev.get('n_casos') or 0} → {n}")
     version = int(prev.get("version") or 0) + 1
     doc = {"version": version, "fecha": _now(), "n_casos": n, "n_aprobados": n_a,
+           "n_reprobados": n - n_a,
            "n_capa1": n_capa1, "origenes": dict(origen_stats),
            "periodo": {"desde": corte.isoformat(), "hasta": _now(), "regla": "últimos 3 meses calendario, móvil diario"},
            "tasa_base": round(base, 4), "base_logit": round(base_logit, 4),

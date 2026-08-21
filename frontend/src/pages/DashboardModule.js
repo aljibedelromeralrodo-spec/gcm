@@ -9,6 +9,7 @@ import GraficosRiesgo from "../components/GraficosRiesgo";
 import CorreosSolicitudHoy from "../components/CorreosSolicitudHoy";
 import VisualizadorCognitivo from "../components/VisualizadorCognitivo";
 import PanelEspejo from "../components/PanelEspejo";
+import AuditoriaFlujos from "../components/AuditoriaFlujos";
 import TelepantallaCognitiva from "../components/TelepantallaCognitiva";
 
 export default function DashboardModule({ valorUF: _valorUF, userName: _userName, onNavigate }) {
@@ -158,6 +159,7 @@ export default function DashboardModule({ valorUF: _valorUF, userName: _userName
         onAbrirCarpeta={(fid) => { sessionStorage.setItem("cm_abrir_folder_id", fid); setTelepantalla(false); onNavigate && onNavigate("clientes"); }} />}
       <VisualizadorCognitivo modo="panel" />
       <PanelEspejo />
+      <AuditoriaFlujos />
       <CorreosSolicitudHoy />
       {seguridad && (
         <div data-testid="seguridad-datos-card" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",

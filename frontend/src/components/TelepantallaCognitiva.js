@@ -238,7 +238,7 @@ export default function TelepantallaCognitiva({ onCerrar, onAbrirCarpeta }) {
         style={{ display: "block", position: "absolute", inset: 0 }} />
       <div style={{ position: "absolute", top: 12, left: 16, pointerEvents: "none" }}>
         <span style={{ color: "#e7cf7a", fontSize: "0.72rem", fontWeight: 800, letterSpacing: 2, fontFamily: "monospace" }}>
-          📡 TELEPANTALLA COGNITIVA — CENTRAL MUTUOS</span>
+          📡 TELEPANTALLA COGNITIVA</span>
         {datos && <span style={{ color: "#6a6046", fontSize: "0.6rem", fontFamily: "monospace", marginLeft: 10 }}>
           {(datos.flujo_correos || []).length} correos en flujo · {datos.carpetas.length} carpetas · {datos.ejecutivos.length} ejecutivos</span>}
       </div>

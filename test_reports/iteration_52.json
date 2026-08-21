@@ -1,0 +1,23 @@
+{
+  "summary": "Iteración 52 — Validación backend (7/7 pytest tests OK) + validación UI (auditoría panel, Martín chat, avatar). Todo verde. La auditoría de flujos devuelve 17/17 correcto (0 incorrectos), PDF válido, ultima OK. Digest MESA incluye 'enviadas_mesa' + sección HTML. Martín contextualiza (carpetas/espejo) y flujo ACCION_CORREO pide 'Confirmas' y responde 'cancelado' al recibir 'cancelar', con db.martin_pendientes estado='cancelado'. Frontend: panel data-testid='auditoria-flujos' visible en Dashboard, ejecutar → 17 correctos, expandir muestra detalle. FAB Martín avatar carga /martin-avatar.jpeg (naturalWidth=1264), chat responde 'Hay 143 carpetas activas...' sin error.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter52_sesion.py",
+    "/app/test_reports/pytest/iter52_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py sigue con ~14.799 líneas y usa @app.on_event (deprecado) — modularizar y migrar a lifespan.",
+    "Backend se cuelga tras varios minutos idle (hot-reload) — hubo que reiniciar con supervisorctl restart backend antes del run principal. Considerar tuning de watchgod o desactivar hot reload en preview persistente.",
+    "El endpoint /api/central/chat responde bajo la clave 'response' (no 'reply' ni 'respuesta') — consolidar contrato de respuesta si otros clientes esperan formatos diferentes."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter52_sesion.py (nuevo)"],
+  "success_rate": {"backend": "100% (7/7)", "frontend": "100%"},
+  "test_credentials": "administrador/141617575 vía POST /api/auth/login → OK",
+  "seed_data_creation": "El test de Martín crea documentos en db.martin_pendientes con session_id 'qa-mail-*' — quedan con estado 'cancelado' (no envían correo). Auditoría crea/borra su propia carpeta AUDIT-* (self-cleanup).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "test_iter52_sesion.py cubre: (1) auditoria ejecutar/ultima/pdf; (2) resumen-diario preview digest con clave enviadas_mesa + HTML 'Solicitudes enviadas a MESA ayer'; (3) Martín chat contexto sistema/espejo; (4) Martín flujo ACCION_CORREO cancelación (session_id único, verifica db.martin_pendientes.estado=='cancelado'); (5) db.folders sin resultado_mesa en las 5 carpetas cliente-real y con resultado en Juan Antonio Moya (reprobado) + GONZALO ARAOS (aprobado). NUNCA responder 'confirmo' en tests para no enviar correos reales. IMPORTANTE: si el backend no responde, sudo supervisorctl restart backend && sleep 18. pytest.ini fuerza -n 2 --dist loadscope; usar -n 0 para serial. Campo de respuesta del chat es 'response'.",
+  "rca of the issue": "N/A — sin issues."
+}

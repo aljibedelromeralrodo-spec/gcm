@@ -2,9 +2,30 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
 
 const API = process.env.REACT_APP_BACKEND_URL;
-const CENTRAL_AVATAR = "https://customer-assets.emergentagent.com/job_30d214b0-f6fc-48df-b542-464600b3a70c/artifacts/z0fy4tj3_ethan_oficina_d7461094-5ca5-408d-a39f-0a1a033339e5.png";
+const CENTRAL_AVATAR = "/martin-avatar.jpeg";
 
 let currentAudio = null;
+let lastSpeakArgs = null;
+
+function pauseSpeaking() {
+  if (currentAudio) { try { currentAudio.pause(); } catch (e) { console.error(e); } }
+  else if (window.speechSynthesis?.speaking) window.speechSynthesis.pause();
+}
+
+function resumeSpeaking() {
+  if (currentAudio) { try { currentAudio.play(); } catch (e) { console.error(e); } }
+  else if (window.speechSynthesis?.paused) window.speechSynthesis.resume();
+}
+
+function restartSpeaking() {
+  if (currentAudio) {
+    try { currentAudio.currentTime = 0; currentAudio.play(); } catch (e) { console.error(e); }
+  } else if (lastSpeakArgs) {
+    window.speechSynthesis?.cancel();
+    speakText(lastSpeakArgs.text, lastSpeakArgs.onEnd);
+  }
+}
+
 function renderTextWithLinks(text) {
   if (!text) return text;
   // Detect http(s) URLs AND absolute API paths like /api/...; transform both
@@ -30,6 +51,7 @@ function renderTextWithLinks(text) {
 
 async function speakText(text, onEnd) {
   const clean = text.replace(/[*#_>`]/g, "").replace(/\n+/g, ". ").slice(0, 4000);
+  lastSpeakArgs = { text, onEnd };
   if (currentAudio) { currentAudio.pause(); currentAudio = null; }
 
   // Try Martin's chosen voice (OpenAI TTS) first
@@ -74,6 +96,7 @@ export default function CentralChat({ userName, activeModule }) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [speaking, setSpeaking] = useState(false);
+  const [paused, setPaused] = useState(false);
   const [recording, setRecording] = useState(false);
   const [liveText, setLiveText] = useState("");
   const [connected, setConnected] = useState(null);
@@ -163,6 +186,34 @@ export default function CentralChat({ userName, activeModule }) {
 
   // Keep recordingRef in sync
   useEffect(() => { recordingRef.current = recording; }, [recording]);
+
+  // ===== COMANDOS DE VOZ DURANTE EL HABLA =====
+  // «para» detiene al instante · «continúa» retoma · «desde el principio»/«desde cero» reinicia
+  useEffect(() => {
+    if (!speaking) { setPaused(false); return; }
+    if (recording) return;
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) return;
+    let activo = true;
+    const cmd = new SR();
+    cmd.lang = "es-CL";
+    cmd.continuous = true;
+    cmd.interimResults = true;
+    cmd.onresult = (e) => {
+      const last = (e.results[e.results.length - 1][0].transcript || "").toLowerCase();
+      if (/desde\s+(el\s+principio|cero)/.test(last)) {
+        restartSpeaking(); setPaused(false);
+      } else if (/\bcontin[uú]a\b|\bsigue\b|\bretoma\b/.test(last)) {
+        resumeSpeaking(); setPaused(false);
+      } else if (/\bpara\b|\bpausa\b|\bdet[eé]nte\b|\bstop\b/.test(last)) {
+        pauseSpeaking(); setPaused(true);
+      }
+    };
+    cmd.onend = () => { if (activo) { try { cmd.start(); } catch (e2) { console.error(e2); } } };
+    cmd.onerror = () => {};
+    try { cmd.start(); } catch (e3) { console.error(e3); }
+    return () => { activo = false; try { cmd.abort(); } catch (e4) { console.error(e4); } };
+  }, [speaking, recording]);
 
   // ===== SEND MESSAGE =====
   const sendMsg = useCallback(async (text, withVoice = false) => {
@@ -378,7 +429,7 @@ export default function CentralChat({ userName, activeModule }) {
   // ===== TEXT HANDLERS =====
   const handleSend = () => { const v = input.trim(); if (v) sendMsg(v, false); };
   const handleKey = (e) => { if (e.key === "Enter" && !loading) handleSend(); };
-  const stopSpeak = () => { stopSpeaking(); setSpeaking(false); };
+  const stopSpeak = () => { stopSpeaking(); setSpeaking(false); setPaused(false); };
 
   // ===== COPY MESSAGE =====
   const copyMsg = (text, idx) => {
@@ -429,11 +480,12 @@ export default function CentralChat({ userName, activeModule }) {
               <span className="central-logo">Martin</span>
               <span className="central-status" data-testid="central-status" style={
                 recording ? { color: "#d4af37" } :
+                paused ? { color: "#ff9800" } :
                 speaking ? { color: "#d4af37" } :
                 loading ? { color: "#ff9800" } :
                 connected === false ? { color: "#e11d48" } : {}
               }>
-                {recording ? "Escuchando..." : speaking ? "Hablando..." : loading ? "Pensando..." : connected === false ? "Sin conexion" : "Tu guia"}
+                {recording ? "Escuchando..." : paused ? "En pausa · di «continúa» o «desde el principio»" : speaking ? "Hablando... · di «para» para detener" : loading ? "Pensando..." : connected === false ? "Sin conexion" : "Tu guia"}
               </span>
               {connected === false && (
                 <button data-testid="central-reconnect-btn"

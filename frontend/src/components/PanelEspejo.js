@@ -39,7 +39,7 @@ export default function PanelEspejo() {
         <span style={{ color: "#e7cf7a", fontSize: "0.7rem", fontWeight: 800, letterSpacing: 2, fontFamily: "monospace" }}>
           🪞 ALGORITMO ESPEJO — EVOLUCIÓN DEL CRITERIO DE MESA</span>
         <span style={{ color: "#6a6046", fontSize: "0.6rem", fontFamily: "monospace" }}>
-          modelo v{modelo.version} · {modelo.n_casos} casos · {modelo.n_aprobados} aprobados · tasa base {(modelo.tasa_base * 100 || 0).toFixed(1)}%
+          modelo v{modelo.version} · {modelo.n_casos} casos · <span style={{ color: "#10d98e" }}>{modelo.n_aprobados} aprobados</span> · <span style={{ color: "#e11d48" }}>{modelo.n_reprobados ?? (modelo.n_casos - modelo.n_aprobados)} rechazados</span> · tasa base {(modelo.tasa_base * 100 || 0).toFixed(1)}%
           {modelo.periodo && <> · ventana móvil 3 meses (desde {fFecha(modelo.periodo.desde).slice(0, 10)})</>}</span>
         <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
           <button data-testid="panel-espejo-entrenar" onClick={entrenar} disabled={entrenando}

@@ -1,0 +1,32 @@
+{
+  "summary": "Iteración 51 — Validación backend de los 4 checks constitucionales solicitados. 10/10 tests pasaron (5 clasificador + 1 bloqueo destino + 1 flujo constitucional con monkeypatch + 3 API regresión).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter51_constitucional.py",
+    "/app/test_reports/pytest/iter51_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py tiene ~14,799 líneas — violación grave de la guía de tamaño de archivo (>700). Considerar modularizar en routers/servicios.",
+    "server.py usa @app.on_event (deprecado en FastAPI) — migrar a lifespan handlers.",
+    "email_service.py tiene 1,542 líneas y mesa_verdad.py está bien acotado (282). Priorizar refactor de server.py."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter51_constitucional.py (nuevo)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "N/A (skip)"},
+  "test_credentials": "rut='administrador' / password='141617575' — funciona OK vía POST /api/auth/login",
+  "seed_data_creation": "Ninguna. El Test 3 inserta un registro con correo_id 'TEST-APROB-<uuid>' en db.mesa_verdad_log y lo BORRA en el finally del test (limpieza garantizada).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "El archivo /app/backend/tests/test_iter51_constitucional.py cubre: (1) mesa_verdad._clasificar con los 4 casos ampliados de rechazo + 1 aprobación; (2) email_service.send_mail bloquea @test.cl/qa.audit; (3) flujo constitucional _procesar_correo con monkeypatch sobre email_service.send_mail (verifica tipo=aprobacion, reenvio_gerardo.ok=True, to=gerardo.ext@centralmutuos.cl, body contiene 'cliente aprobado por mesa'); (4) API regresión: login administrador/141617575, /api/dashai/normativas (total=25, incluye FLUJO APROBACION MESA y VISUALIZADOR COGNITIVO), /api/resumen-diario/estado (hora=8, destino=gerardo.ext@centralmutuos.cl, envios_automaticos=False), /api/visualizador/estado (200). Nota: pytest-asyncio NO está instalado; se usa asyncio.run() como wrapper para el test async. NO abrir IMAP (Gmail throttle) — mock siempre.",
+  "rca of the issue": "N/A — sin issues encontrados."
+}

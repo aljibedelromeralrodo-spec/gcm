@@ -375,6 +375,7 @@ def _parse_full_message(msg, with_bytes=False):
     except Exception:
         fecha = fecha_raw or ""
     body_text = ""
+    html_text = ""
     attachments = []
     for part in msg.walk():
         ctype = part.get_content_type()
@@ -397,9 +398,19 @@ def _parse_full_message(msg, with_bytes=False):
                     part.get_content_charset() or "utf-8", errors="ignore")
             except Exception:
                 pass
+        elif ctype == "text/html" and "attachment" not in disp and not html_text:
+            try:
+                raw = (part.get_payload(decode=True) or b"").decode(
+                    part.get_content_charset() or "utf-8", errors="ignore")
+                html_text = re.sub(r"\s+", " ", re.sub(r"<(style|script)[^>]*>.*?</\1>|<[^>]+>", " ",
+                                                       raw, flags=re.S | re.I)).strip()
+            except Exception:
+                pass
+    if not body_text and html_text:
+        body_text = html_text                     # texto extraído del HTML como cuerpo
     return {"from": remitente, "subject": subject, "date": fecha,
             "tipo": _clasificar(subject + " " + body_text),
-            "body": body_text[:1500], "attachments": attachments}
+            "body": body_text[:1500], "body_html_text": html_text[:1500], "attachments": attachments}
 
 
 def fetch_recent_full(limit=20):
@@ -1151,6 +1162,9 @@ def _ultimo_message_id(to):
         return ""
 
 
+RX_DESTINO_PRUEBA = re.compile(r"@test\.cl$|qa\.audit|@example\.|@prueba\.", re.I)
+
+
 def _anti_autoenvio(to):
     """ANTI-BLOQUEO GMAIL: el auto-envío (misma cuenta → misma cuenta) es la principal
     causa de bloqueo silencioso. Si el destino es una de nuestras propias cuentas, se
@@ -1352,6 +1366,14 @@ def send_mail(to, subject, body_html, attachments=None, desde="secundaria", cc=N
         desde = "secundaria"
     # ANTI AUTO-ENVÍO (1ª capa): destino propio → redirigir al buzón de pruebas corporativo
     to = _anti_autoenvio(to)
+    # NORMATIVA CORREOS: direcciones de prueba PROHIBIDAS — jamás enviar a dominios test
+    if isinstance(to, str):
+        if RX_DESTINO_PRUEBA.search((to or "").strip()):
+            return {"success": False, "error": "Destino de prueba bloqueado por normativa (test.cl)"}
+    else:
+        to = [d for d in to if not RX_DESTINO_PRUEBA.search((d or "").strip())]
+        if not to:
+            return {"success": False, "error": "Destino de prueba bloqueado por normativa (test.cl)"}
     acc = None
     for a in ACCOUNTS:
         if a["rol"] == desde:

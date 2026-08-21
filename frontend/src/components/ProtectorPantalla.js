@@ -73,17 +73,8 @@ export default function ProtectorPantalla({ user }) {
   return (
     <div data-testid="protector-pantalla" style={{ position: "fixed", inset: 0, zIndex: 100000, background: "#000" }}>
       <VisualizadorCognitivo modo="pantalla" />
-      <style>{`@keyframes cm-brillo-metalico {
-        0%, 72% { background-position: 210% center; }
-        88%, 100% { background-position: -110% center; }
-      }`}</style>
       <div style={{ position: "absolute", top: "4%", left: 0, right: 0, textAlign: "center", pointerEvents: "none" }}>
-        <div style={{ fontFamily: "'Playfair Display', serif", fontSize: "1.6rem", fontWeight: 700, letterSpacing: 8,
-          background: "linear-gradient(100deg,#8a6d1a 0%,#BF953F 35%,#FCF6BA 48%,#FFFDF0 50%,#FCF6BA 52%,#B38728 65%,#8a6d1a 100%)",
-          backgroundSize: "250% auto", animation: "cm-brillo-metalico 7s linear infinite",
-          WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-          Central Mutuos</div>
-        <div style={{ color: "#8a7a3a", fontSize: "0.6rem", fontFamily: "monospace", letterSpacing: 4, marginTop: 4 }}>
+        <div style={{ color: "#8a7a3a", fontSize: "0.6rem", fontFamily: "monospace", letterSpacing: 4 }}>
           SISTEMA PROTEGIDO · VISUALIZADOR COGNITIVO EN VIVO · SESIÓN DE ADMINISTRADOR EN PAUSA</div>
       </div>
       {!showPin && (

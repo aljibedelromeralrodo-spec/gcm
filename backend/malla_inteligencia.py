@@ -3049,6 +3049,9 @@ async def resumen_gerencia_loop():
     while True:
         await asyncio.sleep(1800)
         try:
+            from resumen_diario import envios_automaticos_permitidos
+            if not await envios_automaticos_permitidos():
+                continue
             ahora = datetime.now(ZoneInfo("America/Santiago"))
             if ahora.weekday() != 0 or ahora.hour < 8:
                 continue

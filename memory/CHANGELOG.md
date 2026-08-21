@@ -1712,3 +1712,26 @@ Constitución VERSION 19 (nuevas reglas #55, #56, #57).
 - Logo circular oficial aparece centrado con brillo suave SOLO cuando la cadena está formada.
 - Campo PIN maestro OCULTO: aparece solo al presionar cualquier tecla (hint 'PRESIONE CUALQUIER TECLA').
 - Verificado con capturas en fase media y fase completa. NO cambiar sin pedido explícito.
+
+## 2026-06 (fork) — Auditoría 17/17 + Consolidación 8AM + Martín con acciones y comandos de voz
+1. AUDITORÍA DE FLUJOS terminada: fix del mock send_mail (5º arg posicional) en auditoria_flujos.py
+   → POST /api/auditoria-flujos/ejecutar da 17/17 correctos. Panel en Dashboard (data-testid auditoria-flujos)
+   con ejecutar / exportar PDF / detalle. Testeado (iteration_52: backend 7/7 + frontend 100%).
+2. LIMPIEZA MESA: 5 carpetas mal etiquetadas des-etiquetadas (MESA CLIENTES, Central Mutuos,
+   Fabiola Pérez Arias, Gerardo Barrera, CLIENTE PRUEBA SEPTIEMBRE). Se conservan las correctas:
+   Juan Antonio Moya olave (reprobado) y GONZALO ARAOS (aprobado).
+3. CONSOLIDACIÓN 10AM→8AM: loops _daily_report_loop y _reporte_correos_loop DESACTIVADOS en startup
+   (endpoints manuales intactos). Nueva sección "📤 Solicitudes enviadas a MESA ayer" en el digest 8AM
+   (resumen_diario.py: enviadas_mesa desde proc_queue.autocorreo_enviado).
+4. MARTÍN — ACCIONES POR VOZ (server.py central_chat):
+   - Contexto ampliado: estado del sistema, últimos 8 correos de MESA, Algoritmo Espejo (versión/casos/tasa).
+   - ENVÍO DE CORREOS con CONFIRMACIÓN VERBAL OBLIGATORIA: protocolo ACCION_CORREO {para,asunto,cuerpo}
+     → db.martin_pendientes (pendiente/enviado/cancelado). Regex confirmo/cancelar (_martin_resolver_pendiente).
+     Cuerpo con _marca_wrap. Verificado e2e: envío real a ethangerardobarr@gmail.com OK + cancelación OK.
+   - Avatar oficial nuevo: /app/frontend/public/martin-avatar.jpeg (foto subida por el usuario).
+5. MARTÍN — COMANDOS DE INTERRUPCIÓN (CentralChat.js): mientras habla escucha con un SpeechRecognition
+   paralelo: «para»/«pausa»/«detente»/«stop» = pausa INMEDIATA (audio conserva posición);
+   «continúa»/«sigue»/«retoma» = retoma desde donde quedó; «desde el principio»/«desde cero» = reinicia.
+   Estado visible en header ("Hablando... · di «para» para detener" / "En pausa · di «continúa»...").
+   Prompt del backend reforzado: respuestas máx 2 frases por defecto.
+NOTA: hot-reload del backend se cuelga (conocido) → sudo supervisorctl restart backend tras editar.

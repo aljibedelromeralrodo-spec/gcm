@@ -42,6 +42,13 @@ async def notificaciones_permitidas():
     return bool(st.get("permitir_notificaciones"))
 
 
+async def envios_automaticos_permitidos():
+    """Interruptor maestro: todos los envíos automáticos apagados salvo el resumen 8AM
+    y el flujo constitucional de aprobación de MESA."""
+    st = await db.config.find_one({"_key": KEY}) or {}
+    return bool(st.get("envios_automaticos"))
+
+
 async def registrar_omitido(tipo, detalle):
     await db.correos_omitidos_normativa.insert_one({
         "tipo": tipo, "detalle": (detalle or "")[:220],
@@ -129,10 +136,23 @@ async def _datos_digest():
         if en_ventana(o.get("fecha")):
             alertas.append(f"Notificación retenida por normativa ({o.get('tipo')}): {o.get('detalle')}")
 
+    # Consolidación del antiguo reporte 10AM: solicitudes enviadas a MESA en la ventana
+    enviadas_mesa = []
+    async for it in db.proc_queue.find({"autocorreo_enviado": True},
+                                       {"_id": 0, "subject": 1, "sender": 1, "autocorreo_en": 1,
+                                        "autocorreo_a": 1, "classification": 1}).sort("autocorreo_en", -1).limit(120):
+        if not en_ventana(it.get("autocorreo_en")):
+            continue
+        cl = it.get("classification") or {}
+        enviadas_mesa.append({"cliente": (cl.get("cliente") or it.get("subject") or "—")[:60],
+                              "rut": cl.get("rut") or "—",
+                              "enviado_a": (it.get("autocorreo_a") or "—")[:60],
+                              "fecha": str(it.get("autocorreo_en") or "")[:16].replace("T", " ")})
+
     return {"tipo": "digest", "desde": ini.strftime("%d/%m/%Y %H:%M"), "hasta": fin.strftime("%d/%m/%Y %H:%M"),
             "nuevas": nuevas, "sin_movimiento": sin_mov, "correos_sin_carpeta": sin_carpeta,
             "resultados_enviados": resultados, "documentos_faltantes": con_faltantes,
-            "cambios_mesa": cambios_mesa, "alertas": alertas}
+            "cambios_mesa": cambios_mesa, "alertas": alertas, "enviadas_mesa": enviadas_mesa}
 
 
 # ── HTML ──
@@ -175,6 +195,11 @@ def _html_digest(d):
                   _tabla(d["correos_sin_carpeta"], [("Remitente", lambda f: f["remitente"]),
                                                     ("Asunto", lambda f: f["asunto"]),
                                                     ("Fecha", lambda f: str(f["fecha"])[:16].replace("T", " "))]))
+    h += _seccion(f"📤 Solicitudes enviadas a MESA ayer ({len(d.get('enviadas_mesa') or [])})",
+                  _tabla(d.get("enviadas_mesa") or [], [("Cliente", lambda f: f"<b>{f['cliente']}</b>"),
+                                                        ("RUT", lambda f: f["rut"]),
+                                                        ("Enviado a", lambda f: f["enviado_a"]),
+                                                        ("Fecha", lambda f: f["fecha"])]))
     h += _seccion(f"✅ Aprobaciones y rechazos enviados ({len(d['resultados_enviados'])})",
                   _tabla(d["resultados_enviados"], [("Cliente", lambda f: f["cliente"]),
                                                     ("Resultado", lambda f: f["estado"])]))

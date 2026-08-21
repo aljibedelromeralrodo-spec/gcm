@@ -28,8 +28,14 @@ RX_TASA = re.compile(r"\btasas?\b", re.I)
 RX_PLAZO = re.compile(r"\bplazos?\b", re.I)
 RX_CRITERIO = re.compile(r"criterios?|renta\s+m[ií]nima|carga\s+financiera|\bltv\b|financiamiento\s+m[aá]x|"
                          r"dividendo\s+m[aá]x|pol[ií]tica\s+de\s+evaluaci[oó]n|score", re.I)
-RX_APROB = re.compile(r"\baprobad[oa]s?\b|pre-?aprobad|\bviable\b|curse|cursad", re.I)
-RX_RECH = re.compile(r"\brechazad[oa]s?\b|no\s+califica|reprobad[oa]|no\s+aprobad|desistid", re.I)
+RX_APROB = re.compile(r"tenemos\s+el\s+agrado\s+de\s+informar|califica\s+para\s+un\s+mutuo\s+hipotecari"
+                      r"|mutuo\s+hipotecario\s+endosable|adjuntamos\s+carta\s+y\s+simulaci[oó]n"
+                      r"|subsidio\s+estatal|\baprobad[oa]s?\b|pre-?aprobad|\bviable\b|curse|cursad", re.I)
+RX_RECH = re.compile(r"no\s+cumple\s+(?:los\s+)?par[aá]metros\s+objetivos\s+m[ií]nimos"
+                     r"|par[aá]metros\s+objetivos\s+m[ií]nimos\s+de\s+aprobaci[oó]n"
+                     r"|\brechazad[oa]s?\b|\brechaz[oa]\b|no\s+califica|reprobad[oa]|no\s+aprobad|desistid"
+                     r"|no\s+cumple|declinad|sobre.?endeud|excede\s+(la\s+)?(carga|renta)"
+                     r"|pasad[oa]\s+en\s+carga|renta\s+insuficiente|no\s+procede", re.I)
 RX_PCT = re.compile(r"\d{1,2}[.,]?\d{0,2}\s*%")
 RX_ANIOS = re.compile(r"\d{1,2}\s*a[ñn]os", re.I)
 RX_UF = re.compile(r"\d[\d.,]*\s*uf", re.I)
@@ -71,16 +77,24 @@ def _norm_toks(s):
 
 
 async def _buscar_carpeta(texto):
-    """Match de carpeta por RUT o por 2+ tokens del nombre presentes en el correo."""
+    """Correspondencia ESTRICTA (regla del usuario): nombre completo Y RUT deben coincidir.
+    Si el correo trae RUT, el RUT de la carpeta debe calzar además del nombre.
+    Si el correo NO trae RUT, se exige match FUERTE de nombre completo (todos los
+    tokens principales presentes) para evitar falsos positivos."""
     ruts = set(re.sub(r"[^0-9kK]", "", r).lower()[:8]
                for r in re.findall(r"\d{1,2}\.?\d{3}\.?\d{3}-?[\dkK]", texto))
     toks_txt = set(_norm_toks(texto))
     async for f in db.folders.find({}, {"_id": 0, "id": 1, "nombre": 1, "rut": 1}):
-        fr = re.sub(r"[^0-9kK]", "", f.get("rut") or "").lower()[:8]
-        if fr and fr in ruts:
-            return f
         ft = _norm_toks(f.get("nombre"))
-        if len(ft) >= 2 and sum(1 for t in ft if t in toks_txt) >= 2:
+        if len(ft) < 2:
+            continue
+        coincidencias = sum(1 for t in ft if t in toks_txt)
+        fr = re.sub(r"[^0-9kK]", "", f.get("rut") or "").lower()[:8]
+        if ruts:                                   # el correo trae RUT → deben calzar AMBOS
+            if coincidencias >= 2 and fr and fr in ruts:
+                return f
+            continue
+        if coincidencias >= min(len(ft), 3):       # sin RUT en el correo → nombre completo fuerte
             return f
     return None
 
@@ -91,12 +105,47 @@ async def _param_anteriores(tipo):
     return (prev or {}).get("parametros_nuevos") or {}
 
 
+async def _reenviar_aprobacion_gerardo(msg, f_caso, subject):
+    """NORMATIVA CONSTITUCIONAL — FLUJO APROBACIÓN MESA (única excepción al resumen 8AM):
+    reenvío INMEDIATO del correo de aprobación de MESA a gerardo.ext@centralmutuos.cl,
+    cuerpo original ÍNTEGRO + PDF carta de aprobación y simulación (sin gastos operacionales)."""
+    import base64
+    import email_service as mail
+    destino = "gerardo.ext@centralmutuos.cl"
+    cuerpo_original = (msg.get("body") or msg.get("body_html_text") or msg.get("preview") or "").strip()
+    nombre = (f_caso or {}).get("nombre") or ""
+    adjuntos = []
+    try:
+        from server import _imap_descargar_adjuntos_cliente
+        import pdf_service as pdfs
+        if nombre:
+            pares = await asyncio.to_thread(_imap_descargar_adjuntos_cliente, nombre)
+            for fname, raw in (pares or [])[:6]:
+                es_carta = bool(re.search(r"carta|aprobaci[oó]n", fname, re.I))
+                if not es_carta and re.search(r"simulad|simulaci[oó]n", fname, re.I):
+                    try:
+                        raw, _o, _r = pdfs.dejar_primera_pagina(raw)  # sin gastos operacionales
+                    except Exception:
+                        pass
+                adjuntos.append({"filename": fname, "content_b64": base64.b64encode(raw).decode()})
+    except Exception as e:
+        logging.warning(f"flujo aprobacion mesa adjuntos: {e}")
+    html = (f"<p style='margin:0 0 10px'><b>APROBACIÓN DE MESA</b> — reenvío automático constitucional "
+            f"({MESA_EMAIL}){' · Cliente: <b>' + nombre + '</b>' if nombre else ''}</p>"
+            f"<hr style='border:none;border-top:1px solid #d4af37;margin:10px 0'>"
+            f"<div style='white-space:pre-wrap'>{cuerpo_original}</div>")
+    res = await asyncio.to_thread(mail.send_mail, destino, f"✅ APROBACIÓN MESA — {subject[:140]}",
+                                  html, adjuntos, "principal")
+    return {"ok": bool(res.get("success")), "adjuntos": len(adjuntos), "error": res.get("error")}
+
+
 async def _procesar_correo(msg):
     mid = msg.get("id") or ""
     if not mid or await db.mesa_verdad_log.find_one({"correo_id": mid}):
         return None
     subject = msg.get("subject") or ""
-    body = (msg.get("body") or msg.get("body_full") or msg.get("preview") or "")[:6000]
+    # cuerpo completo: texto plano + texto extraído del HTML (nunca solo el asunto)
+    body = f"{msg.get('body') or msg.get('body_full') or msg.get('preview') or ''}\n{msg.get('body_html_text') or ''}"[:8000]
     texto = f"{subject}\n{body}"
     tipo = _clasificar(texto)
     # REGLA ANTI-FALSO-POSITIVO: si el correo corresponde a un CASO de cliente
@@ -112,19 +161,29 @@ async def _procesar_correo(msg):
                 "folder_id": "", "accion": ""}
     if tipo in ("aprobacion", "rechazo"):
         f = f_caso
+        if tipo == "aprobacion":
+            try:
+                fw = await _reenviar_aprobacion_gerardo(msg, f_caso, subject)
+                registro["reenvio_gerardo"] = fw
+                registro["accion"] = (f"Reenvío constitucional a gerardo.ext "
+                                      f"({'OK' if fw.get('ok') else 'FALLÓ: ' + str(fw.get('error'))[:80]}, "
+                                      f"{fw.get('adjuntos', 0)} PDF adjuntos). ")
+            except Exception as e:
+                logging.warning(f"flujo aprobacion mesa: {e}")
+                registro["reenvio_gerardo"] = {"ok": False, "error": str(e)[:150]}
         if f:
             resultado = "aprobado" if tipo == "aprobacion" else "reprobado"
             await db.folders.update_one({"id": f["id"]}, {"$set": {
                 "resultado_mesa": resultado, "resultado_mesa_at": _now(),
                 "resultado_mesa_fuente": MESA_EMAIL, "resultado_mesa_asunto": subject[:200]}})
             registro["folder_id"] = f["id"]
-            registro["accion"] = f"Carpeta {f.get('nombre')} → {resultado.upper()} (botones de envío al ejecutivo activados)"
+            registro["accion"] = (registro.get("accion") or "") + f"Carpeta {f.get('nombre')} → {resultado.upper()} (botones de envío al ejecutivo activados)"
             await db.alertas.insert_one({"id": str(uuid.uuid4()), "tipo": "mesa_verdad", "leida": False,
                                          "cliente": f.get("nombre"),
                                          "mensaje": f"⚖️ MESA ({MESA_EMAIL}): {f.get('nombre')} → {resultado.upper()} — botón de envío al ejecutivo ACTIVADO",
                                          "fecha": _now()})
         else:
-            registro["accion"] = "Sin carpeta coincidente — requiere revisión manual"
+            registro["accion"] = (registro.get("accion") or "") + "Sin carpeta coincidente — requiere revisión manual"
     elif tipo in ("cambio_tasa", "cambio_plazo", "cambio_criterio"):
         registro["parametros_anteriores"] = await _param_anteriores(tipo)
         etiqueta = {"cambio_tasa": "CAMBIO DE TASA", "cambio_plazo": "CAMBIO DE PLAZO",

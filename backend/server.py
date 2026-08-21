@@ -368,7 +368,9 @@ async def _task_blindada(coro_fn, nombre):
 #     intervención manual. Mismos registros que motivo="normativa" del preview. ───
 NORMATIVAS_FIJAS = [
     ("NAVEGACION VOLVER", "NORMATIVA FIJA — NAVEGACIÓN UNIVERSAL E INAMOVIBLE: cada vez que el usuario presione 'Volver' en cualquier parte del sistema, debe regresar exactamente al estado anterior: misma pantalla, mismo scroll, mismo filtro activo, mismo día del calendario, misma carpeta seleccionada. El sistema nunca reinicia una vista al volver, solo retrocede un paso en el estado exacto en que estaba. Aplica a todos los módulos: calendario, carpetas, dashboard, visualizador cognitivo y cualquier módulo futuro."),
-    ("CORREOS DEL SISTEMA", "NORMATIVA FIJA — CORREOS DEL SISTEMA (PERMANENTE E INAMOVIBLE): PROHIBIDO enviar correos automáticos de prueba, notificaciones individuales de estado, avisos de errores de entrega o cualquier correo operacional durante el día. Solo se permite el resumen diario o una respuesta directa a un cliente o ejecutivo. EXCEPCIÓN DE ARRANQUE (única e irrepetible): el primer correo se envía a las 8:00 AM a gerardo.ext@centralmutuos.cl con el listado completo de clientes con carpetas pendientes de las últimas dos semanas (nombre, estado, días sin movimiento, documentos faltantes). DESDE EL DÍA SIGUIENTE: todos los días a las 8:00 AM UN SOLO correo a gerardo.ext@centralmutuos.cl con: carpetas nuevas de ayer, pendientes sin movimiento +2 días hábiles, correos que no generaron carpeta, aprobaciones y rechazos enviados, documentos faltantes por solicitar, cambios de tasas o criterios desde mesa y alertas activas. Un solo correo diario, ordenado, sin repeticiones ni correos de prueba."),
+    ("CORREOS DEL SISTEMA", "NORMATIVA FIJA — CORREOS DEL SISTEMA (PERMANENTE E INAMOVIBLE): PROHIBIDO enviar correos automáticos de prueba, notificaciones individuales de estado, avisos de errores de entrega o cualquier correo operacional durante el día. Solo se permite el resumen diario o una respuesta directa a un cliente o ejecutivo. Direcciones con dominio de prueba (test.cl, qa.audit, example) están BLOQUEADAS a nivel de envío. EXCEPCIÓN DE ARRANQUE (única e irrepetible): el primer correo se envía a las 8:00 AM a gerardo.ext@centralmutuos.cl con el listado completo de clientes con carpetas pendientes de las últimas dos semanas (nombre, estado, días sin movimiento, documentos faltantes). DESDE EL DÍA SIGUIENTE: todos los días a las 8:00 AM UN SOLO correo a gerardo.ext@centralmutuos.cl con: carpetas nuevas de ayer, pendientes sin movimiento +2 días hábiles, correos que no generaron carpeta, aprobaciones y rechazos enviados, documentos faltantes por solicitar, cambios de tasas o criterios desde mesa y alertas activas. Un solo correo diario, ordenado, sin repeticiones ni correos de prueba."),
+    ("FLUJO APROBACION MESA", "NORMATIVA CONSTITUCIONAL — FLUJO DE APROBACIÓN DE MESA (INAMOVIBLE, no debe modificarse en ninguna actualización futura): cuando MESA envía un correo de aprobación a aprobaciones@centralmutuos.cl, el sistema reenvía AUTOMÁTICAMENTE e INMEDIATAMENTE ese correo a gerardo.ext@centralmutuos.cl manteniendo ÍNTEGRO el cuerpo original del mensaje de MESA (sin modificarlo), adjuntando el PDF de la carta de aprobación y la simulación financiera SIN gastos operacionales en ninguna parte del documento (simulación solo primera hoja). Este envío automático es la ÚNICA excepción al resumen diario de las 8:00 AM."),
+    ("VISUALIZADOR COGNITIVO", "NORMATIVA FIJA — VISUALIZADOR COGNITIVO EN VIVO (reglas permanentes): 1) El visualizador NUNCA se detiene ni se reinicia mientras haya sesión activa: gira continuamente (reloj de animación persistente). 2) Los nodos y nombres mostrados son EXCLUSIVAMENTE los que el sistema está procesando en tiempo real desde la base de datos: jamás se inventan ni se usan etiquetas fijas decorativas. 3) PROHIBIDO cualquier texto o etiqueta 'Central Mutuos' dentro del área del visualizador: es solo cognitivo, sin marca. 4) Lo procesado se archiva de forma continua en segundo plano (colección visualizador_archivo) sin interrumpir la visualización."),
     ("SUPERCARPETA", "NORMATIVA FIJA — SUPERCARPETA: vista obligatoria en tarjetas verticales expandibles. Sin tablas ni scroll horizontal. Campos editables con doble clic. Íconos verde/amarillo/rojo por estado."),
     ("RESUMEN IA", "NORMATIVA FIJA — RESUMEN IA: línea visible en tarjeta con formato [estado actual] + [quién debe el próximo paso] + [fecha último movimiento]. Solo eventos de los últimos 90 días."),
     ("ESTUDIO DE TÍTULO", "NORMATIVA FIJA — ESTUDIO DE TÍTULO: propiedad usada envía listado legal completo (Títulos, Herencias, Fusiones, CBR, DOM, TGR, SII). Propiedad nueva no lo incluye."),
@@ -625,7 +627,8 @@ async def startup():
         asyncio.create_task(_task_blindada(_estudio_reparos_loop, "reparos_estudio"))
         asyncio.create_task(_task_blindada(_aprendizaje_loop, "aprendizaje_ia"))
     asyncio.create_task(_task_blindada(_periodic_mesa_loop, "mesa"))
-    asyncio.create_task(_task_blindada(_daily_report_loop, "reporte_diario"))
+    # DESACTIVADO (normativa un-solo-correo): reporte 10AM consolidado en el resumen 8AM
+    # asyncio.create_task(_task_blindada(_daily_report_loop, "reporte_diario"))
     import resumen_diario as _resdia
     asyncio.create_task(_task_blindada(_resdia.resumen_diario_loop, "resumen_diario_8am"))
     import espejo_aprendizaje as _espia
@@ -668,7 +671,8 @@ async def startup():
     asyncio.create_task(_task_blindada(_actividades_terminadas_loop, "actividades_terminadas"))
     asyncio.create_task(_task_blindada(_dashai_perpetuo_loop, "dashai_perpetuo"))
     asyncio.create_task(_task_blindada(_resumen_semanal_loop, "resumen_semanal"))
-    asyncio.create_task(_task_blindada(_reporte_correos_loop, "reporte_correos"))
+    # DESACTIVADO (normativa un-solo-correo): reporte de correos 10AM consolidado en el resumen 8AM
+    # asyncio.create_task(_task_blindada(_reporte_correos_loop, "reporte_correos"))
     asyncio.create_task(_task_blindada(_resumen_cierres_loop, "resumen_cierres"))
     asyncio.create_task(_task_blindada(_setcred_auto_loop, "setcred_auto"))
     asyncio.create_task(_task_blindada(_bunker_loop, "bunker_gridfs"))
@@ -1535,12 +1539,94 @@ async def central_conversations():
     return {"conversations": [clean(d) for d in docs]}
 
 
+RX_MARTIN_CONFIRMA = re.compile(r"\b(confirmo|confirmado|s[ií],?\s*(env[ií]|conf)|env[ií]alo|adelante|hazlo|proced[ea]|dale|apru[eé]bo)\b", re.I)
+RX_MARTIN_CANCELA = re.compile(r"\b(no\b|cancela|cancelar|cancelalo|det[eé]n|olv[ií]dalo|mejor no|descarta)", re.I)
+
+
+async def _martin_resolver_pendiente(pend, msg):
+    """Confirmación VERBAL obligatoria antes de que Martín envíe cualquier correo."""
+    if RX_MARTIN_CONFIRMA.search(msg):
+        res = await asyncio.to_thread(mail.send_mail, pend["para"], pend["asunto"],
+                                      pend["cuerpo_html"], [], "principal")
+        if res.get("success"):
+            await db.martin_pendientes.update_one({"id": pend["id"]}, {"$set": {
+                "estado": "enviado", "resuelto_en": now_iso()}})
+            return f"Listo. Correo enviado a {pend['para']} con asunto «{pend['asunto']}». ¿Algo más?"
+        return (f"No pude enviar el correo ({str(res.get('error'))[:90]}). "
+                "Sigue pendiente: di «confirmo» para reintentar o «cancelar» para descartarlo.")
+    if RX_MARTIN_CANCELA.search(msg):
+        await db.martin_pendientes.update_one({"id": pend["id"]}, {"$set": {
+            "estado": "cancelado", "resuelto_en": now_iso()}})
+        return "Entendido, cancelé el envío del correo. ¿En qué más te ayudo?"
+    return (f"Tengo un correo pendiente de tu confirmación para {pend['para']} "
+            f"(asunto: {pend['asunto']}). Di «confirmo» para enviarlo o «cancelar» para descartarlo.")
+
+
+async def _martin_preparar_correo(session, texto_llm):
+    m_acc = re.search(r"ACCION_CORREO\s*(\{.*\})", texto_llm, re.S)
+    if not m_acc:
+        return None
+    try:
+        acc = json.loads(m_acc.group(1))
+        para = (acc.get("para") or "").strip()
+        asunto = (acc.get("asunto") or "Mensaje de Central Mutuos").strip()[:150]
+        cuerpo = (acc.get("cuerpo") or "").strip()
+        if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", para) or not cuerpo:
+            return "Me faltan datos para el correo. Dime el destinatario (correo válido), el asunto y el mensaje."
+        cuerpo_html = _marca_wrap(f"<div style='white-space:pre-wrap'>{cuerpo}</div>",
+                                  "Mensaje enviado por Martín — Asistente Central Mutuos")
+        await db.martin_pendientes.update_many({"session_id": session, "estado": "pendiente"},
+                                               {"$set": {"estado": "cancelado"}})
+        await db.martin_pendientes.insert_one({
+            "id": str(uuid.uuid4()), "session_id": session, "para": para, "asunto": asunto,
+            "cuerpo": cuerpo, "cuerpo_html": cuerpo_html, "estado": "pendiente", "creado": now_iso()})
+        return (f"Preparé el correo para {para}, asunto «{asunto}». El mensaje dice: "
+                f"{cuerpo[:220]}{'…' if len(cuerpo) > 220 else ''}. "
+                "¿Confirmas el envío? Di «confirmo» para enviarlo o «cancelar».")
+    except Exception:
+        return "No pude preparar el correo. Repíteme el destinatario, el asunto y el mensaje, por favor."
+
+
+async def _martin_contexto_extra():
+    partes = []
+    try:
+        ult = await db.mesa_verdad_log.find({}, {"_id": 0, "tipo": 1, "subject": 1, "hora_cl": 1,
+                                                 "fecha_correo": 1}).sort("procesado_en", -1).limit(8).to_list(8)
+        if ult:
+            partes.append("ÚLTIMOS CORREOS DE MESA (aprobaciones@centralmutuos.cl):\n" + "\n".join(
+                f"- [{u.get('tipo','?').upper()}] {u.get('subject','')[:90]} ({u.get('hora_cl') or u.get('fecha_correo','')})"
+                for u in ult))
+        por_tipo = {}
+        async for g in db.mesa_verdad_log.aggregate([{"$group": {"_id": "$tipo", "n": {"$sum": 1}}}]):
+            por_tipo[g["_id"]] = g["n"]
+        modelo = await db.espejo_modelo.find_one({}, {"_id": 0, "version": 1, "n_casos": 1, "n_aprobados": 1,
+                                                      "n_reprobados": 1, "tasa_base": 1}, sort=[("version", -1)]) or {}
+        n_folders = await db.folders.count_documents({"descartada": {"$ne": True}})
+        partes.append(f"ESTADO DEL SISTEMA: {n_folders} carpetas activas · Mesa procesó {sum(por_tipo.values())} correos "
+                      f"({por_tipo.get('aprobacion', 0)} aprobaciones, {por_tipo.get('rechazo', 0)} rechazos) · "
+                      f"Algoritmo Espejo v{modelo.get('version', 0)}: {modelo.get('n_casos', 0)} casos en ventana de 3 meses "
+                      f"({modelo.get('n_aprobados', 0)} aprobados / {modelo.get('n_reprobados', 0)} reprobados), "
+                      f"tasa base {round((modelo.get('tasa_base') or 0) * 100)}%.")
+    except Exception as e:
+        logging.warning(f"martin contexto extra: {e}")
+    return "\n\n".join(partes)
+
+
 @api.post("/central/chat")
 async def central_chat(payload: dict):
     msg = (payload.get("message") or "").strip()
     session = payload.get("session_id") or str(uuid.uuid4())
     key = os.environ.get("EMERGENT_LLM_KEY", "")
     resp = "No puedo responder ahora, intenta de nuevo."
+    # 0) Acción pendiente → exige confirmación verbal antes de tocar el correo
+    pend = await db.martin_pendientes.find_one({"session_id": session, "estado": "pendiente"})
+    if pend:
+        resp = await _martin_resolver_pendiente(pend, msg)
+        await db.conversaciones.insert_one({
+            "id": str(uuid.uuid4()), "session_id": session,
+            "user_name": payload.get("user_name", ""), "user_msg": msg,
+            "response": resp, "timestamp": now_iso()})
+        return {"response": resp, "session_id": session, "enabled": True}
     try:
         # Contexto: carpetas con sus estados
         folders = await db.folders.find({}).sort("created_at", -1).limit(60).to_list(60)
@@ -1570,18 +1656,31 @@ async def central_chat(payload: dict):
                           + (f", codeudor {f.get('codeudor_nombre')}" if f.get("codeudor_nombre") else "")
                           + (f". Estados: {'; '.join(estados)}" if estados else ""))
         contexto = "\n".join(lineas[:60])
+        extra = await _martin_contexto_extra()
         historial = await db.conversaciones.find({"session_id": session}).sort("timestamp", -1).limit(6).to_list(6)
         hist_txt = "\n".join(f"Usuario: {h.get('user_msg','')}\nMartin: {h.get('response','')}"
                              for h in reversed(historial))
-        system = ("Eres Martin, el asistente de Central Mutuos (mutuaria hipotecaria chilena). "
-                  "Respondes SIEMPRE en español, con respuestas CORTAS y simples (máximo 3 frases). "
-                  "Conoces las carpetas de clientes y sus estados (tasación, estudio de títulos, firma de escritura, mesa). "
-                  "Si te preguntan por un cliente, busca en el listado. Si no está, dilo brevemente.\n\n"
+        system = ("Eres Martín, el asistente de voz de Central Mutuos (mutuaria hipotecaria chilena). "
+                  "Respondes SIEMPRE en español, con respuestas MUY CORTAS y concisas (máximo 2 frases por defecto; "
+                  "extiéndete solo si el usuario lo pide expresamente), habladas de forma natural, "
+                  "porque tus respuestas se leen en voz alta. No uses asteriscos, viñetas ni markdown. "
+                  "Conoces las carpetas de clientes y sus estados (tasación, estudio de títulos, firma de escritura, mesa), "
+                  "el estado del sistema, los últimos correos de MESA y el Algoritmo Espejo. "
+                  "Si te preguntan por un cliente, busca en el listado; si no está, dilo brevemente.\n\n"
+                  "ENVÍO DE CORREOS: puedes preparar correos, pero JAMÁS se envían sin confirmación verbal del administrador. "
+                  "Cuando el usuario te pida enviar un correo Y ya tengas destinatario (correo válido), asunto y mensaje, "
+                  "responde ÚNICAMENTE con una línea exacta: ACCION_CORREO {\"para\": \"...\", \"asunto\": \"...\", \"cuerpo\": \"...\"} "
+                  "sin ningún otro texto. Si falta cualquiera de esos datos, pregunta primero (no emitas la acción). "
+                  "El sistema pedirá la confirmación verbal por ti.\n\n"
                   f"CARPETAS ACTUALES:\n{contexto}\n\n"
+                  + (f"{extra}\n\n" if extra else "")
                   + (f"CONVERSACIÓN PREVIA:\n{hist_txt}" if hist_txt else ""))
         from emergentintegrations.llm.chat import LlmChat, UserMessage
         chat = LlmChat(api_key=key, session_id=session, system_message=system).with_model("openai", "gpt-5.4-mini")
         resp = await _llm_con_timeout(chat, UserMessage(text=msg))
+        preparado = await _martin_preparar_correo(session, str(resp))
+        if preparado:
+            resp = preparado
         import constitucion as _const
         await _const.consultar_cerebro(db, "chat_central_ia", texto_ia=str(resp), modulo="server.py (asistente)")
     except Exception as e:
@@ -9751,6 +9850,10 @@ async def _notif_pace_loop():
     await asyncio.sleep(20)
     while True:
         try:
+            from resumen_diario import envios_automaticos_permitidos
+            if not await envios_automaticos_permitidos():
+                await asyncio.sleep(60)
+                continue
             lote = await db.notif_cola.find({"estado_cola": "pendiente"}) \
                 .sort("encolado_en", 1).to_list(NOTIF_MAX_POR_CICLO)
             enviados = 0
@@ -14716,6 +14819,8 @@ import resumen_diario as _resdia_mod
 api.include_router(_resdia_mod.resdia)
 import espejo_aprendizaje as _espia_mod
 api.include_router(_espia_mod.espia)
+import auditoria_flujos as _audf_mod
+api.include_router(_audf_mod.audf)
 
 # ⚖️ FUENTE DE VERDAD DE MESA — endpoints de estado/log del monitor
 import mesa_verdad as _mesav_router

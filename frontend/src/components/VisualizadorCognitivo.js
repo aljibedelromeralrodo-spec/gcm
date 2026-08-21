@@ -23,6 +23,7 @@ export default function VisualizadorCognitivo({ modo = "panel" }) {
   const fxRef = useRef({ nacimientos: [], vibraciones: {}, conocidos: null, resultados: {} });
   const wrapRef = useRef(null);
   const canvasRef = useRef(null);
+  const startRef = useRef(null);          // el reloj NUNCA se reinicia: giro continuo
   const fullscreen = modo === "pantalla" || expandido;
 
   useEffect(() => {
@@ -56,7 +57,8 @@ export default function VisualizadorCognitivo({ modo = "panel" }) {
     if (!cv) return;
     const ctx = cv.getContext("2d");
     let raf;
-    const start = performance.now();
+    if (startRef.current === null) startRef.current = performance.now();
+    const start = startRef.current;
 
     const draw = (now) => {
       const wrap = wrapRef.current;

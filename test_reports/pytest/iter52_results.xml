@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="2" skipped="0" tests="7" time="5.391" timestamp="2026-08-21T15:13:09.174008+00:00" hostname="agent-env-d69167eb-0e04-44d6-9f32-8385608115ed"><testcase classname="tests.test_iter52_sesion" name="test_auditoria_ejecutar" time="0.548" /><testcase classname="tests.test_iter52_sesion" name="test_auditoria_ultima" time="0.179" /><testcase classname="tests.test_iter52_sesion" name="test_auditoria_pdf" time="0.219" /><testcase classname="tests.test_iter52_sesion" name="test_digest_enviadas_mesa" time="0.241" /><testcase classname="tests.test_iter52_sesion" name="test_martin_estado_espejo" time="3.068"><failure message="AssertionError: respuesta vacía&#10;assert ''">tests/test_iter52_sesion.py:78: in test_martin_estado_espejo
+    assert reply, "respuesta vacía"
+E   AssertionError: respuesta vacía
+E   assert ''</failure></testcase><testcase classname="tests.test_iter52_sesion" name="test_martin_correo_cancelacion" time="0.996"><failure message="AssertionError: no pide confirmación: &#10;assert None&#10; +  where None = &lt;function search at 0xfe8dbb4bd6c0&gt;('confirm', '', re.IGNORECASE)&#10; +    where &lt;function search at 0xfe8dbb4bd6c0&gt; = re.search&#10; +    and   re.IGNORECASE = re.I">tests/test_iter52_sesion.py:93: in test_martin_correo_cancelacion
+    assert re.search(r"confirm", reply1, re.I), f"no pide confirmación: {reply1}"
+E   AssertionError: no pide confirmación: 
+E   assert None
+E    +  where None = &lt;function search at 0xfe8dbb4bd6c0&gt;('confirm', '', re.IGNORECASE)
+E    +    where &lt;function search at 0xfe8dbb4bd6c0&gt; = re.search
+E    +    and   re.IGNORECASE = re.I</failure></testcase><testcase classname="tests.test_iter52_sesion" name="test_folders_resultado_mesa" time="0.007" /></testsuite></testsuites>

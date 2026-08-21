@@ -80,6 +80,19 @@ async def visualizador_estado(request: Request):
 
     normativas = await db.dashai_eventos.count_documents({"motivo": "normativa"})
     perp = await db.config.find_one({"_key": "dashai_perpetuo"}) or {}
+    # ARCHIVO CONTINUO en segundo plano: lo procesado queda archivado sin interrumpir el giro
+    try:
+        from pymongo import UpdateOne
+        ops = [UpdateOne({"clave": c["key"]}, {"$setOnInsert": {
+            "clave": c["key"], "tipo": "correo", "detalle": c["cliente"],
+            "archivado_en": ahora.isoformat()}}, upsert=True) for c in correos]
+        ops += [UpdateOne({"clave": f"carpeta|{c['id']}|{c['resultado']}"}, {"$setOnInsert": {
+            "clave": f"carpeta|{c['id']}|{c['resultado']}", "tipo": "carpeta", "detalle": c["nombre"],
+            "estado": c["resultado"], "archivado_en": ahora.isoformat()}}, upsert=True) for c in carpetas]
+        if ops:
+            await db.visualizador_archivo.bulk_write(ops, ordered=False)
+    except Exception:
+        pass
     return {"generado": ahora.isoformat(),
             "cerebro": {"normativas": normativas, "calibracion": perp.get("nivel_calibracion") or 85},
             "carpetas": carpetas, "correos": correos, "ejecutivos": ejecutivos}
