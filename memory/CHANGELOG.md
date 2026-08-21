@@ -1822,3 +1822,8 @@ polling GET /api/central/proactive existe vacío en server.py:1526) — usuario 
     Enviado por correo (SMTP 250). DECISIONES DEL USUARIO: template brokers original (dorado) se
     MANTIENE como plantilla oficial para brokers; el estilo "bloques" del template inmobiliarias
     dorado le gustó.
+15. PDF inmobiliarias VERSIÓN CORPORATIVA SOBRIA (5 págs, fondo blanco, paleta corporativa ambas
+    empresas, logos oficiales en todas las páginas, pie CMF): 
+    /app/frontend/public/presentacion-inmobiliarias-corporativa.pdf
+    Generador: /app/tests/gen_pdf_inmobiliarias_sobrio.py. Verificado 5/5. Enviado por correo junto
+    al template sobrio (SMTP 250).
