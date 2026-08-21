@@ -14,89 +14,112 @@ function HeliceProtector() {
     const start = performance.now();
     const W = (cv.width = window.innerWidth);
     const H = (cv.height = window.innerHeight);
-    const cy = H / 2;
-    const xIzq = W * 0.08, xDer = W * 0.92;
-    const N = 60;                       // nodos por hebra (estilo poligonal)
-    const amp = Math.min(170, H * 0.21);
+    const cx = W / 2;
+    const yTop = H * 0.1, yBot = H * 0.6;
+    const N = 40;
+    const amp = Math.min(110, W * 0.07);
     const FILL_MS = 16000, HOLD_MS = 3000;
-    const MORADO = ["#7c3aed", "#5b6cf0", "#3b82f6"];
-    const ORO = ["#8a6d1a", "#b8860b", "#BF953F", "#d4af37"];
+    const AZUL = ["#3b6cf6", "#5b8cff", "#7dd3fc"];
+    const ORO = ["#8a6d1a", "#b8860b", "#d4af37", "#FCF6BA"];
+    // destellos fijos alrededor de la hélice (como en la referencia)
+    const chispas = Array.from({ length: 46 }, () => ({
+      x: cx + (Math.random() - 0.5) * amp * 6,
+      y: yTop - 30 + Math.random() * (yBot - yTop + 80),
+      r: 0.6 + Math.random() * 1.8, f: 1 + Math.random() * 3, d: Math.random() * 10,
+    }));
 
     const draw = (now) => {
       const t = now - start;
       const ciclo = t % (FILL_MS + HOLD_MS);
-      const fill = Math.min(1, ciclo / FILL_MS);   // 0→1: el dorado conquista de izquierda a derecha
-      const rot = t * 0.0009;
-      const xFrontera = xIzq + (xDer - xIzq) * fill;
-      ctx.fillStyle = "#000";
+      const fill = Math.min(1, ciclo / FILL_MS);   // el dorado conquista de abajo hacia arriba
+      const rot = t * 0.0011;
+      const yFrontera = yBot - (yBot - yTop) * fill;
+      // fondo azul profundo con luz superior (como la foto)
+      const g = ctx.createLinearGradient(0, 0, W * 0.2, H);
+      g.addColorStop(0, "#101d52");
+      g.addColorStop(0.45, "#0a1238");
+      g.addColorStop(1, "#04081d");
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+      const luz = ctx.createRadialGradient(cx, yTop - 40, 0, cx, yTop - 40, H * 0.5);
+      luz.addColorStop(0, "rgba(120,160,255,0.14)");
+      luz.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = luz;
       ctx.fillRect(0, 0, W, H);
 
       const nodo = (i, desfase) => {
-        const x = xIzq + ((xDer - xIzq) * i) / (N - 1);
-        const ph = i * 0.42 + rot + desfase;
-        return { x, y: cy + Math.sin(ph) * amp, prof: (Math.cos(ph) + 1) / 2 };
+        const y = yTop + ((yBot - yTop) * i) / (N - 1);
+        const ph = i * 0.5 + rot + desfase;
+        return { x: cx + Math.sin(ph) * amp, y, prof: (Math.cos(ph) + 1) / 2 };
       };
-      const colorDe = (x, prof, dorado) => {
-        const pal = dorado ? ORO : MORADO;
+      const colorDe = (y, prof, dorado) => {
+        const pal = dorado ? ORO : AZUL;
         const c = pal[Math.floor(prof * (pal.length - 1))];
-        const cerca = Math.abs(x - xFrontera) < (xDer - xIzq) * 0.035;
-        return { c: cerca && dorado ? "#FCF6BA" : c, a: 0.3 + 0.65 * prof };
+        const cerca = Math.abs(y - yFrontera) < (yBot - yTop) * 0.05;
+        return { c: cerca && dorado ? "#FCF6BA" : c, a: 0.35 + 0.6 * prof };
       };
 
       for (const desfase of [0, Math.PI]) {
-        // hebra poligonal: segmentos rectos entre nodos
         for (let i = 0; i < N - 1; i++) {
           const a = nodo(i, desfase), b = nodo(i + 1, desfase);
-          const dor = a.x <= xFrontera;
-          const { c, a: al } = colorDe(a.x, (a.prof + b.prof) / 2, dor);
-          ctx.globalAlpha = al * 0.85;
+          const dor = a.y >= yFrontera;
+          const { c, a: al } = colorDe(a.y, (a.prof + b.prof) / 2, dor);
+          ctx.globalAlpha = al * 0.9;
           ctx.strokeStyle = c;
-          ctx.lineWidth = 1.6 + 1.8 * a.prof;
+          ctx.lineWidth = 1.2 + 1.6 * a.prof;
           ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
         }
-        // vértices: rombos geométricos (low-poly)
         for (let i = 0; i < N; i++) {
           const p = nodo(i, desfase);
-          const dor = p.x <= xFrontera;
-          const { c, a: al } = colorDe(p.x, p.prof, dor);
-          const r = 3 + 4.5 * p.prof;
+          const dor = p.y >= yFrontera;
+          const { c, a: al } = colorDe(p.y, p.prof, dor);
           ctx.globalAlpha = al;
+          ctx.shadowColor = c; ctx.shadowBlur = 9;
           ctx.fillStyle = c;
+          const r = 2 + 3.4 * p.prof;
           ctx.beginPath();
           ctx.moveTo(p.x, p.y - r); ctx.lineTo(p.x + r, p.y);
           ctx.lineTo(p.x, p.y + r); ctx.lineTo(p.x - r, p.y);
           ctx.closePath(); ctx.fill();
+          ctx.shadowBlur = 0;
         }
       }
-      // peldaños rectos entre hebras
-      for (let i = 0; i < N; i += 3) {
+      // peldaños entre hebras
+      for (let i = 0; i < N; i += 2) {
         const a = nodo(i, 0), b = nodo(i, Math.PI);
-        const dor = a.x <= xFrontera;
-        ctx.globalAlpha = 0.16 + 0.2 * Math.min(a.prof, b.prof);
-        ctx.strokeStyle = dor ? "#b8860b" : "#5b6cf0";
-        ctx.lineWidth = 1.2;
+        const dor = a.y >= yFrontera;
+        ctx.globalAlpha = 0.18 + 0.22 * Math.min(a.prof, b.prof);
+        ctx.strokeStyle = dor ? "#d4af37" : "#5b8cff";
+        ctx.lineWidth = 1;
         ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
       }
+      // destellos titilantes
+      for (const s of chispas) {
+        const tw = (Math.sin(t * 0.001 * s.f + s.d) + 1) / 2;
+        const dor = s.y >= yFrontera;
+        ctx.globalAlpha = 0.15 + 0.6 * tw;
+        ctx.fillStyle = dor ? "#FCF6BA" : "#bfd7ff";
+        ctx.beginPath(); ctx.arc(s.x, s.y, s.r * (0.7 + tw * 0.6), 0, Math.PI * 2); ctx.fill();
+      }
       ctx.globalAlpha = 1;
-      // el logo emerge en el centro a medida que el dorado conquista la hélice
       if (logoRef.current) {
-        logoRef.current.style.opacity = Math.max(0, Math.min(1, (fill - 0.3) / 0.35));
+        logoRef.current.style.opacity = Math.max(0, Math.min(1, (fill - 0.25) / 0.35));
       }
       raf = requestAnimationFrame(draw);
     };
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
   }, []);
-  const logoSize = Math.min(Math.floor(window.innerHeight * 0.3), 250);
+  const logoSize = Math.min(Math.floor(window.innerHeight * 0.22), 190);
   return (
     <>
-      <style>{`@keyframes cm-logo-levita { 0% { transform: translateY(0); } 50% { transform: translateY(-18px); } 100% { transform: translateY(0); } }`}</style>
+      <style>{`@keyframes cm-logo-levita { 0% { transform: translateY(0); } 50% { transform: translateY(-16px); } 100% { transform: translateY(0); } }`}</style>
       <canvas ref={canvasRef} style={{ display: "block", position: "absolute", inset: 0 }} />
       <img ref={logoRef} src="/logo-circular-oficial.png" alt="Central Mutuos" data-testid="protector-logo"
-        style={{ position: "absolute", top: "50%", left: "50%", width: logoSize, height: logoSize,
-          marginTop: -logoSize / 2, marginLeft: -logoSize / 2, borderRadius: "50%", opacity: 0,
+        style={{ position: "absolute", top: "60%", left: "50%", width: logoSize, height: logoSize,
+          marginLeft: -logoSize / 2, borderRadius: "50%", opacity: 0,
           animation: "cm-logo-levita 5s ease-in-out infinite",
-          boxShadow: "0 0 60px -12px rgba(212,175,55,0.55)" }} />
+          boxShadow: "0 0 70px -10px rgba(212,175,55,0.6)" }} />
     </>
   );
 }

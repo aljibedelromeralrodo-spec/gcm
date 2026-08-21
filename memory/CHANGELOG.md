@@ -1690,3 +1690,9 @@ Constitución VERSION 19 (nuevas reglas #55, #56, #57).
 ## 2026-06 — Protector v3: orientación horizontal restaurada
 - El usuario pidió volver a la dirección original: hélice HORIZONTAL a lo ancho de la pantalla (como v1), manteniendo estilo poligonal, morado→dorado (conquista de izquierda a derecha) y logo oficial giratorio al centro.
 - Verificado con captura. NO cambiar la orientación sin pedido explícito.
+
+## 2026-06 — Protector v4 (referencia del usuario, DEFINITIVO)
+- Base: imagen de referencia low-poly del usuario, SIN la mano.
+- Hélice VERTICAL low-poly centrada arriba, estructura DORADA conquistando desde abajo (parte superior queda azul), fondo AZUL PROFUNDO con luz superior (como la foto), destellos titilantes alrededor.
+- Logo circular oficial LEVITA (no gira) debajo de la hélice, donde estaba la mano.
+- NO volver a cambiar: mano prohibida, logo levita, estructura dorada, fondo azul.
