@@ -257,6 +257,7 @@ def _coincidencias(docs):
 
 async def auditar_cliente(cid):
     docs = await db.victoria_docs.find({"cliente_id": cid}, {"_id": 0}).to_list(100)
+    docs = [d for d in docs if (d.get("revision") or {}).get("decision") != "rechazado"]
     alertas = []
     presentes = {d["tipo"] for d in docs}
     for t in DOCS_REQUERIDOS:
@@ -427,10 +428,13 @@ async def detalle(cid: str, request: Request):
     _exigir(request)
     c = await _get_cliente(cid)
     docs = await db.victoria_docs.find({"cliente_id": cid}, {"_id": 0, "ruta": 0}).sort("recibido", -1).to_list(100)
+    docs_ok = [d for d in docs if (d.get("revision") or {}).get("decision") != "rechazado"]
     aud = c.get("auditoria")
+    concreces = await db.concreces_estado.find_one({"victoria_cliente_id": cid}, {"_id": 0, "snapshot": 0})
     return {"cliente": c, "docs": docs, "auditoria": aud,
-            "formularios_auto": _formularios_auto(c, docs),
-            "siguiente": _paso_siguiente(c, docs, aud), "tipos": ETIQUETAS,
+            "formularios_auto": _formularios_auto(c, docs_ok),
+            "siguiente": _paso_siguiente(c, docs_ok, aud), "tipos": ETIQUETAS,
+            "concreces": concreces,
             "requeridos": {t: ETIQUETAS[t] for t in DOCS_REQUERIDOS}}
 
 
@@ -563,3 +567,138 @@ async def aviso_leido(aid: str, request: Request):
     _exigir(request)
     await db.victoria_avisos.update_one({"id": aid}, {"$set": {"leido": True}})
     return {"ok": True}
+
+
+# ══════════ REDISEÑO 2026: dashboard consolidado, preview, revisión y contacto ══════════
+@vict.get("/dashboard")
+async def dashboard(request: Request):
+    _exigir(request)
+    clientes = await db.victoria_clientes.find({}, {"_id": 0}).sort("creado", -1).to_list(300)
+    out, tot_falt, tot_valid_ok, tot_criticas, listos = [], 0, 0, 0, 0
+    for c in clientes:
+        docs = await db.victoria_docs.find({"cliente_id": c["id"]}, {"_id": 0, "ruta": 0}).to_list(100)
+        docs_ok = [d for d in docs if (d.get("revision") or {}).get("decision") != "rechazado"]
+        presentes = {d["tipo"] for d in docs_ok}
+        faltantes = [ETIQUETAS[t] for t in DOCS_REQUERIDOS if t not in presentes]
+        aud = c.get("auditoria") or {}
+        coin = aud.get("coincidencias", [])
+        v_ok = sum(1 for x in coin if x.get("ok") is True)
+        n_crit = sum(1 for a in aud.get("alertas", []) if a.get("nivel") == "critica")
+        es_listo = (not aud.get("bloqueado", True)) and c.get("formularios_confirmados") and not c.get("despachado")
+        if not c.get("despachado"):
+            tot_falt += len(faltantes)
+            tot_criticas += n_crit
+        tot_valid_ok += v_ok
+        listos += 1 if es_listo else 0
+        out.append({"id": c["id"], "nombre": c["nombre"], "rut": c.get("rut", ""),
+                    "email": c.get("email", ""), "telefono": c.get("telefono", ""),
+                    "n_docs": len(docs_ok), "faltantes": faltantes,
+                    "despachado": c.get("despachado", False), "listo_envio": es_listo,
+                    "bloqueado": aud.get("bloqueado", True) if aud else None,
+                    "validaciones_ok": v_ok, "validaciones_total": len(coin),
+                    "alertas_criticas": n_crit, "creado": c.get("creado", ""),
+                    "siguiente": _paso_siguiente(c, docs_ok, c.get("auditoria"))})
+    avisos = await db.victoria_avisos.find({"leido": False}, {"_id": 0}).sort("fecha", -1).to_list(30)
+    sin_clasificar = await db.victoria_docs.find({"cliente_id": None}, {"_id": 0, "ruta": 0}).sort("recibido", -1).to_list(30)
+    despachados = sum(1 for c in out if c["despachado"])
+    pendientes = len(out) - despachados
+    cfg = await db.config.find_one({"_key": "fuentes_imap_victoria"}, {"_id": 0}) or {}
+    return {"kpis": {"clientes_pendientes": pendientes, "docs_faltantes": tot_falt,
+                     "validaciones_aprobadas": tot_valid_ok,
+                     "alertas_activas": len(avisos) + tot_criticas,
+                     "despachados": despachados, "listos_envio": listos,
+                     "estado_general_pct": round(100 * despachados / len(out)) if out else 0},
+            "clientes": out, "avisos": avisos, "sin_clasificar": sin_clasificar,
+            "correo_monitoreado": cfg.get("correo_principal", ""), "tipos": ETIQUETAS,
+            "docs_requeridos": [ETIQUETAS[t] for t in DOCS_REQUERIDOS]}
+
+
+@vict.get("/documentos/{did}/contenido")
+async def doc_contenido(did: str, request: Request):
+    """Preview instantáneo: entrega el archivo inline (PDF/imagen) sin descarga."""
+    from fastapi.responses import Response as _Resp
+    _exigir(request)
+    d = await db.victoria_docs.find_one({"id": did})
+    if not d or not d.get("ruta"):
+        raise HTTPException(status_code=404, detail="Documento no encontrado en la bóveda")
+    p = Path(d["ruta"])
+    if not p.exists():
+        raise HTTPException(status_code=404, detail="El archivo físico no está disponible en esta sesión")
+    import mimetypes
+    mt = mimetypes.guess_type(d.get("archivo", ""))[0] or "application/pdf"
+    return _Resp(content=p.read_bytes(), media_type=mt,
+                 headers={"Content-Disposition": f'inline; filename="{d.get("archivo", "documento")}"'})
+
+
+@vict.post("/documentos/{did}/revision")
+async def doc_revision(did: str, payload: dict, request: Request):
+    """Victoria acepta o rechaza el documento tras verlo en el preview."""
+    u = _exigir(request)
+    decision = payload.get("decision")
+    if decision not in ("aceptado", "rechazado"):
+        raise HTTPException(status_code=400, detail="Decisión inválida: debe ser 'aceptado' o 'rechazado'")
+    motivo = (payload.get("motivo") or "").strip()
+    if decision == "rechazado" and not motivo:
+        raise HTTPException(status_code=400, detail="Indique el motivo del rechazo del documento")
+    d = await db.victoria_docs.find_one({"id": did}, {"_id": 0})
+    if not d:
+        raise HTTPException(status_code=404, detail="Documento no encontrado")
+    await db.victoria_docs.update_one({"id": did}, {"$set": {"revision": {
+        "decision": decision, "motivo": motivo, "por": u.get("sub", ""), "fecha": _now()}}})
+    if decision == "rechazado":
+        await _aviso("doc_rechazado", f"Victoria rechazó «{d.get('archivo','')}»: {motivo}", d.get("cliente_id"))
+    aud = await auditar_cliente(d["cliente_id"]) if d.get("cliente_id") else None
+    return {"ok": True, "decision": decision, "auditoria": aud}
+
+
+@vict.put("/documentos/{did}/tipo")
+async def doc_tipo(did: str, payload: dict, request: Request):
+    _exigir(request)
+    tipo = payload.get("tipo")
+    if tipo not in TIPOS_DOC:
+        raise HTTPException(status_code=400, detail="Tipo de documento inválido")
+    d = await db.victoria_docs.find_one({"id": did}, {"_id": 0})
+    if not d:
+        raise HTTPException(status_code=404, detail="Documento no encontrado")
+    await db.victoria_docs.update_one({"id": did}, {"$set": {"tipo": tipo}})
+    aud = await auditar_cliente(d["cliente_id"]) if d.get("cliente_id") else None
+    return {"ok": True, "tipo": tipo, "auditoria": aud}
+
+
+@vict.put("/clientes/{cid}/contacto")
+async def contacto(cid: str, payload: dict, request: Request):
+    _exigir(request)
+    await _get_cliente(cid)
+    email_c = (payload.get("email") or "").strip().lower()
+    tel = re.sub(r"[^\d+]", "", payload.get("telefono") or "")
+    if email_c and "@" not in email_c:
+        raise HTTPException(status_code=400, detail="Correo del cliente inválido")
+    await db.victoria_clientes.update_one({"id": cid}, {"$set": {"email": email_c, "telefono": tel}})
+    return {"ok": True, "email": email_c, "telefono": tel}
+
+
+@vict.post("/clientes/{cid}/enviar-correo")
+async def enviar_correo_cliente(cid: str, payload: dict, request: Request):
+    """Contactabilidad directa: Victoria envía un correo al cliente desde el sistema."""
+    u = _exigir(request)
+    c = await _get_cliente(cid)
+    email_dest = (payload.get("email") or c.get("email") or "").strip().lower()
+    asunto = (payload.get("asunto") or "").strip()
+    mensaje = (payload.get("mensaje") or "").strip()
+    if not email_dest or "@" not in email_dest:
+        raise HTTPException(status_code=400, detail="El cliente no tiene correo registrado: guárdelo primero en la ficha")
+    if not asunto or not mensaje:
+        raise HTTPException(status_code=400, detail="Complete el asunto y el mensaje del correo")
+    cuerpo = mensaje.replace("\n", "<br>")
+    html = (f"<div style='font-family:Georgia,serif;color:#1a1a1a;max-width:640px'>"
+            f"<p>{cuerpo}</p><hr style='border:none;border-top:2px solid #8a6d1a'>"
+            f"<p style='color:#8a6d1a;font-weight:bold'>Victoria Vilches<br>"
+            f"Central Mutuos · Con Creces</p></div>")
+    import email_service as mail
+    r = await asyncio.to_thread(mail.send_mail, email_dest, asunto, html, None, "secundaria")
+    if not r.get("success"):
+        raise HTTPException(status_code=502, detail=f"No se pudo enviar el correo: {str(r.get('error'))[:120]}")
+    await db.victoria_contactos.insert_one({
+        "id": str(uuid.uuid4()), "cliente_id": cid, "canal": "correo", "destino": email_dest,
+        "asunto": asunto, "mensaje": mensaje, "por": u.get("sub", ""), "fecha": _now()})
+    return {"ok": True, "mensaje": f"Correo enviado a {email_dest}"}

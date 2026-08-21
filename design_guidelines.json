@@ -1,75 +1,100 @@
 {
+  "theme": "dark",
   "typography": {
-    "font_family": "Inter, sans-serif",
-    "headings": "Inter font. Use tracking-tight for large headings, and uppercase with wide tracking (tracking-widest) and smaller sizes for section titles (small caps effect).",
-    "body": "Inter text-base or text-sm for dashboard density.",
-    "tables": "Tabular-nums (font-variant-numeric: tabular-nums), text-sm, minimal typography."
+    "headings": "Playfair Display",
+    "body": "Inter",
+    "weights": {
+      "light": 300,
+      "regular": 400,
+      "medium": 500,
+      "bold": 700
+    },
+    "hierarchy": {
+      "h1": "text-4xl md:text-5xl font-bold tracking-tight text-white",
+      "h2": "text-2xl md:text-3xl font-medium tracking-tight text-[#FCF6BA]",
+      "h3": "text-xl font-medium text-white",
+      "body": "text-base md:text-lg text-gray-300 leading-relaxed",
+      "labels": "text-sm font-semibold uppercase tracking-[0.2em] text-[#BF953F]"
+    }
   },
   "colors": {
-    "background_base": "#0f172a",
-    "background_card": "#1e293b",
-    "border_default": "rgba(255,255,255,0.1)",
-    "gold_accent": "#d4af37",
-    "gold_soft": "rgba(212, 175, 55, 0.4)",
-    "text_primary": "#f8fafc",
-    "text_secondary": "#94a3b8",
-    "success": "#10b981",
-    "danger": "#ef4444",
-    "info": "#3b82f6"
+    "background": "#0a0a0a",
+    "foreground": "#ffffff",
+    "primary_gradient": "bg-gradient-to-r from-[#BF953F] via-[#FCF6BA] to-[#B38728]",
+    "primary_gold": "#BF953F",
+    "surface": {
+      "default": "#141414",
+      "glass": "bg-white/5 backdrop-blur-xl border border-white/10"
+    },
+    "text": {
+      "primary": "#ffffff",
+      "secondary": "#a1a1aa",
+      "accent": "#FCF6BA"
+    },
+    "status": {
+      "success": "#22c55e",
+      "warning": "#f59e0b",
+      "error": "#ef4444"
+    }
   },
-  "visual enhancers": {
-    "glassmorphism": "Used for sidebar, topbar, and modals: backdrop-blur-xl bg-slate-900/60 with a 1px inner border of white/10 or gold/20.",
-    "metallic_logo": "Central Mutuos logo must use a linear gradient text effect (silver/gold) to simulate a metallic finish. E.g., background: linear-gradient(135deg, #e2e8f0 0%, #94a3b8 40%, #d4af37 60%, #fef08a 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;",
-    "shadows": "Deep ambient shadows on risk charts and cards to give depth without looking messy.",
-    "borders": "Square corners (rounded-none or max rounded-sm). Ultra-thin 1px solid borders in border-slate-800 or rgba(212,175,55,0.3) (soft gold)."
-  },
-  "component name": "Dashboard, Sidebar, Login Page, Client Folders, Modals, Forms",
-  "grids": {
-    "dashboard": "High Density Grid (Mode B): Tight gaps (gap-4 or gap-6). Cards span based on summary vs primary data.",
-    "forms": "Use grid-cols-1 md:grid-cols-2 lg:grid-cols-3 for dense form fields."
+  "visual_enhancers": {
+    "borders": "1px solid rgba(255, 255, 255, 0.1) or subtle gold accent borders for active states",
+    "shadows": "shadow-[0_8px_32px_rgba(0,0,0,0.5)]",
+    "radius": "rounded-sm (2px to 4px) for sharp, corporate high-end look"
   },
   "layouts": {
-    "sidebar": "Fixed left sidebar with glassmorphism. Content offset by sidebar width.",
-    "modals": "Large, centered, overlay with dark translucent backdrop (bg-slate-950/80 backdrop-blur-sm), modal itself uses glassmorphism.",
-    "cards": "Minimalist rectangular cards, no large radii, thin gold/slate borders."
+    "dashboard": "Bento Grid Protocol: High Density but with generous padding (p-8). Use grid-cols-1 md:grid-cols-4. KPIs spanning 1 col, charts/lists spanning 2 or 3 cols.",
+    "document_view": "Split Screen: Left side (1/3) for stepper/checklist, Right side (2/3) for instant Document Preview. No small popups.",
+    "spacing": "Generous Spacing: p-6, p-8, p-12. Large hit areas for buttons."
   },
   "motion": {
-    "hover_states": "Subtle background tint changes (e.g., bg-white/5) or border color changes to gold on hover.",
-    "transitions": "Use specific transitions like 'transition-colors duration-200 ease-in-out' instead of 'transition-all'."
+    "transitions": "transition-all duration-300 ease-in-out on buttons and cards",
+    "hover_states": "Cards lift slightly (-translate-y-1) with increased border opacity (border-[#BF953F]/50)",
+    "page_transitions": "Fade in with subtle slide up (Framer Motion)"
+  },
+  "components": {
+    "buttons": {
+      "primary": "bg-gradient-to-r from-[#BF953F] via-[#FCF6BA] to-[#B38728] text-black font-semibold px-8 py-4 rounded-sm hover:opacity-90 shadow-lg text-lg",
+      "secondary": "bg-transparent border border-[#BF953F] text-[#FCF6BA] px-8 py-4 rounded-sm hover:bg-[#BF953F]/10 text-lg",
+      "action_labels": "MANDATORY: Use explicit verbs ('Aceptar documento', 'Rechazar documento', 'Guardar y Volver'). NEVER use 'continuar' or 'aceptar' alone."
+    },
+    "cards": "bg-[#141414] border border-white/10 p-8 rounded-sm shadow-2xl",
+    "stepper": "Vertical or Horizontal clear progression bar with Playfair Display numbers and explicit titles.",
+    "contact_panel": "Dedicated sticky or inline section in client view with explicit 'Enviar WhatsApp' (opens wa.me link with pre-filled text) and 'Enviar Correo'."
   },
   "accessibility": {
-    "contrast": "Ensure text contrast meets APCA/WCAG standards. Use Slate 400 for secondary text, never darker.",
-    "data_testid": "CRITICAL: DO NOT remove or alter any existing data-testid attributes.",
-    "language": "All UI text must remain in Spanish."
+    "contrast": "Ensure all text on dark surfaces meets minimum 4.5:1 ratio. Gold text on black is excellent.",
+    "hit_areas": "Minimum 48x48px for all interactable elements."
   },
   "media": {
-    "charts": "Risk charts use soft gradients with deep shadows.",
-    "tables": "Minimalist high-end tables. Remove vertical borders, use very subtle horizontal borders. Rows hover with 5% gold opacity."
-  },
-  "3d libraries": "None needed for this specific problem unless using Recharts for risk charts.",
-  "image urls": [
-    {
-      "url": "https://images.unsplash.com/photo-1758964297394-1eab6102f9d3?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzl8MHwxfHNlYXJjaHwyfHxkYXJrJTIwbHV4dXJ5JTIwYWJzdHJhY3QlMjBhcmNoaXRlY3R1cmUlMjBnb2xkfGVufDB8fHx8MTc4NTgxMjEwMHww&ixlib=rb-4.1.0&q=85",
-      "description": "Abstract pattern of warm golden vertical lines",
-      "category": "Login Page Background"
+    "image_urls": {
+      "background_texture": {
+        "url": "https://images.unsplash.com/photo-1741356474365-5f0041f89eaa?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA3MDB8MHwxfHNlYXJjaHwzfHxlbGVnYW50JTIwZGFyayUyMGJsYWNrJTIwZ29sZCUyMHRleHR1cmV8ZW58MHx8fHwxNzg3MzQ2NDg5fDA&ixlib=rb-4.1.0&q=85",
+        "category": "hero_background",
+        "description": "Golden ribbons flowing on a dark background for login or ambient dashboard texture (opacity 10-20%)"
+      }
     }
-  ],
-  "component_path": [
-    "/app/frontend/src/App.css",
-    "/app/frontend/src/index.css",
-    "/app/frontend/tailwind.config.js"
-  ],
+  },
   "instructions_to_main_agent": [
-    "REWRITE /app/frontend/src/App.css to replace the old navy/blue theme with the deep Slate (#0f172a) 'Terminal de Inversión Maserati' theme.",
-    "Ensure all CSS variables map to Slate and Soft Gold (#d4af37). REMOVE all blue colors currently mapped to var(--gold) and replace with actual gold.",
-    "Make the sidebar and modals use Glassmorphism (backdrop-filter: blur(16px); background: rgba(15, 23, 42, 0.75)).",
-    "Apply 'modern square corners' (border-radius: 4px or 0) globally across inputs, cards, and buttons.",
-    "Implement the 'Central Mutuos' logo in the sidebar with a metallic text gradient.",
-    "Update table styles in App.css to be high-end: tabular-nums, uppercase headers, subtle horizontal lines, no vertical lines, and a faint gold hover state.",
-    "Update section titles to use small caps (text-transform: uppercase, font-size: smaller, letter-spacing: wider).",
-    "Form inputs should be dark (#0f172a or #1e293b) with thin borders, focusing into soft gold.",
-    "Make sure the 'Motor de Extracción' AI panels use dark themes with subtle green/amber halos based on the status.",
-    "DO NOT break any functionality, components logic, or remove any data-testid."
+    "CRITICAL STATE MANAGEMENT: When Victoria presses the 'Volver' button, the view must restore the EXACT state. You MUST use React Router's `state` object, URL search params, or a global store to persist scroll position, selected tab, and filter state.",
+    "Create the app completely in Spanish.",
+    "Dashboard KPIs must display large, bold numbers. Use Playfair Display for the metric values to look imposing.",
+    "Document Preview: Use an <object>, <iframe>, or `react-pdf` (already in package.json) to show a large preview inline. DO NOT make the user download or click a small link. The 'Aceptar documento' / 'Rechazar documento' buttons must be immediately visible under the viewer.",
+    "Use standard HTML + Tailwind for complex asymmetrical layouts and Shadcn for complex logic components (select, dropdown, dialog).",
+    "Avoid small text. Base font size should be large (text-base or text-lg). Interfaces must feel ample and luxurious.",
+    "Implement the 4-step guided flow explicitly with titles: 'Paso 1 - Recepción y clasificación de documentos', 'Paso 2 - Validación de RUT cliente, RUT codeudor, Rol de avalúo y dirección', 'Paso 3 - Revisión final con checklist completo', 'Paso 4 - Envío a ConCreces con confirmación'.",
+    "Contactability: Include a WhatsApp button with a pre-filled message using `https://wa.me/NUMBER?text=ENCODED_MESSAGE` format and a 'Enviar Correo' email link.",
+    "DO NOT apply `text-align: center` globally. Keep data tabular and left-aligned.",
+    "Include `data-testid` on all buttons, forms, and major UI components to facilitate testing."
   ],
-  "UNIVERSAL GUIDELINES FOR MAIN AGENT": "You tend to converge toward generic, 'on distribution' outputs. In frontend design, this creates what users call the 'AI slop' aesthetic. Avoid this: make creative, distinctive frontends that surprise and delight. Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients. Create depth through layered design elements with z-index hierarchy. Use glass-morphism effects with backdrop filters (12-24px blur). You MUST NOT apply universal transition. Eg: transition: all. This results in breaking transforms. Always add transitions for specific interactive elements like button, input excluding transforms. You MUST NOT center align the app container. Always use modern button styles like pill-shaped, or sharp button with interaction animations & color relevant to the app style. NEVER: use AI assistant Emoji characters. Use 2-3x more spacing than feels comfortable. Subtle grain textures, noise overlays, custom cursors, selection states, and loading animations: separates good from extraordinary. CRITICAL: DO NOT use complete transparent background in header, overlays, any surface that has content under it. All interactive and key informational elements MUST include a data-testid attribute to facilitate robust automated testing."
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
+    "You tend to converge toward generic, 'on distribution' outputs. Avoid this: make creative, distinctive frontends that surprise and delight.",
+    "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients.",
+    "Create depth through layered design elements with z-index hierarchy and glassmorphism (12-24px blur).",
+    "You MUST NOT apply universal transition (e.g., transition: all). Add transitions for specific interactive elements.",
+    "You MUST NOT center align the app container. This disrupts the human natural reading flow of text.",
+    "NEVER use AI assistant Emoji characters like 🤖🧠💭💡🔮🎯 etc for icons. Use Phosphor or Lucide icons.",
+    "Use sonner for toasts.",
+    "Prioritize using pre-existing components from src/components/ui when applicable."
+  ]
 }

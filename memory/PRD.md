@@ -1149,3 +1149,23 @@ actual; todo lo demás permanece intacto.
 - Importar listado "ds19 01 inmoboliarias" al Módulo Publicidad desde la imagen de 174 proyectos
   usatusubsidio.cl enviada por el usuario (solo emails válidos, deduplicar, excluir @ecomac.cl).
   Asset: https://customer-assets-gfyr7b9c.emergentagent.net/job_96f233fb-cd92-45e9-8847-7be7b345f873/artifacts/yuc588dl_image.webp
+
+## 2026-06 — REDISEÑO COMPLETO Módulo Victoria (COMPLETADO, iteración 55: 100%)
+- Nuevo workspace exclusivo (negro mate + dorado, Playfair Display, info grande):
+  /app/frontend/src/victoria/{theme.js, VictoriaDashboard.js, VictoriaFicha.js, DocViewer.js}
+  + shell /app/frontend/src/pages/VictoriaWorkspace.js (nav stack en sessionStorage vw_nav_v2).
+- Dashboard de entrada: 5 KPIs (pendientes, docs faltantes, validaciones aprobadas, alertas, estado general),
+  lista clientes con estado/siguiente acción, avisos, sin clasificar con asignación, buscador+filtro, crear ficha.
+- Flujo guiado 4 pasos: 1 Recepción/clasificación (historial + subir + reclasificar + preview),
+  2 Validación Reglas de Oro 11-14 + formularios editables, 3 Checklist + documento de envío en iframe +
+  confirmar formularios, 4 Envío a ConCreces con checkbox de declaración + botón descriptivo.
+- Preview instantáneo: GET /api/victoria/documentos/{did}/contenido (inline PDF/imagen vía blob);
+  Aceptar/Rechazar con motivo → POST /api/victoria/documentos/{did}/revision; rechazados quedan
+  excluidos de auditar_cliente y generan aviso.
+- Contactabilidad: PUT /clientes/{cid}/contacto (email/tel), POST /clientes/{cid}/enviar-correo
+  (send_mail secundaria, historial en victoria_contactos), link wa.me pre-armado con faltantes.
+- Navegación con memoria: Volver conserva búsqueda/filtro/scroll; F5 restaura misma ficha y paso.
+- Nuevos endpoints extra: GET /api/victoria/dashboard (consolidado), PUT /documentos/{did}/tipo.
+- Testing: iteration_55.json — backend 18/18, frontend 100%, regresión admin OK. Sin bugs.
+- Notas menores del reporte (no bloqueantes): polling 30/45s sin backoff con pestaña oculta;
+  bcrypt cold-start 40-50s tras restart (conocido).
