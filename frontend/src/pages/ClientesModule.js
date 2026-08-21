@@ -4,6 +4,7 @@ import DOMPurify from "dompurify";
 import ImportarCorreo from "../components/ImportarCorreo";
 import ConversorUF from "../components/ConversorUF";
 import CalendarioCarpetas from "../components/CalendarioCarpetas";
+import EnviarResultadoEjecutivo from "../components/EnviarResultadoEjecutivo";
 import CompromisoEditor from "./CompromisoEditor";
 import { secureGet } from "../utils/secureStore";
 
@@ -2051,6 +2052,7 @@ export default function ClientesModule({ onNavigate }) {
                 style={{ background: "rgba(212,175,55,0.12)", border: "1px solid rgba(212,175,55,0.5)", color: "#d4af37" }}>
                 <i className="fa fa-file-pdf-o"></i> Informe VIP
               </button>
+              <EnviarResultadoEjecutivo folder={currentFolder} />
               <button className="docs-btn primary" onClick={() => downloadAll(currentFolder.id)} data-testid="btn-download-all">
                 <i className="fa fa-download"></i> Descargar Todo
               </button>

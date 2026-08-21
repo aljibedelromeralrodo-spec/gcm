@@ -9,7 +9,7 @@ const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio",
 const DIAS_SEM = ["LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB", "DOM"];
 const fmt = (n) => Number(n || 0).toLocaleString("es-CL");
 
-const Item = ({ c, rojo, onOpen }) => (
+const Item = ({ c, rojo, onOpen, onAccion }) => (
   <div data-testid={`cal-carpeta-${c.folder_id}`}
     onClick={() => onOpen && onOpen(c.folder_id)}
     title="Abrir detalle completo de la carpeta"
@@ -26,6 +26,31 @@ const Item = ({ c, rojo, onOpen }) => (
     <b style={{ color: rojo ? "#fecaca" : "var(--white, #fff)", fontSize: 13, textDecoration: onOpen ? "underline" : "none", textDecorationColor: rojo ? "#fca5a5" : `${ORO}88`, textUnderlineOffset: 3 }}>{c.nombre}</b>
     <span style={{ fontFamily: "monospace", fontSize: 11.5, color: rojo ? "#fca5a5" : "#94a3b8" }}>{c.rut || "—"}</span>
     {c.monto_uf && <span style={{ fontSize: 11.5, fontWeight: 800, color: rojo ? "#fecaca" : ORO }}>{fmt(c.monto_uf)} UF</span>}
+    {onAccion && (
+      <span style={{ display: "inline-flex", gap: 5 }} onClick={e => e.stopPropagation()}>
+        {c.descartada ? (
+          <>
+            <span data-testid={`badge-descartada-${c.folder_id}`} style={{ fontSize: 9.5, fontWeight: 900, letterSpacing: 1,
+              padding: "2px 7px", background: "rgba(100,100,100,0.2)", border: "1px solid #64748b", color: "#94a3b8" }}>DESCARTADA</span>
+            <button data-testid={`cal-considerar-${c.folder_id}`} onClick={() => onAccion(c.folder_id, "considerar")}
+              title="Reactivar la solicitud en el flujo"
+              style={{ fontSize: 10, fontWeight: 800, padding: "2px 8px", cursor: "pointer",
+                background: "rgba(16,217,142,0.12)", border: "1px solid rgba(16,217,142,0.5)", color: "#10d98e" }}>✓ Considerar</button>
+          </>
+        ) : (
+          <>
+            <button data-testid={`cal-considerar-${c.folder_id}`} onClick={() => onAccion(c.folder_id, "considerar")}
+              title="Mantener la solicitud activa en el flujo"
+              style={{ fontSize: 10, fontWeight: 800, padding: "2px 8px", cursor: "pointer",
+                background: "rgba(16,217,142,0.12)", border: "1px solid rgba(16,217,142,0.5)", color: "#10d98e" }}>✓ Considerar</button>
+            <button data-testid={`cal-descartar-${c.folder_id}`} onClick={() => onAccion(c.folder_id, "descartar")}
+              title="Marcar como no válida: sale del flujo sin eliminarse"
+              style={{ fontSize: 10, fontWeight: 800, padding: "2px 8px", cursor: "pointer",
+                background: "rgba(225,29,72,0.1)", border: "1px solid rgba(225,29,72,0.5)", color: "#fb7185" }}>✕ Descartar</button>
+          </>
+        )}
+      </span>
+    )}
     <span style={{ marginLeft: "auto", fontSize: 10.5, color: rojo ? "#fca5a5" : "#94a3b8" }}>
       Recibida {c.fecha_recepcion}{rojo && c.dias_sin_avance != null ? ` · ${c.dias_sin_avance} día(s) sin avance` : ""}</span>
     {onOpen && <i className="fa fa-external-link" style={{ fontSize: 11, color: rojo ? "#fca5a5" : ORO }} />}
@@ -52,6 +77,15 @@ export default function CalendarioCarpetas({ onOpenFolder }) {
     axios.get(`${API}/api/clientes/calendario/dia`, { params: { fecha } })
       .then(r => setDia({ ...r.data, loading: false }))
       .catch(() => setDia({ fecha, loading: false, del_dia: [], pendientes_anteriores: [], error: true }));
+  };
+
+  const accionCarpeta = async (fid, accion) => {
+    if (accion === "descartar" && !window.confirm("¿Descartar esta solicitud?\nSaldrá del flujo y de los contadores, pero NO se elimina y seguirá visible en el histórico.")) return;
+    try {
+      await axios.post(`${API}/api/clientes/folders/${fid}/${accion}`);
+      cargar();
+      if (dia?.fecha) abrirDia(dia.fecha);
+    } catch (e) { alert(e.response?.data?.detail || "Error al ejecutar la acción"); }
   };
 
   const mover = (delta) => {
@@ -111,11 +145,11 @@ export default function CalendarioCarpetas({ onOpenFolder }) {
             <>
               <div style={{ color: ORO, fontSize: "0.62rem", fontWeight: 800, letterSpacing: 2, marginTop: 10 }}>
                 CARPETAS DEL DÍA ({(dia.del_dia || []).length})</div>
-              {(dia.del_dia || []).map(c => <Item key={c.folder_id} c={c} rojo={false} onOpen={onOpenFolder} />)}
+              {(dia.del_dia || []).map(c => <Item key={c.folder_id} c={c} rojo={false} onOpen={onOpenFolder} onAccion={accionCarpeta} />)}
               {(dia.del_dia || []).length === 0 && <p style={{ color: "#7a7a7a", fontSize: "0.7rem", margin: "4px 0" }}>Sin carpetas recibidas este día.</p>}
               <div style={{ color: "#f87171", fontSize: "0.62rem", fontWeight: 800, letterSpacing: 2, marginTop: 14 }}>
                 ⏳ PENDIENTES DE DÍAS ANTERIORES SIN PROCESAR ({(dia.pendientes_anteriores || []).length})</div>
-              {(dia.pendientes_anteriores || []).map(c => <Item key={c.folder_id} c={c} rojo={true} onOpen={onOpenFolder} />)}
+              {(dia.pendientes_anteriores || []).map(c => <Item key={c.folder_id} c={c} rojo={true} onOpen={onOpenFolder} onAccion={accionCarpeta} />)}
               {(dia.pendientes_anteriores || []).length === 0 && <p style={{ color: "#4ade80", fontSize: "0.7rem", margin: "4px 0" }}>Sin carpetas pendientes acumuladas. ✅</p>}
             </>
           )}

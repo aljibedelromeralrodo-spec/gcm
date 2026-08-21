@@ -14665,6 +14665,10 @@ api.include_router(_audim_mod.audimesa)
 import calendario_carpetas as _calcarp_mod
 api.include_router(_calcarp_mod.calcarp)
 
+# 🗂️ Considerar/Descartar + Resultado al Ejecutivo + Widget 'Correos de Solicitud - Hoy'
+import carpetas_resultado as _carpres_mod
+api.include_router(_carpres_mod.carpres)
+
 # 📦 IMPORTADOR .MBOX de gran tamaño (streaming por fragmentos)
 import mbox_import as _mbox_mod
 api.include_router(_mbox_mod.mbox)

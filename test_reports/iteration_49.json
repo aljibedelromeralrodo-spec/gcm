@@ -1,0 +1,36 @@
+{
+  "summary": "Iteration 49 — tested 3 new features: (1) Considerar/Descartar en calendario de carpetas, (2) Enviar Aprobación/Rechazo al Ejecutivo (preview fullscreen), (3) Widget 'Correos de Solicitud — Hoy' en dashboard. Backend: 13/13 pytest OK. Frontend: todos los flujos verificados vía Playwright. Carpetas Patricia (aprobado) y Eduar (reprobado) restauradas al estado activo. Ningún correo real enviado.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_carpetas_resultado.py",
+    "/app/test_reports/pytest/iter49_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "carpetas_resultado.py: bien estructurado (<260 líneas), roles enforced, no _id leak, endpoints idempotentes.",
+    "En _resultado_folder se itera hasta el primer RUT coincidente sin límite explícito; con muchas simulaciones podría ser lento — considerar índice/regex $match previo.",
+    "correos_solicitud_hoy: filtro por date_iso >= hoy (string). Si date_iso incluye zona horaria distinta, podría incluir/excluir bordes. Aceptable dado limit=60."
+  ],
+  "updated_files": ["/app/backend/tests/test_carpetas_resultado.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "admin: administrador / 141617575 (rol admin), broker: broker / Broker2026",
+  "seed_data_creation": "No new seed data. Se usaron simulaciones existentes con _test_marker='e1test'. Carpetas Patricia y Eduar quedaron con descartada=false.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend a veces requiere restart tras hot-reload (sudo supervisorctl restart backend + 20s). El widget del dashboard renderiza tras cerrar 2 modales (Saltar + Comenzar jornada). Los flujos de envío al ejecutivo NUNCA deben confirmarse en tests (solo abrir preview y Cancelar).",
+  "verified_flows": [
+    "POST /api/clientes/folders/{fid}/descartar → 200 descartada=true",
+    "GET /api/clientes/calendario/dia?fecha=2026-08-19 → folder aparece con descartada=true en del_dia",
+    "POST /api/clientes/folders/{fid}/considerar → 200 descartada=false",
+    "GET /api/clientes/folders/71a097ed…/resultado-ejecutivo → resultado='aprobado' con asunto+cuerpo_html+destinatarios",
+    "GET /api/clientes/folders/c65e1cce…/resultado-ejecutivo → resultado='reprobado'",
+    "POST enviar-resultado-ejecutivo Patricia → 409 'No se encontraron los PDF' (correcto, sin envío real)",
+    "GET /api/dashboard/correos-solicitud-hoy admin → 200 con estructura completa (12 correos)",
+    "GET widget con broker → 403",
+    "UI Calendario día 19 muestra ✓ Considerar / ✕ Descartar (data-testid cal-considerar-* / cal-descartar-*), badge 'DESCARTADA' aparece tras clic",
+    "UI detalle Patricia: btn-enviar-aprobacion-ejecutivo verde → preview-resultado-ejecutivo fullscreen con iframe preview-correo-iframe, aviso 'No se encontraron los PDF' y botón 'Confirmar y Enviar' DESHABILITADO; Cancelar cierra",
+    "UI detalle Eduar: btn-enviar-rechazo-ejecutivo rojo → preview solo con texto, sin PDFs, sin mención de 'gastos operacionales'",
+    "UI Dashboard widget: título 'Correos de Solicitud — Hoy', badge 'EN VIVO · 30s', filas con hora/remitente/asunto/badges docs y estado ✓ CARPETA CREADA"
+  ]
+}

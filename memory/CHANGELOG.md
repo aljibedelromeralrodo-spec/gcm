@@ -1663,3 +1663,13 @@ Constitución VERSION 19 (nuevas reglas #55, #56, #57).
 - Al hacer clic se abre el detalle completo de la carpeta en la misma pantalla (openFolder → vista detail): documentos, estado, historial de seguimiento y botones de acción (Considerar/Descartar, Aprobación/Rechazo).
 - Archivos: CalendarioCarpetas.js (prop onOpenFolder), ClientesModule.js (línea del tab calendario).
 - Verificado por screenshot en preview.
+
+## 2026-06 — Sesión fork: 5 funcionalidades nuevas (todas verificadas)
+1. Clientes clickeables en calendario → detalle en misma pantalla.
+2. Considerar/Descartar en calendario (backend: carpetas_resultado.py; descartada sale de contadores, no se elimina). Test iteración 49: 100%.
+3. Enviar Aprobación/Rechazo al Ejecutivo (detalle carpeta, preview fullscreen con correo + PDFs carta/simulación desde carpeta cliente; rechazo sin mención de gastos). Test iteración 49: 100%.
+4. Widget 'Correos de Solicitud - Hoy' en dashboard admin (30s polling, Crear Carpeta bloqueado por Regla #67 si <3 docs, No Tomar en Cuenta). Test iteración 49: 100%.
+5. UI: menú lateral auto-oculto en pantalla completa (hover borde izquierdo, CSS fs-auto/fs-visible en App.css) + Protector de pantalla con hélice ADN dorada tras 5 min inactividad, desbloqueo con PIN maestro (POST /api/seguridad/verificar-pin-maestro, MASTER_PIN env, solo admin/maestro). Verificado con screenshot (evento manual 'protector-forzar' disponible para pruebas).
+- Nota: simulaciones de prueba _test_marker='e1test' fueron eliminadas tras el testing.
+- precalificacion_aprobada se guarda como STRING ('True'/'False') en db.simulaciones — siempre coercionar.
+- Hot reload del backend a veces se cuelga: usar sudo supervisorctl restart backend.

@@ -58,10 +58,10 @@ def _item(f):
     return {"folder_id": f.get("id"), "nombre": f.get("nombre"), "rut": f.get("rut") or "",
             "monto_uf": df.get("monto_credito") or None,
             "fecha_recepcion": str(f.get("created_at") or "")[:16].replace("T", " "),
-            "avanzo": _avanzo(f)}
+            "avanzo": _avanzo(f), "descartada": bool(f.get("descartada"))}
 
 
-_PROJ = {"_id": 0, "id": 1, "nombre": 1, "rut": 1, "created_at": 1, "updated_at": 1,
+_PROJ = {"_id": 0, "id": 1, "nombre": 1, "rut": 1, "created_at": 1, "updated_at": 1, "descartada": 1,
          "datos_financieros.monto_credito": 1, "mesa_enviado_at": 1, "estudio_titulo_solicitado_at": 1,
          "escrituracion_movida_at": 1, "is_escrituracion": 1, "faltantes_pedidos_at": 1,
          "tasacion_solicitada_at": 1, "emails_sent_count": 1}
@@ -73,7 +73,9 @@ async def calendario_mes(request: Request, mes: str = ""):
     if not re.match(r"^\d{4}-\d{2}$", mes or ""):
         mes = datetime.now(timezone.utc).strftime("%Y-%m")
     dias = {}
-    async for f in db.folders.find({"created_at": {"$regex": f"^{mes}"}}, {"_id": 0, "created_at": 1}):
+    async for f in db.folders.find({"created_at": {"$regex": f"^{mes}"}}, {"_id": 0, "created_at": 1, "descartada": 1}):
+        if f.get("descartada"):
+            continue  # descartadas: fuera del flujo y de los contadores (siguen en el histórico)
         d = str(f["created_at"])[:10]
         dias[d] = dias.get(d, 0) + 1
     return {"mes": mes, "dias": dias, "total_mes": sum(dias.values())}
@@ -102,7 +104,7 @@ async def calendario_dia(request: Request, fecha: str = ""):
     desde = (datetime.fromisoformat(fecha) - timedelta(days=45)).strftime("%Y-%m-%d")
     pendientes = []
     async for f in db.folders.find({"created_at": {"$gte": desde, "$lt": fecha}}, _PROJ).sort("created_at", -1):
-        if _avanzo(f) or _enviado_directo(f):
+        if f.get("descartada") or _avanzo(f) or _enviado_directo(f):
             continue
         created = _dt(f.get("created_at"))
         if not created or ahora <= _deadline_habil(created):
@@ -111,7 +113,8 @@ async def calendario_dia(request: Request, fecha: str = ""):
         it["dias_sin_avance"] = (ahora - created).days
         pendientes.append(it)
     return {"fecha": fecha, "del_dia": del_dia, "pendientes_anteriores": pendientes,
-            "resumen": {"del_dia": len(del_dia), "pendientes": len(pendientes)}}
+            "resumen": {"del_dia": len([x for x in del_dia if not x.get("descartada")]),
+                        "pendientes": len(pendientes)}}
 
 
 def _rut_norm(r):

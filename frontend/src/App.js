@@ -1,6 +1,7 @@
 import { useState, useEffect, lazy, Suspense } from "react";
 import VistaPreviaRol from "./components/VistaPreviaRol";
 import HeliceADN from "./components/HeliceADN";
+import ProtectorPantalla from "./components/ProtectorPantalla";
 import axios from "axios";
 import "./App.css";
 import { API_URL, formatCurrency } from "./utils/formatters";
@@ -144,12 +145,21 @@ function MainApp() {
   const [cierresAvisos, setCierresAvisos] = useState(0);
   const [showSearch, setShowSearch] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
+  const [fsMenuVisible, setFsMenuVisible] = useState(false);
 
   useEffect(() => {
-    const fn = () => setFullscreen(!!document.fullscreenElement);
+    const fn = () => { setFullscreen(!!document.fullscreenElement); setFsMenuVisible(false); };
     document.addEventListener("fullscreenchange", fn);
     return () => document.removeEventListener("fullscreenchange", fn);
   }, []);
+
+  // En pantalla completa: ocultar el menú al alejar el cursor del borde izquierdo
+  useEffect(() => {
+    if (!fullscreen || !fsMenuVisible) return;
+    const fn = (e) => { if (e.clientX > 300) setFsMenuVisible(false); };
+    window.addEventListener("mousemove", fn);
+    return () => window.removeEventListener("mousemove", fn);
+  }, [fullscreen, fsMenuVisible]);
 
   const toggleFullscreen = () => {
     if (document.fullscreenElement) {
@@ -335,6 +345,11 @@ function MainApp() {
       </div>
     )}
     <div className="dashboard-layout" data-testid="dashboard" style={uEff?._sim ? { paddingTop: 40 } : undefined}>
+      <ProtectorPantalla user={user} />
+      {fullscreen && (
+        <div data-testid="fs-hover-zone" onMouseEnter={() => setFsMenuVisible(true)}
+          style={{ position: "fixed", top: 0, bottom: 0, left: 0, width: 14, zIndex: 99 }} />
+      )}
       {sidebarOpen && (
         <div
           className="mobile-backdrop"
@@ -342,7 +357,8 @@ function MainApp() {
           data-testid="mobile-backdrop"
         />
       )}
-      <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`} data-testid="sidebar">
+      <aside className={`sidebar ${sidebarOpen ? 'open' : ''} ${fullscreen ? 'fs-auto' : ''} ${fullscreen && fsMenuVisible ? 'fs-visible' : ''}`}
+        data-testid="sidebar" onMouseLeave={() => fullscreen && setFsMenuVisible(false)}>
         <div className="sidebar-brand" data-testid="sidebar-logo" style={{ background: "#0a0a0a",
           borderRadius: 10, padding: "0.95rem 0.5rem", textAlign: "center",
           border: "1px solid rgba(212,175,55,0.25)" }}>
@@ -385,7 +401,7 @@ function MainApp() {
         </div>
       </aside>
 
-      <main className="main-content">
+      <main className={`main-content ${fullscreen ? 'fs-full' : ''}`}>
         <header className="topbar">
           <button
             className="mobile-menu-btn"
