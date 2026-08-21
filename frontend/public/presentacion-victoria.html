@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Central Mutuos — Módulo Victoria · Flujo ConCreces</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #050505; color: #e8e8e8; font-family: Georgia, 'Times New Roman', serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+  .gold { color: #d4af37; }
+  header { display: flex; align-items: center; padding: 1.1rem 2rem; border-bottom: 1px solid rgba(212,175,55,0.35); }
+  header .marca { color: #d4af37; letter-spacing: 4px; font-size: 0.7rem; font-weight: 700; }
+  header h1 { font-size: 1.15rem; letter-spacing: 1px; color: #fff; }
+  header .botones { margin-left: auto; display: flex; gap: 10px; }
+  header button { background: transparent; border: 1px solid #d4af37; color: #d4af37; padding: 0.35rem 0.9rem; font-size: 0.7rem; cursor: pointer; font-family: inherit; }
+  .timeline { display: flex; padding: 1rem 2rem 0; }
+  .tramo { flex: 1; display: flex; align-items: center; }
+  .punto { width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0; cursor: pointer; background: rgba(255,255,255,0.08); color: #777; border: 1px solid #444; font-weight: 800; font-size: 0.72rem; font-family: inherit; }
+  .punto.activo, .punto.hecho { background: #d4af37; color: #0a0a0a; border-color: #d4af37; }
+  .punto.activo { animation: pulse 2s infinite; }
+  .linea { flex: 1; height: 1px; background: rgba(255,255,255,0.12); position: relative; overflow: hidden; }
+  .linea.hecha::after { content: ''; position: absolute; inset: 0; background: #d4af37; animation: line 0.6s ease both; }
+  main { flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 0 2rem; max-width: 1050px; margin: 0 auto; width: 100%; }
+  .cabecera-paso { display: flex; align-items: center; gap: 16px; animation: fade 0.7s ease both; }
+  .num-paso { color: #d4af37; font-size: 0.66rem; letter-spacing: 3px; font-weight: 700; }
+  .titulo-paso { font-size: 1.6rem; font-weight: 800; color: #fff; margin-top: 2px; }
+  .icono { font-size: 2.2rem; }
+  .comparacion { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 26px; }
+  .caja { padding: 1.3rem 1.4rem; }
+  .caja p { line-height: 1.75; font-size: 0.95rem; }
+  .caja .etiqueta { font-weight: 800; font-size: 0.7rem; letter-spacing: 2px; margin-bottom: 10px; }
+  .caja .pie { margin-top: 14px; font-weight: 800; font-size: 0.78rem; }
+  .sistema { border: 1px solid #d4af37; background: rgba(212,175,55,0.06); animation: fade 0.7s ease 0.35s both; }
+  .sistema .etiqueta { color: #d4af37; } .sistema .pie { color: #22c55e; }
+  .manual { border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.03); animation: fade 0.7s ease 0.7s both; }
+  .manual .etiqueta { color: #999; } .manual p { color: #bbb; } .manual .pie { color: #ef4444; }
+  .resumen { text-align: center; display: flex; flex-direction: column; align-items: center; }
+  .metricas { display: flex; gap: 18px; margin-top: 30px; flex-wrap: wrap; justify-content: center; animation: fade 0.7s ease 0.35s both; }
+  .metrica { border: 1px solid #d4af37; background: rgba(212,175,55,0.06); padding: 1.4rem 1.6rem; width: 215px; }
+  .metrica .n { color: #d4af37; font-size: 1.25rem; font-weight: 900; }
+  .metrica .t { color: #bbb; font-size: 0.74rem; margin-top: 8px; line-height: 1.6; }
+  .nota { margin-top: 28px; color: #999; font-size: 0.82rem; max-width: 640px; line-height: 1.8; animation: fade 0.7s ease 0.7s both; }
+  footer { display: flex; gap: 10px; padding: 1rem 2rem 1.4rem; border-top: 1px solid rgba(212,175,55,0.25); align-items: center; }
+  footer button { padding: 0.5rem 1.3rem; cursor: pointer; font-size: 0.74rem; font-family: inherit; border-radius: 0; }
+  #btnAnt { background: transparent; border: 1px solid #555; color: #ccc; }
+  #btnSig { background: linear-gradient(135deg,#BF953F,#FCF6BA,#AA771C); border: none; color: #0a0a0a; font-weight: 800; }
+  #pie-info { margin-left: auto; color: #666; font-size: 0.66rem; letter-spacing: 1px; }
+  button:disabled { opacity: 0.35; cursor: default; }
+  @keyframes fade { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes line { from { width: 0; } to { width: 100%; } }
+  @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(212,175,55,0.5); } 50% { box-shadow: 0 0 0 14px rgba(212,175,55,0); } }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <div class="marca">CENTRAL MUTUOS</div>
+    <h1>Módulo Victoria — Flujo ConCreces</h1>
+  </div>
+  <div class="botones">
+    <button id="btnAuto">⏸ Pausar</button>
+  </div>
+</header>
+<div class="timeline" id="timeline"></div>
+<main id="contenido"></main>
+<footer>
+  <button id="btnAnt">← Anterior</button>
+  <button id="btnSig">Siguiente →</button>
+  <span id="pie-info"></span>
+</footer>
+<script>
+const PASOS = [
+  { icono: "📧", titulo: "Detección automática desde el correo",
+    sistema: "El sistema monitorea el correo de Victoria, detecta los sets de crédito, descarga los adjuntos y los clasifica solo: tasación, títulos, carpeta de crédito, simulación.",
+    manual: "Revisar el correo, descargar archivo por archivo, renombrarlos y ordenarlos en carpetas.", min: 25 },
+  { icono: "🔍", titulo: "Auditoría automática del set",
+    sistema: "Verifica que estén todos los documentos requeridos, que las fechas estén vigentes, que las firmas estén presentes y que el formato sea legible. Marca con alerta exacta lo que falta.",
+    manual: "Abrir cada PDF y revisar a ojo fechas, firmas y completitud, uno por uno.", min: 30 },
+  { icono: "🪪", titulo: "Validación de RUT, Rol y Dirección",
+    sistema: "Cruza el RUT del titular y del codeudor en todos los documentos, y el rol de avalúo y la dirección entre tasación y títulos. Si algo no coincide, BLOQUEA el envío y dice exactamente qué y en qué documentos.",
+    manual: "Comparar dígito a dígito entre documentos; un error puede pasar inadvertido y devolver la operación completa.", min: 20 },
+  { icono: "📝", titulo: "Autocompletado de formularios",
+    sistema: "Rellena todos los formularios con los datos ya guardados en la bóveda. Victoria solo revisa, corrige lo alertado y confirma.",
+    manual: "Transcribir a mano cada campo desde los PDF, con riesgo de errores de tipeo.", min: 15 },
+  { icono: "🚀", titulo: "Revisión final y envío con un clic",
+    sistema: "Genera el documento de envío consolidado; Victoria lo revisa y despacha a ConCreces con un solo clic. Queda registro completo en la bóveda.",
+    manual: "Armar el set final, redactar el correo, adjuntar todo y enviarlo esperando no haber omitido nada.", min: 10 },
+];
+const TOTAL = PASOS.reduce((a, p) => a + p.min, 0);
+let paso = 0, auto = true, timer = null;
+
+function render() {
+  const fin = paso >= PASOS.length;
+  document.getElementById("timeline").innerHTML = PASOS.map((s, i) => `
+    <div class="tramo">
+      <button class="punto ${i === paso && !fin ? "activo" : (i < paso || fin ? "hecho" : "")}" onclick="ir(${i})">${i + 1}</button>
+      ${i < PASOS.length - 1 ? `<div class="linea ${i < paso || fin ? "hecha" : ""}"></div>` : ""}
+    </div>`).join("");
+  const cont = document.getElementById("contenido");
+  if (!fin) {
+    const p = PASOS[paso];
+    cont.innerHTML = `
+      <div class="cabecera-paso"><span class="icono">${p.icono}</span>
+        <div><div class="num-paso">PASO ${paso + 1} DE ${PASOS.length}</div>
+        <div class="titulo-paso">${p.titulo}</div></div></div>
+      <div class="comparacion">
+        <div class="caja sistema"><div class="etiqueta">⚙ CON EL SISTEMA</div><p>${p.sistema}</p>
+          <div class="pie">⏱ automático · segundos</div></div>
+        <div class="caja manual"><div class="etiqueta">✍ SIN EL SISTEMA (MANUAL)</div><p>${p.manual}</p>
+          <div class="pie">⏱ ≈ ${p.min} minutos · propenso a error humano</div></div>
+      </div>`;
+    document.getElementById("pie-info").textContent = p.titulo;
+  } else {
+    cont.innerHTML = `
+      <div class="resumen">
+        <div class="cabecera-paso" style="flex-direction:column;gap:6px">
+          <div class="num-paso">RESUMEN</div>
+          <div class="titulo-paso">Lo que el módulo le devuelve a Victoria</div>
+        </div>
+        <div class="metricas">
+          <div class="metrica"><div class="n">≈ ${TOTAL} min → 10 min</div><div class="t">por operación: de trabajo manual a solo revisar y confirmar</div></div>
+          <div class="metrica"><div class="n">${Math.round((1 - 10 / TOTAL) * 100)}% menos tiempo</div><div class="t">≈ ${TOTAL - 10} minutos ahorrados en cada set de crédito</div></div>
+          <div class="metrica"><div class="n">0 descuadres</div><div class="t">RUT, rol de avalúo y dirección validados al 100% antes de cada envío</div></div>
+          <div class="metrica"><div class="n">0 vencidos</div><div class="t">documentos fuera de plazo bloqueados automáticamente</div></div>
+        </div>
+        <p class="nota">Las validaciones de coincidencia son <b class="gold">Reglas de Oro ConCreces</b>, guardadas en la Constitución del sistema: irrenunciables, y ninguna actualización puede omitirlas.</p>
+      </div>`;
+    document.getElementById("pie-info").textContent = "Fin de la presentación";
+  }
+  document.getElementById("btnAnt").disabled = paso === 0;
+  document.getElementById("btnSig").disabled = fin;
+  document.getElementById("btnSig").textContent = paso === PASOS.length - 1 ? "Ver resumen →" : "Siguiente →";
+}
+function programar() {
+  clearTimeout(timer);
+  if (auto && paso < PASOS.length) timer = setTimeout(() => { paso++; render(); programar(); }, 7000);
+}
+function ir(i) { paso = i; auto = false; actualizarAuto(); render(); }
+function actualizarAuto() { document.getElementById("btnAuto").textContent = auto ? "⏸ Pausar" : "▶ Auto"; programar(); }
+document.getElementById("btnAnt").onclick = () => { if (paso > 0) paso--; auto = false; actualizarAuto(); render(); };
+document.getElementById("btnSig").onclick = () => { if (paso < PASOS.length) paso++; auto = false; actualizarAuto(); render(); };
+document.getElementById("btnAuto").onclick = () => { auto = !auto; actualizarAuto(); };
+render(); programar();
+</script>
+</body>
+</html>
