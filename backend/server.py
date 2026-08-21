@@ -9246,6 +9246,11 @@ def _aprobacion_html(payload):
         </div>"""
     mailto = (f"mailto:{contacto}?subject=" +
               f"Deseo continuar con el proceso de escrituración — {nombre}".replace(" ", "%20"))
+    confirm_url = (payload.get("confirm_url") or "").strip()
+    cta_href = confirm_url or mailto
+    cta_nota = ("Al presionar el bot&oacute;n, su confirmaci&oacute;n quedar&aacute; registrada autom&aacute;ticamente y su ejecutivo ser&aacute; notificado de inmediato."
+                if confirm_url else
+                "Al presionar el bot&oacute;n se abrir&aacute; un correo dirigido a nuestro equipo para coordinar los siguientes pasos.")
     return f"""<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -9281,10 +9286,10 @@ def _aprobacion_html(payload):
           {payload.get("links_html", "")}
         </td></tr>
         <tr><td class="cm-cta-zone" style="padding:6px 32px 30px;text-align:center">
-          <a class="cm-cta" href="{mailto}" style="display:inline-block;background:#111318;color:#ffffff;
+          <a class="cm-cta" href="{cta_href}" style="display:inline-block;background:#111318;color:#ffffff;
              font-size:16px;font-weight:700;letter-spacing:1px;text-decoration:none;
              padding:16px 38px;text-align:center">{boton} &nbsp;&#8594;</a>
-          <p style="margin:16px 0 0;color:#8a93a3;font-size:12px">Al presionar el bot&oacute;n se abrir&aacute; un correo dirigido a nuestro equipo para coordinar los siguientes pasos.</p>
+          <p style="margin:16px 0 0;color:#8a93a3;font-size:12px">{cta_nota}</p>
         </td></tr>
         <tr><td class="cm-footer" style="background:#f4f5f7;border-top:1px solid #e2e4e9;padding:20px 32px">
           <p style="margin:0;color:#2b3245;font-size:14px"><b>Central Mutuos</b></p>
@@ -9357,6 +9362,25 @@ async def aprobacion_enviar(payload: dict):
             except Exception:
                 pass
         adjuntos.append({"filename": _nombre_cliente_pdf(p.name), "content_b64": _b64(raw)})
+    # BOTÓN 'DESEO CONTINUAR CON EL PROCESO DE ESCRITURACIÓN': link con token único
+    # que registra la confirmación en la carpeta y avisa al ejecutivo automáticamente
+    try:
+        folder_conf = None
+        toks_c = [t for t in re.split(r"\s+", nombre) if len(t) >= 3]
+        if toks_c:
+            folder_conf = await db.folders.find_one(
+                {"$and": [{"nombre": {"$regex": re.escape(t), "$options": "i"}} for t in toks_c[:2]]},
+                {"_id": 0, "id": 1, "nombre": 1})
+        tok_conf = uuid.uuid4().hex
+        base_pub = (os.environ.get("REACT_APP_BACKEND_URL") or os.environ.get("PUBLIC_BASE_URL") or "").strip().rstrip("/")
+        await db.escrituracion_confirmaciones.insert_one({
+            "token": tok_conf, "cliente": nombre, "rut": payload.get("rut", ""),
+            "folder_id": (folder_conf or {}).get("id", ""), "email_cliente": to,
+            "creado_en": now_iso(), "usado": False})
+        payload["confirm_url"] = f"{base_pub}/api/escrituracion/confirmar/{tok_conf}"
+        cuerpo = _aprobacion_html(payload)
+    except Exception as _e_conf:
+        logging.warning(f"Token de confirmación de escrituración no generado: {_e_conf}")
     res = await asyncio.to_thread(mail.send_mail, to, subject, cuerpo, adjuntos, "secundaria")
     if not res.get("success"):
         raise HTTPException(status_code=502, detail=res.get("error", "Error de envío"))

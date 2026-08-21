@@ -210,6 +210,99 @@ async def verificar_pin_maestro(payload: dict, request: Request):
     return {"ok": True}
 
 
+# ────────────────── CONFIRMACIÓN DE ESCRITURACIÓN (desde el correo de aprobación) ──────────────────
+
+def _pagina_confirm(titulo, mensaje, ok=True):
+    color = "#d4af37" if ok else "#fb7185"
+    icono = "&#10003;" if ok else "&#9888;"
+    return f"""<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>Central Mutuos</title></head>
+<body style="margin:0;background:#050505;font-family:Arial,Helvetica,sans-serif;color:#e8e3d3">
+<div style="max-width:560px;margin:8vh auto;padding:0 18px;text-align:center">
+  <div style="font-family:Georgia,serif;letter-spacing:6px;color:#d4af37;font-size:20px;margin-bottom:6px">CENTRAL MUTUOS</div>
+  <div style="color:#8a7a3a;font-size:10px;letter-spacing:4px;margin-bottom:36px">CON CRECES</div>
+  <div style="border:1px solid rgba(212,175,55,0.4);background:#0c0c0c;padding:38px 30px">
+    <div style="font-size:44px;color:{color};margin-bottom:14px">{icono}</div>
+    <h1 style="margin:0 0 14px;font-size:22px;color:{color}">{titulo}</h1>
+    <p style="margin:0;font-size:14.5px;line-height:1.8;color:#c9c4b4">{mensaje}</p>
+  </div>
+  <p style="margin-top:26px;font-size:11px;color:#6a6a6a">Especialistas en cr&eacute;ditos hipotecarios &middot; Ya puede cerrar esta ventana.</p>
+</div></body></html>"""
+
+
+@carpres.get("/escrituracion/confirmar/{token}")
+async def escrituracion_confirmar(token: str):
+    """Ruta PÚBLICA (link del correo de aprobación): registra la confirmación del
+    cliente en su carpeta y notifica automáticamente al ejecutivo asignado."""
+    from fastapi.responses import HTMLResponse
+    doc = await db.escrituracion_confirmaciones.find_one({"token": token})
+    if not doc:
+        return HTMLResponse(_pagina_confirm("Enlace no válido",
+                            "Este enlace de confirmaci&oacute;n no existe o ha expirado. "
+                            "Por favor cont&aacute;ctese con su ejecutivo.", ok=False), status_code=404)
+    nombre = doc.get("cliente") or "el cliente"
+    if doc.get("usado"):
+        fch = str(doc.get("confirmado_en") or "")[:16].replace("T", " ")
+        return HTMLResponse(_pagina_confirm("Confirmaci&oacute;n ya registrada",
+                            f"Su intenci&oacute;n de continuar con la escrituraci&oacute;n ya fue registrada el <b>{fch}</b> (UTC). "
+                            "Su ejecutivo ya fue notificado — no es necesario volver a confirmar."))
+    ahora = _now()
+    hora_cl = datetime.now(ZoneInfo("America/Santiago")).strftime("%d/%m/%Y %H:%M")
+    await db.escrituracion_confirmaciones.update_one(
+        {"token": token}, {"$set": {"usado": True, "confirmado_en": ahora}})
+    # Registrar en la carpeta del cliente (fecha y hora)
+    f = None
+    if doc.get("folder_id"):
+        f = await db.folders.find_one({"id": doc["folder_id"]})
+    if not f and nombre:
+        toks = [t for t in re.split(r"\s+", nombre) if len(t) >= 3]
+        if toks:
+            f = await db.folders.find_one(
+                {"$and": [{"nombre": {"$regex": re.escape(t), "$options": "i"}} for t in toks[:2]]})
+    n_carpeta = (f or {}).get("id") or doc.get("folder_id") or "sin carpeta asociada"
+    if f:
+        await db.folders.update_one({"id": f["id"]}, {"$set": {
+            "escrituracion_confirmada_at": ahora,
+            "escrituracion_confirmada_via": "boton_correo_aprobacion",
+            "escrituracion_confirmada_hora_cl": hora_cl}})
+    # Notificar automáticamente al ejecutivo asignado
+    destinos = []
+    if f:
+        eje = (f.get("ejecutivo_externo_email") or "").strip()
+        if eje and "@" in eje:
+            destinos.append(eje.lower())
+        for d in await _destinos_ejecutivo(f):
+            if d not in destinos:
+                destinos.append(d)
+    enviado_a = []
+    if destinos:
+        from server import _email_institucional
+        import email_service as mail
+        rut_txt = f" (RUT {doc.get('rut')})" if doc.get("rut") else ""
+        cuerpo = (
+            f"<p style='margin:0 0 12px'>El cliente <b>{nombre}</b>{rut_txt} "
+            f"<b>confirm&oacute; su intenci&oacute;n de avanzar con el proceso de escrituraci&oacute;n</b> "
+            f"presionando el bot&oacute;n de su correo de aprobaci&oacute;n.</p>"
+            f"<p style='margin:0 0 12px'>N&uacute;mero de carpeta: <b>{n_carpeta}</b><br>"
+            f"Fecha y hora de la confirmaci&oacute;n: <b>{hora_cl}</b> (hora de Chile)</p>"
+            f"<p style='margin:0 0 12px'>Por favor contacte al cliente para coordinar los siguientes pasos.</p>")
+        html = _email_institucional("Ejecutivo/a", cuerpo)
+        r = await asyncio.to_thread(mail.send_mail, ", ".join(destinos),
+                                    f"✅ Cliente confirma escrituración — {nombre}", html)
+        if r.get("success"):
+            enviado_a = destinos
+    await db.alertas.insert_one({"id": str(uuid.uuid4()), "tipo": "escrituracion_confirmada", "leida": False,
+                                 "cliente": nombre,
+                                 "mensaje": (f"🖋️ {nombre} CONFIRMÓ continuar con la escrituración (carpeta {n_carpeta}, {hora_cl})"
+                                             + (f" — ejecutivo notificado: {', '.join(enviado_a)}" if enviado_a
+                                                else " — ⚠️ SIN correo de ejecutivo asociado, contactar manualmente")),
+                                 "fecha": ahora})
+    return HTMLResponse(_pagina_confirm("&iexcl;Confirmaci&oacute;n registrada!",
+                        f"Gracias, <b>{nombre}</b>. Su intenci&oacute;n de continuar con el proceso de "
+                        f"escrituraci&oacute;n qued&oacute; registrada el <b>{hora_cl}</b> (hora de Chile). "
+                        "Su ejecutivo fue notificado y lo contactar&aacute; a la brevedad."))
+
+
 # ────────────────── 3) WIDGET 'CORREOS DE SOLICITUD - HOY' ──────────────────
 
 def _docs_correo(it):

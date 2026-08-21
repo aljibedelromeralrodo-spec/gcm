@@ -124,7 +124,7 @@ export default function ProtectorPantalla({ user }) {
         <div style={{ fontFamily: "'Playfair Display', serif", fontSize: "1.3rem", letterSpacing: 6,
           background: "linear-gradient(135deg,#BF953F,#FCF6BA,#B38728,#FBF5B7,#AA771C)",
           WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-          CENTRAL MUTUOS</div>
+          Central Mutuos</div>
         <div style={{ color: "#8a7a3a", fontSize: "0.6rem", fontFamily: "monospace", letterSpacing: 4, marginTop: 6 }}>
           SISTEMA PROTEGIDO · SESIÓN DE ADMINISTRADOR EN PAUSA</div>
       </div>

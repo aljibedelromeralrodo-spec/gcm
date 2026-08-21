@@ -1673,3 +1673,10 @@ Constitución VERSION 19 (nuevas reglas #55, #56, #57).
 - Nota: simulaciones de prueba _test_marker='e1test' fueron eliminadas tras el testing.
 - precalificacion_aprobada se guarda como STRING ('True'/'False') en db.simulaciones — siempre coercionar.
 - Hot reload del backend a veces se cuelga: usar sudo supervisorctl restart backend.
+
+## 2026-06 — Botón de confirmación de escrituración + corrección nombre protector
+- Correo de aprobación al cliente: el botón 'DESEO CONTINUAR CON EL PROCESO DE ESCRITURACIÓN' ahora apunta a /api/escrituracion/confirmar/{token} (público, en auth.py PUBLIC_PREFIXES). En preview (confirm:false) mantiene mailto.
+- Al presionar: registra escrituracion_confirmada_at/hora_cl en la carpeta, marca token usado (idempotente), envía correo automático al ejecutivo (ejecutivo_externo_email → source_email → email_ejecutivo) con nombre del cliente + n° carpeta + fecha/hora, y crea alerta. Página HTML de confirmación negro/dorado.
+- Token se genera en aprobacion_enviar (server.py, confirm=true) y se guarda en db.escrituracion_confirmaciones.
+- CORRECCIÓN (pedido del usuario): el protector de pantalla debe decir EXACTAMENTE 'Central Mutuos' (no CENTRAL MUTUOS ni otro nombre). NO VOLVER A CAMBIARLO.
+- Testeado: ruta pública 200 sin auth, idempotencia, 404 token inválido, alerta y registro en carpeta OK, preview intacto. Sin correos reales enviados.
