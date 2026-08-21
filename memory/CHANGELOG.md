@@ -1735,3 +1735,31 @@ Constitución VERSION 19 (nuevas reglas #55, #56, #57).
    Estado visible en header ("Hablando... · di «para» para detener" / "En pausa · di «continúa»...").
    Prompt del backend reforzado: respuestas máx 2 frases por defecto.
 NOTA: hot-reload del backend se cuelga (conocido) → sudo supervisorctl restart backend tras editar.
+
+## 2026-06 (fork, parte 2) — Comandos de voz Martín + MÓDULO VICTORIA ConCreces
+6. MARTÍN — comandos de interrupción implementados y testeados (iteration_53 frontend 100%).
+7. MÓDULO VICTORIA — FLUJO CONCRECES (manual_concreces.py + ManualConcreces.js, montado en
+   AdministracionModule panel victoria). Basado en el MANUAL DE PROCEDIMIENTO CRÉDITO HIPOTECARIO
+   (Nov 2024, Victoria Vilches) subido por el usuario:
+   - 10 REGLAS DE ORO CONCRECES sembradas AUTOMÁTICAMENTE en la constitución (db.dashai_eventos,
+     etiqueta "Regla de Oro ConCreces", norma_clave ORO_CONCRECES_1..10, inviolable=True, seed en startup).
+   - Flujo guiado 6 pasos con banner "SIGUIENTE PASO" (Victoria no debe recordar nada):
+     1) Checklist ANEXO I (dependiente/independiente) con AUTODETECCIÓN de docs por regex sobre
+        folder.archivos (badge AUTO); permanencia definitiva solo exigible si politica.extranjero=true.
+     2) Antecedentes de compra (8 campos) con autocompletado desde la bóveda (compromisos/perfil).
+     3) Política de crédito (dividendo/renta ≤30%, CF ≤50%, ≤80% menor venta/tasación, ≥UF700,
+        plazo ≤30/40 exc., extranjero→permanencia, >65→aval) + Resolución
+        aprobado/reparado/rechazado con cartas (Carta de Aprobación / Preliminar / mail respaldo);
+        BLOQUEA por Regla de Oro 1 si checklist incompleto (403).
+     4) Formularios cliente ANEXO IV (9). 5) GOP: sin pago NO escriturar (excepción Gerardo Barrera).
+     6) Documento de Revisión HTML (GET /api/concreces/flujo/{fid}/revision) → Victoria valida
+        (checkbox firma) → POST /enviar {confirmado:true} exige TODAS las Reglas de Oro →
+        registra en db.concreces_estado + db.concreces_cargas + folder.concreces_enviado.
+        Reparos de la administradora + subsanación (Oro 9).
+   - Endpoints: GET/PUT /api/concreces/flujo/{fid}, POST resolucion|enviar|reparo|subsanar/{rid},
+     GET /api/concreces/carpetas, GET /api/concreces/reglas-oro. Roles: admin/maestro/administracion.
+   - ENVÍO A CONCRECES ES REGISTRO INTERNO (bóveda db.concreces_estado) — NO hay API externa real.
+   - Testing: iteration_53 backend 10/10 + frontend 100%. Datos de prueba limpiados.
+   NOTA: usuario victoria tiene clave provisoria first_login=true (ver test_credentials.md).
+PENDIENTE PRÓXIMA SESIÓN: Martín Proactivo (aviso hablado al llegar aprobación MESA con chat cerrado,
+polling GET /api/central/proactive existe vacío en server.py:1526) — usuario lo pidió y quedó en cola.

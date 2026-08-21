@@ -1,0 +1,34 @@
+{
+  "summary": "Iteración 53 — Testing completo Módulo Victoria ConCreces + comandos voz Martín. Backend: 10/10 pytest OK (regresión reglas-oro=10, flujo e2e con carpeta TEST_ (enviar+reparo+subsanar), validación política positiva y negativa, guardias REGLA DE ORO 1 y REGLA DE ORO 10). Frontend: login administrador/141617575 OK, WelcomeTour y Briefing cerrados, panel-victoria → modulo-victoria-concreces visible, selector con 145 carpetas, banner concreces-siguiente OK, 6 pasos (concreces-paso-1..6) presentes, 7 checkboxes ANEXO I, botón Ver Reglas de Oro despliega 10 reglas, modal Documento de Revisión con iframe carga OK, enviar-btn correctamente deshabilitado (validaciones no pasan para carpeta real). central-status muestra 'Hablando... · di «para» para detener' cuando el chat está en modo speaking. Datos de prueba (TEST-CONCRECES-*) creados y eliminados por fixtures — cleanup verificado en Mongo (0 residuos). Necesario reiniciar backend una vez al inicio (hot-reload colgado como advertido en contexto).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Administración → Victoria ConCreces (selector de carpetas)", "issues": ["Warning React: '<span>' cannot be a child of '<option>' (hydration warning). En /app/frontend/src/components/ManualConcreces.js línea 98 el <option> renderiza contenido envuelto en span dinámico (por instrumentación x-ve-dynamic). Puede causar hydration mismatch en producción; conviene usar texto plano dentro del <option>."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter53_concreces.py",
+    "/app/test_reports/pytest/iter53_results.xml"
+  ],
+  "action_items": [
+    "(Menor) Arreglar warning React '<span> child of <option>' en ManualConcreces.js:98 — usar {c.nombre} directo sin wrapper, o filtrar por instrumentación.",
+    "(Enhancement, opcional) La Regla de Oro 2 exige permanencia definitiva SOLO para extranjeros, pero el checklist ANEXO I la lista siempre como obligatoria para todos: al llenar el flujo hay que marcar permanencia=true aun para chilenos para que 'listo_para_enviar' sea true. Considerar condicionar visibilidad/obligatoriedad al flag politica.extranjero=true."
+  ],
+  "critical_code_review_comments": [
+    "manual_concreces.py — checklist ANEXO I no distingue extranjero vs chileno: 'permanencia' aparece como item obligatorio siempre, contradiciendo el propio comentario '(si aplica)'. Sugerencia: en _estado() marcar auto=True cuando politica.extranjero!=true, o excluir el item del cálculo de 'completo'.",
+    "manual_concreces.py — endpoint /flujo/{fid}/enviar exige resolucion=='aprobado' (Oro 10 OK), pero la validación 'listo_para_enviar' en /revision NO incluye la regla de escriturar (filter 'escriturar not in v[regla]'), lo que puede confundir: la UI muestra listo_para_enviar aunque el envío luego falle si resolución != aprobado. Consolidar criterio.",
+    "manual_concreces.py — falta índice único en concreces_flujo.folder_id; ante race conditions podrían crearse duplicados (upsert atómico recomendado en _get_flujo)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter53_concreces.py (nuevo)"
+  ],
+  "success_rate": {"backend": "100% (10/10)", "frontend": "100%"},
+  "test_credentials": "administrador/141617575 vía POST /api/auth/login (token Bearer 12h) — OK",
+  "seed_data_creation": "El fixture crea carpetas TEST-CONCRECES-* + TEST-CONC-EMPTY-* + TEST-CONC-POL-* con archivos ficticios en db.folders, y las elimina al terminar. También limpia db.concreces_flujo/concreces_estado/concreces_cargas asociadas. Cleanup verificado (0 documentos TEST en Mongo tras el run). NO se tocaron carpetas de clientes reales.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "test_iter53_concreces.py cubre backend ConCreces end-to-end. Cuidado: el checklist 'permanencia' debe marcarse manualmente incluso para carpeta chilena para que listo_para_enviar sea true — es un detalle del manual/impl que hay que replicar en cualquier flujo completo. En UI, seleccionar cualquier carpeta real hará que enviar-btn quede deshabilitado incluso marcando valido-check (validaciones fallan) — comportamiento esperado y seguro. Si el backend se cuelga: sudo supervisorctl restart backend && sleep 18. pytest.ini fuerza -n 2; usar -n 0 para tests con fixtures compartidas de module scope. Los comandos de voz reales (SpeechRecognition) requieren micrófono real — solo verificamos el texto central-status.",
+  "rca of the issue": "N/A — sin issues bloqueantes. Warnings menores documentados."
+}

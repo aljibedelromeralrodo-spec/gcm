@@ -7,6 +7,7 @@ import DestinatariosCorreo from "../components/DestinatariosCorreo";
 import EspejoHibrido from "../components/EspejoHibrido";
 import DocumentoViewer from "../components/DocumentoViewer";
 import TrackerPasos from "../components/TrackerPasos";
+import ManualConcreces from "../components/ManualConcreces";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 const PILL = { validado: "#22c55e", observado: "#f59e0b", pendiente: "#94a3b8", expulsado: "#ef4444" };
@@ -375,6 +376,8 @@ export default function AdministracionModule({ user }) {
 
       {/* FLUJOS USADA/INMOBILIARIA solo en el panel de Victoria (Regla #37) */}
       {panel === "victoria" && <FlujosVictoria />}
+      {/* 📘 MÓDULO VICTORIA — Flujo guiado ConCreces según Manual de Procedimiento */}
+      {panel === "victoria" && <ManualConcreces />}
 
       {cartera && (
         <div data-testid="carpetas-mes-strip" style={{ marginTop: 10, display: "flex", gap: 16, flexWrap: "wrap", color: "var(--text-secondary)", fontSize: "0.72rem" }}>

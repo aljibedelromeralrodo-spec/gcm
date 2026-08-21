@@ -629,6 +629,11 @@ async def startup():
     asyncio.create_task(_task_blindada(_periodic_mesa_loop, "mesa"))
     # DESACTIVADO (normativa un-solo-correo): reporte 10AM consolidado en el resumen 8AM
     # asyncio.create_task(_task_blindada(_daily_report_loop, "reporte_diario"))
+    try:
+        import manual_concreces as _mc_seed
+        asyncio.create_task(_mc_seed.seed_reglas_oro())
+    except Exception as _e:
+        logging.warning(f"seed reglas oro concreces: {_e}")
     import resumen_diario as _resdia
     asyncio.create_task(_task_blindada(_resdia.resumen_diario_loop, "resumen_diario_8am"))
     import espejo_aprendizaje as _espia
@@ -14819,6 +14824,8 @@ import resumen_diario as _resdia_mod
 api.include_router(_resdia_mod.resdia)
 import espejo_aprendizaje as _espia_mod
 api.include_router(_espia_mod.espia)
+import manual_concreces as _mconc_mod
+api.include_router(_mconc_mod.mconc)
 import auditoria_flujos as _audf_mod
 api.include_router(_audf_mod.audf)
 
