@@ -1121,3 +1121,15 @@ actual; todo lo demás permanece intacto.
   período (find sin limit). Filtro por fecha_caso aplica a TODAS las capas (capa 2 incluida).
   Modelo guarda `periodo` {desde, hasta, regla}; PanelEspejo muestra "ventana móvil 3 meses".
   Verificado: v3 con periodo 2026-05-21→2026-08-21, predicción OK.
+- APRENDIZAJE POR HILOS DE CORREO (corrección clave del usuario): el Espejo ya NO depende de
+  vincular carpetas. Nueva fuente `capa1_hilos` en espejo_aprendizaje.py (_leer_hilos_mesa):
+  lee el buzón gerardo.ext@ (carpeta [Gmail]/Todos) de los últimos 3 meses de forma LIVIANA
+  (headers + BODYSTRUCTURE para nombres de adjuntos SIN descargarlos + 2KB del texto de la
+  respuesta — evita el OVERQUOTA de Gmail que bloqueó el primer intento con RFC822 completos),
+  empareja envío→respuesta por asunto normalizado (_asunto_norm quita Re:/RV:) y clasifica el
+  veredicto por regex (aprobad/viable vs rechaz/no cumple/no califica/pasado en carga/
+  sobreendeudado/excede). Features de adjuntos: DOC_PATRONES (liquidación, cédula, AFP, CMF,
+  boletas, impuestos, contrato, simulación, subsidio) + buckets de cantidad de adjuntos.
+  _decodifica_snippet elige plano/quoted-printable/base64 por legibilidad.
+  RESULTADO REAL: 109 hilos (10 aprobados · 99 rechazados) + 17 sims = 126 casos; pesos ya
+  diferenciados (adjuntos_7+ y contrato de trabajo +0.76 a favor). Re-entrena solo cada día.

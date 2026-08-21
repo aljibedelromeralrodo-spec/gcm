@@ -16,7 +16,7 @@ import math
 import re
 import uuid
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, HTTPException, Request
 from database import db
@@ -107,7 +107,28 @@ ETIQUETAS = {"monto<1500UF": "Monto solicitado bajo 1.500 UF", "monto1500-3000UF
              "plazo<=15a": "Plazo hasta 15 años", "plazo16-25a": "Plazo 16 a 25 años", "plazo>25a": "Plazo sobre 25 años",
              "ltv<=70": "Financiamiento ≤70% (LTV)", "ltv71-80": "Financiamiento 71–80% (LTV)", "ltv>80": "Financiamiento >80% (LTV)",
              "carga<=25%": "Carga financiera ≤25%", "carga26-35%": "Carga financiera 26–35%", "carga>35%": "Carga financiera >35%",
-             "con_codeudor": "Con codeudor", "sin_codeudor": "Sin codeudor"}
+             "con_codeudor": "Con codeudor", "sin_codeudor": "Sin codeudor",
+             "adjuntos_1-3": "Envío con 1–3 adjuntos", "adjuntos_4-6": "Envío con 4–6 adjuntos",
+             "adjuntos_7+": "Envío con 7 o más adjuntos"}
+
+# tipos de documento detectables en los nombres de archivos adjuntos enviados a mesa
+DOC_PATRONES = [("adj:Liquidaciones de sueldo", r"liquidaci"), ("adj:Cédula de identidad", r"cedula|c%c3%a9dula|carnet|ci_"),
+                ("adj:Cotizaciones AFP", r"afp|cotizaci|previsional"), ("adj:Informe CMF", r"cmf|deuda"),
+                ("adj:Boletas de honorarios", r"boleta|honorario"), ("adj:Declaración de impuestos", r"impuesto|renta|tributar|f22"),
+                ("adj:Contrato de trabajo", r"contrato|vigencia"), ("adj:Simulación/Precalificación", r"simulaci|precalific"),
+                ("adj:Certificado de subsidio", r"subsidio|serviu|ds19|ds49|ds1")]
+
+
+def _features_adjuntos(nombres):
+    fts = set()
+    texto = " ".join(n.lower() for n in nombres)
+    for feat, pat in DOC_PATRONES:
+        if re.search(pat, texto):
+            fts.add(feat)
+    n = len(nombres)
+    if n:
+        fts.add("adjuntos_1-3" if n <= 3 else "adjuntos_4-6" if n <= 6 else "adjuntos_7+")
+    return sorted(fts)
 
 
 def _etiqueta(f):
@@ -115,7 +136,170 @@ def _etiqueta(f):
         return f"Documento presente: {f[7:]}"
     if f.startswith("doc_falta:"):
         return f"Documento faltante: {f[10:]}"
+    if f.startswith("adj:"):
+        return f"Adjunto enviado a mesa: {f[4:]}"
     return ETIQUETAS.get(f, f)
+
+
+# ── HILOS CON MESA: envío con adjuntos → respuesta de mesa (sin carpetas) ──
+RE_VEREDICTO_OK = re.compile(r"\bpre.?aprobad|\baprobad[oa]|\bviable\b|\bprocede\b", re.I)
+RE_VEREDICTO_NO = re.compile(r"\brechaz|\bno\s+cumple|\bno\s+aprobad|\bdeclinad|\bno\s+califica"
+                             r"|pasad[oa]\s+en\s+carga|sobre.?endeud|excede\s+(la\s+)?(carga|renta)", re.I)
+RE_LIMPIA_ASUNTO = re.compile(r"^\s*((re|rv|fw|fwd|reenv\w*)\s*:\s*)+", re.I)
+
+
+def _asunto_norm(s):
+    s = RE_LIMPIA_ASUNTO.sub("", s or "").lower()
+    return re.sub(r"[^a-z0-9áéíóúñ]+", " ", s).strip()[:80]
+
+
+def _fetch_tuplas(m, ids, query, chunk=60):
+    out = []
+    for k in range(0, len(ids), chunk):
+        sub = b",".join(ids[k:k + chunk])
+        try:
+            _, data = m.fetch(sub, query)
+        except Exception:
+            break
+        out.extend(t for t in data if isinstance(t, tuple) and t[1])
+    return out
+
+
+def _bodystructures(m, ids, chunk=100):
+    """BODYSTRUCTURE por mensaje (sin descargar adjuntos): seq → nombres de archivo."""
+    res = {}
+    for k in range(0, len(ids), chunk):
+        sub = b",".join(ids[k:k + chunk])
+        try:
+            _, data = m.fetch(sub, "(BODYSTRUCTURE)")
+        except Exception:
+            break
+        for item in data:
+            s = ((item[0] + b" " + item[1]) if isinstance(item, tuple) else item or b"").decode(errors="ignore")
+            mm = re.match(r"(\d+)\s", s)
+            if not mm:
+                continue
+            nombres = re.findall(r'"(?:name|filename)\*?"\s+"([^"]{3,120})"', s, re.I)
+            res[mm.group(1)] = [_dec_nombre(n) for n in nombres if "." in n or "=?" in n]
+    return res
+
+
+def _dec_nombre(n):
+    try:
+        import email_service as mail
+        return mail._dec(n)
+    except Exception:
+        return n
+
+
+def _decodifica_snippet(b):
+    """Elige la decodificación (plano / quoted-printable / base64) con más texto legible."""
+    import base64 as b64
+    import quopri
+    candidatos = [b or b""]
+    try:
+        candidatos.append(quopri.decodestring(b))
+    except Exception:
+        pass
+    try:
+        limpio = re.sub(rb"\s", b"", b or b"")
+        candidatos.append(b64.b64decode(limpio + b"=" * (-len(limpio) % 4)))
+    except Exception:
+        pass
+    mejor, score = "", -1
+    for c in candidatos:
+        t = c.decode("utf-8", errors="ignore")
+        s = sum(ch.isalpha() or ch.isspace() for ch in t[:400])
+        if s > score:
+            mejor, score = t, s
+    return mejor
+
+
+def _leer_hilos_mesa(dias=92):
+    """Lee el buzón completo (3 meses) de forma LIVIANA (sin descargar adjuntos):
+    encabezados + nombres de adjuntos (BODYSTRUCTURE) + 2KB del texto de la
+    respuesta de mesa. Empareja envío → veredicto por asunto normalizado."""
+    import email as email_lib
+    import email_service as mail
+    import os as _os
+    mesa = _os.environ.get("MESA_EMAIL", "aprobaciones@centralmutuos.cl")
+    if not mail.configured():
+        return []
+    acc = next((a for a in mail.ACCOUNTS if a["rol"] == "secundaria"), mail.ACCOUNTS[0])
+    m = mail._connect(acc)
+    try:
+        folder = mail._all_mail_folder(m)
+        m.select(f'"{folder}"' if folder else "INBOX", readonly=True)
+        desde = (datetime.now(timezone.utc) - timedelta(days=dias)).strftime("%d-%b-%Y")
+
+        def _ids(criterio):
+            try:
+                _, data = m.search(None, criterio)
+                return (data[0] or b"").split()[-600:]
+            except Exception:
+                return []
+
+        ids_env = _ids(f'(SINCE "{desde}" TO "{mesa}")')
+        ids_res = _ids(f'(SINCE "{desde}" FROM "{mesa}")')
+
+        # ENVIADOS: asunto + nombres de adjuntos (sin bajar contenido)
+        enviados = {}
+        heads = _fetch_tuplas(m, ids_env, "(BODY.PEEK[HEADER.FIELDS (SUBJECT DATE)])")
+        estructuras = _bodystructures(m, ids_env)
+        for idx, t in enumerate(heads):
+            h = email_lib.message_from_bytes(t[1])
+            subject = mail._dec(h.get("Subject"))
+            clave = _asunto_norm(subject)
+            if not clave:
+                continue
+            seq = (re.match(rb"(\d+)\s", t[0]) or [None, b""])[1].decode() if re.match(rb"(\d+)\s", t[0]) else \
+                (ids_env[idx].decode() if idx < len(ids_env) else "")
+            adjuntos = estructuras.get(seq) or []
+            prev = enviados.get(clave)
+            if not prev or len(adjuntos) > len(prev["adjuntos"]):
+                enviados[clave] = {"subject": subject, "adjuntos": adjuntos, "fecha": mail._dec(h.get("Date"))}
+
+        # RESPUESTAS DE MESA: asunto + 2KB del texto para detectar veredicto
+        respuestas = []
+        heads_r = _fetch_tuplas(m, ids_res, "(BODY.PEEK[HEADER.FIELDS (SUBJECT DATE)])")
+        cuerpos = _fetch_tuplas(m, ids_res, "(BODY.PEEK[1]<0.2048>)")
+        for idx, t in enumerate(heads_r):
+            h = email_lib.message_from_bytes(t[1])
+            subject = mail._dec(h.get("Subject"))
+            clave = _asunto_norm(subject)
+            if not clave:
+                continue
+            snippet = _decodifica_snippet(cuerpos[idx][1]) if idx < len(cuerpos) else ""
+            fecha_raw = h.get("Date")
+            try:
+                from email.utils import parsedate_to_datetime
+                fecha = parsedate_to_datetime(fecha_raw).isoformat()
+            except Exception:
+                fecha = _now()
+            respuestas.append({"clave": clave, "subject": subject, "texto": f"{subject} {snippet}", "fecha": fecha})
+
+        casos = []
+        for resp in respuestas:
+            if RE_VEREDICTO_NO.search(resp["texto"]):
+                resultado = "reprobado"
+            elif RE_VEREDICTO_OK.search(resp["texto"]):
+                resultado = "aprobado"
+            else:
+                continue
+            envio = enviados.get(resp["clave"]) or next(
+                (v for k, v in enviados.items() if k and (k in resp["clave"] or resp["clave"] in k)), None)
+            if not envio or not envio["adjuntos"]:
+                continue
+            casos.append({"clave": resp["clave"], "resultado": resultado, "fecha_caso": resp["fecha"],
+                          "features": _features_adjuntos(envio["adjuntos"]),
+                          "adjuntos": envio["adjuntos"][:15], "asunto": envio["subject"][:120],
+                          "respuesta_asunto": resp["subject"][:120]})
+        return casos
+    finally:
+        try:
+            m.logout()
+        except Exception:
+            pass
 
 
 # ── Construcción de casos CAPA 1 (ventana móvil de 3 meses, TODOS los casos) ──
@@ -153,6 +337,20 @@ async def _reconstruir_casos_capa1():
                       "features": sorted(set(fts)), "razones": [], "rut": _rut8(f.get("rut"))})
     if casos:
         await db.espejo_casos.insert_many(casos)
+    # HILOS CON MESA: envío con adjuntos → respuesta con veredicto (fuente principal)
+    try:
+        hilos = await asyncio.to_thread(_leer_hilos_mesa, 92)
+    except Exception as e:
+        logging.warning(f"espejo hilos mesa: {e}")
+        hilos = []
+    if hilos:
+        docs = [{"id": str(uuid.uuid4()), "origen": "capa1_hilos",
+                 "fecha_caso": h["fecha_caso"], "resultado": h["resultado"],
+                 "features": h["features"], "razones": [],
+                 "adjuntos": h["adjuntos"], "asunto": h["asunto"],
+                 "respuesta_asunto": h["respuesta_asunto"], "rut": ""} for h in hilos]
+        await db.espejo_casos.insert_many(docs)
+        casos += docs
     return len(casos)
 
 
