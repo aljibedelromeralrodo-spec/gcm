@@ -1814,3 +1814,11 @@ polling GET /api/central/proactive existe vacío en server.py:1526) — usuario 
       quiénes somos+alianza, productos+plazos, comparativo+proceso paso a paso, FAQ+contacto; pie CMF
       en todas). Generador: /app/tests/gen_pdf_inmobiliarias.py. Verificado 5/5 sin defectos.
     - Ambos enviados por correo a gerardo.ext@centralmutuos.cl (SMTP 250).
+14. Template inmobiliarias VERSIÓN CORPORATIVA SOBRIA (solo por esta vez, colores dorados aún no
+    autorizados): /app/frontend/public/template-inmobiliarias-corporativo.html — fondo blanco,
+    paleta corporativa de ambas empresas (CM: petróleo #2e4a5a + turquesa #43b5c3; ConCreces:
+    navy #0e1c30 + azul #2f80ed), logos oficiales de los sitios web hosteados en
+    /logo-centralmutuos-horizontal.png y /logo-concreces.png (SVG convertido con cairosvg).
+    Enviado por correo (SMTP 250). DECISIONES DEL USUARIO: template brokers original (dorado) se
+    MANTIENE como plantilla oficial para brokers; el estilo "bloques" del template inmobiliarias
+    dorado le gustó.
