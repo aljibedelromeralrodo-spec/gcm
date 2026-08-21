@@ -42,7 +42,7 @@ export default function EnviarResultadoEjecutivo({ folder }) {
           ? { background: "rgba(16,217,142,0.15)", border: "1px solid #10d98e", color: "#10d98e", fontWeight: 700 }
           : { background: "rgba(225,29,72,0.15)", border: "1px solid #e11d48", color: "#fb7185", fontWeight: 700 }}>
         <i className={`fa ${aprobado ? "fa-check-circle" : "fa-times-circle"}`}></i>{" "}
-        {aprobado ? "Enviar Aprobación al Ejecutivo" : "Enviar Rechazo al Ejecutivo"}
+        {aprobado ? "Enviar Aprobación al Ejecutivo" : "Informar Rechazo"}
         {info.ya_enviado_at ? " ✓" : ""}
       </button>
 

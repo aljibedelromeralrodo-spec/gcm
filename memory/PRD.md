@@ -1025,3 +1025,24 @@ el agente DEBE mostrar un resumen del plan de cambios y solicitar confirmación 
 administrador antes de ejecutar. Ningún cambio estructural, de diseño o de funcionalidad existente
 puede realizarse sin aprobación previa. Solo se ejecuta lo explícitamente autorizado en el prompt
 actual; todo lo demás permanece intacto.
+
+## Fork 2026-06 (Visualizador Cognitivo) — HECHO
+- REEMPLAZO DEL PROTECTOR DE PANTALLA (orden explícita del usuario): ahora es el
+  VISUALIZADOR COGNITIVO EN VIVO (`/app/frontend/src/components/VisualizadorCognitivo.js`):
+  red neuronal con nodos reales — Cerebro Normativo al centro (reglas + calibración),
+  ejecutivos, 36 carpetas activas (morado espera / verde aprobado / rojo rechazo-alerta)
+  y últimos 14 correos procesados. Conexiones doradas con pulsos de luz cuando hay
+  actividad real; nacimiento de nodos al llegar correos nuevos; vibración al cambiar resultado.
+- Backend nuevo: `/app/backend/visualizador.py` → GET /api/visualizador/estado (solo admin/maestro).
+- Panel embebido en el dashboard admin (DashboardModule.js, tras ProactiveAlertsPanel) con
+  botón "PANTALLA COMPLETA" (data-testid="visualizador-expandir").
+- ProtectorPantalla.js conserva TODA la lógica: 5 min inactividad o doble espacio → fullscreen;
+  PIN maestro (0586) aparece SOLO al presionar una tecla; desbloqueo verificado E2E.
+  Texto "Central Mutuos" arriba con brillo metálico periódico (cm-brillo-metalico).
+- Normativa PALETA OFICIAL actualizada en código (NORMATIVAS_FIJAS) y en DB
+  (dashai_eventos + backup config) describiendo el nuevo diseño aprobado.
+- NOTA: se descartó la iteración de la hélice ADN horizontal (el usuario cambió el concepto).
+  El módulo antiguo HeliceADN.js ("ADN DEL SISTEMA — VISUALIZACIÓN DEL ALGORITMO") NO fue
+  tocado y sigue auto-reproduciéndose cuando el algoritmo procesa (módulo existente protegido).
+- Incidente resuelto: recarga de uvicorn colgada (login sin respuesta) → sudo supervisorctl restart backend.
+- Verificado por screenshot E2E: panel en dashboard, expansión, protector fullscreen, PIN y desbloqueo.

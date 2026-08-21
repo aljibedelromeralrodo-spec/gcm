@@ -5,6 +5,7 @@ import ImportarCorreo from "../components/ImportarCorreo";
 import ConversorUF from "../components/ConversorUF";
 import CalendarioCarpetas from "../components/CalendarioCarpetas";
 import EnviarResultadoEjecutivo from "../components/EnviarResultadoEjecutivo";
+import PanelEstadoCarpeta from "../components/PanelEstadoCarpeta";
 import CompromisoEditor from "./CompromisoEditor";
 import { secureGet } from "../utils/secureStore";
 
@@ -2058,6 +2059,8 @@ export default function ClientesModule({ onNavigate }) {
               </button>
             </div>
           </div>
+
+          <PanelEstadoCarpeta folder={currentFolder} />
 
           {showCompromiso && currentFolder && (
             <CompromisoEditor folder={currentFolder} onClose={() => setShowCompromiso(false)} />

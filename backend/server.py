@@ -374,6 +374,12 @@ NORMATIVAS_FIJAS = [
     ("DISEÑO CORREOS", "NORMATIVA FIJA — DISEÑO CORREOS: fondo blanco, Arial, encabezados grises, datos clave en negrita. Firma siempre 'Central Mutuos'. Nunca mencionar 'Concreces'."),
     ("DESTINATARIOS ESTUDIO", "NORMATIVA FIJA — DESTINATARIOS ESTUDIO DE TÍTULO: cascada inmobiliaria > vendedor > correo de origen de la solicitud."),
     ("CC", "NORMATIVA FIJA — CC: solo en correos entrantes procesados por el sistema. Nunca en salientes, bajo ninguna circunstancia."),
+    ("REGLA 3 DOCUMENTOS", "NORMATIVA FIJA — APERTURA DE CARPETAS: prohibido crear carpeta de solicitud de crédito sin al menos 3 de: Carnet de Identidad, Certificado AFP, Informe CMF, Boletas de Honorarios, Liquidación de Sueldo o Declaración de Impuestos. Sin excepciones por ningún canal, agente o proceso automatizado (Regla Constitucional #67)."),
+    ("MODULOS PROTEGIDOS", "NORMATIVA FIJA — MÓDULOS PROTEGIDOS: prohibido modificar, rediseñar o eliminar módulos existentes sin autorización expresa del administrador. Toda mejora se implementa SOLO AGREGANDO, con ediciones quirúrgicas mínimas."),
+    ("PALETA OFICIAL", "NORMATIVA FIJA — PALETA OFICIAL: negro profundo y dorado mate en todo el sistema. El nombre corporativo se escribe exactamente 'Central Mutuos'. El protector de pantalla fue reemplazado por el VISUALIZADOR COGNITIVO EN VIVO: panel en el dashboard del administrador (expandible a pantalla completa) que muestra el flujo real del sistema como cerebro vivo — carpetas, correos, ejecutivos y cerebro normativo como nodos; conexiones doradas que pulsan con actividad real; morado en espera, verde aprobado, rojo rechazo/alerta, fondo negro profundo. A los 5 minutos de inactividad o con doble espacio ocupa toda la pantalla; el PIN maestro aparece solo al presionar una tecla."),
+    ("GASTOS OPERACIONALES", "NORMATIVA FIJA — GASTOS OPERACIONALES: prohibido mencionar gastos operacionales en cualquier correo dirigido a clientes o ejecutivos (aprobación, rechazo, simulaciones). La simulación al cliente va solo con la primera hoja, sin gastos."),
+    ("PREVIEW OBLIGATORIO", "NORMATIVA FIJA — PREVIEW OBLIGATORIO: todo correo de aprobación o rechazo exige vista previa visible (texto + adjuntos) y confirmación explícita del usuario antes del envío. Nunca envío directo sin preview. Opera de forma local, sin consumo de IA."),
+    ("FUENTE VERDAD MESA", "REGLA CONSTITUCIONAL — FUENTE DE VERDAD DE MESA: el correo aprobaciones@centralmutuos.cl es el canal oficial de mesa; de ahí llegan aprobaciones, rechazos, cambios de tasas, plazos y criterios de evaluación. Es el corazón del sistema de aprendizaje y se monitorea de forma permanente y autónoma. Aprobación/rechazo actualiza la carpeta y activa los botones de envío al ejecutivo; cambios de tasa/plazo/criterio generan alerta al administrador, correo de notificación y marcan las carpetas activas como 'Simulación desactualizada'. Cada correo procesado queda registrado con fecha, hora, tipo y parámetros anteriores vs nuevos. Esta regla es PERMANENTE e INAMOVIBLE: ningún proceso del sistema puede modificarla ni ignorarla."),
 ]
 
 
@@ -638,6 +644,12 @@ async def startup():
     asyncio.create_task(_task_blindada(_hib.espejo_hibrido_loop, "espejo_hibrido"))
     import gestion_ejecutivos as _gest
     asyncio.create_task(_task_blindada(_gest.gestion_harvest_loop, "gestion_ejecutivos"))
+    # ⚖️ FUENTE DE VERDAD DE MESA (aprobaciones@centralmutuos.cl) — monitoreo permanente
+    import mesa_verdad as _mesav
+    asyncio.create_task(_task_blindada(_mesav.mesa_verdad_loop, "mesa_verdad"))
+    # 📪 Cierre automático de correos fallidos >24h (regla permanente, sin reintentos ni alertas)
+    import monitor_envios as _monenv
+    asyncio.create_task(_task_blindada(_monenv.cierre_fallidos_loop, "cierre_fallidos"))
     asyncio.create_task(_task_blindada(_malla.buzon_aprendizaje_loop, "buzon_aprendizaje"))
     import grid_dashai as _grid
     asyncio.create_task(_task_blindada(_grid.grid_loop, "grid_dashai_forzado"))
@@ -14692,6 +14704,12 @@ api.include_router(_calcarp_mod.calcarp)
 # 🗂️ Considerar/Descartar + Resultado al Ejecutivo + Widget 'Correos de Solicitud - Hoy'
 import carpetas_resultado as _carpres_mod
 api.include_router(_carpres_mod.carpres)
+import visualizador as _visual_mod
+api.include_router(_visual_mod.visual)
+
+# ⚖️ FUENTE DE VERDAD DE MESA — endpoints de estado/log del monitor
+import mesa_verdad as _mesav_router
+api.include_router(_mesav_router.mesav)
 
 # 📦 IMPORTADOR .MBOX de gran tamaño (streaming por fragmentos)
 import mbox_import as _mbox_mod

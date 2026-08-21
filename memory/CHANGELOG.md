@@ -1696,3 +1696,19 @@ Constitución VERSION 19 (nuevas reglas #55, #56, #57).
 - Hélice VERTICAL low-poly centrada arriba, estructura DORADA conquistando desde abajo (parte superior queda azul), fondo AZUL PROFUNDO con luz superior (como la foto), destellos titilantes alrededor.
 - Logo circular oficial LEVITA (no gira) AL CENTRO de la pantalla, integrado en la hélice (top 50%). Aprobado por el usuario.
 - NO volver a cambiar: mano prohibida, logo levita, estructura dorada, fondo azul.
+
+## 2026-06 — Fuente de Verdad de Mesa + Protector ADN real (DEFINITIVO)
+### Fuente de Verdad de Mesa (/app/backend/mesa_verdad.py)
+- Normativa #13 'FUENTE VERDAD MESA' sembrada en DashAI (inamovible). Canal oficial: aprobaciones@centralmutuos.cl (MESA_EMAIL en .env).
+- Loop autónomo cada 120s (mesa_verdad_loop en startup). Clasificación 100% LOCAL (regex, sin IA): aprobacion/rechazo/cambio_tasa/cambio_plazo/cambio_criterio.
+- Aprobación/rechazo → folder.resultado_mesa (PRIORIDAD sobre simulaciones en _resultado_folder) → activa botones de envío al ejecutivo.
+- Cambios estructurales → alerta crítica + correo al admin (MAIL2_USER) + carpetas activas marcadas simulacion_desactualizada (badge naranja en PanelEstadoCarpeta).
+- Log completo en db.mesa_verdad_log (fecha, hora_cl, tipo, parametros_anteriores vs nuevos).
+- ANTI-FALSO-POSITIVO: si el correo coincide con una carpeta de cliente, NUNCA se clasifica como cambio global (bug corregido: 143 carpetas marcadas por error fueron revertidas).
+- Endpoints: GET /api/mesa-verdad/estado, GET /api/mesa-verdad/log, POST /api/mesa-verdad/procesar-ahora (corre en background, el IMAP tarda minutos).
+### Protector de pantalla vFINAL (corrección del usuario)
+- Hélice de ADN REAL vertical a toda la pantalla, perspectiva 3D, dos cadenas entrelazadas + pares de bases horizontales como escalones.
+- Se construye nodo a nodo de abajo hacia arriba; cada nodo nace morado/azul y se convierte en dorado mate (~2.6s). Fondo NEGRO profundo (ya no azul).
+- Logo circular oficial aparece centrado con brillo suave SOLO cuando la cadena está formada.
+- Campo PIN maestro OCULTO: aparece solo al presionar cualquier tecla (hint 'PRESIONE CUALQUIER TECLA').
+- Verificado con capturas en fase media y fase completa. NO cambiar sin pedido explícito.

@@ -77,3 +77,28 @@ async def exigir_correo_ok(cliente: str):
         raise HTTPException(status_code=409, detail=(
             f"⛔ Regla de Oro #62: existe un correo FALLIDO asociado a {cliente} "
             f"(«{(pend.get('subject') or '')[:80]}»). Re-envíelo desde el Estado de Salida antes de completar el hito."))
+
+
+# ── CORRECCIÓN URGENTE (regla permanente): todo correo fallido con más de 24 horas
+#    se cierra automáticamente ('cerrado'): sin reintentos, alertas ni notificaciones.
+#    Solo se monitorean envíos posteriores a su fecha de cierre. ──
+async def cierre_automatico_fallidos():
+    limite = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+    r = await db.correos_fallidos.update_many(
+        {"estado": "fallido", "fecha": {"$lt": limite}},
+        {"$set": {"estado": "cerrado", "cerrado_en": _now(),
+                  "cerrado_motivo": "Cierre automático: más de 24 horas sin entrega (regla permanente)"}})
+    if r.modified_count:
+        import logging
+        logging.info(f"📪 Cierre automático de correos fallidos >24h: {r.modified_count} cerrado(s)")
+    return r.modified_count
+
+
+async def cierre_fallidos_loop():
+    await asyncio.sleep(40)
+    while True:
+        try:
+            await cierre_automatico_fallidos()
+        except Exception:
+            pass
+        await asyncio.sleep(3600)

@@ -7,6 +7,7 @@ import ProactiveAlertsPanel from "../components/ProactiveAlertsPanel";
 import LearningStatusPanel from "../components/LearningStatusPanel";
 import GraficosRiesgo from "../components/GraficosRiesgo";
 import CorreosSolicitudHoy from "../components/CorreosSolicitudHoy";
+import VisualizadorCognitivo from "../components/VisualizadorCognitivo";
 
 export default function DashboardModule({ valorUF: _valorUF, userName: _userName, onNavigate }) {
   const [data, setData] = useState(null);
@@ -144,6 +145,7 @@ export default function DashboardModule({ valorUF: _valorUF, userName: _userName
         </div>
       )}
       <ProactiveAlertsPanel />
+      <VisualizadorCognitivo modo="panel" />
       <CorreosSolicitudHoy />
       {seguridad && (
         <div data-testid="seguridad-datos-card" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",

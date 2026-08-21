@@ -7,7 +7,7 @@ import re
 import uuid
 import base64
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, HTTPException, Request
@@ -72,7 +72,10 @@ def _rut_norm(r):
 
 
 async def _resultado_folder(f):
-    """Último resultado del Motor por RUT: 'aprobado' | 'reprobado' | None."""
+    """Resultado del caso: PRIORIDAD 1 la Fuente de Verdad de Mesa (resultado_mesa),
+    PRIORIDAD 2 la última simulación del Motor por RUT."""
+    if f.get("resultado_mesa") in ("aprobado", "reprobado"):
+        return f["resultado_mesa"], str(f.get("resultado_mesa_at") or "")[:10]
     rn = _rut_norm(f.get("rut"))
     if not rn:
         return None, None
@@ -301,6 +304,75 @@ async def escrituracion_confirmar(token: str):
                         f"Gracias, <b>{nombre}</b>. Su intenci&oacute;n de continuar con el proceso de "
                         f"escrituraci&oacute;n qued&oacute; registrada el <b>{hora_cl}</b> (hora de Chile). "
                         "Su ejecutivo fue notificado y lo contactar&aacute; a la brevedad."))
+
+
+# ────────────────── PANEL DE ESTADO EN CARPETA DE CLIENTE ──────────────────
+
+def _dias_habiles_entre(desde, hasta):
+    d, n = desde.date(), 0
+    while d < hasta.date():
+        d += timedelta(days=1)
+        if d.weekday() < 5:
+            n += 1
+    return n
+
+
+@carpres.get("/clientes/folders/{fid}/panel-estado")
+async def panel_estado_folder(fid: str, request: Request):
+    _exigir(request)
+    f = await db.folders.find_one({"id": fid})
+    if not f:
+        raise HTTPException(status_code=404, detail="Carpeta no encontrada")
+    from server import _criterios_folder
+    nombre = f.get("nombre") or ""
+    resultado, fecha_res = await _resultado_folder(f)
+    # ENVIADO POR SISTEMA (autocorreo/mesa vía plataforma)
+    log_sis = await db.autocorreo_log.find_one(
+        {"cliente": {"$regex": f"^{re.escape(nombre[:25])}", "$options": "i"}, "status": "sent"},
+        {"_id": 0, "processed_at": 1, "subject": 1, "attachments_info": 1}, sort=[("processed_at", -1)])
+    env_sis = bool(f.get("mesa_enviado_at") or f.get("emails_sent_count") or log_sis)
+    det_sis = {"fecha": str((log_sis or {}).get("processed_at") or f.get("mesa_enviado_at") or "")[:16].replace("T", " "),
+               "destinatario": "Mesa de análisis (vía sistema)",
+               "contenido": (log_sis or {}).get("subject") or "",
+               "adjuntos": (log_sis or {}).get("attachments_info") or ""} if env_sis else None
+    # ENVIADO POR CORREO (correo directo espejado en la casilla de mesa)
+    from auditoria_mesa import _norm_tokens, _match_nombre, _rut_limpio
+    ftoks, frut = _norm_tokens(nombre), _rut_limpio(f.get("rut"))
+    det_cor, env_cor = None, False
+    async for m in db.mesa_enviados.find({}, {"_id": 0, "cliente": 1, "nombre": 1, "rut": 1,
+                                              "enviado_at": 1, "subject": 1}).sort("enviado_at", -1):
+        mtoks, mrut = _norm_tokens(m.get("cliente") or m.get("nombre")), _rut_limpio(m.get("rut"))
+        if (frut and mrut and frut == mrut) or _match_nombre(ftoks, mtoks):
+            env_cor = True
+            det_cor = {"fecha": str(m.get("enviado_at") or "")[:16].replace("T", " "),
+                       "destinatario": "Casilla de mesa (correo directo)",
+                       "contenido": m.get("subject") or "", "adjuntos": ""}
+            break
+    # INACTIVIDAD: días hábiles sin movimiento
+    hitos = [f.get(k) for k in ("updated_at", "mesa_enviado_at", "estudio_titulo_solicitado_at",
+                                "tasacion_solicitada_at", "faltantes_pedidos_at",
+                                "escrituracion_confirmada_at", "created_at")]
+    ult = max((_dtp(h) for h in hitos if _dtp(h)), default=None)
+    dias_par = _dias_habiles_entre(ult, datetime.now(timezone.utc)) if ult else 0
+    # DOCUMENTOS FALTANTES
+    faltantes = [c["nombre"] for c in _criterios_folder(f)
+                 if not c["ok"] and c["nombre"] not in ("Enviada a mesa", "Datos financieros completos")]
+    return {"resultado": resultado, "fecha_resultado": fecha_res,
+            "enviado_sistema": env_sis, "detalle_sistema": det_sis,
+            "enviado_correo": env_cor, "detalle_correo": det_cor,
+            "dias_sin_movimiento": dias_par, "alerta_inactividad": dias_par > 2,
+            "documentos_faltantes": faltantes,
+            "destinatario_solicitud": f.get("source_email") or "",
+            "simulacion_desactualizada": bool(f.get("simulacion_desactualizada")),
+            "simulacion_desactualizada_motivo": f.get("simulacion_desactualizada_motivo") or ""}
+
+
+def _dtp(ts):
+    try:
+        d = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+        return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
+    except (TypeError, ValueError):
+        return None
 
 
 # ────────────────── 3) WIDGET 'CORREOS DE SOLICITUD - HOY' ──────────────────
