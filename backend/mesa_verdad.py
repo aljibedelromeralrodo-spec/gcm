@@ -141,12 +141,16 @@ async def _procesar_correo(msg):
                                                  f"nuevos: {registro['parametros_nuevos']} · "
                                                  f"{r.modified_count} carpeta(s) → Simulación desactualizada"),
                                      "fecha": _now()})
-        # Correo de notificación al administrador
+        # Correo de notificación al administrador — sujeto a NORMATIVA CORREOS:
+        # durante el día solo se registra; el cambio viaja en el Resumen Diario 8AM.
         try:
+            from resumen_diario import notificaciones_permitidas, registrar_omitido
             from server import _email_institucional
             import email_service as mail
             admin_to = os.environ.get("MAIL2_USER") or os.environ.get("MAIL_NOTIF_TEST") or ""
-            if admin_to:
+            if admin_to and not await notificaciones_permitidas():
+                await registrar_omitido("mesa_verdad", f"{etiqueta} — {subject[:140]}")
+            elif admin_to:
                 nuevos = registro["parametros_nuevos"]
                 antes = registro["parametros_anteriores"]
                 cuerpo = (

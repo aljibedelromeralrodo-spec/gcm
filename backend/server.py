@@ -367,6 +367,8 @@ async def _task_blindada(coro_fn, nombre):
 #     PRODUCCIÓN (base de datos separada) se auto-siembre en el arranque sin
 #     intervención manual. Mismos registros que motivo="normativa" del preview. ───
 NORMATIVAS_FIJAS = [
+    ("NAVEGACION VOLVER", "NORMATIVA FIJA — NAVEGACIÓN UNIVERSAL E INAMOVIBLE: cada vez que el usuario presione 'Volver' en cualquier parte del sistema, debe regresar exactamente al estado anterior: misma pantalla, mismo scroll, mismo filtro activo, mismo día del calendario, misma carpeta seleccionada. El sistema nunca reinicia una vista al volver, solo retrocede un paso en el estado exacto en que estaba. Aplica a todos los módulos: calendario, carpetas, dashboard, visualizador cognitivo y cualquier módulo futuro."),
+    ("CORREOS DEL SISTEMA", "NORMATIVA FIJA — CORREOS DEL SISTEMA (PERMANENTE E INAMOVIBLE): PROHIBIDO enviar correos automáticos de prueba, notificaciones individuales de estado, avisos de errores de entrega o cualquier correo operacional durante el día. Solo se permite el resumen diario o una respuesta directa a un cliente o ejecutivo. EXCEPCIÓN DE ARRANQUE (única e irrepetible): el primer correo se envía a las 8:00 AM a gerardo.ext@centralmutuos.cl con el listado completo de clientes con carpetas pendientes de las últimas dos semanas (nombre, estado, días sin movimiento, documentos faltantes). DESDE EL DÍA SIGUIENTE: todos los días a las 8:00 AM UN SOLO correo a gerardo.ext@centralmutuos.cl con: carpetas nuevas de ayer, pendientes sin movimiento +2 días hábiles, correos que no generaron carpeta, aprobaciones y rechazos enviados, documentos faltantes por solicitar, cambios de tasas o criterios desde mesa y alertas activas. Un solo correo diario, ordenado, sin repeticiones ni correos de prueba."),
     ("SUPERCARPETA", "NORMATIVA FIJA — SUPERCARPETA: vista obligatoria en tarjetas verticales expandibles. Sin tablas ni scroll horizontal. Campos editables con doble clic. Íconos verde/amarillo/rojo por estado."),
     ("RESUMEN IA", "NORMATIVA FIJA — RESUMEN IA: línea visible en tarjeta con formato [estado actual] + [quién debe el próximo paso] + [fecha último movimiento]. Solo eventos de los últimos 90 días."),
     ("ESTUDIO DE TÍTULO", "NORMATIVA FIJA — ESTUDIO DE TÍTULO: propiedad usada envía listado legal completo (Títulos, Herencias, Fusiones, CBR, DOM, TGR, SII). Propiedad nueva no lo incluye."),
@@ -624,6 +626,10 @@ async def startup():
         asyncio.create_task(_task_blindada(_aprendizaje_loop, "aprendizaje_ia"))
     asyncio.create_task(_task_blindada(_periodic_mesa_loop, "mesa"))
     asyncio.create_task(_task_blindada(_daily_report_loop, "reporte_diario"))
+    import resumen_diario as _resdia
+    asyncio.create_task(_task_blindada(_resdia.resumen_diario_loop, "resumen_diario_8am"))
+    import espejo_aprendizaje as _espia
+    asyncio.create_task(_task_blindada(_espia.espejo_aprendizaje_loop, "espejo_aprendizaje"))
     asyncio.create_task(_task_blindada(_notif_pace_loop, "notif_pace"))
     import bodega_concreces as _bc
     asyncio.create_task(_task_blindada(_bc.gerencia_audit_loop, "gerencia_audit"))
@@ -14706,6 +14712,10 @@ import carpetas_resultado as _carpres_mod
 api.include_router(_carpres_mod.carpres)
 import visualizador as _visual_mod
 api.include_router(_visual_mod.visual)
+import resumen_diario as _resdia_mod
+api.include_router(_resdia_mod.resdia)
+import espejo_aprendizaje as _espia_mod
+api.include_router(_espia_mod.espia)
 
 # ⚖️ FUENTE DE VERDAD DE MESA — endpoints de estado/log del monitor
 import mesa_verdad as _mesav_router

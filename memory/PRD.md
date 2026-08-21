@@ -1079,3 +1079,35 @@ actual; todo lo demás permanece intacto.
 - Producción verificada en vivo (risk-assess-17.emergent.host): telepantalla y visualizador
   funcionando; el bundle principal no la contiene porque DashboardModule es lazy (chunk 48).
   Dominio mutuariasyleasing.cl aún sin conectar.
+
+## Fork 2026-06 (Normativas Navegación + Correos 8AM + Espejo Capa 1) — HECHO
+- NORMATIVA "NAVEGACION VOLVER" inscrita en el cerebro (NORMATIVAS_FIJAS + DB, 23 normativas):
+  · Helper /app/frontend/src/utils/navegacion.js (guardarEstado/leerEstado/marcarRegreso/tomarRegreso).
+  · CalendarioCarpetas conserva mes/año/día (sessionStorage cm_nav_calendario).
+  · ClientesModule: guarda scroll en el momento de la acción (openFolder/loadEmails/loadAjustes)
+    y lo restaura al volver a la lista (verificado E2E: scroll 600 exacto). Persiste
+    view/folderId/folderTab; los "Volver a Carpeta Clientes" de Gastos/SetCredito/Aprobación
+    llaman marcarRegreso → ClientesModule restaura pestaña/carpeta/scroll al montar.
+- NORMATIVA "CORREOS DEL SISTEMA" inscrita + módulo /app/backend/resumen_diario.py:
+  · UN SOLO correo diario 8:00 AM (hora Chile) a gerardo.ext@centralmutuos.cl.
+  · Arranque único (config resumen_diario_8am, fecha_inicio=2026-08-21, arranque_enviado=false):
+    listado carpetas últimas 2 semanas (nombre, estado, días sin movimiento, faltantes).
+  · Digest diario: nuevas ayer, sin movimiento +2 días hábiles, correos sin carpeta,
+    aprobaciones/rechazos, faltantes, cambios de mesa (mesa_verdad_log), alertas.
+  · Endpoints admin: GET /api/resumen-diario/estado|preview, POST /enviar-ahora.
+  · GATE normativa: mesa_verdad (aviso cambio de mesa) y malla (simulación procesada a gerardo)
+    ya NO envían correo suelto: registran en correos_omitidos_normativa y viajan en el digest.
+    Reactivable con config permitir_notificaciones=true.
+  · Reporte diario ANTIGUO de las 10:00 desactivado por config (reporte_diario.enabled=false).
+- ALGORITMO ESPEJO — CAPA 1 (/app/backend/espejo_aprendizaje.py, MODULAR POR CAPAS):
+  · db.espejo_casos con `origen` (capa1_simulaciones / capa1_mesa / futuro capa2_mbox):
+    los 13.000 correos históricos se insertarán como capa 2 SIN reescribir nada.
+  · Entrena pesos log-odds por rasgo (monto/plazo/LTV/carga/codeudor/docs) + razones de
+    rechazo top; modelo versionado en db.espejo_modelo con `aprendizajes` fechados (evolución).
+  · Loop re-entrena cada 6h si cambian los datos (firma_datos). v1: 17 casos, criterios reales
+    (DIV/Renta >35%, carga financiera >40%...).
+  · Endpoints: GET /api/espejo-ia/prediccion/{fid} (todos los roles), /modelo, /evolucion,
+    POST /entrenar (admin).
+  · Frontend: PrediccionEspejo.js en el detalle de carpeta (ALTA/MEDIA/BAJA + % + factores,
+    data-testid prediccion-espejo). Verificado E2E (BAJA 5.3% con 0 aprobados aún).
+- NOTA: NO se envió ningún correo real (normativa: el primero es mañana 8:00 AM automático).

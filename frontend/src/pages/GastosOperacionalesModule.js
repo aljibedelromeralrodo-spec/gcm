@@ -3,6 +3,7 @@ import axios from "axios";
 import DOMPurify from "dompurify";
 import ImportarCorreo from "../components/ImportarCorreo";
 import { EmailAutocomplete } from "../components/EmailAutocomplete";
+import { marcarRegreso } from "../utils/navegacion";
 import { estiloConfianza, PanelAprendizaje, useAprendizaje } from "../components/CampoAprendizaje";
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -286,7 +287,7 @@ export default function GastosOperacionalesModule({ onNavigate }) {
   return (
     <div style={{ padding: "1.5rem", color: "var(--white)", maxWidth: "1000px" }} data-testid="gastos-module">
       {onNavigate && (
-        <button data-testid="gastos-volver" onClick={() => onNavigate("clientes")} style={{ marginBottom: "1rem", background: "transparent", border: "1px solid rgba(212,175,55,0.5)", color: "var(--gold)", borderRadius: 0, padding: "0.45rem 1rem", fontWeight: 700, cursor: "pointer" }}>
+        <button data-testid="gastos-volver" onClick={() => { marcarRegreso("clientes"); onNavigate("clientes"); }} style={{ marginBottom: "1rem", background: "transparent", border: "1px solid rgba(212,175,55,0.5)", color: "var(--gold)", borderRadius: 0, padding: "0.45rem 1rem", fontWeight: 700, cursor: "pointer" }}>
           <i className="fa fa-arrow-left" /> Volver a Carpeta Clientes
         </button>
       )}

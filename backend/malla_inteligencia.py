@@ -4025,6 +4025,15 @@ async def _auto_envio_aprobaciones():
                 f"<p>Central Mutuos — envío automático (barrido de aprobaciones)</p>")
         adj = [{"filename": pdf.get("filename") or "simulacion.pdf",
                 "content_b64": base64.b64encode(pdf["content_bytes"]).decode()}]
+        # NORMATIVA CORREOS: durante el día no se envían avisos sueltos; queda
+        # registrado y viaja en el Resumen Diario de las 8:00 AM.
+        from resumen_diario import notificaciones_permitidas, registrar_omitido
+        if not await notificaciones_permitidas():
+            await registrar_omitido("simulacion_procesada", (c.get("subject") or "")[:140])
+            registro["estado"] = "omitido_normativa"
+            registro["cbr"] = cbr
+            await db.auto_envios_aprobaciones.insert_one(registro)
+            continue
         res = await asyncio.to_thread(
             lambda: mail.send_mail("gerardo.ext@centralmutuos.cl",
                                    f"⚙️ Simulación procesada + Gastos Operacionales — {c.get('subject','')[:70]}",

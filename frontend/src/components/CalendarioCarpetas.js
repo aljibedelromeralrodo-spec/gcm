@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { guardarEstado, leerEstado } from "../utils/navegacion";
 import axios from "axios";
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -59,10 +60,13 @@ const Item = ({ c, rojo, onOpen, onAccion }) => (
 
 export default function CalendarioCarpetas({ onOpenFolder }) {
   const hoy = new Date();
-  const [anio, setAnio] = useState(hoy.getFullYear());
-  const [mesN, setMesN] = useState(hoy.getMonth());
+  // NORMATIVA DE NAVEGACIÓN: al volver, conservar mes/año/día exactos
+  const nav0 = leerEstado("calendario") || {};
+  const [anio, setAnio] = useState(nav0.anio ?? hoy.getFullYear());
+  const [mesN, setMesN] = useState(nav0.mesN ?? hoy.getMonth());
   const [datos, setDatos] = useState(null);
-  const [dia, setDia] = useState(null);
+  const [dia, setDia] = useState(nav0.dia ?? null);
+  useEffect(() => { guardarEstado("calendario", { anio, mesN, dia }); }, [anio, mesN, dia]);
 
   const mesStr = `${anio}-${String(mesN + 1).padStart(2, "0")}`;
 

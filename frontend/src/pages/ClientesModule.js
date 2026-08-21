@@ -6,8 +6,10 @@ import ConversorUF from "../components/ConversorUF";
 import CalendarioCarpetas from "../components/CalendarioCarpetas";
 import EnviarResultadoEjecutivo from "../components/EnviarResultadoEjecutivo";
 import PanelEstadoCarpeta from "../components/PanelEstadoCarpeta";
+import PrediccionEspejo from "../components/PrediccionEspejo";
 import CompromisoEditor from "./CompromisoEditor";
 import { secureGet } from "../utils/secureStore";
+import { guardarEstado, leerEstado, tomarRegreso } from "../utils/navegacion";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 // Regla #65: validador de dígito verificador (módulo 11) — RUT verificado al 100%
@@ -785,6 +787,7 @@ export default function ClientesModule({ onNavigate }) {
   };
 
   const loadAjustes = async () => {
+    sessionStorage.setItem("cm_nav_scroll_clientes", String(window.scrollY));
     try {
       const r = await axios.get(`${API}/api/clientes/ajustes`);
       setAjustes(r.data.folders || []);
@@ -969,6 +972,7 @@ export default function ClientesModule({ onNavigate }) {
   };
 
   const openFolder = async (folderId, autoAction) => {
+    sessionStorage.setItem("cm_nav_scroll_clientes", String(window.scrollY));
     setLoading(true);
     try {
       const r = await axios.get(`${API}/api/clientes/folders/${folderId}`);
@@ -983,14 +987,42 @@ export default function ClientesModule({ onNavigate }) {
   };
 
   // Apertura instantánea desde la Telepantalla Cognitiva (clic en nodo)
+  // + NORMATIVA DE NAVEGACIÓN: al regresar con "Volver" desde otro módulo,
+  //   restaurar pestaña, carpeta abierta y scroll exactos.
   useEffect(() => {
     const fid = sessionStorage.getItem("cm_abrir_folder_id");
     if (fid) {
       sessionStorage.removeItem("cm_abrir_folder_id");
       openFolder(fid);
+      return;
+    }
+    if (tomarRegreso("clientes")) {
+      const est = leerEstado("clientes");
+      if (est) {
+        if (est.folderTab) setFolderTab(est.folderTab);
+        if (est.view === "detail" && est.folderId) openFolder(est.folderId);
+        else {
+          const y = parseFloat(sessionStorage.getItem("cm_nav_scroll_clientes") || "0");
+          setTimeout(() => window.scrollTo(0, y), 300);
+        }
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // NORMATIVA DE NAVEGACIÓN: persistir estado y restaurar scroll al volver a la lista
+  useEffect(() => {
+    guardarEstado("clientes", { view, folderId: currentFolder?.id || null, folderTab });
+  }, [view, currentFolder, folderTab]);
+  const prevViewRef = useRef(view);
+  useEffect(() => {
+    if (view === "list" && prevViewRef.current !== "list") {
+      const y = parseFloat(sessionStorage.getItem("cm_nav_scroll_clientes") || "0");
+      setTimeout(() => window.scrollTo(0, y), 80);
+      setTimeout(() => window.scrollTo(0, y), 350);
+    }
+    prevViewRef.current = view;
+  }, [view]);
 
   const handleManualUpload = async (e) => {
     const files = Array.from(e.target.files || []);
@@ -1052,6 +1084,7 @@ export default function ClientesModule({ onNavigate }) {
   };
 
   const loadEmails = async () => {
+    sessionStorage.setItem("cm_nav_scroll_clientes", String(window.scrollY));
     setLoading(true);
     try {
       const r = await axios.get(`${API}/api/clientes/emails?max_results=30`);
@@ -2071,6 +2104,7 @@ export default function ClientesModule({ onNavigate }) {
           </div>
 
           <PanelEstadoCarpeta folder={currentFolder} />
+          <PrediccionEspejo folderId={currentFolder.id} />
 
           {showCompromiso && currentFolder && (
             <CompromisoEditor folder={currentFolder} onClose={() => setShowCompromiso(false)} />
