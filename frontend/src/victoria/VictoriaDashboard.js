@@ -3,6 +3,8 @@ import axios from "axios";
 import { toast } from "sonner";
 import { API_URL } from "../utils/formatters";
 import { S, GOLD, PLAYFAIR, ESTADO_PILL, estadoCliente } from "./theme";
+import MonitorCorreo from "./MonitorCorreo";
+import Cuarentena from "./Cuarentena";
 
 let _cache = null;
 
@@ -104,6 +106,9 @@ export default function VictoriaDashboard({ onAbrirCliente, filtro, busqueda, on
           sub={`${k.despachados} enviados a ConCreces`} color="#FCF6BA" />
       </div>
 
+      <Cuarentena items={data.cuarentena} clientes={data.clientes || []}
+        pinConfigurado={data.pin_configurado} onRefrescar={cargar} />
+
       {(data.avisos || []).length > 0 && (
         <div data-testid="dash-avisos" style={{ ...S.card, marginTop: 24, borderColor: "rgba(239,68,68,0.35)" }}>
           <h2 style={{ ...S.h2, color: "#f87171", marginBottom: 14 }}>Alertas activas que requieren su acción ({data.avisos.length})</h2>
@@ -133,6 +138,8 @@ export default function VictoriaDashboard({ onAbrirCliente, filtro, busqueda, on
           ))}
         </div>
       )}
+
+      <MonitorCorreo eventos={data.eventos} />
 
       <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 24, marginTop: 24, alignItems: "start" }}>
         <div style={{ ...S.card, padding: "1.8rem 2rem" }}>

@@ -1169,3 +1169,26 @@ actual; todo lo demás permanece intacto.
 - Testing: iteration_55.json — backend 18/18, frontend 100%, regresión admin OK. Sin bugs.
 - Notas menores del reporte (no bloqueantes): polling 30/45s sin backoff con pestaña oculta;
   bcrypt cold-start 40-50s tras restart (conocido).
+
+## 2026-06 — Regla de Oro 15 + Trazabilidad + Demo (COMPLETADO, iteración 56: backend 18/18)
+1. VALIDACIÓN DE INGRESO IRRENUNCIABLE (Regla de Oro 15, sembrada en Constitución):
+   - _validar_ingreso contrasta RUT titular/RUT codeudor/rol/dirección de cada doc entrante vs ficha.
+   - Correo: mismatch → doc en CUARENTENA (cliente_id null + candidato + validaciones_ingreso) + aviso crítico.
+   - Manual: 409 VALIDACION_BLOQUEADA {codigo, fallas, pin_configurado}; carga forzada exige PIN 4 dígitos
+     (bcrypt en users.pin_seguridad_hash, POST /api/victoria/pin) y queda registrada (forzado_manual + aviso).
+   - Endpoints: POST /cuarentena/{did}/revalidar (asocia si ya coincide), /cuarentena/{did}/asociar (con PIN),
+     /documentos/{did}/descartar (motivo obligatorio). /sin-clasificar/{did}/asignar bloqueado para cuarentena.
+   - Nuevos tipos doc: liquidacion, cert_matrimonio, certificado_avaluo, cedula.
+   - Dashboard: secciones Cuarentena + Monitor en tiempo real (victoria_eventos, chips ✓/✕/— por validación).
+   - Frontend: Cuarentena.js, MonitorCorreo.js (ChipsValidacion), PinModal.js; Paso1 maneja 409+PIN.
+2. TRAZABILIDAD: documento-envio envuelve datos críticos en <span class='traz'> (hover lupa, clic → postMessage);
+   GET /clientes/{cid}/origen-dato/{campo} devuelve doc origen + página (pypdf búsqueda normalizada);
+   PreviewFlotante.js abre el PDF en la página exacta; cerrar vuelve al punto exacto. Mapeo: RUT→cédula/carpeta,
+   rol→tasación, dirección→títulos.
+3. DEMO VICTORIA: DemoVictoria.js (9 escenas animadas, datos ficticios Juan Pérez Soto 3.500 UF, cronómetro,
+   tiempos por paso, total 58,3 s; controles reproducir/pausar/reiniciar; gate #demo-victoria en App.js).
+   Video MP4 1:20 (933KB) generado con Playwright+ffmpeg (/app/tests/grabar_demo_victoria.py) en
+   /app/backend/demos/demo_victoria.mp4; GET /api/victoria/demo/video (descarga en DemoCard.js, panel admin
+   Administración→Victoria); POST /api/victoria/demo/enviar → correo ENVIADO a gerardo.ext@centralmutuos.cl.
+- Testing: iteration_56.json backend 18/18 + demo UI verificada; limpieza QA total; PIN de Victoria sin configurar
+  (lo elegirá ella); clave_temporal sigue activa hasta que cambie su contraseña.

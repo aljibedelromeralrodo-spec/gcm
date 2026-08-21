@@ -50,6 +50,7 @@ const ContralorModule = lazy(() => import("./pages/ContralorModule"));
 const PostventaModule = lazy(() => import("./pages/PostventaModule"));
 const RoleDashboard = lazy(() => import("./pages/RoleDashboards"));
 const VictoriaWorkspace = lazy(() => import("./pages/VictoriaWorkspace"));
+const DemoVictoria = lazy(() => import("./victoria/DemoVictoria"));
 const FrentePrincipal = lazy(() => import("./components/FrentePrincipal"));
 const AuditoriaForenseModule = lazy(() => import("./pages/AuditoriaForenseModule"));
 const DespachoModule = lazy(() => import("./pages/DespachoModule"));
@@ -288,7 +289,23 @@ function MainApp() {
     ? { ...user, rol: previewRol.rol, perfil: previewRol.perfil || "", _sim: previewRol.label }
     : user;
 
+  const [verDemoVictoria, setVerDemoVictoria] = useState(window.location.hash === "#demo-victoria");
+  useEffect(() => {
+    const h = () => setVerDemoVictoria(window.location.hash === "#demo-victoria");
+    window.addEventListener("hashchange", h);
+    return () => window.removeEventListener("hashchange", h);
+  }, []);
+
   if (!user) return <LoginPage onLogin={setUser} />;
+
+  // ── DEMO MÓDULO VICTORIA (datos ficticios, reproducible) ──
+  if (verDemoVictoria) {
+    return (
+      <Suspense fallback={<div style={{ minHeight: "100vh", background: "#0a0a0a" }} />}>
+        <DemoVictoria autoPlay onSalir={() => { window.location.hash = ""; }} />
+      </Suspense>
+    );
+  }
 
   // ── ACCESO EXCLUSIVO: Victoria Vilches solo ve su módulo de trabajo ──
   if (user.solo_modulo === "victoria") {

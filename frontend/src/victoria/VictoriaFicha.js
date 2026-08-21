@@ -4,6 +4,8 @@ import { toast } from "sonner";
 import { API_URL } from "../utils/formatters";
 import { S, GOLD, PLAYFAIR, PASOS, ESTADO_PILL } from "./theme";
 import DocViewer from "./DocViewer";
+import PinModal from "./PinModal";
+import PreviewFlotante from "./PreviewFlotante";
 
 const COIN_COLOR = { true: "#4ade80", false: "#f87171", null: "#f59e0b" };
 const CAMPOS_FORM = [
@@ -89,23 +91,41 @@ function Paso1({ det, cargar, docSel, onSetDocSel }) {
   const [file, setFile] = useState(null);
   const [tipo, setTipo] = useState("");
   const [subiendo, setSubiendo] = useState(false);
+  const [bloqueo, setBloqueo] = useState(null);
+  const [pinAbierto, setPinAbierto] = useState(false);
   const docSelObj = det.docs.find(d => d.id === docSel) || null;
 
-  const subir = async (e) => {
-    e.preventDefault();
-    if (!file) { toast.error("Seleccione primero el archivo a subir"); return; }
+  const ejecutarSubida = async (pin = "") => {
     setSubiendo(true);
     const fd = new FormData();
     fd.append("file", file);
     fd.append("tipo", tipo);
+    if (pin) fd.append("pin", pin);
     try {
       const r = await axios.post(`${API_URL}/api/victoria/clientes/${det.cliente.id}/subir`, fd);
-      toast.success(`«${r.data.doc.archivo}» subido, clasificado como ${det.tipos[r.data.doc.tipo]} y auditado`);
-      setFile(null);
+      toast.success(r.data.forzado
+        ? `«${r.data.doc.archivo}» cargado con PIN: quedó registrado como carga forzada`
+        : `«${r.data.doc.archivo}» subido, clasificado como ${det.tipos[r.data.doc.tipo]} y auditado`);
+      setFile(null); setBloqueo(null);
       cargar();
       onSetDocSel(r.data.doc.id);
-    } catch (er) { toast.error(er.response?.data?.detail || "No se pudo subir el documento"); }
+    } catch (er) {
+      const d = er.response?.data?.detail;
+      if (er.response?.status === 409 && d?.codigo === "VALIDACION_BLOQUEADA") {
+        setBloqueo(d);
+        toast.error("Validación irrenunciable: hay datos que no coinciden con la ficha del cliente");
+      } else if (pin) {
+        toast.error(typeof d === "string" ? d : "PIN rechazado");
+        throw er;
+      } else toast.error(typeof d === "string" ? d : "No se pudo subir el documento");
+    }
     setSubiendo(false);
+  };
+
+  const subir = (e) => {
+    e.preventDefault();
+    if (!file) { toast.error("Seleccione primero el archivo a subir"); return; }
+    ejecutarSubida();
   };
 
   const cambiarTipo = async (did, t) => {
@@ -174,7 +194,27 @@ function Paso1({ det, cargar, docSel, onSetDocSel }) {
           </select>
           <button type="submit" data-testid="subir-btn" disabled={subiendo} style={S.btnGold}>
             {subiendo ? "Subiendo y auditando…" : "Subir este documento a la bóveda del cliente"}</button>
+          {bloqueo && (
+            <div data-testid="subir-bloqueo" style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.5)", borderRadius: 4, padding: "1rem 1.2rem" }}>
+              <div style={{ color: "#f87171", fontWeight: 700, fontSize: "0.95rem" }}>
+                ⛔ {bloqueo.mensaje}</div>
+              {(bloqueo.fallas || []).map((v, i) => (
+                <div key={i} style={{ color: "#f87171", fontSize: "0.88rem", marginTop: 6 }}>
+                  ✕ {v.etiqueta}: la ficha dice «{v.esperado}» pero el documento dice «{v.detectado}»</div>
+              ))}
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
+                <button type="button" data-testid="subir-forzar-pin" onClick={() => setPinAbierto(true)}
+                  style={{ ...S.btnDanger, ...S.btnSmall }}>
+                  Subir de todas formas con mi PIN de seguridad (queda registrado)</button>
+                <button type="button" data-testid="subir-cancelar-bloqueo" onClick={() => setBloqueo(null)}
+                  style={{ ...S.btnLine, ...S.btnSmall }}>Cancelar y corregir los datos primero</button>
+              </div>
+            </div>
+          )}
         </form>
+        {pinAbierto && <PinModal pinConfigurado={bloqueo?.pin_configurado} onClose={() => setPinAbierto(false)}
+          titulo="Va a subir un documento cuyos datos no coinciden con la ficha del cliente."
+          onConfirmar={(pin) => ejecutarSubida(pin)} />}
       </div>
       <DocViewer doc={docSelObj} onActualizado={cargar} />
     </div>
@@ -257,6 +297,21 @@ function Paso2({ det, cargar }) {
 function Paso3({ det, cargar }) {
   const [envio, setEnvio] = useState(null);
   const [trabajando, setTrabajando] = useState(false);
+  const [traz, setTraz] = useState(null);
+
+  useEffect(() => {
+    const h = async (e) => {
+      if (e.data?.tipo !== "dato-trazable") return;
+      try {
+        const r = await axios.get(`${API_URL}/api/victoria/clientes/${det.cliente.id}/origen-dato/${e.data.campo}`);
+        setTraz(r.data);
+      } catch (er) {
+        toast.error(er.response?.data?.detail || "No hay documento de origen para este dato");
+      }
+    };
+    window.addEventListener("message", h);
+    return () => window.removeEventListener("message", h);
+  }, [det.cliente.id]);
 
   const verDocEnvio = async () => {
     try {
@@ -321,11 +376,15 @@ function Paso3({ det, cargar }) {
       </div>
       {envio && (
         <div style={{ ...S.card, padding: "1.5rem" }} data-testid="doc-envio-preview">
-          <div style={{ ...S.label, marginBottom: 10 }}>Documento de envío (revisión en pantalla, sin descarga)</div>
+          <div style={{ ...S.label, marginBottom: 6 }}>Documento de envío (revisión en pantalla, sin descarga)</div>
+          <p style={{ ...S.body, fontSize: "0.85rem", color: "#a1a1aa", margin: "0 0 10px" }}>
+            Los datos críticos (nombre, RUT, rol, dirección) están subrayados: al hacer clic se abre
+            el documento físico de donde se extrajo cada dato, en la página exacta.</p>
           <iframe title="documento de envío" srcDoc={envio.html}
             style={{ width: "100%", height: 520, border: "1px solid rgba(255,255,255,0.1)", borderRadius: 4, background: "#fff" }} />
         </div>
       )}
+      {traz && <PreviewFlotante info={traz} onClose={() => setTraz(null)} />}
     </div>
   );
 }

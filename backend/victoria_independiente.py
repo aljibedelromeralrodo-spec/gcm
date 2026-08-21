@@ -36,6 +36,7 @@ REGLAS_ORO_COINCIDENCIA = [
     ("ORO_CONCRECES_12", "El RUT del codeudor debe coincidir EXACTAMENTE en todos los documentos donde aparezca. Cualquier diferencia bloquea el avance con alerta crítica."),
     ("ORO_CONCRECES_13", "El Rol de avalúo fiscal debe coincidir EXACTAMENTE entre la tasación y el estudio de títulos. Cualquier diferencia bloquea el avance con alerta crítica."),
     ("ORO_CONCRECES_14", "La dirección de la propiedad debe coincidir EXACTAMENTE entre la tasación y el estudio de títulos. Cualquier diferencia bloquea el avance con alerta crítica. NO se puede enviar a ConCreces hasta que todo coincida. Estas validaciones son IRRENUNCIABLES y ninguna actualización puede omitirlas."),
+    ("ORO_CONCRECES_15", "VALIDACIÓN DE INGRESO IRRENUNCIABLE: todo documento recibido (correo o manual) debe contrastar RUT del cliente principal, RUT del codeudor, Rol de avalúo fiscal y dirección de la propiedad contra la ficha del cliente ANTES de asociarse. Cualquier no coincidencia exacta envía el documento a CUARENTENA con alerta crítica y NO se asocia hasta que Victoria lo corrija. Una carga forzada manual exige PIN de seguridad de 4 dígitos y queda registrada. Sin excepción."),
 ]
 
 
@@ -50,12 +51,17 @@ async def seed_reglas_coincidencia():
 
 
 # ══════════ CLASIFICACIÓN Y EXTRACCIÓN ══════════
-TIPOS_DOC = ("tasacion", "titulos", "carpeta_credito", "simulacion", "escritura", "otro")
+TIPOS_DOC = ("tasacion", "titulos", "carpeta_credito", "simulacion", "escritura",
+             "liquidacion", "cert_matrimonio", "certificado_avaluo", "cedula", "otro")
 DOCS_REQUERIDOS = ("tasacion", "titulos", "carpeta_credito", "simulacion")
 ETIQUETAS = {"tasacion": "Informe de Tasación", "titulos": "Estudio de Títulos",
              "carpeta_credito": "Carpeta de Crédito", "simulacion": "Simulación",
-             "escritura": "Escritura / Borrador", "otro": "Otro documento"}
-VIGENCIA_DIAS = {"tasacion": 90, "titulos": 90, "simulacion": 60, "carpeta_credito": 180, "escritura": 365}
+             "escritura": "Escritura / Borrador", "liquidacion": "Liquidaciones de Sueldo",
+             "cert_matrimonio": "Certificado de Matrimonio",
+             "certificado_avaluo": "Certificado de Avalúo Fiscal",
+             "cedula": "Cédula de Identidad", "otro": "Otro documento"}
+VIGENCIA_DIAS = {"tasacion": 90, "titulos": 90, "simulacion": 60, "carpeta_credito": 180,
+                 "escritura": 365, "liquidacion": 90, "cert_matrimonio": 90, "certificado_avaluo": 90}
 FIRMA_OBLIGATORIA = ("titulos", "carpeta_credito", "escritura")
 _KW_SET = re.compile(r"set\s+(de\s+)?cr[eé]dito|tasaci[oó]n|estudio\s+de\s+t[ií]tulos|carpeta\s+(de\s+)?cr[eé]dito|simulaci[oó]n|escritura", re.I)
 
@@ -66,6 +72,14 @@ def _clasificar_tipo(filename, texto=""):
         return "tasacion"
     if re.search(r"titulo|estudio\s+de\s+t", base):
         return "titulos"
+    if re.search(r"matrimonio", base):
+        return "cert_matrimonio"
+    if re.search(r"c[eé]dula|carne|identidad", base):
+        return "cedula"
+    if re.search(r"liquidaci", base):
+        return "liquidacion"
+    if re.search(r"certificado\s+de\s+aval|aval[uú]o\s+fiscal", base):
+        return "certificado_avaluo"
     if re.search(r"escritura|borrador", base):
         return "escritura"
     if re.search(r"simulaci", base):
@@ -195,6 +209,50 @@ async def _buscar_o_crear_cliente(rut, nombre, origen="correo"):
 async def _aviso(tipo, detalle, cliente_id=None):
     await db.victoria_avisos.insert_one({"id": str(uuid.uuid4()), "tipo": tipo, "detalle": detalle,
                                          "cliente_id": cliente_id, "fecha": _now(), "leido": False})
+
+
+# ══════════ VALIDACIÓN DE INGRESO IRRENUNCIABLE (Regla de Oro 15) ══════════
+CAMPOS_VALIDACION_INGRESO = [
+    ("rut_titular", "RUT del cliente principal", _norm_rut),
+    ("rut_codeudor", "RUT del codeudor", _norm_rut),
+    ("rol_avaluo", "Rol de avalúo fiscal", _norm_rol),
+    ("direccion_propiedad", "Dirección de la propiedad", _norm_dir),
+]
+
+
+def _validar_ingreso(cliente, docs_previos, datos):
+    """Contrasta el documento entrante contra la ficha del cliente. ok True/False/None."""
+    esperados = _formularios_auto(cliente, docs_previos)
+    out = []
+    for campo, etiqueta, norm in CAMPOS_VALIDACION_INGRESO:
+        esp = str(esperados.get(campo) or "").strip()
+        det = str((datos or {}).get(campo) or "").strip()
+        ok = None if (not esp or not det) else (norm(esp) == norm(det))
+        out.append({"campo": campo, "etiqueta": etiqueta, "ok": ok, "esperado": esp, "detectado": det})
+    return out
+
+
+async def _docs_validos(cid):
+    docs = await db.victoria_docs.find({"cliente_id": cid}, {"_id": 0, "ruta": 0}).to_list(100)
+    return [d for d in docs if (d.get("revision") or {}).get("decision") != "rechazado"]
+
+
+async def _evento(archivo, tipo, resultado, cliente=None, validaciones=None, origen="correo"):
+    await db.victoria_eventos.insert_one({
+        "id": str(uuid.uuid4()), "fecha": _now(), "archivo": archivo, "tipo": tipo,
+        "tipo_etiqueta": ETIQUETAS.get(tipo, tipo), "resultado": resultado,
+        "cliente": (cliente or {}).get("nombre", ""), "cliente_id": (cliente or {}).get("id"),
+        "validaciones": validaciones or [], "origen": origen})
+
+
+async def _verificar_pin(sub, pin):
+    u_doc = await db.users.find_one({"codigo": sub}) or {}
+    h = u_doc.get("pin_seguridad_hash")
+    if not h:
+        raise HTTPException(status_code=403, detail="Aún no tiene PIN de seguridad: créelo primero (4 dígitos)")
+    import bcrypt as _b
+    if not pin or not _b.checkpw(str(pin).encode(), h.encode()):
+        raise HTTPException(status_code=403, detail="PIN de seguridad incorrecto")
 
 
 # ══════════ AUDITORÍA AUTOMÁTICA (manual ConCreces) ══════════
@@ -366,10 +424,27 @@ async def procesar_correo_victoria(limit=25):
                     await _aviso("sin_clasificar",
                                  f"No pude identificar al cliente del documento «{pdf['filename']}» "
                                  f"(correo: {c.get('subject','')[:60]}). Súbelo o asígnalo manualmente.")
+                    await _evento(pdf["filename"], tipo, "sin_cliente")
                     continue
-                await _guardar_doc(cliente["id"], pdf["filename"], raw, tipo, "correo", datos=datos)
+                # Regla de Oro 15: validación de ingreso irrenunciable
+                validaciones = _validar_ingreso(cliente, await _docs_validos(cliente["id"]), datos)
+                fallas = [v for v in validaciones if v["ok"] is False]
+                if fallas:
+                    doc = await _guardar_doc(None, pdf["filename"], raw, tipo, "correo", datos=datos)
+                    await db.victoria_docs.update_one({"id": doc["id"]}, {"$set": {
+                        "cuarentena": True, "candidato_cliente_id": cliente["id"],
+                        "candidato_nombre": cliente["nombre"], "validaciones_ingreso": validaciones}})
+                    det_f = " · ".join(f"{v['etiqueta']}: ficha «{v['esperado']}» ≠ documento «{v['detectado']}»" for v in fallas)
+                    await _aviso("cuarentena",
+                                 f"ALERTA CRÍTICA: «{pdf['filename']}» NO se asoció a {cliente['nombre']} — {det_f}. "
+                                 f"Resuélvalo en el panel de Cuarentena.", cliente["id"])
+                    await _evento(pdf["filename"], tipo, "cuarentena", cliente, validaciones)
+                    continue
+                doc = await _guardar_doc(cliente["id"], pdf["filename"], raw, tipo, "correo", datos=datos)
+                await db.victoria_docs.update_one({"id": doc["id"]}, {"$set": {"validaciones_ingreso": validaciones}})
                 nuevos_docs += 1
                 await auditar_cliente(cliente["id"])
+                await _evento(pdf["filename"], tipo, "asociado", cliente, validaciones)
             except Exception as e:
                 logging.warning(f"victoria adjunto {pdf.get('filename')}: {e}")
                 await _aviso("error_adjunto", f"No pude procesar «{pdf.get('filename')}» — súbelo manualmente. ({str(e)[:80]})")
@@ -400,7 +475,7 @@ async def panel(request: Request):
                     "bloqueado": (aud or {}).get("bloqueado", True),
                     "siguiente": _paso_siguiente(c, docs, aud)})
     avisos = await db.victoria_avisos.find({"leido": False}, {"_id": 0}).sort("fecha", -1).to_list(30)
-    sin_clasificar = await db.victoria_docs.find({"cliente_id": None}, {"_id": 0, "ruta": 0}).sort("recibido", -1).to_list(30)
+    sin_clasificar = await db.victoria_docs.find({"cliente_id": None, "cuarentena": {"$ne": True}, "descartado": {"$ne": True}}, {"_id": 0, "ruta": 0}).sort("recibido", -1).to_list(30)
     cfg = await db.config.find_one({"_key": "fuentes_imap_victoria"}, {"_id": 0}) or {}
     return {"clientes": out, "avisos": avisos, "sin_clasificar": sin_clasificar,
             "correo_monitoreado": cfg.get("correo_principal", ""),
@@ -439,9 +514,9 @@ async def detalle(cid: str, request: Request):
 
 
 @vict.post("/clientes/{cid}/subir")
-async def subir(cid: str, request: Request, file: UploadFile = File(...), tipo: str = Form("")):
+async def subir(cid: str, request: Request, file: UploadFile = File(...), tipo: str = Form(""), pin: str = Form("")):
     u = _exigir(request)
-    await _get_cliente(cid)
+    c = await _get_cliente(cid)
     raw = await file.read()
     if not raw:
         raise HTTPException(status_code=400, detail="Archivo vacío")
@@ -451,10 +526,32 @@ async def subir(cid: str, request: Request, file: UploadFile = File(...), tipo: 
     datos = await _extraer_campos(texto, file.filename or "")
     datos["_legible"] = len((texto or "").strip()) >= 50
     tipo_final = tipo or _clasificar_tipo(file.filename or "", texto)
+    # Regla de Oro 15: la validación de ingreso aplica también a la carga manual
+    validaciones = _validar_ingreso(c, await _docs_validos(cid), datos)
+    fallas = [v for v in validaciones if v["ok"] is False]
+    forzado = False
+    if fallas:
+        if not pin:
+            u_doc = await db.users.find_one({"codigo": u.get("sub", "")}) or {}
+            raise HTTPException(status_code=409, detail={
+                "codigo": "VALIDACION_BLOQUEADA",
+                "mensaje": "Los datos del documento NO coinciden exactamente con la ficha del cliente (Regla de Oro 15)",
+                "fallas": [{"etiqueta": v["etiqueta"], "esperado": v["esperado"], "detectado": v["detectado"]} for v in fallas],
+                "pin_configurado": bool(u_doc.get("pin_seguridad_hash"))})
+        await _verificar_pin(u.get("sub", ""), pin)
+        forzado = True
     doc = await _guardar_doc(cid, file.filename or "documento.pdf", raw, tipo_final, "manual",
                              u.get("sub", ""), datos=datos)
+    sets = {"validaciones_ingreso": validaciones}
+    if forzado:
+        sets["forzado_manual"] = {"por": u.get("sub", ""), "fecha": _now()}
+        await _aviso("forzado_manual",
+                     f"REGISTRO: {u.get('sub','')} forzó con PIN la carga manual de «{doc['archivo']}» "
+                     f"en {c['nombre']} pese a validación de ingreso no coincidente.", cid)
+    await db.victoria_docs.update_one({"id": doc["id"]}, {"$set": sets})
     aud = await auditar_cliente(cid)
-    return {"ok": True, "doc": {k: v for k, v in doc.items() if k != "ruta"}, "auditoria": aud}
+    await _evento(doc["archivo"], tipo_final, "manual_forzado" if forzado else "manual", c, validaciones, origen="manual")
+    return {"ok": True, "doc": {k: v for k, v in doc.items() if k != "ruta"}, "auditoria": aud, "forzado": forzado}
 
 
 @vict.post("/clientes/{cid}/auditar")
@@ -482,6 +579,12 @@ async def documento_envio(cid: str, request: Request):
     docs = await db.victoria_docs.find({"cliente_id": cid}, {"_id": 0, "ruta": 0}).to_list(100)
     aud = c.get("auditoria") or await auditar_cliente(cid)
     forms = _formularios_auto(c, docs)
+
+    def _traz(campo, valor):
+        v = str(valor or "").strip()
+        if not v:
+            return "—"
+        return f"<span class='traz' data-campo='{campo}' title='Clic: ver el documento de origen de este dato'>{v}</span>"
     filas_docs = "".join(
         f"<tr><td>{ETIQUETAS.get(d['tipo'], d['tipo'])}</td><td>{d['archivo']}</td>"
         f"<td>{(d.get('datos') or {}).get('fecha_documento') or '—'}</td>"
@@ -492,11 +595,13 @@ async def documento_envio(cid: str, request: Request):
     filas_alertas = "".join(
         f"<tr><td>{'🚨' if a['nivel'] == 'critica' else '⚠️'}</td><td>{a['doc']}</td><td>{a['detalle']}</td></tr>"
         for a in aud.get("alertas", [])) or "<tr><td colspan=3>Sin alertas</td></tr>"
-    filas_forms = "".join(f"<tr><td>{k.replace('_', ' ').title()}</td><td>{v or '—'}</td></tr>" for k, v in forms.items())
+    filas_forms = "".join(
+        f"<tr><td>{k.replace('_', ' ').title()}</td><td>{_traz(k, v) if k in CAMPOS_TRAZABLES else (v or '—')}</td></tr>"
+        for k, v in forms.items())
     tabla = "border-collapse:collapse;width:100%;font-size:13px"
     html = (f"<html><body style='font-family:Georgia,serif;color:#111;max-width:840px;margin:auto;padding:18px'>"
             f"<h1 style='color:#8a6d1a;border-bottom:3px solid #8a6d1a'>CENTRAL MUTUOS — Documento de Envío a ConCreces</h1>"
-            f"<p><b>Cliente:</b> {c['nombre']} · <b>RUT:</b> {forms.get('rut_titular') or c.get('rut') or '—'} · <b>Fecha:</b> {_now()[:16].replace('T', ' ')} UTC</p>"
+            f"<p><b>Cliente:</b> {_traz('nombre_cliente', c['nombre'])} · <b>RUT:</b> {_traz('rut_titular', forms.get('rut_titular') or c.get('rut'))} · <b>Fecha:</b> {_now()[:16].replace('T', ' ')} UTC</p>"
             f"<h3>1. Documentos del set de crédito ({len(docs)})</h3>"
             f"<table border=1 cellpadding=5 style='{tabla}'><tr><th>Tipo</th><th>Archivo</th><th>Fecha doc.</th><th>Firma</th><th>Origen</th></tr>{filas_docs}</table>"
             f"<h3>2. Validación de coincidencias — Reglas de Oro ConCreces 11-14 (IRRENUNCIABLES)</h3>"
@@ -506,7 +611,13 @@ async def documento_envio(cid: str, request: Request):
             f"<table border=1 cellpadding=5 style='{tabla}'>{filas_forms}</table>"
             f"<p style='background:#fdf6e3;border:1px solid #8a6d1a;padding:10px;font-weight:bold'>"
             f"{'✅ APTO PARA ENVÍO: todas las coincidencias validadas.' if not aud.get('bloqueado') else '⛔ BLOQUEADO: no se puede enviar a ConCreces hasta que todo coincida y no haya alertas críticas.'}"
-            f" Documento generado para revisión final de Victoria Vilches.</p></body></html>")
+            f" Documento generado para revisión final de Victoria Vilches.</p>"
+            f"<style>.traz{{cursor:pointer;border-bottom:1.5px dashed #b08d2a;transition:background .2s}}"
+            f".traz:hover{{background:#f5e9c8;border-bottom-style:solid}}"
+            f".traz:hover::after{{content:' 🔍';font-size:11px}}</style>"
+            f"<script>document.addEventListener('click',function(e){{var s=e.target.closest('.traz');"
+            f"if(s)parent.postMessage({{tipo:'dato-trazable',campo:s.getAttribute('data-campo'),valor:s.textContent}},'*');}});</script>"
+            f"</body></html>")
     listo = (not aud.get("bloqueado")) and c.get("formularios_confirmados")
     return {"html": html, "bloqueado": aud.get("bloqueado", True),
             "formularios_confirmados": c.get("formularios_confirmados", False), "listo": listo}
@@ -555,7 +666,7 @@ async def asignar(did: str, payload: dict, request: Request):
     sets = {"cliente_id": cid}
     if tipo:
         sets["tipo"] = tipo
-    r = await db.victoria_docs.update_one({"id": did, "cliente_id": None}, {"$set": sets})
+    r = await db.victoria_docs.update_one({"id": did, "cliente_id": None, "cuarentena": {"$ne": True}}, {"$set": sets})
     if not r.modified_count:
         raise HTTPException(status_code=404, detail="Documento sin clasificar no encontrado")
     aud = await auditar_cliente(cid)
@@ -572,7 +683,7 @@ async def aviso_leido(aid: str, request: Request):
 # ══════════ REDISEÑO 2026: dashboard consolidado, preview, revisión y contacto ══════════
 @vict.get("/dashboard")
 async def dashboard(request: Request):
-    _exigir(request)
+    u = _exigir(request)
     clientes = await db.victoria_clientes.find({}, {"_id": 0}).sort("creado", -1).to_list(300)
     out, tot_falt, tot_valid_ok, tot_criticas, listos = [], 0, 0, 0, 0
     for c in clientes:
@@ -599,16 +710,21 @@ async def dashboard(request: Request):
                     "alertas_criticas": n_crit, "creado": c.get("creado", ""),
                     "siguiente": _paso_siguiente(c, docs_ok, c.get("auditoria"))})
     avisos = await db.victoria_avisos.find({"leido": False}, {"_id": 0}).sort("fecha", -1).to_list(30)
-    sin_clasificar = await db.victoria_docs.find({"cliente_id": None}, {"_id": 0, "ruta": 0}).sort("recibido", -1).to_list(30)
+    sin_clasificar = await db.victoria_docs.find({"cliente_id": None, "cuarentena": {"$ne": True}, "descartado": {"$ne": True}}, {"_id": 0, "ruta": 0}).sort("recibido", -1).to_list(30)
     despachados = sum(1 for c in out if c["despachado"])
     pendientes = len(out) - despachados
     cfg = await db.config.find_one({"_key": "fuentes_imap_victoria"}, {"_id": 0}) or {}
+    cuarentena = await db.victoria_docs.find({"cuarentena": True, "descartado": {"$ne": True}}, {"_id": 0, "ruta": 0}).sort("recibido", -1).to_list(30)
+    eventos = await db.victoria_eventos.find({}, {"_id": 0}).sort("fecha", -1).to_list(25)
+    u_doc = await db.users.find_one({"codigo": u.get("sub", "")}) or {}
     return {"kpis": {"clientes_pendientes": pendientes, "docs_faltantes": tot_falt,
                      "validaciones_aprobadas": tot_valid_ok,
-                     "alertas_activas": len(avisos) + tot_criticas,
+                     "alertas_activas": len(avisos) + tot_criticas + len(cuarentena),
                      "despachados": despachados, "listos_envio": listos,
                      "estado_general_pct": round(100 * despachados / len(out)) if out else 0},
             "clientes": out, "avisos": avisos, "sin_clasificar": sin_clasificar,
+            "cuarentena": cuarentena, "eventos": eventos,
+            "pin_configurado": bool(u_doc.get("pin_seguridad_hash")),
             "correo_monitoreado": cfg.get("correo_principal", ""), "tipos": ETIQUETAS,
             "docs_requeridos": [ETIQUETAS[t] for t in DOCS_REQUERIDOS]}
 
@@ -702,3 +818,214 @@ async def enviar_correo_cliente(cid: str, payload: dict, request: Request):
         "id": str(uuid.uuid4()), "cliente_id": cid, "canal": "correo", "destino": email_dest,
         "asunto": asunto, "mensaje": mensaje, "por": u.get("sub", ""), "fecha": _now()})
     return {"ok": True, "mensaje": f"Correo enviado a {email_dest}"}
+
+# ══════════ PIN DE SEGURIDAD Y CUARENTENA (Regla de Oro 15) ══════════
+@vict.post("/pin")
+async def pin_config(payload: dict, request: Request):
+    """Crea o cambia el PIN de seguridad de 4 dígitos para cargas forzadas."""
+    u = _exigir(request)
+    import bcrypt as _b
+    pin = str(payload.get("pin") or "").strip()
+    conf = str(payload.get("confirmacion") or "").strip()
+    if not re.match(r"^\d{4}$", pin):
+        raise HTTPException(status_code=400, detail="El PIN debe ser exactamente 4 dígitos numéricos")
+    if pin != conf:
+        raise HTTPException(status_code=400, detail="El PIN y su confirmación no coinciden")
+    u_doc = await db.users.find_one({"codigo": u.get("sub", "")}) or {}
+    if u_doc.get("pin_seguridad_hash"):
+        actual = str(payload.get("pin_actual") or "").strip()
+        if not actual or not _b.checkpw(actual.encode(), u_doc["pin_seguridad_hash"].encode()):
+            raise HTTPException(status_code=403, detail="El PIN actual no es correcto")
+    await db.users.update_one({"codigo": u.get("sub", "")},
+                              {"$set": {"pin_seguridad_hash": _b.hashpw(pin.encode(), _b.gensalt()).decode()}})
+    return {"ok": True, "mensaje": "PIN de seguridad guardado"}
+
+
+@vict.post("/cuarentena/{did}/revalidar")
+async def cuarentena_revalidar(did: str, payload: dict, request: Request):
+    """Re-contrasta el documento contra la ficha (ya corregida). Si todo coincide, se asocia solo."""
+    _exigir(request)
+    d = await db.victoria_docs.find_one({"id": did, "cuarentena": True}, {"_id": 0})
+    if not d:
+        raise HTTPException(status_code=404, detail="Documento en cuarentena no encontrado")
+    cid = payload.get("cliente_id") or d.get("candidato_cliente_id")
+    c = await _get_cliente(cid)
+    validaciones = _validar_ingreso(c, await _docs_validos(cid), d.get("datos"))
+    fallas = [v for v in validaciones if v["ok"] is False]
+    if fallas:
+        await db.victoria_docs.update_one({"id": did}, {"$set": {
+            "validaciones_ingreso": validaciones, "candidato_cliente_id": cid, "candidato_nombre": c["nombre"]}})
+        return {"ok": True, "asociado": False, "validaciones": validaciones,
+                "mensaje": f"Aún hay {len(fallas)} validación(es) que no coinciden: sigue en cuarentena"}
+    await db.victoria_docs.update_one({"id": did}, {
+        "$set": {"cliente_id": cid, "validaciones_ingreso": validaciones},
+        "$unset": {"cuarentena": "", "candidato_cliente_id": "", "candidato_nombre": ""}})
+    aud = await auditar_cliente(cid)
+    await _evento(d.get("archivo", ""), d.get("tipo", "otro"), "asociado", c, validaciones, origen="revalidacion")
+    return {"ok": True, "asociado": True, "auditoria": aud,
+            "mensaje": f"Las 4 validaciones coinciden: «{d.get('archivo','')}» quedó en la bóveda de {c['nombre']}"}
+
+
+@vict.post("/cuarentena/{did}/asociar")
+async def cuarentena_asociar(did: str, payload: dict, request: Request):
+    """Asociación forzada con PIN de seguridad: queda registrada como carga forzada."""
+    u = _exigir(request)
+    d = await db.victoria_docs.find_one({"id": did, "cuarentena": True}, {"_id": 0})
+    if not d:
+        raise HTTPException(status_code=404, detail="Documento en cuarentena no encontrado")
+    await _verificar_pin(u.get("sub", ""), str(payload.get("pin") or ""))
+    cid = payload.get("cliente_id") or d.get("candidato_cliente_id")
+    c = await _get_cliente(cid)
+    await db.victoria_docs.update_one({"id": did}, {
+        "$set": {"cliente_id": cid, "forzado_manual": {"por": u.get("sub", ""), "fecha": _now()}},
+        "$unset": {"cuarentena": "", "candidato_cliente_id": "", "candidato_nombre": ""}})
+    await _aviso("forzado_manual",
+                 f"REGISTRO: {u.get('sub','')} asoció con PIN «{d.get('archivo','')}» a {c['nombre']} "
+                 f"pese a validación de ingreso no coincidente.", cid)
+    aud = await auditar_cliente(cid)
+    await _evento(d.get("archivo", ""), d.get("tipo", "otro"), "manual_forzado", c,
+                  d.get("validaciones_ingreso"), origen="cuarentena")
+    return {"ok": True, "auditoria": aud, "mensaje": f"Documento asociado a {c['nombre']} con registro de carga forzada"}
+
+
+@vict.post("/documentos/{did}/descartar")
+async def doc_descartar(did: str, payload: dict, request: Request):
+    u = _exigir(request)
+    motivo = (payload.get("motivo") or "").strip()
+    if not motivo:
+        raise HTTPException(status_code=400, detail="Indique el motivo para descartar el documento")
+    d = await db.victoria_docs.find_one({"id": did}, {"_id": 0})
+    if not d:
+        raise HTTPException(status_code=404, detail="Documento no encontrado")
+    await db.victoria_docs.update_one({"id": did}, {
+        "$set": {"descartado": True, "descartado_info": {"por": u.get("sub", ""), "motivo": motivo, "fecha": _now()}},
+        "$unset": {"cuarentena": ""}})
+    await _evento(d.get("archivo", ""), d.get("tipo", "otro"), "descartado", None, None, origen="manual")
+    return {"ok": True, "mensaje": f"«{d.get('archivo','')}» descartado definitivamente"}
+
+# ══════════ TRAZABILIDAD DE DATOS CRÍTICOS (clic → documento de origen) ══════════
+CAMPOS_TRAZABLES = {"nombre_cliente", "rut_titular", "rut_codeudor", "rol_avaluo", "direccion_propiedad"}
+ETIQUETA_CAMPO = {"nombre_cliente": "Nombre del cliente", "rut_titular": "RUT del cliente principal",
+                  "rut_codeudor": "RUT del codeudor", "rol_avaluo": "Rol de avalúo fiscal",
+                  "direccion_propiedad": "Dirección de la propiedad"}
+MAPEO_ORIGEN = {
+    "rut_titular": ["cedula", "carpeta_credito", "tasacion", "titulos", "simulacion"],
+    "nombre_cliente": ["cedula", "carpeta_credito", "tasacion", "titulos"],
+    "rut_codeudor": ["cedula", "carpeta_credito", "titulos", "tasacion"],
+    "rol_avaluo": ["tasacion", "titulos", "certificado_avaluo"],
+    "direccion_propiedad": ["titulos", "tasacion"],
+}
+
+
+def _pagina_de(ruta, valor, campo):
+    """Busca en qué página del PDF aparece el dato (1-indexado)."""
+    try:
+        from pypdf import PdfReader
+        rd = PdfReader(ruta)
+    except Exception:
+        return 1
+    if campo in ("rut_titular", "rut_codeudor", "rol_avaluo"):
+        aguja = re.sub(r"[^0-9kK]", "", str(valor)).lower()
+        prep = lambda t: re.sub(r"[^0-9a-zk]", "", t.lower())
+    else:
+        aguja = re.sub(r"\s+", " ", str(valor).lower()).strip()
+        prep = lambda t: re.sub(r"\s+", " ", t.lower())
+    if not aguja:
+        return 1
+    for i, pg in enumerate(rd.pages[:60]):
+        try:
+            tx = prep(pg.extract_text() or "")
+        except Exception:
+            continue
+        if aguja in tx:
+            return i + 1
+    return 1
+
+
+@vict.get("/clientes/{cid}/origen-dato/{campo}")
+async def origen_dato(cid: str, campo: str, request: Request):
+    """Devuelve el documento físico (y la página) de donde se extrajo un dato crítico."""
+    _exigir(request)
+    if campo not in MAPEO_ORIGEN:
+        raise HTTPException(status_code=400, detail="Dato no trazable")
+    c = await _get_cliente(cid)
+    docs = await _docs_validos(cid)
+    forms = _formularios_auto(c, docs)
+    valor = str(forms.get(campo) or "").strip()
+    if not valor:
+        raise HTTPException(status_code=404, detail=f"No hay valor registrado para {ETIQUETA_CAMPO[campo]}")
+    if campo in ("rut_titular", "rut_codeudor"):
+        norm = _norm_rut
+    elif campo == "rol_avaluo":
+        norm = _norm_rol
+    elif campo == "direccion_propiedad":
+        norm = _norm_dir
+    else:
+        norm = lambda s: re.sub(r"\s+", " ", str(s).lower().strip())
+    objetivo = norm(valor)
+    prioridad = MAPEO_ORIGEN[campo]
+
+    def rank(d):
+        try:
+            p = prioridad.index(d.get("tipo"))
+        except ValueError:
+            p = 99
+        datos = d.get("datos") or {}
+        contiene = any(norm(str(datos.get(k) or "")) == objetivo
+                       for k in ("rut_titular", "rut_codeudor", "rol_avaluo", "direccion_propiedad", "nombre_cliente")
+                       if datos.get(k))
+        return (0 if contiene else 1, p)
+
+    candidatos = sorted(docs, key=rank)
+    if not candidatos:
+        raise HTTPException(status_code=404, detail="No hay documentos en la bóveda para rastrear este dato")
+    elegido = candidatos[0]
+    full = await db.victoria_docs.find_one({"id": elegido["id"]}) or {}
+    ruta = full.get("ruta")
+    pagina = 1
+    if ruta and Path(ruta).exists():
+        pagina = await asyncio.to_thread(_pagina_de, ruta, valor, campo)
+    return {"doc_id": elegido["id"], "archivo": elegido.get("archivo", ""),
+            "tipo": elegido.get("tipo", ""), "tipo_etiqueta": ETIQUETAS.get(elegido.get("tipo"), ""),
+            "pagina": pagina, "campo": campo, "etiqueta": ETIQUETA_CAMPO[campo], "valor": valor}
+
+
+# ══════════ DEMO MÓDULO VICTORIA: video descargable y envío por correo ══════════
+DEMOS_DIR = Path("/app/backend/demos")
+DEMOS_DIR.mkdir(parents=True, exist_ok=True)
+
+
+@vict.get("/demo/video")
+async def demo_video(request: Request):
+    _exigir(request)
+    p = DEMOS_DIR / "demo_victoria.mp4"
+    if not p.exists():
+        raise HTTPException(status_code=404, detail="El video de la demo aún no ha sido generado")
+    from fastapi.responses import FileResponse
+    return FileResponse(p, media_type="video/mp4", filename="Demo_Modulo_Victoria_Central_Mutuos.mp4")
+
+
+@vict.post("/demo/enviar")
+async def demo_enviar(payload: dict, request: Request):
+    u = _exigir(request)
+    p = DEMOS_DIR / "demo_victoria.mp4"
+    if not p.exists():
+        raise HTTPException(status_code=404, detail="El video de la demo aún no ha sido generado")
+    import base64
+    import email_service as mail
+    dest = (payload.get("email") or "gerardo.ext@centralmutuos.cl").strip()
+    b64 = base64.b64encode(p.read_bytes()).decode()
+    html = ("<div style='font-family:Georgia,serif;color:#1a1a1a;max-width:640px'>"
+            "<h2 style='color:#8a6d1a'>Demo módulo Victoria — Central Mutuos ConCreces</h2>"
+            "<p>Se adjunta el video de la demo interactiva del módulo de Victoria: caso completo "
+            "con datos ficticios (Juan Pérez Soto, 3.500 UF, sin subsidio) desde la detección "
+            "automática del correo hasta el envío confirmado a ConCreces.</p>"
+            "<p>El video también está disponible para descarga desde el panel de administrador.</p>"
+            "<hr style='border:none;border-top:2px solid #8a6d1a'>"
+            "<p style='color:#8a6d1a;font-weight:bold'>Central Mutuos · Con Creces</p></div>")
+    r = await asyncio.to_thread(mail.send_mail, dest, "Demo módulo Victoria - Central Mutuos ConCreces",
+                                html, [{"filename": "Demo_Modulo_Victoria_Central_Mutuos.mp4", "content_b64": b64}],
+                                "secundaria")
+    if not r.get("success"):
+        raise HTTPException(status_code=502, detail=f"No se pudo enviar el correo: {str(r.get('error'))[:120]}")
+    return {"ok": True, "mensaje": f"Video de la demo enviado a {dest}"}

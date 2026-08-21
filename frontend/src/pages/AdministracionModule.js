@@ -8,6 +8,7 @@ import EspejoHibrido from "../components/EspejoHibrido";
 import DocumentoViewer from "../components/DocumentoViewer";
 import TrackerPasos from "../components/TrackerPasos";
 import ManualConcreces from "../components/ManualConcreces";
+import DemoCard from "../victoria/DemoCard";
 import VictoriaBoveda from "../components/VictoriaBoveda";
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -381,6 +382,8 @@ export default function AdministracionModule({ user }) {
       {panel === "victoria" && <VictoriaBoveda />}
       {/* 📘 MÓDULO VICTORIA — Flujo guiado ConCreces según Manual de Procedimiento */}
       {panel === "victoria" && <ManualConcreces />}
+      {/* 🎬 DEMO reproducible del módulo Victoria (datos ficticios) */}
+      {panel === "victoria" && <DemoCard />}
 
       {cartera && (
         <div data-testid="carpetas-mes-strip" style={{ marginTop: 10, display: "flex", gap: 16, flexWrap: "wrap", color: "var(--text-secondary)", fontSize: "0.72rem" }}>
