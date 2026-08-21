@@ -1827,3 +1827,13 @@ polling GET /api/central/proactive existe vacío en server.py:1526) — usuario 
     /app/frontend/public/presentacion-inmobiliarias-corporativa.pdf
     Generador: /app/tests/gen_pdf_inmobiliarias_sobrio.py. Verificado 5/5. Enviado por correo junto
     al template sobrio (SMTP 250).
+16. MÓDULO PUBLICIDAD (solo admin, pedido explícito): backend /app/backend/publicidad.py
+    (/api/publicidad/*), frontend /app/frontend/src/pages/PublicidadModule.js, nav '📣 Publicidad'
+    en App.js SOLO visible para admin/maestro (excepción a la regla de menú universal, pedida por
+    el usuario). Funciones: listados de campaña guardados (dedupe automático, validación,
+    exclusiones p.ej. ecomac.cl, correos y teléfonos en un mismo listado), campaña por CORREO con
+    los 3 templates guardados + envío de PRUEBA al admin + envío real en segundo plano con pausa
+    6s por correo (reputación) + historial con progreso; campaña por WHATSAPP con generación de
+    enlaces wa.me por teléfono (envío manual con clic; envío automático requeriría Twilio, no
+    integrado). Testeado por curl: dedupe/exclusión/confirmación/403 no-admin OK; UI verificada.
+    PENDIENTE: usuario aún NO pega la lista real de correos "Para Inmobiliarias".

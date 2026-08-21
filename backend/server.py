@@ -14831,6 +14831,8 @@ import manual_concreces as _mconc_mod
 api.include_router(_mconc_mod.mconc)
 import victoria_independiente as _vict_mod
 api.include_router(_vict_mod.vict)
+import publicidad as _pub_mod
+api.include_router(_pub_mod.pub)
 import auditoria_flujos as _audf_mod
 api.include_router(_audf_mod.audf)
 

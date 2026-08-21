@@ -22,6 +22,7 @@ const ClientesModule = lazy(() => import("./pages/ClientesModule"));
 const CentralChat = lazy(() => import("./components/CentralChat"));
 const SeguimientoModule = lazy(() => import("./pages/SeguimientoModule"));
 const UsuariosModule = lazy(() => import("./pages/UsuariosModule"));
+const PublicidadModule = lazy(() => import("./pages/PublicidadModule"));
 const GerenciaComercialModule = lazy(() => import("./pages/GerenciaComercialModule"));
 const AdministracionModule = lazy(() => import("./pages/AdministracionModule"));
 const BrokersModule = lazy(() => import("./pages/BrokersModule"));
@@ -326,6 +327,8 @@ function MainApp() {
     { key: 'administracion', icon: 'fa-database', label: 'Administración' },
     { key: 'brokers', icon: 'fa-briefcase', label: 'Panel Broker' },
     { key: 'micorreo', icon: 'fa-envelope', label: 'Mi Correo' },
+    // 📣 PUBLICIDAD: visible SOLO para el Administrador (pedido explícito)
+    ...(['admin', 'maestro'].includes(uEff.rol) && !uEff._sim ? [{ key: 'publicidad', icon: 'fa-bullhorn', label: '📣 Publicidad' }] : []),
   ];
   const acceso = accesoModulo(uEff, activeModule);
 
@@ -577,6 +580,7 @@ function MainApp() {
         {activeModule === 'dashai' && <CerebroDashAIModule />}
         {activeModule === 'auditoria' && <AuditoriaForenseModule />}
         {activeModule === 'despacho' && <DespachoModule />}
+        {activeModule === 'publicidad' && <PublicidadModule />}
         </>)}
         </Suspense>
       </main>
