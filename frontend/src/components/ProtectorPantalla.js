@@ -116,8 +116,8 @@ function HeliceProtector() {
       <style>{`@keyframes cm-logo-levita { 0% { transform: translateY(0); } 50% { transform: translateY(-16px); } 100% { transform: translateY(0); } }`}</style>
       <canvas ref={canvasRef} style={{ display: "block", position: "absolute", inset: 0 }} />
       <img ref={logoRef} src="/logo-circular-oficial.png" alt="Central Mutuos" data-testid="protector-logo"
-        style={{ position: "absolute", top: "60%", left: "50%", width: logoSize, height: logoSize,
-          marginLeft: -logoSize / 2, borderRadius: "50%", opacity: 0,
+        style={{ position: "absolute", top: "50%", left: "50%", width: logoSize, height: logoSize,
+          marginTop: -logoSize / 2, marginLeft: -logoSize / 2, borderRadius: "50%", opacity: 0,
           animation: "cm-logo-levita 5s ease-in-out infinite",
           boxShadow: "0 0 70px -10px rgba(212,175,55,0.6)" }} />
     </>
