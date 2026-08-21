@@ -1793,3 +1793,10 @@ polling GET /api/central/proactive existe vacío en server.py:1526) — usuario 
    Testing: iteration_54 backend 14/14 + frontend 100%. Test e2e de referencia: /app/tests/test_victoria_qa.py.
    Menores conocidos: primer login tras cold-start tarda 40-50s (bcrypt); IMAP puede ser lento (por eso
    procesar-correo es asíncrono).
+
+## 2026-06 (fork, parte 4) — Entregables descargables
+10. /app/frontend/public/presentacion-victoria.html — presentación animada standalone (descargable).
+11. /app/frontend/public/presentacion-brokers-concreces.pdf — one-pager corporativo para brokers
+    (negro/dorado, logo oficial, generado con /app/tests/gen_pdf_brokers.py; regenerar ahí si piden cambios).
+    NOTA: app ya DESPLEGADA en producción https://mutuariasyleasing.cl — ante bugs preguntar SIEMPRE
+    si ocurre en preview o producción; cambios requieren redeploy del usuario.
