@@ -27,6 +27,12 @@ export default function DashboardModule({ valorUF: _valorUF, userName: _userName
   const [seguridad, setSeguridad] = useState(null);
   const [telepantalla, setTelepantalla] = useState(false);
 
+  useEffect(() => {
+    const abrir = () => setTelepantalla(true);
+    window.addEventListener("abrir-telepantalla", abrir);
+    return () => window.removeEventListener("abrir-telepantalla", abrir);
+  }, []);
+
   const generarDocsDataset = async () => {
     try {
       await axios.post(`${API_URL}/api/dashai/dataset-documentos/generar`);
@@ -147,12 +153,6 @@ export default function DashboardModule({ valorUF: _valorUF, userName: _userName
         </div>
       )}
       <ProactiveAlertsPanel />
-      <button data-testid="btn-telepantalla" onClick={() => setTelepantalla(true)}
-        style={{ display: "inline-flex", alignItems: "center", gap: 8, marginBottom: "0.8rem",
-          background: "rgba(14,14,16,0.9)", border: "1px solid rgba(212,175,55,0.5)", color: "#e7cf7a",
-          padding: "0.45rem 1.1rem", cursor: "pointer", fontSize: "0.72rem", fontWeight: 800, letterSpacing: 1.5 }}>
-        📡 TELEPANTALLA COGNITIVA — VER FLUJO EN VIVO
-      </button>
       {telepantalla && <TelepantallaCognitiva onCerrar={() => setTelepantalla(false)}
         onAbrirCarpeta={(fid) => { sessionStorage.setItem("cm_abrir_folder_id", fid); setTelepantalla(false); onNavigate && onNavigate("clientes"); }} />}
       <VisualizadorCognitivo modo="panel" />

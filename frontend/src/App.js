@@ -532,7 +532,7 @@ function MainApp() {
             borderRadius: 10, padding: "0.5rem 1rem", marginBottom: 12, color: "#e2e8f0", fontSize: "0.8rem", fontWeight: 700 }}>
             👁 MODO LECTURA — su rol puede visualizar este módulo pero no ejercer cambios.</div>
         )}
-        {activeModule === 'dashboard' && ['admin', 'maestro', 'gerencia'].includes(uEff.rol) && <HeliceADN />}
+        {activeModule === 'dashboard' && ['admin', 'maestro', 'gerencia'].includes(uEff.rol) && <HeliceADN conTelepantalla={['admin', 'maestro'].includes(uEff.rol)} />}
         {activeModule === 'dashboard' && (
           ['gerencia', 'administracion', 'postventa', 'contralor', 'broker'].includes(uEff.rol)
             ? <>

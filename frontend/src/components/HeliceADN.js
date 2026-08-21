@@ -90,7 +90,7 @@ function OverlayHelice({ est, onSalir }) {
   );
 }
 
-export default function HeliceADN() {
+export default function HeliceADN({ conTelepantalla }) {
   const [est, setEst] = useState(null);
   const [playing, setPlaying] = useState(false);
   const cargar = useCallback(() => {
@@ -122,11 +122,20 @@ export default function HeliceADN() {
           <div style={{ color: "#8a7a3a", fontSize: "0.62rem", fontFamily: "monospace", marginTop: 2 }}>
             {est ? `${est.procesados} bloques procesados · ${est.faltantes} pendientes · último: ${fFecha(est.ultimo_procesamiento)} · estado: ${ESTADO_LB[est.estado] || "—"}` : "cargando estado…"}</div>
         </div>
-        <button data-testid="btn-helice-reproducir" onClick={() => setPlaying(true)}
-          style={{ marginLeft: "auto", background: "linear-gradient(135deg,#8a6d1a,#b8860b)",
-            color: "#000", border: "none", borderRadius: 10, padding: "0.5rem 1.1rem",
-            fontWeight: 900, cursor: "pointer", fontSize: "0.72rem", letterSpacing: 0.5 }}>
-          ▶ Reproducir visualización</button>
+        <div style={{ marginLeft: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
+          <button data-testid="btn-helice-reproducir" onClick={() => setPlaying(true)}
+            style={{ background: "linear-gradient(135deg,#8a6d1a,#b8860b)",
+              color: "#000", border: "none", borderRadius: 10, padding: "0.5rem 1.1rem",
+              fontWeight: 900, cursor: "pointer", fontSize: "0.72rem", letterSpacing: 0.5 }}>
+            ▶ Reproducir visualización</button>
+          {conTelepantalla && (
+            <button data-testid="btn-telepantalla" onClick={() => window.dispatchEvent(new Event("abrir-telepantalla"))}
+              style={{ background: "rgba(14,14,16,0.9)", border: "1px solid rgba(212,175,55,0.5)",
+                color: "#e7cf7a", borderRadius: 10, padding: "0.5rem 1.1rem",
+                fontWeight: 900, cursor: "pointer", fontSize: "0.72rem", letterSpacing: 0.5 }}>
+              📡 Telepantalla Cognitiva</button>
+          )}
+        </div>
       </div>
       {playing && <OverlayHelice est={est} onSalir={salir} />}
     </>

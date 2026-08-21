@@ -1072,3 +1072,10 @@ actual; todo lo demás permanece intacto.
   `cm_abrir_folder_id` en sessionStorage, navegan a "clientes" y ClientesModule (useEffect de
   montaje tras openFolder) abre la carpeta al instante. Cursor pointer al pasar sobre un nodo,
   leyenda "CLIC EN UNA CARPETA PARA ABRIRLA". Verificado E2E (abrió carpeta Carlos Arancibia).
+- REUBICACIÓN BOTÓN (pedido del usuario): el botón "📡 Telepantalla Cognitiva" se movió a la
+  barra ADN DEL SISTEMA (HeliceADN.js), debajo de "▶ Reproducir visualización". HeliceADN recibe
+  prop conTelepantalla (solo admin/maestro, desde App.js) y dispara el evento window
+  "abrir-telepantalla"; DashboardModule lo escucha y monta TelepantallaCognitiva. Verificado E2E.
+- Producción verificada en vivo (risk-assess-17.emergent.host): telepantalla y visualizador
+  funcionando; el bundle principal no la contiene porque DashboardModule es lazy (chunk 48).
+  Dominio mutuariasyleasing.cl aún sin conectar.
