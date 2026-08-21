@@ -83,3 +83,31 @@ async def visualizador_estado(request: Request):
     return {"generado": ahora.isoformat(),
             "cerebro": {"normativas": normativas, "calibracion": perp.get("nivel_calibracion") or 85},
             "carpetas": carpetas, "correos": correos, "ejecutivos": ejecutivos}
+
+
+# ─── TELEPANTALLA COGNITIVA: visualizador + flujo de correos en tiempo real ───
+@visual.get("/telepantalla/estado")
+async def telepantalla_estado(request: Request):
+    base = await visualizador_estado(request)
+    from carpetas_resultado import _docs_correo
+    flujo = []
+    async for it in db.proc_queue.find(
+            {}, {"_id": 0, "id": 1, "sender": 1, "subject": 1, "date_iso": 1, "status": 1,
+                 "drive_folder_id": 1, "attachments": 1, "classification.cliente": 1,
+                 "classification.documentos.filename": 1}).sort("date_iso", -1).limit(16):
+        if it.get("drive_folder_id") or it.get("status") == "procesado":
+            estado = "carpeta"                       # generó carpeta → nodo dorado activo
+        elif it.get("status") == "descartado":
+            estado = "no_califica"                   # descartado → se apaga morado tenue
+        else:
+            try:
+                docs = _docs_correo(it)
+            except Exception:
+                docs = []
+            estado = "espera" if len(docs) >= 3 else "no_califica"
+        nombre = ((it.get("classification") or {}).get("cliente")
+                  or re.sub(r"<.*", "", it.get("sender") or "").strip() or "correo")[:20]
+        flujo.append({"id": it.get("id"), "nombre": nombre, "estado": estado,
+                      "hora": str(it.get("date_iso") or "")[11:16]})
+    base["flujo_correos"] = flujo
+    return base

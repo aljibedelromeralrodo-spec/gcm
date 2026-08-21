@@ -126,7 +126,7 @@ export default function FichaModal({ resultado, valorUF: _valorUF, onClose, prev
             <h4>PARA CONTINUAR CON EL PROCESO</h4>
             <div className="ficha-contact-inner">
               <p className="ficha-contact-label">Comuníquese a:</p>
-              <a href="mailto:gerardo.ext@centralmutuo.cl" className="ficha-contact-email">gerardo.ext@centralmutuo.cl</a>
+              <a href="mailto:gerardo.ext@centralmutuos.cl" className="ficha-contact-email">gerardo.ext@centralmutuos.cl</a>
               <p className="ficha-contact-brand">Central Mutuos - con creces</p>
             </div>
           </div>
@@ -137,7 +137,7 @@ export default function FichaModal({ resultado, valorUF: _valorUF, onClose, prev
           <button onClick={onDownloadPDF} className="ficha-action-btn pdf-btn">Generar PDF</button>
           <button onClick={() => {
             const subject = encodeURIComponent(`Simulación Crediticia - ${resultado.nombre_completo}`);
-            const body = encodeURIComponent(`Estimado/a,\n\nAdjunto resultados de simulación crediticia.\n\nCliente: ${resultado.nombre_completo}\nCapacidad: ${formatUF(resultado.capacidad_credito_uf)}\nDividendo: ${formatCurrency(resultado.dividendo_credito_clp || resultado.dividendo_tope)}\n\nSaludos,\nCentral Mutual - Con Creces`);
+            const body = encodeURIComponent(`Estimado/a,\n\nAdjunto resultados de simulación crediticia.\n\nCliente: ${resultado.nombre_completo}\nCapacidad: ${formatUF(resultado.capacidad_credito_uf)}\nDividendo: ${formatCurrency(resultado.dividendo_credito_clp || resultado.dividendo_tope)}\n\nSaludos,\nCentral Mutuos - Con Creces`);
             window.open(`mailto:?subject=${subject}&body=${body}`);
           }} className="ficha-action-btn email-btn">Enviar Email</button>
           <button onClick={() => {

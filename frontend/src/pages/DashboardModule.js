@@ -8,6 +8,7 @@ import LearningStatusPanel from "../components/LearningStatusPanel";
 import GraficosRiesgo from "../components/GraficosRiesgo";
 import CorreosSolicitudHoy from "../components/CorreosSolicitudHoy";
 import VisualizadorCognitivo from "../components/VisualizadorCognitivo";
+import TelepantallaCognitiva from "../components/TelepantallaCognitiva";
 
 export default function DashboardModule({ valorUF: _valorUF, userName: _userName, onNavigate }) {
   const [data, setData] = useState(null);
@@ -24,6 +25,7 @@ export default function DashboardModule({ valorUF: _valorUF, userName: _userName
   const [hallazgos, setHallazgos] = useState(null);
   const [capturas, setCapturas] = useState([]);
   const [seguridad, setSeguridad] = useState(null);
+  const [telepantalla, setTelepantalla] = useState(false);
 
   const generarDocsDataset = async () => {
     try {
@@ -145,6 +147,13 @@ export default function DashboardModule({ valorUF: _valorUF, userName: _userName
         </div>
       )}
       <ProactiveAlertsPanel />
+      <button data-testid="btn-telepantalla" onClick={() => setTelepantalla(true)}
+        style={{ display: "inline-flex", alignItems: "center", gap: 8, marginBottom: "0.8rem",
+          background: "rgba(14,14,16,0.9)", border: "1px solid rgba(212,175,55,0.5)", color: "#e7cf7a",
+          padding: "0.45rem 1.1rem", cursor: "pointer", fontSize: "0.72rem", fontWeight: 800, letterSpacing: 1.5 }}>
+        📡 TELEPANTALLA COGNITIVA — VER FLUJO EN VIVO
+      </button>
+      {telepantalla && <TelepantallaCognitiva onCerrar={() => setTelepantalla(false)} />}
       <VisualizadorCognitivo modo="panel" />
       <CorreosSolicitudHoy />
       {seguridad && (

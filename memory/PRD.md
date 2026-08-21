@@ -1046,3 +1046,25 @@ actual; todo lo demás permanece intacto.
   tocado y sigue auto-reproduciéndose cuando el algoritmo procesa (módulo existente protegido).
 - Incidente resuelto: recarga de uvicorn colgada (login sin respuesta) → sudo supervisorctl restart backend.
 - Verificado por screenshot E2E: panel en dashboard, expansión, protector fullscreen, PIN y desbloqueo.
+
+## Fork 2026-06 (Telepantalla Cognitiva + corrección de nombre) — HECHO
+- CORRECCIÓN OBLIGATORIA DE NOMBRE: corregidos 4 textos con variantes erróneas —
+  "Central Mutual - Con Creces" en FichaModal.js y SimuladorModule.js (correo + WhatsApp)
+  y el email `gerardo.ext@centralmutuo.cl` (sin s) en FichaModal.js. Todo dice "Central Mutuos".
+- TELEPANTALLA COGNITIVA (aprobada por el usuario con imagen de previsualización; pidió MANTENER
+  los nombres visibles, versión explicativa):
+  · Backend: GET /api/telepantalla/estado en visualizador.py (visualizador + flujo_correos desde
+    db.proc_queue: estado carpeta / no_califica (docs<3 o descartado) / espera).
+  · Frontend: /app/frontend/src/components/TelepantallaCognitiva.js — vista fullscreen dedicada:
+    correos entran como impulsos eléctricos dorados con estela y nombre (✉) desde el borde hacia
+    el centro; si genera carpeta → nodo dorado mate activo con anillo de nacimiento; si no
+    califica → el impulso se apaga en morado tenue a mitad de camino; si espera → nodo morado
+    pulsando lento. Red base con nombres (cerebro normativo, ejecutivos, carpetas con colores
+    reales) y disparo neuronal secuencial. Cierre con ESC o botón.
+  · Botón en dashboard admin: data-testid="btn-telepantalla" (DashboardModule.js).
+- INCIDENTE RECURRENTE: el hot-reload de uvicorn se cuelga tras editar archivos backend
+  (shutdown completa pero el proceso nuevo no arranca) → SIEMPRE `sudo supervisorctl restart backend`
+  tras editar backend y verificar con curl.
+- Deploy: usuario publicó a producción (https://risk-assess-17.emergent.host). deployment_agent dio
+  PASS sin hallazgos; el bloqueo del filtro fue falso positivo gestionado vía support@emergent.sh.
+- Verificado por screenshots E2E: botón, impulsos con nombres, integración de nodos, cierre ESC.

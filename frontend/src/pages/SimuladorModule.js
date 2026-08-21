@@ -330,13 +330,13 @@ export default function SimuladorModule({ valorUF, loadedSimulation }) {
                 </button>
                 <button className="action-btn email" onClick={() => {
                   const subject = encodeURIComponent(`Simulación Crediticia - ${resultado.nombre_completo}`);
-                  const body = encodeURIComponent(`Estimado/a,\n\nAdjunto resultados de simulación crediticia:\n\nCliente: ${resultado.nombre_completo}\nCapacidad: ${formatUF(resultado.capacidad_credito_uf)}\nDividendo: ${formatCurrency(resultado.dividendo_credito_clp || resultado.dividendo_tope)}\nCrédito Máximo: ${formatUF(resultado.credito_maximo_uf)}\n\nSaludos,\nCentral Mutual - Con Creces`);
+                  const body = encodeURIComponent(`Estimado/a,\n\nAdjunto resultados de simulación crediticia:\n\nCliente: ${resultado.nombre_completo}\nCapacidad: ${formatUF(resultado.capacidad_credito_uf)}\nDividendo: ${formatCurrency(resultado.dividendo_credito_clp || resultado.dividendo_tope)}\nCrédito Máximo: ${formatUF(resultado.credito_maximo_uf)}\n\nSaludos,\nCentral Mutuos - Con Creces`);
                   window.open(`mailto:?subject=${subject}&body=${body}`);
                 }} data-testid="btn-email">
                   <i className="fa fa-envelope"></i> Email
                 </button>
                 <button className="action-btn whatsapp" onClick={() => {
-                  const text = encodeURIComponent(`*Simulación Crediticia*\nCliente: ${resultado.nombre_completo}\nCapacidad: ${formatUF(resultado.capacidad_credito_uf)}\nDividendo: ${formatCurrency(resultado.dividendo_credito_clp || resultado.dividendo_tope)}\nCrédito Máximo: ${formatUF(resultado.credito_maximo_uf)}\n\n_Central Mutual - Con Creces_`);
+                  const text = encodeURIComponent(`*Simulación Crediticia*\nCliente: ${resultado.nombre_completo}\nCapacidad: ${formatUF(resultado.capacidad_credito_uf)}\nDividendo: ${formatCurrency(resultado.dividendo_credito_clp || resultado.dividendo_tope)}\nCrédito Máximo: ${formatUF(resultado.credito_maximo_uf)}\n\n_Central Mutuos - Con Creces_`);
                   window.open(`https://wa.me/?text=${text}`, '_blank');
                 }} data-testid="btn-whatsapp">
                   <i className="fa fa-whatsapp"></i> WhatsApp
