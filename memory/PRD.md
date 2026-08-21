@@ -1115,3 +1115,9 @@ actual; todo lo demás permanece intacto.
   del criterio de mesa con timeline de aprendizajes fechados (usa /api/espejo-ia/evolucion y
   /modelo), chips de criterios de rechazo top, botones RE-ENTRENAR y expandir. Se renderiza
   tras VisualizadorCognitivo en DashboardModule. Verificado E2E con captura (v1 y v2 visibles).
+- ACTUALIZACIÓN APRENDIZAJE ESPEJO (orden del usuario): el período de aprendizaje ya NO es por
+  cantidad de casos — es VENTANA MÓVIL DE 3 MESES CALENDARIO desde hoy, actualizada cada día
+  (firma incluye la fecha → re-entrena diario; loop cada 1h). Sin límite de casos dentro del
+  período (find sin limit). Filtro por fecha_caso aplica a TODAS las capas (capa 2 incluida).
+  Modelo guarda `periodo` {desde, hasta, regla}; PanelEspejo muestra "ventana móvil 3 meses".
+  Verificado: v3 con periodo 2026-05-21→2026-08-21, predicción OK.

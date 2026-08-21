@@ -2,6 +2,10 @@
 Aprende los criterios de mesa desde los datos ya espejados (simulaciones,
 resultados de mesa en carpetas y correos a mesa) y predice la probabilidad
 de aprobación de cada carpeta con sus factores de mayor peso.
+PERÍODO DE APRENDIZAJE: siempre los últimos 3 MESES CALENDARIO desde la fecha
+actual, actualizado automáticamente cada día — sin límite de cantidad de casos
+dentro del período: se procesan TODOS. Lo que sale del rango se descarta y lo
+nuevo se suma solo.
 DISEÑO MODULAR POR CAPAS: cada caso de aprendizaje lleva `origen`
 ("capa1_simulaciones", "capa1_mesa", "capa2_mbox"). Cuando lleguen los
 13.000 correos históricos (.mbox de Daniela Galindo) solo se insertan casos
@@ -34,6 +38,23 @@ def _now():
 
 def _rut8(r):
     return re.sub(r"[^0-9kK]", "", r or "").lower()[:8]
+
+
+def _corte_3_meses():
+    """Inicio del período de aprendizaje: 3 meses calendario atrás desde hoy."""
+    hoy = datetime.now(timezone.utc)
+    m = hoy.month - 3
+    y = hoy.year + (m - 1) // 12
+    m = (m - 1) % 12 + 1
+    return hoy.replace(year=y, month=m, day=min(hoy.day, 28))
+
+
+def _dtu(ts):
+    try:
+        d = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+        return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
+    except (TypeError, ValueError):
+        return None
 
 
 # ── Extracción de rasgos (compartida por todas las capas) ──
@@ -97,11 +118,14 @@ def _etiqueta(f):
     return ETIQUETAS.get(f, f)
 
 
-# ── Construcción de casos CAPA 1 ──
+# ── Construcción de casos CAPA 1 (ventana móvil de 3 meses, TODOS los casos) ──
 async def _reconstruir_casos_capa1():
+    corte = _corte_3_meses()
     await db.espejo_casos.delete_many({"origen": {"$regex": "^capa1"}})
     casos = []
-    async for s in db.simulaciones.find({"precalificacion_aprobada": {"$in": [True, False]}}).limit(2000):
+    async for s in db.simulaciones.find({"precalificacion_aprobada": {"$in": [True, False]}}):
+        if (_dtu(s.get("timestamp")) or datetime.now(timezone.utc)) < corte:
+            continue
         casos.append({"id": str(uuid.uuid4()), "origen": "capa1_simulaciones",
                       "fecha_caso": s.get("timestamp") or _now(),
                       "resultado": "aprobado" if s.get("precalificacion_aprobada") else "reprobado",
@@ -110,9 +134,12 @@ async def _reconstruir_casos_capa1():
                       "rut": _rut8(s.get("rut"))})
     from server import _criterios_folder
     sims_por_rut = {}
-    async for s in db.simulaciones.find({}).sort("timestamp", -1).limit(1000):
+    async for s in db.simulaciones.find({}).sort("timestamp", -1).limit(3000):
         sims_por_rut.setdefault(_rut8(s.get("rut")), s)
-    async for f in db.folders.find({"resultado_mesa": {"$in": ["aprobado", "reprobado"]}}).limit(2000):
+    async for f in db.folders.find({"resultado_mesa": {"$in": ["aprobado", "reprobado"]}}):
+        fecha = f.get("resultado_mesa_at") or f.get("updated_at") or _now()
+        if (_dtu(fecha) or datetime.now(timezone.utc)) < corte:
+            continue
         try:
             crit = _criterios_folder(f)
         except Exception:
@@ -122,18 +149,19 @@ async def _reconstruir_casos_capa1():
         if sim:
             fts += _features_sim(sim)
         casos.append({"id": str(uuid.uuid4()), "origen": "capa1_mesa",
-                      "fecha_caso": f.get("resultado_mesa_at") or f.get("updated_at") or _now(),
-                      "resultado": f.get("resultado_mesa"), "features": sorted(set(fts)),
-                      "razones": [], "rut": _rut8(f.get("rut"))})
+                      "fecha_caso": fecha, "resultado": f.get("resultado_mesa"),
+                      "features": sorted(set(fts)), "razones": [], "rut": _rut8(f.get("rut"))})
     if casos:
         await db.espejo_casos.insert_many(casos)
     return len(casos)
 
 
-# ── Entrenamiento (lee TODAS las capas presentes en espejo_casos) ──
+# ── Entrenamiento: TODAS las capas, solo casos dentro de los últimos 3 meses ──
 async def entrenar():
     n_capa1 = await _reconstruir_casos_capa1()
-    casos = await db.espejo_casos.find({}, {"_id": 0}).to_list(20000)
+    corte = _corte_3_meses()
+    todos = await db.espejo_casos.find({}, {"_id": 0}).to_list(None)
+    casos = [c for c in todos if (_dtu(c.get("fecha_caso")) or corte) >= corte]
     n = len(casos)
     aprob = [c for c in casos if c["resultado"] == "aprobado"]
     n_a = len(aprob)
@@ -170,6 +198,7 @@ async def entrenar():
     version = int(prev.get("version") or 0) + 1
     doc = {"version": version, "fecha": _now(), "n_casos": n, "n_aprobados": n_a,
            "n_capa1": n_capa1, "origenes": dict(origen_stats),
+           "periodo": {"desde": corte.isoformat(), "hasta": _now(), "regla": "últimos 3 meses calendario, móvil diario"},
            "tasa_base": round(base, 4), "base_logit": round(base_logit, 4),
            "pesos": pesos, "razones_top": razones_top, "aprendizajes": aprendizajes}
     await db.espejo_modelo.insert_one(dict(doc))
@@ -220,21 +249,22 @@ async def predecir_folder(f):
             "casos_aprendidos": m.get("n_casos"), "capas": m.get("origenes") or {}}
 
 
-# ── Loop: re-entrena cuando cambia la base de datos espejada ──
+# ── Loop: ventana móvil de 3 meses re-entrenada automáticamente CADA DÍA ──
 async def espejo_aprendizaje_loop():
     await asyncio.sleep(120)
     while True:
         try:
+            hoy = datetime.now(timezone.utc).strftime("%Y-%m-%d")
             n_sim = await db.simulaciones.count_documents({"precalificacion_aprobada": {"$in": [True, False]}})
             n_mesa = await db.folders.count_documents({"resultado_mesa": {"$in": ["aprobado", "reprobado"]}})
             m = await _modelo_actual()
-            firma = f"{n_sim}|{n_mesa}"
+            firma = f"{hoy}|{n_sim}|{n_mesa}"           # cambia cada día → la ventana avanza sola
             if not m or m.get("firma_datos") != firma:
                 doc = await entrenar()
                 await db.espejo_modelo.update_one({"version": doc["version"]}, {"$set": {"firma_datos": firma}})
         except Exception as e:
             logging.warning(f"espejo_aprendizaje_loop: {e}")
-        await asyncio.sleep(6 * 3600)
+        await asyncio.sleep(3600)
 
 
 # ── Endpoints ──
