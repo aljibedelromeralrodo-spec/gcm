@@ -1806,3 +1806,11 @@ polling GET /api/central/proactive existe vacío en server.py:1526) — usuario 
     tradicional, inmobiliarias Boetsch/Ecomac/Besalco, productos DS19-DS01 y 2.000-12.000 UF,
     beneficios cesantía/buen pagador, CTA a centralmutuos.cl + contacto@centralmutuos.cl, pie CMF).
     Enviado de muestra a gerardo.ext@centralmutuos.cl (redirección anti auto-envío). SMTP 250 OK.
+13. Material para INMOBILIARIAS (contenido real de centralmutuos.cl + concreces.cl):
+    - /app/frontend/public/template-inmobiliarias-concreces.html (email HTML Gmail/Outlook, foco
+      inmobiliarias: alianza CM+ConCreces, cifras Ecomac +12mil/1.300/30 años, rapidez=escrituración,
+      comparativo, paso a paso). 
+    - /app/frontend/public/presentacion-inmobiliarias-concreces.pdf (5 págs negro/dorado: portada,
+      quiénes somos+alianza, productos+plazos, comparativo+proceso paso a paso, FAQ+contacto; pie CMF
+      en todas). Generador: /app/tests/gen_pdf_inmobiliarias.py. Verificado 5/5 sin defectos.
+    - Ambos enviados por correo a gerardo.ext@centralmutuos.cl (SMTP 250).
