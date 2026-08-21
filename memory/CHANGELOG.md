@@ -1686,3 +1686,7 @@ Constitución VERSION 19 (nuevas reglas #55, #56, #57).
 - Logo circular OFICIAL: /app/frontend/public/logo-circular-oficial.png (círculo negro, CM dorado, 'CENTRAL MUTUOS / CON CRECES'). ⚠️ /logo-cm.png es el avatar de WhatsApp — NO usarlo como logo corporativo.
 - El logo emerge en el centro cuando el llenado pasa 30% y gira lentamente (26s/vuelta).
 - Desbloqueo con PIN maestro sin cambios. Texto superior sigue diciendo exactamente 'Central Mutuos'.
+
+## 2026-06 — Protector v3: orientación horizontal restaurada
+- El usuario pidió volver a la dirección original: hélice HORIZONTAL a lo ancho de la pantalla (como v1), manteniendo estilo poligonal, morado→dorado (conquista de izquierda a derecha) y logo oficial giratorio al centro.
+- Verificado con captura. NO cambiar la orientación sin pedido explícito.

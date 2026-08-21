@@ -14,10 +14,10 @@ function HeliceProtector() {
     const start = performance.now();
     const W = (cv.width = window.innerWidth);
     const H = (cv.height = window.innerHeight);
-    const cx = W / 2;
-    const yTop = H * 0.12, yBot = H * 0.9;
-    const N = 46;                       // nodos por hebra (estilo poligonal)
-    const amp = Math.min(240, W * 0.16);
+    const cy = H / 2;
+    const xIzq = W * 0.08, xDer = W * 0.92;
+    const N = 60;                       // nodos por hebra (estilo poligonal)
+    const amp = Math.min(170, H * 0.21);
     const FILL_MS = 16000, HOLD_MS = 3000;
     const MORADO = ["#7c3aed", "#5b6cf0", "#3b82f6"];
     const ORO = ["#8a6d1a", "#b8860b", "#BF953F", "#d4af37"];
@@ -25,21 +25,21 @@ function HeliceProtector() {
     const draw = (now) => {
       const t = now - start;
       const ciclo = t % (FILL_MS + HOLD_MS);
-      const fill = Math.min(1, ciclo / FILL_MS);   // 0→1: el dorado conquista de abajo hacia arriba
+      const fill = Math.min(1, ciclo / FILL_MS);   // 0→1: el dorado conquista de izquierda a derecha
       const rot = t * 0.0009;
-      const yFrontera = yBot - (yBot - yTop) * fill;
+      const xFrontera = xIzq + (xDer - xIzq) * fill;
       ctx.fillStyle = "#000";
       ctx.fillRect(0, 0, W, H);
 
       const nodo = (i, desfase) => {
-        const y = yTop + ((yBot - yTop) * i) / (N - 1);
+        const x = xIzq + ((xDer - xIzq) * i) / (N - 1);
         const ph = i * 0.42 + rot + desfase;
-        return { x: cx + Math.sin(ph) * amp, y, prof: (Math.cos(ph) + 1) / 2 };
+        return { x, y: cy + Math.sin(ph) * amp, prof: (Math.cos(ph) + 1) / 2 };
       };
-      const colorDe = (y, prof, dorado) => {
+      const colorDe = (x, prof, dorado) => {
         const pal = dorado ? ORO : MORADO;
         const c = pal[Math.floor(prof * (pal.length - 1))];
-        const cerca = Math.abs(y - yFrontera) < (yBot - yTop) * 0.045;
+        const cerca = Math.abs(x - xFrontera) < (xDer - xIzq) * 0.035;
         return { c: cerca && dorado ? "#FCF6BA" : c, a: 0.3 + 0.65 * prof };
       };
 
@@ -47,8 +47,8 @@ function HeliceProtector() {
         // hebra poligonal: segmentos rectos entre nodos
         for (let i = 0; i < N - 1; i++) {
           const a = nodo(i, desfase), b = nodo(i + 1, desfase);
-          const dor = a.y >= yFrontera;
-          const { c, a: al } = colorDe(a.y, (a.prof + b.prof) / 2, dor);
+          const dor = a.x <= xFrontera;
+          const { c, a: al } = colorDe(a.x, (a.prof + b.prof) / 2, dor);
           ctx.globalAlpha = al * 0.85;
           ctx.strokeStyle = c;
           ctx.lineWidth = 1.6 + 1.8 * a.prof;
@@ -57,8 +57,8 @@ function HeliceProtector() {
         // vértices: rombos geométricos (low-poly)
         for (let i = 0; i < N; i++) {
           const p = nodo(i, desfase);
-          const dor = p.y >= yFrontera;
-          const { c, a: al } = colorDe(p.y, p.prof, dor);
+          const dor = p.x <= xFrontera;
+          const { c, a: al } = colorDe(p.x, p.prof, dor);
           const r = 3 + 4.5 * p.prof;
           ctx.globalAlpha = al;
           ctx.fillStyle = c;
@@ -71,7 +71,7 @@ function HeliceProtector() {
       // peldaños rectos entre hebras
       for (let i = 0; i < N; i += 3) {
         const a = nodo(i, 0), b = nodo(i, Math.PI);
-        const dor = a.y >= yFrontera;
+        const dor = a.x <= xFrontera;
         ctx.globalAlpha = 0.16 + 0.2 * Math.min(a.prof, b.prof);
         ctx.strokeStyle = dor ? "#b8860b" : "#5b6cf0";
         ctx.lineWidth = 1.2;
