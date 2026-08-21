@@ -1111,3 +1111,7 @@ actual; todo lo demás permanece intacto.
   · Frontend: PrediccionEspejo.js en el detalle de carpeta (ALTA/MEDIA/BAJA + % + factores,
     data-testid prediccion-espejo). Verificado E2E (BAJA 5.3% con 0 aprobados aún).
 - NOTA: NO se envió ningún correo real (normativa: el primero es mañana 8:00 AM automático).
+- PANEL DEL ESPEJO (dashboard admin): /app/frontend/src/components/PanelEspejo.js — evolución
+  del criterio de mesa con timeline de aprendizajes fechados (usa /api/espejo-ia/evolucion y
+  /modelo), chips de criterios de rechazo top, botones RE-ENTRENAR y expandir. Se renderiza
+  tras VisualizadorCognitivo en DashboardModule. Verificado E2E con captura (v1 y v2 visibles).
