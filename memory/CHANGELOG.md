@@ -1694,5 +1694,5 @@ Constitución VERSION 19 (nuevas reglas #55, #56, #57).
 ## 2026-06 — Protector v4 (referencia del usuario, DEFINITIVO)
 - Base: imagen de referencia low-poly del usuario, SIN la mano.
 - Hélice VERTICAL low-poly centrada arriba, estructura DORADA conquistando desde abajo (parte superior queda azul), fondo AZUL PROFUNDO con luz superior (como la foto), destellos titilantes alrededor.
-- Logo circular oficial LEVITA (no gira) debajo de la hélice, donde estaba la mano.
+- Logo circular oficial LEVITA (no gira) AL CENTRO de la pantalla, integrado en la hélice (top 50%). Aprobado por el usuario.
 - NO volver a cambiar: mano prohibida, logo levita, estructura dorada, fondo azul.
