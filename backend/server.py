@@ -632,6 +632,9 @@ async def startup():
     try:
         import manual_concreces as _mc_seed
         asyncio.create_task(_mc_seed.seed_reglas_oro())
+        import victoria_independiente as _vi_mod
+        asyncio.create_task(_vi_mod.seed_reglas_coincidencia())
+        asyncio.create_task(_task_blindada(_vi_mod.victoria_mail_loop, "victoria_mail"))
     except Exception as _e:
         logging.warning(f"seed reglas oro concreces: {_e}")
     import resumen_diario as _resdia
@@ -14826,6 +14829,8 @@ import espejo_aprendizaje as _espia_mod
 api.include_router(_espia_mod.espia)
 import manual_concreces as _mconc_mod
 api.include_router(_mconc_mod.mconc)
+import victoria_independiente as _vict_mod
+api.include_router(_vict_mod.vict)
 import auditoria_flujos as _audf_mod
 api.include_router(_audf_mod.audf)
 

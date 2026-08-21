@@ -8,6 +8,7 @@ import EspejoHibrido from "../components/EspejoHibrido";
 import DocumentoViewer from "../components/DocumentoViewer";
 import TrackerPasos from "../components/TrackerPasos";
 import ManualConcreces from "../components/ManualConcreces";
+import VictoriaBoveda from "../components/VictoriaBoveda";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 const PILL = { validado: "#22c55e", observado: "#f59e0b", pendiente: "#94a3b8", expulsado: "#ef4444" };
@@ -376,6 +377,8 @@ export default function AdministracionModule({ user }) {
 
       {/* FLUJOS USADA/INMOBILIARIA solo en el panel de Victoria (Regla #37) */}
       {panel === "victoria" && <FlujosVictoria />}
+      {/* 🗄️ MÓDULO VICTORIA INDEPENDIENTE — bóveda propia, correo, auditoría y ConCreces */}
+      {panel === "victoria" && <VictoriaBoveda />}
       {/* 📘 MÓDULO VICTORIA — Flujo guiado ConCreces según Manual de Procedimiento */}
       {panel === "victoria" && <ManualConcreces />}
 

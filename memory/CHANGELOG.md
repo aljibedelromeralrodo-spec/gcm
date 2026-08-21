@@ -1763,3 +1763,33 @@ NOTA: hot-reload del backend se cuelga (conocido) → sudo supervisorctl restart
    NOTA: usuario victoria tiene clave provisoria first_login=true (ver test_credentials.md).
 PENDIENTE PRÓXIMA SESIÓN: Martín Proactivo (aviso hablado al llegar aprobación MESA con chat cerrado,
 polling GET /api/central/proactive existe vacío en server.py:1526) — usuario lo pidió y quedó en cola.
+
+## 2026-06 (fork, parte 3) — MÓDULO VICTORIA INDEPENDIENTE + Presentación animada
+8. MÓDULO VICTORIA INDEPENDIENTE (victoria_independiente.py, /api/victoria/*, VictoriaBoveda.js
+   montado en panel victoria SOBRE ManualConcreces): bóveda PROPIA separada de folders del admin.
+   - Colecciones: victoria_clientes, victoria_docs (archivos en /app/boveda_victoria/{cid}),
+     victoria_avisos, victoria_mail_log. Despacho registra en concreces_estado origen=victoria_independiente.
+   - MONITOREO CORREO: loop victoria_mail_loop (10 min) + POST /procesar-correo (ahora asíncrono 202-style,
+     fix iter54) usa email_service.fetch_pdf_attachments + fuentes de db.config fuentes_imap_victoria
+     (victoriavilches@centralmutuos.cl, Value Property, G.Mardones). Clasifica adjuntos por regex
+     (tasacion/titulos/carpeta_credito/simulacion/escritura), crea cliente por RUT extraído; si no
+     identifica → victoria_avisos + doc sin_clasificar con endpoint /sin-clasificar/{did}/asignar.
+   - EXTRACCIÓN: ocr_service.extraer_texto + IA gpt-5.4-mini (JSON: rut_titular, rut_codeudor,
+     rol_avaluo, direccion_propiedad, fecha_documento, firmado) con fallback regex (_regex_fallback).
+   - AUDITORÍA AUTOMÁTICA: docs requeridos (tasacion/titulos/carpeta_credito/simulacion), vigencias
+     (tasacion 90d, titulos 90d, simulacion 60d...), firmas obligatorias (titulos/carpeta/escritura),
+     legibilidad. Alertas con detalle exacto.
+   - REGLAS DE ORO 11-14 (irrenunciables, sembradas en dashai_eventos etiqueta "Regla de Oro ConCreces",
+     total ahora 14): RUT titular idéntico en TODOS los docs; RUT codeudor idéntico; rol de avalúo
+     idéntico tasación↔títulos; dirección idéntica tasación↔títulos (normalizada). Si falla →
+     bloqueado + alerta crítica con "«X» en doc A ≠ «Y» en doc B" + 403 al despachar.
+   - Formularios auto-rellenados (_formularios_auto) que Victoria confirma; documento de envío HTML;
+     despacho 1 clic bloqueado hasta coincidencias 4/4 + formularios confirmados.
+   - Banner "SIGUIENTE" (_paso_siguiente) guía a Victoria en todo momento.
+9. PRESENTACIÓN ANIMADA (PresentacionVictoria.js, botón "▶ Ver presentación" en la bóveda):
+   fullscreen negro/dorado sobrio, 5 pasos secuenciales (auto 7s o manual) comparando
+   "CON EL SISTEMA" vs "SIN EL SISTEMA (manual, minutos)" + resumen final (≈100→10 min, 90% menos,
+   0 descuadres, 0 vencidos).
+   Testing: iteration_54 backend 14/14 + frontend 100%. Test e2e de referencia: /app/tests/test_victoria_qa.py.
+   Menores conocidos: primer login tras cold-start tarda 40-50s (bcrypt); IMAP puede ser lento (por eso
+   procesar-correo es asíncrono).
