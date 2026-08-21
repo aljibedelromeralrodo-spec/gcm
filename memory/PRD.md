@@ -1068,3 +1068,7 @@ actual; todo lo demás permanece intacto.
 - Deploy: usuario publicó a producción (https://risk-assess-17.emergent.host). deployment_agent dio
   PASS sin hallazgos; el bloqueo del filtro fue falso positivo gestionado vía support@emergent.sh.
 - Verificado por screenshots E2E: botón, impulsos con nombres, integración de nodos, cierre ESC.
+- CLIC EN NODOS (2026-06): los nodos de carpeta de la Telepantalla son clickeables → guardan
+  `cm_abrir_folder_id` en sessionStorage, navegan a "clientes" y ClientesModule (useEffect de
+  montaje tras openFolder) abre la carpeta al instante. Cursor pointer al pasar sobre un nodo,
+  leyenda "CLIC EN UNA CARPETA PARA ABRIRLA". Verificado E2E (abrió carpeta Carlos Arancibia).

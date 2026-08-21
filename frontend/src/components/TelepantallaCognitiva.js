@@ -16,12 +16,26 @@ const disparo = (h, t) => {
 const DUR_IMPULSO = 5200;
 
 // TELEPANTALLA COGNITIVA: visualizador + correos entrando como impulsos eléctricos
-export default function TelepantallaCognitiva({ onCerrar }) {
+export default function TelepantallaCognitiva({ onCerrar, onAbrirCarpeta }) {
   const [datos, setDatos] = useState(null);
   const datosRef = useRef(null);
   const impRef = useRef({ vistos: new Set(), vuelo: [], llegados: {} });
+  const hitsRef = useRef([]);
   const wrapRef = useRef(null);
   const canvasRef = useRef(null);
+
+  const buscarNodo = (e) => {
+    const rect = canvasRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left, y = e.clientY - rect.top;
+    return hitsRef.current.find(h => (h.x - x) ** 2 + (h.y - y) ** 2 <= 169);
+  };
+  const clickCanvas = (e) => {
+    const h = buscarNodo(e);
+    if (h && onAbrirCarpeta) onAbrirCarpeta(h.id);
+  };
+  const moverCanvas = (e) => {
+    if (canvasRef.current) canvasRef.current.style.cursor = buscarNodo(e) ? "pointer" : "default";
+  };
 
   useEffect(() => {
     let vivo = true;
@@ -188,11 +202,15 @@ export default function TelepantallaCognitiva({ onCerrar }) {
         }
       });
 
-      // nodos carpeta con nombres
+      // nodos carpeta con nombres (clickeables → abren la carpeta del cliente)
+      const hits = [];
       d.carpetas.forEach((c, i) => {
         const rgb = colorCarpeta(c);
-        nodo(posCa(i, nC, c.id), 4.6, rgb, 5, c.nombre.split(" ")[0], `rgba(${rgb},0.8)`, disparo(hashStr(c.id), t));
+        const p = posCa(i, nC, c.id);
+        hits.push({ x: p.x, y: p.y, id: c.id });
+        nodo(p, 4.6, rgb, 5, c.nombre.split(" ")[0], `rgba(${rgb},0.8)`, disparo(hashStr(c.id), t));
       });
+      hitsRef.current = hits;
       d.ejecutivos.forEach((e, i) => nodo(posEj(i, nE), 6, ORO, 6, e.nombre.split(" ")[0],
         "rgba(231,207,122,0.85)", disparo(hashStr(e.codigo) + 31, t)));
 
@@ -216,7 +234,8 @@ export default function TelepantallaCognitiva({ onCerrar }) {
   return (
     <div ref={wrapRef} data-testid="telepantalla-cognitiva"
       style={{ position: "fixed", inset: 0, zIndex: 95000, background: "#000" }}>
-      <canvas ref={canvasRef} style={{ display: "block", position: "absolute", inset: 0 }} />
+      <canvas ref={canvasRef} onClick={clickCanvas} onMouseMove={moverCanvas} data-testid="telepantalla-canvas"
+        style={{ display: "block", position: "absolute", inset: 0 }} />
       <div style={{ position: "absolute", top: 12, left: 16, pointerEvents: "none" }}>
         <span style={{ color: "#e7cf7a", fontSize: "0.72rem", fontWeight: 800, letterSpacing: 2, fontFamily: "monospace" }}>
           📡 TELEPANTALLA COGNITIVA — CENTRAL MUTUOS</span>
@@ -227,6 +246,8 @@ export default function TelepantallaCognitiva({ onCerrar }) {
         {[["IMPULSO/ACTIVO", ORO], ["ESPERA (pulsa)", MORADO], ["APROBADO", VERDE], ["RECHAZO/ALERTA", ROJO]].map(([l, c]) => (
           <span key={l} style={{ fontSize: "0.55rem", fontFamily: "monospace", letterSpacing: 1, color: `rgb(${c})` }}>● {l}</span>
         ))}
+        <span style={{ fontSize: "0.55rem", fontFamily: "monospace", letterSpacing: 1, color: "#6a6046" }}>
+          · CLIC EN UNA CARPETA PARA ABRIRLA</span>
       </div>
       <button data-testid="telepantalla-cerrar" onClick={onCerrar}
         style={{ position: "absolute", top: 10, right: 12, background: "rgba(14,14,16,0.9)",

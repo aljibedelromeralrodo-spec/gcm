@@ -982,6 +982,16 @@ export default function ClientesModule({ onNavigate }) {
     setLoading(false);
   };
 
+  // Apertura instantánea desde la Telepantalla Cognitiva (clic en nodo)
+  useEffect(() => {
+    const fid = sessionStorage.getItem("cm_abrir_folder_id");
+    if (fid) {
+      sessionStorage.removeItem("cm_abrir_folder_id");
+      openFolder(fid);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleManualUpload = async (e) => {
     const files = Array.from(e.target.files || []);
     if (!files.length || !currentFolder) return;

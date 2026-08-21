@@ -153,7 +153,8 @@ export default function DashboardModule({ valorUF: _valorUF, userName: _userName
           padding: "0.45rem 1.1rem", cursor: "pointer", fontSize: "0.72rem", fontWeight: 800, letterSpacing: 1.5 }}>
         📡 TELEPANTALLA COGNITIVA — VER FLUJO EN VIVO
       </button>
-      {telepantalla && <TelepantallaCognitiva onCerrar={() => setTelepantalla(false)} />}
+      {telepantalla && <TelepantallaCognitiva onCerrar={() => setTelepantalla(false)}
+        onAbrirCarpeta={(fid) => { sessionStorage.setItem("cm_abrir_folder_id", fid); setTelepantalla(false); onNavigate && onNavigate("clientes"); }} />}
       <VisualizadorCognitivo modo="panel" />
       <CorreosSolicitudHoy />
       {seguridad && (
