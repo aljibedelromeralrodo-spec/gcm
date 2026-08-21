@@ -1133,3 +1133,19 @@ actual; todo lo demás permanece intacto.
   _decodifica_snippet elige plano/quoted-printable/base64 por legibilidad.
   RESULTADO REAL: 109 hilos (10 aprobados · 99 rechazados) + 17 sims = 126 casos; pesos ya
   diferenciados (adjuntos_7+ y contrato de trabajo +0.76 a favor). Re-entrena solo cada día.
+
+## 2026-06 — Acceso exclusivo Victoria Vilches (COMPLETADO)
+- Usuario sembrado: victoria.vilches@centralmutuos.cl / clave temporal Victoria2024
+  (rol administracion + solo_modulo="victoria" + clave_temporal=true, seed idempotente en ensure_seed).
+- Al ingresar ve SOLO su módulo de trabajo (VictoriaWorkspace.js: VictoriaBoveda + ManualConcreces),
+  sin sidebar, sin dashboard ni paneles de administrador. Gate en App.js (user.solo_modulo === "victoria").
+- Cambio de contraseña: banner de clave temporal al primer ingreso + botón "Cambiar contraseña" en
+  el header (siempre disponible desde su perfil). Endpoint POST /api/auth/cambiar-clave
+  (verifica clave actual, valida mín 8 chars + mayúscula + número, limpia clave_temporal).
+- Verificado: curl E2E (login, clave incorrecta 400, clave débil 400, cambio OK, re-login case-insensitive)
+  + screenshot (workspace exclusivo, banner visible, sidebar ausente).
+
+## PENDIENTE INMEDIATO
+- Importar listado "ds19 01 inmoboliarias" al Módulo Publicidad desde la imagen de 174 proyectos
+  usatusubsidio.cl enviada por el usuario (solo emails válidos, deduplicar, excluir @ecomac.cl).
+  Asset: https://customer-assets-gfyr7b9c.emergentagent.net/job_96f233fb-cd92-45e9-8847-7be7b345f873/artifacts/yuc588dl_image.webp

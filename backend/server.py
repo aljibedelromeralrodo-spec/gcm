@@ -117,6 +117,15 @@ async def ensure_seed():
                 "codigo": codigo, "nombre": nombre, "rol": rol, "perfil": perfil,
                 "clave_hash": bcrypt.hashpw(clave.encode(), bcrypt.gensalt()).decode(),
                 "activo": True, "created": now_iso()})
+    # ── ACCESO EXCLUSIVO VICTORIA VILCHES: solo ve su módulo de trabajo ──
+    if not await db.users.find_one({"codigo": "victoria.vilches@centralmutuos.cl"}):
+        await db.users.insert_one({
+            "codigo": "victoria.vilches@centralmutuos.cl",
+            "email": "victoria.vilches@centralmutuos.cl",
+            "nombre": "Victoria Vilches", "rol": "administracion", "perfil": "",
+            "solo_modulo": "victoria", "clave_temporal": True,
+            "clave_hash": bcrypt.hashpw("Victoria2024".encode(), bcrypt.gensalt()).decode(),
+            "activo": True, "created": now_iso()})
     # ── CARGO OFICIAL DEL ADMINISTRADOR (Ethan): fijo e inamovible por otros usuarios ──
     await db.users.update_many(
         {"codigo": {"$in": ["admin", "administrador"]}, "cargo": {"$exists": False}},
@@ -713,6 +722,8 @@ def _token_usuario(user):
         "perfil": perfil,
         "cargo": user.get("cargo") or "",
         "first_login": bool(user.get("first_login")),
+        "solo_modulo": user.get("solo_modulo") or "",
+        "clave_temporal": bool(user.get("clave_temporal")),
     }
 
 
@@ -903,6 +914,31 @@ async def primer_ingreso_imap(payload: dict, request: Request):
         "first_login": False}, "$unset": {"primer_paso_clave": ""}})
     fresh = await db.users.find_one({"codigo": user["codigo"]})
     return {"ok": True, "paso": 2, **_token_usuario(fresh)}
+
+
+@api.post("/auth/cambiar-clave")
+async def cambiar_clave(payload: dict, request: Request):
+    """Cambio de contraseña desde el perfil del usuario (primer ingreso o cuando desee)."""
+    sub = (getattr(request.state, "user", {}) or {}).get("sub") or ""
+    user = await db.users.find_one({"codigo": sub})
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    actual = (payload.get("clave_actual") or "").strip()
+    nueva = (payload.get("clave_nueva") or "").strip()
+    conf = (payload.get("confirmacion") or "").strip()
+    ok = (bool(actual) and bcrypt.checkpw(actual.encode(), user["clave_hash"].encode())
+          if user.get("clave_hash") else bool(actual) and user.get("password") == actual)
+    if not ok:
+        raise HTTPException(status_code=400, detail="La contraseña actual no es correcta")
+    if nueva != conf:
+        raise HTTPException(status_code=400, detail="La nueva contraseña y su confirmación no coinciden")
+    _validar_clave_nueva(nueva)
+    if nueva == actual:
+        raise HTTPException(status_code=400, detail="La nueva contraseña debe ser distinta a la actual")
+    await db.users.update_one({"codigo": user["codigo"]}, {"$set": {
+        "clave_hash": bcrypt.hashpw(nueva.encode(), bcrypt.gensalt()).decode()},
+        "$unset": {"clave_temporal": "", "password": ""}})
+    return {"ok": True, "mensaje": "Contraseña actualizada correctamente"}
 
 
 @api.post("/inmobiliaria/auth/login")

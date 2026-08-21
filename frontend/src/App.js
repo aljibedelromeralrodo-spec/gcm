@@ -49,6 +49,7 @@ const CerebroDashAIModule = lazy(() => import("./pages/CerebroDashAIModule"));
 const ContralorModule = lazy(() => import("./pages/ContralorModule"));
 const PostventaModule = lazy(() => import("./pages/PostventaModule"));
 const RoleDashboard = lazy(() => import("./pages/RoleDashboards"));
+const VictoriaWorkspace = lazy(() => import("./pages/VictoriaWorkspace"));
 const FrentePrincipal = lazy(() => import("./components/FrentePrincipal"));
 const AuditoriaForenseModule = lazy(() => import("./pages/AuditoriaForenseModule"));
 const DespachoModule = lazy(() => import("./pages/DespachoModule"));
@@ -288,6 +289,16 @@ function MainApp() {
     : user;
 
   if (!user) return <LoginPage onLogin={setUser} />;
+
+  // ── ACCESO EXCLUSIVO: Victoria Vilches solo ve su módulo de trabajo ──
+  if (user.solo_modulo === "victoria") {
+    return (
+      <Suspense fallback={<div style={{ minHeight: "100vh", background: "#0a0f1c" }} />}>
+        <VictoriaWorkspace user={user} onLogout={logout}
+          onUserUpdate={(nu) => { setUser(nu); secureSet("user", nu); }} />
+      </Suspense>
+    );
+  }
 
   // REGLA UNIVERSAL: todos los roles ven TODOS los módulos en el menú.
   // El ingreso a un módulo no autorizado muestra el aviso, jamás un error técnico.
