@@ -1014,6 +1014,7 @@ async def demo_enviar(payload: dict, request: Request):
     import base64
     import email_service as mail
     dest = (payload.get("email") or "gerardo.ext@centralmutuos.cl").strip()
+    asunto = (payload.get("asunto") or "Demo módulo Victoria - Central Mutuos ConCreces").strip()
     b64 = base64.b64encode(p.read_bytes()).decode()
     html = ("<div style='font-family:Georgia,serif;color:#1a1a1a;max-width:640px'>"
             "<h2 style='color:#8a6d1a'>Demo módulo Victoria — Central Mutuos ConCreces</h2>"
@@ -1023,7 +1024,7 @@ async def demo_enviar(payload: dict, request: Request):
             "<p>El video también está disponible para descarga desde el panel de administrador.</p>"
             "<hr style='border:none;border-top:2px solid #8a6d1a'>"
             "<p style='color:#8a6d1a;font-weight:bold'>Central Mutuos · Con Creces</p></div>")
-    r = await asyncio.to_thread(mail.send_mail, dest, "Demo módulo Victoria - Central Mutuos ConCreces",
+    r = await asyncio.to_thread(mail.send_mail, dest, asunto,
                                 html, [{"filename": "Demo_Modulo_Victoria_Central_Mutuos.mp4", "content_b64": b64}],
                                 "secundaria")
     if not r.get("success"):

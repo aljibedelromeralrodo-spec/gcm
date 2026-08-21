@@ -1192,3 +1192,26 @@ actual; todo lo demás permanece intacto.
    Administración→Victoria); POST /api/victoria/demo/enviar → correo ENVIADO a gerardo.ext@centralmutuos.cl.
 - Testing: iteration_56.json backend 18/18 + demo UI verificada; limpieza QA total; PIN de Victoria sin configurar
   (lo elegirá ella); clave_temporal sigue activa hasta que cambie su contraseña.
+
+## 2026-06 — Demo con voz de Martín + Revisión Constitucional (COMPLETADO)
+1. VOZ DE MARTÍN EN LA DEMO:
+   - Demo interactiva: narración sincronizada por escena vía Web Speech API (es-CL, se cancela al pausar/salir).
+   - Escenas extendidas a 96s para calzar la narración (NARRACION[] en DemoVictoria.js).
+   - Video: 9 audios TTS OpenAI (emergentintegrations, tts-1-hd voz onyx, generador /app/tests/gen_narracion_martin.py)
+     muxeados con ffmpeg (adelay+amix) sobre regrabación Playwright → /app/backend/demos/demo_victoria.mp4
+     (1:30, video H264 + audio AAC, 1.5MB). Se abre con "Hola, soy Martín..." y cierra "…listo para ConCreces."
+   - ENVIADO por correo a gerardo.ext@centralmutuos.cl con asunto "Demo módulo Victoria con Martín - Central Mutuos ConCreces"
+     (endpoint demo/enviar ahora acepta asunto opcional en payload).
+2. REVISIÓN CONSTITUCIONAL PRE-REDESPLIEGUE (/app/tests/revision_constitucional.py — re-ejecutable):
+   - 7 reglas canónicas escritas y activas en dashai_eventos (codigo REDESPLIEGUE-1..7): lectura completa de correos,
+     validación ConCreces 4 contrastes, único correo 8AM, MESA automática, Victoria independiente,
+     Visualizador perpetuo, Martín con autorización + stop "para".
+   - Verificado: _daily_report_loop y _reporte_correos_loop DESACTIVADOS (comentados en server.py);
+     ORO_CONCRECES_1..15 sembradas (norma_clave); solo_modulo victoria activo.
+   - Incidente: hot-reload de uvicorn quedó colgado en shutdown → sudo supervisorctl restart backend lo resolvió
+     (bcrypt cold-start: hacer warm-up login local tras restart).
+
+## PENDIENTE INMEDIATO (sin cambios)
+- Listado "ds19 01 inmoboliarias": imagen 599x2000px con 174 filas; el texto de correos es de ~4px y el extractor
+  alucina. Recortes de columna en /tmp/v_0..9.png (7x) listos para lectura manual. RECOMENDACIÓN: pedir al usuario
+  el CSV/Excel de origen para fidelidad 100% antes de una campaña real (correos mal leídos = rebotes).

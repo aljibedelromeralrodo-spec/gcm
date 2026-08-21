@@ -21,13 +21,17 @@ async def main():
         await page.fill('[data-testid="login-rut"]', "administrador")
         await page.fill('[data-testid="login-password"]', "141617575")
         await page.click('[data-testid="login-submit"]', force=True)
-        await page.wait_for_selector(".sidebar, [data-testid='victoria-workspace'], nav", timeout=60000)
+        for intento in range(30):
+            await page.wait_for_timeout(3000)
+            visible = await page.query_selector('[data-testid="login-submit"]')
+            if not visible:
+                break
         await page.evaluate("window.location.hash='#demo-victoria'")
-        await page.wait_for_selector('[data-testid="demo-victoria"]', timeout=20000)
+        await page.wait_for_selector('[data-testid="demo-victoria"]', timeout=30000)
         t_demo = time.time() - t0
         print(f"demo visible a los {t_demo:.1f}s", flush=True)
-        await page.wait_for_selector('[data-testid="demo-tiempo-total"]', timeout=110000)
-        await page.wait_for_timeout(7000)
+        await page.wait_for_selector('[data-testid="demo-tiempo-total"]', timeout=130000)
+        await page.wait_for_timeout(11000)
         video = page.video
         await ctx.close()
         webm = await video.path()
@@ -35,7 +39,7 @@ async def main():
         print("webm:", webm, os.path.getsize(webm), flush=True)
         import imageio_ffmpeg
         ff = imageio_ffmpeg.get_ffmpeg_exe()
-        out = "/app/backend/demos/demo_victoria.mp4"
+        out = "/tmp/demo_martin_raw.mp4"
         os.makedirs("/app/backend/demos", exist_ok=True)
         r = subprocess.run([ff, "-y", "-ss", str(max(0, t_demo - 0.4)), "-i", webm,
                             "-c:v", "libx264", "-preset", "veryfast", "-crf", "26",

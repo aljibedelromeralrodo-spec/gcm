@@ -40,17 +40,30 @@ const CHECKLIST = [
 
 // Escenas: [clave, título, duración en segundos]
 const ESCENAS = [
-  ["intro", "Demo Módulo Victoria — caso completo con datos ficticios", 5],
-  ["deteccion", "Paso 1 — Detección automática del correo", 9],
-  ["clasificacion", "Paso 2 — Clasificación de documentos por tipo", 9],
-  ["validacion", "Paso 3 — Validación irrenunciable RUT · Rol · Dirección", 12],
-  ["preview", "Paso 4 — Preview de documentos antes de aceptar", 10],
-  ["formularios", "Paso 5 — Autocompletado de formularios", 11],
-  ["revision", "Paso 6 — Revisión final con checklist completo", 8],
-  ["envio", "Paso 7 — Envío a ConCreces con confirmación", 8],
-  ["final", "Proceso completo — resumen de tiempos", 8],
+  ["intro", "Demo Módulo Victoria — caso completo con datos ficticios", 10],
+  ["deteccion", "Paso 1 — Detección automática del correo", 10],
+  ["clasificacion", "Paso 2 — Clasificación de documentos por tipo", 10],
+  ["validacion", "Paso 3 — Validación irrenunciable RUT · Rol · Dirección", 13],
+  ["preview", "Paso 4 — Preview de documentos antes de aceptar", 11],
+  ["formularios", "Paso 5 — Autocompletado de formularios", 12],
+  ["revision", "Paso 6 — Revisión final con checklist completo", 9],
+  ["envio", "Paso 7 — Envío a ConCreces con confirmación", 9],
+  ["final", "Proceso completo — resumen de tiempos", 12],
 ];
 const TOTAL = ESCENAS.reduce((a, e) => a + e[2], 0);
+
+// Narración de Martín, sincronizada por escena
+const NARRACION = [
+  "Hola, soy Martín, el asistente de Central Mutuos ConCreces. Te voy a mostrar cómo funciona el módulo de Victoria paso a paso.",
+  "Paso uno: llega un correo con el set de crédito. El sistema lo detecta y descarga los adjuntos automáticamente en segundos.",
+  "Paso dos: cada documento se lee y se clasifica por tipo: tasación, estudio de títulos, carpeta de crédito y simulación.",
+  "Paso tres: la validación irrenunciable. RUT con RUT, codeudor con codeudor, rol de avalúo y dirección. Todo debe coincidir exactamente.",
+  "Paso cuatro: Victoria revisa cada documento en pantalla, sin descargarlo, y lo acepta o rechaza con un clic.",
+  "Paso cinco: los formularios se completan solos con los datos extraídos. Cero digitación y cero errores.",
+  "Paso seis: revisión final. El checklist completo queda aprobado en verde.",
+  "Paso siete: Victoria confirma y el set viaja a ConCreces con un solo clic.",
+  "Así de simple y rápido opera el módulo de Victoria. Todo validado, todo en orden, listo para ConCreces.",
+];
 
 const box = { background: "#141414", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 4, padding: "1.6rem 2rem" };
 const fadeIn = (visible, delay = 0) => ({
@@ -81,6 +94,29 @@ export default function DemoVictoria({ autoPlay = false, onSalir }) {
     }
     return { escena: "final", prog: 1, idx: ESCENAS.length - 1 };
   }, [t]);
+
+  // Voz de Martín (Web Speech API): narra cada escena sincronizada
+  const habloEscena = useRef(-1);
+  useEffect(() => {
+    if (!playing) { window.speechSynthesis?.cancel(); return; }
+    if (habloEscena.current === idx) return;
+    habloEscena.current = idx;
+    try {
+      const synth = window.speechSynthesis;
+      if (!synth) return;
+      synth.cancel();
+      const u = new SpeechSynthesisUtterance(NARRACION[idx]);
+      u.lang = "es-CL";
+      const voces = synth.getVoices();
+      const voz = voces.find(v => v.lang.startsWith("es") && /male|jorge|diego|carlos|raul|juan/i.test(v.name))
+        || voces.find(v => v.lang.startsWith("es"));
+      if (voz) u.voice = voz;
+      u.rate = 1.02;
+      u.pitch = 0.9;
+      synth.speak(u);
+    } catch {}
+  }, [idx, playing]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => window.speechSynthesis?.cancel(), []);
 
   const irA = (i) => { setT(ESCENAS.slice(0, i).reduce((a, e) => a + e[2], 0) + 0.01); };
   const reloj = `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
