@@ -38,3 +38,22 @@ Fuente: 400 mensajes de ethangerardobarr@gmail.com (Gmail API) + IMAP gerardo.ex
 - Documentos no clasificados → "otros" (99_otros), SIEMPRE incluidos al FINAL del PDF combinado a mesa. Ningún documento se rechaza (salvo Ley del RUT: RUT distinto → Buzón de Rescate).
 - Orden del set a mesa: 01_Cedula → 02_Liquidaciones/Impuesto_Renta → 03_AFP/Boletas → 04_CMF → 05_codeudor/contratos → 99_otros.
 - Regla 67: mínimo 3 categorías válidas para abrir carpeta (el divisor multi-documento ayuda a cumplirla).
+
+
+## 6. Casos especiales (análisis 60 días, 2026-08-22)
+### Codeudor / Aval / Complemento
+- Señales en asunto: "+AVAL SU PADRE", "+AVAL MAMA", "y su aval su pareja", "y complemento", "(Aval {Titular})", "y su pareja". El correo del aval puede llegar SEPARADO: "Documentos {Aval} (Aval {Titular})".
+- Guardado: subcarpeta 05_codeudor/{Nombre}/ con prefijo CODEUDOR_, campos codeudor_nombre/codeudor_rut en folder; Ley del RUT rutea archivos por RUT al anexo; el PDF combinado del titular EXCLUYE papeles del codeudor (merge_codeudor aparte).
+- Mesa: evalúa renta conjunta; rechaza ingresos de sociedad SPA del codeudor; recomienda "incorporar un codeudor" en rechazos por carga.
+- Casos: Jonathan Galleguillos(+padre), Silvia Meriño(+mamá), Helen Veas, Nicolás Guevara(pareja, boletas), Camila Collado(pareja), Javiera Espinoza↔Rodrigo Espinoza (correos separados), Javiera Mery, Carlos Arancibia (RECHAZADO por SPA), Ignacio Pizarro, Yan Carmona, Eduar Araya.
+### Boletas de honorarios (independientes)
+- tipo_cliente=independiente si hay boleta_honorarios o impuesto_renta. Set: cédula → impuesto_renta(F22) → boletas (resumen anual SII / Carpeta_Tributaria_Regular.pdf) → CMF.
+- Casos: Valeska Díaz (6 boletas+4 renta → APROBADA "máximo posible UF 1500"), Catalina Aguilera (mixto 7+7), Camila Collado, Nicolás Guevara, Nicolás Muñoz, Carlos Justo y pareja.
+- Mesa suele aprobar con TOPE de monto a independientes.
+### Licencias médicas (<30 días trabajados)
+- Las liquidaciones reales traen campos estructurados: "Días Trabajados: X · Días Licencia: Y · Días Ausencia" (formato constructoras) o "Días trabajados: 29 Días licencia: 0" (pymes). EXTRAER SIEMPRE.
+- Si Días Licencia>0 o Trabajados<30: el sueldo del mes está incompleto → exigir PAGO DE LICENCIA (CCAF Los Andes/Los Héroes o Isapre, "subsidio de incapacidad laboral") como respaldo de renta. Hoy ese comprobante NO tiene categoría → cae en 99_otros.
+- Candidatos detectados por contenido: Yan Carmona, Gloria Bolados, Julieth Marin, Ignacio Pizarro, Maira Valenzuela.
+### Pre/Postnatal
+- Patrón: clienta embarazada con licencia maternal → liquidaciones bajas o en cero + subsidio maternal pagado por Isapre/CCAF. Suele complementarse con AVAL (caso Javiera Espinoza + Rodrigo Espinoza).
+- Renta se acredita con: liquidaciones previas + comprobantes de pago de licencia maternal (mensuales) + certificado prenatal/postnatal. No descartar por liquidación baja.

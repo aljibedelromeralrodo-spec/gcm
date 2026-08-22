@@ -5431,12 +5431,14 @@ async def _clasificar_item(item):
         _merge(info_body)
 
     # 2) Analizar cada adjunto (OCR + IA)
+    analisis_ocr = []
     for fn in item.get("attachments", []):
         path = folder / fn
         if not path.exists():
             continue
         raw = path.read_bytes()
         texto, metodo = await asyncio.to_thread(ocr_service.extraer_texto, raw, fn)
+        analisis_ocr.append((fn, len(texto), len(raw)))
         info = await ai_extract.clasificar_y_extraer(texto, fn)
         docs_detectados.append({"filename": fn, "tipo": info["tipo_documento"],
                                  "metodo": metodo, "confianza": info.get("confianza", 0)})
@@ -5469,7 +5471,67 @@ async def _clasificar_item(item):
                       "confianza": max([d["confianza"] for d in docs_detectados] + [0.4])}
     await db.proc_queue.update_one({"id": item["id"]}, {"$set": {
         "status": status, "classification": classification, "campos": campos}})
+    try:  # 🔔 Regla de Oro #69: aviso de recepción incompleta (ilegibles / adjuntos ausentes)
+        await _aviso_recepcion_incompleta(item, analisis_ocr)
+    except Exception as e:
+        logging.warning(f"aviso recepción incompleta: {e}")
     return status
+
+
+RX_ARCHIVO_BASURA = re.compile(r"^(image\d*\b|image\.|outlook-|blocked|firma|logo)", re.I)
+RX_PROMESA_DOCS = re.compile(r"adjunt|env[ií]o|acompa[ñn]|remito|documentaci[oó]n", re.I)
+RX_DOCS_MENCION = re.compile(r"liquidaci|c[eé]dula|carnet|\bafp\b|\bcmf\b|cotizaci|antecedentes|boletas?", re.I)
+
+
+async def _aviso_recepcion_incompleta(item, analisis_ocr):
+    """Pide al remitente reenviar archivos ilegibles y avisa si el correo promete
+    documentos que no llegaron. Máx. 1 aviso por correo + escudo Regla #68.
+    En modo prueba el aviso va SOLO al destino de prueba (nunca al remitente)."""
+    if item.get("aviso_ilegible_enviado") or not analisis_ocr:
+        return
+    ilegibles = [fn for fn, chars, size in analisis_ocr
+                 if chars < 50 and size > 80_000 and not RX_ARCHIVO_BASURA.search(fn)]
+    reales = [fn for fn, chars, size in analisis_ocr
+              if not RX_ARCHIVO_BASURA.search(fn) and (size > 60_000 or chars > 200)]
+    texto = f"{item.get('subject') or ''} {item.get('body_full') or item.get('body_preview') or ''}"
+    sin_adjuntos = bool(RX_PROMESA_DOCS.search(texto) and RX_DOCS_MENCION.search(texto)) and not reales
+    if not ilegibles and not sin_adjuntos:
+        return
+    em = re.search(r"[\w.+-]+@[\w-]+\.[\w.-]+", item.get("sender") or "")
+    destino = (em.group(0) if em else "").lower()
+    propios = {(os.environ.get("MAIL_USER") or "").lower(), (os.environ.get("MAIL2_USER") or "").lower(),
+               "aprobaciones@centralmutuos.cl"}
+    if not destino or destino in propios:
+        return
+    import modo_prueba as _mp
+    nota_prueba = ""
+    if await _mp.activo():
+        destino_real, destino = destino, ((await _mp._estado()).get("destino") or "gerardo.ext@centralmutuos.cl")
+        nota_prueba = f"🧪 MODO PRUEBA — el remitente ({destino_real}) NO fue notificado."
+    partes = []
+    if ilegibles:
+        partes.append("<p>📄 Los siguientes archivos llegaron <b>ilegibles</b> (foto borrosa u oscura, "
+                      "o escaneo de muy baja resolución). ¿Podría reenviarlos con mejor calidad o el PDF original?</p><ul>"
+                      + "".join(f"<li>{f}</li>" for f in ilegibles) + "</ul>")
+    if sin_adjuntos:
+        partes.append("<p>📎 El correo menciona documentación adjunta, pero <b>los documentos no llegaron</b> "
+                      "(solo se recibieron firmas o imágenes del correo). ¿Podría reenviarlos adjuntos?</p>")
+    cuerpo = (f"<p>Estimado/a,</p><p>Recibimos su correo «{(item.get('subject') or '')[:90]}». "
+              "Para avanzar con la evaluación necesitamos lo siguiente:</p>" + "".join(partes)
+              + "<p>Muchas gracias,<br><b>Equipo Central Mutuos</b></p>"
+              + (f"<p style='color:#8a7a5a'>{nota_prueba}</p>" if nota_prueba else ""))
+    res = await asyncio.to_thread(
+        mail.send_mail, destino,
+        f"Re: {(item.get('subject') or 'su envío')[:110]} — documentación recibida incompleta",
+        _email_institucional("Administración", cuerpo), [], "secundaria")
+    upd = {"aviso_ilegible_enviado": True,
+           "aviso_ilegible_detalle": {"ilegibles": ilegibles, "sin_adjuntos": sin_adjuntos,
+                                      "destino": destino, "ok": bool(res.get("success")),
+                                      "fecha": now_iso()}}
+    if sin_adjuntos:
+        upd["status"] = "revisar"
+    await db.proc_queue.update_one({"id": item["id"]}, {"$set": upd})
+    logging.info(f"🔔 Aviso recepción incompleta → {destino} · ilegibles={len(ilegibles)} · sin_adjuntos={sin_adjuntos}")
 
 
 @api.post("/procesamiento/process-pending")

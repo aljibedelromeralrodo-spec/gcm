@@ -1938,3 +1938,8 @@ polling GET /api/central/proactive existe vacío en server.py:1526) — usuario 
 - proc_upload_drive: evento de historial en cada enriquecimiento (fecha, remitente, asunto, archivos nuevos) y evento de creación de carpeta. Endpoint /clientes/folders/{fid}/historial ahora muestra el array historial. Validado E2E (carpeta Francisca Hernandez, 3 eventos).
 - Confirmado (ya existía): documentos 'otro' van a 99_otros y SIEMPRE al final del PDF combinado (orden numérico 01→99); nada se rechaza salvo Ley del RUT (→ Buzón de Rescate).
 - /app/memory/APRENDIZAJE_CORREOS.md creado: remitentes, asuntos, formatos, secuencia de llegada y keywords de mesa (30 días reales).
+
+
+## 2026-08-22 — Regla de Oro #69 + análisis casos especiales 60d
+- Regla #69 'Aviso de Recepción Incompleta' (Constitución v30, ORO-69 en dashai_eventos): aviso único al remitente por archivos ilegibles o adjuntos prometidos ausentes; respeta modo prueba; item queda 'revisar' si faltan adjuntos. Función _aviso_recepcion_incompleta en server.py, integrada a _clasificar_item.
+- Análisis 60 días de casos especiales (codeudor, boletas, licencias médicas, pre/postnatal) guardado en APRENDIZAJE_CORREOS.md sección 6.

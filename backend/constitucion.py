@@ -109,6 +109,8 @@ REGLAS_ORO = [
      "ley": "REGLA ABSOLUTA — APERTURA DE CARPETAS: queda estrictamente prohibido crear una carpeta de solicitud de crédito sin que el correo o solicitud contenga al menos 3 de los siguientes documentos: Carnet de Identidad, Certificado AFP, Informe CMF, Boletas de Honorarios, Liquidación de Sueldo o Declaración de Impuestos. Esta regla no admite excepciones: no importa si la solicitud llega por el sistema, por correo electrónico externo, por mensaje o por cualquier otro canal. Sin los 3 documentos mínimos, no se crea carpeta. El sistema bloquea la acción e informa 'Documentación insuficiente' hasta que se completen los requisitos. REGLA DE HIERRO: ningún agente, ejecutivo ni proceso automatizado puede violar esta regla."},
     {"n": 68, "id": "anti_duplicado_absoluto", "titulo": "Escudo Anti-Duplicados Absoluto",
      "ley": "NINGÚN correo automático puede enviarse dos veces. Antes de CADA envío, el sistema verifica en base de datos la huella digital (hash de destinatario + asunto + contenido + adjuntos); si ya existe un envío exitoso con la misma huella dentro de la ventana de protección (7 días), el envío se BLOQUEA y queda registrado en correos_duplicados_bloqueados. Todo envío exitoso queda marcado con su huella y timestamp en correos_enviados_hash. REGLA DE HIERRO: el procesamiento de correos de MESA reserva su registro (cerrojo atómico por UID y por huella de contenido, con índice único en BD) ANTES de reenviar; ningún reinicio, barrido paralelo ni segunda casilla IMAP puede provocar un reenvío. El Resumen Diario 8AM reserva atómicamente su fecha antes de salir: un solo correo por día, sin excepciones."},
+    {"n": 69, "id": "aviso_recepcion_incompleta", "titulo": "Aviso de Recepción Incompleta",
+     "ley": "Cuando un correo de gestión trae archivos ILEGIBLES (OCR < 50 caracteres en archivos relevantes) o el cuerpo PROMETE documentación que no llegó adjunta, el sistema envía UN ÚNICO aviso cortés al remitente pidiendo el reenvío, y el ítem queda en 'revisar' si faltan los adjuntos. LÍMITES DE HIERRO: máximo un aviso por correo recibido (marca aviso_ilegible_enviado), protegido por el escudo anti-duplicados (Regla #68), jamás dirigido a casillas propias ni a la mesa, y durante el Modo Prueba el aviso va exclusivamente al destino de prueba del administrador — nunca al remitente."},
 ]
 
 REGLAS_EFICIENCIA = [
@@ -120,7 +122,7 @@ REGLAS_EFICIENCIA = [
     {"id": "estimacion_previa", "ley": "Estimación Previa: antes de construir, calcular la ruta de menor costo de créditos según DashAI."},
 ]
 
-VERSION = 29  # v29: Regla de Oro #68 — Escudo Anti-Duplicados Absoluto
+VERSION = 30  # v30: Regla de Oro #69 — Aviso de Recepción Incompleta
 
 
 class ViolacionConstitucional(Exception):
