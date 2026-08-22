@@ -700,6 +700,8 @@ async def startup():
     asyncio.create_task(_task_blindada(_mesav.mesa_verdad_loop, "mesa_verdad"))
     import gmail_pubsub as _gmailps
     asyncio.create_task(_task_blindada(_gmailps.gmail_watch_loop, "gmail_watch"))
+    import whatsapp_twilio_service as _wa_boot
+    asyncio.create_task(_wa_boot.cargar_credenciales_guardadas())
 
     async def _asegurar_ocr_binarios():
         import shutil as _sh

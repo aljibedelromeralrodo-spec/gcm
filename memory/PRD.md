@@ -1255,3 +1255,5 @@ actual; todo lo demás permanece intacto.
 - P2: Backoff exponencial IMAP (EOF Gmail) — mitigado parcialmente al migrar la cuenta principal a Gmail API push.
 
 4. NUEVO (2026-08-22): Modo Prueba de Clasificación armado para el lunes 2026-08-25 — procesa todo pero reporta a gerardo.ext y NO notifica clientes (modo_prueba.py). Desactivar tras la prueba con POST /api/modo-prueba/desactivar.
+
+5. NUEVO (2026-08-22): Centro de comando 'Publicidad y Captación' unificado (4 secciones) con importación Excel/CSV de listados y formulario de credenciales Twilio. Pendientes visibles: ds19 (falta archivo del usuario) y Twilio (faltan credenciales).

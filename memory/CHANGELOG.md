@@ -1912,3 +1912,11 @@ polling GET /api/central/proactive existe vacío en server.py:1526) — usuario 
 - Endpoints admin: GET /api/modo-prueba/estado · POST /activar {fecha_inicio,fecha_fin,destino} · POST /desactivar.
 - TEST E2E real: reporte de ítem existente (Jorge Alcayaga) enviado OK a gerardo.ext; ventana restaurada al 25/08.
 - Nota: switch maestro envios_automaticos ya estaba OFF (doble protección al cliente).
+
+
+## 2026-08-22 — Centro de Comando: Publicidad y Captación (vista unificada)
+- PublicidadModule.js reescrito: 4 secciones (1 Captación individual: prospectos + portal + copiar link/WhatsApp + docs subidos + llamadas; 2 Campañas de correo: 3 templates + prueba a mí + importar Excel/CSV + estado campañas; 3 Campañas WhatsApp: links masivos + Excel teléfonos + mensaje editable; 4 Pendientes: ds19 con carga directa + Twilio con formulario de credenciales). Estilo negro mate + dorado.
+- Backend publicidad.py: GET /publicidad/captacion, GET /publicidad/pendientes, POST /publicidad/listados/importar (xlsx/csv/txt, dedup + fusión por nombre).
+- whatsapp_twilio_service.py: POST /whatsapp-twilio/credenciales (guarda BD + runtime) + cargar_credenciales_guardadas() al arranque.
+- Menú App.js: '📣 Publicidad y Captación'.
+- Testeado: endpoints via curl (captacion 2 prospectos/1 llamada, pendientes, import CSV 4 contactos, validación Twilio 400) + screenshots del módulo completo renderizando las 4 secciones.

@@ -8,7 +8,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 from urllib.parse import quote
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form
 from database import db
 
 pub = APIRouter(prefix="/publicidad")
@@ -97,6 +97,96 @@ async def borrar_listado(lid: str, request: Request):
     _exigir_admin(request)
     await db.publicidad_listados.delete_one({"id": lid})
     return {"ok": True}
+
+
+@pub.post("/listados/importar")
+async def importar_listado(request: Request, archivo: UploadFile = File(...),
+                           nombre: str = Form(""), excluir: str = Form("ecomac.cl")):
+    """Carga un listado desde Excel (.xlsx) o CSV/TXT: extrae correos y teléfonos de todas
+    las celdas, deduplica y fusiona con el listado del mismo nombre si ya existe."""
+    u = _exigir_admin(request)
+    raw = await archivo.read()
+    fn = (archivo.filename or "").lower()
+    celdas = []
+    if fn.endswith((".xlsx", ".xlsm")):
+        import io
+        import openpyxl
+        try:
+            wb = openpyxl.load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
+            for ws in wb.worksheets:
+                for row in ws.iter_rows(values_only=True):
+                    celdas += [str(c) for c in row if c is not None]
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"No pude leer el Excel: {str(e)[:120]}")
+    elif fn.endswith((".csv", ".txt")):
+        celdas = [raw.decode("utf-8", errors="ignore")]
+    else:
+        raise HTTPException(status_code=400, detail="Formato no soportado: suba .xlsx, .csv o .txt")
+    exclusiones = [e.strip() for e in (excluir or "").split(",") if e.strip()]
+    contactos, resumen = _parsear_contactos(" ".join(celdas), exclusiones)
+    if not contactos:
+        raise HTTPException(status_code=400,
+                            detail="El archivo no contiene correos ni teléfonos válidos")
+    nombre = (nombre or "").strip() or (archivo.filename or "Listado importado").rsplit(".", 1)[0]
+    existente = await db.publicidad_listados.find_one({"nombre": nombre}, {"_id": 0})
+    if existente:
+        previos = {c["valor"] for c in existente.get("contactos", [])}
+        nuevos = [c for c in contactos if c["valor"] not in previos]
+        resumen["duplicados_eliminados"] += len(contactos) - len(nuevos)
+        resumen["agregados"] = len(nuevos)
+        await db.publicidad_listados.update_one({"id": existente["id"]}, {
+            "$push": {"contactos": {"$each": nuevos}}, "$set": {"actualizado": _now()}})
+        lid = existente["id"]
+    else:
+        lid = str(uuid.uuid4())
+        await db.publicidad_listados.insert_one({
+            "id": lid, "nombre": nombre, "tipo_contacto": "Importado (archivo)",
+            "contactos": contactos, "creado": _now(), "creado_por": u.get("sub", ""),
+            "archivo_origen": archivo.filename})
+    reg = await db.publicidad_listados.find_one({"id": lid}, {"_id": 0})
+    return {"ok": True, "listado": reg, "resumen": resumen,
+            "mensaje": f"«{nombre}»: {resumen['agregados']} contacto(s) importados desde {archivo.filename}"}
+
+
+# ══ CENTRO DE CAPTACIÓN — datos unificados para la vista del administrador ══
+@pub.get("/captacion")
+async def captacion(request: Request):
+    _exigir_admin(request)
+    prospectos = []
+    async for p in db.prospectos.find({}, {"_id": 0}).sort("creado_en", -1).limit(60):
+        oid = p.get("id")
+        docs = await db.capturas_autonomas.count_documents({"oportunidad_id": oid})
+        primer = (p.get("nombre") or "").split()[0].title() if p.get("nombre") else ""
+        link = p.get("link_calificar") or ""
+        mensaje = ""
+        if link:
+            mensaje = (f"🏠 *Central Mutuos - Precalificación Hipotecaria*\n\nHola {primer}, "
+                       f"soy José Martín de Central Mutuos. Suba su Cédula y sus últimas 6 "
+                       f"Liquidaciones de Sueldo en este portal privado y su calificación queda lista:\n{link}"
+                       f"\n\nAtentamente, el equipo de @CentralMutuos")
+        prospectos.append({"id": oid, "nombre": p.get("nombre") or "—",
+                           "proyecto": p.get("proyecto") or "", "telefono": p.get("telefono") or "",
+                           "estado": p.get("status") or "", "link": link,
+                           "docs_subidos": docs, "captura_en": p.get("captura_autonoma_en") or "",
+                           "mensaje_whatsapp": mensaje})
+    llamadas = await db.solicitudes_llamada.find({}, {"_id": 0}).sort("creado_en", -1).limit(20).to_list(20)
+    return {"prospectos": prospectos, "llamadas": llamadas,
+            "capturas_total": await db.capturas_autonomas.count_documents({})}
+
+
+@pub.get("/pendientes")
+async def pendientes(request: Request):
+    _exigir_admin(request)
+    import whatsapp_twilio_service as wa
+    ds19 = await db.publicidad_listados.find_one(
+        {"nombre": {"$regex": "ds19", "$options": "i"}}, {"_id": 0, "nombre": 1, "contactos": 1})
+    return {"ds19": {"resuelto": bool(ds19), "nombre": (ds19 or {}).get("nombre", ""),
+                     "contactos": len((ds19 or {}).get("contactos", [])),
+                     "detalle": "Listado 'ds19 01 inmobiliarias' (174 proyectos) pendiente: "
+                                "las capturas de imagen eran ilegibles. Suba aquí el Excel/CSV de usatusubsidio.cl."},
+            "twilio": {"resuelto": wa.configurado(),
+                       "detalle": "WhatsApp automático (Regla de Oro #21): faltan las credenciales "
+                                  "Twilio (Account SID, Auth Token y número exclusivo)."}}
 
 
 @pub.post("/listados/{lid}/quitar")

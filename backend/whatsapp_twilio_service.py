@@ -8,7 +8,7 @@ import os
 import asyncio
 import logging
 from datetime import datetime, timezone
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from database import db
 
 wa_twilio = APIRouter(prefix="/whatsapp-twilio")
@@ -27,6 +27,43 @@ def _credenciales():
 
 def configurado():
     return all(_credenciales())
+
+
+async def cargar_credenciales_guardadas():
+    """Arranque: si .env está vacío, carga las credenciales guardadas por el admin en BD."""
+    if configurado():
+        return
+    doc = await db.config.find_one({"_key": "twilio_credenciales"}) or {}
+    for k_env, k_doc in (("TWILIO_ACCOUNT_SID", "sid"), ("TWILIO_AUTH_TOKEN", "token"),
+                         ("TWILIO_PHONE_NUMBER", "numero")):
+        if doc.get(k_doc) and not os.environ.get(k_env, "").strip():
+            os.environ[k_env] = doc[k_doc]
+    if configurado():
+        logging.info("📱 Twilio: credenciales cargadas desde la bóveda del administrador")
+
+
+@wa_twilio.post("/credenciales")
+async def guardar_credenciales(payload: dict, request: Request):
+    """El administrador pega las credenciales Twilio desde el panel (persisten en BD + runtime)."""
+    c = getattr(request.state, "user", {}) or {}
+    if c.get("rol") not in ("admin", "maestro"):
+        raise HTTPException(status_code=403, detail="Solo el administrador")
+    sid = (payload.get("sid") or "").strip()
+    token = (payload.get("token") or "").strip()
+    numero = (payload.get("numero") or "").strip()
+    if not sid.startswith("AC") or len(sid) < 30 or not token or not numero.startswith("+"):
+        raise HTTPException(status_code=400, detail=(
+            "Datos incompletos: Account SID debe empezar con 'AC', Auth Token no vacío y "
+            "número en formato internacional (+569XXXXXXXX)"))
+    os.environ["TWILIO_ACCOUNT_SID"] = sid
+    os.environ["TWILIO_AUTH_TOKEN"] = token
+    os.environ["TWILIO_PHONE_NUMBER"] = numero
+    await db.config.update_one({"_key": "twilio_credenciales"}, {"$set": {
+        "sid": sid, "token": token, "numero": numero,
+        "guardado_en": datetime.now(timezone.utc).isoformat(), "guardado_por": c.get("sub", "")}},
+        upsert=True)
+    return {"ok": True, "configurado": configurado(), "numero_exclusivo": numero,
+            "mensaje": "Credenciales Twilio activas: el motor WhatsApp automático quedó operativo"}
 
 
 def _enviar_sync(to, cuerpo):

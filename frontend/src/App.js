@@ -403,7 +403,7 @@ function MainApp() {
     { key: 'brokers', icon: 'fa-briefcase', label: 'Panel Broker' },
     { key: 'micorreo', icon: 'fa-envelope', label: 'Mi Correo' },
     // 📣 PUBLICIDAD: visible SOLO para el Administrador (pedido explícito)
-    ...(['admin', 'maestro'].includes(uEff.rol) && !uEff._sim ? [{ key: 'publicidad', icon: 'fa-bullhorn', label: '📣 Publicidad' }] : []),
+    ...(['admin', 'maestro'].includes(uEff.rol) && !uEff._sim ? [{ key: 'publicidad', icon: 'fa-bullhorn', label: '📣 Publicidad y Captación' }] : []),
   ];
   const acceso = accesoModulo(uEff, activeModule);
 
