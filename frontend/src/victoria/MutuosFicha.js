@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { API_URL } from "../utils/formatters";
 import { S, GOLD, PLAYFAIR } from "./theme";
 import PreviewFlotante from "./PreviewFlotante";
+import AuditoriaCampos from "./AuditoriaCampos";
 
 const V_COLOR = { true: "#4ade80", false: "#f87171", null: "#f59e0b" };
 const TRAZABLES = ["rut_titular", "rut_codeudor", "rol_avaluo", "direccion_propiedad", "nombre_cliente"];
@@ -69,6 +70,8 @@ export default function MutuosFicha({ oid, etapa, onSetEtapa, onVolver }) {
     <div data-testid="mutuos-ficha" style={{ padding: "2.5rem 3rem", maxWidth: 1500, margin: "0 auto" }}>
       <button data-testid="mutuos-btn-volver" onClick={onVolver} style={{ ...S.btnLine, ...S.btnSmall, marginBottom: 18 }}>
         ← Volver al panel de operaciones (conserva su posición)</button>
+
+      <AuditoriaCampos clienteId={det.cliente?.id} />
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 14 }}>
         <div>

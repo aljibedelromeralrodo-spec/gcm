@@ -6,6 +6,7 @@ import { S, GOLD, PLAYFAIR, PASOS, ESTADO_PILL } from "./theme";
 import DocViewer from "./DocViewer";
 import PinModal from "./PinModal";
 import PreviewFlotante from "./PreviewFlotante";
+import AuditoriaCampos from "./AuditoriaCampos";
 
 const COIN_COLOR = { true: "#4ade80", false: "#f87171", null: "#f59e0b" };
 const CAMPOS_FORM = [
@@ -472,6 +473,8 @@ export default function VictoriaFicha({ cid, paso, docSel, onSetPaso, onSetDocSe
       <button data-testid="ficha-btn-volver" onClick={onVolver}
         style={{ ...S.btnLine, ...S.btnSmall, marginBottom: 20 }}>
         ← Volver al panel de Daniela (conserva su posición y filtros)</button>
+
+      <AuditoriaCampos clienteId={cid} />
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 14 }}>
         <div>

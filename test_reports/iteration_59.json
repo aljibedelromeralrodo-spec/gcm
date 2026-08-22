@@ -1,0 +1,38 @@
+{
+  "summary": "Iter 59 — Testing FULL (backend + frontend) del lote grande: Módulo Ventas mejoras (rendimiento, embudo, export, semáforo, timeline, balance de carga) + Auditoría de campos con origen documental (Daniela/Victoria) + huellas constitucionales en db.cerebro_consultas. Backend: 10 tests PASSED / 1 SKIPPED (endpoint /api/constitucion/consultas no existe, verificación de huella hecha directo a mongo db.cerebro_consultas — 2 accion 'asignacion_ventas' y 2 accion 'validacion_cruzada_daniela' confirmadas). Frontend: (A) Admin → Panel Ventas OK: ventas-reporte, ventas-rendimiento (tarjetas Yerile Barrera + Deisy Salazar lado a lado), ventas-embudo con 6 barras (ingresado/documentacion_proceso/completo/enviado_mesa/aprobado/rechazado), ventas-export con filtros ejecutivo/desde/hasta/resultado + botón export-descargar, tour 'Saltar' y 'Briefing Mañanero' cerrados con force=True. Se creó cliente 'QA UI TIMELINE Iter59' (RUT 22.222.222-2) → asignado a Yerile por balance de carga → semaforo-cliente-{id} visible, click en ver-timeline-{id} abre ventas-timeline-modal con evento de asignación, ventas-timeline-cerrar cierra correctamente. (B) Daniela Galindo (daniela.galindo@centralmutuos.cl / Daniela2024): workspace 'MÓDULO DANIELA GALINDO · CON CRECES' abre directo, se abrió ficha de cliente, auditoria-toggle visible y funcional, auditoria-panel muestra los 5 campos exigidos (nombre_cliente, rut_titular, rut_codeudor, rol_avaluo, direccion_propiedad). NOTA: 0 botones auditoria-fragmento en la ficha probada porque los 5 campos tenían pendiente=true o doc_id vacío (los documentos físicos de esos clientes no están en /app/backend/storage o el matcher _doc_origen no halla el valor exacto) — el endpoint de fragmento se validó vía backend test con status 200 + content-type image/png + magic PNG. (C) Victoria Vilches (victoria.vilches@centralmutuos.cl / Victoria2024): workspace 'MÓDULO VICTORIA VILCHES · GERENCIA DE OPERACIONES · MUTUOS' abre directo; sin operaciones previas → seleccionó primer cliente de la bóveda del select mutuos-select-cliente y 'Crear operación con datos autocompletados' → ficha abierta → auditoria-toggle EXISTE y es visible. Cleanup ejecutado: cliente QA borrado, operación mutuos borrada; 5 clientes reales de la bóveda intactos.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "MutuosPanel select cliente", "issues": ["Console warning persiste: 'In HTML, <span> cannot be a child of <option>'. Ya reportado en iter58 — no se corrigió. No afecta funcionalidad."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/tests/test_iter59_ventas_auditoria.py",
+    "/app/test_reports/pytest/iter59.xml"
+  ],
+  "action_items": [
+    "OPCIONAL: exponer un endpoint GET /api/constitucion/consultas o similar para auditar huellas cerebro (hoy solo consultables por mongo directo).",
+    "OPCIONAL: revisar _doc_origen en victoria_independiente.py — para los 5 clientes reales de la bóveda ningún campo devolvió doc_id en la ficha UI probada, por lo que no aparecen botones 'Ver fragmento original' aunque el endpoint /fragmento sí funciona. Verificar que los PDFs físicos existan en la ruta esperada (Path(ruta).exists()).",
+    "OPCIONAL (arrastre iter58): corregir warning hidratación '<span> child of <option>' en select global."
+  ],
+  "critical_code_review_comments": [
+    "ventas.py:167 (_evento fallback en timeline): si no hay eventos con 'asignaci' en accion se inserta uno sintético. Podría evitarse garantizando que asignar_a_ventas_si_corresponde SIEMPRE crea el evento inicial (ya lo hace en el $set de ventas.timeline línea 1193). El fallback queda como defensivo — está bien.",
+    "ventas.py:212 tasa_conversion divide por len(res) (total_asignados) — coherente con 'aprobados/total'. Si el KPI quisiera 'aprobados/cerrados' habría que cambiarlo. Documentar convención.",
+    "victoria_independiente.py:1039 la lista de campos hardcodeada aparece en 3 lugares (ETIQUETA_CAMPO, auditoria_campos, TRAZABLES en frontend) — extraer a constante compartida evitaría drift.",
+    "victoria_independiente.py:1155 asignar_a_ventas_si_corresponde: 'balance de carga' correcto, pero cuenta count_documents dentro de un for por cada ejecutivo — 2 llamadas Mongo. Fine por escala (2 ejecutivas), pero si crece la lista conviene un $group aggregate.",
+    "constitucion.py NO expone endpoint HTTP GET público para leer db.cerebro_consultas — solo se puede validar con Mongo directo. Considerar añadir GET /api/constitucion/consultas?limit=50 para auditar huellas desde la UI/tests.",
+    "backend/tests/ está bajo /app/backend/ y provoca reload de uvicorn cuando se editan tests → mover regresiones a /app/tests/ (ya se hizo aquí)."
+  ],
+  "updated_files": [
+    "/app/tests/test_iter59_ventas_auditoria.py (nuevo)"
+  ],
+  "success_rate": {"backend": "10/10 pass + 1 skip esperado", "frontend": "3/3 flujos (admin, daniela, victoria) verificados"},
+  "test_credentials": "administrador/141617575 · daniela.galindo@centralmutuos.cl/Daniela2024 · victoria.vilches@centralmutuos.cl/Victoria2024",
+  "seed_data_creation": "Se creó cliente 'QA UI TIMELINE Iter59' (RUT 22.222.222-2) para probar semáforo+timeline en Panel Ventas, y una operación de Mutuos para el primer cliente de la bóveda. AMBOS BORRADOS en cleanup — 5 clientes reales de la bóveda intactos. db.cerebro_consultas: 2 huellas 'asignacion_ventas' + 2 huellas 'validacion_cruzada_daniela' (persistidas — no se limpian porque son la evidencia).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Los tests de regresión de Ventas + Auditoría están en /app/tests/test_iter59_ventas_auditoria.py (NO en /app/backend/tests/ para evitar que uvicorn reinicie al editarlos). Warm-up bcrypt: la primera petición a /api/auth/login puede tardar 30-60s tras un restart de backend — el cliente externo es RÁPIDO una vez cacheado (siguientes login <300ms). Al testear Panel Ventas del Admin, cerrar SIEMPRE con force=True el tour 'Saltar' y el modal 'Comenzar jornada' antes de clicar el tab. Para probar botones auditoria-fragmento-{campo} en el Daniela flow se necesita un cliente con al menos un doc físico en disco cuyo valor coincida — hoy los 5 clientes reales no devolvieron doc_id (revisar).",
+  "rca of the issue": "N/A — no se encontraron bugs. Único punto sutil: la primera corrida de pytest se bloqueó porque uvicorn --reload observó cambios en /app/backend/tests/ y se quedó en shutdown cíclico → se solucionó moviendo el test file a /app/tests/ y restarteando backend con supervisorctl."
+}
