@@ -35,6 +35,8 @@ const Gauge = ({ pct }) => {
   );
 };
 
+const fdd = (iso) => (iso ? `${String(iso).slice(8, 10)}/${String(iso).slice(5, 7)}/${String(iso).slice(0, 4)} ${String(iso).slice(11, 16)}` : "—");
+
 const ExportarConstitucion = () => {
   const [estado, setEstado] = useState(null);
   const [dialogo, setDialogo] = useState(false);
@@ -224,7 +226,6 @@ const EstadoCerebro = () => {
     cargarAud();
   }, []);
   if (!ec) return null;
-  const fdd = (iso) => (iso ? `${String(iso).slice(8, 10)}/${String(iso).slice(5, 7)}/${String(iso).slice(0, 4)} ${String(iso).slice(11, 16)}` : "—");
   const celda = { background: "rgba(15,23,42,0.6)", border: "1px solid rgba(212,175,55,0.3)", borderRadius: 10, padding: "0.8rem 1rem", flex: "1 1 200px" };
   return (
     <div data-testid="estado-cerebro" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: "1.1rem" }}>

@@ -1008,7 +1008,7 @@ async def inmo_login(payload: dict):
     }
 
 
-PARIDAD_STAMP = "2026-08-22-paridad-v2"  # subir al cambiar seeds/reglas críticas
+PARIDAD_STAMP = "2026-08-22-paridad-v3"  # subir al cambiar seeds/reglas críticas
 
 
 @api.get("/paridad")

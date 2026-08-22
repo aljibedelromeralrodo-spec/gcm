@@ -88,6 +88,9 @@ const MODULE_TITLES = {
   cierres: 'Cierres — Seguimiento de Aprobaciones',
   aprendizaje: 'Aprendizaje IA — Flujo Comercial',
   oportunidades: 'Centro de Ventas VIP — José Martín',
+  ventas_ws: 'Módulo Ventas — Ejecutivas',
+  mod_daniela: 'Módulo Daniela Galindo',
+  mod_victoria: 'Módulo Victoria Vilches',
   postventa: 'Postventa — Seguimiento de Escritura',
   contralor: 'Módulo Contralor — Algoritmo Espejo',
   gerencia: 'Gerencia Comercial',
@@ -115,7 +118,38 @@ const PERMISOS_LEGADO = {
   D: ['brokers', 'micorreo'],
 };
 
+// ═══ 6 SUPERMÓDULOS DEL MENÚ (acordeón, fondo negro mate + dorado) ═══
+const SUPERMODULOS = [
+  { key: 'sm_ventas', icon: 'fa-diamond', label: 'Ventas', mods: ['ventas_ws', 'oportunidades', 'cierres', 'aprobacion', 'seguimiento'] },
+  { key: 'sm_simulacion', icon: 'fa-calculator', label: 'Simulación y Análisis', mods: ['simulador', 'calculadora', 'historial', 'formato', 'setcredito'] },
+  { key: 'sm_captacion', icon: 'fa-bullhorn', label: 'Captación y Publicidad', mods: ['publicidad', 'brokers', 'aprendizaje'] },
+  { key: 'sm_operacion', icon: 'fa-folder-open', label: 'Operación y Clientes', mods: ['clientes', 'supercarpeta', 'tasacion', 'estudio', 'escritura', 'gastos', 'procesamiento', 'rescate', 'autocorreo', 'micorreo'] },
+  { key: 'sm_control', icon: 'fa-shield', label: 'Control y Postventa', mods: ['postventa', 'contralor', 'contraloria', 'auditoria', 'gerencia', 'mod_daniela', 'mod_victoria'] },
+  { key: 'sm_sistema', icon: 'fa-cogs', label: 'Administración y Sistema', mods: ['dashboard', 'usuarios', 'criterios', 'administracion', 'dashai', 'whatsapp', 'basehistorica', 'salud', 'despacho'] },
+];
+
+// ═══ PERFILES DE ACCESO (los módulos no listados NO se ven ni se pueden abrir) ═══
+const PERFIL_MODS = {
+  ventas: {  // Yerile Barrera · Deisy Salazar
+    total: ['ventas_ws', 'oportunidades', 'cierres', 'aprobacion', 'seguimiento',
+            'simulador', 'calculadora', 'historial', 'formato', 'setcredito',
+            'publicidad', 'brokers', 'aprendizaje', 'supercarpeta', 'clientes'],
+    lectura: ['postventa', 'contralor', 'contraloria'],
+  },
+  gerencia_comercial: {  // Daniela Galindo · Victoria Vilches · Javier Urrutia
+    total: ['gerencia', 'mod_daniela', 'mod_victoria', 'postventa', 'contralor'],
+    lectura: ['contraloria'],
+  },
+};
+
 function accesoModulo(user, key) {
+  // PERFILES ESTRICTOS: ventas / gerencia_comercial (admin y maestro quedan exentos)
+  if (PERFIL_MODS[user.perfil] && !['admin', 'maestro'].includes(user.rol)) {
+    const P = PERFIL_MODS[user.perfil];
+    if (P.total.includes(key)) return key === 'contraloria' ? 'lectura' : 'total';
+    if (P.lectura.includes(key)) return 'lectura';
+    return 'bloqueado';
+  }
   if (key === 'contraloria') return 'lectura'; // MÓDULO CONTROL: solo lectura SIN EXCEPCIÓN
   if (['admin', 'maestro'].includes(user.rol)) return 'total';
   const A = ACCESOS_ROL[user.rol];
@@ -178,6 +212,7 @@ function MainApp() {
   };
   const [showTour, setShowTour] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [openSM, setOpenSM] = useState(null);
   const [energia, setEnergia] = useState(null);
   const [showCargarSaldo, setShowCargarSaldo] = useState(false);
   const [saldoInput, setSaldoInput] = useState("");
@@ -208,6 +243,16 @@ function MainApp() {
       secureSet("user", nu);
     } catch (e) { window.alert(e.response?.data?.detail || "No fue posible actualizar el cargo. Intente nuevamente."); }
   };
+
+  // ── PERFILES ESTRICTOS: aterrizaje y bloqueo de módulos no asignados ──
+  useEffect(() => {
+    if (!user) return;
+    const P = PERFIL_MODS[user.perfil];
+    if (P && !['admin', 'maestro'].includes(user.rol) && ![...P.total, ...P.lectura].includes(activeModule)) {
+      setActiveModule(P.total[0]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, activeModule]);
 
   // Close mobile sidebar on resize to desktop
   useEffect(() => {
@@ -309,8 +354,8 @@ function MainApp() {
 
   if (!user) return <LoginPage onLogin={setUser} />;
 
-  // ── DEMO MÓDULO VICTORIA (datos ficticios, reproducible) ──
-  if (verDemoVictoria) {
+  // ── DEMO MÓDULO VICTORIA (datos ficticios, solo Administrador) ──
+  if (verDemoVictoria && esAdminReal) {
     return (
       <Suspense fallback={<div style={{ minHeight: "100vh", background: "#0a0a0a" }} />}>
         <DemoVictoria autoPlay onSalir={() => { window.location.hash = ""; }} />
@@ -318,7 +363,7 @@ function MainApp() {
     );
   }
 
-  if (verDemoVentas) {
+  if (verDemoVentas && esAdminReal) {
     return (
       <Suspense fallback={<div style={{ minHeight: "100vh", background: "#0a0a0a" }} />}>
         <DemoVentas autoPlay onSalir={() => { window.location.hash = ""; }} />
@@ -326,7 +371,7 @@ function MainApp() {
     );
   }
 
-  if (verDemoMutuos) {
+  if (verDemoMutuos && esAdminReal) {
     return (
       <Suspense fallback={<div style={{ minHeight: "100vh", background: "#0a0a0a" }} />}>
         <DemoMutuos autoPlay onSalir={() => { window.location.hash = ""; }} />
@@ -334,8 +379,8 @@ function MainApp() {
     );
   }
 
-  // ── ACCESO EXCLUSIVO: Victoria Vilches — Módulo Mutuos (Guía de Usuario) ──
-  if (user.solo_modulo === "mutuos") {
+  // ── ACCESO EXCLUSIVO: Victoria Vilches — Módulo Mutuos (Guía de Usuario, sin perfil nuevo) ──
+  if (user.solo_modulo === "mutuos" && !PERFIL_MODS[user.perfil]) {
     return (
       <Suspense fallback={<div style={{ minHeight: "100vh", background: "#0a0f1c" }} />}>
         <MutuosWorkspace user={user} onLogout={logout}
@@ -344,8 +389,8 @@ function MainApp() {
     );
   }
 
-  // ── ACCESO EXCLUSIVO: ejecutivas del Módulo Ventas ──
-  if (user.solo_modulo === "ventas") {
+  // ── ACCESO EXCLUSIVO: ejecutivas del Módulo Ventas (solo si NO tienen perfil nuevo) ──
+  if (user.solo_modulo === "ventas" && !PERFIL_MODS[user.perfil]) {
     return (
       <Suspense fallback={<div style={{ minHeight: "100vh", background: "#0a0f1c" }} />}>
         <VentasWorkspace user={user} onLogout={logout}
@@ -354,8 +399,8 @@ function MainApp() {
     );
   }
 
-  // ── ACCESO EXCLUSIVO: Victoria Vilches solo ve su módulo de trabajo ──
-  if (user.solo_modulo === "victoria") {
+  // ── ACCESO EXCLUSIVO: Victoria Vilches solo ve su módulo de trabajo (sin perfil nuevo) ──
+  if (user.solo_modulo === "victoria" && !PERFIL_MODS[user.perfil]) {
     return (
       <Suspense fallback={<div style={{ minHeight: "100vh", background: "#0a0f1c" }} />}>
         <VictoriaWorkspace user={user} onLogout={logout}
@@ -387,6 +432,9 @@ function MainApp() {
     { key: 'despacho', icon: 'fa-rocket', label: '🚀 Despacho Veloz' },
     { key: 'cierres', icon: 'fa-handshake-o', label: 'Cierres' },
     { key: 'oportunidades', icon: 'fa-diamond', label: 'Centro de Ventas VIP' },
+    { key: 'ventas_ws', icon: 'fa-briefcase', label: 'Módulo Ventas' },
+    { key: 'mod_daniela', icon: 'fa-user-circle-o', label: 'Módulo Daniela Galindo' },
+    { key: 'mod_victoria', icon: 'fa-user-circle', label: 'Módulo Victoria Vilches' },
     { key: 'salud', icon: 'fa-heartbeat', label: 'Panel de Salud' },
     { key: 'rescate', icon: 'fa-life-ring', label: 'Por Clasificar' },
     { key: 'aprendizaje', icon: 'fa-graduation-cap', label: 'Aprendizaje IA' },
@@ -402,9 +450,16 @@ function MainApp() {
     { key: 'administracion', icon: 'fa-database', label: 'Administración' },
     { key: 'brokers', icon: 'fa-briefcase', label: 'Panel Broker' },
     { key: 'micorreo', icon: 'fa-envelope', label: 'Mi Correo' },
-    // 📣 PUBLICIDAD: visible SOLO para el Administrador (pedido explícito)
-    ...(['admin', 'maestro'].includes(uEff.rol) && !uEff._sim ? [{ key: 'publicidad', icon: 'fa-bullhorn', label: '📣 Publicidad y Captación' }] : []),
+    // 📣 PUBLICIDAD: Administrador y perfil Ventas
+    ...((['admin', 'maestro'].includes(uEff.rol) && !uEff._sim) || uEff.perfil === 'ventas' ? [{ key: 'publicidad', icon: 'fa-bullhorn', label: '📣 Publicidad y Captación' }] : []),
   ];
+  const perfilEstricto = PERFIL_MODS[uEff.perfil] && !['admin', 'maestro'].includes(uEff.rol);
+  const itemPorKey = Object.fromEntries(navItems.map(i => [i.key, i]));
+  const gruposMenu = SUPERMODULOS.map(g => ({
+    ...g,
+    items: g.mods.map(k => itemPorKey[k]).filter(Boolean)
+      .filter(i => !perfilEstricto || accesoModulo(uEff, i.key) !== 'bloqueado'),
+  })).filter(g => g.items.length > 0);
   const acceso = accesoModulo(uEff, activeModule);
 
   return (
@@ -451,11 +506,33 @@ function MainApp() {
             fontSize: "0.44rem", letterSpacing: 4.5, fontWeight: 400 }}>CON CRECES</div>
         </div>
         <nav className="sidebar-nav">
-          {navItems.map(item => (
-            <button key={item.key} className={`sidebar-item ${activeModule === item.key ? 'active' : ''}`} onClick={() => { setActiveModule(item.key); setSidebarOpen(false); }} data-testid={`nav-${item.key}`}>
-              <span className="sidebar-icon"><i className={`fa ${item.icon}`}></i></span> {item.label}
-            </button>
-          ))}
+          {gruposMenu.map(g => {
+            const abierto = (openSM ?? (SUPERMODULOS.find(x => x.mods.includes(activeModule))?.key)) === g.key;
+            return (
+              <div key={g.key} data-testid={`supermodulo-${g.key}`}>
+                <button onClick={() => setOpenSM(abierto ? '__cerrado__' : g.key)}
+                  data-testid={`sm-toggle-${g.key}`}
+                  style={{ width: "100%", display: "flex", alignItems: "center", gap: 10,
+                    background: abierto ? "rgba(212,175,55,0.10)" : "transparent",
+                    border: "none", borderLeft: abierto ? "3px solid #d4af37" : "3px solid transparent",
+                    color: "#d4af37", padding: "0.62rem 0.9rem", cursor: "pointer",
+                    fontSize: "0.7rem", fontWeight: 800, letterSpacing: "0.14em",
+                    textTransform: "uppercase", textAlign: "left",
+                    transition: "background-color 0.2s, border-color 0.2s" }}>
+                  <i className={`fa ${g.icon}`} style={{ width: 16, textAlign: "center" }}></i>
+                  <span style={{ flex: 1 }}>{g.label}</span>
+                  <i className={`fa fa-chevron-${abierto ? 'down' : 'right'}`} style={{ fontSize: "0.55rem", opacity: 0.7 }}></i>
+                </button>
+                {abierto && g.items.map(item => (
+                  <button key={item.key} className={`sidebar-item ${activeModule === item.key ? 'active' : ''}`}
+                    onClick={() => { setActiveModule(item.key); setSidebarOpen(false); }}
+                    data-testid={`nav-${item.key}`} style={{ paddingLeft: "1.9rem" }}>
+                    <span className="sidebar-icon"><i className={`fa ${item.icon}`}></i></span> {item.label}
+                  </button>
+                ))}
+              </div>
+            );
+          })}
         </nav>
         <div className="sidebar-user">
           <p className="sidebar-user-name">{user.nombre}</p>
@@ -656,6 +733,9 @@ function MainApp() {
         {activeModule === 'auditoria' && <AuditoriaForenseModule />}
         {activeModule === 'despacho' && <DespachoModule />}
         {activeModule === 'publicidad' && <PublicidadModule />}
+        {activeModule === 'ventas_ws' && <VentasWorkspace user={uEff} onLogout={logout} onUserUpdate={(nu) => { setUser(nu); secureSet("user", nu); }} />}
+        {activeModule === 'mod_daniela' && <VictoriaWorkspace user={uEff} onLogout={logout} onUserUpdate={(nu) => { setUser(nu); secureSet("user", nu); }} />}
+        {activeModule === 'mod_victoria' && <MutuosWorkspace user={uEff} onLogout={logout} onUserUpdate={(nu) => { setUser(nu); secureSet("user", nu); }} />}
         </>)}
         </Suspense>
       </main>

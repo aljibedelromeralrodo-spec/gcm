@@ -1312,3 +1312,11 @@ actual; todo lo demás permanece intacto.
 - Historial (correos ya enviados en seguimiento/grid_eventos/adn) NO se reescribió (trazabilidad); carpeta del cliente "Gerardo Barrera" no tocada (su RUT es identidad, no cuenta de cobro).
 - Verificado: 0 restos de la cuenta antigua en plantillas/config/colas activas.
 - (adición) seed_paridad_produccion paso 3: cuenta bancaria oficial (MUTUARIAS/Mercado Pago/1030937838) se aplica al arrancar en config gastos_op + todas las plantillas tipo gastos con cuenta distinta. Probado con simulación de producción e idempotencia. PARIDAD_STAMP → v2.
+
+## 2026-08-22 — Menú en 6 supermódulos + 3 perfiles de acceso (testing agent 95%→100% tras fix)
+- App.js: SUPERMODULOS (acordeón dorado/negro: Ventas, Simulación y Análisis, Captación y Publicidad, Operación y Clientes, Control y Postventa, Administración y Sistema) + PERFIL_MODS estrictos.
+- Perfiles: ventas (Yerile/Deisy: Ventas+Simulación+Captación/Publicidad+Clientes+Supercarpeta, Postventa/Contralor lectura, aterrizan en Módulo Ventas embebido) · gerencia_comercial (Daniela/Victoria/Javier: Gerencia, Módulo Daniela=VictoriaWorkspace, Módulo Victoria=MutuosWorkspace, Postventa, Contralor) · admin/maestro todo.
+- Módulos no asignados: fuera del DOM + redirección automática si el estado apunta a uno bloqueado; demos #demo-* solo admin; workspaces exclusivos (solo_modulo) se omiten si hay perfil.
+- Usuarios: perfil asignado a 7 cuentas; Javier Urrutia NUEVO (javier.urrutia@centralmutuos.cl / Urrutia2026!, bcrypt, clave_temporal); usuario 'javier' antiguo alineado. Todo dentro de seed_paridad_produccion paso 4 (PARIDAD_STAMP v3) → producción lo toma al redeploy.
+- BUGFIX preexistente: CerebroDashAIModule 'fdd is not defined' (helper movido a nivel de módulo) — verificado con screenshot.
+- test_credentials.md actualizado.

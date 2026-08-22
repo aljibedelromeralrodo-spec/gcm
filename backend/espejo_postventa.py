@@ -1870,3 +1870,31 @@ async def seed_paridad_produccion():
         {"$set": {"data.datos_pago": cuenta_oficial}})
     if r.modified_count:
         logging.info(f"🔁 Paridad: {r.modified_count} plantilla(s) de gastos con cuenta antigua corregida(s)")
+    # 4) Perfiles de acceso del menú (mandato del Administrador 2026-08-22):
+    #    ventas = Yerile/Deisy · gerencia_comercial = Daniela/Victoria/Javier
+    perfiles = {
+        "yerile.barrera@centralmutuos.cl": "ventas",
+        "deysi.salazar@centralmutuos.cl": "ventas",
+        "daniela.galindo@centralmutuos.cl": "gerencia_comercial",
+        "daniela": "gerencia_comercial",
+        "victoria.vilches@centralmutuos.cl": "gerencia_comercial",
+        "victoria": "gerencia_comercial",
+        "javier.urrutia@centralmutuos.cl": "gerencia_comercial",
+        "javier": "gerencia_comercial",
+        "javierurrutia@centralmutuos.cl": "gerencia_comercial",
+    }
+    for cod, perfil in perfiles.items():
+        await db.users.update_one({"codigo": cod, "perfil": {"$ne": perfil}},
+                                  {"$set": {"perfil": perfil}})
+    # El usuario 'javier' antiguo era rol postventa → administracion para que las APIs del perfil funcionen
+    await db.users.update_many({"codigo": {"$in": ["javier", "javierurrutia@centralmutuos.cl"]},
+                                "rol": "postventa"}, {"$set": {"rol": "administracion"}})
+    if not await db.users.find_one({"codigo": "javier.urrutia@centralmutuos.cl"}):
+        import bcrypt as _bc
+        await db.users.insert_one({
+            "codigo": "javier.urrutia@centralmutuos.cl",
+            "email": "javier.urrutia@centralmutuos.cl", "nombre": "Javier Urrutia",
+            "rol": "administracion", "perfil": "gerencia_comercial",
+            "clave_hash": _bc.hashpw("Urrutia2026!".encode(), _bc.gensalt()).decode(),
+            "clave_temporal": True, "activo": True, "created": _now()})
+        logging.info("🔁 Paridad: usuario Javier Urrutia creado (perfil gerencia_comercial)")
