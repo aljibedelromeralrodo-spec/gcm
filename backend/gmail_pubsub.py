@@ -313,6 +313,13 @@ async def _procesar_history(history_id_notif):
 
 
 # ══ WEBHOOK PUB/SUB (público — responde 200 de inmediato) ════════════════════
+@gmailr.get("/push")
+@gmailr.head("/push")
+async def gmail_push_probe():
+    """Sondas de verificación de Google/ingress: responder 200."""
+    return {"ok": True, "endpoint": "gmail-push", "metodo_esperado": "POST"}
+
+
 @gmailr.post("/push")
 async def gmail_push(request: Request):
     try:
