@@ -1,0 +1,31 @@
+{
+  "summary": "Iteración 58 — FRONTEND ONLY del Módulo Mutuos (Victoria Vilches) + regresiones Ventas/Daniela. Warm-up bcrypt hecho por curl (200 en ~230ms para las 3 cuentas). Todos los flujos exigidos pasaron en Playwright contra la URL preview: (1) login victoria.vilches → entra DIRECTO a mutuos-workspace con header 'MÓDULO VICTORIA VILCHES · GERENCIA DE OPERACIONES · MUTUOS', sin sidebar admin, banner clave-temporal visible; (2) panel muestra KPIs mutuos-kpi-proceso/riesgo/boveda (5 clientes en la bóveda), select trae los 5 clientes reales, botón 'Crear operación con datos autocompletados' crea la operación y abre la ficha directamente con ANDRES BENJAMIN HERZBERG GADAN; (3) stepper de 6 etapas con títulos correctos (Evaluación del Cliente / Registro / Tasación / Datos del Crédito / Seguimiento / Validación Final), sección mutuos-validaciones con 4 chips en verde (rut_titular, rut_codeudor, rol_avaluo, direccion_propiedad) + chip deuda/garantía inicial ⏳ (amarillo); campos mutuos-campo-rut_titular='16.212.567-2' y mutuos-campo-nombre_cliente='ANDRES BENJAMIN HERZBERG GADAN' AUTOCOMPLETADOS desde la bóveda; (4) trazabilidad: clic en mutuos-val-rut_titular abre PreviewFlotante con documento de origen 'Certificado de Avalúo Fiscal Detallado, página 1' y el botón preview-flotante-cerrar cierra sin perder la ficha; (5) mutuos-abrir-autorizacion abre el modal mutuos-modal-autorizacion, mutuos-confirmar-autorizacion autoriza la etapa 1 y avanza a la etapa 2; (6) etapa 3 (valor_tasacion=3500) + etapa 4 (precio_vivienda=3500, credito_uf=2800, plazo_anos=25) guardan correctamente vía mutuos-guardar-etapa → chip deuda_garantia pasa a VERDE (80.0% tope 80%); (7) etapa 6: checklist muestra 1..5 con ✕ rojo salvo etapa 1 autorizada; mutuos-enviar-riesgo está deshabilitado tanto sin marcar mutuos-check-final como con el check marcado si hay etapas pendientes (bloqueo correcto — NO se completó envío real); (8) mutuos-btn-volver regresa al panel y F5 en la ficha restaura la misma operación y la misma etapa (Etapa 6); (9) Yerile: ventas-emails-aviso + ventas-emails-guardar guardan 'aviso.qa@test.cl' (toast éxito) y persiste tras reload — luego se vació para no enviar correos reales; (10) validación RUT: al enviar 'abc' en ventas-sol-rut aparece toast 'RUT inválido: use el formato 12.345.678-9' y no se crea el cliente; (11) regresión daniela.galindo → workspace 'MÓDULO DANIELA GALINDO · CON CRECES' correcto. Cleanup final ejecutado: db.victoria_operaciones.delete_many({}) → 1 borrada; ventas_emails.yerile desetado (ya vacío desde UI); 5 clientes reales intactos.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "MutuosPanel select cliente", "issues": ["Warning de hidratación en consola: 'In HTML, <span> cannot be a child of <option>'. Probablemente por un ícono/nodo dentro del <option> del select mutuos-select-cliente. No afecta la funcionalidad pero ensucia la consola en dev. Verificar options del select y quitar cualquier elemento no-texto dentro de <option>."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter57_ventas.py"
+  ],
+  "action_items": [
+    "Opcional: corregir el warning de hidratación 'span cannot be a child of option' en el select del panel de Mutuos (o en algún select global) para tener consola limpia."
+  ],
+  "critical_code_review_comments": [
+    "MutuosFicha.js:9 TRAZABLES incluye 'nombre_cliente' pero el backend solo devuelve 4 validaciones (rut_titular, rut_codeudor, rol_avaluo, direccion_propiedad) + deuda_garantia — no hay chip mutuos-val-nombre_cliente. Coherente con el enunciado ('4 validaciones irrenunciables'), pero la lista TRAZABLES podría depurarse si no se piensa exponer nombre_cliente como chip aparte.",
+    "MutuosFicha.js:9 constante TRAZABLES y V_COLOR podrían moverse a theme.js para mantener la ficha bajo 220 líneas y ser reutilizadas por PreviewFlotante.",
+    "MutuosWorkspace.js:19 setNav persiste TODO el nav en sessionStorage (incluida etapa) → correcto para F5 (verificado). Nice.",
+    "server.py sigue con seed dupla 'victoria' (legacy /codigo) que fue notada en iter57 — revisar si se eliminó tras el renombre 'MÓDULO VICTORIA VILCHES'."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "no probado (backend ya validado por E1 vía curl)", "frontend": "11/11 flujos verificados"},
+  "test_credentials": "victoria.vilches@centralmutuos.cl / Victoria2024 (solo_modulo=mutuos, clave_temporal=true); yerile.barrera@centralmutuos.cl / Yerile2024; daniela.galindo@centralmutuos.cl / Daniela2024. Warm-up bcrypt hecho por curl externo antes de UI.",
+  "seed_data_creation": "Playwright creó 1 operación de mutuos para ANDRES BENJAMIN HERZBERG GADAN (etapa 1 autorizada, etapas 3-4 guardadas). Ventas: creó cliente 'QA RUT INVALIDO' — bloqueado por la validación de RUT (no se creó realmente, toast 'RUT inválido'). Cleanup verificado: 0 operaciones en victoria_operaciones, config.ventas_emails.yerile ausente, victoria_clientes con 5 clientes reales intactos.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "El Módulo Mutuos frontend está estable y todo funciona end-to-end. IMPORTANTE: los tests de Playwright deben cerrar el PreviewFlotante usando data-testid='preview-flotante-cerrar' (no matcher por texto de 'Cerrar', que puede colisionar con 'Cerrar sesión' del header). El bloqueo de mutuos-enviar-riesgo es correcto (disabled=true) hasta que TODAS las etapas 1..5 estén autorizadas Y mutuos-check-final marcado — la etapa autorizada muestra un pill verde '✓ ETAPA AUTORIZADA POR VICTORIA <fecha>' (verificado en etapa 1). La ficha se restaura correctamente tras F5 gracias al sessionStorage 'mutuos_nav_v1' que persiste view/oid/etapa. La validación de RUT en ventas ya se aplica (toast 'RUT inválido: use el formato 12.345.678-9') — resuelve el minor de iter57.",
+  "rca of the issue": "N/A — no se encontraron bugs. Nota metodológica: en el primer intento el PreviewFlotante quedó abierto porque usé un selector por texto 'Cerrar' que match ambiguo; al usar data-testid='preview-flotante-cerrar' cerró limpio y desbloqueó los siguientes flujos (autorización, stepper, etapa 6, F5)."
+}

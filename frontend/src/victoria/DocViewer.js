@@ -63,7 +63,7 @@ export default function DocViewer({ doc, onActualizado }) {
         {rev && <span data-testid="doc-viewer-estado-revision" style={S.pill(
           rev.decision === "aceptado" ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)",
           rev.decision === "aceptado" ? "#4ade80" : "#f87171")}>
-          {rev.decision === "aceptado" ? "✓ ACEPTADO POR VICTORIA" : "✕ RECHAZADO"}</span>}
+          {rev.decision === "aceptado" ? "✓ ACEPTADO POR DANIELA" : "✕ RECHAZADO"}</span>}
       </div>
       {err ? (
         <div data-testid="doc-viewer-error" style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.4)", borderRadius: 4, padding: "1.4rem", color: "#f87171", fontSize: "1rem" }}>{err}</div>

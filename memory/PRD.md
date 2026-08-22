@@ -1215,3 +1215,28 @@ actual; todo lo demás permanece intacto.
 - Listado "ds19 01 inmoboliarias": imagen 599x2000px con 174 filas; el texto de correos es de ~4px y el extractor
   alucina. Recortes de columna en /tmp/v_0..9.png (7x) listos para lectura manual. RECOMENDACIÓN: pedir al usuario
   el CSV/Excel de origen para fidelidad 100% antes de una campaña real (correos mal leídos = rebotes).
+
+## 2026-06 — Sesión grande: Ventas, renombre Daniela, Mutuos (Guía), voz Martín
+1. MÓDULO VENTAS (iter57 20/20 + iter58): Yerile Barrera (yerile.barrera@) y Deysi Salazar (deysi.salazar@),
+   solo_modulo="ventas"; round-robin automático (doc incompleta + entrega inmediata, detectada por texto o checkbox);
+   /app/backend/ventas.py; panel+ficha+contactos+estados; reporte admin (Administración→Panel Ventas);
+   validación formato RUT; correos de aviso por ejecutiva (PUT /api/ventas/ejecutivos/{ej}/avisos-email,
+   avisos enviados a ejecutiva ALEATORIA vía _notificar_aviso_ventas). Demo con voz enviada por correo.
+2. RENOMBRE: módulo bóveda ConCreces ahora es "Módulo Daniela Galindo" (daniela.galindo@ / Daniela2024,
+   solo_modulo="victoria" interno); todos los textos visibles renombrados; usuario victoria.vilches viejo migrado.
+3. MÓDULO VICTORIA VILCHES · MUTUOS (iter58 11/11): /app/backend/mutuos_victoria.py + MutuosWorkspace/Panel/Ficha;
+   victoria.vilches@ / Victoria2024 (solo_modulo="mutuos", gerente de operaciones). Flujo 6 etapas según Guía de
+   Usuario Mutuos (PDF en assets jxy15tj9): Evaluación Cliente → Registro Operación → Tasación → Datos Crédito →
+   Seguimiento → Validación final/envío a riesgo. Autocompletado desde la bóveda (PUENTE de solo lectura con módulo
+   Daniela), 4 validaciones irrenunciables + regla 80% deuda/garantía + formato RUT con puntos/guion, pantalla de
+   autorización por etapa, trazabilidad clic→documento origen (PreviewFlotante), envío a riesgo bloqueado hasta
+   todo autorizado. 6 "Regla de Oro Victoria" sembradas (etiqueta en dashai_eventos, seed idempotente).
+4. VOZ MARTÍN corregida: utils/vozMartin.js (selector estricto voz española es-419/es-US primero, rate 1.0)
+   aplicado a DemoVictoria, DemoVentas y CentralChat; videos regenerados con tts-1-hd onyx speed 1.0;
+   demo Victoria/bóveda REENVIADA a gerardo.ext con asunto "voz corregida". demo_ventas.mp4 y demo_victoria.mp4
+   en /app/backend/demos (GET /api/victoria/demo/video?modulo=).
+5. Constitución: REGLA_ARQ_SEPARACION (módulos independientes, admin única visión transversal) actualizada
+   con nombres correctos; REDESPLIEGUE-5 actualizado.
+- Testing: iteration_57.json (backend 20/20), iteration_58.json (frontend 11/11, sin bugs).
+- Nota menor pendiente: warning consola "span cannot be child of option" (no funcional).
+- PENDIENTE: listado publicidad "ds19 01 inmoboliarias" sigue esperando CSV/Excel del usuario (imagen ilegible).

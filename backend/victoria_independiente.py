@@ -182,7 +182,7 @@ async def _guardar_doc(cliente_id, filename, raw, tipo, origen, subido_por="", d
 async def _get_cliente(cid):
     c = await db.victoria_clientes.find_one({"id": cid}, {"_id": 0})
     if not c:
-        raise HTTPException(status_code=404, detail="Cliente no encontrado en la bóveda de Victoria")
+        raise HTTPException(status_code=404, detail="Cliente no encontrado en la bóveda de Daniela")
     return c
 
 
@@ -445,6 +445,7 @@ async def procesar_correo_victoria(limit=25):
                 nuevos_docs += 1
                 await auditar_cliente(cliente["id"])
                 await _evento(pdf["filename"], tipo, "asociado", cliente, validaciones)
+                await asignar_a_ventas_si_corresponde(cliente["id"], f"{texto_corto} {texto[:600]}")
             except Exception as e:
                 logging.warning(f"victoria adjunto {pdf.get('filename')}: {e}")
                 await _aviso("error_adjunto", f"No pude procesar «{pdf.get('filename')}» — súbelo manualmente. ({str(e)[:80]})")
@@ -611,7 +612,7 @@ async def documento_envio(cid: str, request: Request):
             f"<table border=1 cellpadding=5 style='{tabla}'>{filas_forms}</table>"
             f"<p style='background:#fdf6e3;border:1px solid #8a6d1a;padding:10px;font-weight:bold'>"
             f"{'✅ APTO PARA ENVÍO: todas las coincidencias validadas.' if not aud.get('bloqueado') else '⛔ BLOQUEADO: no se puede enviar a ConCreces hasta que todo coincida y no haya alertas críticas.'}"
-            f" Documento generado para revisión final de Victoria Vilches.</p>"
+            f" Documento generado para revisión final de Daniela Galindo.</p>"
             f"<style>.traz{{cursor:pointer;border-bottom:1.5px dashed #b08d2a;transition:background .2s}}"
             f".traz:hover{{background:#f5e9c8;border-bottom-style:solid}}"
             f".traz:hover::after{{content:' 🔍';font-size:11px}}</style>"
@@ -762,7 +763,7 @@ async def doc_revision(did: str, payload: dict, request: Request):
     await db.victoria_docs.update_one({"id": did}, {"$set": {"revision": {
         "decision": decision, "motivo": motivo, "por": u.get("sub", ""), "fecha": _now()}}})
     if decision == "rechazado":
-        await _aviso("doc_rechazado", f"Victoria rechazó «{d.get('archivo','')}»: {motivo}", d.get("cliente_id"))
+        await _aviso("doc_rechazado", f"Daniela rechazó «{d.get('archivo','')}»: {motivo}", d.get("cliente_id"))
     aud = await auditar_cliente(d["cliente_id"]) if d.get("cliente_id") else None
     return {"ok": True, "decision": decision, "auditoria": aud}
 
@@ -808,7 +809,7 @@ async def enviar_correo_cliente(cid: str, payload: dict, request: Request):
     cuerpo = mensaje.replace("\n", "<br>")
     html = (f"<div style='font-family:Georgia,serif;color:#1a1a1a;max-width:640px'>"
             f"<p>{cuerpo}</p><hr style='border:none;border-top:2px solid #8a6d1a'>"
-            f"<p style='color:#8a6d1a;font-weight:bold'>Victoria Vilches<br>"
+            f"<p style='color:#8a6d1a;font-weight:bold'>Daniela Galindo<br>"
             f"Central Mutuos · Con Creces</p></div>")
     import email_service as mail
     r = await asyncio.to_thread(mail.send_mail, email_dest, asunto, html, None, "secundaria")
@@ -996,37 +997,98 @@ DEMOS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 @vict.get("/demo/video")
-async def demo_video(request: Request):
+async def demo_video(request: Request, modulo: str = "victoria"):
     _exigir(request)
-    p = DEMOS_DIR / "demo_victoria.mp4"
+    archivo = {"victoria": "demo_victoria.mp4", "ventas": "demo_ventas.mp4"}.get(modulo)
+    if not archivo:
+        raise HTTPException(status_code=400, detail="Módulo de demo inválido")
+    p = DEMOS_DIR / archivo
     if not p.exists():
         raise HTTPException(status_code=404, detail="El video de la demo aún no ha sido generado")
     from fastapi.responses import FileResponse
-    return FileResponse(p, media_type="video/mp4", filename="Demo_Modulo_Victoria_Central_Mutuos.mp4")
+    return FileResponse(p, media_type="video/mp4", filename=f"Demo_Modulo_{modulo.title()}_Central_Mutuos.mp4")
 
 
 @vict.post("/demo/enviar")
 async def demo_enviar(payload: dict, request: Request):
     u = _exigir(request)
-    p = DEMOS_DIR / "demo_victoria.mp4"
+    modulo = payload.get("modulo") or "victoria"
+    archivo = {"victoria": "demo_victoria.mp4", "ventas": "demo_ventas.mp4"}.get(modulo)
+    if not archivo:
+        raise HTTPException(status_code=400, detail="Módulo de demo inválido")
+    p = DEMOS_DIR / archivo
     if not p.exists():
         raise HTTPException(status_code=404, detail="El video de la demo aún no ha sido generado")
     import base64
     import email_service as mail
     dest = (payload.get("email") or "gerardo.ext@centralmutuos.cl").strip()
-    asunto = (payload.get("asunto") or "Demo módulo Victoria - Central Mutuos ConCreces").strip()
+    asunto = (payload.get("asunto") or f"Demo módulo {modulo.title()} - Central Mutuos ConCreces").strip()
     b64 = base64.b64encode(p.read_bytes()).decode()
-    html = ("<div style='font-family:Georgia,serif;color:#1a1a1a;max-width:640px'>"
-            "<h2 style='color:#8a6d1a'>Demo módulo Victoria — Central Mutuos ConCreces</h2>"
-            "<p>Se adjunta el video de la demo interactiva del módulo de Victoria: caso completo "
-            "con datos ficticios (Juan Pérez Soto, 3.500 UF, sin subsidio) desde la detección "
-            "automática del correo hasta el envío confirmado a ConCreces.</p>"
-            "<p>El video también está disponible para descarga desde el panel de administrador.</p>"
+    html = (f"<div style='font-family:Georgia,serif;color:#1a1a1a;max-width:640px'>"
+            f"<h2 style='color:#8a6d1a'>{asunto}</h2>"
+            f"<p>Se adjunta el video de la demo del módulo {modulo.title()} de Central Mutuos, "
+            f"narrado por Martín, con datos ficticios.</p>"
             "<hr style='border:none;border-top:2px solid #8a6d1a'>"
             "<p style='color:#8a6d1a;font-weight:bold'>Central Mutuos · Con Creces</p></div>")
     r = await asyncio.to_thread(mail.send_mail, dest, asunto,
-                                html, [{"filename": "Demo_Modulo_Victoria_Central_Mutuos.mp4", "content_b64": b64}],
+                                html, [{"filename": f"Demo_Modulo_{modulo.title()}_Central_Mutuos.mp4", "content_b64": b64}],
                                 "secundaria")
     if not r.get("success"):
         raise HTTPException(status_code=502, detail=f"No se pudo enviar el correo: {str(r.get('error'))[:120]}")
     return {"ok": True, "mensaje": f"Video de la demo enviado a {dest}"}
+
+# ══════════ MÓDULO VENTAS: asignación alternada automática ══════════
+EJECUTIVOS_VENTAS = {"yerile": "Yerile Barrera", "deysi": "Deysi Salazar"}
+
+
+async def asignar_a_ventas_si_corresponde(cid, texto=""):
+    """Regla Ventas: documentación incompleta + entrega inmediata → round-robin Yerile/Deysi."""
+    c = await db.victoria_clientes.find_one({"id": cid})
+    if not c or c.get("ventas") or c.get("despachado"):
+        return None
+    inmediata = bool(c.get("entrega_inmediata")) or bool(re.search(r"entrega\s+inmediata", (texto or "").lower()))
+    if not inmediata:
+        return None
+    docs = await _docs_validos(cid)
+    presentes = {d["tipo"] for d in docs}
+    if all(t in presentes for t in DOCS_REQUERIDOS):
+        return None
+    cfg = await db.config.find_one({"_key": "ventas_rr"}) or {}
+    orden = list(EJECUTIVOS_VENTAS.keys())
+    ultimo = cfg.get("ultimo")
+    sig = orden[(orden.index(ultimo) + 1) % len(orden)] if ultimo in orden else orden[0]
+    await db.config.update_one({"_key": "ventas_rr"}, {"$set": {"ultimo": sig}}, upsert=True)
+    await db.victoria_clientes.update_one({"id": cid}, {"$set": {
+        "entrega_inmediata": True,
+        "ventas": {"ejecutivo": sig, "ejecutivo_nombre": EJECUTIVOS_VENTAS[sig],
+                   "asignado_en": _now(), "estado": "en_gestion", "contactos": []}}})
+    await _aviso("ventas", f"Solicitud de {c['nombre']} (documentación incompleta + entrega inmediata) "
+                           f"asignada automáticamente a {EJECUTIVOS_VENTAS[sig]} en el Módulo Ventas.", cid)
+    try:
+        await _notificar_aviso_ventas(c, sig)
+    except Exception:
+        pass
+    return sig
+
+
+async def _notificar_aviso_ventas(cliente, ejecutivo_asignado):
+    """Aviso del sistema por correo, asignado ALEATORIAMENTE entre las ejecutivas de Ventas."""
+    import random
+    cfg = await db.config.find_one({"_key": "ventas_emails"}) or {}
+    ej_aviso = random.choice(list(EJECUTIVOS_VENTAS.keys()))
+    emails = cfg.get(ej_aviso) or []
+    if not emails:
+        return
+    import email_service as mail_srv
+    html = (f"<div style='font-family:Georgia,serif;color:#1a1a1a'>"
+            f"<h3 style='color:#8a6d1a'>Aviso del sistema — Módulo Ventas</h3>"
+            f"<p>Nueva solicitud asignada a <b>{EJECUTIVOS_VENTAS[ejecutivo_asignado]}</b>: "
+            f"{cliente['nombre']} (RUT {cliente.get('rut','—')}), documentación incompleta + entrega inmediata.</p>"
+            f"<p>Este aviso fue dirigido aleatoriamente a {EJECUTIVOS_VENTAS[ej_aviso]}.</p>"
+            f"<p style='color:#8a6d1a;font-weight:bold'>Central Mutuos · Módulo Ventas</p></div>")
+    for em in emails:
+        try:
+            await asyncio.to_thread(mail_srv.send_mail, em,
+                                    f"Nueva solicitud en Módulo Ventas: {cliente['nombre']}", html, None, "secundaria")
+        except Exception:
+            pass

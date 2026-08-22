@@ -1,0 +1,41 @@
+{
+  "summary": "Iteración 57 — Backend Módulo VENTAS (round-robin, paneles, gestión, Regla de Oro 15) + renombre Daniela + demos. Pytest 20/20 PASSED en 4.56s contra localhost:8001 (bcrypt warmed-up con logins previos). Frontend Playwright: workspace Yerile (header MÓDULO VENTAS, banner clave-temporal, KPIs ventas-kpi-*, form ventas-sol-*, creación de solicitud, apertura de ficha, registro de contacto, botón volver, F5-persistencia) todo OK; workspace Deysi muestra SOLO sus clientes (independencia confirmada); workspace Daniela muestra 'MÓDULO DANIELA GALINDO · CON CRECES' correctamente; login antiguo victoria.vilches@centralmutuos.cl FALLA (sigue en pantalla de login, no carga ningún workspace). Frontend admin → Administración → panel-ventas NO se pudo validar por bloqueo del modal 'Briefing Mañanero' que reaparece tras cada navegación (limitación de entorno preview, ya reportada en iter56); el backend /api/ventas/reporte SÍ está cubierto con test_reporte_admin (verifica ejecutivos yerile+deysi, dias_gestion y faltantes_total). Cleanup final ejecutado: 5 clientes QA borrados de victoria_clientes + docs/avisos/eventos asociados; ventas_rr.ultimo desmarcado; 5 clientes reales intactos.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/ventas/solicitudes", "issue": "No valida formato de RUT: acepta cadenas como 'Daniela2024', 'Victoria2024', '141617575' como RUT y crea el cliente en la bóveda. Sólo se rechaza si nombre o rut están vacíos (400). Sugerencia: validar formato chileno (dígitos+guión+DV) igual que en victoria_independiente._norm_rut."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Admin → Administración → panel-ventas", "issue": "El modal Briefing Mañanero reaparece automáticamente tras cada navegación, interceptando clicks al nav-administracion; nav-administracion (data-testid presente) recibe el click pero el módulo no cambia (activeModule permanece 'dashboard'). Verificable manualmente cerrando el modal — este bloqueo es de entorno preview, no del código.", "affected_selectors": ["nav-administracion", "panel-ventas"]}
+    ],
+    "design_issues": [
+      {"screen": "VictoriaWorkspace (Daniela)", "issues": ["Dashboard menciona 'Correo monitoreado automáticamente: victoriavilches@centralmutuos.cl' — es un dato real (email IMAP del buzón heredado) pero contradice el requisito 'NINGÚN texto visible del workspace diga Victoria'. Considerar renombrar la casilla a algo genérico o esconder el email exacto detrás de un tooltip."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter57_ventas.py",
+    "/app/test_reports/pytest/iter57_results.xml"
+  ],
+  "action_items": [
+    "Opcional: validar formato de RUT en POST /api/ventas/solicitudes (reutilizar _norm_rut / validar patrón).",
+    "Opcional: sanear el label 'Correo monitoreado automáticamente' en el dashboard de Daniela para que no contenga la palabra 'Victoria' (ni victoriavilches@)."
+  ],
+  "critical_code_review_comments": [
+    "ventas.py:56-86 nueva_solicitud NO valida formato del RUT — cualquier string es aceptado. Recomendación: aplicar re.fullmatch(r'\\d{1,2}\\.?\\d{3}\\.?\\d{3}-[0-9kK]', rut) antes de _buscar_o_crear_cliente.",
+    "victoria_independiente.py:1041 EJECUTIVOS_VENTAS hardcodeado ({'yerile','deysi'}). Si se agrega una tercera ejecutiva, hay que tocar código; considerar leer de db.config.",
+    "asignar_a_ventas_si_corresponde (linea 1044) — round-robin persiste 'ultimo' en db.config sin lock: en preview OK, pero bajo concurrencia real dos solicitudes simultáneas podrían asignarse al mismo ejecutivo. Considerar findAndModify o atomic increment.",
+    "server.py:112 seed dupla 'victoria' → 'Victoria Vilchez' rol administracion (login legacy /codigo) sigue existiendo. Si no se necesita, eliminarlo evita confusión con el renombre 'Daniela'.",
+    "victoria_independiente.py sigue en 1068 líneas — split pendiente sugerido en iter56 (regla15/pin, demo, panel, ventas-hook)."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter57_ventas.py"],
+  "success_rate": {"backend": "100% (20/20)", "frontend": "6/7 flujos (admin panel-ventas bloqueado por modal preview; backend equivalente sí probado)"},
+  "test_credentials": "yerile.barrera@centralmutuos.cl / Yerile2024; deysi.salazar@centralmutuos.cl / Deysi2024; daniela.galindo@centralmutuos.cl / Daniela2024; administrador / 141617575. Todas warmed-up (bcrypt cold-start ~15-20s por usuario).",
+  "seed_data_creation": "Test file crea QA VENTAS A/B/C via /api/ventas/solicitudes y QA VENTAS D (rechazo). Fixture module-scope + cleanup manual final borran TODOS los QA (incluyendo residuos de UI tests: QA UI YERILE, ADMINISTRADOR, DEYSI/DANIELA/VICTORIA .cl auto-creados por el bug del script Playwright). ventas_rr.ultimo se resetea. 5 clientes reales de victoria_clientes intactos. 0 residuos post-cleanup.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend Ventas está 100% cubierto en /app/backend/tests/test_iter57_ventas.py (20 tests, correr con `python -m pytest tests/test_iter57_ventas.py -n 0` en /app/backend). REQUIERE warm-up previo (POST /api/auth/login) de yerile/deysi/daniela porque bcrypt cold-start puede tardar 40-50s y hacer timeout. El fixture usa python-dotenv para leer MONGO_URL/DB_NAME de backend/.env (los valores tienen comillas en el archivo, no exportar manualmente). FRONTEND: para test panel-ventas necesitas cerrar el 'Briefing Mañanero' que reaparece cada vez que se navega a otro módulo. Truco: la primera aparición se cierra con 'Comenzar jornada', pero al hacer setActiveModule('administracion') vuelve a aparecer (probable side effect del useEffect de briefing tras route change). Ya está reportado como limitación del preview desde iter56.",
+  "rca of the issue": "N/A — no hay bugs bloqueantes. Notas: (a) mi primer script Playwright tenía un bug (sessionStorage.clear no efectivo antes de goto) que hizo que 4 intentos de login en la workspace ya cargada de Yerile se interpretaran como submits del form ventas-sol (creó ADMINISTRADOR, DANIELA.GALINDO, VICTORIA.VILCHES, DEYSI.SALAZAR como clientes ventas). Estos residuos fueron eliminados. Esto expuso el hallazgo minor: /api/ventas/solicitudes acepta cualquier string como RUT sin validar formato."
+}

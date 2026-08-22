@@ -17,7 +17,7 @@ export default function DemoCard() {
       const u = URL.createObjectURL(r.data);
       const a = document.createElement("a");
       a.href = u;
-      a.download = "Demo_Modulo_Victoria_Central_Mutuos.mp4";
+      a.download = "Demo_Modulo_Daniela_Central_Mutuos.mp4";
       a.click();
       URL.revokeObjectURL(u);
       toast.success("Descargando el video de la demo");
@@ -39,7 +39,7 @@ export default function DemoCard() {
   return (
     <div data-testid="demo-card" style={{ marginTop: 14, background: "rgba(30,41,59,0.55)", border: "1.5px solid rgba(212,175,55,0.4)", borderRadius: 12, padding: "1rem 1.3rem" }}>
       <Toaster position="top-right" richColors theme="dark" />
-      <div style={{ color: "#d4af37", fontWeight: 800, fontSize: "0.9rem" }}>🎬 Demo módulo Victoria (datos ficticios)</div>
+      <div style={{ color: "#d4af37", fontWeight: 800, fontSize: "0.9rem" }}>🎬 Demo módulo Daniela Galindo (datos ficticios)</div>
       <div style={{ color: "#94a3b8", fontSize: "0.72rem", marginTop: 3 }}>
         Caso completo Juan Pérez Soto (3.500 UF): detección de correo → clasificación → validación → preview → formularios → checklist → envío a ConCreces.</div>
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>

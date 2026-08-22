@@ -50,7 +50,10 @@ const ContralorModule = lazy(() => import("./pages/ContralorModule"));
 const PostventaModule = lazy(() => import("./pages/PostventaModule"));
 const RoleDashboard = lazy(() => import("./pages/RoleDashboards"));
 const VictoriaWorkspace = lazy(() => import("./pages/VictoriaWorkspace"));
+const VentasWorkspace = lazy(() => import("./pages/VentasWorkspace"));
+const MutuosWorkspace = lazy(() => import("./pages/MutuosWorkspace"));
 const DemoVictoria = lazy(() => import("./victoria/DemoVictoria"));
+const DemoVentas = lazy(() => import("./victoria/DemoVentas"));
 const FrentePrincipal = lazy(() => import("./components/FrentePrincipal"));
 const AuditoriaForenseModule = lazy(() => import("./pages/AuditoriaForenseModule"));
 const DespachoModule = lazy(() => import("./pages/DespachoModule"));
@@ -290,8 +293,12 @@ function MainApp() {
     : user;
 
   const [verDemoVictoria, setVerDemoVictoria] = useState(window.location.hash === "#demo-victoria");
+  const [verDemoVentas, setVerDemoVentas] = useState(window.location.hash === "#demo-ventas");
   useEffect(() => {
-    const h = () => setVerDemoVictoria(window.location.hash === "#demo-victoria");
+    const h = () => {
+      setVerDemoVictoria(window.location.hash === "#demo-victoria");
+      setVerDemoVentas(window.location.hash === "#demo-ventas");
+    };
     window.addEventListener("hashchange", h);
     return () => window.removeEventListener("hashchange", h);
   }, []);
@@ -303,6 +310,34 @@ function MainApp() {
     return (
       <Suspense fallback={<div style={{ minHeight: "100vh", background: "#0a0a0a" }} />}>
         <DemoVictoria autoPlay onSalir={() => { window.location.hash = ""; }} />
+      </Suspense>
+    );
+  }
+
+  if (verDemoVentas) {
+    return (
+      <Suspense fallback={<div style={{ minHeight: "100vh", background: "#0a0a0a" }} />}>
+        <DemoVentas autoPlay onSalir={() => { window.location.hash = ""; }} />
+      </Suspense>
+    );
+  }
+
+  // ── ACCESO EXCLUSIVO: Victoria Vilches — Módulo Mutuos (Guía de Usuario) ──
+  if (user.solo_modulo === "mutuos") {
+    return (
+      <Suspense fallback={<div style={{ minHeight: "100vh", background: "#0a0f1c" }} />}>
+        <MutuosWorkspace user={user} onLogout={logout}
+          onUserUpdate={(nu) => { setUser(nu); secureSet("user", nu); }} />
+      </Suspense>
+    );
+  }
+
+  // ── ACCESO EXCLUSIVO: ejecutivas del Módulo Ventas ──
+  if (user.solo_modulo === "ventas") {
+    return (
+      <Suspense fallback={<div style={{ minHeight: "100vh", background: "#0a0f1c" }} />}>
+        <VentasWorkspace user={user} onLogout={logout}
+          onUserUpdate={(nu) => { setUser(nu); secureSet("user", nu); }} />
       </Suspense>
     );
   }

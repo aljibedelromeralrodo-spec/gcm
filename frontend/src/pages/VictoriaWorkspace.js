@@ -9,7 +9,7 @@ import VictoriaFicha from "../victoria/VictoriaFicha";
 const inp = { width: "100%", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(212,175,55,0.3)", color: "#fff", padding: "0.55rem 0.7rem", borderRadius: 4, fontSize: "0.9rem", boxSizing: "border-box" };
 const lbl = { color: "#94a3b8", fontSize: "0.72rem", fontWeight: 700, display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.15em" };
 
-function CambiarClave({ onClose, onChanged }) {
+export function CambiarClave({ onClose, onChanged }) {
   const [f, setF] = useState({ actual: "", nueva: "", conf: "" });
   const [error, setError] = useState("");
   const [ok, setOk] = useState("");
@@ -105,7 +105,7 @@ export default function VictoriaWorkspace({ user, onLogout, onUserUpdate }) {
           <div style={{ fontFamily: PLAYFAIR, fontWeight: 700, fontSize: "1.5rem", letterSpacing: 4,
             background: GOLD_GRAD, WebkitBackgroundClip: "text",
             backgroundClip: "text", WebkitTextFillColor: "transparent" }}>CENTRAL MUTUOS</div>
-          <div style={{ color: "#a1a1aa", fontSize: "0.72rem", letterSpacing: 3, marginTop: 2 }}>MÓDULO VICTORIA · CON CRECES</div>
+          <div style={{ color: "#a1a1aa", fontSize: "0.72rem", letterSpacing: 3, marginTop: 2 }}>MÓDULO DANIELA GALINDO · CON CRECES</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <span data-testid="victoria-user-nombre" style={{ color: "#e4e4e7", fontSize: "0.95rem", fontWeight: 700 }}>

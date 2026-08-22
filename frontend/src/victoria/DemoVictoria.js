@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { S, GOLD, GOLD_GRAD, PLAYFAIR } from "./theme";
+import { hablarMartin } from "../utils/vozMartin";
 
 const CLIENTE = {
   nombre: "Juan Pérez Soto", rut: "12.345.678-9",
@@ -35,12 +36,12 @@ const CHECKLIST = [
   "Set de crédito completo: 4 de 4 documentos requeridos en la bóveda",
   "Reglas de Oro 11-14: las 4 validaciones cruzadas coinciden",
   "Sin alertas críticas de auditoría ni documentos vencidos",
-  "Formularios revisados y confirmados por Victoria",
+  "Formularios revisados y confirmados por Daniela",
 ];
 
 // Escenas: [clave, título, duración en segundos]
 const ESCENAS = [
-  ["intro", "Demo Módulo Victoria — caso completo con datos ficticios", 10],
+  ["intro", "Demo Módulo Daniela Galindo — caso completo con datos ficticios", 10],
   ["deteccion", "Paso 1 — Detección automática del correo", 10],
   ["clasificacion", "Paso 2 — Clasificación de documentos por tipo", 10],
   ["validacion", "Paso 3 — Validación irrenunciable RUT · Rol · Dirección", 13],
@@ -54,15 +55,15 @@ const TOTAL = ESCENAS.reduce((a, e) => a + e[2], 0);
 
 // Narración de Martín, sincronizada por escena
 const NARRACION = [
-  "Hola, soy Martín, el asistente de Central Mutuos ConCreces. Te voy a mostrar cómo funciona el módulo de Victoria paso a paso.",
+  "Hola, soy Martín, el asistente de Central Mutuos ConCreces. Te voy a mostrar cómo funciona el módulo de Daniela Galindo paso a paso.",
   "Paso uno: llega un correo con el set de crédito. El sistema lo detecta y descarga los adjuntos automáticamente en segundos.",
   "Paso dos: cada documento se lee y se clasifica por tipo: tasación, estudio de títulos, carpeta de crédito y simulación.",
   "Paso tres: la validación irrenunciable. RUT con RUT, codeudor con codeudor, rol de avalúo y dirección. Todo debe coincidir exactamente.",
-  "Paso cuatro: Victoria revisa cada documento en pantalla, sin descargarlo, y lo acepta o rechaza con un clic.",
+  "Paso cuatro: Daniela revisa cada documento en pantalla, sin descargarlo, y lo acepta o rechaza con un clic.",
   "Paso cinco: los formularios se completan solos con los datos extraídos. Cero digitación y cero errores.",
   "Paso seis: revisión final. El checklist completo queda aprobado en verde.",
-  "Paso siete: Victoria confirma y el set viaja a ConCreces con un solo clic.",
-  "Así de simple y rápido opera el módulo de Victoria. Todo validado, todo en orden, listo para ConCreces.",
+  "Paso siete: Daniela confirma y el set viaja a ConCreces con un solo clic.",
+  "Así de simple y rápido opera el módulo de Daniela Galindo. Todo validado, todo en orden, listo para ConCreces.",
 ];
 
 const box = { background: "#141414", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 4, padding: "1.6rem 2rem" };
@@ -101,20 +102,7 @@ export default function DemoVictoria({ autoPlay = false, onSalir }) {
     if (!playing) { window.speechSynthesis?.cancel(); return; }
     if (habloEscena.current === idx) return;
     habloEscena.current = idx;
-    try {
-      const synth = window.speechSynthesis;
-      if (!synth) return;
-      synth.cancel();
-      const u = new SpeechSynthesisUtterance(NARRACION[idx]);
-      u.lang = "es-CL";
-      const voces = synth.getVoices();
-      const voz = voces.find(v => v.lang.startsWith("es") && /male|jorge|diego|carlos|raul|juan/i.test(v.name))
-        || voces.find(v => v.lang.startsWith("es"));
-      if (voz) u.voice = voz;
-      u.rate = 1.02;
-      u.pitch = 0.9;
-      synth.speak(u);
-    } catch {}
+    hablarMartin(NARRACION[idx]);
   }, [idx, playing]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => window.speechSynthesis?.cancel(), []);
 
@@ -127,7 +115,7 @@ export default function DemoVictoria({ autoPlay = false, onSalir }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.9rem 2.5rem", borderBottom: "1px solid rgba(212,175,55,0.35)", flexWrap: "wrap", gap: 10 }}>
         <div>
           <span style={{ fontFamily: PLAYFAIR, fontWeight: 700, fontSize: "1.2rem", letterSpacing: 3, background: GOLD_GRAD, WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent" }}>CENTRAL MUTUOS</span>
-          <span style={{ color: "#a1a1aa", fontSize: "0.75rem", letterSpacing: 2, marginLeft: 14 }}>DEMO MÓDULO VICTORIA · DATOS FICTICIOS</span>
+          <span style={{ color: "#a1a1aa", fontSize: "0.75rem", letterSpacing: 2, marginLeft: 14 }}>DEMO MÓDULO DANIELA GALINDO · DATOS FICTICIOS</span>
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           <span data-testid="demo-reloj" style={{ fontFamily: "monospace", fontSize: "1.05rem", color: "#FCF6BA" }}>⏱ {reloj}</span>
@@ -267,21 +255,21 @@ export default function DemoVictoria({ autoPlay = false, onSalir }) {
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 14, ...fadeIn(prog > 0.3) }}>
               <div style={box}>
-                <div style={S.label}>Victoria revisa sin descargar</div>
-                <p style={{ ...S.body, marginTop: 8 }}>El documento se ve al instante en pantalla. Victoria decide con un clic:</p>
+                <div style={S.label}>Daniela revisa sin descargar</div>
+                <p style={{ ...S.body, marginTop: 8 }}>El documento se ve al instante en pantalla. Daniela decide con un clic:</p>
               </div>
               <button style={{ ...S.btnGold, transform: prog > 0.7 ? "scale(0.97)" : "scale(1)", transition: "transform 0.2s ease" }}>
                 ✓ Aceptar documento como válido</button>
               <button style={S.btnDanger}>✕ Rechazar documento y solicitar reemplazo</button>
               {prog > 0.75 && <div data-testid="demo-preview-aceptado" style={{ color: "#4ade80", fontWeight: 800, fontSize: "1.05rem" }}>
-                ✓ Los 4 documentos aceptados por Victoria (12,8 s de revisión)</div>}
+                ✓ Los 4 documentos aceptados por Daniela (12,8 s de revisión)</div>}
             </div>
           </div>
         )}
 
         {escena === "formularios" && (
           <div style={{ maxWidth: 800 }}>
-            <p style={{ ...S.body, marginBottom: 16 }}>El sistema rellena solo cada campo con lo extraído de los documentos: Victoria no digita nada.</p>
+            <p style={{ ...S.body, marginBottom: 16 }}>El sistema rellena solo cada campo con lo extraído de los documentos: Daniela no digita nada.</p>
             <div style={box}>
               {CAMPOS.map(([et, val], i) => {
                 const inicio = 0.08 + i * 0.14;
@@ -345,7 +333,7 @@ export default function DemoVictoria({ autoPlay = false, onSalir }) {
             <p style={{ ...S.body, fontSize: "1.1rem" }}>del correo entrante al envío confirmado en ConCreces — sin digitación manual</p>
             <div style={{ ...box, marginTop: 20, textAlign: "left" }}>
               {[["Detección y descarga automática", "2,4 s"], ["Clasificación de 4 documentos", "4,3 s"],
-                ["Validación irrenunciable (4 contrastes)", "3,7 s"], ["Preview y aceptación por Victoria", "12,8 s"],
+                ["Validación irrenunciable (4 contrastes)", "3,7 s"], ["Preview y aceptación por Daniela", "12,8 s"],
                 ["Autocompletado de formularios", "3,1 s"], ["Revisión final con checklist", "18,0 s"],
                 ["Confirmación y envío a ConCreces", "14,0 s"]].map(([et, tt], i) => (
                 <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "0.55rem 0", borderTop: i ? "1px solid rgba(255,255,255,0.08)" : "none" }}>

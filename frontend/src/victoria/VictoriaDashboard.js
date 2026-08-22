@@ -68,7 +68,7 @@ export default function VictoriaDashboard({ onAbrirCliente, filtro, busqueda, on
     } catch (e) { toast.error(e.response?.data?.detail || "No se pudo asignar"); }
   };
 
-  if (!data) return <div style={{ padding: "4rem", color: "#a1a1aa", fontSize: "1.1rem" }}>Cargando panel de Victoria…</div>;
+  if (!data) return <div style={{ padding: "4rem", color: "#a1a1aa", fontSize: "1.1rem" }}>Cargando panel de Daniela…</div>;
 
   const k = data.kpis;
   const clientes = (data.clientes || []).filter(c => {
@@ -87,10 +87,10 @@ export default function VictoriaDashboard({ onAbrirCliente, filtro, busqueda, on
           <div style={S.label}>Panel de operación · Bóveda ConCreces</div>
           <h1 style={{ ...S.h1, marginTop: 6 }}>Estado general del flujo</h1>
           {data.correo_monitoreado && <div style={{ color: "#a1a1aa", fontSize: "0.95rem", marginTop: 6 }}>
-            Correo monitoreado automáticamente: <b style={{ color: "#FCF6BA" }}>{data.correo_monitoreado}</b></div>}
+            Casilla monitoreada automáticamente: <b style={{ color: "#FCF6BA" }}>bóveda ConCreces activa</b></div>}
         </div>
         <button data-testid="dash-btn-revisar-correo" onClick={revisarCorreo} style={S.btnLine}>
-          <i className="fa fa-envelope" style={{ marginRight: 8 }}></i>Revisar correo de Victoria ahora</button>
+          <i className="fa fa-envelope" style={{ marginRight: 8 }}></i>Revisar correo de Daniela ahora</button>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))", gap: 20 }}>

@@ -117,15 +117,40 @@ async def ensure_seed():
                 "codigo": codigo, "nombre": nombre, "rol": rol, "perfil": perfil,
                 "clave_hash": bcrypt.hashpw(clave.encode(), bcrypt.gensalt()).decode(),
                 "activo": True, "created": now_iso()})
-    # ── ACCESO EXCLUSIVO VICTORIA VILCHES: solo ve su módulo de trabajo ──
+    # ── ACCESO EXCLUSIVO DANIELA GALINDO: solo ve su módulo de trabajo ──
+    if not await db.users.find_one({"codigo": "daniela.galindo@centralmutuos.cl"}):
+        await db.users.insert_one({
+            "codigo": "daniela.galindo@centralmutuos.cl",
+            "email": "daniela.galindo@centralmutuos.cl",
+            "nombre": "Daniela Galindo", "rol": "administracion", "perfil": "",
+            "solo_modulo": "victoria", "clave_temporal": True,
+            "clave_hash": bcrypt.hashpw("Daniela2024".encode(), bcrypt.gensalt()).decode(),
+            "activo": True, "created": now_iso()})
+    # ── MÓDULO VICTORIA VILCHES (Guía Mutuos): gerente de operaciones ──
     if not await db.users.find_one({"codigo": "victoria.vilches@centralmutuos.cl"}):
         await db.users.insert_one({
             "codigo": "victoria.vilches@centralmutuos.cl",
             "email": "victoria.vilches@centralmutuos.cl",
             "nombre": "Victoria Vilches", "rol": "administracion", "perfil": "",
-            "solo_modulo": "victoria", "clave_temporal": True,
+            "solo_modulo": "mutuos", "clave_temporal": True,
             "clave_hash": bcrypt.hashpw("Victoria2024".encode(), bcrypt.gensalt()).decode(),
             "activo": True, "created": now_iso()})
+    try:
+        import mutuos_victoria as _mv_seed
+        await _mv_seed.seed_reglas_oro_victoria()
+    except Exception as _e:
+        logging.warning(f"seed reglas oro victoria: {_e}")
+    # ── MÓDULO VENTAS: ejecutivas con acceso exclusivo a su panel ──
+    for _cod, _nom, _ej, _clave in (
+            ("yerile.barrera@centralmutuos.cl", "Yerile Barrera", "yerile", "Yerile2024"),
+            ("deysi.salazar@centralmutuos.cl", "Deysi Salazar", "deysi", "Deysi2024")):
+        if not await db.users.find_one({"codigo": _cod}):
+            await db.users.insert_one({
+                "codigo": _cod, "email": _cod, "nombre": _nom, "rol": "administracion",
+                "perfil": "", "solo_modulo": "ventas", "ventas_ejecutivo": _ej,
+                "clave_temporal": True,
+                "clave_hash": bcrypt.hashpw(_clave.encode(), bcrypt.gensalt()).decode(),
+                "activo": True, "created": now_iso()})
     # ── CARGO OFICIAL DEL ADMINISTRADOR (Ethan): fijo e inamovible por otros usuarios ──
     await db.users.update_many(
         {"codigo": {"$in": ["admin", "administrador"]}, "cargo": {"$exists": False}},
@@ -723,6 +748,7 @@ def _token_usuario(user):
         "cargo": user.get("cargo") or "",
         "first_login": bool(user.get("first_login")),
         "solo_modulo": user.get("solo_modulo") or "",
+        "ventas_ejecutivo": user.get("ventas_ejecutivo") or "",
         "clave_temporal": bool(user.get("clave_temporal")),
     }
 
@@ -14867,6 +14893,10 @@ import manual_concreces as _mconc_mod
 api.include_router(_mconc_mod.mconc)
 import victoria_independiente as _vict_mod
 api.include_router(_vict_mod.vict)
+import ventas as _vtas_mod
+api.include_router(_vtas_mod.vtas)
+import mutuos_victoria as _mut_mod
+api.include_router(_mut_mod.mut)
 import publicidad as _pub_mod
 api.include_router(_pub_mod.pub)
 import auditoria_flujos as _audf_mod

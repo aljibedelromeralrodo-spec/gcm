@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
+import { elegirVozEspanol } from "../utils/vozMartin";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 const CENTRAL_AVATAR = "/martin-avatar.jpeg";
@@ -71,11 +72,9 @@ async function speakText(text, onEnd) {
   if (!window.speechSynthesis) { onEnd?.(); return; }
   window.speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(clean);
-  u.lang = "es-ES"; u.rate = 1.05; u.pitch = 0.85;
-  const voices = window.speechSynthesis.getVoices();
-  const v = voices.find(v => v.lang.startsWith("es") && /male|jorge|pablo|enrique|diego|andrés|carlos/i.test(v.name))
-    || voices.find(v => v.lang.startsWith("es"));
-  if (v) u.voice = v;
+  const vSel = elegirVozEspanol();
+  if (vSel) { u.voice = vSel; u.lang = vSel.lang; } else u.lang = "es-419";
+  u.rate = 1.0; u.pitch = 1.0;
   u.onend = () => onEnd?.();
   u.onerror = () => onEnd?.();
   window.speechSynthesis.speak(u);

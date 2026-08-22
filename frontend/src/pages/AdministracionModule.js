@@ -9,6 +9,7 @@ import DocumentoViewer from "../components/DocumentoViewer";
 import TrackerPasos from "../components/TrackerPasos";
 import ManualConcreces from "../components/ManualConcreces";
 import DemoCard from "../victoria/DemoCard";
+import VentasReporte from "../victoria/VentasReporte";
 import VictoriaBoveda from "../components/VictoriaBoveda";
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -19,7 +20,8 @@ const card = { background: "rgba(30,41,59,0.55)", border: "1px solid rgba(148,16
 
 const PANELES = [
   ["daniela", "Panel Daniela Galindo", "Operación A — Fase Revisión"],
-  ["victoria", "Panel Victoria Vilche", "Operación B — Fase Carga · Estudio de Títulos"],
+  ["victoria", "Panel Daniela Galindo · Bóveda", "Operación B — Fase Carga · Estudio de Títulos"],
+  ["ventas", "Panel Ventas", "Yerile Barrera & Deysi Salazar — entrega inmediata"],
   ["postventa", "Panel Postventa", "Seguimiento posterior a la entrega"],
 ];
 
@@ -384,6 +386,8 @@ export default function AdministracionModule({ user }) {
       {panel === "victoria" && <ManualConcreces />}
       {/* 🎬 DEMO reproducible del módulo Victoria (datos ficticios) */}
       {panel === "victoria" && <DemoCard />}
+      {/* 🧲 REPORTE EN TIEMPO REAL — MÓDULO VENTAS */}
+      {panel === "ventas" && <VentasReporte />}
 
       {cartera && (
         <div data-testid="carpetas-mes-strip" style={{ marginTop: 10, display: "flex", gap: 16, flexWrap: "wrap", color: "var(--text-secondary)", fontSize: "0.72rem" }}>

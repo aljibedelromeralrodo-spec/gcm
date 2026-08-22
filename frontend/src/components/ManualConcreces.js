@@ -259,7 +259,7 @@ export const ManualConcreces = () => {
             <div style={{ padding: "0.8rem 1rem", borderTop: "1px solid rgba(212,175,55,0.3)" }}>
               <label style={{ display: "flex", gap: 8, alignItems: "center", color: "#e2e8f0", fontSize: "0.72rem", cursor: "pointer" }}>
                 <input data-testid="concreces-valido-check" type="checkbox" checked={valido} onChange={e => setValido(e.target.checked)} />
-                Yo, Victoria Vilches, reviso y valido que toda la información está correcta para el envío a ConCreces.
+                Yo, Daniela Galindo, reviso y valido que toda la información está correcta para el envío a ConCreces.
               </label>
               <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
                 <button data-testid="concreces-enviar-btn" disabled={!valido || !revision.listo_para_enviar || busy} onClick={enviar}

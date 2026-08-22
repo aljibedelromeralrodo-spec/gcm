@@ -46,7 +46,7 @@ function Contacto({ det, cargar }) {
     ? Object.values(det.requeridos).filter(et => !det.docs.some(d => det.tipos[d.tipo] === et && (d.revision?.decision !== "rechazado")))
     : [];
   const msjWA = encodeURIComponent(
-    `Estimado/a ${c.nombre}, le saluda Victoria Vilches de Central Mutuos. Le escribo por su operación hipotecaria.` +
+    `Estimado/a ${c.nombre}, le saluda Daniela Galindo de Central Mutuos. Le escribo por su operación hipotecaria.` +
     (faltan.length ? ` Para avanzar necesitamos los siguientes documentos: ${faltan.join(", ")}.` : " Su carpeta avanza según lo previsto.") +
     " Quedo atenta. Muchas gracias.");
 
@@ -347,7 +347,7 @@ function Paso3({ det, cargar }) {
         ? "Reglas de Oro 11-14: todas las coincidencias validadas"
         : "Coincidencias pendientes o en conflicto — resuélvalas en el Paso 2"],
     [!!det.cliente.formularios_confirmados, det.cliente.formularios_confirmados
-      ? "Formularios revisados y confirmados por Victoria"
+      ? "Formularios revisados y confirmados por Daniela"
       : "Formularios aún sin confirmar — confírmelos aquí abajo tras revisar el documento"],
   ];
 
@@ -471,7 +471,7 @@ export default function VictoriaFicha({ cid, paso, docSel, onSetPaso, onSetDocSe
     <div data-testid="victoria-ficha" style={{ padding: "2.5rem 3rem", maxWidth: 1600, margin: "0 auto" }}>
       <button data-testid="ficha-btn-volver" onClick={onVolver}
         style={{ ...S.btnLine, ...S.btnSmall, marginBottom: 20 }}>
-        ← Volver al panel de Victoria (conserva su posición y filtros)</button>
+        ← Volver al panel de Daniela (conserva su posición y filtros)</button>
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 14 }}>
         <div>
