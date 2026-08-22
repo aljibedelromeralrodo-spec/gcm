@@ -237,9 +237,14 @@ async def _encolar(c):
                 pdfs_svc.convertir_a_pdf, pdf["content_bytes"], pdf["filename"])
         except Exception:
             continue
-        fn = _safe_name(nombre)
-        (folder / fn).write_bytes(raw)
-        attachments.append(fn)
+        # ✂️ PDF multi-documento → dividir por contenido (cada parte se procesa por separado)
+        for raw_p, nombre_p in await asyncio.to_thread(pdfs_svc.expandir_adjunto, raw, nombre):
+            fn = _safe_name(nombre_p)
+            if fn in attachments:
+                import re as _re
+                fn = _safe_name(_re.sub(r"\.pdf$", "", nombre_p, flags=_re.I) + f"_{len(attachments)+1}.pdf")
+            (folder / fn).write_bytes(raw_p)
+            attachments.append(fn)
     await db.proc_queue.insert_one({
         "id": qid, "subject": c["subject"], "sender": c["from"],
         "date_iso": c["date"], "status": "pendiente",

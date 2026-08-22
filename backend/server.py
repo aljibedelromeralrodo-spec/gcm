@@ -5045,7 +5045,7 @@ PROC_DIR = ROOT_DIR / "storage" / "proc"
 PROC_DIR.mkdir(parents=True, exist_ok=True)
 CLIENTES_DIR = ROOT_DIR / "storage" / "clientes"
 CLIENTES_DIR.mkdir(parents=True, exist_ok=True)
-GESTION_DOMINIOS = ["ecomac", "maestra"]
+GESTION_DOMINIOS = ["ecomac", "maestra", "boetsch", "yerile426"]
 
 # Orden preestablecido del PDF agrupado
 ORDEN_DEPENDIENTE = ["cedula", "liquidacion", "cotizacion_afp", "certificado_afp", "certificado_smf"]
@@ -5382,10 +5382,14 @@ async def proc_ingest(max_emails: int = 20, dias: int = 0):
                     convertidos.append(nombre)
             except Exception:
                 continue  # formato no soportado, se puede adjuntar a mano
-            fn = _safe_name(nombre)
-            with open(folder / fn, "wb") as f:
-                f.write(raw)
-            attachments.append(fn)
+            # ✂️ PDF multi-documento (cliente escanea todo junto) → dividir por contenido
+            for raw_p, nombre_p in await asyncio.to_thread(pdfs.expandir_adjunto, raw, nombre):
+                fn = _safe_name(nombre_p)
+                if fn in attachments:
+                    fn = _safe_name(re.sub(r"\.pdf$", "", nombre_p, flags=re.I) + f"_{len(attachments)+1}.pdf")
+                with open(folder / fn, "wb") as f:
+                    f.write(raw_p)
+                attachments.append(fn)
         await db.proc_queue.insert_one({
             "id": qid, "subject": c["subject"], "sender": c["from"],
             "date_iso": c["date"], "status": "pendiente",

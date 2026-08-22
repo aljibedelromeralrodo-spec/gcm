@@ -1920,3 +1920,15 @@ polling GET /api/central/proactive existe vacío en server.py:1526) — usuario 
 - whatsapp_twilio_service.py: POST /whatsapp-twilio/credenciales (guarda BD + runtime) + cargar_credenciales_guardadas() al arranque.
 - Menú App.js: '📣 Publicidad y Captación'.
 - Testeado: endpoints via curl (captacion 2 prospectos/1 llamada, pendientes, import CSV 4 contactos, validación Twilio 400) + screenshots del módulo completo renderizando las 4 secciones.
+
+
+## 2026-08-22 — Divisor PDF multi-documento + Aprendizaje correos reales
+### Divisor PDF multi-documento (caso Regla 67)
+- pdf_service: dividir_pdf_multidocumento() (texto embebido por página + OCR híbrido solo en páginas escaneadas, categorías por contenido, agrupación consecutiva, carry-forward) + expandir_adjunto(). Integrado en proc_ingest (server.py) y gmail_pubsub._encolar. Fix colisión de nombres duplicados.
+- Validado con PDF real 'Francisca Hernandez EV.pdf' (2.9MB, 12 págs): dividido en 01_Cedula (p1-2), 05_Contrato (p3), 02_Liquidaciones (p4-11), 04_CMF (p12) → supera Regla 67.
+### Aprendizaje de correos reales (30 días, Gmail API + IMAP gerardo.ext)
+- Flujo real confirmado: solicitudes llegan de @ecomac.cl/@boetsch.cl/yerile426@gmail.com con asuntos 'SOLICITUD CREDITO MUTUO // NOMBRE RUT: X', 'EVALUAR ENTREGA INMEDIATA_...', 'Liquidaciones de X rut Y interesado...'. Envíos a mesa: gerardo.ext → aprobaciones@ asunto '{Nombre} (DS19 - INMEDIATA - EJECUTIVA)' con cuerpo NOMBRE/RUT/CONDOMINIO/INMOBILIARIA/SUBSIDIO/ENTREGA/VALOR/CRÉDITO + PDF combinado 'NOMBRE EV.pdf'. Mesa aprueba con 'Tenemos el agrado de informar... califica para un mutuo hipotecario endosable' (+Carta+Simulador), rechaza con 'no cumple parámetros objetivos mínimos' / 'pasado en carga financiera'.
+- reglas_auto actualizadas: dominios ['ecomac','maestra','boetsch','yerile426'], keywords +mutuo/evaluar/condominio (y ds19/inmediata/subsidio). GESTION_DOMINIOS en código igual.
+- db.proc_rules: 7 reglas aprendidas (tag aprendido_de=analisis_gmail_30d).
+### Caso auditado: María Constanza Encina Rojas (18.225.253-0, Jardines del Norte)
+- Gestión 100% manual: origen probable base de clientes Boetsch (Celinda Soria 07/07 + reenvío a Yerile 05/08); set a mesa manual 20/08 15:32 (gerardo.ext→aprobaciones@, 1 PDF combinado); mesa aprobó 21/08 12:32; el sistema detectó la aprobación (mesa_verdad) pero la reenvió DUPLICADA (16:34 y 17:05 — bug ya corregido con Regla 68) y creó carpeta 'MARÍA ENCINA' origen aprobacion_mesa sin documentos.

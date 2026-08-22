@@ -105,6 +105,88 @@ def prefijo_protocolo_imagen(base):
 
 RX_CEDULA_CONTENIDO = re.compile(r"c[eé]dula|identidad|registro civil|\brun\b", re.I)
 
+# ══ DIVISOR DE PDF MULTI-DOCUMENTO (caso real: cliente escanea todo en un solo PDF) ══
+CATS_PAGINA = [
+    ("liquidacion", r"liquidaci[oó]n de sueldo|total haberes|l[ií]quido a pagar|sueldo base|remuneraci"),
+    ("impuestos", r"impuesto a la renta|formulario 22|\bf22\b|declaraci[oó]n anual"),
+    ("boletas", r"boleta.{0,25}honorario|honorarios electr[oó]nic"),
+    ("afp", r"certificado de cotizaciones|cotizaciones previsionales|\bafp\b|previred"),
+    ("cmf", r"comisi[oó]n para el mercado financiero|informe de deudas|\bcmf\b"),
+    ("cedula", r"c[eé]dula|identidad|registro civ|\brun\b|apellidos"),
+    ("contrato", r"contrato de trabajo|anexo de contrato"),
+    ("subsidio", r"registro social de hogares|subsidio habitacional|serviu"),
+]
+PREF_CAT = {"cedula": "01_Cedula", "liquidacion": "02_Liquidaciones",
+            "impuestos": "02_Impuesto_Renta", "boletas": "03_Resumen_Impuestos",
+            "afp": "03_Certificado_AFP", "cmf": "04_CMF",
+            "contrato": "05_Contrato", "subsidio": "06_Subsidio"}
+
+
+def _categoria_pagina(texto):
+    low = (texto or "").lower()
+    for cat, pat in CATS_PAGINA:
+        if re.search(pat, low):
+            return cat
+    return "otro"
+
+
+def dividir_pdf_multidocumento(pdf_bytes, filename, max_paginas=30):
+    """Detecta un PDF que contiene VARIOS documentos distintos y lo divide en PDFs
+    separados por categoría de contenido (texto embebido o OCR por página).
+    Devuelve lista [{filename, bytes, categoria, paginas}] o None si no aplica."""
+    import pypdf
+    reader = pypdf.PdfReader(io.BytesIO(pdf_bytes))
+    n = len(reader.pages)
+    if n < 2 or n > max_paginas:
+        return None
+    textos = [(p.extract_text() or "").strip() for p in reader.pages]
+    faltantes = [i for i, t in enumerate(textos) if len(t) < 40]
+    if faltantes:  # híbrido: OCR solo en las páginas escaneadas sin texto embebido
+        try:
+            from pdf2image import convert_from_bytes
+            import ocr_service
+            for i in faltantes:
+                im = convert_from_bytes(pdf_bytes, dpi=200, first_page=i + 1, last_page=i + 1)[0]
+                textos[i] = ocr_service.ocr_imagen(im)[0]
+        except Exception:
+            pass
+    cats = [_categoria_pagina(t) for t in textos]
+    for i in range(1, len(cats)):  # páginas sin señal heredan la del documento anterior
+        if cats[i] == "otro":
+            cats[i] = cats[i - 1]
+    if len({c for c in cats if c != "otro"}) < 2:
+        return None
+    segmentos = []
+    for i, c in enumerate(cats):
+        if segmentos and segmentos[-1]["cat"] == c:
+            segmentos[-1]["paginas"].append(i)
+        else:
+            segmentos.append({"cat": c, "paginas": [i]})
+    base = re.sub(r"\.pdf$", "", filename or "documento", flags=re.I)
+    base = re.sub(r"^\d{2}_[A-Za-z_]+?_", "", base)
+    partes = []
+    for idx, s in enumerate(segmentos, 1):
+        w = pypdf.PdfWriter()
+        for pi in s["paginas"]:
+            w.add_page(reader.pages[pi])
+        buf = io.BytesIO()
+        w.write(buf)
+        pref = PREF_CAT.get(s["cat"], "00_Documento")
+        partes.append({"filename": f"{pref}_{base}_p{idx}.pdf", "bytes": buf.getvalue(),
+                       "categoria": s["cat"], "paginas": [p + 1 for p in s["paginas"]]})
+    return partes
+
+
+def expandir_adjunto(raw_pdf, nombre):
+    """[(bytes, nombre)] — si el PDF trae varios documentos, los separa; si no, lo deja igual."""
+    try:
+        partes = dividir_pdf_multidocumento(raw_pdf, nombre)
+    except Exception:
+        partes = None
+    if partes:
+        return [(p["bytes"], p["filename"]) for p in partes]
+    return [(raw_pdf, nombre)]
+
 
 def prefijo_por_contenido(base, texto_ocr=""):
     """PROTOCOLO 01-06 corregido: el prefijo se decide por el CONTENIDO real (OCR).

@@ -1257,3 +1257,5 @@ actual; todo lo demás permanece intacto.
 4. NUEVO (2026-08-22): Modo Prueba de Clasificación armado para el lunes 2026-08-25 — procesa todo pero reporta a gerardo.ext y NO notifica clientes (modo_prueba.py). Desactivar tras la prueba con POST /api/modo-prueba/desactivar.
 
 5. NUEVO (2026-08-22): Centro de comando 'Publicidad y Captación' unificado (4 secciones) con importación Excel/CSV de listados y formulario de credenciales Twilio. Pendientes visibles: ds19 (falta archivo del usuario) y Twilio (faltan credenciales).
+
+6. NUEVO (2026-08-22): Divisor de PDF multi-documento integrado en ambas vías de ingesta (IMAP + Gmail push). Reglas de clasificación aprendidas de 30 días de correos reales (reglas_auto + proc_rules). Gmail Push operativo en tiempo real (suscripción Pub/Sub activa, verificada con correos reales).
