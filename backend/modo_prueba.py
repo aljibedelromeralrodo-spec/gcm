@@ -36,9 +36,15 @@ async def activo():
     st = await _estado()
     if not st.get("enabled"):
         return False
-    hoy = datetime.now(TZ_CL).strftime("%Y-%m-%d")
+    ahora = datetime.now(TZ_CL)
+    hoy = ahora.strftime("%Y-%m-%d")
     ini, fin = st.get("fecha_inicio") or hoy, st.get("fecha_fin") or st.get("fecha_inicio") or hoy
-    return ini <= hoy <= fin
+    if not (ini <= hoy <= fin):
+        return False
+    # hora_fin: en el último día, la prueba termina a esa hora (ej: martes 26 en la mañana)
+    if hoy == fin and st.get("hora_fin") is not None and ahora.hour >= int(st["hora_fin"]):
+        return False
+    return True
 
 
 def _fila(label, valor):
@@ -142,6 +148,7 @@ async def modo_prueba_activar(request: Request, payload: dict = None):
         raise HTTPException(status_code=400, detail="fecha_inicio requerida (YYYY-MM-DD)")
     await db.config.update_one({"_key": KEY}, {"$set": {
         "enabled": True, "fecha_inicio": fi, "fecha_fin": (p.get("fecha_fin") or fi).strip(),
+        "hora_fin": p.get("hora_fin"),
         "destino": (p.get("destino") or DESTINO_DEFAULT).strip(),
         "activado_en": _now()}}, upsert=True)
     return await _estado()
