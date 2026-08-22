@@ -1291,3 +1291,8 @@ actual; todo lo demás permanece intacto.
 2. LECTOR DE SIMULADOR (espejo_postventa.py): leer_simulador_sync extrae plazo/monto/dividendo/tasa de PDFs Simulador* (2 formatos validados); persiste simulador_extraido + datos_financieros.plazo_anos + historial; alimenta auditoría (plazo por edad + nueva violación div_renta con dividendo real vs Bóveda div_renta_max). Cache simulador_scan_at.
 3. PANEL DE HALLAZGOS (ContralorModule.js + GET /contralor/espejo/hallazgos): alertas de auditoría agrupadas por carpeta con regla, nivel, fuente citada; expandible; visible para contralor/admin/gerencia/administracion.
 - Backfill de campo fuente en alertas antiguas aplicado.
+
+## 2026-08-22 — Morosidad desde CMF (último criterio de la Bóveda auditado)
+- leer_cmf_sync (espejo_postventa.py): parsea filas "Total \$ \$ \$ \$ \$" del Informe de Deudas CMF (Directa+Indirecta, columnas 30-59/60-89/90+ días, montos en miles ×1000); persiste cmf_morosidad + historial, cache cmf_scan_at.
+- Auditoría: si morosidad_clp>0 y Bóveda morosidad_permitida=No → alerta CRÍTICA (no bloquea, ORO-35) con desglose y fuente. Validado: 8 CMFs reales (mora \$0), sintético moroso (\$300.000 detectado), carpeta real sin falso positivo.
+- ORO-71 actualizado en dashai_eventos + espejo_criterios (ahora incluye morosidad en la lista auditada).

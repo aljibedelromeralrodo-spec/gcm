@@ -1405,6 +1405,39 @@ RX_SIM_PLAZO_TASA = re.compile(r"\b([1-4]\d)\s+\d{1,2},\d{2}%")
 RX_SIM_MONTO = re.compile(r"(?:monto\s+)?cr[eé]dito\s*:?\s*([\d.]+,\d{2})", re.I)
 RX_SIM_DIV = re.compile(r"total\s+dividendo\s+mensual\s+([\d.,]+)\s*uf", re.I)
 RX_SIM_TASA = re.compile(r"tasa\s+(?:anual|del\s+cr[eé]dito)\s*:?\s*(\d{1,2}[.,]\d{1,2})\s*%", re.I)
+RX_CMF_TOTAL = re.compile(r"total\s+\$\s*([\d.]+)\s+\$\s*([\d.]+)\s+\$\s*([\d.]+)\s+\$\s*([\d.]+)\s+\$\s*([\d.]+)", re.I)
+
+
+def _clp_miles(s):
+    """Montos CMF vienen en MILES de pesos → CLP reales."""
+    return int(re.sub(r"[^\d]", "", str(s)) or 0) * 1000
+
+
+def leer_cmf_sync(nombre_folder):
+    """🧾 Lector CMF: morosidad real desde el Informe de Deudas (filas 'Total' de
+    Deuda Directa + Indirecta, columnas 30-59 / 60-89 / 90+ días de atraso)."""
+    base = fsvc.folder_dir(nombre_folder) / "04_cmf"
+    if not base.exists():
+        return None
+    pdfs = sorted(base.glob("*.pdf"), key=lambda p: p.stat().st_mtime, reverse=True)
+    for p in pdfs[:4]:
+        try:
+            texto, _m = ocr_service.extraer_texto(p.read_bytes(), p.name)
+        except Exception as e:
+            logging.warning(f"lector CMF {p.name}: {e}")
+            continue
+        t = " ".join((texto or "").split())
+        filas = RX_CMF_TOTAL.findall(t)
+        if not filas:
+            continue
+        a30 = sum(_clp_miles(f[2]) for f in filas)
+        a60 = sum(_clp_miles(f[3]) for f in filas)
+        a90 = sum(_clp_miles(f[4]) for f in filas)
+        return {"morosidad_clp": a30 + a60 + a90, "atraso_30_59_clp": a30,
+                "atraso_60_89_clp": a60, "atraso_90_mas_clp": a90,
+                "deuda_total_clp": sum(_clp_miles(f[0]) for f in filas),
+                "vigente_clp": sum(_clp_miles(f[1]) for f in filas), "archivo": p.name}
+    return None
 
 
 def _num_cl(s):
@@ -1608,6 +1641,35 @@ async def auditar_folder(doc):
         except Exception as e:
             logging.warning(f"div/renta #71: {e}")
 
+    # 🧾 Morosidad — informe CMF real (Bóveda: morosidad_permitida = No)
+    cm = doc.get("cmf_morosidad") or {}
+    if not cm and not doc.get("cmf_scan_at"):
+        try:
+            r_cmf = await asyncio.to_thread(leer_cmf_sync, doc.get("nombre", ""))
+            upd = {"cmf_scan_at": _now()}
+            op = {"$set": upd}
+            if r_cmf:
+                cm = {**r_cmf, "extraido_at": _now()}
+                upd["cmf_morosidad"] = cm
+                op["$push"] = {"historial": {"fecha": _now(), "accion": (
+                    f"🧾 Lector CMF ({r_cmf['archivo']}): deuda total ${r_cmf['deuda_total_clp']:,.0f} · "
+                    f"morosidad ${r_cmf['morosidad_clp']:,.0f} "
+                    f"(30-59d ${r_cmf['atraso_30_59_clp']:,.0f} · 60-89d ${r_cmf['atraso_60_89_clp']:,.0f} · "
+                    f"90+d ${r_cmf['atraso_90_mas_clp']:,.0f})")}}
+            await db.folders.update_one({"id": doc["id"]}, op)
+        except Exception as e:
+            logging.warning(f"lector CMF #71: {e}")
+    if cm.get("morosidad_clp"):
+        morosidad_permitida = str(btg.get("morosidad_permitida") or "No").strip().lower()
+        if morosidad_permitida in ("no", "false", "0"):
+            add("morosidad", "Bóveda — morosidad NO permitida",
+                (f"El informe CMF ({cm.get('archivo', '')}) registra ${cm['morosidad_clp']:,.0f} en atraso "
+                 f"(30-59d ${cm.get('atraso_30_59_clp', 0):,.0f} · 60-89d ${cm.get('atraso_60_89_clp', 0):,.0f} · "
+                 f"90+d ${cm.get('atraso_90_mas_clp', 0):,.0f}) y la Bóveda no permite morosidad"),
+                "Regularizar la deuda morosa y adjuntar comprobante de pago o aclaración antes de enviar a mesa",
+                nivel="critica",
+                fuente="Bóveda btg_pactual.morosidad_permitida · Informe CMF real (04_cmf)")
+
     edad = None
     try:
         edad = await obtener_edad(doc)
@@ -1706,7 +1768,9 @@ REGLAS_ORO_AUDITORIA = [
      "REGLA DE ORO #71 — AUDITORÍA PRE-MESA DEL CONTRALOR: antes de CUALQUIER envío a mesa el sistema "
      "verifica la carpeta ÚNICAMENTE contra lo escrito en: 1) la Bóveda de Criterios (montos mín/máx, LTV, "
      "edad, plazo por edad, antigüedad, carga financiera con fórmula de endeudamiento 2% mensual vía "
-     "credit_engine), 2) las reglas de dashai_eventos, y 3) el Algoritmo Espejo de Mesa (topes empíricos "
+     "credit_engine, dividendo/renta con el dividendo real del PDF Simulador, y morosidad extraída del "
+     "informe CMF real — columnas de atraso 30-59/60-89/90+ días), 2) las reglas de dashai_eventos, y "
+     "3) el Algoritmo Espejo de Mesa (topes empíricos "
      "de veredictos reales de aprobaciones@, config espejo_mesa_modelo). JERARQUÍA ESCRITA: "
      "a) INV-3 (crédito mínimo UF 2.000 SIN subsidio — 'ninguna evaluación puede aprobarse bajo ese monto') "
      "es la ÚNICA violación que BLOQUEA el envío, con error 422 y el detalle exacto según OP-7; "
