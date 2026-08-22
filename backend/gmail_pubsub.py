@@ -18,6 +18,8 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from database import db
 
+os.environ.setdefault("OAUTHLIB_RELAX_TOKEN_SCOPE", "1")  # tolera reorden/variación de scopes de Google
+
 gmailr = APIRouter(prefix="/gmail")
 
 CLIENT_ID = os.environ.get("GMAIL_CLIENT_ID", "")
@@ -92,6 +94,15 @@ async def oauth_callback(code: str = "", state: str = "", error: str = ""):
     except Exception as e:
         return HTMLResponse(f"<h3>❌ Error al canjear el código: {str(e)[:200]}</h3>", status_code=400)
     creds = flow.credentials
+    scopes_ok = any("gmail.readonly" in s for s in (creds.scopes or SCOPES))
+    if not scopes_ok:
+        return HTMLResponse(
+            "<div style='font-family:Georgia,serif;background:#0b0b0d;color:#e8e2cf;min-height:100vh;"
+            "display:flex;align-items:center;justify-content:center;text-align:center'><div>"
+            "<h2 style='color:#ef4444'>⚠️ Falta el permiso de lectura de Gmail</h2>"
+            "<p>La autorización se completó pero SIN el acceso de solo lectura al correo.</p>"
+            "<p>Vuelva a abrir el link de autorización y <b>marque la casilla de Gmail</b> en la pantalla de consentimiento.</p>"
+            "</div></div>", status_code=400)
     prev = await db.config.find_one({"_key": KEY_TOK}) or {}
     await db.config.update_one({"_key": KEY_TOK}, {"$set": {
         "access_token": creds.token,
