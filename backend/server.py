@@ -7015,7 +7015,7 @@ GASTOS_OP_DEFAULTS = {
         "banco": "Mercado Pago",
         "tipo_cuenta": "Cuenta Vista",
         "numero_cuenta": "1030937838",
-        "email": "",
+        "email": "gerardo.ext@centralmutuos.cl",
     },
 }
 

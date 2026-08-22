@@ -1305,3 +1305,9 @@ actual; todo lo demás permanece intacto.
 - Nuevo seed_paridad_produccion() (espejo_postventa.py, corre al arrancar, idempotente): migra Bóveda a INV-3 (con registro en criterios_auditoria + bump de versión) y siembra proc_rules. Probado: corrige 1000/500→2000/0 (v7) y no re-ejecuta si ya está bien.
 - Nuevo endpoint público GET /api/paridad (whitelisted en auth.py): stamp de código, UF (valor/día/fuente/al_día), Bóveda (versión+mins+carga+edad), hash proc_rules, conteos dashai_eventos, contralor (criterios+hash ORO-71+espejo listo), ventana anti-anulación. Comparar preview vs https://mutuariasyleasing.cl/api/paridad tras redeploy.
 - UF: preview al día con sii.cl (40.861,91); producción se autocorrige al redeploy vía _uf_auto_loop (cada 30 min) salvo bloqueo de egreso (→ soporte Emergent).
+
+## 2026-08-22 — Cuenta bancaria oficial única (MUTUARIAS Y LEASING LIMITADA)
+- Cuenta oficial en todos los flujos de cobro: MUTUARIAS Y LEASING LIMITADA · RUT 77.771.552-6 · Mercado Pago · Cuenta Vista · 1030937838 · gerardo.ext@centralmutuos.cl.
+- Lugares verificados/actualizados: config gastos_op.datos_pago (ya estaba), defaults hardcodeados server.py (email vacío → completado), TASACION_CUENTA (ya estaba), plantilla "ok" tipo gastos (tenía cuenta personal antigua 1014622077 → reemplazada).
+- Historial (correos ya enviados en seguimiento/grid_eventos/adn) NO se reescribió (trazabilidad); carpeta del cliente "Gerardo Barrera" no tocada (su RUT es identidad, no cuenta de cobro).
+- Verificado: 0 restos de la cuenta antigua en plantillas/config/colas activas.
