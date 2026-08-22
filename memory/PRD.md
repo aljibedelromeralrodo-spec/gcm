@@ -1320,3 +1320,8 @@ actual; todo lo demás permanece intacto.
 - Usuarios: perfil asignado a 7 cuentas; Javier Urrutia NUEVO (javier.urrutia@centralmutuos.cl / Urrutia2026!, bcrypt, clave_temporal); usuario 'javier' antiguo alineado. Todo dentro de seed_paridad_produccion paso 4 (PARIDAD_STAMP v3) → producción lo toma al redeploy.
 - BUGFIX preexistente: CerebroDashAIModule 'fdd is not defined' (helper movido a nivel de módulo) — verificado con screenshot.
 - test_credentials.md actualizado.
+
+## 2026-08-22 — Aclaración de Mora con comprobante (autovalidada)
+- POST /clientes/folders/{fid}/aclarar-mora: el ejecutivo sube el comprobante desde la ficha (banner rojo MORA CMF en ClientesModule); validación automática en espejo_postventa.validar_comprobante_mora (legibilidad + keywords de pago + monto ≥95% de la mora); si valida → guarda en 04_cmf (dual write), marca cmf_morosidad.aclarada, evento en historial y cierra alertas auditoria71:morosidad SIN admin; si falla → 422 con mensaje claro (mostrado en el banner).
+- Auditoría #71 omite morosidad cuando aclarada=true. Banner verde "MORA ACLARADA" tras validar.
+- Testeado e2e vía API: no-comprobante rechazado, monto insuficiente rechazado con comparación, válido cierra 1 alerta, re-subida bloqueada; UI verificada con screenshot.

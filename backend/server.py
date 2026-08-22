@@ -3953,6 +3953,55 @@ def _fin_resumen_html(doc):
     return f"<table style='border-collapse:collapse'>{rows}</table>"
 
 
+@api.post("/clientes/folders/{fid}/aclarar-mora")
+async def folder_aclarar_mora(fid: str, request: Request, file: UploadFile = File(...)):
+    """🧾 El ejecutivo sube el comprobante de pago de la mora: el sistema lo valida
+    automáticamente y cierra la alerta sin intervención del administrador."""
+    import espejo_postventa as _apm
+    doc = await _get_folder_doc(fid)
+    cm = doc.get("cmf_morosidad") or {}
+    if not cm.get("morosidad_clp"):
+        raise HTTPException(status_code=400, detail="Esta carpeta no registra mora CMF pendiente de aclarar.")
+    if cm.get("aclarada"):
+        raise HTTPException(status_code=400, detail="La mora de esta carpeta ya fue aclarada.")
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(status_code=400, detail="Archivo vacío.")
+    nombre_archivo = file.filename or "comprobante"
+    try:
+        raw, nombre_archivo, _conv = pdfs.convertir_a_pdf(raw, nombre_archivo)
+    except ValueError:
+        pass
+    res = await asyncio.to_thread(_apm.validar_comprobante_mora, raw, nombre_archivo,
+                                  float(cm.get("morosidad_clp") or 0))
+    if not res["ok"]:
+        raise HTTPException(status_code=422, detail=f"❌ Comprobante NO validado: {res['motivo']}")
+    nombre_archivo = f"COMPROBANTE_PAGO_MORA_{now_iso()[:10]}_{nombre_archivo}"
+    rel = await asyncio.to_thread(fsvc.guardar_archivo, doc.get("nombre", ""),
+                                  nombre_archivo, raw, "04_cmf")
+    try:
+        import media_storage as _ms
+        _cl = getattr(request.state, "user", {}) or {}
+        asyncio.create_task(_ms.registrar_documento(raw, nombre_archivo, doc, origen="aclaracion_mora",
+                                                    subido_por=_cl.get("sub") or "", rol=_cl.get("rol") or "", rel=rel))
+    except Exception as _e:
+        logging.warning(f"storage dual aclarar-mora: {_e}")
+    _quien = (getattr(request.state, "user", {}) or {}).get("sub") or "ejecutivo"
+    await db.folders.update_one({"id": fid}, {
+        "$set": {"cmf_morosidad.aclarada": True, "cmf_morosidad.aclarada_at": now_iso(),
+                 "cmf_morosidad.comprobante": {"archivo": nombre_archivo,
+                                               "monto_detectado": res["monto_detectado"],
+                                               "subido_por": _quien}},
+        "$push": {"historial": {"fecha": now_iso(), "accion": (
+            f"🧾 Mora CMF ACLARADA automáticamente: comprobante '{nombre_archivo}' validado "
+            f"(pago detectado ${res['monto_detectado']:,.0f} vs mora ${float(cm.get('morosidad_clp') or 0):,.0f}) "
+            f"— subido por {_quien}. Alerta cerrada sin intervención del administrador.")}}})
+    cerradas = await _apm.cerrar_alertas_mora(fid)
+    return {"ok": True, "monto_detectado": res["monto_detectado"], "alertas_cerradas": cerradas,
+            "mensaje": f"✅ Comprobante validado (${res['monto_detectado']:,.0f}). "
+                       f"Mora aclarada y {cerradas} alerta(s) cerrada(s) automáticamente."}
+
+
 @api.get("/clientes/folders/{fid}/auditoria")
 async def folder_auditoria(fid: str):
     """🛡️ Regla #71: auditoría en vivo de la carpeta contra la Bóveda de Criterios."""

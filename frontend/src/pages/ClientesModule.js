@@ -203,6 +203,8 @@ export default function ClientesModule({ onNavigate }) {
   const [selectedFiles, setSelectedFiles] = useState({}); // { folder_id: Set(rel_paths) }
   const [uploadingFor, setUploadingFor] = useState(null); // folder_id currently uploading
   const [uploadingManual, setUploadingManual] = useState(false);
+  const [moraUp, setMoraUp] = useState(null); // folder_id subiendo comprobante de mora
+  const [moraMsg, setMoraMsg] = useState({}); // { folder_id: { ok, texto } }
   const [merging, setMerging] = useState(false);
   const [mergingProto, setMergingProto] = useState(null); // folder_id in progress
   const [splittingRel, setSplittingRel] = useState(null); // rel path currently splitting
@@ -929,6 +931,23 @@ export default function ClientesModule({ onNavigate }) {
     setOcrRunning(false);
   };
 
+
+  const subirComprobanteMora = async (f, file) => {
+    if (!file) return;
+    setMoraUp(f.id);
+    setMoraMsg(s => ({ ...s, [f.id]: null }));
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const r = await axios.post(`${API}/api/clientes/folders/${f.id}/aclarar-mora`, fd);
+      setMoraMsg(s => ({ ...s, [f.id]: { ok: true, texto: r.data.mensaje } }));
+      loadFolders();
+    } catch (e) {
+      setMoraMsg(s => ({ ...s, [f.id]: { ok: false, texto: e.response?.data?.detail || "Error al subir el comprobante. Intente nuevamente." } }));
+    } finally {
+      setMoraUp(null);
+    }
+  };
 
   const loadFolders = async () => {
     try {
@@ -1833,6 +1852,44 @@ export default function ClientesModule({ onNavigate }) {
                         <span data-testid={`badge-entrega-${f.id}`} style={{ fontSize: 10, background: "rgba(46,92,230,0.15)", color: "#1e46c0", padding: "2px 6px", borderRadius: 0, fontWeight: 700 }}>🏠 Entrega {f.datos_financieros.fecha_entrega}</span>
                       )}
                     </div>
+                    {(f.cmf_morosidad?.morosidad_clp > 0) && (
+                      <div data-testid={`mora-banner-${f.id}`} onClick={(ev) => ev.stopPropagation()}
+                        style={{ marginTop: 6, padding: "0.55rem 0.8rem", borderRadius: 0,
+                          background: f.cmf_morosidad.aclarada ? "rgba(16,217,142,0.12)" : "rgba(190,18,60,0.12)",
+                          border: `1px solid ${f.cmf_morosidad.aclarada ? "rgba(16,217,142,0.45)" : "rgba(190,18,60,0.45)"}` }}>
+                        {f.cmf_morosidad.aclarada ? (
+                          <span data-testid={`mora-aclarada-${f.id}`} style={{ fontSize: 11, fontWeight: 800, color: "#0e9f6e" }}>
+                            ✅ MORA ACLARADA {String(f.cmf_morosidad.aclarada_at || "").slice(0, 10)} — comprobante validado
+                            (${Number(f.cmf_morosidad.comprobante?.monto_detectado || 0).toLocaleString("es-CL")}) · alerta cerrada automáticamente
+                          </span>
+                        ) : (
+                          <>
+                            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                              <span style={{ fontSize: 11, fontWeight: 800, color: "#be123c" }}>
+                                🧾 MORA CMF: ${Number(f.cmf_morosidad.morosidad_clp).toLocaleString("es-CL")} — la Bóveda no permite morosidad
+                              </span>
+                              <label data-testid={`mora-subir-${f.id}`}
+                                style={{ cursor: moraUp === f.id ? "wait" : "pointer", fontSize: 10, fontWeight: 800,
+                                  padding: "3px 10px", background: "#be123c", color: "#fff",
+                                  opacity: moraUp === f.id ? 0.6 : 1 }}>
+                                {moraUp === f.id ? "⏳ Validando comprobante…" : "📤 Subir comprobante de pago"}
+                                <input type="file" accept=".pdf,image/*" style={{ display: "none" }} disabled={moraUp === f.id}
+                                  onChange={(ev) => { subirComprobanteMora(f, ev.target.files?.[0]); ev.target.value = ""; }} />
+                              </label>
+                            </div>
+                            <div style={{ fontSize: 10, color: "#9f1239", marginTop: 3 }}>
+                              Al subir, el sistema valida el comprobante y cierra la alerta automáticamente (sin pasar por el administrador).
+                            </div>
+                          </>
+                        )}
+                        {moraMsg[f.id] && (
+                          <div data-testid={`mora-msg-${f.id}`} style={{ marginTop: 5, fontSize: 11, fontWeight: 700,
+                            color: moraMsg[f.id].ok ? "#0e9f6e" : "#be123c" }}>
+                            {moraMsg[f.id].texto}
+                          </div>
+                        )}
+                      </div>
+                    )}
                     {missing.length > 0 && (
                       <div data-testid={`missing-docs-${f.id}`} style={{ display: "flex", gap: 4, marginTop: 5, flexWrap: "wrap", alignItems: "center" }}>
                         <span style={{ fontSize: 10, fontWeight: 800, color: enviadoManual ? "#fff" : "#be123c" }}>⚠️ FALTA:</span>

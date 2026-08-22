@@ -1413,6 +1413,48 @@ def _clp_miles(s):
     return int(re.sub(r"[^\d]", "", str(s)) or 0) * 1000
 
 
+RX_PAGO_KW = re.compile(r"comprobante|transferencia|pago|abono|dep[oó]sito|cancelaci[oó]n|recibo|voucher|pagad[oa]", re.I)
+RX_MONTOS = re.compile(r"\$\s?([\d.]{4,15})|(?:monto|total|valor)\D{0,12}([\d.]{4,15})", re.I)
+
+
+def validar_comprobante_mora(raw, filename, morosidad_clp):
+    """🧾 Validación automática del comprobante de pago de mora (sin intervención del admin).
+    Reglas: legible + parece comprobante de pago + monto detectado ≥ 95% de la mora."""
+    try:
+        texto, _m = ocr_service.extraer_texto(raw, filename, force_ocr=False)
+        if not texto or len(texto.strip()) < 30:
+            texto, _m = ocr_service.extraer_texto(raw, filename, force_ocr=True)
+    except Exception as e:
+        return {"ok": False, "motivo": f"No se pudo leer el archivo ({str(e)[:80]}). Suba un PDF o imagen legible."}
+    t = " ".join((texto or "").split())
+    if len(t) < 30:
+        return {"ok": False, "motivo": "El archivo es ilegible para el sistema. Suba un comprobante nítido (PDF o foto clara)."}
+    if not RX_PAGO_KW.search(t):
+        return {"ok": False, "motivo": "El documento no parece un comprobante de pago (no contiene palabras como "
+                                       "'transferencia', 'pago', 'abono' o 'comprobante'). Verifique el archivo subido."}
+    montos = []
+    for m in RX_MONTOS.finditer(t):
+        v = int(re.sub(r"[^\d]", "", m.group(1) or m.group(2) or "") or 0)
+        if 1000 <= v <= 10_000_000_000:
+            montos.append(v)
+    if not montos:
+        return {"ok": False, "motivo": "No se detectó ningún monto en el comprobante. Verifique que el documento muestre el valor pagado."}
+    monto_max = max(montos)
+    if morosidad_clp and monto_max < morosidad_clp * 0.95:
+        return {"ok": False, "monto_detectado": monto_max,
+                "motivo": (f"El comprobante indica un pago de ${monto_max:,.0f}, pero la mora registrada en el CMF "
+                           f"es de ${morosidad_clp:,.0f}. El pago debe cubrir el total de la deuda morosa "
+                           "(o suba el comprobante del saldo restante).")}
+    return {"ok": True, "monto_detectado": monto_max, "motivo": ""}
+
+
+async def cerrar_alertas_mora(fid):
+    r = await db.alertas.update_many(
+        {"folder_id": fid, "tipo": "auditoria71:morosidad", "leida": {"$ne": True}},
+        {"$set": {"leida": True, "cerrada_por": "comprobante_pago_validado", "cerrada_at": _now()}})
+    return r.modified_count
+
+
 def leer_cmf_sync(nombre_folder):
     """🧾 Lector CMF: morosidad real desde el Informe de Deudas (filas 'Total' de
     Deuda Directa + Indirecta, columnas 30-59 / 60-89 / 90+ días de atraso)."""
@@ -1659,7 +1701,7 @@ async def auditar_folder(doc):
             await db.folders.update_one({"id": doc["id"]}, op)
         except Exception as e:
             logging.warning(f"lector CMF #71: {e}")
-    if cm.get("morosidad_clp"):
+    if cm.get("morosidad_clp") and not cm.get("aclarada"):
         morosidad_permitida = str(btg.get("morosidad_permitida") or "No").strip().lower()
         if morosidad_permitida in ("no", "false", "0"):
             add("morosidad", "Bóveda — morosidad NO permitida",
