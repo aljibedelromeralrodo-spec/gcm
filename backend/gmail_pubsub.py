@@ -58,7 +58,8 @@ async def oauth_iniciar(request: Request):
     url, state = flow.authorization_url(access_type="offline", prompt="consent",
                                         login_hint=CUENTA, include_granted_scopes="true")
     await db.config.update_one({"_key": "gmail_oauth_state"},
-                               {"$set": {"state": state, "creado": _now()}}, upsert=True)
+                               {"$set": {"state": state, "code_verifier": flow.code_verifier,
+                                         "creado": _now()}}, upsert=True)
     return {"url": url, "instruccion": f"Abra esta URL con la cuenta {CUENTA} y acepte el acceso de solo lectura."}
 
 
@@ -69,6 +70,9 @@ async def oauth_callback(code: str = "", state: str = "", error: str = ""):
     import warnings
     from google_auth_oauthlib.flow import Flow
     flow = Flow.from_client_config(_client_config(), scopes=SCOPES, redirect_uri=REDIRECT_URI)
+    st_doc = await db.config.find_one({"_key": "gmail_oauth_state"}) or {}
+    if st_doc.get("code_verifier"):
+        flow.code_verifier = st_doc["code_verifier"]
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
