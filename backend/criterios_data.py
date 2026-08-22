@@ -13,7 +13,8 @@ DEFAULT_CRITERIOS = {
     "updated_at": now_iso(),
     "btg_pactual": {
         "con_subsidio": {
-            "monto_credito_min_uf": 500,
+            "monto_credito_min_uf": 0,
+            "nota_minimo": "SIN mínimo de crédito para viviendas con subsidio (Regla de Oro #71 / INV-3)",
             "monto_credito_max_uf": 8000,
             "ltv_max": 0.80,
             "div_renta_max": 0.35,
@@ -25,7 +26,8 @@ DEFAULT_CRITERIOS = {
         },
         "sin_subsidio": {
             "renta_min_uf": 30,
-            "monto_credito_min_uf": 1000,
+            "monto_credito_min_uf": 2000,
+            "nota_minimo": "Mínimo UF 2.000 aplica ÚNICAMENTE a viviendas sin subsidio (Regla de Oro #71 / INV-3)",
             "monto_credito_max_uf": 25000,
             "valor_propiedad_min_uf": 1000,
             "valor_propiedad_max_uf": 40000,

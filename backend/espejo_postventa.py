@@ -1808,4 +1808,50 @@ async def seed_reglas_oro_auditoria():
                 "id": str(uuid.uuid4()), "origen": "capa_b", "fecha": _now(),
                 "clave": clave_esp, "tipo": "criterio_manual",
                 "patron": f"[REGLA DE ORO {clave}] {titulo}"})
+        else:
+            # Paridad: mantener el texto del criterio sincronizado con el código
+            await db.espejo_criterios.update_one({"clave": clave_esp}, {"$set": {
+                "criterio": f"{clave} — {titulo}", "detalle": patron[:500]}})
     logging.info("🛡️ Reglas de Oro #71/#72 (Auditoría Pre-Mesa + Edad Cédula) registradas")
+
+
+async def seed_paridad_produccion():
+    """🔁 PARIDAD PREVIEW↔PRODUCCIÓN: aplica al arrancar (idempotente) todo lo que en
+    preview se ajustó por base de datos, para que un redeploy deje ambos entornos iguales.
+    1) Bóveda: mínimos de crédito según INV-3 (sin subsidio 2.000 UF, con subsidio sin mínimo).
+    2) proc_rules: reglas de clasificación aprendidas (seeds/proc_rules_seed.json)."""
+    import json
+    from pathlib import Path
+    # 1) Bóveda — corrección INV-3 si el entorno trae valores antiguos
+    c = await db.config.find_one({"_key": "criterios"})
+    if c:
+        btg = c.get("btg_pactual") or {}
+        min_sin = (btg.get("sin_subsidio") or {}).get("monto_credito_min_uf")
+        min_con = (btg.get("con_subsidio") or {}).get("monto_credito_min_uf")
+        if min_sin != 2000 or min_con != 0:
+            version = int(float(str(c.get("version", 0)).split(".")[-1] or 0)) + 1
+            await db.config.update_one({"_key": "criterios"}, {"$set": {
+                "btg_pactual.sin_subsidio.monto_credito_min_uf": 2000,
+                "btg_pactual.sin_subsidio.nota_minimo":
+                    "Mínimo UF 2.000 aplica ÚNICAMENTE a viviendas sin subsidio (Regla de Oro #71 / INV-3)",
+                "btg_pactual.con_subsidio.monto_credito_min_uf": 0,
+                "btg_pactual.con_subsidio.nota_minimo":
+                    "SIN mínimo de crédito para viviendas con subsidio (Regla de Oro #71 / INV-3)",
+                "updated_at": _now(), "version": version}})
+            await db.criterios_auditoria.insert_one({
+                "id": str(uuid.uuid4()), "fecha": _now(), "version": version,
+                "usuario": "DashAI — migración de paridad (INV-3)",
+                "detalle": "Paridad preview↔producción: mínimo UF 2.000 SOLO sin subsidio; con subsidio sin mínimo",
+                "cambios": [f"sin_subsidio.monto_credito_min_uf: {min_sin} → 2000",
+                            f"con_subsidio.monto_credito_min_uf: {min_con} → 0"]})
+            logging.info(f"🔁 Paridad: Bóveda corregida según INV-3 (v{version})")
+    # 2) proc_rules — reglas aprendidas (upsert por nombre, sin duplicar)
+    ruta = Path(__file__).parent / "seeds" / "proc_rules_seed.json"
+    if ruta.exists():
+        n = 0
+        for r in json.loads(ruta.read_text()):
+            res = await db.proc_rules.update_one({"name": r["name"]}, {"$set": r}, upsert=True)
+            if res.upserted_id or res.modified_count:
+                n += 1
+        if n:
+            logging.info(f"🔁 Paridad: {n} proc_rules sembradas/actualizadas desde seed")

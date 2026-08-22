@@ -51,7 +51,7 @@ def decode_token(token):
 # propio (oid del prospecto / token de firma) validado dentro del endpoint.
 PUBLIC_EXACT = {
     "/api/", "/api", "/api/auth/login", "/api/auth/crear-clave",
-    "/api/inmobiliaria/auth/login", "/api/valor-uf",
+    "/api/inmobiliaria/auth/login", "/api/valor-uf", "/api/paridad",
 }
 PUBLIC_PREFIXES = (
     "/api/calificar",              # Portal de Captura Autónoma (token = oid)

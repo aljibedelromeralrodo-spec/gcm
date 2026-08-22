@@ -1,0 +1,186 @@
+[
+ {
+  "id": "bb5d7d8b-d6ea-44ae-b26d-e4ccd3ebe7ab",
+  "name": "Solicitud crédito mutuo (ejecutivas)",
+  "pattern": "solicitud\\s+credito\\s+mutuo",
+  "kind": "regex",
+  "priority": 10,
+  "active": true,
+  "classify_as": {
+   "categoria": "solicitud_credito",
+   "origen_tipico": "yerile426@gmail.com / ejecutivas ventas",
+   "extraer": [
+    "nombre",
+    "rut"
+   ],
+   "formato_asunto": "SOLICITUD CREDITO MUTUO // NOMBRE RUT: XX.XXX.XXX-X"
+  },
+  "aprendido_de": "analisis_gmail_30d"
+ },
+ {
+  "id": "7dfa5106-78de-4f68-9752-4c16b56bd07b",
+  "name": "Evaluación cliente Ecomac/Boetsch",
+  "pattern": "evaluar\\s+entrega|evaluacion\\s+cliente|solicitud\\s+de\\s+antecedentes",
+  "kind": "regex",
+  "priority": 10,
+  "active": true,
+  "classify_as": {
+   "categoria": "solicitud_credito",
+   "origen_tipico": "@ecomac.cl (X/S/G Gomez Pino, M Ortiz), @boetsch.cl (R Salazar)",
+   "extraer": [
+    "nombre",
+    "rut",
+    "condominio"
+   ],
+   "formato_asunto": "EVALUAR ENTREGA INMEDIATA_NOMBRE_RUT_X_CONDOMINIO Y"
+  },
+  "aprendido_de": "analisis_gmail_30d"
+ },
+ {
+  "id": "4cc78f39-de17-4a14-8f27-9e51e0941b31",
+  "name": "Liquidaciones de cliente interesado",
+  "pattern": "liquidaciones\\s+de\\s+.{0,40}(rut|interesad)",
+  "kind": "regex",
+  "priority": 15,
+  "active": true,
+  "classify_as": {
+   "categoria": "solicitud_credito",
+   "origen_tipico": "@ecomac.cl reenvíos",
+   "extraer": [
+    "nombre",
+    "rut",
+    "condominio",
+    "valor_uf",
+    "subsidio_uf",
+    "credito_uf"
+   ],
+   "formato_asunto": "Liquidaciones de NOMBRE rut X interesado en condominio ..."
+  },
+  "aprendido_de": "analisis_gmail_30d"
+ },
+ {
+  "id": "1b09ea4f-00cc-4ae2-98bb-90f4ae6c3a27",
+  "name": "Set enviado a mesa (formato manual)",
+  "pattern": "\\((ds19|sin subsidio|con subsidio|urgente)[^)]*(inmediata|futura|octubre)",
+  "kind": "regex",
+  "priority": 20,
+  "active": true,
+  "classify_as": {
+   "categoria": "envio_mesa",
+   "origen_tipico": "gerardo.ext → aprobaciones@centralmutuos.cl",
+   "cuerpo_tipico": "NOMBRE / RUT / CONDOMINIO / INMOBILIARIA / SUBSIDIO / ENTREGA / VALOR UF / CRÉDITO UF",
+   "adjunto_tipico": "PDF único combinado 'NOMBRE EV.pdf' (usar divisor multi-documento)"
+  },
+  "aprendido_de": "analisis_gmail_30d"
+ },
+ {
+  "id": "12eb4b8c-2809-4de7-9464-7b03c8c1f500",
+  "name": "Respuesta MESA — aprobación",
+  "pattern": "tenemos\\s+el\\s+agrado|califica\\s+para\\s+un\\s+mutuo|adjuntamos\\s+carta\\s+y\\s+simulaci",
+  "kind": "regex",
+  "priority": 5,
+  "active": true,
+  "classify_as": {
+   "categoria": "respuesta_mesa_aprobacion",
+   "adjuntos": [
+    "Carta_Aprobacion_*.pdf",
+    "Simulador_*.pdf"
+   ],
+   "nota": "puede incluir condición 'por máximo posible de UF X'"
+  },
+  "aprendido_de": "analisis_gmail_30d"
+ },
+ {
+  "id": "62046c68-53c9-4f14-be7c-d4ac1d73464d",
+  "name": "Respuesta MESA — rechazo",
+  "pattern": "no\\s+cumple\\s+parametros|pasad[oa]\\s+en\\s+carga\\s+financiera|limitar\\s+la\\s+deuda|incorporar\\s+(un\\s+)?codeudor|ingresos?\\s+.{0,30}no\\s+son\\s+suficientes|no\\s+hay\\s+posibilidad\\s+de\\s+aprobar|estaria\\s+por\\s+debajo\\s+de\\s+las?\\s+uf|necesitamos\\s+al\\s+menos\\s+\\d+\\s+meses|no\\s+se\\s+puede\\s+aprobar\\s+con\\s+.{0,30}como\\s+titular|favor\\s+cancelar\\s+email\\s+de\\s+aprobacion",
+  "kind": "regex",
+  "priority": 5,
+  "active": true,
+  "classify_as": {
+   "categoria": "respuesta_mesa_rechazo",
+   "nota": "sin adjuntos; incluye motivo y a veces recomendación (codeudor / bajar deuda)",
+   "motivos_conocidos": [
+    "carga financiera",
+    "ingresos insuficientes",
+    "sociedad SPA",
+    "antigüedad laboral <6 meses plazo fijo",
+    "tope UF por capacidad/edad",
+    "titular no califica (sugerir cambio de titular)",
+    "anulación de aprobación previa"
+   ]
+  },
+  "aprendido_de": "analisis_gmail_120d",
+  "actualizado": "2026-08-22T07:22:28.554769+00:00"
+ },
+ {
+  "id": "efbc85c9-1f7b-413e-936e-95932d7333ea",
+  "name": "Respuesta MESA — corrección/observación",
+  "pattern": "favor\\s+revisar|no\\s+se\\s+que\\s+paso|revisar\\s+monto|ficha\\s+esta\\s+por|favor\\s+(pedir|solicitar|confirmar|enviar)\\s|con\\s+eso\\s+podemos\\s+evaluar",
+  "kind": "regex",
+  "priority": 8,
+  "active": true,
+  "classify_as": {
+   "categoria": "respuesta_mesa_observacion",
+   "nota": "pide corregir el set (montos, ficha, simulación) y reenviar",
+   "pedidos_conocidos": [
+    "detalle deuda indirecta",
+    "confirmar con/sin subsidio",
+    "informe resumen boletas de honorarios (SII) para evaluar independientes",
+    "contratos de arriendo para bajar ratio del codeudor"
+   ]
+  },
+  "aprendido_de": "analisis_gmail_120d",
+  "actualizado": "2026-08-22T07:22:28.554769+00:00"
+ },
+ {
+  "name": "Respuesta MESA — aprobación con tope",
+  "active": true,
+  "aprendido_de": "analisis_gmail_120d",
+  "classify_as": {
+   "categoria": "respuesta_mesa_aprobacion_con_tope",
+   "nota": "Aprueba pero limita el monto (\"máximo posible UF X\"). Frecuente en independientes, renta mixta y clientes 55+ (plazo acortado por edad). Extraer tope_uf si aparece.",
+   "extraer": [
+    "tope_uf"
+   ]
+  },
+  "creado": "2026-08-22T07:22:28.554769+00:00",
+  "id": "fc8eff5d-60c7-4d4f-b079-236b37185a5a",
+  "kind": "regex",
+  "pattern": "por\\s+maximo\\s+posible(\\s+de\\s+uf\\s*[\\d\\.]+)?|simulacion\\s+por\\s+maximo\\s+posible|por\\s+ambas\\s+opciones\\s+solicitadas",
+  "priority": 4
+ },
+ {
+  "name": "Ficha con edad — alerta plazo 55+",
+  "active": true,
+  "aprendido_de": "analisis_gmail_120d",
+  "classify_as": {
+   "categoria": "alerta_edad_plazo",
+   "nota": "Si edad>=55, el plazo máximo se acorta y baja el crédito posible (caso Eduar Araya, 55a: tope < UF 2000 y sugerencia de codeudor). Mesa NUNCA escribe \"por edad\": el efecto solo se ve en el tope UF o en el Simulador PDF. Marcar folder con edad_titular y alertar al ejecutivo que el monto puede bajar.",
+   "extraer": [
+    "edad"
+   ],
+   "umbral_alerta": 55
+  },
+  "creado": "2026-08-22T07:22:28.554769+00:00",
+  "id": "bd7ae413-d473-4b09-b1de-9de2e02f5887",
+  "kind": "regex",
+  "pattern": "edad\\s*:?\\s*([5-9]\\d)\\s*(años|anos)?",
+  "priority": 12
+ },
+ {
+  "name": "Renta mixta — dependiente + honorarios",
+  "active": true,
+  "aprendido_de": "analisis_gmail_120d",
+  "classify_as": {
+   "categoria": "renta_mixta",
+   "nota": "Titular o pareja con renta dependiente + independiente (Catalina Aguilera+Nelson Barraza, Javiera Espinoza). Mesa exige \"informe resumen de boletas de honorarios\" (resumen anual SII) para evaluar la parte independiente. Set: liquidaciones en 02, boletas/F22 en 03. Suele aprobarse CON TOPE.",
+   "documento_requerido": "informe_resumen_boletas_sii"
+  },
+  "creado": "2026-08-22T07:22:28.554769+00:00",
+  "id": "1cc22668-3d0e-4832-bb20-942f108df36f",
+  "kind": "regex",
+  "pattern": "(liquidacion(es)?\\s+de\\s+sueldo|liquidaciones).{0,400}(boletas?\\s+de\\s+honorarios|certificados?\\s+sii|carpeta\\s+tributaria)|(boletas?\\s+de\\s+honorarios|certificados?\\s+sii).{0,400}liquidacion",
+  "priority": 14
+ }
+]

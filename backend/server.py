@@ -666,6 +666,7 @@ async def startup():
     try:
         import espejo_postventa as _apm_seed
         asyncio.create_task(_apm_seed.seed_reglas_oro_auditoria())
+        asyncio.create_task(_apm_seed.seed_paridad_produccion())
     except Exception as _e:
         logging.warning(f"seed reglas oro auditoría 71/72: {_e}")
     try:
@@ -1004,6 +1005,43 @@ async def inmo_login(payload: dict):
         "nombre": usuario.capitalize(),
         "inmobiliaria": inmo,
         "rol": "ejecutivo",
+    }
+
+
+PARIDAD_STAMP = "2026-08-22-paridad-v1"  # subir al cambiar seeds/reglas críticas
+
+
+@api.get("/paridad")
+async def paridad_check():
+    """🔁 Auto-diagnóstico de paridad preview↔producción (sin datos sensibles).
+    Abrir este endpoint en ambos entornos y comparar: deben ser idénticos salvo `uf.actualizado`."""
+    import hashlib
+    from zoneinfo import ZoneInfo
+    hoy_cl = datetime.now(ZoneInfo("America/Santiago")).strftime("%Y-%m-%d")
+    uf = await db.config.find_one({"_key": "uf"}) or {}
+    c = await db.config.find_one({"_key": "criterios"}) or {}
+    btg = c.get("btg_pactual") or {}
+    reglas = await db.proc_rules.find({}, {"_id": 0, "name": 1, "pattern": 1}).sort("name", 1).to_list(200)
+    hash_reglas = hashlib.md5("|".join(f"{r['name']}::{r.get('pattern', '')}" for r in reglas).encode()).hexdigest()[:12]
+    dashai = {}
+    for m in ("regla_oro", "regla_inviolable", "regla_operativa", "regla_eficiencia", "normativa"):
+        dashai[m] = await db.dashai_eventos.count_documents({"motivo": m})
+    oro71 = await db.dashai_eventos.find_one({"norma_clave": "ORO-71"}) or {}
+    return {
+        "stamp_codigo": PARIDAD_STAMP,
+        "uf": {"valor": uf.get("valor_uf"), "dia": uf.get("uf_day"), "fuente": uf.get("uf_source"),
+               "al_dia": uf.get("uf_day") == hoy_cl, "actualizado": uf.get("uf_updated_at", "")},
+        "boveda": {"version": c.get("version"),
+                   "min_sin_subsidio_uf": (btg.get("sin_subsidio") or {}).get("monto_credito_min_uf"),
+                   "min_con_subsidio_uf": (btg.get("con_subsidio") or {}).get("monto_credito_min_uf"),
+                   "carga_max": (btg.get("sin_subsidio") or {}).get("carga_financiera_max"),
+                   "edad_plazo_max": (btg.get("sin_subsidio") or {}).get("edad_plazo_max")},
+        "proc_rules": {"total": len(reglas), "hash": hash_reglas},
+        "dashai_eventos": dashai,
+        "contralor": {"espejo_criterios": await db.espejo_criterios.count_documents({}),
+                      "oro71_hash": hashlib.md5((oro71.get("patron") or "").encode()).hexdigest()[:12],
+                      "espejo_mesa_listo": bool(((await db.config.find_one({"_key": "espejo_mesa_modelo"})) or {}).get("listo"))},
+        "ventana_antianulacion_min": int((((await db.config.find_one({"_key": "mesa_verdad"})) or {}).get("ventana_antianulacion_min")) or 45),
     }
 
 

@@ -1296,3 +1296,12 @@ actual; todo lo demás permanece intacto.
 - leer_cmf_sync (espejo_postventa.py): parsea filas "Total \$ \$ \$ \$ \$" del Informe de Deudas CMF (Directa+Indirecta, columnas 30-59/60-89/90+ días, montos en miles ×1000); persiste cmf_morosidad + historial, cache cmf_scan_at.
 - Auditoría: si morosidad_clp>0 y Bóveda morosidad_permitida=No → alerta CRÍTICA (no bloquea, ORO-35) con desglose y fuente. Validado: 8 CMFs reales (mora \$0), sintético moroso (\$300.000 detectado), carpeta real sin falso positivo.
 - ORO-71 actualizado en dashai_eventos + espejo_criterios (ahora incluye morosidad en la lista auditada).
+
+## 2026-08-22 — Paridad Preview↔Producción
+- Diagnóstico: producción tiene DB y entorno propios; los ajustes hechos por DB en preview NO viajan con un redeploy. Divergencias código↔DB encontradas y corregidas:
+  1. DEFAULT_CRITERIOS (criterios_data.py) traía mins antiguos (1000/500) → actualizado a 2000/0 con notas INV-3.
+  2. proc_rules (10 reglas aprendidas) no tenían seed → exportadas a seeds/proc_rules_seed.json + upsert por nombre al arrancar.
+  3. espejo_criterios ORO-71/72 era insert-only → ahora sincroniza texto en cada arranque.
+- Nuevo seed_paridad_produccion() (espejo_postventa.py, corre al arrancar, idempotente): migra Bóveda a INV-3 (con registro en criterios_auditoria + bump de versión) y siembra proc_rules. Probado: corrige 1000/500→2000/0 (v7) y no re-ejecuta si ya está bien.
+- Nuevo endpoint público GET /api/paridad (whitelisted en auth.py): stamp de código, UF (valor/día/fuente/al_día), Bóveda (versión+mins+carga+edad), hash proc_rules, conteos dashai_eventos, contralor (criterios+hash ORO-71+espejo listo), ventana anti-anulación. Comparar preview vs https://mutuariasyleasing.cl/api/paridad tras redeploy.
+- UF: preview al día con sii.cl (40.861,91); producción se autocorrige al redeploy vía _uf_auto_loop (cada 30 min) salvo bloqueo de egreso (→ soporte Emergent).
