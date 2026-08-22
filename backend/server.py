@@ -664,6 +664,11 @@ async def startup():
     # DESACTIVADO (normativa un-solo-correo): reporte 10AM consolidado en el resumen 8AM
     # asyncio.create_task(_task_blindada(_daily_report_loop, "reporte_diario"))
     try:
+        import espejo_postventa as _apm_seed
+        asyncio.create_task(_apm_seed.seed_reglas_oro_auditoria())
+    except Exception as _e:
+        logging.warning(f"seed reglas oro auditoría 71/72: {_e}")
+    try:
         import manual_concreces as _mc_seed
         asyncio.create_task(_mc_seed.seed_reglas_oro())
         import victoria_independiente as _vi_mod
@@ -2354,12 +2359,23 @@ async def docs_sin_clasificar_delete(did: str, request: Request):
 
 @api.get("/admin/alertas")
 async def admin_alertas():
-    return {"alertas": []}
+    docs = await db.alertas.find({"leida": {"$ne": True}}, {"_id": 0}).sort("fecha", -1).limit(100).to_list(100)
+    return {"alertas": docs}
 
 
 @api.post("/admin/alertas/refresh")
 async def admin_alertas_refresh():
-    return {"ok": True, "alertas": []}
+    """Regla #71: barrido de auditoría en segundo plano sobre carpetas no enviadas a mesa."""
+    import espejo_postventa as _apm
+    asyncio.create_task(_apm.auditar_carpetas_activas())
+    docs = await db.alertas.find({"leida": {"$ne": True}}, {"_id": 0}).sort("fecha", -1).limit(100).to_list(100)
+    return {"ok": True, "barrido": "iniciado en segundo plano", "alertas": docs}
+
+
+@api.post("/admin/alertas/{aid}/leida")
+async def admin_alerta_leida(aid: str):
+    await db.alertas.update_one({"id": aid}, {"$set": {"leida": True}})
+    return {"ok": True}
 
 
 @api.get("/admin/learning/status")
@@ -3899,6 +3915,14 @@ def _fin_resumen_html(doc):
     return f"<table style='border-collapse:collapse'>{rows}</table>"
 
 
+@api.get("/clientes/folders/{fid}/auditoria")
+async def folder_auditoria(fid: str):
+    """🛡️ Regla #71: auditoría en vivo de la carpeta contra la Bóveda de Criterios."""
+    import espejo_postventa as _apm
+    doc = await _get_folder_doc(fid)
+    return await _apm.auditar_folder(doc)
+
+
 @api.post("/clientes/folders/{fid}/send-email")
 async def folder_send_email(fid: str, payload: dict):
     doc = await _get_folder_doc(fid)
@@ -3923,6 +3947,25 @@ async def folder_send_email(fid: str, payload: dict):
             raise HTTPException(status_code=412, detail=(
                 "🏥 REGLA #70: liquidaciones con licencia médica o menos de 30 días trabajados. "
                 "Cargue el PAGO DE LICENCIA (CCAF/Isapre/subsidio) en 06_licencias antes de enviar a mesa."))
+    # 🛡️ REGLA DE ORO #71: auditoría contra Bóveda + dashai_eventos + Espejo de Mesa.
+    # Solo INV-3 bloquea (422 según OP-7); el resto alerta sin bloquear (ORO-35).
+    import espejo_postventa as _apm
+    try:
+        _audit71 = await _apm.auditar_folder(doc)
+    except Exception as _e71:
+        logging.warning(f"auditoría #71: {_e71}")
+        _audit71 = {"violaciones": []}
+    if _audit71["violaciones"]:
+        await _apm.registrar_alertas(doc, _audit71["violaciones"])
+    _bloq71 = [x for x in _audit71["violaciones"] if x["bloqueante"]]
+    if _bloq71 and (payload.get("clave") or "") != CLAVE_FORZAR_CARPETA:
+        raise HTTPException(status_code=422, detail=(
+            "⛔ OP-7 — NORMATIVA VIOLADA (envío bloqueado): "
+            + " | ".join(f"{x['regla']}: {x['detalle']}. {x['recomendacion']}" for x in _bloq71)
+            + ". Alerta generada al administrador. Solo la clave maestra permite forzar el envío."))
+    if _audit71["violaciones"] and not _bloq71:
+        logging.warning(f"🛡️ Auditoría #71 (informativa, ORO-35): {len(_audit71['violaciones'])} "
+                        f"hallazgo(s) en {nombre} — envío NO bloqueado, alerta al administrador")
     cr = doc.get("credit_request") or {}
     _cats = {fsvc.cat_de_archivo(a["nombre"], a["subfolder"]) for a in fsvc.scan_archivos(nombre)} - {"combinado", "codeudor", "estudio_titulo"}
     _ct = cr.get("client_type") or "dependiente"
@@ -5491,6 +5534,11 @@ async def _clasificar_item(item):
         await _aviso_recepcion_incompleta(item, analisis_ocr)
     except Exception as e:
         logging.warning(f"aviso recepción incompleta: {e}")
+    try:  # 🛡️ Regla de Oro #71: auditoría proactiva de criterios — detectar ANTES de mesa
+        import espejo_postventa as _apm71
+        await _apm71.auditoria_proactiva(cliente)
+    except Exception as e:
+        logging.warning(f"auditoría proactiva #71: {e}")
     return status
 
 

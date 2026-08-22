@@ -1267,3 +1267,21 @@ actual; todo lo demás permanece intacto.
 - APRENDIZAJE_CORREOS.md: agregada sección 7 (casos límite 120d).
 - Informe 2 partes entregado en chat (técnico + evaluación honesta: 97-98% docs, 95% veredictos, 85-90% casos financieros límite; 100% imposible).
 - Recomendación pendiente de aprobación: ventana de espera 30-60 min antes de notificar aprobaciones (riesgo de anulación); parsear plazo desde Simulador_*.pdf.
+
+## 2026-08-22 — Auditoría Pre-Mesa (Reglas de Oro #71/#72) en módulo contralor
+- Lógica integrada en espejo_postventa.py (módulo contralor existente, sin módulos nuevos).
+- #71: auditoría automática contra Bóveda de Criterios antes de todo envío a mesa; bloqueo HTTP 412 (forzable solo con MASTER_PIN) + alerta crítica al admin (cliente, regla, acción recomendada). Corre proactiva en ingesta y con barrido en background (/api/admin/alertas/refresh).
+- #72: edad calculada por OCR desde cédula (fecha_nacimiento + edad_titular persistidos, evento en historial, marca edad_ocr_fallido para no repetir OCR); valida edad min/max y plazo máximo por edad (término ≤80).
+- CORRECCIÓN: mínimo UF 2.000 aplica SOLO sin subsidio; con subsidio SIN mínimo (Bóveda v6: sin_subsidio.monto_credito_min_uf=2000, con_subsidio=0; ORO-71 y espejo_criterios actualizados; registro en criterios_auditoria).
+- Endpoints: GET /clientes/folders/{fid}/auditoria, GET/POST /admin/alertas (+/refresh, /{aid}/leida ahora reales).
+- Verificado: bloqueo 412 (Cristian Pavez 1.800 UF sin subsidio), sin falso positivo con subsidio (Lilian 1.722 UF), 42 alertas en barrido, edades extraídas (7 carpetas).
+
+## 2026-08-22 — Auditoría del Contralor basada SOLO en fuentes escritas (rediseño final)
+- Fuentes leídas completas: Bóveda de Criterios v6, 114 reglas dashai_eventos (53 oro + 5 inviolables + 10 operativas + 6 eficiencia + 40 normativas), Algoritmo Espejo (config espejo_mesa_modelo + limites_reales_mesa, veredictos reales 280d).
+- Jerarquía implementada según texto literal:
+  · INV-3 (min UF 2.000 sin subsidio, "ninguna evaluación puede aprobarse bajo ese monto") = ÚNICO bloqueo, HTTP 422 con detalle exacto según OP-7, forzable solo con MASTER_PIN.
+  · ORO-9 (carga conjunta >40% = "RIESGO CRÍTICO mande lo que mande la MESA") = alerta crítica, sin bloqueo; fórmula endeudamiento 2% mensual reutilizando credit_engine.endeudamiento_mensual (EF-1).
+  · Resto Bóveda (montos máx, LTV, edad, plazo por edad, antigüedad 12m) = alertas informativas (ORO-35: el Contralor audita e informa).
+  · Algoritmo Espejo: tope empírico por vecindad de veredictos reales; monto >115% del tope → alerta con sugerencia de codeudor.
+- Cada violación cita su fuente exacta (campo `fuente` en alertas). ORO-71 reescrito en dashai_eventos + espejo_criterios con la jerarquía.
+- Verificado: 422 INV-3 (Cristian Pavez), carga 705% crítica sin bloqueo (Lilian), tope espejo UF 2.065 vs 4.000 (sintético).

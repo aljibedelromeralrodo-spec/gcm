@@ -1253,3 +1253,366 @@ async def broker_cargar_excel(request: Request):
         "detalle": {"creados": creados, "actualizados": actualizados}, "fecha": _now()})
     return {"ok": True, "creados": creados, "actualizados": actualizados,
             "errores": errores, "nota": "Las carpetas de la Supercarpeta fueron alimentadas sin ingreso manual"}
+
+
+# ═══ 🛡️ REGLAS DE ORO #71/#72 — AUDITORÍA PRE-MESA DEL CONTRALOR ═══
+# #71: Bóveda de Criterios verificada ANTES de todo envío a mesa (bloqueo + alerta admin).
+# #72: edad calculada automáticamente desde la cédula (OCR) para validar plazo máximo.
+import io
+from datetime import date
+
+import folders_service as fsvc
+import ocr_service
+from criterios_data import DEFAULT_CRITERIOS
+
+MIN_CREDITO_SIN_SUBSIDIO_UF = 2000  # Regla de Oro #71 — SOLO viviendas SIN subsidio (con subsidio NO hay mínimo)
+
+MESES = {"ene": 1, "feb": 2, "mar": 3, "abr": 4, "may": 5, "jun": 6, "jul": 7,
+         "ago": 8, "sep": 9, "sept": 9, "set": 9, "oct": 10, "nov": 11, "dic": 12,
+         "enero": 1, "febrero": 2, "marzo": 3, "abril": 4, "mayo": 5, "junio": 6,
+         "julio": 7, "agosto": 8, "septiembre": 9, "setiembre": 9, "octubre": 10,
+         "noviembre": 11, "diciembre": 12}
+RX_NAC_TXT = re.compile(r"nacimi?ento\D{0,50}?(\d{1,2})\s+([a-záéíóú]{3,12})\.?\s+(\d{4})", re.I)
+RX_NAC_NUM = re.compile(r"nacimi?ento\D{0,50}?(\d{1,2})[./\- ](\d{1,2})[./\- ](\d{4})", re.I)
+RX_FECHA_SUELTA = re.compile(r"\b(\d{1,2})\s+(ene|feb|mar|abr|may|jun|jul|ago|sept?|set|oct|nov|dic)[a-z]*\.?\s+(\d{4})\b", re.I)
+
+
+def _edad_de_fecha(f):
+    hoy = date.today()
+    return hoy.year - f.year - ((hoy.month, hoy.day) < (f.month, f.day))
+
+
+def _parse_nacimiento(texto):
+    m = RX_NAC_TXT.search(texto)
+    if m:
+        mes = MESES.get(m.group(2).lower().rstrip("."))
+        if mes:
+            try:
+                return date(int(m.group(3)), mes, int(m.group(1)))
+            except ValueError:
+                pass
+    m = RX_NAC_NUM.search(texto)
+    if m:
+        try:
+            return date(int(m.group(3)), int(m.group(2)), int(m.group(1)))
+        except ValueError:
+            pass
+    # Respaldo: la fecha con año más antiguo de la cédula (emisión/vencimiento son recientes)
+    hoy = date.today()
+    candidatas = []
+    for m in RX_FECHA_SUELTA.finditer(texto):
+        mes = MESES.get(m.group(2).lower())
+        if not mes:
+            continue
+        try:
+            f = date(int(m.group(3)), mes, int(m.group(1)))
+        except ValueError:
+            continue
+        if 1930 <= f.year <= hoy.year - 17:
+            candidatas.append(f)
+    return min(candidatas) if candidatas else None
+
+
+def extraer_nacimiento_cedula_sync(nombre_folder):
+    """Regla #72: OCR de la cédula → fecha de nacimiento. Devuelve date o None."""
+    base = fsvc.folder_dir(nombre_folder) / "01_cedula"
+    if not base.exists():
+        return None
+    for p in sorted(base.iterdir()):
+        try:
+            if p.suffix.lower() == ".pdf":
+                texto, _ = ocr_service.extraer_texto(p.read_bytes(), p.name, force_ocr=True)
+            elif p.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp"):
+                from PIL import Image
+                texto, _ = ocr_service.ocr_imagen(Image.open(io.BytesIO(p.read_bytes())))
+            else:
+                continue
+        except Exception as e:
+            logging.warning(f"OCR cédula {p.name}: {e}")
+            continue
+        f = _parse_nacimiento(texto or "")
+        if f and 18 <= _edad_de_fecha(f) <= 99:
+            return f
+    return None
+
+
+async def obtener_edad(doc):
+    """Edad del titular: 1° la guardada en la carpeta; 2° cédula por OCR (y se persiste)."""
+    if doc.get("edad_titular"):
+        return int(doc["edad_titular"])
+    df = doc.get("datos_financieros") or {}
+    if df.get("edad"):
+        return int(df["edad"])
+    import asyncio
+    if doc.get("edad_ocr_fallido"):
+        return None
+    f = await asyncio.to_thread(extraer_nacimiento_cedula_sync, doc.get("nombre", ""))
+    if not f:
+        await db.folders.update_one({"id": doc["id"]}, {"$set": {"edad_ocr_fallido": True}})
+        return None
+    edad = _edad_de_fecha(f)
+    await db.folders.update_one({"id": doc["id"]}, {
+        "$set": {"fecha_nacimiento": f.isoformat(), "edad_titular": edad},
+        "$push": {"historial": {"fecha": _now(),
+                                "accion": f"🪪 Regla #72: fecha de nacimiento leída de la cédula "
+                                          f"({f.strftime('%d-%m-%Y')}) — edad calculada: {edad} años"}}})
+    doc["fecha_nacimiento"] = f.isoformat()
+    doc["edad_titular"] = edad
+    return edad
+
+
+async def _criterios():
+    cfg = await db.config.find_one({"_key": "criterios"}, {"_id": 0})
+    return cfg or DEFAULT_CRITERIOS
+
+
+def _num(v):
+    try:
+        x = float(str(v).replace(",", "."))
+        return x if x > 0 else None
+    except (TypeError, ValueError):
+        return None
+
+
+async def auditar_folder(doc):
+    """Auditoría completa de la carpeta contra la Bóveda de Criterios.
+    Devuelve {violaciones:[{clave, regla, detalle, recomendacion, bloqueante}], edad, ...}."""
+    crit = await _criterios()
+    df = doc.get("datos_financieros") or {}
+    cr = doc.get("credit_request") or {}
+    con_sub = bool(df.get("con_subsidio"))
+    btg = (crit.get("btg_pactual") or {}).get("con_subsidio" if con_sub else "sin_subsidio") or {}
+    monto = _num(df.get("monto_credito"))
+    valor = _num(df.get("valor_propiedad"))
+    plazo = _num(df.get("plazo_anos") or df.get("plazo") or cr.get("plazo_anos"))
+    antig = _num(df.get("antiguedad_laboral_meses"))
+    v = []
+
+    def add(clave, regla, detalle, recomendacion, bloqueante=False, nivel=None, fuente=""):
+        v.append({"clave": clave, "regla": regla, "detalle": detalle,
+                  "recomendacion": recomendacion, "bloqueante": bloqueante,
+                  "nivel": nivel or ("critica" if bloqueante else "media"), "fuente": fuente})
+
+    if monto is None:
+        add("sin_monto", "Monto de crédito no registrado",
+            "La carpeta no tiene monto de crédito en UF — la auditoría queda incompleta",
+            "Registrar el monto del crédito antes de enviar a mesa",
+            fuente="ORO-65 Certeza Absoluta")
+    else:
+        if not con_sub and monto < MIN_CREDITO_SIN_SUBSIDIO_UF:
+            add("min_sin_subsidio", "INV-3 — Crédito mínimo 2.000 UF sin subsidio (REGLA INVIOLABLE DEL DUEÑO)",
+                f"Crédito de UF {monto:,.0f} SIN subsidio, bajo el tope duro de UF {MIN_CREDITO_SIN_SUBSIDIO_UF:,}. "
+                "«Ninguna evaluación puede aprobarse bajo ese monto»",
+                "No enviar a mesa: subir el monto, cambiar a operación con subsidio o descartar",
+                bloqueante=True, fuente="dashai_eventos INV-3 · bloqueo 422 según OP-7")
+        minimo = _num(btg.get("monto_credito_min_uf"))
+        if minimo and monto < minimo and (con_sub or minimo > MIN_CREDITO_SIN_SUBSIDIO_UF):
+            add("monto_min_boveda", "Bóveda — monto mínimo",
+                f"Crédito de UF {monto:,.0f} bajo el mínimo de la Bóveda (UF {minimo:,.0f})",
+                "Ajustar el monto o revisar la operación con el ejecutivo",
+                fuente="Bóveda btg_pactual.monto_credito_min_uf")
+        maximo = _num(btg.get("monto_credito_max_uf"))
+        if maximo and monto > maximo:
+            add("monto_max_boveda", "Bóveda — monto máximo",
+                f"Crédito de UF {monto:,.0f} sobre el máximo de la Bóveda (UF {maximo:,.0f})",
+                "Reducir el monto solicitado o aumentar pie/ahorro",
+                fuente="Bóveda btg_pactual.monto_credito_max_uf")
+        ltv_max = _num(btg.get("ltv_max"))
+        if valor and ltv_max and monto / valor > ltv_max + 0.0001:
+            add("ltv", "Bóveda — LTV máximo",
+                f"LTV {monto / valor * 100:.1f}% supera el máximo permitido ({ltv_max * 100:.0f}%)",
+                f"Aumentar el pie: crédito máximo para esta propiedad UF {valor * ltv_max:,.0f}",
+                fuente="Bóveda btg_pactual.ltv_max · ORO-11 LTV sin redondeo hacia arriba")
+
+    antig_min = _num(btg.get("antiguedad_laboral_min_meses"))
+    if antig is not None and antig_min and antig < antig_min:
+        add("antiguedad", "Bóveda — antigüedad laboral mínima",
+            f"Antigüedad de {antig:.0f} meses, bajo el mínimo de {antig_min:.0f} meses",
+            "Esperar a cumplir la antigüedad o incorporar un codeudor con antigüedad suficiente",
+            fuente="Bóveda btg_pactual.antiguedad_laboral_min_meses · Mesa real exigió ≥6 meses plazo fijo (caso Yan Carmona)")
+
+    # Carga financiera — fórmula de endeudamiento de la Bóveda (2% mensual, motor credit_engine)
+    renta = _num(df.get("renta_liquida"))
+    uf_val = None
+    if renta:
+        try:
+            import credit_engine as ce
+            uf_doc = await db.config.find_one({"_key": "uf"})
+            uf_val = float(uf_doc["valor_uf"]) if uf_doc else float(DEFAULT_UF)
+            fe = crit.get("formula_endeudamiento") or {}
+            endeud = ce.endeudamiento_mensual(df, uf_val, _num(fe.get("cuota_pct_mensual")) or 0.02)
+            cuota_clp = float(endeud.get("endeudamiento_mensual_clp") or 0)
+            tope = (_num(btg.get("carga_financiera_max") or btg.get("carga_financiera_max_sin_codeudor"))
+                    or _num(fe.get("tope_carga_financiera")) or 0.4)
+            if cuota_clp:
+                carga = cuota_clp / renta
+                if carga > tope + 0.0001:
+                    add("carga_financiera", "ORO-9 / Bóveda — carga financiera máxima 40% (RIESGO CRÍTICO)",
+                        f"Carga financiera {carga * 100:.1f}% (cuota teórica ${cuota_clp:,.0f} / renta ${renta:,.0f}), "
+                        f"sobre el tope de {tope * 100:.0f}%. «Es RIESGO CRÍTICO, mande lo que mande la MESA» (ORO-9)",
+                        f"Depurar deudas CMF, acreditar más renta o incorporar codeudor: "
+                        f"deuda compatible máxima ≈ ${renta * tope / (_num(fe.get('cuota_pct_mensual')) or 0.02):,.0f}",
+                        nivel="critica",
+                        fuente="dashai_eventos ORO-9 · Bóveda formula_endeudamiento (2% mensual CMF+PAV)")
+        except Exception as e:
+            logging.warning(f"carga financiera #71: {e}")
+
+    # Algoritmo Espejo de Mesa — tope empírico por vecindad de veredictos reales
+    if renta and monto:
+        try:
+            modelo = await db.config.find_one({"_key": "espejo_mesa_modelo"}) or {}
+            casos = modelo.get("casos") or []
+            if modelo.get("listo") and casos:
+                cercanos = [c for c in casos if 0.75 * renta <= c["renta_liquida_clp"] <= 1.25 * renta]
+                if not cercanos:
+                    cercanos = sorted(casos, key=lambda c: abs(c["renta_liquida_clp"] - renta))[:3]
+                tope_real = sum(c["tope_uf"] for c in cercanos) / len(cercanos)
+                if monto > tope_real * 1.15:
+                    n_cod = sum(1 for c in cercanos if c["con_codeudor"])
+                    sug = " Los casos comparables aprobados incluían codeudor." if cercanos and n_cod / len(cercanos) >= 0.5 else ""
+                    add("tope_espejo_mesa", "Algoritmo Espejo — tope empírico de la Mesa",
+                        f"Crédito de UF {monto:,.0f} supera en más de 15% el tope que la Mesa aprobó a rentas "
+                        f"similares: ~UF {tope_real:,.0f} ({len(cercanos)} veredicto(s) real(es), "
+                        f"precisión modelo {modelo.get('precision_pct', 0)}%)",
+                        f"Anticipar aprobación con tope o ajustar la operación a ~UF {tope_real:,.0f}.{sug}",
+                        fuente="config espejo_mesa_modelo · limites_reales_mesa (veredictos aprobaciones@)")
+        except Exception as e:
+            logging.warning(f"tope espejo mesa #71: {e}")
+
+    edad = None
+    try:
+        edad = await obtener_edad(doc)
+    except Exception as e:
+        logging.warning(f"edad titular: {e}")
+    edad_plazo_max = _num(btg.get("edad_plazo_max") or btg.get("edad_termino_max")) or 80
+    plazo_min = _num(btg.get("plazo_min_anos")) or 5
+    plazo_max_permitido = None
+    if edad:
+        edad_min = _num(btg.get("edad_min"))
+        edad_max = _num(btg.get("edad_max"))
+        if edad_min and edad < edad_min:
+            add("edad_min", "Bóveda — edad mínima",
+                f"Titular de {edad} años, bajo la edad mínima de {edad_min:.0f}",
+                "El titular no califica por edad: evaluar otro titular")
+        if edad_max and edad > edad_max:
+            add("edad_max", "Bóveda — edad máxima del titular",
+                f"Titular de {edad} años supera la edad máxima de {edad_max:.0f}",
+                "Evaluar cambio de titular o codeudor joven")
+        plazo_max_permitido = max(0, int(edad_plazo_max - edad))
+        if plazo and edad + plazo > edad_plazo_max:
+            add("plazo_edad", "Bóveda — edad al término del crédito",
+                f"Edad {edad} + plazo {plazo:.0f} años = {edad + plazo:.0f} al término, "
+                f"supera el límite de {edad_plazo_max:.0f} años",
+                f"Acortar el plazo a máximo {plazo_max_permitido} años (subirá el dividendo)")
+        if plazo_max_permitido < plazo_min:
+            add("plazo_inviable", "Bóveda — plazo inviable por edad",
+                f"Por edad ({edad}) el plazo máximo sería {plazo_max_permitido} años, "
+                f"bajo el mínimo de {plazo_min:.0f} años",
+                "Operación inviable como titular único: requiere codeudor o descartar")
+        elif not plazo and plazo_max_permitido < 25:
+            add("plazo_acotado", "Aviso — plazo acotado por edad",
+                f"Titular de {edad} años: plazo máximo permitido {plazo_max_permitido} años "
+                f"(edad término {edad_plazo_max:.0f}) — el crédito posible baja",
+                "Simular con ese plazo antes de enviar; anticipar tope de monto de la Mesa",
+                bloqueante=False)
+
+    return {"folder_id": doc.get("id"), "cliente": doc.get("nombre"),
+            "con_subsidio": con_sub, "monto_credito_uf": monto, "edad": edad,
+            "plazo_max_permitido": plazo_max_permitido,
+            "violaciones": v, "bloqueantes": sum(1 for x in v if x["bloqueante"]),
+            "auditado_at": _now()}
+
+
+async def registrar_alertas(doc, violaciones):
+    """Alerta inmediata al administrador — una por carpeta+regla (sin duplicar)."""
+    nuevas = 0
+    for vi in violaciones:
+        clave = f"auditoria71:{vi['clave']}"
+        if await db.alertas.find_one({"tipo": clave, "folder_id": doc.get("id"), "leida": {"$ne": True}}):
+            continue
+        await db.alertas.insert_one({
+            "id": str(uuid.uuid4()), "tipo": clave,
+            "nivel": vi.get("nivel") or ("critica" if vi["bloqueante"] else "media"),
+            "cliente": doc.get("nombre", ""), "folder_id": doc.get("id"),
+            "mensaje": (f"🛡️ AUDITORÍA PRE-MESA — {doc.get('nombre', '')}: {vi['regla']}. "
+                        f"{vi['detalle']}. Acción recomendada: {vi['recomendacion']}"),
+            "regla": vi["regla"], "recomendacion": vi["recomendacion"],
+            "fuente": vi.get("fuente", ""),
+            "bloqueante": vi["bloqueante"], "fecha": _now(), "leida": False})
+        nuevas += 1
+    return nuevas
+
+
+async def auditoria_proactiva(nombre_cliente):
+    """Se ejecuta al ingresar documentos: detecta ANTES de que la carpeta viaje a mesa."""
+    doc = await db.folders.find_one({"nombre": nombre_cliente}, {"_id": 0})
+    if not doc or doc.get("mesa_enviado_at"):
+        return None
+    res = await auditar_folder(doc)
+    if res["violaciones"]:
+        await registrar_alertas(doc, res["violaciones"])
+    return res
+
+
+async def auditar_carpetas_activas(dias=30, limite=100):
+    """Barrido: audita todas las carpetas activas aún no enviadas a mesa."""
+    from datetime import timedelta, timezone
+    corte = (datetime.now(timezone.utc) - timedelta(days=dias)).isoformat()
+    cur = db.folders.find({"mesa_enviado_at": {"$in": [None, ""]},
+                           "created_at": {"$gte": corte}}, {"_id": 0}).limit(limite)
+    n = 0
+    async for doc in cur:
+        try:
+            res = await auditar_folder(doc)
+            if res["violaciones"]:
+                await registrar_alertas(doc, res["violaciones"])
+                n += 1
+        except Exception as e:
+            logging.warning(f"auditoría {doc.get('nombre')}: {e}")
+    return n
+
+
+REGLAS_ORO_AUDITORIA = [
+    ("ORO-71", "Auditoría Pre-Mesa del Contralor",
+     "REGLA DE ORO #71 — AUDITORÍA PRE-MESA DEL CONTRALOR: antes de CUALQUIER envío a mesa el sistema "
+     "verifica la carpeta ÚNICAMENTE contra lo escrito en: 1) la Bóveda de Criterios (montos mín/máx, LTV, "
+     "edad, plazo por edad, antigüedad, carga financiera con fórmula de endeudamiento 2% mensual vía "
+     "credit_engine), 2) las reglas de dashai_eventos, y 3) el Algoritmo Espejo de Mesa (topes empíricos "
+     "de veredictos reales de aprobaciones@, config espejo_mesa_modelo). JERARQUÍA ESCRITA: "
+     "a) INV-3 (crédito mínimo UF 2.000 SIN subsidio — 'ninguna evaluación puede aprobarse bajo ese monto') "
+     "es la ÚNICA violación que BLOQUEA el envío, con error 422 y el detalle exacto según OP-7; "
+     "solo la clave maestra (MASTER_PIN) permite forzar. Para viviendas CON subsidio NO existe mínimo. "
+     "b) Carga financiera >40% es RIESGO CRÍTICO según ORO-9 ('mande lo que mande la MESA') → alerta crítica. "
+     "c) Todo el resto de la Bóveda y del Espejo genera alerta informativa inmediata al administrador "
+     "(cliente, regla, fuente y acción recomendada) SIN bloquear, en cumplimiento de ORO-35 "
+     "(el Contralor audita e informa). La auditoría corre proactivamente al ingresar documentos. "
+     "PERMANENTE E INAMOVIBLE."),
+    ("ORO-72", "Edad Automática desde la Cédula",
+     "REGLA DE ORO #72 — EDAD AUTOMÁTICA DESDE LA CÉDULA: si la carpeta tiene cédula de identidad "
+     "cargada (01_cedula), el sistema extrae por OCR la fecha de nacimiento, calcula la edad actual y "
+     "la persiste en la carpeta (fecha_nacimiento, edad_titular) con evento en el historial. Esa edad "
+     "se usa para verificar edad mínima/máxima y el plazo máximo permitido (edad al término ≤ 80 años "
+     "según Bóveda); si el plazo solicitado lo supera, se alerta al administrador antes de mesa. "
+     "PERMANENTE E INAMOVIBLE."),
+]
+
+
+async def seed_reglas_oro_auditoria():
+    """Registra las reglas #71/#72 en dashai_eventos y en el módulo controlador (espejo)."""
+    for clave, titulo, patron in REGLAS_ORO_AUDITORIA:
+        await db.dashai_eventos.update_one({"motivo": "regla_oro", "norma_clave": clave}, {"$set": {
+            "titulo": titulo, "patron": patron, "categoria": "auditoria_trazabilidad",
+            "inamovible": True, "nivel_calibracion": 100, "fecha": _now(),
+        }, "$setOnInsert": {"id": str(uuid.uuid4()), "motivo": "regla_oro", "norma_clave": clave}},
+            upsert=True)
+        clave_esp = f"regla-oro-{clave.lower()}"
+        if not await db.espejo_criterios.find_one({"clave": clave_esp}):
+            await db.espejo_criterios.insert_one({
+                "id": str(uuid.uuid4()), "clave": clave_esp,
+                "criterio": f"{clave} — {titulo}", "detalle": patron[:500],
+                "origen": "manual", "estado": "activo", "fecha": _now(), "por": "DashAI"})
+            await db.espejo_bitacora.insert_one({
+                "id": str(uuid.uuid4()), "origen": "capa_b", "fecha": _now(),
+                "clave": clave_esp, "tipo": "criterio_manual",
+                "patron": f"[REGLA DE ORO {clave}] {titulo}"})
+    logging.info("🛡️ Reglas de Oro #71/#72 (Auditoría Pre-Mesa + Edad Cédula) registradas")
