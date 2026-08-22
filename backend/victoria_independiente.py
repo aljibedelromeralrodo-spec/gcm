@@ -559,6 +559,10 @@ async def subir(cid: str, request: Request, file: UploadFile = File(...), tipo: 
 async def auditar(cid: str, request: Request):
     _exigir(request)
     await _get_cliente(cid)
+    import constitucion as _const
+    await _const.consultar_cerebro(db, "validacion_cruzada_daniela",
+                                   texto_ia=f"Validación cruzada RUT-Rol-Dirección del cliente {cid} (módulo Daniela Galindo)",
+                                   modulo="victoria_independiente.py (auditar)")
     return {"ok": True, "auditoria": await auditar_cliente(cid)}
 
 
@@ -637,6 +641,10 @@ async def despachar(cid: str, payload: dict, request: Request):
         raise HTTPException(status_code=403, detail="REGLAS DE ORO CONCRECES (11-14): envío BLOQUEADO — " + " · ".join((malas + crit)[:4]))
     if not c.get("formularios_confirmados"):
         raise HTTPException(status_code=403, detail="Los formularios deben ser revisados y confirmados por Victoria antes de despachar")
+    import constitucion as _const
+    await _const.consultar_cerebro(db, "despacho_concreces",
+                                   texto_ia=f"Despacho del set de crédito de {c.get('nombre')} a ConCreces",
+                                   modulo="victoria_independiente.py (despachar)")
     docs = await db.victoria_docs.find({"cliente_id": cid}, {"_id": 0, "ruta": 0}).to_list(100)
     await db.concreces_estado.update_one({"victoria_cliente_id": cid}, {"$set": {
         "victoria_cliente_id": cid, "cliente": c["nombre"], "rut": c.get("rut", ""),
@@ -1173,6 +1181,10 @@ async def asignar_a_ventas_si_corresponde(cid, texto=""):
         if sig not in candidatos:
             sig = candidatos[0]
     await db.config.update_one({"_key": "ventas_rr"}, {"$set": {"ultimo": sig}}, upsert=True)
+    import constitucion as _const
+    await _const.consultar_cerebro(db, "asignacion_ventas",
+                                   texto_ia=f"Asignación de {c['nombre']} a {EJECUTIVOS_VENTAS[sig]} por balance de carga inteligente",
+                                   modulo="victoria_independiente.py (asignar_a_ventas)")
     await db.victoria_clientes.update_one({"id": cid}, {"$set": {
         "entrega_inmediata": True,
         "ventas": {"ejecutivo": sig, "ejecutivo_nombre": EJECUTIVOS_VENTAS[sig],

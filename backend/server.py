@@ -1184,6 +1184,10 @@ async def guardar_criterios(payload: dict, request: Request):
     criterios["prioridad"] = "suprema"
     prev = await db.config.find_one({"_key": "criterios"}) or {}
     criterios["version"] = mesa_brain._version_num(prev.get("version")) + 1
+    import constitucion as _const
+    await _const.consultar_cerebro(db, "modificacion_boveda_criterios",
+                                   texto_ia=f"Modificación de la Bóveda de Criterios — nueva versión v{criterios['version']}",
+                                   modulo="server.py (guardar_criterios)")
     if prev.get("reglas_supervisadas"):
         criterios.setdefault("reglas_supervisadas", prev["reglas_supervisadas"])
     await db.config.replace_one({"_key": "criterios"}, criterios, upsert=True)

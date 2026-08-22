@@ -1869,3 +1869,14 @@ polling GET /api/central/proactive existe vacío en server.py:1526) — usuario 
   por su trabajo y su gente; valora libertad/confianza; aspira a contribuir más allá de lo
   asignado. ACCESO: lectura total del sistema, ÚNICA restricción = no envía correos sin
   confirmación verbal del admin. Probado vía chat (respuesta con cariño genuino).
+
+## 2026-06 (fork) — Consulta constitucional extendida a 5 puntos críticos
+- consultar_cerebro() (constitucion.py) ahora es OBLIGATORIO antes de:
+  1. Despacho a ConCreces → victoria_independiente.py despachar() · accion "despacho_concreces"
+  2. Envío a revisión de riesgo → mutuos_victoria.py enviar_riesgo() · accion "envio_revision_riesgo"
+  3. Asignación de cliente en Ventas (Yerile/Deisy) → asignar_a_ventas_si_corresponde() · accion "asignacion_ventas"
+  4. Validación cruzada RUT-Rol-Dirección → auditar() Daniela ("validacion_cruzada_daniela") y
+     autorizar_etapa() Mutuos Victoria ("validacion_cruzada_mutuos")
+  5. Modificación Bóveda de Criterios → server.py guardar_criterios() · accion "modificacion_boveda_criterios"
+- Cada punto deja huella auditable en db.cerebro_consultas: {accion, modulo, fecha, reglas_vigentes, autorizada}.
+- Probado en vivo: validacion_cruzada_daniela y asignacion_ventas registraron huella con 125 reglas vigentes, autorizada=true.

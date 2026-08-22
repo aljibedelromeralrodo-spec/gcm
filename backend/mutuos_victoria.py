@@ -193,6 +193,10 @@ async def autorizar_etapa(oid: str, n: int, payload: dict, request: Request):
     bloqueos = [v for v in detalle["validaciones"] if v["ok"] is False]
     if n in (1, 2, 3, 4) and bloqueos:
         raise HTTPException(status_code=403, detail="Validación irrenunciable en rojo: " + bloqueos[0]["etiqueta"])
+    import constitucion as _const
+    await _const.consultar_cerebro(db, "validacion_cruzada_mutuos",
+                                   texto_ia=f"Validación cruzada y autorización de la etapa {n} — operación #{op.get('numero')} (módulo Victoria Vilches)",
+                                   modulo="mutuos_victoria.py (autorizar_etapa)")
     await db.victoria_operaciones.update_one({"id": oid}, {"$set": {
         f"etapas.{n}.autorizada": True, f"etapas.{n}.autorizada_en": _now(),
         f"etapas.{n}.autorizada_por": u.get("sub", ""), "etapa_actual": min(6, n + 1)}})
@@ -212,6 +216,10 @@ async def enviar_riesgo(oid: str, payload: dict, request: Request):
     detalle = await _detalle_op(op)
     if not detalle["lista_para_riesgo"]:
         raise HTTPException(status_code=403, detail="Regla de Oro Victoria: hay etapas sin autorizar, campos pendientes o validaciones en rojo — no se puede enviar a revisión de riesgo")
+    import constitucion as _const
+    await _const.consultar_cerebro(db, "envio_revision_riesgo",
+                                   texto_ia=f"Operación #{op.get('numero')} enviada a revisión de riesgo en ConCreces",
+                                   modulo="mutuos_victoria.py (enviar_riesgo)")
     await db.victoria_operaciones.update_one({"id": oid}, {"$set": {
         "estado": "enviada_riesgo", "enviada_en": _now(), "enviada_por": u.get("sub", ""),
         "etapas.6.autorizada": True, "etapas.6.autorizada_en": _now()}})
