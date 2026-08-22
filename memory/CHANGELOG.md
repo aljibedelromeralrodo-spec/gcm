@@ -1932,3 +1932,9 @@ polling GET /api/central/proactive existe vacío en server.py:1526) — usuario 
 - db.proc_rules: 7 reglas aprendidas (tag aprendido_de=analisis_gmail_30d).
 ### Caso auditado: María Constanza Encina Rojas (18.225.253-0, Jardines del Norte)
 - Gestión 100% manual: origen probable base de clientes Boetsch (Celinda Soria 07/07 + reenvío a Yerile 05/08); set a mesa manual 20/08 15:32 (gerardo.ext→aprobaciones@, 1 PDF combinado); mesa aprobó 21/08 12:32; el sistema detectó la aprobación (mesa_verdad) pero la reenvió DUPLICADA (16:34 y 17:05 — bug ya corregido con Regla 68) y creó carpeta 'MARÍA ENCINA' origen aprobacion_mesa sin documentos.
+
+
+## 2026-08-22 — Enriquecimiento progresivo + memoria de aprendizaje
+- proc_upload_drive: evento de historial en cada enriquecimiento (fecha, remitente, asunto, archivos nuevos) y evento de creación de carpeta. Endpoint /clientes/folders/{fid}/historial ahora muestra el array historial. Validado E2E (carpeta Francisca Hernandez, 3 eventos).
+- Confirmado (ya existía): documentos 'otro' van a 99_otros y SIEMPRE al final del PDF combinado (orden numérico 01→99); nada se rechaza salvo Ley del RUT (→ Buzón de Rescate).
+- /app/memory/APRENDIZAJE_CORREOS.md creado: remitentes, asuntos, formatos, secuencia de llegada y keywords de mesa (30 días reales).

@@ -3686,6 +3686,9 @@ async def folder_historial(fid: str):
     alertas = await db.alertas.find({"folder_id": fid}).limit(60).to_list(60)
     for a in alertas:
         ev(a.get("fecha"), "🔔", (a.get("mensaje") or "Alerta")[:140])
+    for h in doc.get("historial") or []:
+        ev(h.get("fecha"), "📥", (h.get("accion") or "Actividad registrada")[:170],
+           ", ".join((h.get("archivos") or [])[:6]))
     eventos.sort(key=lambda e: e["fecha"], reverse=True)
     return {"nombre": doc.get("nombre", ""), "eventos": eventos}
 
@@ -6213,6 +6216,11 @@ async def proc_upload_drive(qid: str, force: bool = False, clave: str = ""):
         await db.folders.insert_one({"id": str(uuid.uuid4()), "nombre": cliente,
                                      "rut": cl.get("rut", ""), "archivos": uploaded,
                                      "codeudor_nombre": cod_nombre, "codeudor_rut": cod_rut,
+                                     "historial": [{"fecha": now_iso(),
+                                                    "accion": (f"📁 Carpeta creada desde correo de {item.get('sender','')[:60]} — "
+                                                               f"«{(item.get('subject') or '')[:70]}» con {len([u for u in uploaded if not u.startswith('Carpeta_')])} documento(s)"),
+                                                    "remitente": item.get("sender", ""),
+                                                    "archivos": [u for u in uploaded if not u.startswith("Carpeta_")]}],
                                      "source_email": item.get("sender", ""),
                                      "credit_request": credit_request,
                                      "datos_financieros": fin_nuevos,
@@ -6258,6 +6266,18 @@ async def proc_upload_drive(qid: str, force: bool = False, clave: str = ""):
                                   "name": cod_nombre or folder_doc.get("codeudor_nombre", "")}
             upd["credit_request"] = cr_act
         await db.folders.update_one({"nombre": cliente}, {"$set": upd})
+        # 📜 LÍNEA DE TIEMPO — enriquecimiento progresivo: fecha, remitente y archivos nuevos
+        nuevos_arch = [a for a in uploaded
+                       if a not in vistos_arch and not a.startswith("Carpeta_")]
+        if nuevos_arch:
+            await db.folders.update_one({"nombre": cliente}, {"$push": {"historial": {
+                "fecha": now_iso(),
+                "accion": (f"📥 Carpeta enriquecida: {len(nuevos_arch)} documento(s) nuevo(s) desde "
+                           f"{item.get('sender','')[:60]} — «{(item.get('subject') or '')[:70]}»: "
+                           + ", ".join(a.split("/")[-1] for a in nuevos_arch[:6])
+                           + ("…" if len(nuevos_arch) > 6 else "")),
+                "remitente": item.get("sender", ""),
+                "archivos": nuevos_arch}}})
     # Checklist de faltantes
     req = CHECKLIST.get(tipo_cliente, {})
     conteo = {}
