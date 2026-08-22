@@ -24,7 +24,19 @@ CLIENT_ID = os.environ.get("GMAIL_CLIENT_ID", "")
 CLIENT_SECRET = os.environ.get("GMAIL_CLIENT_SECRET", "")
 TOPIC = os.environ.get("GMAIL_PUBSUB_TOPIC", "")
 CUENTA = os.environ.get("GMAIL_WATCH_ACCOUNT", "ethangerardobarr@gmail.com")
-APP_URL = (os.environ.get("APP_URL") or "").rstrip("/")
+def _app_url():
+    """URL pública vigente: REACT_APP_BACKEND_URL es la única fuente de verdad
+    (la variable APP_URL del supervisor puede quedar obsoleta si el preview cambia de dominio)."""
+    try:
+        for line in open("/app/frontend/.env"):
+            if line.startswith("REACT_APP_BACKEND_URL="):
+                return line.split("=", 1)[1].strip().strip('"').rstrip("/")
+    except Exception:
+        pass
+    return (os.environ.get("APP_URL") or "").rstrip("/")
+
+
+APP_URL = _app_url()
 REDIRECT_URI = f"{APP_URL}/api/gmail/oauth/callback"
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly",
           "openid", "https://www.googleapis.com/auth/userinfo.email"]
