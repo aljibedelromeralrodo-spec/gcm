@@ -61,6 +61,8 @@ PUBLIC_PREFIXES = (
     "/api/escrituracion/confirmar/",  # Confirmación de escrituración desde el correo de aprobación (token único)
     "/api/brain/",                 # Conexión Contralora (exige BRAIN_ACCESS_KEY dentro del módulo)
     "/api/energia",                # Monitor de energía (indicador de saldo del topbar)
+    "/api/gmail/push",             # Webhook Pub/Sub de Gmail (valida cuenta monitoreada dentro)
+    "/api/gmail/oauth/callback",   # Callback OAuth de Google (canje de código único)
 )
 # El portal comercial de inmobiliarias tiene su propia sesión (scope inmobiliaria)
 INMO_PREFIX = "/api/inmobiliaria"

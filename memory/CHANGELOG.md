@@ -1880,3 +1880,35 @@ polling GET /api/central/proactive existe vacío en server.py:1526) — usuario 
   5. Modificación Bóveda de Criterios → server.py guardar_criterios() · accion "modificacion_boveda_criterios"
 - Cada punto deja huella auditable en db.cerebro_consultas: {accion, modulo, fecha, reglas_vigentes, autorizada}.
 - Probado en vivo: validacion_cruzada_daniela y asignacion_ventas registraron huella con 125 reglas vigentes, autorizada=true.
+
+
+## 2026-08-22 — Sesión: Anti-duplicados + Gmail Push + OCR
+### 1. Regla de Oro #68 — Escudo Anti-Duplicados Absoluto (P0 URGENTE — RESUELTO)
+- email_service.send_mail: verificación en BD (hash destinatario+asunto+contenido+adjuntos, colección correos_enviados_hash, ventana 7 días/ANTIDUP_HORAS) ANTES de todo envío. Duplicado -> bloqueado y registrado en correos_duplicados_bloqueados. Param permitir_duplicado=True para reenvíos manuales intencionales.
+- mesa_verdad.py: cerrojo atómico — el registro se reserva ANTES de reenviar (dedup por UID y por huella de contenido; índice único 'huella' en mesa_verdad_log). El mismo correo llegado a 2 casillas IMAP ya no se procesa 2 veces.
+- resumen_diario.py: reserva atómica del día antes de enviar el resumen 8AM (rollback si falla).
+- Backlog limpiado: 20 notif_cola pendientes marcadas omitido_backlog, 11 correos MESA antiguos reservados sin reenvío (scripts_migracion_antidup.py).
+- Constitución v29: regla n:68 sembrada en config + dashai_eventos (ORO-68, inviolable).
+- TEST E2E real: envío 1 -> SMTP 250 OK; envío idéntico -> BLOQUEADO; override -> sale. Barrido MESA: 40 revisados, 0 reprocesados.
+
+### 2. Gmail API + Pub/Sub (tiempo real, reemplaza polling IMAP cuenta principal)
+- Nuevo gmail_pubsub.py: OAuth (refresh token en db.config), watch + renovación automática <24h, webhook público POST /api/gmail/push, procesamiento exactamente-una-vez (historyId + índice único gmail_msg_id en gmail_procesados), mismo flujo actual (proc_queue -> _run_proc_auto -> clasificación/carpetas/ejecutivos). Endpoints admin: /api/gmail/estado, /api/gmail/oauth/iniciar, /api/gmail/watch/renovar, /api/gmail/sincronizar.
+- .env: GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_PUBSUB_TOPIC, GMAIL_WATCH_ACCOUNT.
+- PENDIENTE DEL USUARIO: en GCP dar permiso de publicación a gmail-api-push@system.gserviceaccount.com sobre el topic, crear suscripción PUSH -> APP_URL/api/gmail/push, registrar redirect URI APP_URL/api/gmail/oauth/callback y autorizar vía /api/gmail/oauth/iniciar.
+
+### 3. OCR + conversión JPG/PNG->PDF (RESUELTO 6/6)
+- Causa raíz principal: binarios tesseract/poppler NO instalados -> OCR siempre vacío. Instalados + guard de reinstalación automática al arrancar el backend (server.py startup).
+- Flujo corregido en pdf_service.convertir_a_pdf: convertir -> preprocesar -> OCR -> clasificar por CONTENIDO -> recién ahí renombrar con prefijo protocolo (nuevo prefijo_por_contenido). Fin del bug 'todo se llama 01_Cedula'.
+- ocr_service.py: preprocesar_imagen (EXIF, upscale ~300 DPI hasta 4x, contraste/nitidez) + ocr_imagen con auto-orientación por puntaje de palabras reales (OSD descartado: giraba mal). ocr_texto a 250 DPI con preprocesamiento.
+- Test /app/tests/test_ocr_flujo_completo.py: 6/6 correctos (4 docs WhatsApp baja resolución + 2 rotados 90/270), RUT legible en todos. Antes: 2/6.
+
+### Otros
+- Videos demo: confirmado que los 3 (Mutuos, Daniela, Ventas) fueron enviados con SMTP 250 OK a gerardo.ext@centralmutuos.cl el 21-22/08.
+
+
+## 2026-08-22 — Modo Prueba de Clasificación (lunes 25/08)
+- Nuevo modo_prueba.py: ventana activa lunes 2026-08-25 (config modo_prueba_clasificacion, ACTIVADO).
+- Flujo completo se ejecuta normal (carpeta + clasificación + faltantes) pero: (a) notif_cola al cliente queda 'retenido_modo_prueba' (gate en _notif_pace_loop), (b) reporte íntegro a gerardo.ext@centralmutuos.cl por cada ítem: cliente detectado, correo origen, carpeta, docs recibidos con clasificación por archivo, faltantes (hook reportar_pendientes al final de _run_proc_auto).
+- Endpoints admin: GET /api/modo-prueba/estado · POST /activar {fecha_inicio,fecha_fin,destino} · POST /desactivar.
+- TEST E2E real: reporte de ítem existente (Jorge Alcayaga) enviado OK a gerardo.ext; ventana restaurada al 25/08.
+- Nota: switch maestro envios_automaticos ya estaba OFF (doble protección al cliente).

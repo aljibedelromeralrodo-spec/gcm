@@ -1240,3 +1240,18 @@ actual; todo lo demás permanece intacto.
 - Testing: iteration_57.json (backend 20/20), iteration_58.json (frontend 11/11, sin bugs).
 - Nota menor pendiente: warning consola "span cannot be child of option" (no funcional).
 - PENDIENTE: listado publicidad "ds19 01 inmoboliarias" sigue esperando CSV/Excel del usuario (imagen ilegible).
+
+
+## Actualización 2026-08-22 (post-fork)
+1. RESUELTO P0: correos duplicados — Regla de Oro #68 (escudo por huella en send_mail + cerrojo atómico MESA + claim atómico resumen 8AM + backlog limpiado). Constitución v29.
+2. NUEVO: Gmail API + Pub/Sub en tiempo real (gmail_pubsub.py) — reemplaza polling IMAP de ethangerardobarr@gmail.com. Pendiente: configuración GCP + consentimiento OAuth del usuario (ver CHANGELOG).
+3. RESUELTO P1: OCR/conversión JPG-PNG->PDF — 6/6 en test (flujo: convertir->preprocesar->OCR->clasificar por contenido->renombrar). Binarios tesseract/poppler con auto-reinstalación al arranque.
+
+### Backlog vigente
+- P2: Gestor de credenciales plataforma 'Crece' (solo Admin edita).
+- P2: Reporte de Campaña (aperturas de correo en Módulo Publicidad).
+- P2: Botón Hilo Frío (tarjetas inactivas 7+ días -> correo de seguimiento).
+- P2: Listado Publicidad ds19 (BLOQUEADO: falta Excel/CSV del usuario).
+- P2: Backoff exponencial IMAP (EOF Gmail) — mitigado parcialmente al migrar la cuenta principal a Gmail API push.
+
+4. NUEVO (2026-08-22): Modo Prueba de Clasificación armado para el lunes 2026-08-25 — procesa todo pero reporta a gerardo.ext y NO notifica clientes (modo_prueba.py). Desactivar tras la prueba con POST /api/modo-prueba/desactivar.

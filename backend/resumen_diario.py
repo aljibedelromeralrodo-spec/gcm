@@ -254,7 +254,16 @@ async def resumen_diario_loop():
             if hoy < (st.get("fecha_inicio") or hoy):
                 continue
             if ahora.hour >= int(st.get("hora") or 8) and st.get("last_sent_date") != hoy:
+                # ⛡ Regla de Oro #68: reserva ATÓMICA del día ANTES de enviar (sin carreras)
+                claim = await db.config.update_one(
+                    {"_key": KEY, "last_sent_date": {"$ne": hoy}},
+                    {"$set": {"last_sent_date": hoy, "claim_en": datetime.now(timezone.utc).isoformat()}})
+                if not claim.modified_count:
+                    continue
                 r = await _enviar()
+                if not r.get("success"):
+                    await db.config.update_one({"_key": KEY, "last_sent_date": hoy},
+                                               {"$set": {"last_sent_date": st.get("last_sent_date")}})
                 logging.info(f"📬 Resumen diario 8AM: {r}")
         except asyncio.CancelledError:
             break

@@ -103,6 +103,24 @@ def prefijo_protocolo_imagen(base):
     return f"01_Cedula_{base}"
 
 
+RX_CEDULA_CONTENIDO = re.compile(r"c[eé]dula|identidad|registro civil|\brun\b", re.I)
+
+
+def prefijo_por_contenido(base, texto_ocr=""):
+    """PROTOCOLO 01-06 corregido: el prefijo se decide por el CONTENIDO real (OCR).
+    El nombre original solo se usa como respaldo si la imagen no tiene texto legible."""
+    if re.match(r"^\d{2}_", base or ""):
+        return base
+    cont = (texto_ocr or "").lower()
+    if cont.strip():
+        for pref, pat in PREFIJOS_PROTOCOLO_IMG:
+            if re.search(pat, cont):
+                return f"{pref}_{base}"
+        if RX_CEDULA_CONTENIDO.search(cont):
+            return f"01_Cedula_{base}"
+    return prefijo_protocolo_imagen(base)
+
+
 def convertir_a_pdf(raw_bytes, filename):
     """Convierte un archivo a PDF si no lo es.
 
@@ -117,14 +135,35 @@ def convertir_a_pdf(raw_bytes, filename):
         return raw_bytes, fn, False
     base = fn.rsplit(".", 1)[0]
     if low.endswith(IMG_EXT):
-        nuevo = prefijo_protocolo_imagen(base) + ".pdf"
+        # FLUJO CORRECTO (orden del administrador): 1) preprocesar la imagen
+        # (rotación OSD + escalado ≈300 DPI + contraste/nitidez), 2) OCR,
+        # 3) clasificar por CONTENIDO real, 4) recién ahí renombrar con el prefijo.
+        from PIL import Image
+        import ocr_service as _ocr
+        im, texto = None, ""
+        try:
+            im = Image.open(io.BytesIO(raw_bytes))
+        except Exception:
+            im = None
+        if im is not None:
+            texto, im = _ocr.ocr_imagen(im)
+        nuevo = prefijo_por_contenido(base, texto) + ".pdf"
+        if im is not None:
+            jbuf = io.BytesIO()
+            im.save(jbuf, format="JPEG", quality=92)
+            try:
+                import img2pdf
+                return img2pdf.convert(jbuf.getvalue()), nuevo, True
+            except Exception:
+                out = io.BytesIO()
+                im.save(out, format="PDF", resolution=300.0)
+                return out.getvalue(), nuevo, True
         try:
             import img2pdf
             pdf = img2pdf.convert(raw_bytes)
             return pdf, nuevo, True
         except Exception:
             # Fallback PIL (convierte modos no soportados, ej. RGBA)
-            from PIL import Image
             im = Image.open(io.BytesIO(raw_bytes)).convert("RGB")
             buf = io.BytesIO()
             im.save(buf, format="PDF")

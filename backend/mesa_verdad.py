@@ -139,13 +139,33 @@ async def _reenviar_aprobacion_gerardo(msg, f_caso, subject):
     return {"ok": bool(res.get("success")), "adjuntos": len(adjuntos), "error": res.get("error")}
 
 
+def _huella_msg(msg, subject, body):
+    """Huella de CONTENIDO (idéntica aunque el correo llegue a varias cuentas IMAP)."""
+    import hashlib
+    base = (f"{(msg.get('from') or '').strip().lower()}|{subject.strip().lower()}|"
+            f"{str(msg.get('date') or '')[:25]}|{body[:500]}")
+    return hashlib.sha256(base.encode()).hexdigest()
+
+
 async def _procesar_correo(msg):
     mid = msg.get("id") or ""
-    if not mid or await db.mesa_verdad_log.find_one({"correo_id": mid}):
+    if not mid:
         return None
     subject = msg.get("subject") or ""
     # cuerpo completo: texto plano + texto extraído del HTML (nunca solo el asunto)
     body = f"{msg.get('body') or msg.get('body_full') or msg.get('preview') or ''}\n{msg.get('body_html_text') or ''}"[:8000]
+    # ⛡ CERROJO ATÓMICO ANTI-DUPLICADOS (Regla de Oro #68): el registro se RESERVA
+    # ANTES de reenviar. Dedup por UID (correo_id) Y por huella de contenido, para
+    # que el mismo correo llegado a 2 cuentas o un barrido paralelo jamás se repita.
+    huella = _huella_msg(msg, subject, body)
+    if await db.mesa_verdad_log.find_one({"$or": [{"correo_id": mid}, {"huella": huella}]}):
+        return None
+    try:
+        await db.mesa_verdad_log.insert_one({
+            "id": str(uuid.uuid4()), "correo_id": mid, "huella": huella,
+            "tipo": "procesando", "subject": subject[:200], "procesado_en": _now()})
+    except Exception:
+        return None  # índice único de huella: otro proceso ya lo reservó
     texto = f"{subject}\n{body}"
     tipo = _clasificar(texto)
     # REGLA ANTI-FALSO-POSITIVO: si el correo corresponde a un CASO de cliente
@@ -153,7 +173,7 @@ async def _procesar_correo(msg):
     f_caso = await _buscar_carpeta(texto)
     if tipo.startswith("cambio_") and f_caso:
         tipo = "aprobacion" if RX_APROB.search(texto) else ("rechazo" if RX_RECH.search(texto) else "otro")
-    registro = {"id": str(uuid.uuid4()), "correo_id": mid, "tipo": tipo,
+    registro = {"correo_id": mid, "huella": huella, "tipo": tipo,
                 "subject": subject[:200], "sender": msg.get("from") or MESA_EMAIL,
                 "fecha_correo": str(msg.get("date") or "")[:25],
                 "procesado_en": _now(), "hora_cl": _hora_cl(),
@@ -232,7 +252,7 @@ async def _procesar_correo(msg):
                 await asyncio.to_thread(mail.send_mail, admin_to, f"🚨 {etiqueta} — Fuente de Verdad de Mesa", html)
         except Exception as e:
             logging.warning(f"mesa_verdad notificación admin: {e}")
-    await db.mesa_verdad_log.insert_one(dict(registro))
+    await db.mesa_verdad_log.update_one({"correo_id": mid}, {"$set": dict(registro)})
     return registro
 
 
@@ -258,6 +278,10 @@ async def barrido_mesa(dias=2):
 async def mesa_verdad_loop():
     """Monitoreo permanente y autónomo (REGLA CONSTITUCIONAL — inamovible)."""
     await asyncio.sleep(25)
+    try:  # ⛡ Regla de Oro #68: índice único de huella (cerrojo a nivel de BD)
+        await db.mesa_verdad_log.create_index("huella", unique=True, sparse=True)
+    except Exception as e:
+        logging.warning(f"mesa_verdad índice huella: {e}")
     while True:
         try:
             await barrido_mesa(dias=2)

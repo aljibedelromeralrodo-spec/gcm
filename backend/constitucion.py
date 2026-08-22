@@ -107,6 +107,8 @@ REGLAS_ORO = [
      "ley": "La Bóveda de ADN de Clientes (ADN_CLIENTES_360) es el registro civil único de Central Mutuos. El acceso a la información es restringido por propiedad de cartera: los ejecutivos solo consultan RUTs de su propia gestión; el administrador y la Gerencia Comercial tienen acceso total y búsqueda global, garantizando la privacidad y la integridad absoluta de los datos. Cada registro contiene el EXPEDIENTE_360 (titular, codeudor amarrado por RUT, propiedad con fojas/número/año, hitos legales y links a los archivos originales de la Bóveda Local). MODO BODEGA SOBERANA: es la fuente primaria y final de consulta; si falta un dato, se succiona del PDF histórico y se guarda para siempre. REGLA DE HIERRO: ningún dato nuevo entra sin pasar el Validador de Dígito Verificador de RUT; el sistema no le pide nada a Gmail si el dato existe en el EXPEDIENTE_360 y la IA tiene prohibido reportar 'datos incompletos' si la información está en la historia documental del cliente."},
     {"n": 67, "id": "apertura_3_documentos", "titulo": "Apertura de carpetas con 3 documentos mínimos",
      "ley": "REGLA ABSOLUTA — APERTURA DE CARPETAS: queda estrictamente prohibido crear una carpeta de solicitud de crédito sin que el correo o solicitud contenga al menos 3 de los siguientes documentos: Carnet de Identidad, Certificado AFP, Informe CMF, Boletas de Honorarios, Liquidación de Sueldo o Declaración de Impuestos. Esta regla no admite excepciones: no importa si la solicitud llega por el sistema, por correo electrónico externo, por mensaje o por cualquier otro canal. Sin los 3 documentos mínimos, no se crea carpeta. El sistema bloquea la acción e informa 'Documentación insuficiente' hasta que se completen los requisitos. REGLA DE HIERRO: ningún agente, ejecutivo ni proceso automatizado puede violar esta regla."},
+    {"n": 68, "id": "anti_duplicado_absoluto", "titulo": "Escudo Anti-Duplicados Absoluto",
+     "ley": "NINGÚN correo automático puede enviarse dos veces. Antes de CADA envío, el sistema verifica en base de datos la huella digital (hash de destinatario + asunto + contenido + adjuntos); si ya existe un envío exitoso con la misma huella dentro de la ventana de protección (7 días), el envío se BLOQUEA y queda registrado en correos_duplicados_bloqueados. Todo envío exitoso queda marcado con su huella y timestamp en correos_enviados_hash. REGLA DE HIERRO: el procesamiento de correos de MESA reserva su registro (cerrojo atómico por UID y por huella de contenido, con índice único en BD) ANTES de reenviar; ningún reinicio, barrido paralelo ni segunda casilla IMAP puede provocar un reenvío. El Resumen Diario 8AM reserva atómicamente su fecha antes de salir: un solo correo por día, sin excepciones."},
 ]
 
 REGLAS_EFICIENCIA = [
@@ -118,7 +120,7 @@ REGLAS_EFICIENCIA = [
     {"id": "estimacion_previa", "ley": "Estimación Previa: antes de construir, calcular la ruta de menor costo de créditos según DashAI."},
 ]
 
-VERSION = 28  # PIN maestro redactado del texto legal: vive SOLO en variable de entorno protegida
+VERSION = 29  # v29: Regla de Oro #68 — Escudo Anti-Duplicados Absoluto
 
 
 class ViolacionConstitucional(Exception):

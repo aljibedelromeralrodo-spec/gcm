@@ -1124,19 +1124,47 @@ def buscar_hilo_por_asunto(subject_kw, limit=8):
     return out
 
 
+def _db_sync():
+    from pymongo import MongoClient
+    global _log_db_cli
+    if "_log_db_cli" not in globals() or _log_db_cli is None:
+        _log_db_cli = MongoClient(os.environ["MONGO_URL"],
+                                  serverSelectionTimeoutMS=3000)[os.environ["DB_NAME"]]
+    return _log_db_cli
+
+
 def _log_db_insert(coleccion, entry):
     """Insert síncrono en Mongo (usable desde hilos de envío)."""
     try:
-        from pymongo import MongoClient
-        global _log_db_cli
-        if "_log_db_cli" not in globals() or _log_db_cli is None:
-            _log_db_cli = MongoClient(os.environ["MONGO_URL"],
-                                      serverSelectionTimeoutMS=3000)[os.environ["DB_NAME"]]
         from datetime import datetime, timezone
         entry["fecha"] = datetime.now(timezone.utc).isoformat()
-        _log_db_cli[coleccion].insert_one(entry)
+        _db_sync()[coleccion].insert_one(entry)
     except Exception:
         pass
+
+
+# ══ ⛡ REGLA DE ORO #68 — ESCUDO ANTI-DUPLICADOS ABSOLUTO ══════════════════
+ANTIDUP_HORAS = int(os.environ.get("ANTIDUP_HORAS", "168"))
+
+
+def huella_correo(to, subject, body_html, attachments=None):
+    """Huella digital del correo: destinatario + asunto + contenido (texto plano) + adjuntos."""
+    import hashlib
+    dest = to if isinstance(to, str) else ",".join(sorted((d or "").strip().lower() for d in (to or [])))
+    cuerpo = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", body_html or "")).strip().lower()[:3000]
+    adj = ",".join(sorted((a.get("filename") or "") for a in (attachments or [])))
+    return hashlib.sha256(f"{dest.strip().lower()}|{(subject or '').strip().lower()}|{cuerpo}|{adj}".encode()).hexdigest()
+
+
+def _envio_duplicado(huella):
+    """True si ya existe un envío EXITOSO con la misma huella dentro de la ventana de protección."""
+    try:
+        from datetime import datetime, timezone, timedelta
+        corte = (datetime.now(timezone.utc) - timedelta(hours=ANTIDUP_HORAS)).isoformat()
+        return bool(_db_sync()["correos_enviados_hash"].find_one(
+            {"huella": huella, "fecha": {"$gte": corte}}))
+    except Exception:
+        return False
 
 
 def _log_smtp(entry):
@@ -1353,7 +1381,7 @@ def _blindaje_responsivo(html):
     return html, problemas
 
 
-def send_mail(to, subject, body_html, attachments=None, desde="secundaria", cc=None, headers=None, clave_sin_ajuste="", bcc=None, registro_fallo=True):
+def send_mail(to, subject, body_html, attachments=None, desde="secundaria", cc=None, headers=None, clave_sin_ajuste="", bcc=None, registro_fallo=True, permitir_duplicado=False):
     """Envia un correo con envío controlado (throttling):
     1) pausa mínima de 10s entre correos, 2) 1 reintento automático tras 60s si falla,
     3) todo error SMTP queda en la colección 'log_errores_correo' (fecha + destinatario).
@@ -1374,6 +1402,14 @@ def send_mail(to, subject, body_html, attachments=None, desde="secundaria", cc=N
         to = [d for d in to if not RX_DESTINO_PRUEBA.search((d or "").strip())]
         if not to:
             return {"success": False, "error": "Destino de prueba bloqueado por normativa (test.cl)"}
+    # ⛡ REGLA DE ORO #68 — verificación en BD ANTES de enviar: correo idéntico ya enviado → BLOQUEADO
+    _huella = huella_correo(to, subject, body_html, attachments)
+    if not permitir_duplicado and _envio_duplicado(_huella):
+        logging.warning(f"⛡ Regla de Oro #68: correo duplicado BLOQUEADO → {to} · {(subject or '')[:80]}")
+        _log_db_insert("correos_duplicados_bloqueados", {
+            "to": str(to), "subject": subject, "huella": _huella, "regla": "oro_68_anti_duplicado"})
+        return {"success": False, "duplicado": True, "huella": _huella,
+                "error": "Bloqueado por Regla de Oro #68: un correo idéntico ya fue enviado (escudo anti-duplicados)"}
     acc = None
     for a in ACCOUNTS:
         if a["rol"] == desde:
@@ -1463,6 +1499,9 @@ def send_mail(to, subject, body_html, attachments=None, desde="secundaria", cc=N
             "desde_rol": desde, "subject": subject, "body_html": body_html,
             "attachments": attachments or [],
             "smtp_code": res.get("smtp_code"), "error": res.get("error", ""), "reintentos": 0})
+    if res.get("success"):
+        # ⛡ Regla de Oro #68: el envío exitoso queda marcado con su huella + timestamp
+        _log_db_insert("correos_enviados_hash", {"huella": _huella, "to": msg["To"], "subject": subject})
     try:
         size_kb = round(len(msg.as_bytes()) / 1024, 1)
     except Exception:

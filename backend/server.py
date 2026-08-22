@@ -698,6 +698,20 @@ async def startup():
     # ⚖️ FUENTE DE VERDAD DE MESA (aprobaciones@centralmutuos.cl) — monitoreo permanente
     import mesa_verdad as _mesav
     asyncio.create_task(_task_blindada(_mesav.mesa_verdad_loop, "mesa_verdad"))
+    import gmail_pubsub as _gmailps
+    asyncio.create_task(_task_blindada(_gmailps.gmail_watch_loop, "gmail_watch"))
+
+    async def _asegurar_ocr_binarios():
+        import shutil as _sh
+        if _sh.which("tesseract") and _sh.which("pdftoppm"):
+            return
+        logging.warning("🔧 OCR: reinstalando tesseract/poppler (pod nuevo)")
+        p = await asyncio.create_subprocess_shell(
+            "apt-get install -y -qq tesseract-ocr tesseract-ocr-spa poppler-utils",
+            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
+        await p.wait()
+        logging.info(f"🔧 OCR binarios listos: tesseract={bool(_sh.which('tesseract'))}")
+    asyncio.create_task(_asegurar_ocr_binarios())
     # 📪 Cierre automático de correos fallidos >24h (regla permanente, sin reintentos ni alertas)
     import monitor_envios as _monenv
     asyncio.create_task(_task_blindada(_monenv.cierre_fallidos_loop, "cierre_fallidos"))
@@ -6411,6 +6425,12 @@ async def _run_proc_auto():
                     resumen["errors"].append(f"carpeta '{(it.get('subject') or '')[:30]}': {str(he.detail)[:80]}")
             except Exception as e:
                 resumen["errors"].append(f"carpeta '{(it.get('subject') or '')[:30]}': {str(e)[:80]}")
+        # 🧪 MODO PRUEBA: reporte completo al admin de cada ítem procesado (nada al cliente)
+        try:
+            import modo_prueba as _mp
+            resumen["reportes_prueba"] = await _mp.reportar_pendientes()
+        except Exception as e:
+            resumen["errors"].append(f"modo_prueba: {str(e)[:80]}")
         folders = await db.folders.find({}).limit(300).to_list(300)
         for f in folders:
             try:
@@ -9969,6 +9989,17 @@ async def _notif_pace_loop():
     while True:
         try:
             from resumen_diario import envios_automaticos_permitidos
+            import modo_prueba as _mp
+            if await _mp.activo():
+                # 🧪 MODO PRUEBA: NADA al cliente — las notificaciones quedan retenidas
+                r_ret = await db.notif_cola.update_many(
+                    {"estado_cola": "pendiente"},
+                    {"$set": {"estado_cola": "retenido_modo_prueba", "retenido_en": now_iso(),
+                              "motivo": "Modo prueba de clasificación: prohibido notificar al cliente"}})
+                if r_ret.modified_count:
+                    logging.info(f"🧪 Modo prueba: {r_ret.modified_count} notificación(es) a cliente retenidas")
+                await asyncio.sleep(60)
+                continue
             if not await envios_automaticos_permitidos():
                 await asyncio.sleep(60)
                 continue
@@ -14953,6 +14984,14 @@ api.include_router(_audf_mod.audf)
 # ⚖️ FUENTE DE VERDAD DE MESA — endpoints de estado/log del monitor
 import mesa_verdad as _mesav_router
 api.include_router(_mesav_router.mesav)
+
+# 📡 GMAIL API + PUB/SUB — recepción en tiempo real (reemplaza polling IMAP de la cuenta principal)
+import gmail_pubsub as _gmailps_mod
+api.include_router(_gmailps_mod.gmailr)
+
+# 🧪 MODO PRUEBA DE CLASIFICACIÓN — flujo completo sin notificar al cliente
+import modo_prueba as _modop_mod
+api.include_router(_modop_mod.modop)
 
 # 📦 IMPORTADOR .MBOX de gran tamaño (streaming por fragmentos)
 import mbox_import as _mbox_mod
