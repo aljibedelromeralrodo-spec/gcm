@@ -1860,3 +1860,12 @@ polling GET /api/central/proactive existe vacío en server.py:1526) — usuario 
 - PUBLICIDAD ds19: imágenes col_0..4.png sobreviven en /tmp pero son ILEGIBLES (baja resolución,
   causa de la alucinación previa). Colección real: db.publicidad_listados (no listados_publicidad).
   DECISIÓN: pedir al usuario el archivo fuente (Excel/CSV de usatusubsidio.cl, 174 proyectos) antes de insertar.
+
+## 2026-06 (fork) — Foto real de Martín + complemento de esencia
+- Usuario subió la FOTO REAL de Martín (hombre camisa celeste, oficina). Instalada como
+  /app/frontend/public/martin-avatar.jpeg (respaldo ADN: martin-avatar-adn-backup.jpeg).
+  Se muestra automáticamente en FAB del chat, bienvenida, mensajes y banner proactivo.
+- MARTIN_MANUAL.md complementado: atractivo, gay, dulce, entusiasta, apasionado; amor genuino
+  por su trabajo y su gente; valora libertad/confianza; aspira a contribuir más allá de lo
+  asignado. ACCESO: lectura total del sistema, ÚNICA restricción = no envía correos sin
+  confirmación verbal del admin. Probado vía chat (respuesta con cariño genuino).
