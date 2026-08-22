@@ -3912,7 +3912,17 @@ async def folder_send_email(fid: str, payload: dict):
         raise HTTPException(status_code=400, detail="Destinatario inválido")
     nombre = doc.get("nombre", "")
     rut = doc.get("rut", "")
-    base = fsvc.folder_dir(nombre)
+    # 🏥 Regla de Oro #70: BLOQUEO — con licencia detectada, no sale a mesa sin el pago de licencia
+    ce = doc.get("casos_especiales") or {}
+    if ce.get("licencia_detectada") and not ce.get("pago_licencia_cargado"):
+        base_lic = fsvc.folder_dir(nombre) / "06_licencias"
+        pago_ok = base_lic.exists() and any(base_lic.rglob("*.pdf"))
+        if pago_ok:
+            await db.folders.update_one({"id": fid}, {"$set": {"casos_especiales.pago_licencia_cargado": True}})
+        else:
+            raise HTTPException(status_code=412, detail=(
+                "🏥 REGLA #70: liquidaciones con licencia médica o menos de 30 días trabajados. "
+                "Cargue el PAGO DE LICENCIA (CCAF/Isapre/subsidio) en 06_licencias antes de enviar a mesa."))
     cr = doc.get("credit_request") or {}
     _cats = {fsvc.cat_de_archivo(a["nombre"], a["subfolder"]) for a in fsvc.scan_archivos(nombre)} - {"combinado", "codeudor", "estudio_titulo"}
     _ct = cr.get("client_type") or "dependiente"
@@ -5432,6 +5442,7 @@ async def _clasificar_item(item):
 
     # 2) Analizar cada adjunto (OCR + IA)
     analisis_ocr = []
+    textos_docs = {}
     for fn in item.get("attachments", []):
         path = folder / fn
         if not path.exists():
@@ -5439,6 +5450,7 @@ async def _clasificar_item(item):
         raw = path.read_bytes()
         texto, metodo = await asyncio.to_thread(ocr_service.extraer_texto, raw, fn)
         analisis_ocr.append((fn, len(texto), len(raw)))
+        textos_docs[fn] = texto[:6000]
         info = await ai_extract.clasificar_y_extraer(texto, fn)
         docs_detectados.append({"filename": fn, "tipo": info["tipo_documento"],
                                  "metodo": metodo, "confianza": info.get("confianza", 0)})
@@ -5471,6 +5483,10 @@ async def _clasificar_item(item):
                       "confianza": max([d["confianza"] for d in docs_detectados] + [0.4])}
     await db.proc_queue.update_one({"id": item["id"]}, {"$set": {
         "status": status, "classification": classification, "campos": campos}})
+    try:  # 🧬 Regla de Oro #70: casos especiales (licencias, maternal, codeudor, SPA)
+        await _analizar_casos_especiales(item, docs_detectados, textos_docs, cliente)
+    except Exception as e:
+        logging.warning(f"casos especiales: {e}")
     try:  # 🔔 Regla de Oro #69: aviso de recepción incompleta (ilegibles / adjuntos ausentes)
         await _aviso_recepcion_incompleta(item, analisis_ocr)
     except Exception as e:
@@ -5481,6 +5497,82 @@ async def _clasificar_item(item):
 RX_ARCHIVO_BASURA = re.compile(r"^(image\d*\b|image\.|outlook-|blocked|firma|logo)", re.I)
 RX_PROMESA_DOCS = re.compile(r"adjunt|env[ií]o|acompa[ñn]|remito|documentaci[oó]n", re.I)
 RX_DOCS_MENCION = re.compile(r"liquidaci|c[eé]dula|carnet|\bafp\b|\bcmf\b|cotizaci|antecedentes|boletas?", re.I)
+
+# ══ 🧬 REGLA DE ORO #70 — CASOS ESPECIALES (licencias, maternal, codeudor, SPA) ══
+RX_DIAS = re.compile(
+    r"d[ií]as?\s+trabajados?\s*:?\s*(\d{1,2})(?:[^\d]{0,60}?d[ií]as?\s+(?:de\s+)?licencias?\s*:?\s*(\d{1,2}))?"
+    r"|d[ií]as?\s+trabajados?:?\s*d[ií]as?\s+licencias?[^\d]{0,50}(\d{1,2})\s+(\d{1,2})", re.I)
+RX_MATERNAL = re.compile(r"pre.?natal|post.?natal|subsidio\s+maternal|maternidad|embaraz", re.I)
+RX_CODEUDOR_SUBJ = re.compile(r"\+\s*aval|y\s+complementos?\b|\(aval\s+([^)]+)\)|codeudor|y\s+su\s+(?:aval|pareja)", re.I)
+RX_SPA = re.compile(r"raz[oó]n\s+social[^\n]{0,70}\bspa\b|empleador[^\n]{0,70}\bspa\b|sociedad\s+spa", re.I)
+
+
+async def _alerta_unica(tipo, cliente, mensaje, nivel="alta"):
+    if await db.alertas.find_one({"tipo": tipo, "cliente": cliente}):
+        return
+    await db.alertas.insert_one({"id": str(uuid.uuid4()), "tipo": tipo, "nivel": nivel,
+                                 "cliente": cliente, "mensaje": mensaje,
+                                 "fecha": now_iso(), "leida": False})
+
+
+async def _analizar_casos_especiales(item, docs_detectados, textos_docs, cliente):
+    """Regla de Oro #70: extractor días trabajados/licencia, protocolo maternal,
+    codeudor desde el asunto y advertencia de renta SPA."""
+    flags = {}
+    # 2) Días trabajados / licencia en cada liquidación
+    liq_alerta = []
+    for d in docs_detectados:
+        texto = textos_docs.get(d["filename"], "")
+        if d.get("tipo") != "liquidacion" or not texto:
+            continue
+        m = RX_DIAS.search(" ".join(texto.split()))
+        if not m:
+            continue
+        trab = int(m.group(1) or m.group(3) or 30)
+        lic = int(m.group(2) or m.group(4) or 0)
+        d["dias_trabajados"], d["dias_licencia"] = trab, lic
+        if lic > 0 or trab < 30:
+            liq_alerta.append(f"{d['filename'][:40]} ({trab} días trab., {lic} lic.)")
+    tiene_pago_lic = any(re.search(r"pago\s+de\s+licencia|subsidio\s+de\s+incapacidad|\bccaf\b|subsidio\s+maternal",
+                                   t or "", re.I) for t in textos_docs.values())
+    if liq_alerta:
+        flags["licencia_detectada"] = True
+        flags["pago_licencia_cargado"] = tiene_pago_lic
+        if not tiene_pago_lic:
+            await _alerta_unica("licencia_medica", cliente,
+                                f"🏥 Exigir PAGO DE LICENCIA antes de enviar a mesa — {cliente}: "
+                                + "; ".join(liq_alerta[:4]), "critica")
+    # 3) Protocolo maternal
+    texto_total = " ".join(list(textos_docs.values())[:20]) + f" {item.get('subject','')} {item.get('body_full','')}"
+    if RX_MATERNAL.search(texto_total):
+        flags["protocolo_maternal"] = True
+        await _alerta_unica("protocolo_maternal", cliente,
+                            f"🤰 PROTOCOLO MATERNAL activado — {cliente}: exigir licencias médicas + pagos "
+                            "mensuales del subsidio + liquidaciones previas al embarazo. La renta del mes "
+                            "en licencia NO se castiga en el promedio.", "alta")
+    # 4) Codeudor desde el asunto
+    subj = item.get("subject") or ""
+    mcod = RX_CODEUDOR_SUBJ.search(subj)
+    if mcod:
+        flags["codeudor_detectado"] = True
+        titular_paren = (mcod.group(1) or "").strip()
+        if titular_paren:  # "(Aval X)" → este correo es del codeudor del titular X
+            flags["codeudor_de_titular"] = titular_paren
+        await _alerta_unica("codeudor_set", cliente,
+                            f"👥 CODEUDOR detectado en «{subj[:70]}» — exigir set completo del codeudor: "
+                            "cédula + renta (liquidaciones/boletas) + informe CMF propio.", "media")
+        if RX_SPA.search(texto_total):
+            flags["codeudor_renta_spa"] = True
+            await _alerta_unica("codeudor_spa", cliente,
+                                f"⚠️ Mesa suele RECHAZAR ingresos de SPA propia — {cliente}: la renta del "
+                                "codeudor proviene de una SPA. Revisar antes de enviar a mesa.", "critica")
+    if flags:
+        await db.proc_queue.update_one({"id": item["id"]}, {"$set": {"casos_especiales": flags}})
+        # traspasar flags a la carpeta si ya existe
+        f = await _buscar_carpeta_existente(cliente, (item.get("classification") or {}).get("rut", ""))
+        if f:
+            await db.folders.update_one({"id": f["id"]}, {"$set": {"casos_especiales": {
+                **(f.get("casos_especiales") or {}), **flags}}})
 
 
 async def _aviso_recepcion_incompleta(item, analisis_ocr):

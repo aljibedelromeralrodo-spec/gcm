@@ -111,6 +111,8 @@ REGLAS_ORO = [
      "ley": "NINGÚN correo automático puede enviarse dos veces. Antes de CADA envío, el sistema verifica en base de datos la huella digital (hash de destinatario + asunto + contenido + adjuntos); si ya existe un envío exitoso con la misma huella dentro de la ventana de protección (7 días), el envío se BLOQUEA y queda registrado en correos_duplicados_bloqueados. Todo envío exitoso queda marcado con su huella y timestamp en correos_enviados_hash. REGLA DE HIERRO: el procesamiento de correos de MESA reserva su registro (cerrojo atómico por UID y por huella de contenido, con índice único en BD) ANTES de reenviar; ningún reinicio, barrido paralelo ni segunda casilla IMAP puede provocar un reenvío. El Resumen Diario 8AM reserva atómicamente su fecha antes de salir: un solo correo por día, sin excepciones."},
     {"n": 69, "id": "aviso_recepcion_incompleta", "titulo": "Aviso de Recepción Incompleta",
      "ley": "Cuando un correo de gestión trae archivos ILEGIBLES (OCR < 50 caracteres en archivos relevantes) o el cuerpo PROMETE documentación que no llegó adjunta, el sistema envía UN ÚNICO aviso cortés al remitente pidiendo el reenvío, y el ítem queda en 'revisar' si faltan los adjuntos. LÍMITES DE HIERRO: máximo un aviso por correo recibido (marca aviso_ilegible_enviado), protegido por el escudo anti-duplicados (Regla #68), jamás dirigido a casillas propias ni a la mesa, y durante el Modo Prueba el aviso va exclusivamente al destino de prueba del administrador — nunca al remitente."},
+    {"n": 70, "id": "casos_especiales", "titulo": "Protocolo de Casos Especiales",
+     "ley": "1) LICENCIAS: toda liquidación se lee extrayendo 'días trabajados' y 'días licencia'; si licencia>0 o trabajados<30, se alerta 'Exigir pago de licencia' y el envío a mesa queda BLOQUEADO hasta cargar el pago (CCAF/Isapre/subsidio) en 06_licencias. 2) MATERNAL: al detectar pre/postnatal o subsidio maternal se activa checklist extendido (licencias + pagos mensuales del subsidio + liquidaciones previas) y la renta del mes en licencia NO se castiga. 3) CODEUDOR: se detecta desde el ASUNTO (+AVAL, y complemento, (Aval X), codeudor); se exige set completo del codeudor (cédula + renta + CMF propio) y los correos separados del aval se vinculan por el nombre entre paréntesis. 4) SPA: si la renta del codeudor proviene de una SPA propia, advertencia crítica 'Mesa suele rechazar ingresos de SPA propia' antes de enviar. Categorías propias y exigibles: licencia_medica y pago_licencia (06_licencias), contrato_trabajo (05_contratos), registro_social_hogares (08_rsh)."},
 ]
 
 REGLAS_EFICIENCIA = [
@@ -122,7 +124,7 @@ REGLAS_EFICIENCIA = [
     {"id": "estimacion_previa", "ley": "Estimación Previa: antes de construir, calcular la ruta de menor costo de créditos según DashAI."},
 ]
 
-VERSION = 30  # v30: Regla de Oro #69 — Aviso de Recepción Incompleta
+VERSION = 31  # v31: Regla de Oro #70 — Protocolo de Casos Especiales
 
 
 class ViolacionConstitucional(Exception):

@@ -36,6 +36,10 @@ SUBFOLDER_POR_TIPO = {
     "certificado_afp": "03_afp",
     "boleta_honorarios": "03_boletas",
     "certificado_smf": "04_cmf",
+    "licencia_medica": "06_licencias",
+    "pago_licencia": "06_licencias",
+    "contrato_trabajo": "05_contratos",
+    "registro_social_hogares": "08_rsh",
 }
 
 CAT_A_SUBFOLDER = {
@@ -43,16 +47,23 @@ CAT_A_SUBFOLDER = {
     "imp_renta": "02_impuesto_renta", "afp": "03_afp",
     "boletas": "03_boletas", "cmf": "04_cmf", "extras": "99_otros",
     "estudio_titulo": "07_estudio_titulo",
+    "licencia": "06_licencias", "pago_licencia": "06_licencias",
+    "contrato": "05_contratos", "rsh": "08_rsh",
 }
 SUBFOLDER_A_CAT = {
     "01_cedula": "cedula", "02_liquidaciones": "liquidacion",
     "02_impuesto_renta": "imp_renta", "03_afp": "afp",
     "03_boletas": "boletas", "04_cmf": "cmf", "99_otros": "extras",
     "05_codeudor": "codeudor", "07_estudio_titulo": "estudio_titulo",
+    "06_licencias": "licencia", "05_contratos": "contrato", "08_rsh": "rsh",
 }
 
 CAT_KEYWORDS = [
     ("estudio_titulo", r"estudio de t[ií]tulo|dominio vigente|hipotecas? y grav|grav[aá]men|prohibici[oó]n|expropiaci|conservador de bienes|\bcbr\b|escritura de compraventa|copia de escritura|inscripci[oó]n de dominio"),
+    ("pago_licencia", r"pago\s+de\s+licencia|subsidio\s+de\s+incapacidad|\bccaf\b|caja\s+los\s+andes|caja\s+los\s+h[eé]roes|subsidio\s+maternal"),
+    ("licencia", r"licencia\s+m[eé]dica|reposo\s+(laboral|m[eé]dico)|pre.?natal|post.?natal"),
+    ("contrato", r"contrato\s+de\s+trabajo|anexo\s+de\s+contrato|antig[üu]edad\s+laboral"),
+    ("rsh", r"registro\s+social\s+de\s+hogares|\brsh\b|calificaci[oó]n\s+socioecon[oó]mica"),
     ("cedula", r"c[eé]?dula|carnet|identidad|registro civil"),
     ("liquidacion", r"liquidaci[oó]?n|sueldo|remuneraci|haberes|\bliq[\d_ ]|^liq"),
     ("afp", r"afp|cotizaci|previred|afiliaci|habitat|provida|planvital|cuprum|capital"),
@@ -68,6 +79,10 @@ MISSING_LABELS = {
     "cmf": "Informe de deudas CMF",
     "imp_renta": "Última declaración de impuesto a la renta",
     "boletas": "Resumen de boletas de honorarios",
+    "licencia": "Licencias médicas",
+    "pago_licencia": "Pagos de licencia (CCAF/Isapre/subsidio)",
+    "contrato": "Contrato de trabajo",
+    "rsh": "Registro Social de Hogares",
 }
 
 

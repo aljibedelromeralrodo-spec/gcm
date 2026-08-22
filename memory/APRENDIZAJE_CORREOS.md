@@ -57,3 +57,25 @@ Fuente: 400 mensajes de ethangerardobarr@gmail.com (Gmail API) + IMAP gerardo.ex
 ### Pre/Postnatal
 - Patrón: clienta embarazada con licencia maternal → liquidaciones bajas o en cero + subsidio maternal pagado por Isapre/CCAF. Suele complementarse con AVAL (caso Javiera Espinoza + Rodrigo Espinoza).
 - Renta se acredita con: liquidaciones previas + comprobantes de pago de licencia maternal (mensuales) + certificado prenatal/postnatal. No descartar por liquidación baja.
+
+## 7. Casos límite (análisis 120 días, 2026-08-22)
+### Edad máxima / plazo
+- Mesa NUNCA escribe "por edad" ni "acorta el plazo" en sus correos. El efecto edad es INVISIBLE en el texto: aparece solo como tope de monto ("el crédito posible estaría por debajo de las UF 2000") o dentro del Simulador_*.pdf adjunto (campo plazo).
+- Caso ancla: **Eduar Araya Collao, 55 años (RUT 11.821.533-8)** → 1º rechazo "no cumple parámetros... incorporar codeudor" → 2º "crédito posible por debajo de UF 2000" → ejecutiva Ximena renegocia a casa de menor valor al 80% de financiamiento.
+- Solo el formato de ficha de Ximena Gómez (Ecomac) trae campo "Edad:". El resto de ejecutivas NO informa edad → única fuente alternativa: RUT (correlación aproximada) o cédula OCR (fecha nacimiento).
+- Regla nueva: si edad>=55 → marcar folder `edad_titular` y alertar que el monto máximo puede bajar por plazo acortado.
+### Antigüedad laboral
+- Rechazo textual nuevo: "necesitamos al menos 6 meses de empleabilidad a plazo fijo" (Yan Carmona, 40a, técnico construcción). La antigüedad se lee de las liquidaciones (fecha ingreso) — hoy no la extraemos.
+### 2 trabajos dependientes simultáneos
+- **CERO casos explícitos en 120 días.** No existe ni un correo con "dos empleadores/dos contratos/segundo empleador" referido a un mismo titular. La renta múltiple en esta operación se materializa como TITULAR + CODEUDOR/COMPLEMENTO (100 correos "codeudor", 55 "complementa"), nunca como doble contrato del mismo RUT.
+### Dependiente + independiente
+- Ocurre a nivel de PAREJA/COMPLEMENTO, no del mismo RUT: Catalina Aguilera (liquidaciones) + Nelson Barraza (Certificados SII, mixto 7+7); Javiera Espinoza + Rodrigo Espinoza.
+- Frase clave de Mesa: "favor enviar informe resumen de boletas de honorarios, con eso podemos evaluar independientes" → el doc que desbloquea la evaluación independiente es el RESUMEN ANUAL SII, no las boletas sueltas.
+- Desenlace típico: aprobación CON TOPE ("por máximo posible de UF X") o cambio de titular ("No se puede aprobar con ella como titular").
+### 3 trabajos dependientes
+- **CERO casos en 120 días.** No crear reglas especulativas.
+### Frases nuevas de Mesa (agregadas a proc_rules)
+- Rechazo: "no hay posibilidad de aprobar", "estaría por debajo de las UF X", "necesitamos al menos N meses", "No se puede aprobar con ella como titular", "FAVOR CANCELAR EMAIL DE APROBACIÓN".
+- Observación: "Favor pedir detalles de la deuda indirecta", "Favor confirmar si es con o sin subsidio", "favor enviar informe resumen de boletas".
+- Aprobación con tope: "por máximo posible de UF X", "Adjunto simulación por máximo posible", "POR AMBAS OPCIONES SOLICITADAS".
+- OJO: una APROBACIÓN puede ser ANULADA minutos después ("FAVOR CANCELAR EMAIL DE APROBACIÓN") → nunca cerrar el estado del folder con el primer correo de aprobación; esperar ventana de corrección.

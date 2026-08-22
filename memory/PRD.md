@@ -1259,3 +1259,11 @@ actual; todo lo demás permanece intacto.
 5. NUEVO (2026-08-22): Centro de comando 'Publicidad y Captación' unificado (4 secciones) con importación Excel/CSV de listados y formulario de credenciales Twilio. Pendientes visibles: ds19 (falta archivo del usuario) y Twilio (faltan credenciales).
 
 6. NUEVO (2026-08-22): Divisor de PDF multi-documento integrado en ambas vías de ingesta (IMAP + Gmail push). Reglas de clasificación aprendidas de 30 días de correos reales (reglas_auto + proc_rules). Gmail Push operativo en tiempo real (suscripción Pub/Sub activa, verificada con correos reales).
+
+## 2026-08-22 (sesión fork) — Análisis 120 días casos límite
+- Ejecutados scripts de extracción sobre Gmail (120d): edad/plazo, multi-empleo, renta mixta.
+- Hallazgos: Mesa nunca menciona "edad" textualmente (efecto solo en tope UF/Simulador PDF); 0 casos de 2-3 empleos dependientes del mismo RUT (renta múltiple = siempre codeudor); dep+indep ocurre a nivel pareja (doc clave: informe resumen boletas SII); aprobaciones pueden anularse minutos después.
+- proc_rules: 2 reglas actualizadas (rechazo, observación) + 3 nuevas (aprobación con tope, alerta edad 55+, renta mixta). Validadas 14/14 regex tests.
+- APRENDIZAJE_CORREOS.md: agregada sección 7 (casos límite 120d).
+- Informe 2 partes entregado en chat (técnico + evaluación honesta: 97-98% docs, 95% veredictos, 85-90% casos financieros límite; 100% imposible).
+- Recomendación pendiente de aprobación: ventana de espera 30-60 min antes de notificar aprobaciones (riesgo de anulación); parsear plazo desde Simulador_*.pdf.
