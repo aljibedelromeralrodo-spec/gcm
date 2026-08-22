@@ -143,7 +143,7 @@ async def ensure_seed():
     # ── MÓDULO VENTAS: ejecutivas con acceso exclusivo a su panel ──
     for _cod, _nom, _ej, _clave in (
             ("yerile.barrera@centralmutuos.cl", "Yerile Barrera", "yerile", "Yerile2024"),
-            ("deysi.salazar@centralmutuos.cl", "Deysi Salazar", "deysi", "Deysi2024")):
+            ("deysi.salazar@centralmutuos.cl", "Deisy Salazar", "deysi", "Deysi2024")):
         if not await db.users.find_one({"codigo": _cod}):
             await db.users.insert_one({
                 "codigo": _cod, "email": _cod, "nombre": _nom, "rol": "administracion",

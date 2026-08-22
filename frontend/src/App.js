@@ -55,6 +55,7 @@ const VentasWorkspace = lazy(() => import("./pages/VentasWorkspace"));
 const MutuosWorkspace = lazy(() => import("./pages/MutuosWorkspace"));
 const DemoVictoria = lazy(() => import("./victoria/DemoVictoria"));
 const DemoVentas = lazy(() => import("./victoria/DemoVentas"));
+const DemoMutuos = lazy(() => import("./victoria/DemoMutuos"));
 const FrentePrincipal = lazy(() => import("./components/FrentePrincipal"));
 const AuditoriaForenseModule = lazy(() => import("./pages/AuditoriaForenseModule"));
 const DespachoModule = lazy(() => import("./pages/DespachoModule"));
@@ -295,10 +296,12 @@ function MainApp() {
 
   const [verDemoVictoria, setVerDemoVictoria] = useState(window.location.hash === "#demo-victoria");
   const [verDemoVentas, setVerDemoVentas] = useState(window.location.hash === "#demo-ventas");
+  const [verDemoMutuos, setVerDemoMutuos] = useState(window.location.hash === "#demo-mutuos");
   useEffect(() => {
     const h = () => {
       setVerDemoVictoria(window.location.hash === "#demo-victoria");
       setVerDemoVentas(window.location.hash === "#demo-ventas");
+      setVerDemoMutuos(window.location.hash === "#demo-mutuos");
     };
     window.addEventListener("hashchange", h);
     return () => window.removeEventListener("hashchange", h);
@@ -319,6 +322,14 @@ function MainApp() {
     return (
       <Suspense fallback={<div style={{ minHeight: "100vh", background: "#0a0a0a" }} />}>
         <DemoVentas autoPlay onSalir={() => { window.location.hash = ""; }} />
+      </Suspense>
+    );
+  }
+
+  if (verDemoMutuos) {
+    return (
+      <Suspense fallback={<div style={{ minHeight: "100vh", background: "#0a0a0a" }} />}>
+        <DemoMutuos autoPlay onSalir={() => { window.location.hash = ""; }} />
       </Suspense>
     );
   }

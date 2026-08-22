@@ -226,6 +226,8 @@ REGLAS_ORO_VICTORIA = [
     ("REGLA_ORO_VICTORIA-4", "Autorización previa a ConCreces", "Cada etapa importante termina en una pantalla de autorización donde Victoria revisa y aprueba antes de continuar. El envío a revisión de riesgo exige todas las etapas autorizadas."),
     ("REGLA_ORO_VICTORIA-5", "Trazabilidad de datos críticos", "Nombre, RUT, rol y dirección muestran un indicador al pasar el cursor y, con un clic, abren el documento físico de origen en un panel flotante, sin salir de la pantalla."),
     ("REGLA_ORO_VICTORIA-6", "Tope deuda/garantía y formato RUT", "El crédito no puede superar el 80% del valor de tasación (Guía: Antecedentes Operación). El RUT se ingresa con puntos y guion; si es menor a 10 millones se antepone un 0."),
+    ("REGLA_ORO_VICTORIA-7", "Llenado automatizado estricto (Daniela y Victoria)", "El sistema completa automáticamente todos los campos posibles cruzando los documentos cargados, con validaciones obligatorias: RUT titular vs documentos, RUT codeudor vs documentos, Rol de avalúo vs documentos, Dirección vs documentos y todos los datos de tasación. Solo se llena lo hallado con certeza documental. Está ABSOLUTAMENTE PROHIBIDO inventar datos, asumir valores o completar campos sin respaldo. Lo no hallado queda vacío y marcado como PENDIENTE."),
+    ("REGLA_ORO_VICTORIA-8", "Vista de auditoría con preview de origen (Daniela y Victoria)", "Daniela Galindo y Victoria Vilches disponen de una vista de auditoría donde cada campo del sistema muestra de qué documento proviene, en qué página aparece y cómo se ve el fragmento original, permitiendo verificación aleatoria sin revisar documentos completos."),
 ]
 
 

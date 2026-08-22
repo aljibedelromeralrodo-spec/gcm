@@ -21,7 +21,7 @@ const card = { background: "rgba(30,41,59,0.55)", border: "1px solid rgba(148,16
 const PANELES = [
   ["daniela", "Panel Daniela Galindo", "Operación A — Fase Revisión"],
   ["victoria", "Panel Daniela Galindo · Bóveda", "Operación B — Fase Carga · Estudio de Títulos"],
-  ["ventas", "Panel Ventas", "Yerile Barrera & Deysi Salazar — entrega inmediata"],
+  ["ventas", "Panel Ventas", "Yerile Barrera & Deisy Salazar — entrega inmediata"],
   ["postventa", "Panel Postventa", "Seguimiento posterior a la entrega"],
 ];
 

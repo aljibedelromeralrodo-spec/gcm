@@ -991,6 +991,109 @@ async def origen_dato(cid: str, campo: str, request: Request):
             "pagina": pagina, "campo": campo, "etiqueta": ETIQUETA_CAMPO[campo], "valor": valor}
 
 
+def _doc_origen(docs, campo, valor):
+    """Mejor documento candidato del cual proviene un dato (mismo criterio que origen-dato)."""
+    if campo in ("rut_titular", "rut_codeudor"):
+        norm = _norm_rut
+    elif campo == "rol_avaluo":
+        norm = _norm_rol
+    elif campo == "direccion_propiedad":
+        norm = _norm_dir
+    else:
+        norm = lambda s: re.sub(r"\s+", " ", str(s).lower().strip())
+    objetivo = norm(valor)
+    prioridad = MAPEO_ORIGEN.get(campo, [])
+
+    def rank(d):
+        try:
+            p = prioridad.index(d.get("tipo"))
+        except ValueError:
+            p = 99
+        datos = d.get("datos") or {}
+        contiene = any(norm(str(datos.get(k) or "")) == objetivo
+                       for k in ("rut_titular", "rut_codeudor", "rol_avaluo", "direccion_propiedad", "nombre_cliente")
+                       if datos.get(k))
+        return (0 if contiene else 1, p)
+
+    cand = sorted(docs, key=rank)
+    return cand[0] if cand else None
+
+
+@vict.get("/clientes/{cid}/auditoria-campos")
+async def auditoria_campos(cid: str, request: Request):
+    """REGLA IRRENUNCIABLE 2 — Vista de auditoría: cada campo con su documento de origen,
+    página exacta y acceso al fragmento original. Lo no hallado queda vacío y PENDIENTE."""
+    _exigir(request)
+    c = await _get_cliente(cid)
+    docs = await _docs_validos(cid)
+    forms = _formularios_auto(c, docs)
+    out = []
+    for campo in ("nombre_cliente", "rut_titular", "rut_codeudor", "rol_avaluo", "direccion_propiedad"):
+        valor = str(forms.get(campo) or "").strip()
+        item = {"campo": campo, "etiqueta": ETIQUETA_CAMPO[campo], "valor": valor,
+                "pendiente": not valor, "doc_id": "", "archivo": "", "tipo_etiqueta": "", "pagina": 0}
+        if valor and docs:
+            elegido = _doc_origen(docs, campo, valor)
+            if elegido:
+                full = await db.victoria_docs.find_one({"id": elegido["id"]}) or {}
+                ruta = full.get("ruta")
+                pagina = 1
+                if ruta and Path(ruta).exists():
+                    pagina = await asyncio.to_thread(_pagina_de, ruta, valor, campo)
+                item.update({"doc_id": elegido["id"], "archivo": elegido.get("archivo", ""),
+                             "tipo_etiqueta": ETIQUETAS.get(elegido.get("tipo"), ""), "pagina": pagina})
+        out.append(item)
+    pendientes = [x["etiqueta"] for x in out if x["pendiente"]]
+    return {"campos": out, "pendientes": pendientes,
+            "regla": ("Llenado automatizado estricto: el sistema solo completa lo que encuentra con "
+                      "certeza en los documentos. Está prohibido inventar o asumir valores; lo no "
+                      "hallado queda vacío y marcado como pendiente.")}
+
+
+@vict.get("/documentos/{did}/fragmento")
+async def fragmento_documento(did: str, request: Request, q: str = "", pagina: int = 1):
+    """Renderiza el fragmento original del documento donde aparece el dato (recorte de la página)."""
+    _exigir(request)
+    d = await db.victoria_docs.find_one({"id": did}) or {}
+    ruta = d.get("ruta")
+    if not ruta or not Path(ruta).exists():
+        raise HTTPException(status_code=404, detail="El documento físico no está disponible en la bóveda")
+
+    def render():
+        import fitz
+        pdf = fitz.open(ruta)
+        idx = min(max(0, (pagina or 1) - 1), len(pdf) - 1)
+        page = pdf[idx]
+        rects = []
+        for v in dict.fromkeys([q.strip(), q.strip().upper(), q.strip().lower()]):
+            if not v:
+                continue
+            try:
+                rects = page.search_for(v)
+            except Exception:
+                rects = []
+            if rects:
+                break
+        if rects:
+            r0 = rects[0]
+            for r in rects[1:3]:
+                r0 |= r
+            m = 55
+            clip = fitz.Rect(max(0, r0.x0 - m), max(0, r0.y0 - m),
+                             min(page.rect.x1, r0.x1 + m * 3), min(page.rect.y1, r0.y1 + m))
+            pix = page.get_pixmap(matrix=fitz.Matrix(3, 3), clip=clip)
+        else:
+            pix = page.get_pixmap(matrix=fitz.Matrix(1.6, 1.6))
+        data = pix.tobytes("png")
+        pdf.close()
+        return data, bool(rects)
+
+    data, hallado = await asyncio.to_thread(render)
+    from fastapi.responses import Response as _Resp
+    return _Resp(content=data, media_type="image/png",
+                 headers={"X-Fragmento-Hallado": "1" if hallado else "0"})
+
+
 # ══════════ DEMO MÓDULO VICTORIA: video descargable y envío por correo ══════════
 DEMOS_DIR = Path("/app/backend/demos")
 DEMOS_DIR.mkdir(parents=True, exist_ok=True)
@@ -999,7 +1102,7 @@ DEMOS_DIR.mkdir(parents=True, exist_ok=True)
 @vict.get("/demo/video")
 async def demo_video(request: Request, modulo: str = "victoria"):
     _exigir(request)
-    archivo = {"victoria": "demo_victoria.mp4", "ventas": "demo_ventas.mp4"}.get(modulo)
+    archivo = {"victoria": "demo_victoria.mp4", "ventas": "demo_ventas.mp4", "mutuos": "demo_mutuos.mp4"}.get(modulo)
     if not archivo:
         raise HTTPException(status_code=400, detail="Módulo de demo inválido")
     p = DEMOS_DIR / archivo
@@ -1013,7 +1116,7 @@ async def demo_video(request: Request, modulo: str = "victoria"):
 async def demo_enviar(payload: dict, request: Request):
     u = _exigir(request)
     modulo = payload.get("modulo") or "victoria"
-    archivo = {"victoria": "demo_victoria.mp4", "ventas": "demo_ventas.mp4"}.get(modulo)
+    archivo = {"victoria": "demo_victoria.mp4", "ventas": "demo_ventas.mp4", "mutuos": "demo_mutuos.mp4"}.get(modulo)
     if not archivo:
         raise HTTPException(status_code=400, detail="Módulo de demo inválido")
     p = DEMOS_DIR / archivo
@@ -1038,11 +1141,11 @@ async def demo_enviar(payload: dict, request: Request):
     return {"ok": True, "mensaje": f"Video de la demo enviado a {dest}"}
 
 # ══════════ MÓDULO VENTAS: asignación alternada automática ══════════
-EJECUTIVOS_VENTAS = {"yerile": "Yerile Barrera", "deysi": "Deysi Salazar"}
+EJECUTIVOS_VENTAS = {"yerile": "Yerile Barrera", "deysi": "Deisy Salazar"}
 
 
 async def asignar_a_ventas_si_corresponde(cid, texto=""):
-    """Regla Ventas: documentación incompleta + entrega inmediata → round-robin Yerile/Deysi."""
+    """Regla Ventas: documentación incompleta + entrega inmediata → round-robin Yerile/Deisy."""
     c = await db.victoria_clientes.find_one({"id": cid})
     if not c or c.get("ventas") or c.get("despachado"):
         return None
@@ -1055,15 +1158,33 @@ async def asignar_a_ventas_si_corresponde(cid, texto=""):
         return None
     cfg = await db.config.find_one({"_key": "ventas_rr"}) or {}
     orden = list(EJECUTIVOS_VENTAS.keys())
-    ultimo = cfg.get("ultimo")
-    sig = orden[(orden.index(ultimo) + 1) % len(orden)] if ultimo in orden else orden[0]
+    # BALANCE DE CARGA INTELIGENTE: se asigna a quien tenga menos clientes activos
+    conteos = {}
+    for e in orden:
+        conteos[e] = await db.victoria_clientes.count_documents(
+            {"ventas.ejecutivo": e, "ventas.estado": {"$nin": ["aprobado", "rechazado"]}})
+    minimo = min(conteos.values())
+    candidatos = [e for e in orden if conteos[e] == minimo]
+    if len(candidatos) == 1:
+        sig = candidatos[0]
+    else:
+        ultimo = cfg.get("ultimo")
+        sig = orden[(orden.index(ultimo) + 1) % len(orden)] if ultimo in orden else candidatos[0]
+        if sig not in candidatos:
+            sig = candidatos[0]
     await db.config.update_one({"_key": "ventas_rr"}, {"$set": {"ultimo": sig}}, upsert=True)
     await db.victoria_clientes.update_one({"id": cid}, {"$set": {
         "entrega_inmediata": True,
         "ventas": {"ejecutivo": sig, "ejecutivo_nombre": EJECUTIVOS_VENTAS[sig],
-                   "asignado_en": _now(), "estado": "en_gestion", "contactos": []}}})
-    await _aviso("ventas", f"Solicitud de {c['nombre']} (documentación incompleta + entrega inmediata) "
-                           f"asignada automáticamente a {EJECUTIVOS_VENTAS[sig]} en el Módulo Ventas.", cid)
+                   "asignado_en": _now(), "estado": "en_gestion", "contactos": [],
+                   "ultimo_evento": _now(),
+                   "timeline": [{"fecha": _now(), "por": "sistema",
+                                 "accion": (f"Asignación por balance de carga inteligente: la gestión de "
+                                            f"{c['nombre']} queda a cargo de {EJECUTIVOS_VENTAS[sig]} "
+                                            f"({conteos[sig]} cliente(s) activos al momento de asignar).")}]}}})
+    await _aviso("ventas", f"Nueva gestión asignada — {c['nombre']} queda bajo la responsabilidad de "
+                           f"{EJECUTIVOS_VENTAS[sig]} por balance de carga inteligente. "
+                           f"Se espera el primer contacto dentro de las próximas 24 horas.", cid)
     try:
         await _notificar_aviso_ventas(c, sig)
     except Exception:
@@ -1080,12 +1201,20 @@ async def _notificar_aviso_ventas(cliente, ejecutivo_asignado):
     if not emails:
         return
     import email_service as mail_srv
-    html = (f"<div style='font-family:Georgia,serif;color:#1a1a1a'>"
-            f"<h3 style='color:#8a6d1a'>Aviso del sistema — Módulo Ventas</h3>"
-            f"<p>Nueva solicitud asignada a <b>{EJECUTIVOS_VENTAS[ejecutivo_asignado]}</b>: "
-            f"{cliente['nombre']} (RUT {cliente.get('rut','—')}), documentación incompleta + entrega inmediata.</p>"
-            f"<p>Este aviso fue dirigido aleatoriamente a {EJECUTIVOS_VENTAS[ej_aviso]}.</p>"
-            f"<p style='color:#8a6d1a;font-weight:bold'>Central Mutuos · Módulo Ventas</p></div>")
+    html = (f"<div style='font-family:Georgia,serif;background:#0a0a0a;color:#f4f4f5;padding:28px 32px;border-radius:10px;max-width:620px'>"
+            f"<div style='color:#C9A227;font-size:20px;font-weight:bold;letter-spacing:2px'>CENTRAL MUTUOS</div>"
+            f"<div style='height:1px;background:#C9A227;margin:10px 0 18px'></div>"
+            f"<h3 style='color:#C9A227;margin:0 0 12px'>Nueva gestión asignada — Módulo Ventas</h3>"
+            f"<p style='line-height:1.7;margin:0 0 12px'>Estimada {EJECUTIVOS_VENTAS[ej_aviso].split()[0]}:</p>"
+            f"<p style='line-height:1.7;margin:0 0 12px'>El sistema ha asignado la gestión de "
+            f"<b style='color:#FCF6BA'>{cliente['nombre']}</b> (RUT {cliente.get('rut','—')}) a "
+            f"<b style='color:#FCF6BA'>{EJECUTIVOS_VENTAS[ejecutivo_asignado]}</b>, aplicando el criterio de "
+            f"balance de carga inteligente. La solicitud presenta documentación incompleta y propiedad de "
+            f"entrega inmediata: se espera el primer contacto dentro de las próximas 24 horas.</p>"
+            f"<p style='color:#a1a1aa;font-size:13px;margin:16px 0 0'>Este aviso fue dirigido a usted según la "
+            f"distribución aleatoria de notificaciones del módulo.</p>"
+            f"<div style='height:1px;background:#333;margin:18px 0 12px'></div>"
+            f"<p style='color:#C9A227;font-weight:bold;margin:0'>Central Mutuos · Módulo Ventas</p></div>")
     for em in emails:
         try:
             await asyncio.to_thread(mail_srv.send_mail, em,

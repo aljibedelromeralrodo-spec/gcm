@@ -4,7 +4,7 @@ import { hablarMartin } from "../utils/vozMartin";
 
 const EJECUTIVAS = [
   { nombre: "Yerile Barrera", ini: "YB" },
-  { nombre: "Deysi Salazar", ini: "DS" },
+  { nombre: "Deisy Salazar", ini: "DS" },
 ];
 const SOLICITUDES = [
   { nombre: "Carolina Rojas Fuentes", rut: "15.678.234-5", faltan: "tasación y simulación", a: 0 },
@@ -15,7 +15,7 @@ const SOLICITUDES = [
 const ESCENAS = [
   ["intro", "Demo Módulo Ventas — datos ficticios", 9],
   ["condiciones", "Condición de entrada: documentación incompleta + entrega inmediata", 11],
-  ["asignacion", "Asignación automática alternada — Yerile · Deysi · Yerile", 12],
+  ["asignacion", "Asignación automática alternada — Yerile · Deisy · Yerile", 12],
   ["panel", "Panel de la ejecutiva — clientes, faltantes y días en gestión", 12],
   ["gestion", "Ficha del cliente — contactos, estados y carga con validación", 13],
   ["reporte", "Reporte en tiempo real para el Administrador", 11],
@@ -24,9 +24,9 @@ const ESCENAS = [
 const TOTAL = ESCENAS.reduce((a, e) => a + e[2], 0);
 
 const NARRACION = [
-  "Hola, soy Martín. Te presento el Módulo Ventas de Central Mutuos, con las ejecutivas Yerile Barrera y Deysi Salazar.",
+  "Hola, soy Martín. Te presento el Módulo Ventas de Central Mutuos, con las ejecutivas Yerile Barrera y Deisy Salazar.",
   "Cuando llega una solicitud con documentación incompleta y entrega inmediata, califica automáticamente para Ventas.",
-  "La asignación es alternada: una solicitud para Yerile, la siguiente para Deysi, y así sucesivamente. Siempre equilibrado.",
+  "La asignación es alternada: una solicitud para Yerile, la siguiente para Deisy, y así sucesivamente. Siempre equilibrado.",
   "Cada ejecutiva ve solo sus clientes: qué documentos faltan, cuándo se asignó y el último contacto registrado.",
   "Desde la ficha registra contactos, actualiza el estado y sube documentos, con las mismas validaciones irrenunciables del módulo de Daniela Galindo.",
   "El administrador ve el reporte completo en tiempo real: clientes por ejecutiva, estados, faltantes y días en gestión.",

@@ -74,7 +74,7 @@ export default function VentasFicha({ cid, onVolver }) {
   const contactos = [...(v.contactos || [])].reverse();
   const presentes = new Set(det.docs.filter(d => d.revision?.decision !== "rechazado").map(d => d.tipo));
   const docSelObj = det.docs.find(d => d.id === docSel) || null;
-  const ESTADOS = { en_gestion: "En gestión", contactado: "Contactado", esperando_documentos: "Esperando documentos", documentacion_completa: "Documentación completa", sin_respuesta: "Sin respuesta" };
+  const ESTADOS = { en_gestion: "En gestión", contactado: "Contactado", esperando_documentos: "Esperando documentos", documentacion_completa: "Documentación completa", sin_respuesta: "Sin respuesta", enviado_mesa: "Enviado a mesa", aprobado: "Aprobado", rechazado: "Rechazado" };
 
   return (
     <div data-testid="ventas-ficha" style={{ padding: "2.5rem 3rem", maxWidth: 1500, margin: "0 auto" }}>
