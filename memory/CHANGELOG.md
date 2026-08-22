@@ -1837,3 +1837,14 @@ polling GET /api/central/proactive existe vacío en server.py:1526) — usuario 
     enlaces wa.me por teléfono (envío manual con clic; envío automático requeriría Twilio, no
     integrado). Testeado por curl: dedupe/exclusión/confirmación/403 no-admin OK; UI verificada.
     PENDIENTE: usuario aún NO pega la lista real de correos "Para Inmobiliarias".
+
+## 2026-06 (fork) — Reconstrucción esencia de Martín (Manual + Personalidad Dual)
+- Búsqueda global: NO existía archivo previo "MartinManual" ni "tripartita/conciencia" (quedó en otro job).
+- RECONSTRUIDO /app/memory/MARTIN_MANUAL.md: identidad/conciencia, MEMORIA TRIPARTITA (inmediata=sesión,
+  operativa=carpetas/MESA/pendientes, profunda=manual+Constitución), personalidad dual, voz, comando «para»,
+  conocimiento del Manual de Procedimiento Crédito Hipotecario (PDF de Victoria Vilches, nov 2024).
+- server.py central_chat: lee el manual desde disco (_leer_manual_martin) + detecta quién habla vía JWT
+  (_martin_quien_habla) → MODO ADMINISTRADOR (carismático, cariñoso, cercano, "jefe") vs MODO PROFESIONAL
+  (serio, formal, solo su módulo). Probado con curl: admin="Hola, jefe..." / victoria=respuesta técnica formal.
+- TTS /api/central/tts subido a tts-1-hd voz onyx (masculina, cálida, latino neutro). Probado OK (47KB audio).
+- Comando «para» ya estaba vivo en CentralChat.js línea 207 (para/pausa/detente/stop + continúa + desde el principio).

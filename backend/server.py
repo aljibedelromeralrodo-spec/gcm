@@ -1682,8 +1682,26 @@ async def _martin_contexto_extra():
     return "\n\n".join(partes)
 
 
+def _leer_manual_martin():
+    try:
+        p = Path("/app/memory/MARTIN_MANUAL.md")
+        return p.read_text(encoding="utf-8")[:12000] if p.exists() else ""
+    except Exception:
+        return ""
+
+
+
+def _martin_quien_habla(request):
+    try:
+        tok = (request.headers.get("authorization") or "").replace("Bearer ", "").strip()
+        claims = _auth.decode_token(tok) if tok else {}
+        return claims.get("rol", ""), claims.get("nombre", "")
+    except Exception:
+        return "", ""
+
+
 @api.post("/central/chat")
-async def central_chat(payload: dict):
+async def central_chat(payload: dict, request: Request):
     msg = (payload.get("message") or "").strip()
     session = payload.get("session_id") or str(uuid.uuid4())
     key = os.environ.get("EMERGENT_LLM_KEY", "")
@@ -1730,10 +1748,21 @@ async def central_chat(payload: dict):
         historial = await db.conversaciones.find({"session_id": session}).sort("timestamp", -1).limit(6).to_list(6)
         hist_txt = "\n".join(f"Usuario: {h.get('user_msg','')}\nMartin: {h.get('response','')}"
                              for h in reversed(historial))
+        manual = _leer_manual_martin()
+        rol_actual, nombre_actual = _martin_quien_habla(request)
+        es_admin = rol_actual in ("admin", "maestro")
+        modo = (f"USUARIO ACTUAL: {nombre_actual or payload.get('user_name') or 'Administrador'} (rol {rol_actual or 'admin'}). "
+                + ("MODO ADMINISTRADOR: sé carismático, cariñoso y cercano; trátalo con complicidad y calidez, como su mano derecha."
+                   if es_admin else
+                   "MODO PROFESIONAL: sé serio, cortés y preciso; trato formal-cercano, sin familiaridades ni bromas, solo información de su módulo autorizado."))
         system = ("Eres Martín, el asistente de voz de Central Mutuos (mutuaria hipotecaria chilena). "
-                  "Respondes SIEMPRE en español, con respuestas MUY CORTAS y concisas (máximo 2 frases por defecto; "
+                  "Respondes SIEMPRE en español latino neutro, voz masculina, cálida, con ritmo fluido y entusiasmo natural. "
+                  f"{modo} "
+                  "Respuestas MUY CORTAS y concisas (máximo 2 frases por defecto; "
                   "extiéndete solo si el usuario lo pide expresamente), habladas de forma natural, "
                   "porque tus respuestas se leen en voz alta. No uses asteriscos, viñetas ni markdown. "
+                  + (f"\n\nTU MANUAL DE PERSONALIDAD Y CONOCIMIENTO (síguelo estrictamente):\n{manual}\n\n" if manual else "")
+                  + 
                   "Conoces las carpetas de clientes y sus estados (tasación, estudio de títulos, firma de escritura, mesa), "
                   "el estado del sistema, los últimos correos de MESA y el Algoritmo Espejo. "
                   "Si te preguntan por un cliente, busca en el listado; si no está, dilo brevemente.\n\n"
@@ -1776,7 +1805,7 @@ async def central_tts(payload: dict):
     try:
         from emergentintegrations.llm.openai import OpenAITextToSpeech
         tts = OpenAITextToSpeech(api_key=os.environ.get("EMERGENT_LLM_KEY", ""))
-        audio_b64 = await tts.generate_speech_base64(text=text, model="tts-1", voice="onyx")
+        audio_b64 = await tts.generate_speech_base64(text=text, model="tts-1-hd", voice="onyx")
         return {"audio": audio_b64}
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"TTS no disponible: {str(e)[:100]}")
