@@ -53,6 +53,23 @@ PUBLIC_EXACT = {
     "/api/", "/api", "/api/auth/login", "/api/auth/crear-clave",
     "/api/inmobiliaria/auth/login", "/api/valor-uf", "/api/paridad",
 }
+
+# ═══ Bloqueos backend por PERFIL (los módulos no asignados tampoco son accesibles por API) ═══
+PERFIL_RUTAS_BLOQUEADAS = {
+    "ventas": (
+        "/api/admin/users",            # Gestión de usuarios: solo Admin
+        "/api/dashai",                 # Cerebro DashAI / configuración del sistema
+        "/api/auditoria-forense",
+    ),
+    "gerencia_comercial": (
+        "/api/admin/users",
+        "/api/dashai",
+        "/api/auditoria-forense",
+        "/api/clientes/folders",       # Carpeta de Clientes: sin acceso
+        "/api/supercarpeta",           # Supercarpeta: sin acceso
+        "/api/crece/credenciales",     # Gestor Crece: solo Admin y ejecutivos de venta
+    ),
+}
 PUBLIC_PREFIXES = (
     "/api/calificar",              # Portal de Captura Autónoma (token = oid)
     "/api/firma/",                 # Portal de Firma (token de firma en la URL)
@@ -197,4 +214,14 @@ class AuthMiddleware(BaseHTTPMiddleware):
             except Exception:
                 logging.warning("auditoría de simulación: no fue posible registrar")
         request.state.user = claims
+        # ═══ PERFILES ESTRICTOS (Regla del menú por rol): bloqueo backend de rutas sensibles ═══
+        perfil = claims.get("perfil") or ""
+        if perfil in PERFIL_RUTAS_BLOQUEADAS and claims.get("rol") not in ("admin", "maestro"):
+            for pref in PERFIL_RUTAS_BLOQUEADAS[perfil]:
+                if path.startswith(pref):
+                    return JSONResponse({"detail": f"Acceso denegado: su perfil ({perfil}) no tiene "
+                                                   "permiso sobre este módulo."}, status_code=403)
+            if path.startswith("/api/inmobiliaria/config/criterios") and method in ("POST", "PUT", "DELETE"):
+                return JSONResponse({"detail": "Solo el Administrador puede modificar la Bóveda de Criterios."},
+                                    status_code=403)
         return await call_next(request)

@@ -1011,6 +1011,45 @@ async def inmo_login(payload: dict):
 PARIDAD_STAMP = "2026-08-22-paridad-v3"  # subir al cambiar seeds/reglas críticas
 
 
+# ═══ 🔑 GESTOR DE CREDENCIALES CRECE (Regla de Oro #74) ═══
+# Ejecutivos: SOLO lectura · Crear/editar/eliminar: EXCLUSIVO Administrador
+@api.get("/crece/credenciales")
+async def crece_listar(request: Request):
+    docs = await db.credenciales_crece.find({}, {"_id": 0}).sort("etiqueta", 1).to_list(200)
+    rol = (getattr(request.state, "user", {}) or {}).get("rol", "")
+    return {"credenciales": docs, "editable": rol in ("admin", "maestro")}
+
+
+@api.post("/crece/credenciales")
+async def crece_guardar(payload: dict, request: Request):
+    _exigir_roles(request, ("admin", "maestro"))
+    cid = (payload.get("id") or "").strip()
+    doc = {"etiqueta": (payload.get("etiqueta") or "").strip(),
+           "usuario": (payload.get("usuario") or "").strip(),
+           "clave": (payload.get("clave") or "").strip(),
+           "url": (payload.get("url") or "https://crece.cl").strip(),
+           "notas": (payload.get("notas") or "").strip(),
+           "actualizado": now_iso(),
+           "por": (getattr(request.state, "user", {}) or {}).get("sub") or "admin"}
+    if not doc["etiqueta"] or not doc["usuario"]:
+        raise HTTPException(status_code=400, detail="Etiqueta y usuario son obligatorios")
+    if cid:
+        r = await db.credenciales_crece.update_one({"id": cid}, {"$set": doc})
+        if not r.matched_count:
+            raise HTTPException(status_code=404, detail="Credencial no encontrada")
+    else:
+        cid = str(uuid.uuid4())
+        await db.credenciales_crece.insert_one({"id": cid, **doc})
+    return {"ok": True, "id": cid}
+
+
+@api.delete("/crece/credenciales/{cid}")
+async def crece_eliminar(cid: str, request: Request):
+    _exigir_roles(request, ("admin", "maestro"))
+    await db.credenciales_crece.delete_one({"id": cid})
+    return {"ok": True}
+
+
 @api.get("/paridad")
 async def paridad_check():
     """🔁 Auto-diagnóstico de paridad preview↔producción (sin datos sensibles).
@@ -3954,9 +3993,9 @@ def _fin_resumen_html(doc):
 
 
 @api.post("/clientes/folders/{fid}/aclarar-mora")
-async def folder_aclarar_mora(fid: str, request: Request, file: UploadFile = File(...)):
-    """🧾 El ejecutivo sube el comprobante de pago de la mora: el sistema lo valida
-    automáticamente y cierra la alerta sin intervención del administrador."""
+async def folder_aclarar_mora(fid: str, request: Request, file: UploadFile = File(...), tipo: str = Form("comprobante")):
+    """🧾 Regla de Oro #73: el ejecutivo sube comprobante de pago o formulario de regularización;
+    el sistema valida automáticamente y cierra la alerta sin intervención del administrador."""
     import espejo_postventa as _apm
     doc = await _get_folder_doc(fid)
     cm = doc.get("cmf_morosidad") or {}
@@ -3967,16 +4006,25 @@ async def folder_aclarar_mora(fid: str, request: Request, file: UploadFile = Fil
     raw = await file.read()
     if not raw:
         raise HTTPException(status_code=400, detail="Archivo vacío.")
-    nombre_archivo = file.filename or "comprobante"
+    nombre_archivo = file.filename or "documento"
     try:
         raw, nombre_archivo, _conv = pdfs.convertir_a_pdf(raw, nombre_archivo)
     except ValueError:
         pass
-    res = await asyncio.to_thread(_apm.validar_comprobante_mora, raw, nombre_archivo,
-                                  float(cm.get("morosidad_clp") or 0))
-    if not res["ok"]:
-        raise HTTPException(status_code=422, detail=f"❌ Comprobante NO validado: {res['motivo']}")
-    nombre_archivo = f"COMPROBANTE_PAGO_MORA_{now_iso()[:10]}_{nombre_archivo}"
+    es_form = (tipo or "").strip().lower() == "formulario"
+    if es_form:
+        res = await asyncio.to_thread(_apm.validar_formulario_regularizacion, raw, nombre_archivo,
+                                      doc.get("nombre", ""), doc.get("rut", ""))
+        if not res["ok"]:
+            raise HTTPException(status_code=422, detail=f"❌ Formulario NO validado: {res['motivo']}")
+        prefijo, via = "FORMULARIO_REGULARIZACION_MORA_", "formulario de regularización"
+    else:
+        res = await asyncio.to_thread(_apm.validar_comprobante_mora, raw, nombre_archivo,
+                                      float(cm.get("morosidad_clp") or 0))
+        if not res["ok"]:
+            raise HTTPException(status_code=422, detail=f"❌ Comprobante NO validado: {res['motivo']}")
+        prefijo, via = "COMPROBANTE_PAGO_MORA_", "comprobante de pago"
+    nombre_archivo = f"{prefijo}{now_iso()[:10]}_{nombre_archivo}"
     rel = await asyncio.to_thread(fsvc.guardar_archivo, doc.get("nombre", ""),
                                   nombre_archivo, raw, "04_cmf")
     try:
@@ -3989,17 +4037,81 @@ async def folder_aclarar_mora(fid: str, request: Request, file: UploadFile = Fil
     _quien = (getattr(request.state, "user", {}) or {}).get("sub") or "ejecutivo"
     await db.folders.update_one({"id": fid}, {
         "$set": {"cmf_morosidad.aclarada": True, "cmf_morosidad.aclarada_at": now_iso(),
+                 "cmf_morosidad.aclarada_via": "formulario" if es_form else "comprobante",
                  "cmf_morosidad.comprobante": {"archivo": nombre_archivo,
-                                               "monto_detectado": res["monto_detectado"],
+                                               "monto_detectado": res.get("monto_detectado", 0),
                                                "subido_por": _quien}},
         "$push": {"historial": {"fecha": now_iso(), "accion": (
-            f"🧾 Mora CMF ACLARADA automáticamente: comprobante '{nombre_archivo}' validado "
-            f"(pago detectado ${res['monto_detectado']:,.0f} vs mora ${float(cm.get('morosidad_clp') or 0):,.0f}) "
-            f"— subido por {_quien}. Alerta cerrada sin intervención del administrador.")}}})
+            f"🧾 Mora CMF ACLARADA automáticamente vía {via}: '{nombre_archivo}' validado"
+            + (f" (pago detectado ${res['monto_detectado']:,.0f} vs mora ${float(cm.get('morosidad_clp') or 0):,.0f})"
+               if res.get("monto_detectado") else "")
+            + f" — subido por {_quien}. Alerta cerrada sin intervención del administrador.")}}})
     cerradas = await _apm.cerrar_alertas_mora(fid)
-    return {"ok": True, "monto_detectado": res["monto_detectado"], "alertas_cerradas": cerradas,
-            "mensaje": f"✅ Comprobante validado (${res['monto_detectado']:,.0f}). "
-                       f"Mora aclarada y {cerradas} alerta(s) cerrada(s) automáticamente."}
+    return {"ok": True, "monto_detectado": res.get("monto_detectado", 0), "alertas_cerradas": cerradas,
+            "mensaje": (f"✅ {'Formulario de regularización' if es_form else 'Comprobante'} validado"
+                        + (f" (${res['monto_detectado']:,.0f})" if res.get("monto_detectado") else "")
+                        + f". Mora aclarada y {cerradas} alerta(s) cerrada(s) automáticamente.")}
+
+
+@api.post("/clientes/folders/{fid}/mora-link-pago")
+async def folder_mora_link_pago(fid: str, request: Request):
+    """💳 Regla de Oro #73a: envía al cliente el link/instrucciones de pago de su mora
+    (monto + cuenta oficial MUTUARIAS Y LEASING LIMITADA)."""
+    doc = await _get_folder_doc(fid)
+    cm = doc.get("cmf_morosidad") or {}
+    if not cm.get("morosidad_clp") or cm.get("aclarada"):
+        raise HTTPException(status_code=400, detail="Esta carpeta no registra mora pendiente de pago.")
+    email_cliente = (doc.get("email_cliente") or (doc.get("credit_request") or {}).get("email_cliente") or "").strip()
+    if not email_cliente or "@" not in email_cliente:
+        raise HTTPException(status_code=422, detail="❌ La carpeta no tiene correo del cliente registrado. "
+                                                    "Agregue el email del cliente antes de enviar el link de pago.")
+    g = await db.config.find_one({"_key": "gastos_op"}) or {}
+    dp = g.get("datos_pago") or {}
+    monto = float(cm.get("morosidad_clp") or 0)
+    ref = f"MORA-{fid[:8].upper()}"
+    html = f"""
+    <div style="font-family:Arial,sans-serif;max-width:620px;margin:auto;background:#0a0e17;color:#f8fafc;padding:28px;border:1px solid #d4af37">
+      <h2 style="color:#d4af37;margin-top:0">Central Mutuos — Regularización de deuda</h2>
+      <p>Estimado(a) <b>{doc.get('nombre','')}</b>:</p>
+      <p>Para continuar con la evaluación de su crédito hipotecario, es necesario regularizar la deuda
+      morosa que registra su informe financiero, por un total de:</p>
+      <p style="font-size:26px;font-weight:900;color:#d4af37;margin:12px 0">${monto:,.0f}</p>
+      <p><b>Datos para transferencia:</b></p>
+      <table style="color:#f8fafc;font-size:14px;line-height:1.7">
+        <tr><td style="color:#94a3b8;padding-right:14px">Nombre</td><td><b>{dp.get('nombre','')}</b></td></tr>
+        <tr><td style="color:#94a3b8">RUT</td><td>{dp.get('rut','')}</td></tr>
+        <tr><td style="color:#94a3b8">Banco</td><td>{dp.get('banco','')}</td></tr>
+        <tr><td style="color:#94a3b8">Tipo de cuenta</td><td>{dp.get('tipo_cuenta','')}</td></tr>
+        <tr><td style="color:#94a3b8">N° de cuenta</td><td><b>{dp.get('numero_cuenta','')}</b></td></tr>
+        <tr><td style="color:#94a3b8">Correo</td><td>{dp.get('email','')}</td></tr>
+        <tr><td style="color:#94a3b8">Referencia</td><td><b>{ref}</b></td></tr>
+      </table>
+      <p style="margin-top:16px">Una vez realizado el pago, responda este correo adjuntando el
+      <b>comprobante de transferencia</b> o envíeselo a su ejecutivo, quien lo cargará al sistema
+      para cerrar la observación de forma automática.</p>
+      <p style="color:#94a3b8;font-size:12px;margin-top:22px">CENTRAL MUTUOS · +56 2 2249 1290 ·
+      Av. La Dehesa 1822, Of. 511, Torre Sur, Lo Barnechea</p>
+    </div>"""
+    cfg = await db.config.find_one({"_key": "reglas_auto"}) or {}
+    modo_prueba = bool(cfg.get("modo_prueba_clasificacion"))
+    destino = "gerardo.ext@centralmutuos.cl" if modo_prueba else email_cliente
+    asunto = f"Regularización de deuda — {doc.get('nombre','')} (Ref {ref})"
+    if modo_prueba:
+        asunto = f"[MODO PRUEBA — destinado a {email_cliente}] {asunto}"
+    import email_service as _es
+    r = await asyncio.to_thread(_es.send_mail, destino, asunto, html)
+    if not ((r or {}).get("success") or (r or {}).get("ok")):
+        raise HTTPException(status_code=502, detail=f"❌ No se pudo enviar el correo: {str((r or {}).get('error'))[:120]}")
+    _quien = (getattr(request.state, "user", {}) or {}).get("sub") or "ejecutivo"
+    await db.folders.update_one({"id": fid}, {
+        "$set": {"cmf_morosidad.link_pago_enviado_at": now_iso(),
+                 "cmf_morosidad.link_pago_enviado_a": email_cliente},
+        "$push": {"historial": {"fecha": now_iso(), "accion": (
+            f"💳 Link/instrucciones de pago de mora (${monto:,.0f}, ref {ref}) enviado a "
+            f"{email_cliente}{' [MODO PRUEBA → gerardo.ext]' if modo_prueba else ''} por {_quien}")}}})
+    return {"ok": True, "mensaje": f"✅ Instrucciones de pago enviadas a {email_cliente}"
+                                   + (" (MODO PRUEBA: interceptado al administrador)" if modo_prueba else ""),
+            "referencia": ref}
 
 
 @api.get("/clientes/folders/{fid}/auditoria")

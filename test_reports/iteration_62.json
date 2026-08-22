@@ -1,0 +1,37 @@
+{
+  "summary": "BARRIDO PRE-DEPLOY completo. Backend: 8/8 regresiones de seguridad y regresiones (paridad/uf/hallazgos) OK. Frontend: 38 módulos abiertos como admin — 36 OK, 2 con contenido muy corto (aprendizaje len=130, autocorreo len=155) que corresponden a placeholders (no rotos, no en blanco fatal). CRUD Crece (crear/editar/eliminar) funciona con credencial 'TEST_QA_LABEL', y la credencial real 'Ejecutivas — Acceso Crece' quedó intacta. Perfil Ventas (Yerile) sólo ve 5 supermódulos (sin sm_sistema) y en Crece muestra badge 'SOLO LECTURA — edición exclusiva del Administrador' sin botones editar/eliminar/nueva. Perfil Gerencia (Javier) sólo ve sm_control (gerencia+mod_daniela+mod_victoria+postventa+contralor+contraloria); todos los nav de sm_ventas/sm_simulacion/sm_captacion/sm_operacion/sm_sistema ausentes del DOM. El bug 'fdd is not defined' de DashAI reportado en iteration_61 ya está resuelto (DashAI abre con len=7551 sin runtime error).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "AprendizajeIAModule (nav-aprendizaje)", "issue": "Módulo abre pero cuerpo prácticamente vacío (main text len=130) — sólo se ve título 'APRENDIZAJE IA — FLUJO COMERCIAL' y encabezado. Verificar si es estado esperado (placeholder) o falta render.", "selector": "[data-testid='nav-aprendizaje']", "priority": "LOW"},
+      {"component": "AutocorreoModule (nav-autocorreo)", "issue": "Módulo 'Correo a Mesa - Envío Revisado Directo a Mesa' abre pero main text len=155 — casi sin contenido visible. Confirmar si es estado por diseño (formulario colapsado) o falta contenido.", "selector": "[data-testid='nav-autocorreo']", "priority": "LOW"},
+      {"component": "GerenciaComercialModule (nav-gerencia)", "issue": "En sesión de Javier el módulo Gerencia muestra warning inline 'No fue posible cargar el Centro de Mando.' aunque el resto del reporte sí carga (gráfico comparativa, tarjetas Daniela/Victoria/Postventa, filtros y 16 operaciones). El módulo NO queda en blanco pero el mensaje sugiere una llamada backend fallida. Recomendado revisar endpoint de Centro de Mando para rol gerencia_comercial.", "selector": "[data-testid='nav-gerencia']", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Revisar por qué GerenciaComercialModule muestra 'No fue posible cargar el Centro de Mando.' para rol gerencia_comercial (el resto del módulo sí carga; probablemente un endpoint devuelve 403/error para ese rol).",
+    "Confirmar si nav-aprendizaje y nav-autocorreo deben mostrar contenido más rico o si el estado actual (casi sólo header) es intencional."
+  ],
+  "critical_code_review_comments": [
+    "OK: Los 6 supermódulos y sus 38 módulos cargan sin runtime errors en admin (main text > 200 en 36/38). Diseño negro mate + dorado consistente.",
+    "OK: Bug de iteration_61 'fdd is not defined' en CerebroDashAIModule está corregido — DashAI abre con len=7551 sin excepciones.",
+    "OK: Filtro por perfil (App.js PERFIL_MODS/accesoModulo) totalmente funcional. Yerile (ventas) no tiene sm_sistema ni gerencia/mod_daniela/mod_victoria en DOM. Javier (gerencia_comercial) sólo tiene sm_control con los 6 items esperados.",
+    "OK: Backend PERFIL_RUTAS_BLOQUEADAS enforcing correcto: yerile → /api/admin/users=403, POST /api/crece/credenciales=403, /api/clientes/folders=200. Javier → /api/clientes/folders=403, /api/crece/credenciales=403, /api/gerencia/cartera=200. Sin token → /api/crece/credenciales=401.",
+    "OK: Regresiones /api/paridad stamp='2026-08-22-paridad-v3', /api/contralor/espejo/hallazgos (admin)=200, /api/valor-uf al_dia=true con valor 40861.91.",
+    "OK: CRECE CRUD admin end-to-end (crear → editar → eliminar) funciona sin errores y la credencial real 'Ejecutivas — Acceso Crece' permaneció intacta.",
+    "OK: crece-modo='SOLO LECTURA — edición exclusiva del Administrador' visible para Yerile, sin botones Editar/Eliminar/Nueva.",
+    "OK: Módulo Clientes (Yerile) carga con len=76652 sin banner de mora roto y sin errores JS.",
+    "Menor: Console emite warnings de React 'Encountered two children with the same key' y 'In HTML, <span> cannot be a child of <option>' — hidratación de algún <select> con span dentro de option. No bloquea flujo pero conviene sanear."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (8/8 checks)", "frontend": "95% (36/38 módulos con contenido, 2 casi vacíos posiblemente por diseño; 1 warning inline en Gerencia)"},
+  "test_credentials": "administrador/141617575, yerile.barrera@centralmutuos.cl/Yerile2024, javier.urrutia@centralmutuos.cl/Urrutia2026!",
+  "seed_data_creation": "Se creó y luego eliminó credencial Crece 'TEST_QA_LABEL' para validar CRUD; se restauró el estado (queda sólo la credencial real 'Ejecutivas — Acceso Crece').",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "El barrido exhaustivo de los 38 módulos como admin, y las verificaciones de perfil Ventas (Yerile) y Gerencia (Javier), están completas. Nada bloqueante para deploy. Ítems menores a revisar por el agente principal: (1) warning inline 'No fue posible cargar el Centro de Mando.' dentro del módulo Gerencia cuando lo abre Javier — el resto del módulo sí carga con datos, así que probablemente un endpoint secundario devuelve error para el rol gerencia_comercial; (2) nav-aprendizaje y nav-autocorreo muestran casi sólo el header (main text 130/155 chars) — confirmar si es intencional; (3) console warnings de React sobre keys duplicadas y <span> dentro de <option>. Modales al login: 'Saltar' + 'Comenzar jornada' (NO usar 'Cerrar' porque matchea 'Cerrar Sesión'). Antes de cambiar de usuario, ejecutar localStorage.clear() para forzar logout.",
+  "rca of the issue": "N/A — no se detectaron bugs bloqueantes. El único mensaje anómalo ('No fue posible cargar el Centro de Mando.' en Gerencia para Javier) parece ser una llamada backend secundaria que retorna error para el rol; el módulo sigue funcional. Sin repro claro de endpoint específico desde la UI."
+}

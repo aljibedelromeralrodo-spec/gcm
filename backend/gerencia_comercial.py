@@ -60,6 +60,9 @@ def _claims(request):
 
 def _exigir(request, roles):
     c = _claims(request)
+    # Perfil Gerencia Comercial (Daniela/Victoria/Javier): acceso al módulo aunque su rol sea administracion
+    if c.get("perfil") == "gerencia_comercial" and "gerencia" in roles:
+        return c
     if c.get("rol") not in roles:
         raise HTTPException(status_code=403, detail="Su rol no tiene acceso a esta función de Gerencia Comercial")
     return c

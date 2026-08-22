@@ -53,6 +53,7 @@ const RoleDashboard = lazy(() => import("./pages/RoleDashboards"));
 const VictoriaWorkspace = lazy(() => import("./pages/VictoriaWorkspace"));
 const VentasWorkspace = lazy(() => import("./pages/VentasWorkspace"));
 const MutuosWorkspace = lazy(() => import("./pages/MutuosWorkspace"));
+const CreceModule = lazy(() => import("./pages/CreceModule"));
 const DemoVictoria = lazy(() => import("./victoria/DemoVictoria"));
 const DemoVentas = lazy(() => import("./victoria/DemoVentas"));
 const DemoMutuos = lazy(() => import("./victoria/DemoMutuos"));
@@ -91,6 +92,7 @@ const MODULE_TITLES = {
   ventas_ws: 'Módulo Ventas — Ejecutivas',
   mod_daniela: 'Módulo Daniela Galindo',
   mod_victoria: 'Módulo Victoria Vilches',
+  crece: 'Credenciales Plataforma Crece',
   postventa: 'Postventa — Seguimiento de Escritura',
   contralor: 'Módulo Contralor — Algoritmo Espejo',
   gerencia: 'Gerencia Comercial',
@@ -123,7 +125,7 @@ const SUPERMODULOS = [
   { key: 'sm_ventas', icon: 'fa-diamond', label: 'Ventas', mods: ['ventas_ws', 'oportunidades', 'cierres', 'aprobacion', 'seguimiento'] },
   { key: 'sm_simulacion', icon: 'fa-calculator', label: 'Simulación y Análisis', mods: ['simulador', 'calculadora', 'historial', 'formato', 'setcredito'] },
   { key: 'sm_captacion', icon: 'fa-bullhorn', label: 'Captación y Publicidad', mods: ['publicidad', 'brokers', 'aprendizaje'] },
-  { key: 'sm_operacion', icon: 'fa-folder-open', label: 'Operación y Clientes', mods: ['clientes', 'supercarpeta', 'tasacion', 'estudio', 'escritura', 'gastos', 'procesamiento', 'rescate', 'autocorreo', 'micorreo'] },
+  { key: 'sm_operacion', icon: 'fa-folder-open', label: 'Operación y Clientes', mods: ['clientes', 'supercarpeta', 'tasacion', 'estudio', 'escritura', 'gastos', 'procesamiento', 'rescate', 'autocorreo', 'micorreo', 'crece'] },
   { key: 'sm_control', icon: 'fa-shield', label: 'Control y Postventa', mods: ['postventa', 'contralor', 'contraloria', 'auditoria', 'gerencia', 'mod_daniela', 'mod_victoria'] },
   { key: 'sm_sistema', icon: 'fa-cogs', label: 'Administración y Sistema', mods: ['dashboard', 'usuarios', 'criterios', 'administracion', 'dashai', 'whatsapp', 'basehistorica', 'salud', 'despacho'] },
 ];
@@ -134,7 +136,7 @@ const PERFIL_MODS = {
     total: ['ventas_ws', 'oportunidades', 'cierres', 'aprobacion', 'seguimiento',
             'simulador', 'calculadora', 'historial', 'formato', 'setcredito',
             'publicidad', 'brokers', 'aprendizaje', 'supercarpeta', 'clientes'],
-    lectura: ['postventa', 'contralor', 'contraloria'],
+    lectura: ['postventa', 'contralor', 'contraloria', 'crece'],
   },
   gerencia_comercial: {  // Daniela Galindo · Victoria Vilches · Javier Urrutia
     total: ['gerencia', 'mod_daniela', 'mod_victoria', 'postventa', 'contralor'],
@@ -435,6 +437,7 @@ function MainApp() {
     { key: 'ventas_ws', icon: 'fa-briefcase', label: 'Módulo Ventas' },
     { key: 'mod_daniela', icon: 'fa-user-circle-o', label: 'Módulo Daniela Galindo' },
     { key: 'mod_victoria', icon: 'fa-user-circle', label: 'Módulo Victoria Vilches' },
+    { key: 'crece', icon: 'fa-key', label: 'Credenciales Crece' },
     { key: 'salud', icon: 'fa-heartbeat', label: 'Panel de Salud' },
     { key: 'rescate', icon: 'fa-life-ring', label: 'Por Clasificar' },
     { key: 'aprendizaje', icon: 'fa-graduation-cap', label: 'Aprendizaje IA' },
@@ -736,6 +739,7 @@ function MainApp() {
         {activeModule === 'ventas_ws' && <VentasWorkspace user={uEff} onLogout={logout} onUserUpdate={(nu) => { setUser(nu); secureSet("user", nu); }} />}
         {activeModule === 'mod_daniela' && <VictoriaWorkspace user={uEff} onLogout={logout} onUserUpdate={(nu) => { setUser(nu); secureSet("user", nu); }} />}
         {activeModule === 'mod_victoria' && <MutuosWorkspace user={uEff} onLogout={logout} onUserUpdate={(nu) => { setUser(nu); secureSet("user", nu); }} />}
+        {activeModule === 'crece' && <CreceModule user={uEff} />}
         </>)}
         </Suspense>
       </main>

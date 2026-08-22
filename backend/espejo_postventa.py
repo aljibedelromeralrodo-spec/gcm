@@ -1455,6 +1455,34 @@ async def cerrar_alertas_mora(fid):
     return r.modified_count
 
 
+RX_REGULARIZACION = re.compile(r"regularizaci[oó]n|repactaci[oó]n|convenio\s+de\s+pago|compromiso\s+de\s+pago|"
+                               r"plan\s+de\s+pago|aclaraci[oó]n\s+de\s+(deuda|mora)|renegociaci[oó]n", re.I)
+
+
+def validar_formulario_regularizacion(raw, filename, nombre_cliente="", rut=""):
+    """📋 Validación automática del formulario manual de regularización de mora."""
+    try:
+        texto, _m = ocr_service.extraer_texto(raw, filename, force_ocr=False)
+        if not texto or len(texto.strip()) < 40:
+            texto, _m = ocr_service.extraer_texto(raw, filename, force_ocr=True)
+    except Exception as e:
+        return {"ok": False, "motivo": f"No se pudo leer el archivo ({str(e)[:80]}). Suba un PDF o imagen legible."}
+    t = " ".join((texto or "").split())
+    if len(t) < 40:
+        return {"ok": False, "motivo": "El formulario es ilegible para el sistema. Suba un documento nítido (PDF o foto clara)."}
+    if not RX_REGULARIZACION.search(t):
+        return {"ok": False, "motivo": "El documento no parece un formulario de regularización (no contiene términos como "
+                                       "'regularización', 'convenio de pago', 'compromiso de pago' o 'repactación')."}
+    tl = t.lower()
+    rut_dig = re.sub(r"[^\dkK]", "", rut or "")
+    nombre_ok = any(p.lower() in tl for p in (nombre_cliente or "").split() if len(p) > 3)
+    rut_ok = bool(rut_dig) and rut_dig[:-1] in re.sub(r"[^\dkK]", "", t)
+    if not (nombre_ok or rut_ok):
+        return {"ok": False, "motivo": f"El formulario no menciona al cliente ({nombre_cliente or rut}). "
+                                       "Verifique que el documento corresponda a este cliente."}
+    return {"ok": True, "motivo": ""}
+
+
 def leer_cmf_sync(nombre_folder):
     """🧾 Lector CMF: morosidad real desde el Informe de Deudas (filas 'Total' de
     Deuda Directa + Indirecta, columnas 30-59 / 60-89 / 90+ días de atraso)."""
@@ -1829,6 +1857,21 @@ REGLAS_ORO_AUDITORIA = [
      "se usa para verificar edad mínima/máxima y el plazo máximo permitido (edad al término ≤ 80 años "
      "según Bóveda); si el plazo solicitado lo supera, se alerta al administrador antes de mesa. "
      "PERMANENTE E INAMOVIBLE."),
+    ("ORO-73", "Gestión de Pago de Mora (autovalidada)",
+     "REGLA DE ORO #73 — GESTIÓN DE PAGO DE MORA: en la ficha del cliente moroso el ejecutivo dispone de "
+     "tres acciones: a) enviar link/instrucciones de pago directamente al cliente (correo con el monto de la "
+     "mora y la cuenta oficial MUTUARIAS Y LEASING LIMITADA), b) subir comprobante de pago, c) subir "
+     "formulario manual de regularización. Al subir comprobante o formulario el sistema los VALIDA "
+     "AUTOMÁTICAMENTE (legibilidad OCR + contenido + monto ≥95% de la mora en comprobantes + identidad del "
+     "cliente en formularios) y CIERRA la alerta de mora SIN intervención del administrador, dejando registro "
+     "en el historial y archivo en 04_cmf. Si la validación falla, el ejecutivo recibe el motivo exacto. "
+     "PERMANENTE E INAMOVIBLE — modificable solo con PIN maestro."),
+    ("ORO-74", "Gestor de Credenciales Crece",
+     "REGLA DE ORO #74 — GESTOR DE CREDENCIALES CRECE: las credenciales de la plataforma Crece se administran "
+     "en un gestor central (colección credenciales_crece). Los ejecutivos acceden EXCLUSIVAMENTE en modo "
+     "lectura; crear, editar o eliminar credenciales es potestad EXCLUSIVA del Administrador (roles "
+     "admin/maestro), con bloqueo 403 en el backend para cualquier otro rol. "
+     "PERMANENTE E INAMOVIBLE — modificable solo con PIN maestro."),
 ]
 
 

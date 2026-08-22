@@ -1325,3 +1325,12 @@ actual; todo lo demás permanece intacto.
 - POST /clientes/folders/{fid}/aclarar-mora: el ejecutivo sube el comprobante desde la ficha (banner rojo MORA CMF en ClientesModule); validación automática en espejo_postventa.validar_comprobante_mora (legibilidad + keywords de pago + monto ≥95% de la mora); si valida → guarda en 04_cmf (dual write), marca cmf_morosidad.aclarada, evento en historial y cierra alertas auditoria71:morosidad SIN admin; si falla → 422 con mensaje claro (mostrado en el banner).
 - Auditoría #71 omite morosidad cuando aclarada=true. Banner verde "MORA ACLARADA" tras validar.
 - Testeado e2e vía API: no-comprobante rechazado, monto insuficiente rechazado con comparación, válido cierra 1 alerta, re-subida bloqueada; UI verificada con screenshot.
+
+## 2026-08-22 — Lote pre-deploy (6 puntos, testing agent iteration_62: backend 100%, frontend 38 módulos barridos)
+1. Menú 6 supermódulos + 3 perfiles: ya implementado antes, re-verificado en barrido.
+2. Mora — 3 acciones en ficha: enviar link/instrucciones de pago al cliente (POST /clientes/folders/{fid}/mora-link-pago, correo con cuenta oficial + referencia MORA-XXXX, respeta modo_prueba), subir comprobante (tipo=comprobante) y formulario de regularización (tipo=formulario, validador RX_REGULARIZACION + identidad cliente). Ambos autovalidan y cierran alerta sin admin. Testeado e2e.
+3. Gestor Credenciales Crece: db.credenciales_crece + endpoints GET (todos autenticados, editable flag) / POST/DELETE (solo admin 403 resto) + CreceModule.js (tabla, ver/ocultar clave, CRUD admin). En menú sm_operacion, perfil ventas en LECTURA, gerencia bloqueado. Credencial real creada: Ejecutivas — Acceso Crece / centralmutuos@crece.cl.
+4. Constitución: ORO-73 (Gestión de Pago de Mora) y ORO-74 (Credenciales Crece) sembradas en dashai_eventos (inamovibles) + /app/memory/REGLAS_MAESTRAS.md creado.
+5. Revisión exhaustiva: 38 módulos barridos como admin (36 OK, aprendizaje/autocorreo escasos por diseño), CRUD Crece verificado, perfiles verificados en UI.
+6. Seguridad: PERFIL_RUTAS_BLOQUEADAS en auth.py (ventas: sin admin/users, dashai, auditoria-forense; gerencia: además sin clientes/folders, supercarpeta, crece; criterios write solo admin). 8/8 checks curl OK. FIX: gerencia_comercial._exigir acepta perfil gerencia_comercial (Centro de Mando daba error a Javier → ahora 200; export-pdf sigue PIN-protegido).
+- Deudas menores (LOW, no bloqueantes): warnings React (span dentro de option, keys duplicadas en un select), módulos aprendizaje/autocorreo con poco contenido inicial.
