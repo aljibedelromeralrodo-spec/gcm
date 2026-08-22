@@ -1855,3 +1855,18 @@ async def seed_paridad_produccion():
                 n += 1
         if n:
             logging.info(f"🔁 Paridad: {n} proc_rules sembradas/actualizadas desde seed")
+    # 3) Cuenta bancaria oficial única (mandato del Administrador 2026-08-22):
+    #    reemplaza cualquier cuenta anterior en config y plantillas de gastos.
+    cuenta_oficial = {"nombre": "MUTUARIAS Y LEASING LIMITADA", "rut": "77.771.552-6",
+                      "banco": "Mercado Pago", "tipo_cuenta": "Cuenta Vista",
+                      "numero_cuenta": "1030937838", "email": "gerardo.ext@centralmutuos.cl"}
+    g = await db.config.find_one({"_key": "gastos_op"}) or {}
+    if (g.get("datos_pago") or {}) != cuenta_oficial:
+        await db.config.update_one({"_key": "gastos_op"},
+                                   {"$set": {"datos_pago": cuenta_oficial}}, upsert=True)
+        logging.info("🔁 Paridad: datos bancarios oficiales aplicados en config gastos_op")
+    r = await db.plantillas.update_many(
+        {"tipo": "gastos", "data.datos_pago.numero_cuenta": {"$ne": cuenta_oficial["numero_cuenta"]}},
+        {"$set": {"data.datos_pago": cuenta_oficial}})
+    if r.modified_count:
+        logging.info(f"🔁 Paridad: {r.modified_count} plantilla(s) de gastos con cuenta antigua corregida(s)")

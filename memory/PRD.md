@@ -1311,3 +1311,4 @@ actual; todo lo demás permanece intacto.
 - Lugares verificados/actualizados: config gastos_op.datos_pago (ya estaba), defaults hardcodeados server.py (email vacío → completado), TASACION_CUENTA (ya estaba), plantilla "ok" tipo gastos (tenía cuenta personal antigua 1014622077 → reemplazada).
 - Historial (correos ya enviados en seguimiento/grid_eventos/adn) NO se reescribió (trazabilidad); carpeta del cliente "Gerardo Barrera" no tocada (su RUT es identidad, no cuenta de cobro).
 - Verificado: 0 restos de la cuenta antigua en plantillas/config/colas activas.
+- (adición) seed_paridad_produccion paso 3: cuenta bancaria oficial (MUTUARIAS/Mercado Pago/1030937838) se aplica al arrancar en config gastos_op + todas las plantillas tipo gastos con cuenta distinta. Probado con simulación de producción e idempotencia. PARIDAD_STAMP → v2.
