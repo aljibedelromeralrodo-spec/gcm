@@ -5,6 +5,72 @@ const API = process.env.REACT_APP_BACKEND_URL;
 
 const PRIO_COLOR = { alta: "#fb7185", media: "#fbbf24", baja: "#34eab9" };
 
+const TIPO_META = {
+  patron: { label: "Patrón detectado", color: "#d4af37" },
+  regla: { label: "Regla aprendida", color: "#34eab9" },
+  correccion: { label: "Corrección aplicada", color: "#fb7185" },
+  comportamiento: { label: "Comportamiento", color: "#a78bfa" },
+};
+
+function HallazgosPanel() {
+  const [cats, setCats] = useState([]);
+  const [activa, setActiva] = useState("correos");
+  const [total, setTotal] = useState(0);
+
+  useEffect(() => {
+    axios.get(`${API}/api/aprendizaje/hallazgos`).then(r => {
+      setCats(r.data.categorias || []);
+      setTotal(r.data.total || 0);
+    }).catch(() => {});
+  }, []);
+
+  const cat = cats.find(c => c.key === activa);
+  const card = { background: "#0b0b0d", border: "1px solid rgba(212,175,55,0.25)", borderRadius: 0, padding: "1.2rem 1.4rem" };
+
+  if (!cats.length) return null;
+  return (
+    <div style={card} data-testid="aprendizaje-hallazgos">
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+        <div style={{ fontWeight: 800, fontSize: 14.5, color: "#d4af37" }}>
+          <i className="fa fa-diamond" /> Hallazgos reales del flujo comercial
+        </div>
+        <span style={{ fontSize: 11.5, color: "#94a3b8" }}>{total} hallazgos extraídos de la Constitución, Reglas Maestras y correos reales del sistema</span>
+      </div>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
+        {cats.map(c => (
+          <button key={c.key} data-testid={`hallazgos-tab-${c.key}`} onClick={() => setActiva(c.key)}
+            style={{
+              background: activa === c.key ? "#d4af37" : "#151517",
+              color: activa === c.key ? "#101012" : "#e2e8f0",
+              border: `1px solid ${activa === c.key ? "#d4af37" : "rgba(212,175,55,0.3)"}`,
+              borderRadius: 0, padding: "0.45rem 1rem", fontSize: 12.5, fontWeight: 800, cursor: "pointer",
+            }}>
+            <i className={`fa ${c.icono}`} /> {c.nombre} <span style={{ opacity: 0.65, fontWeight: 600 }}>({c.total})</span>
+          </button>
+        ))}
+      </div>
+      <div style={{ display: "grid", gap: 8, maxHeight: 480, overflow: "auto", paddingRight: 4 }}>
+        {(cat?.hallazgos || []).map((h, i) => {
+          const tm = TIPO_META[h.tipo] || TIPO_META.patron;
+          return (
+            <div key={i} data-testid={`hallazgo-item-${cat.key}-${i}`}
+              style={{ background: "#131315", border: "1px solid rgba(148,163,184,0.12)", borderLeft: `3px solid ${tm.color}`, padding: "0.75rem 1rem" }}>
+              <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 5 }}>
+                <span style={{ background: `${tm.color}1a`, color: tm.color, border: `1px solid ${tm.color}55`, padding: "1px 9px", fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.5 }}>{tm.label}</span>
+                <b style={{ fontSize: 13, color: "#fff" }}>{h.titulo}</b>
+              </div>
+              <div style={{ fontSize: 12.5, color: "#cbd5e1", lineHeight: 1.6 }}>{h.detalle}</div>
+              <div style={{ fontSize: 10.5, color: "#d4af37", marginTop: 6, opacity: 0.8 }}>
+                <i className="fa fa-database" /> Fuente: {h.fuente}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function AprendizajeModule() {
   const [analisis, setAnalisis] = useState([]);
   const [notas, setNotas] = useState([]);
@@ -67,6 +133,8 @@ export default function AprendizajeModule() {
         </p>
         {msg && <div data-testid="aprendizaje-msg" style={{ marginTop: 8, fontSize: 12.5, color: msg.startsWith("✅") ? "#34eab9" : "#fb7185", fontWeight: 700 }}>{msg}</div>}
       </div>
+
+      <HallazgosPanel />
 
       <div style={card}>
         <div style={{ fontWeight: 800, fontSize: 13.5, color: "#e2e8f0", marginBottom: 8 }}>

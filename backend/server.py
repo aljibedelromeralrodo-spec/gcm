@@ -7902,6 +7902,12 @@ async def aprendizaje_get():
     return {"analisis": [clean(d) for d in docs], "notas": [clean(n) for n in notas]}
 
 
+@api.get("/aprendizaje/hallazgos")
+async def aprendizaje_hallazgos_get():
+    from aprendizaje_hallazgos import construir_hallazgos
+    return await construir_hallazgos(db)
+
+
 @api.post("/aprendizaje/nota")
 async def aprendizaje_nota(payload: dict):
     texto = ((payload or {}).get("texto") or "").strip()

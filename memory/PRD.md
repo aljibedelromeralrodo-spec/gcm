@@ -1334,3 +1334,9 @@ actual; todo lo demás permanece intacto.
 5. Revisión exhaustiva: 38 módulos barridos como admin (36 OK, aprendizaje/autocorreo escasos por diseño), CRUD Crece verificado, perfiles verificados en UI.
 6. Seguridad: PERFIL_RUTAS_BLOQUEADAS en auth.py (ventas: sin admin/users, dashai, auditoria-forense; gerencia: además sin clientes/folders, supercarpeta, crece; criterios write solo admin). 8/8 checks curl OK. FIX: gerencia_comercial._exigir acepta perfil gerencia_comercial (Centro de Mando daba error a Javier → ahora 200; export-pdf sigue PIN-protegido).
 - Deudas menores (LOW, no bloqueantes): warnings React (span dentro de option, keys duplicadas en un select), módulos aprendizaje/autocorreo con poco contenido inicial.
+
+## 2026-08-22 — Módulo Aprendizaje IA poblado con hallazgos reales
+- Nuevo endpoint `GET /api/aprendizaje/hallazgos` (backend/aprendizaje_hallazgos.py): consolida 78 hallazgos reales desde dashai_eventos, REGLAS_MAESTRAS.md, APRENDIZAJE_CORREOS.md, patrones_aprendidos y estado de mora en vivo.
+- 5 categorías: Correos (27), Ventas (15), Mora (7), Documentos (18), Criterios (11). Tipos: patrón detectado, regla aprendida, corrección aplicada, comportamiento.
+- Frontend: panel "Hallazgos reales del flujo comercial" con pestañas en AprendizajeModule.js (negro mate, dorado, blanco). Contenido curado vive en el código → paridad automática con producción.
+- Verificado: curl con token admin + screenshots UI (pestañas Correos y Criterios).
