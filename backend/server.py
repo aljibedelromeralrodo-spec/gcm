@@ -1797,6 +1797,21 @@ async def central_chat_files():
     return {"response": "Procesamiento de archivos no disponible en esta instancia.", "enabled": False}
 
 
+@api.get("/central/proactivo")
+async def central_proactivo(request: Request):
+    rol, _ = _martin_quien_habla(request)
+    if rol not in ("admin", "maestro"):
+        return {"avisos": []}
+    avisos = await db.martin_avisos.find({"estado": "pendiente"}, {"_id": 0}).sort("creado", 1).limit(3).to_list(3)
+    return {"avisos": avisos}
+
+
+@api.post("/central/proactivo/{aviso_id}/hablado")
+async def central_proactivo_hablado(aviso_id: str):
+    await db.martin_avisos.update_one({"id": aviso_id}, {"$set": {"estado": "hablado", "hablado_en": now_iso()}})
+    return {"ok": True}
+
+
 @api.post("/central/tts")
 async def central_tts(payload: dict):
     text = ((payload or {}).get("text") or "").strip()[:4000]

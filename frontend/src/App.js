@@ -20,6 +20,7 @@ const CalculadoraModule = lazy(() => import("./pages/CalculadoraModule"));
 const FormatoModule = lazy(() => import("./pages/FormatoModule"));
 const ClientesModule = lazy(() => import("./pages/ClientesModule"));
 const CentralChat = lazy(() => import("./components/CentralChat"));
+const MartinProactivo = lazy(() => import("./components/MartinProactivo"));
 const SeguimientoModule = lazy(() => import("./pages/SeguimientoModule"));
 const UsuariosModule = lazy(() => import("./pages/UsuariosModule"));
 const PublicidadModule = lazy(() => import("./pages/PublicidadModule"));
@@ -651,6 +652,10 @@ function MainApp() {
 
     <Suspense fallback={null}>
       <CentralChat userName={user?.nombre || ""} activeModule={activeModule} />
+    </Suspense>
+
+    <Suspense fallback={null}>
+      <MartinProactivo user={user} />
     </Suspense>
 
     {showSearch && (

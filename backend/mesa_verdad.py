@@ -182,6 +182,14 @@ async def _procesar_correo(msg):
                                          "cliente": f.get("nombre"),
                                          "mensaje": f"⚖️ MESA ({MESA_EMAIL}): {f.get('nombre')} → {resultado.upper()} — botón de envío al ejecutivo ACTIVADO",
                                          "fecha": _now()})
+            # MARTÍN PROACTIVO: aviso hablado al administrador sin abrir el chat
+            await db.martin_avisos.insert_one({
+                "id": str(uuid.uuid4()), "tipo": f"mesa_{resultado}",
+                "cliente": f.get("nombre"), "estado": "pendiente", "creado": _now(),
+                "mensaje": (f"Atención jefe: llegó el veredicto de mesa para {f.get('nombre')}. "
+                            + ("¡Fue aprobada! La carpeta quedó lista para avisar al ejecutivo."
+                               if resultado == "aprobado"
+                               else "Fue reprobada. Te recomiendo revisar la carpeta y sus reparos."))})
         else:
             registro["accion"] = (registro.get("accion") or "") + "Sin carpeta coincidente — requiere revisión manual"
     elif tipo in ("cambio_tasa", "cambio_plazo", "cambio_criterio"):

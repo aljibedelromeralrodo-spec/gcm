@@ -1848,3 +1848,15 @@ polling GET /api/central/proactive existe vacío en server.py:1526) — usuario 
   (serio, formal, solo su módulo). Probado con curl: admin="Hola, jefe..." / victoria=respuesta técnica formal.
 - TTS /api/central/tts subido a tts-1-hd voz onyx (masculina, cálida, latino neutro). Probado OK (47KB audio).
 - Comando «para» ya estaba vivo en CentralChat.js línea 207 (para/pausa/detente/stop + continúa + desde el principio).
+
+## 2026-06 (fork) — MARTÍN PROACTIVO (P0 completado)
+- mesa_verdad.py: al llegar veredicto de MESA (aprobación/rechazo con carpeta coincidente) inserta aviso
+  en db.martin_avisos {tipo: mesa_aprobado|mesa_reprobado, cliente, mensaje, estado: pendiente}.
+- server.py: GET /api/central/proactivo (solo admin/maestro vía JWT, devuelve pendientes) +
+  POST /api/central/proactivo/{id}/hablado (marca hablado).
+- Frontend: components/MartinProactivo.js montado global en App.js (junto a CentralChat). Solo admin:
+  sondea cada 45s, muestra banner dorado flotante (testids martin-proactivo-banner/mensaje/cerrar),
+  habla con TTS onyx SIN abrir el chat, marca hablado. Probado E2E: 2 avisos detectados→hablados.
+- PUBLICIDAD ds19: imágenes col_0..4.png sobreviven en /tmp pero son ILEGIBLES (baja resolución,
+  causa de la alucinación previa). Colección real: db.publicidad_listados (no listados_publicidad).
+  DECISIÓN: pedir al usuario el archivo fuente (Excel/CSV de usatusubsidio.cl, 174 proyectos) antes de insertar.
