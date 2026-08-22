@@ -354,6 +354,11 @@ function MainApp() {
     return () => window.removeEventListener("hashchange", h);
   }, []);
 
+  // Deep-link a ficha de cliente (aviso de mora): #cliente-{folderId}
+  useEffect(() => {
+    if (user && window.location.hash.startsWith("#cliente-")) setActiveModule("clientes");
+  }, [user]);
+
   if (!user) return <LoginPage onLogin={setUser} />;
 
   // ── DEMO MÓDULO VICTORIA (datos ficticios, solo Administrador) ──

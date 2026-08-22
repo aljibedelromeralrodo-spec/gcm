@@ -1340,3 +1340,9 @@ actual; todo lo demás permanece intacto.
 - 5 categorías: Correos (27), Ventas (15), Mora (7), Documentos (18), Criterios (11). Tipos: patrón detectado, regla aprendida, corrección aplicada, comportamiento.
 - Frontend: panel "Hallazgos reales del flujo comercial" con pestañas en AprendizajeModule.js (negro mate, dorado, blanco). Contenido curado vive en el código → paridad automática con producción.
 - Verificado: curl con token admin + screenshots UI (pestañas Correos y Criterios).
+
+## 2026-08-22 — Aviso de Mora al ejecutivo (ORO-73 extendido)
+- Al detectar mora CMF no aclarada, `auditar_folder` (espejo_postventa.py, `_avisar_mora_ejecutivo`) envía UN correo al ejecutivo (email extraído de source_email; fallback admin) con monto, desglose de atrasos y link directo a la ficha.
+- Anti-duplicado: claim atómico en `cmf_morosidad.aviso_ejecutivo_at` (un solo aviso por carpeta). Respeta modo prueba (intercepta a gerardo.ext). Evento registrado en historial.
+- Deep-link nuevo: `/#cliente-{folderId}` abre directamente la ficha (App.js + ClientesModule.js).
+- Verificado: correo real enviado (SMTP success), anti-duplicado en 2ª auditoría, deep-link con screenshot.

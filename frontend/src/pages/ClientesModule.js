@@ -254,6 +254,16 @@ export default function ClientesModule({ onNavigate }) {
   const uploadCtxRef = useRef(null); // { folder_id, subfolder }
 
   useEffect(() => { loadFolders(); loadUf(); }, []);
+  // Deep-link desde el aviso de mora: #cliente-{folderId} abre la ficha directo
+  useEffect(() => {
+    const h = window.location.hash;
+    if (h.startsWith("#cliente-")) {
+      const fid = h.slice(9);
+      if (fid) openFolder(fid);
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   useEffect(() => {
     axios.get(`${API}/api/clientes/evaluaciones-negativas`)
       .then(r => setEvalNeg(r.data.negativas || {})).catch(() => setEvalNeg({}));

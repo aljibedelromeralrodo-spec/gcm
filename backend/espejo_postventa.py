@@ -1561,6 +1561,64 @@ def leer_simulador_sync(nombre_folder):
     return None
 
 
+async def _avisar_mora_ejecutivo(doc, cm):
+    """📧 Aviso de Mora (ORO-73): un solo correo al ejecutivo apenas la auditoría
+    detecta mora, con el link directo a la ficha para subir el comprobante."""
+    try:
+        claim = await db.folders.update_one(
+            {"id": doc["id"], "cmf_morosidad.aviso_ejecutivo_at": {"$exists": False}},
+            {"$set": {"cmf_morosidad.aviso_ejecutivo_at": _now()}})
+        if not claim.modified_count:
+            return
+        import email_service as mail
+        cfg = await db.config.find_one({"_key": "reglas_auto"}) or {}
+        modo_prueba = bool(cfg.get("modo_prueba_clasificacion"))
+        m = re.search(r"[\w.+-]+@[\w-]+\.[\w.-]+", doc.get("source_email") or "")
+        dest_real = m.group(0) if m else ""
+        admin = os.environ.get("MAIL_USER") or "gerardo.ext@centralmutuos.cl"
+        destino = "gerardo.ext@centralmutuos.cl" if modo_prueba else (dest_real or admin)
+        app_url = ""
+        try:
+            for line in open("/app/frontend/.env"):
+                if line.startswith("REACT_APP_BACKEND_URL="):
+                    app_url = line.split("=", 1)[1].strip().strip('"').rstrip("/")
+        except Exception:
+            pass
+        link = f"{app_url}/#cliente-{doc['id']}"
+        cliente = doc.get("nombre", "")
+        cuerpo = (
+            "<div style='font-family:Arial,Helvetica,sans-serif;background:#fff;color:#111;font-size:14px'>"
+            "<p>Estimado ejecutivo:</p>"
+            f"<p>La auditoría del Contralor detectó <b style='color:#b91c1c'>morosidad vigente</b> en el informe "
+            f"CMF de su cliente <b>{cliente}</b>:</p>"
+            f"<p style='background:#fef2f2;border-left:4px solid #b91c1c;padding:10px 14px'>"
+            f"<b>Mora total: ${cm.get('morosidad_clp', 0):,.0f}</b><br>"
+            f"30-59 días: ${cm.get('atraso_30_59_clp', 0):,.0f} · "
+            f"60-89 días: ${cm.get('atraso_60_89_clp', 0):,.0f} · "
+            f"90+ días: ${cm.get('atraso_90_mas_clp', 0):,.0f}<br>"
+            f"Fuente: {cm.get('archivo', 'informe CMF')}</p>"
+            "<p>La operación <b>no puede avanzar a mesa</b> mientras la mora no sea aclarada. "
+            "Desde la ficha del cliente puede:</p>"
+            "<ol><li>Enviar el link/instrucciones de pago al cliente</li>"
+            "<li>Subir el comprobante de pago (validación automática)</li>"
+            "<li>Subir el formulario de regularización</li></ol>"
+            f"<p><a href='{link}' style='background:#101012;color:#d4af37;padding:10px 22px;"
+            "text-decoration:none;font-weight:bold;display:inline-block'>Abrir ficha y subir comprobante</a></p>"
+            f"<p style='color:#555;font-size:12px'>{link}</p>"
+            "<p style='color:#555'>Saludos cordiales,<br><b>Central Mutuos</b></p></div>")
+        await asyncio.to_thread(mail.send_mail, destino,
+                                f"⚠️ Aviso de mora — {cliente}", cuerpo, [], "secundaria")
+        await db.folders.update_one({"id": doc["id"]}, {
+            "$set": {"cmf_morosidad.aviso_ejecutivo_a": destino},
+            "$push": {"historial": {"fecha": _now(), "accion": (
+                f"📧 Aviso de mora enviado al ejecutivo ({destino}"
+                f"{' · MODO PRUEBA: interceptado al administrador' if modo_prueba else ''}) "
+                "con link directo a la ficha para subir el comprobante")}}})
+        logging.info(f"📧 Aviso de mora enviado — {cliente} → {destino}")
+    except Exception as e:
+        logging.warning(f"aviso mora ejecutivo: {e}")
+
+
 async def auditar_folder(doc):
     """Auditoría completa de la carpeta contra la Bóveda de Criterios.
     Devuelve {violaciones:[{clave, regla, detalle, recomendacion, bloqueante}], edad, ...}."""
@@ -1739,6 +1797,8 @@ async def auditar_folder(doc):
                 "Regularizar la deuda morosa y adjuntar comprobante de pago o aclaración antes de enviar a mesa",
                 nivel="critica",
                 fuente="Bóveda btg_pactual.morosidad_permitida · Informe CMF real (04_cmf)")
+            if not cm.get("aviso_ejecutivo_at"):
+                asyncio.create_task(_avisar_mora_ejecutivo(doc, cm))
 
     edad = None
     try:
