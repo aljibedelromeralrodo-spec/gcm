@@ -18,6 +18,8 @@ export default function ContralorModule({ user }) {
   const [simForm, setSimForm] = useState({ asunto: "", cuerpo: "" });
   const [simRes, setSimRes] = useState(null);
   const [simBusy, setSimBusy] = useState(false);
+  const [hallazgos, setHallazgos] = useState(null);
+  const [hallExp, setHallExp] = useState({});
 
   const cargar = () => {
     axios.get(`${API}/api/contralor/espejo`)
@@ -26,6 +28,7 @@ export default function ContralorModule({ user }) {
     axios.get(`${API}/api/contralor/espejo/criterios`).then(r => setCriterios(r.data)).catch(() => {});
     axios.get(`${API}/api/contralor/espejo/operaciones`).then(r => setOps(r.data)).catch(() => {});
     axios.get(`${API}/api/contralor/espejo/no-clasificados`).then(r => setNoClas(r.data.correos || [])).catch(() => {});
+    axios.get(`${API}/api/contralor/espejo/hallazgos`).then(r => setHallazgos(r.data)).catch(() => {});
   };
   useEffect(() => { cargar(); }, []);
 
@@ -307,6 +310,61 @@ export default function ContralorModule({ user }) {
           </div>
         </div>
       )}
+
+      {/* ── PANEL DE HALLAZGOS DE AUDITORÍA (Regla de Oro #71) ── */}
+      <div data-testid="panel-hallazgos" style={{ background: "rgba(15,23,42,0.6)",
+        border: "1px solid rgba(212,175,55,0.35)", borderRadius: 14, padding: "1.2rem 1.6rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <h3 style={{ color: "#FCF6BA", fontSize: "0.95rem", margin: 0 }}>🛡️ Hallazgos de Auditoría Pre-Mesa (Regla de Oro #71)</h3>
+          {hallazgos && (
+            <span data-testid="hallazgos-resumen" style={{ marginLeft: "auto", fontSize: "0.72rem", color: "#94a3b8" }}>
+              {hallazgos.total_alertas} hallazgo(s) ·{" "}
+              <b style={{ color: "#f87171" }}>{hallazgos.criticas} crítico(s)</b> ·{" "}
+              {hallazgos.sin_leer} sin leer</span>)}
+        </div>
+        <p style={{ color: "#94a3b8", fontSize: "0.74rem", marginTop: 6 }}>
+          Cada hallazgo cita la regla incumplida y su fuente exacta (Bóveda de Criterios, dashai_eventos
+          o Algoritmo Espejo). El Contralor audita e informa (ORO-35); solo INV-3 bloquea el envío.</p>
+        {!hallazgos || (hallazgos.carpetas || []).length === 0 ? (
+          <p style={{ color: "#64748b", fontSize: "0.78rem", fontStyle: "italic", marginTop: 10 }}>
+            Sin hallazgos de auditoría registrados.</p>
+        ) : (hallazgos.carpetas || []).slice(0, 30).map(c => {
+          const abierto = !!hallExp[c.folder_id || c.cliente];
+          const criticos = c.hallazgos.filter(h => h.nivel === "critica" || h.bloqueante).length;
+          return (
+            <div key={c.folder_id || c.cliente} data-testid={`hallazgo-carpeta-${c.folder_id || c.cliente}`}
+              style={{ borderTop: "1px solid rgba(148,163,184,0.15)", padding: "0.5rem 0" }}>
+              <div onClick={() => setHallExp(s => ({ ...s, [c.folder_id || c.cliente]: !abierto }))}
+                style={{ display: "flex", gap: 10, alignItems: "center", cursor: "pointer", flexWrap: "wrap" }}>
+                <span style={{ color: "#64748b", fontSize: "0.72rem" }}>{abierto ? "▼" : "▶"}</span>
+                <b style={{ color: "#f8fafc", fontSize: "0.82rem" }}>{c.cliente}</b>
+                <span style={{ fontSize: "0.66rem", fontWeight: 800, borderRadius: 999, padding: "2px 9px",
+                  color: criticos ? "#f87171" : "#facc15",
+                  border: `1px solid ${criticos ? "#f8717155" : "#facc1555"}` }}>
+                  {c.hallazgos.length} hallazgo(s){criticos ? ` · ${criticos} crítico(s)` : ""}</span>
+                <span style={{ marginLeft: "auto", color: "#64748b", fontSize: "0.66rem", fontFamily: "monospace" }}>
+                  {String(c.ultima_fecha || "").slice(0, 16).replace("T", " ")}</span>
+              </div>
+              {abierto && c.hallazgos.map(h => (
+                <div key={h.id} data-testid={`hallazgo-${h.id}`} style={{ margin: "6px 0 6px 22px",
+                  padding: "0.5rem 0.8rem", background: "rgba(2,6,23,0.5)", borderRadius: 8,
+                  borderLeft: `3px solid ${h.bloqueante ? "#f87171" : h.nivel === "critica" ? "#fb923c" : "#facc15"}` }}>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                    <b style={{ color: h.bloqueante ? "#f87171" : "#e2e8f0", fontSize: "0.74rem" }}>
+                      {h.bloqueante ? "⛔ BLOQUEA (INV-3/OP-7)" : h.nivel === "critica" ? "🔴 CRÍTICA" : "🟡 ALERTA"}
+                      {h.regla ? ` — ${h.regla}` : ""}</b>
+                    <span style={{ marginLeft: "auto", color: "#64748b", fontSize: "0.62rem", fontFamily: "monospace" }}>
+                      {String(h.fecha || "").slice(0, 16).replace("T", " ")}{h.leida ? " · leída" : ""}</span>
+                  </div>
+                  <div style={{ color: "#cbd5e1", fontSize: "0.72rem", marginTop: 4 }}>{h.detalle}</div>
+                  {h.fuente && <div style={{ color: "#818cf8", fontSize: "0.64rem", marginTop: 3 }}>
+                    📜 Fuente: {h.fuente}</div>}
+                </div>
+              ))}
+            </div>
+          );
+        })}
+      </div>
 
       {/* ── CAPA B: CRITERIOS MANUALES DEL ADMINISTRADOR ── */}
       <div data-testid="espejo-capa-b" style={{ background: "rgba(15,23,42,0.6)",

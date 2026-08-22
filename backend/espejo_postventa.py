@@ -478,6 +478,32 @@ async def espejo_ia_correccion(fid: str, payload: dict, request: Request):
 
 
 # ═══════════════ ALGORITMO ESPEJO — CAPA B (MANUAL) ═══════════════
+@espejo.get("/hallazgos")
+async def espejo_hallazgos(request: Request):
+    """🛡️ Panel de Hallazgos del Contralor: alertas de auditoría agrupadas por carpeta,
+    con la regla incumplida y la fuente exacta citada."""
+    _exigir(request, ("admin", "maestro", "contralor", "gerencia", "administracion"))
+    alertas = await db.alertas.find(
+        {"tipo": {"$regex": "^(auditoria71|mesa_verdad)"}},
+        {"_id": 0}).sort("fecha", -1).limit(400).to_list(400)
+    grupos = {}
+    for a in alertas:
+        k = a.get("folder_id") or a.get("cliente") or "general"
+        g = grupos.setdefault(k, {"folder_id": a.get("folder_id") or "",
+                                  "cliente": a.get("cliente") or "(sistema)",
+                                  "ultima_fecha": a.get("fecha", ""), "hallazgos": []})
+        g["hallazgos"].append({
+            "id": a.get("id"), "tipo": a.get("tipo"), "nivel": a.get("nivel") or "media",
+            "regla": a.get("regla") or ("Fuente de Verdad de Mesa" if str(a.get("tipo", "")).startswith("mesa_verdad") else ""),
+            "detalle": a.get("mensaje", ""), "recomendacion": a.get("recomendacion", ""),
+            "fuente": a.get("fuente", ""), "bloqueante": bool(a.get("bloqueante")),
+            "fecha": a.get("fecha", ""), "leida": bool(a.get("leida"))})
+    carpetas = sorted(grupos.values(), key=lambda g: g["ultima_fecha"], reverse=True)
+    return {"carpetas": carpetas, "total_alertas": len(alertas),
+            "criticas": sum(1 for a in alertas if (a.get("nivel") == "critica" or a.get("bloqueante")) and not a.get("leida")),
+            "sin_leer": sum(1 for a in alertas if not a.get("leida"))}
+
+
 @espejo.get("/criterios")
 async def espejo_criterios_list(request: Request):
     _exigir(request, ("admin", "maestro", "contralor", "gerencia", "administracion", "postventa"))
@@ -1374,6 +1400,64 @@ def _num(v):
         return None
 
 
+RX_SIM_PLAZO = re.compile(r"plazo(?:\s+cr[eé]dito)?\s*:?\s*(\d{1,2})\s*a[ñn]os|·\s*(\d{1,2})\s*a[ñn]os", re.I)
+RX_SIM_PLAZO_TASA = re.compile(r"\b([1-4]\d)\s+\d{1,2},\d{2}%")
+RX_SIM_MONTO = re.compile(r"(?:monto\s+)?cr[eé]dito\s*:?\s*([\d.]+,\d{2})", re.I)
+RX_SIM_DIV = re.compile(r"total\s+dividendo\s+mensual\s+([\d.,]+)\s*uf", re.I)
+RX_SIM_TASA = re.compile(r"tasa\s+(?:anual|del\s+cr[eé]dito)\s*:?\s*(\d{1,2}[.,]\d{1,2})\s*%", re.I)
+
+
+def _num_cl(s):
+    """Número chileno: '2.000,00'→2000.0 · '5.50'→5.5."""
+    s = str(s or "").strip()
+    if "," in s:
+        s = s.replace(".", "").replace(",", ".")
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+
+def leer_simulador_sync(nombre_folder):
+    """📄 Lector de Simulador (ORO-71/72): extrae plazo, monto, dividendo y tasa reales
+    desde el PDF Simulador más reciente de la carpeta."""
+    base = fsvc.folder_dir(nombre_folder)
+    if not base.exists():
+        return None
+    pdfs = sorted([p for p in base.rglob("*.pdf") if re.search(r"simulad", p.name, re.I)],
+                  key=lambda p: p.stat().st_mtime, reverse=True)
+    for p in pdfs[:4]:
+        try:
+            texto, _m = ocr_service.extraer_texto(p.read_bytes(), p.name)
+        except Exception as e:
+            logging.warning(f"lector simulador {p.name}: {e}")
+            continue
+        t = " ".join((texto or "").split())
+        if not t:
+            continue
+        m = RX_SIM_PLAZO.search(t)
+        plazo = int(m.group(1) or m.group(2)) if m else None
+        if not plazo:
+            m2 = RX_SIM_PLAZO_TASA.search(t)
+            plazo = int(m2.group(1)) if m2 else None
+        monto = None
+        mm = RX_SIM_MONTO.search(t)
+        if mm:
+            monto = _num_cl(mm.group(1))
+        div = None
+        md = RX_SIM_DIV.search(t)
+        if md:
+            div = _num_cl(md.group(1))
+        tasa = None
+        mt = RX_SIM_TASA.search(t)
+        if mt:
+            tasa = _num_cl(mt.group(1))
+        if plazo or monto or div:
+            return {"plazo_anos": plazo, "monto_uf": monto, "dividendo_uf": div,
+                    "tasa_pct": tasa, "archivo": p.name}
+    return None
+
+
 async def auditar_folder(doc):
     """Auditoría completa de la carpeta contra la Bóveda de Criterios.
     Devuelve {violaciones:[{clave, regla, detalle, recomendacion, bloqueante}], edad, ...}."""
@@ -1386,6 +1470,29 @@ async def auditar_folder(doc):
     valor = _num(df.get("valor_propiedad"))
     plazo = _num(df.get("plazo_anos") or df.get("plazo") or cr.get("plazo_anos"))
     antig = _num(df.get("antiguedad_laboral_meses"))
+
+    # 📄 Lector de Simulador: plazo/monto/dividendo reales desde el PDF (una sola lectura)
+    se = doc.get("simulador_extraido") or {}
+    if not se and not doc.get("simulador_scan_at"):
+        try:
+            sim = await asyncio.to_thread(leer_simulador_sync, doc.get("nombre", ""))
+            upd = {"simulador_scan_at": _now()}
+            op = {"$set": upd}
+            if sim:
+                se = {**sim, "extraido_at": _now()}
+                upd["simulador_extraido"] = se
+                if sim.get("plazo_anos"):
+                    upd["datos_financieros.plazo_anos"] = sim["plazo_anos"]
+                op["$push"] = {"historial": {"fecha": _now(), "accion": (
+                    f"📄 Lector de Simulador ({sim['archivo']}): plazo {sim.get('plazo_anos') or '—'} años · "
+                    f"crédito UF {sim.get('monto_uf') or '—'} · dividendo {sim.get('dividendo_uf') or '—'} UF · "
+                    f"tasa {sim.get('tasa_pct') or '—'}%")}}
+            await db.folders.update_one({"id": doc["id"]}, op)
+        except Exception as e:
+            logging.warning(f"lector simulador #71: {e}")
+    plazo = plazo or _num(se.get("plazo_anos"))
+    if monto is None:
+        monto = _num(se.get("monto_uf"))
     v = []
 
     def add(clave, regla, detalle, recomendacion, bloqueante=False, nivel=None, fuente=""):
@@ -1478,6 +1585,28 @@ async def auditar_folder(doc):
                         fuente="config espejo_mesa_modelo · limites_reales_mesa (veredictos aprobaciones@)")
         except Exception as e:
             logging.warning(f"tope espejo mesa #71: {e}")
+
+    # Dividendo/renta — con el dividendo REAL del PDF Simulador (Lector ORO-71)
+    div_uf = _num(se.get("dividendo_uf"))
+    if renta and div_uf:
+        try:
+            if uf_val is None:
+                uf_doc = await db.config.find_one({"_key": "uf"})
+                uf_val = float(uf_doc["valor_uf"]) if uf_doc else float(DEFAULT_UF)
+            con_cod = bool(doc.get("codeudor_nombre"))
+            dr_max = _num(btg.get("div_renta_max")
+                          or (btg.get("div_renta_max_con_codeudor_conjunto") if con_cod
+                              else btg.get("div_renta_max_sin_codeudor"))) or 0.3
+            dr = div_uf * uf_val / renta
+            if dr > dr_max + 0.0001:
+                add("div_renta", "Bóveda — dividendo/renta máximo",
+                    f"Dividendo real del Simulador {div_uf:.2f} UF (${div_uf * uf_val:,.0f}) equivale al "
+                    f"{dr * 100:.1f}% de la renta, sobre el máximo de {dr_max * 100:.0f}%",
+                    f"Bajar el dividendo (más plazo o menor monto) o complementar renta: "
+                    f"dividendo máximo compatible ≈ ${renta * dr_max:,.0f}",
+                    fuente="Bóveda btg_pactual.div_renta_max · Lector de Simulador (PDF real)")
+        except Exception as e:
+            logging.warning(f"div/renta #71: {e}")
 
     edad = None
     try:

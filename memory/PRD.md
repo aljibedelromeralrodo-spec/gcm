@@ -1285,3 +1285,9 @@ actual; todo lo demás permanece intacto.
   · Algoritmo Espejo: tope empírico por vecindad de veredictos reales; monto >115% del tope → alerta con sugerencia de codeudor.
 - Cada violación cita su fuente exacta (campo `fuente` en alertas). ORO-71 reescrito en dashai_eventos + espejo_criterios con la jerarquía.
 - Verificado: 422 INV-3 (Cristian Pavez), carga 705% crítica sin bloqueo (Lilian), tope espejo UF 2.065 vs 4.000 (sintético).
+
+## 2026-08-22 — 3 features nuevas (testing agent: 100% backend + 100% frontend, iteration_60)
+1. VENTANA ANTI-ANULACIÓN (mesa_verdad.py): aprobaciones de Mesa se encolan 45 min (config mesa_verdad.ventana_antianulacion_min) en db.aprobaciones_en_espera antes del reenvío a gerardo.ext; tipo "anulacion" (RX_ANULA, caso Viviana) cancela el reenvío, revierte folder a resultado_mesa=anulado, alerta crítica + aviso Martín. procesar_aprobaciones_en_espera() corre en mesa_verdad_loop; respaldo: si la cola falla, reenvío inmediato.
+2. LECTOR DE SIMULADOR (espejo_postventa.py): leer_simulador_sync extrae plazo/monto/dividendo/tasa de PDFs Simulador* (2 formatos validados); persiste simulador_extraido + datos_financieros.plazo_anos + historial; alimenta auditoría (plazo por edad + nueva violación div_renta con dividendo real vs Bóveda div_renta_max). Cache simulador_scan_at.
+3. PANEL DE HALLAZGOS (ContralorModule.js + GET /contralor/espejo/hallazgos): alertas de auditoría agrupadas por carpeta con regla, nivel, fuente citada; expandible; visible para contralor/admin/gerencia/administracion.
+- Backfill de campo fuente en alertas antiguas aplicado.

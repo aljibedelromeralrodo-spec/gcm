@@ -11,7 +11,7 @@ import re
 import uuid
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, HTTPException, Request
@@ -39,6 +39,10 @@ RX_RECH = re.compile(r"no\s+cumple\s+(?:los\s+)?par[aá]metros\s+objetivos\s+m[i
 RX_PCT = re.compile(r"\d{1,2}[.,]?\d{0,2}\s*%")
 RX_ANIOS = re.compile(r"\d{1,2}\s*a[ñn]os", re.I)
 RX_UF = re.compile(r"\d[\d.,]*\s*uf", re.I)
+RX_ANULA = re.compile(r"favor\s+cancelar\s+(el\s+)?(email|correo|mail)\s+de\s+aprobaci[oó]n"
+                      r"|cancelar\s+la?\s+aprobaci[oó]n|anular\s+la?\s+aprobaci[oó]n"
+                      r"|no\s+considerar\s+la\s+aprobaci[oó]n", re.I)
+VENTANA_ANTIANULACION_MIN = 45  # caso Viviana: la Mesa anuló una aprobación 13 min después
 
 
 def _now():
@@ -50,7 +54,9 @@ def _hora_cl():
 
 
 def _clasificar(texto):
-    """Clasificación LOCAL (sin IA). Prioridad: cambios estructurales > resultado de caso."""
+    """Clasificación LOCAL (sin IA). Prioridad: anulación > cambios estructurales > resultado."""
+    if RX_ANULA.search(texto):
+        return "anulacion"
     if RX_TASA.search(texto) and RX_CAMBIO.search(texto) and RX_PCT.search(texto):
         return "cambio_tasa"
     if RX_PLAZO.search(texto) and RX_CAMBIO.search(texto) and RX_ANIOS.search(texto):
@@ -182,15 +188,29 @@ async def _procesar_correo(msg):
     if tipo in ("aprobacion", "rechazo"):
         f = f_caso
         if tipo == "aprobacion":
+            # ⏳ VENTANA ANTI-ANULACIÓN: el reenvío al ejecutivo se programa (no inmediato)
+            # para captar cancelaciones de la Mesa (caso Viviana: anulada 13 min después).
             try:
+                cfg_v = await db.config.find_one({"_key": "mesa_verdad"}) or {}
+                ventana_min = int(cfg_v.get("ventana_antianulacion_min") or VENTANA_ANTIANULACION_MIN)
+                notificar_en = (datetime.now(timezone.utc) + timedelta(minutes=ventana_min)).isoformat()
+                await db.aprobaciones_en_espera.insert_one({
+                    "id": str(uuid.uuid4()), "estado": "en_espera",
+                    "folder_id": (f_caso or {}).get("id", ""), "cliente": (f_caso or {}).get("nombre", ""),
+                    "subject": subject[:200], "correo_id": mid,
+                    "msg": {"from": msg.get("from"), "date": str(msg.get("date") or "")[:25],
+                            "body": (msg.get("body") or msg.get("body_html_text") or msg.get("preview") or "")[:6000]},
+                    "creado": _now(), "notificar_despues": notificar_en, "ventana_min": ventana_min})
+                registro["ventana_antianulacion"] = {"min": ventana_min, "notificar_despues": notificar_en}
+                registro["accion"] = (f"⏳ Ventana anti-anulación: reenvío a gerardo.ext programado "
+                                      f"en {ventana_min} min ({notificar_en[:16]}Z). ")
+            except Exception as e:
+                logging.warning(f"ventana anti-anulación: {e}")
+                # Respaldo: si la cola falla, se reenvía de inmediato (flujo constitucional)
                 fw = await _reenviar_aprobacion_gerardo(msg, f_caso, subject)
                 registro["reenvio_gerardo"] = fw
-                registro["accion"] = (f"Reenvío constitucional a gerardo.ext "
-                                      f"({'OK' if fw.get('ok') else 'FALLÓ: ' + str(fw.get('error'))[:80]}, "
-                                      f"{fw.get('adjuntos', 0)} PDF adjuntos). ")
-            except Exception as e:
-                logging.warning(f"flujo aprobacion mesa: {e}")
-                registro["reenvio_gerardo"] = {"ok": False, "error": str(e)[:150]}
+                registro["accion"] = (f"Reenvío constitucional inmediato (cola falló) "
+                                      f"({'OK' if fw.get('ok') else 'FALLÓ'}). ")
         if f:
             resultado = "aprobado" if tipo == "aprobacion" else "reprobado"
             await db.folders.update_one({"id": f["id"]}, {"$set": {
@@ -207,11 +227,52 @@ async def _procesar_correo(msg):
                 "id": str(uuid.uuid4()), "tipo": f"mesa_{resultado}",
                 "cliente": f.get("nombre"), "estado": "pendiente", "creado": _now(),
                 "mensaje": (f"Atención jefe: llegó el veredicto de mesa para {f.get('nombre')}. "
-                            + ("¡Fue aprobada! La carpeta quedó lista para avisar al ejecutivo."
+                            + (f"¡Fue aprobada! El aviso al ejecutivo quedó programado por la ventana "
+                               f"anti-anulación ({registro.get('ventana_antianulacion', {}).get('min', VENTANA_ANTIANULACION_MIN)} minutos)."
                                if resultado == "aprobado"
                                else "Fue reprobada. Te recomiendo revisar la carpeta y sus reparos."))})
         else:
             registro["accion"] = (registro.get("accion") or "") + "Sin carpeta coincidente — requiere revisión manual"
+    elif tipo == "anulacion":
+        # 🚫 ANULACIÓN DE APROBACIÓN (caso Viviana): cancelar el reenvío pendiente y revertir
+        pend = None
+        if f_caso:
+            pend = await db.aprobaciones_en_espera.find_one({"folder_id": f_caso["id"], "estado": "en_espera"})
+        if not pend:
+            subj_n = re.sub(r"^(re|rv|fwd?)\s*:\s*", "", subject.strip(), flags=re.I).lower()[:60]
+            for p in await db.aprobaciones_en_espera.find({"estado": "en_espera"}).sort("creado", -1).to_list(20):
+                p_n = re.sub(r"^(re|rv|fwd?)\s*:\s*", "", (p.get("subject") or "").strip(), flags=re.I).lower()[:60]
+                if subj_n and p_n and (subj_n in p_n or p_n in subj_n):
+                    pend = p
+                    break
+        if pend:
+            await db.aprobaciones_en_espera.update_one({"id": pend["id"]}, {"$set": {
+                "estado": "anulada", "anulada_en": _now(), "anulada_por_correo": mid,
+                "motivo_anulacion": subject[:200]}})
+            registro["accion"] = (f"🚫 APROBACIÓN ANULADA por la Mesa dentro de la ventana anti-anulación: "
+                                  f"reenvío a gerardo.ext CANCELADO ({pend.get('cliente') or pend.get('subject', '')[:60]})")
+        else:
+            registro["accion"] = "🚫 Anulación recibida SIN aprobación pendiente en la ventana — revisar manualmente"
+        fid_an = (f_caso or {}).get("id") or (pend or {}).get("folder_id") or ""
+        cliente_an = (f_caso or {}).get("nombre") or (pend or {}).get("cliente") or subject[:60]
+        if fid_an:
+            await db.folders.update_one({"id": fid_an}, {"$set": {
+                "resultado_mesa": "anulado", "resultado_mesa_at": _now(),
+                "resultado_mesa_fuente": MESA_EMAIL, "resultado_mesa_asunto": subject[:200]}})
+            registro["folder_id"] = fid_an
+        await db.alertas.insert_one({"id": str(uuid.uuid4()), "tipo": "mesa_verdad_anulacion",
+                                     "nivel": "critica", "leida": False, "cliente": cliente_an,
+                                     "folder_id": fid_an,
+                                     "mensaje": (f"🚫 MESA ANULÓ UNA APROBACIÓN — {cliente_an}: «{subject[:110]}». "
+                                                 + ("Reenvío al ejecutivo cancelado a tiempo por la ventana anti-anulación."
+                                                    if pend else "No había reenvío pendiente: verificar si el ejecutivo ya fue notificado.")),
+                                     "fecha": _now()})
+        await db.martin_avisos.insert_one({
+            "id": str(uuid.uuid4()), "tipo": "mesa_anulacion", "cliente": cliente_an,
+            "estado": "pendiente", "creado": _now(),
+            "mensaje": (f"Ojo jefe: la Mesa ANULÓ la aprobación de {cliente_an}. "
+                        + ("Alcancé a frenar el aviso al ejecutivo." if pend
+                           else "Revisa si el ejecutivo ya fue avisado, porque no había reenvío pendiente."))})
     elif tipo in ("cambio_tasa", "cambio_plazo", "cambio_criterio"):
         registro["parametros_anteriores"] = await _param_anteriores(tipo)
         etiqueta = {"cambio_tasa": "CAMBIO DE TASA", "cambio_plazo": "CAMBIO DE PLAZO",
@@ -275,6 +336,45 @@ async def barrido_mesa(dias=2):
     return {"ok": True, "revisados": len(msgs), "nuevos": len(procesados), "detalle": procesados}
 
 
+async def procesar_aprobaciones_en_espera():
+    """⏳ Ventana anti-anulación: reenvía a gerardo.ext las aprobaciones cuya ventana venció
+    y que NO fueron anuladas por la Mesa en el intertanto."""
+    ahora = _now()
+    enviadas = 0
+    for p in await db.aprobaciones_en_espera.find({"estado": "en_espera",
+                                                   "notificar_despues": {"$lte": ahora}}).to_list(20):
+        anul = None
+        if p.get("folder_id"):
+            anul = await db.mesa_verdad_log.find_one({
+                "tipo": {"$in": ["anulacion", "rechazo"]}, "folder_id": p["folder_id"],
+                "procesado_en": {"$gte": p["creado"]}})
+        if anul:
+            await db.aprobaciones_en_espera.update_one({"id": p["id"]}, {"$set": {
+                "estado": "anulada", "anulada_en": _now(),
+                "motivo_anulacion": f"{anul['tipo']}: {anul.get('subject', '')[:150]}"}})
+            continue
+        f_caso = await db.folders.find_one({"id": p["folder_id"]}) if p.get("folder_id") else None
+        try:
+            fw = await _reenviar_aprobacion_gerardo(p["msg"], f_caso, p["subject"])
+        except Exception as e:
+            fw = {"ok": False, "error": str(e)[:150]}
+        await db.aprobaciones_en_espera.update_one({"id": p["id"]}, {"$set": {
+            "estado": "notificada" if fw.get("ok") else "error_envio",
+            "notificada_en": _now(), "reenvio_gerardo": fw}})
+        await db.mesa_verdad_log.update_one({"correo_id": p.get("correo_id")}, {"$set": {
+            "reenvio_gerardo": fw,
+            "accion_ventana": (f"Ventana anti-anulación cumplida ({p.get('ventana_min')} min) → reenvío a "
+                               f"gerardo.ext {'OK' if fw.get('ok') else 'FALLÓ'} ({fw.get('adjuntos', 0)} PDF)")}})
+        if fw.get("ok"):
+            enviadas += 1
+            await db.martin_avisos.insert_one({
+                "id": str(uuid.uuid4()), "tipo": "mesa_aprobado_notificado",
+                "cliente": p.get("cliente") or "", "estado": "pendiente", "creado": _now(),
+                "mensaje": (f"Listo jefe: pasó la ventana anti-anulación de {p.get('cliente') or 'la carpeta'} "
+                            "sin cancelaciones de la Mesa y ya reenvié la aprobación al ejecutivo.")})
+    return enviadas
+
+
 async def mesa_verdad_loop():
     """Monitoreo permanente y autónomo (REGLA CONSTITUCIONAL — inamovible)."""
     await asyncio.sleep(25)
@@ -287,6 +387,10 @@ async def mesa_verdad_loop():
             await barrido_mesa(dias=2)
         except Exception as e:
             logging.warning(f"mesa_verdad loop: {e}")
+        try:
+            await procesar_aprobaciones_en_espera()
+        except Exception as e:
+            logging.warning(f"ventana anti-anulación loop: {e}")
         await asyncio.sleep(INTERVALO_SEG)
 
 
