@@ -99,12 +99,21 @@ async def borrar_listado(lid: str, request: Request):
     return {"ok": True}
 
 
+TIPOS_DESTINATARIO = {"broker_inmobiliario": "Broker Inmobiliario",
+                      "cliente_directo": "Cliente Directo",
+                      "cliente_individual": "Cliente Individual"}
+
+
 @pub.post("/listados/importar")
 async def importar_listado(request: Request, archivo: UploadFile = File(...),
-                           nombre: str = Form(""), excluir: str = Form("ecomac.cl")):
+                           nombre: str = Form(""), excluir: str = Form("ecomac.cl"),
+                           tipo_destinatario: str = Form("broker_inmobiliario")):
     """Carga un listado desde Excel (.xlsx) o CSV/TXT: extrae correos y teléfonos de todas
-    las celdas, deduplica y fusiona con el listado del mismo nombre si ya existe."""
+    las celdas (pueden venir en columnas distintas del MISMO archivo), deduplica y
+    distribuye automáticamente: correos → campaña de mail · teléfonos → campaña WhatsApp."""
     u = _exigir_admin(request)
+    if tipo_destinatario not in TIPOS_DESTINATARIO:
+        tipo_destinatario = "broker_inmobiliario"
     raw = await archivo.read()
     fn = (archivo.filename or "").lower()
     celdas = []
@@ -135,17 +144,23 @@ async def importar_listado(request: Request, archivo: UploadFile = File(...),
         resumen["duplicados_eliminados"] += len(contactos) - len(nuevos)
         resumen["agregados"] = len(nuevos)
         await db.publicidad_listados.update_one({"id": existente["id"]}, {
-            "$push": {"contactos": {"$each": nuevos}}, "$set": {"actualizado": _now()}})
+            "$push": {"contactos": {"$each": nuevos}},
+            "$set": {"actualizado": _now(), "tipo_destinatario": tipo_destinatario}})
         lid = existente["id"]
     else:
         lid = str(uuid.uuid4())
         await db.publicidad_listados.insert_one({
             "id": lid, "nombre": nombre, "tipo_contacto": "Importado (archivo)",
+            "tipo_destinatario": tipo_destinatario,
             "contactos": contactos, "creado": _now(), "creado_por": u.get("sub", ""),
             "archivo_origen": archivo.filename})
     reg = await db.publicidad_listados.find_one({"id": lid}, {"_id": 0})
+    n_mail = sum(1 for c in reg.get("contactos", []) if c["tipo"] == "correo")
+    n_tel = sum(1 for c in reg.get("contactos", []) if c["tipo"] == "telefono")
     return {"ok": True, "listado": reg, "resumen": resumen,
-            "mensaje": f"«{nombre}»: {resumen['agregados']} contacto(s) importados desde {archivo.filename}"}
+            "mensaje": (f"«{nombre}» ({TIPOS_DESTINATARIO[tipo_destinatario]}): "
+                        f"{resumen['agregados']} contacto(s) nuevos — distribución automática: "
+                        f"{n_mail} correo(s) → Campañas de Correo · {n_tel} teléfono(s) → Campañas WhatsApp")}
 
 
 # ══ CENTRO DE CAPTACIÓN — datos unificados para la vista del administrador ══

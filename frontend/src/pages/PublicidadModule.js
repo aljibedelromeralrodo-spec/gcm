@@ -11,6 +11,13 @@ const secTitle = { color: ORO, fontFamily: "'Playfair Display', serif", fontSize
 const secSub = { color: "#8a8fa3", fontSize: "0.66rem", margin: "2px 0 0" };
 const chip = (bg, fg) => ({ background: bg, color: fg, borderRadius: 20, padding: "0.14rem 0.6rem", fontSize: "0.6rem", fontWeight: 800, whiteSpace: "nowrap" });
 
+const TIPO_DEST = {
+  broker_inmobiliario: "Broker Inmobiliario",
+  cliente_directo: "Cliente Directo",
+  cliente_individual: "Cliente Individual",
+};
+const etiquetaTipo = (l) => TIPO_DEST[l.tipo_destinatario] || "Broker Inmobiliario";
+
 const Encabezado = ({ n, titulo, sub }) => (
   <div style={{ display: "flex", alignItems: "baseline", gap: 10, borderBottom: "1px solid rgba(212,175,55,0.2)", paddingBottom: 8, marginBottom: 12 }}>
     <span style={{ color: "#0a0a0a", background: `linear-gradient(135deg,#BF953F,#FCF6BA,#AA771C)`, borderRadius: 8, width: 26, height: 26, display: "inline-flex", alignItems: "center", justifyContent: "center", fontWeight: 900, fontSize: "0.8rem" }}>{n}</span>
@@ -26,6 +33,7 @@ export default function PublicidadModule() {
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
   const [camp, setCamp] = useState({ listado_id: "", template: "", asunto: "" });
+  const [tipoDest, setTipoDest] = useState("broker_inmobiliario");
   const [wa, setWa] = useState({ listado_id: "", mensaje: "" });
   const [waLinks, setWaLinks] = useState([]);
   const [twilio, setTwilio] = useState({ sid: "", token: "", numero: "" });
@@ -65,10 +73,11 @@ export default function PublicidadModule() {
     return r;
   });
 
-  const importar = (file, nombre) => accion(async () => {
+  const importar = (file, nombre, tipo) => accion(async () => {
     const fd = new FormData();
     fd.append("archivo", file);
     if (nombre) fd.append("nombre", nombre);
+    fd.append("tipo_destinatario", tipo || tipoDest);
     return axios.post(`${API}/api/publicidad/listados/importar`, fd);
   });
 
@@ -143,17 +152,26 @@ export default function PublicidadModule() {
           ))}
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 8 }}>
+          <select data-testid="pub-tipo-destinatario" style={inp} value={tipoDest} onChange={e => setTipoDest(e.target.value)}>
+            <option value="broker_inmobiliario">👔 Broker Inmobiliario</option>
+            <option value="cliente_directo">🏠 Cliente Directo</option>
+            <option value="cliente_individual">👤 Cliente Individual</option>
+          </select>
           <select data-testid="pub-camp-listado" style={inp} value={camp.listado_id} onChange={e => setCamp({ ...camp, listado_id: e.target.value })}>
             <option value="">— Listado de contactos —</option>
-            {listadosCorreo.map(l => <option key={l.id} value={l.id}>{`${l.nombre} (${(l.contactos || []).filter(c => c.tipo === "correo").length} correos)`}</option>)}
+            {listadosCorreo.map(l => <option key={l.id} value={l.id}>{`${l.nombre} · ${etiquetaTipo(l)} (${(l.contactos || []).filter(c => c.tipo === "correo").length} correos)`}</option>)}
           </select>
           <input data-testid="pub-camp-asunto" style={inp} placeholder="Asunto del correo" value={camp.asunto} onChange={e => setCamp({ ...camp, asunto: e.target.value })} />
           <div>
             <input ref={fileCorreo} type="file" accept=".xlsx,.csv,.txt" style={{ display: "none" }}
               onChange={e => { if (e.target.files[0]) { importar(e.target.files[0]); e.target.value = ""; } }} />
-            <button data-testid="pub-importar-correo" disabled={busy} style={{ ...ghostBtn, width: "100%" }} onClick={() => fileCorreo.current?.click()}>📂 Cargar listado (Excel / CSV)</button>
+            <button data-testid="pub-importar-correo" disabled={busy} style={{ ...ghostBtn, width: "100%" }} onClick={() => fileCorreo.current?.click()}>📂 Cargar base (Excel / CSV)</button>
           </div>
         </div>
+        <p style={{ color: "#8a8fa3", fontSize: "0.62rem", margin: "8px 0 0" }} data-testid="pub-distribucion-nota">
+          💡 Una sola subida basta: si el Excel trae columnas de <b style={{ color: ORO }}>correo</b> y <b style={{ color: "#25d366" }}>WhatsApp</b>,
+          el sistema distribuye automáticamente los correos a esta campaña y los teléfonos a Campañas WhatsApp, con el tipo de destinatario elegido.
+        </p>
         <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
           <button data-testid="pub-enviar-prueba" disabled={busy || !camp.template || !camp.asunto} style={{ ...ghostBtn, color: "#38bdf8", borderColor: "#38bdf8", background: "rgba(56,189,248,0.08)" }} onClick={() => enviarCampana(true)}>📧 Enviar PRUEBA a mí</button>
           <button data-testid="pub-enviar-campana" disabled={busy || !camp.listado_id || !camp.template || !camp.asunto} style={goldBtn} onClick={() => enviarCampana(false)}>🚀 ENVIAR CAMPAÑA</button>
@@ -176,14 +194,19 @@ export default function PublicidadModule() {
       <div style={sec} data-testid="campanas-whatsapp">
         <Encabezado n="3" titulo="Campañas WhatsApp" sub="Generador de links masivos por listado · un clic por contacto" />
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 8 }}>
+          <select data-testid="pub-wa-tipo-destinatario" style={inp} value={tipoDest} onChange={e => setTipoDest(e.target.value)}>
+            <option value="broker_inmobiliario">👔 Broker Inmobiliario</option>
+            <option value="cliente_directo">🏠 Cliente Directo</option>
+            <option value="cliente_individual">👤 Cliente Individual</option>
+          </select>
           <select data-testid="pub-wa-listado" style={inp} value={wa.listado_id} onChange={e => setWa({ ...wa, listado_id: e.target.value })}>
             <option value="">— Listado con teléfonos —</option>
-            {listadosTel.map(l => <option key={l.id} value={l.id}>{`${l.nombre} (${(l.contactos || []).filter(c => c.tipo === "telefono").length} teléfonos)`}</option>)}
+            {listadosTel.map(l => <option key={l.id} value={l.id}>{`${l.nombre} · ${etiquetaTipo(l)} (${(l.contactos || []).filter(c => c.tipo === "telefono").length} teléfonos)`}</option>)}
           </select>
           <div>
             <input ref={fileWa} type="file" accept=".xlsx,.csv,.txt" style={{ display: "none" }}
               onChange={e => { if (e.target.files[0]) { importar(e.target.files[0]); e.target.value = ""; } }} />
-            <button data-testid="pub-importar-wa" disabled={busy} style={{ ...ghostBtn, width: "100%" }} onClick={() => fileWa.current?.click()}>📂 Cargar Excel de teléfonos</button>
+            <button data-testid="pub-importar-wa" disabled={busy} style={{ ...ghostBtn, width: "100%" }} onClick={() => fileWa.current?.click()}>📂 Cargar base (Excel / CSV)</button>
           </div>
         </div>
         <textarea data-testid="pub-wa-mensaje" style={{ ...inp, width: "100%", minHeight: 70, marginTop: 8 }} placeholder="Mensaje editable de la campaña de WhatsApp…" value={wa.mensaje} onChange={e => setWa({ ...wa, mensaje: e.target.value })} />

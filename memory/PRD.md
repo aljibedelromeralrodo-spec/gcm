@@ -1358,3 +1358,8 @@ actual; todo lo demás permanece intacto.
 - Fix: dedupe por nombre en backend (gerencia_comercial.py, panel ejecutivos) + key compuesta nombre-rol-índice en GerenciaCommandCenter.js.
 - Warning span-dentro-de-option: NO existe en el código actual (barrido estático de todos los <option>/<select> del frontend + recorrido de 38 módulos como admin y módulos gerencia con captura de consola = 0 ocurrencias). Probablemente era efecto del render duplicado ya corregido.
 - Verificado: consola impecable (0 warnings/errores React) en ambos perfiles.
+
+## 2026-08-23 — Publicidad: tipos de destinatario + distribución automática Excel
+- Nuevo selector de tipo de destinatario en Campañas de Correo y WhatsApp: Broker Inmobiliario / Cliente Directo / Cliente Individual (backend: campo tipo_destinatario en publicidad_listados, Form en /listados/importar).
+- Una sola subida de Excel con columnas de correo y WhatsApp distribuye automáticamente: correos → campaña de mail, teléfonos → campaña WhatsApp (el parser ya extraía ambos; ahora el mensaje muestra el desglose y el tipo).
+- Los selects de listados muestran la etiqueta del tipo. Verificado end-to-end con Excel real (3 correos + 3 teléfonos → distribución correcta, UI muestra el listado en ambas campañas).
