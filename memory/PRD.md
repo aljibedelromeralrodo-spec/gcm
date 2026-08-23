@@ -1385,3 +1385,6 @@ actual; todo lo demás permanece intacto.
 - leader_guard.py reescrito: claim atómico con find_one_and_update sobre db.config (_key=leader_lock), identidad de pod vía HOSTNAME, heartbeat 15s / TTL 45s. Todos los loops periódicos (server.py startup, vía _task_blindada) corren solo en el pod líder.
 - bunker.sync_diff: YA NO borra entradas de GridFS según el disco local (GridFS = fuente de verdad). Nuevo bunker.eliminar()/eliminar_bg() para borrado explícito (GridFS + disco), conectado en los 11 puntos de eliminación intencional (server.py: borrar carpeta/archivo/set, reclasificar, reset drive; folders_service.py: moves de codeudor y split).
 - Verificado: claim exclusivo/expiración/liberación con HOSTNAME, sync no destructivo, restauración desde BD, borrado explícito end-to-end.
+
+## 2026-08-23 — .dockerignore (PASO 3)
+- Creado /app/.dockerignore: excluye backend/storage/ (1.8 GB de archivos de clientes que viven en GridFS), node_modules, build, __pycache__, logs y test_reports de la imagen de despliegue.

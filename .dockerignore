@@ -1,0 +1,12 @@
+# Archivos de clientes: viven en GridFS (búnker), no en la imagen de despliegue
+backend/storage/
+
+# Dependencias y artefactos de build
+frontend/node_modules/
+frontend/build/
+**/__pycache__/
+*.pyc
+
+# Datos locales y temporales
+test_reports/
+*.log
