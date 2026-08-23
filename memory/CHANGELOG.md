@@ -1972,3 +1972,31 @@ polling GET /api/central/proactive existe vacío en server.py:1526) — usuario 
 - +EMPRENDIMIENTO E INNOVACIÓN (Guía de Innovación PDF): MVP/validar antes de endeudarse, modelo de negocio,
   financiamiento sano (Sercotec/Corfo/FOSIS), formalización, separar plata negocio/casa. Tema chip "🚀 Emprender"
   (11 temas). Verificado por curl: respuesta prudente con mini-ensayo de 10 porciones y fondos estatales.
+
+## 2026-06 (fork) — APP MÓVIL "MARTÍN SUMA UC" + Video Portal Cliente
+- VIDEO PORTAL CLIENTE: generado (2:03 min, Playwright+TTS onyx+ffmpeg) →
+  /app/frontend/public/demo-portal-cliente.mp4 (link público /demo-portal-cliente.mp4).
+  NOTA: playwright chromium se pierde en forks → `python3 -m playwright install chromium`.
+- APP MÓVIL /app/frontend/public/martin-app.html (mobile-first 480px, estilo Suma UC:
+  crema #FFF4DC, azul #16297C, amarillo #FFC93C, coral #FF7A59, Outfit):
+  · PANTALLA PRINCIPAL = Registro diario: "¿Cuánto gastó hoy y cuánto pudo ahorrar?";
+    si ahorro=0 → "Cuénteme qué gastó hoy, así vemos juntos en qué podríamos guardar algo."
+    → pide detalle → consejo personalizado vía /chat. Acumula en localStorage (ma_registro)
+    → tarjeta "Su mes en construcción" (gastado/ahorrado/días + barra + frases motivadoras).
+  · AVATAR VIVO: 3 fotogramas (martin-avatar.jpeg + -talk + -blink generados con Gemini image,
+    casi pixel-alineados) — parpadeo aleatorio, boca sincronizada al audio (toggle 105ms mientras
+    suena), vaivén CSS. Presente en home, topbars, chat, FAB y player.
+  · CONTROLES DE AUDIO: barra fija #audiobar con Pausar/Continuar/Detener (íconos grandes,
+    etiquetas español, ecualizador animado). Pausar congela la secuencia (promise espera onended).
+  · SALUDO PROACTIVO: POST /api/martin-financiero/saludo (LLM, hora Chile) termina SIEMPRE con
+    la pregunta del registro; se muestra + se habla (autoplay con fallback primer tap).
+  · RECORDATORIO MATUTINO: toggle + Notification API (6-12h, 1 vez/día, ma_rec/ma_rec_dia).
+  · 8 módulos: Punto de Partida (diagnóstico), Presupuesto (50/30/20), Deudas (bola de nieve +
+    bancos/CAE), Mi Sueño de Casa (DS49/DS1 T1-T2-T3/DS19/sitio propio/cómo postular),
+    Emprender, Me Quiero a Mí, Experiencias Guiadas (player pantalla completa), Chat libre.
+- BACKEND: /api/martin-financiero/tts PÚBLICO (onyx, misma voz Martín), /saludo nuevo.
+  SISTEMA: chileno natural (chilenismos suaves), proactivo/mentor, respuestas 3-6 frases
+  COMPLETAS (nunca cortadas).
+- RENOMBRE pedido por usuario: la app móvil se llama "Martín Suma UC" (title, hero, chip, footer).
+- VERIFICADO: curl saludo/tts + screenshots móviles 390x844 del flujo completo de registro
+  (frase cálida sin ahorro → consejo personalizado delivery/bencina → progreso mensual → barra audio).

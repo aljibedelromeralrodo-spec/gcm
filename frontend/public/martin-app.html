@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#16297C">
+<title>Martín Suma UC</title>
+<link rel="icon" href="martin-avatar.jpeg">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+:root{--azul:#16297C;--azul2:#2743A6;--cel:#4CC9F0;--ama:#FFC93C;--coral:#FF7A59;--crema:#FFF4DC;--blanco:#FFFDF7;--tinta:#1B2559;--verde:#2EC4A6}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{font-family:Outfit,system-ui,sans-serif;background:var(--crema);color:var(--tinta);overflow:hidden}
+#app{max-width:480px;margin:0 auto;height:100dvh;position:relative;background:var(--crema);overflow:hidden}
+.view{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;padding-bottom:110px;opacity:0;pointer-events:none;transform:translateX(24px);transition:opacity .28s,transform .28s;-webkit-overflow-scrolling:touch}
+.view.on{opacity:1;pointer-events:auto;transform:none}
+/* ===== Avatar vivo ===== */
+.alive{position:relative;border-radius:50%;overflow:hidden;flex:none;background:#dbe6f5;box-shadow:0 4px 14px rgba(22,41,124,.28);animation:sway 6.5s ease-in-out infinite}
+.alive img{position:absolute;width:220%;height:220%;left:-57.8%;top:-12.2%;object-fit:cover}
+.alive .fTalk,.alive .fBlink{opacity:0;transition:opacity .07s linear}
+.alive.mo .fTalk{opacity:1}
+.alive.blk .fBlink{opacity:1}
+@keyframes sway{0%,100%{transform:rotate(-1.1deg) translateY(0)}25%{transform:rotate(.6deg) translateY(-1.5px)}55%{transform:rotate(1.2deg) translateY(.5px)}80%{transform:rotate(-.5deg) translateY(-1px)}}
+.aliveRing{padding:3px;border-radius:50%;background:conic-gradient(var(--ama),var(--coral),var(--cel),var(--ama));flex:none}
+body.talking .aliveRing{animation:pulseRing 1s ease-in-out infinite}
+@keyframes pulseRing{0%,100%{box-shadow:0 0 0 0 rgba(255,201,60,.55)}50%{box-shadow:0 0 0 9px rgba(255,201,60,0)}}
+/* ===== Home ===== */
+.hero{background:linear-gradient(160deg,var(--azul) 0%,#1D3494 60%,var(--azul2) 100%);border-radius:0 0 34px 34px;padding:calc(env(safe-area-inset-top) + 22px) 22px 26px;color:#fff;position:relative;overflow:hidden}
+.hero::after{content:"";position:absolute;width:190px;height:190px;border-radius:50%;background:rgba(255,201,60,.14);top:-70px;right:-60px}
+.hero::before{content:"";position:absolute;width:120px;height:120px;border-radius:50%;background:rgba(76,201,240,.12);bottom:-46px;left:-30px}
+.heroRow{display:flex;align-items:center;gap:14px;position:relative;z-index:1}
+.hero h1{font-size:1.5rem;font-weight:900;line-height:1.15}
+.hero h1 em{color:var(--ama);font-style:normal}
+.hero p{font-size:.78rem;color:#dbe4ff;margin-top:4px;line-height:1.45}
+.chip{display:inline-block;background:rgba(255,201,60,.18);border:1px solid rgba(255,201,60,.5);color:var(--ama);font-size:.56rem;font-weight:800;letter-spacing:1.4px;padding:4px 11px;border-radius:999px;margin-top:10px}
+.tipCard{margin:-16px 18px 0;background:var(--blanco);border-radius:18px;padding:13px 16px;font-size:.78rem;line-height:1.5;box-shadow:0 6px 20px rgba(22,41,124,.10);position:relative;z-index:2;border-left:5px solid var(--ama)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:13px;padding:18px}
+.mcard{background:var(--blanco);border-radius:22px;padding:17px 15px 15px;box-shadow:0 4px 16px rgba(22,41,124,.08);cursor:pointer;transition:transform .15s,box-shadow .15s;animation:up .5s both;border:1.5px solid transparent}
+.mcard:active{transform:scale(.96)}
+.mcard .ic{width:52px;height:52px;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:26px;margin-bottom:10px}
+.mcard b{display:block;font-size:.86rem;font-weight:800;line-height:1.2}
+.mcard span{font-size:.68rem;color:#6B7280;line-height:1.35;display:block;margin-top:3px}
+@keyframes up{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+/* ===== Módulo ===== */
+.topbar{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:11px;padding:calc(env(safe-area-inset-top) + 12px) 16px 12px;background:linear-gradient(160deg,var(--azul),var(--azul2));color:#fff;border-radius:0 0 24px 24px}
+.back{width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,.16);border:0;color:#fff;font-size:19px;cursor:pointer;flex:none}
+.topbar h2{font-size:1.02rem;font-weight:900;flex:1;line-height:1.2}
+.mbody{padding:16px}
+.card{background:var(--blanco);border-radius:20px;padding:16px;margin-bottom:13px;box-shadow:0 3px 14px rgba(22,41,124,.07);animation:up .45s both}
+.card h3{font-size:.92rem;font-weight:800;color:var(--azul);margin-bottom:7px}
+.card p,.card li{font-size:.8rem;line-height:1.6;color:#3B4468}
+.card ul{padding-left:18px;margin-top:5px}
+.acc{border:1.5px solid #EDE4C8;border-radius:16px;margin-top:10px;overflow:hidden}
+.acc>b{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;font-size:.82rem;font-weight:800;cursor:pointer;color:var(--azul)}
+.acc>div{display:none;padding:0 14px 13px;font-size:.78rem;line-height:1.6;color:#3B4468}
+.acc.open>div{display:block}
+.acc.open>b .ar{transform:rotate(90deg)}
+.ar{transition:transform .2s;color:var(--coral)}
+input,select{width:100%;background:#F6F1E2;border:1.5px solid #EDE4C8;border-radius:14px;padding:12px 14px;font-size:.88rem;font-family:Outfit;color:var(--tinta);margin-top:8px}
+.btn{background:var(--ama);color:var(--azul);border:0;border-radius:999px;padding:12px 22px;font-weight:900;font-size:.84rem;font-family:Outfit;cursor:pointer;margin-top:12px;transition:transform .12s;box-shadow:0 4px 12px rgba(255,201,60,.4)}
+.btn:active{transform:scale(.95)}
+.btn.azul{background:var(--azul);color:#fff;box-shadow:0 4px 12px rgba(22,41,124,.3)}
+.btn.coral{background:var(--coral);color:#fff;box-shadow:0 4px 12px rgba(255,122,89,.35)}
+.btn.mini{padding:8px 15px;font-size:.72rem;margin-top:8px}
+.res{display:none;margin-top:13px;border-radius:16px;padding:14px;font-size:.8rem;line-height:1.55}
+.pill3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;margin-top:12px}
+.pill3 div{border-radius:14px;padding:11px 7px;text-align:center;font-size:.64rem;font-weight:700}
+.pill3 b{display:block;font-size:.92rem;font-weight:900;margin-top:2px}
+.barra{background:#EDE4C8;border-radius:999px;height:12px;overflow:hidden;margin-top:7px}
+.barra i{display:block;height:100%;background:linear-gradient(90deg,var(--cel),var(--ama));border-radius:999px;transition:width .6s}
+.voz{display:inline-flex;align-items:center;gap:6px;background:rgba(255,201,60,.18);border:1.5px solid var(--ama);color:#8a6d00;border-radius:999px;padding:7px 14px;font-size:.7rem;font-weight:800;cursor:pointer;margin-top:10px}
+/* ===== Chat ===== */
+#v-chat{display:flex;flex-direction:column;padding-bottom:0}
+.chatScroll{flex:1;overflow-y:auto;padding:14px 14px 8px}
+.mM,.mU{max-width:84%;padding:11px 14px;font-size:.82rem;line-height:1.55;margin-bottom:10px;white-space:pre-wrap;animation:up .3s both}
+.mM{background:var(--blanco);border-radius:18px 18px 18px 5px;box-shadow:0 2px 10px rgba(22,41,124,.08)}
+.mM b{color:var(--coral);font-size:.62rem;display:block;margin-bottom:3px;letter-spacing:.6px}
+.mU{background:var(--azul);color:#fff;border-radius:18px 18px 5px 18px;margin-left:auto}
+.temasRow{display:flex;gap:8px;overflow-x:auto;padding:8px 14px;scrollbar-width:none}
+.temasRow::-webkit-scrollbar{display:none}
+.temasRow button{flex:none;background:var(--blanco);border:1.5px solid #EDE4C8;border-radius:999px;padding:8px 14px;font-size:.7rem;font-weight:700;font-family:Outfit;color:var(--azul);cursor:pointer}
+.inputRow{display:flex;gap:8px;padding:10px 14px calc(env(safe-area-inset-bottom) + 86px);background:var(--crema)}
+.inputRow input{flex:1;margin:0;border-radius:999px}
+.inputRow button{background:var(--ama);border:0;border-radius:50%;width:48px;height:48px;font-size:19px;cursor:pointer;flex:none;color:var(--azul)}
+/* ===== Player experiencias ===== */
+#player{position:fixed;inset:0;z-index:60;background:linear-gradient(170deg,#101E5E,var(--azul2));display:none;flex-direction:column;align-items:center;justify-content:center;padding:30px;text-align:center;color:#fff;max-width:480px;margin:0 auto}
+#player.on{display:flex}
+#player h3{font-size:1.05rem;font-weight:900;margin-top:20px}
+#player .paso{font-size:.9rem;line-height:1.7;color:#dbe4ff;margin-top:14px;min-height:110px;animation:up .4s both}
+#player .prog{font-size:.66rem;letter-spacing:2px;color:var(--ama);font-weight:800;margin-top:16px}
+/* ===== FAB + Nav ===== */
+#fab{position:fixed;right:16px;bottom:calc(env(safe-area-inset-bottom) + 92px);z-index:50;border:0;background:none;cursor:pointer;transition:transform .15s}
+#fab:active{transform:scale(.9)}
+nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;background:var(--blanco);border-radius:24px 24px 0 0;display:flex;box-shadow:0 -6px 24px rgba(22,41,124,.12);z-index:40;padding-bottom:env(safe-area-inset-bottom)}
+nav button{flex:1;background:none;border:0;padding:11px 0 9px;font-family:Outfit;font-size:.62rem;font-weight:800;color:#9AA1BD;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px}
+nav button .nic{font-size:21px;transition:transform .15s}
+nav button.on{color:var(--azul)}
+nav button.on .nic{transform:translateY(-2px) scale(1.12)}
+footer{font-size:.6rem;color:#9AA1BD;text-align:center;padding:8px 24px 14px;line-height:1.6}
+/* ===== Barra de audio ===== */
+#audiobar{position:fixed;left:50%;transform:translateX(-50%) translateY(120px);bottom:calc(env(safe-area-inset-bottom) + 74px);width:calc(100% - 28px);max-width:452px;background:var(--azul);border-radius:22px;display:flex;align-items:center;gap:6px;padding:9px 12px;z-index:55;box-shadow:0 8px 24px rgba(22,41,124,.4);transition:transform .3s;color:#fff}
+#audiobar.on{transform:translateX(-50%) translateY(0)}
+#audiobar .eq{display:flex;gap:3px;align-items:flex-end;height:20px;flex:none;margin-right:2px}
+#audiobar .eq i{width:4px;background:var(--ama);border-radius:2px;animation:eq .8s ease-in-out infinite}
+#audiobar .eq i:nth-child(2){animation-delay:.2s}#audiobar .eq i:nth-child(3){animation-delay:.4s}
+#audiobar.paused .eq i{animation-play-state:paused;height:6px!important}
+@keyframes eq{0%,100%{height:6px}50%{height:18px}}
+#audiobar span{flex:1;font-size:.66rem;font-weight:700;color:#dbe4ff;line-height:1.25}
+.abtn{border:0;border-radius:16px;padding:8px 12px;font-family:Outfit;font-size:.62rem;font-weight:900;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:1px;flex:none}
+.abtn i{font-style:normal;font-size:19px;line-height:1}
+.abtn.p{background:var(--ama);color:var(--azul)}
+.abtn.c{background:var(--verde);color:#fff}
+.abtn.d{background:var(--coral);color:#fff}
+/* ===== Saludo proactivo ===== */
+#saludo{margin:14px 18px 0;background:var(--blanco);border-radius:20px;padding:14px 16px;box-shadow:0 5px 18px rgba(22,41,124,.10);display:none;gap:12px;align-items:flex-start;border:1.5px solid rgba(255,201,60,.5);animation:up .5s both}
+#saludo.on{display:flex}
+#saludo p{font-size:.79rem;line-height:1.55;flex:1}
+#saludo b{color:var(--coral);font-size:.62rem;display:block;letter-spacing:.8px;margin-bottom:3px}
+.recCard{margin:4px 18px 0;background:var(--blanco);border-radius:20px;padding:14px 16px;box-shadow:0 3px 14px rgba(22,41,124,.07);display:flex;align-items:center;gap:12px}
+.recCard p{font-size:.72rem;line-height:1.45;flex:1;color:#3B4468}
+.sw{width:52px;height:30px;border-radius:999px;background:#E5DCC0;position:relative;cursor:pointer;flex:none;transition:background .2s}
+.sw::after{content:"";position:absolute;width:24px;height:24px;border-radius:50%;background:#fff;top:3px;left:3px;transition:left .2s;box-shadow:0 2px 6px rgba(0,0,0,.2)}
+.sw.on{background:var(--verde)}
+.sw.on::after{left:25px}
+</style></head>
+<body>
+<div id="app">
+
+  <!-- ============ HOME ============ -->
+  <section class="view on" id="v-home">
+    <div class="hero">
+      <div class="heroRow">
+        <div class="aliveRing"><div class="alive" style="width:76px;height:76px" data-testid="avatar-home"></div></div>
+        <div>
+          <h1>Hola, soy <em>Martín</em></h1>
+          <p>Su amigo y mentor de <b>Martín Suma UC</b>. Le acompaño con la plata, su casa propia, su emprendimiento y su bienestar.</p>
+        </div>
+      </div>
+      <span class="chip">MARTÍN SUMA UC · RESPONSABILIDAD SOCIAL CENTRAL MUTUOS CON CRECES</span>
+    </div>
+    <!-- ===== REGISTRO DIARIO (pantalla principal) ===== -->
+    <div class="card" style="margin:16px 18px 0" id="registro" data-testid="registro-diario">
+      <h3>📒 Su registro de hoy</h3>
+      <p id="reg-preg" style="font-weight:700;color:var(--azul)">¿Cuánto gastó hoy y cuánto pudo ahorrar?</p>
+      <input id="reg-gasto" type="number" inputmode="numeric" placeholder="¿Cuánto gastó hoy? (ej: 25000)" data-testid="reg-gasto">
+      <input id="reg-ahorro" type="number" inputmode="numeric" placeholder="¿Cuánto ahorró hoy? (0 si nada)" data-testid="reg-ahorro">
+      <div id="reg-det-wrap" style="display:none">
+        <input id="reg-detalle" placeholder="¿En qué gastó hoy? (ej: super, micro, delivery)" data-testid="reg-detalle">
+      </div>
+      <button class="btn" onclick="registrarDia()" data-testid="reg-guardar">Contarle a Martín ✍️</button>
+      <div class="res" id="reg-resp" style="background:#FFF1C9"></div>
+    </div>
+    <!-- ===== PROGRESO MENSUAL ===== -->
+    <div class="card" style="margin:13px 18px 0" id="progreso" data-testid="progreso-mensual"></div>
+    <div class="tipCard" id="tipdia" style="margin-top:13px">💡 <b>Tip del día:</b> cargando…</div>
+    <div id="saludo" data-testid="saludo-martin">
+      <div class="aliveRing"><div class="alive" style="width:46px;height:46px"></div></div>
+      <p><b>MARTÍN LE SALUDA 💛</b><span id="saludo-txt">…</span><br>
+        <button class="btn mini" onclick="hablar(document.getElementById('saludo-txt').textContent)" data-testid="saludo-escuchar">🔊 Escuchar a Martín</button>
+        <button class="btn mini azul" onclick="irChat()" style="margin-left:6px">Responderle 💬</button></p>
+    </div>
+    <div class="recCard" data-testid="recordatorio-card">
+      <span style="font-size:26px">🔔</span>
+      <p><b>Recordatorio matutino</b><br>Martín le avisa cada mañana para anotar los gastos del día y revisar sus metas.</p>
+      <div class="sw" id="sw-rec" onclick="toggleRec()" data-testid="recordatorio-toggle"></div>
+    </div>
+    <div class="grid" id="grid"></div>
+    <footer><b>Martín Suma UC</b> entrega educación financiera general, no asesoría personalizada ni oferta comercial.<br>Hecho con cariño para las familias de Chile 💛</footer>
+  </section>
+
+  <!-- ============ MÓDULO ============ -->
+  <section class="view" id="v-mod">
+    <div class="topbar">
+      <button class="back" onclick="irHome()" data-testid="btn-volver">←</button>
+      <h2 id="mod-titulo"></h2>
+      <div class="aliveRing"><div class="alive" style="width:42px;height:42px"></div></div>
+    </div>
+    <div class="mbody" id="mod-body"></div>
+  </section>
+
+  <!-- ============ CHAT ============ -->
+  <section class="view" id="v-chat">
+    <div class="topbar">
+      <button class="back" onclick="irHome()">←</button>
+      <h2>Converse con Martín</h2>
+      <div class="aliveRing"><div class="alive" style="width:42px;height:42px" data-testid="avatar-chat"></div></div>
+    </div>
+    <div class="temasRow" id="temas"></div>
+    <div class="chatScroll" id="chat">
+      <div class="mM"><b>MARTÍN 💛</b>¿Sobre qué le gustaría conversar hoy? Puedo ayudarle con ahorro, deudas, subsidios habitacionales, emprendimiento, trámites y también con el ánimo cuando la plata pesa. Estoy para escucharle, sin juzgar.</div>
+    </div>
+    <div class="inputRow">
+      <input id="q" placeholder="Escríbale a Martín…" data-testid="chat-input" onkeydown="if(event.key==='Enter')enviar()">
+      <button onclick="enviar()" data-testid="chat-enviar">➤</button>
+    </div>
+  </section>
+</div>
+
+<!-- Player de experiencias -->
+<div id="player">
+  <div class="aliveRing"><div class="alive" style="width:130px;height:130px" data-testid="avatar-player"></div></div>
+  <h3 id="pl-titulo"></h3>
+  <div class="prog" id="pl-prog"></div>
+  <div class="paso" id="pl-paso"></div>
+  <button class="btn coral" onclick="stopExp()" data-testid="exp-detener">⏹ Detener</button>
+</div>
+
+<div id="audiobar" data-testid="audio-bar">
+  <div class="eq"><i></i><i></i><i></i></div>
+  <span id="ab-txt">Martín está hablando…</span>
+  <button class="abtn p" id="ab-pausa" onclick="pausarVoz()" data-testid="audio-pausar"><i>⏸</i>Pausar</button>
+  <button class="abtn c" id="ab-cont" onclick="continuarVoz()" style="display:none" data-testid="audio-continuar"><i>▶</i>Continuar</button>
+  <button class="abtn d" onclick="detenerVoz()" data-testid="audio-detener"><i>⏹</i>Detener</button>
+</div>
+
+<button id="fab" onclick="irChat()" data-testid="fab-martin">
+  <div class="aliveRing"><div class="alive" style="width:58px;height:58px"></div></div>
+</button>
+
+<nav>
+  <button class="on" id="nav-home" onclick="irHome()" data-testid="nav-inicio"><span class="nic">🏠</span>Inicio</button>
+  <button id="nav-mods" onclick="irHome(true)" data-testid="nav-modulos"><span class="nic">✨</span>Módulos</button>
+  <button id="nav-chat" onclick="irChat()" data-testid="nav-chat"><span class="nic">💬</span>Martín</button>
+</nav>
+
+<script>
+const API = "";
+const SES = "app-" + Date.now();
+const fmt = n => "$" + Math.round(n).toLocaleString("es-CL");
+
+/* ================= AVATAR VIVO ================= */
+document.querySelectorAll(".alive").forEach(a => {
+  a.innerHTML = '<img src="martin-avatar.jpeg" alt="Martín"><img src="martin-avatar-talk.jpeg" class="fTalk" alt=""><img src="martin-avatar-blink.jpeg" class="fBlink" alt="">';
+});
+function blinkLoop() {
+  const t = 2600 + Math.random() * 2600;
+  setTimeout(() => {
+    if (!document.body.classList.contains("talking")) {
+      document.querySelectorAll(".alive").forEach(a => a.classList.add("blk"));
+      setTimeout(() => document.querySelectorAll(".alive").forEach(a => a.classList.remove("blk")), 140);
+    }
+    blinkLoop();
+  }, t);
+}
+blinkLoop();
+let mouthTimer = null;
+function bocaOn() {
+  document.body.classList.add("talking");
+  clearInterval(mouthTimer);
+  mouthTimer = setInterval(() => {
+    const abrir = Math.random() > 0.42;
+    document.querySelectorAll(".alive").forEach(a => a.classList.toggle("mo", abrir));
+  }, 105);
+}
+function bocaOff() {
+  document.body.classList.remove("talking");
+  clearInterval(mouthTimer);
+  document.querySelectorAll(".alive").forEach(a => a.classList.remove("mo"));
+}
+
+/* ================= VOZ REAL DE MARTÍN + CONTROLES ================= */
+let audioActual = null;
+const abar = () => document.getElementById("audiobar");
+function barOn(paused) {
+  abar().classList.add("on");
+  abar().classList.toggle("paused", !!paused);
+  document.getElementById("ab-pausa").style.display = paused ? "none" : "flex";
+  document.getElementById("ab-cont").style.display = paused ? "flex" : "none";
+  document.getElementById("ab-txt").textContent = paused ? "Audio en pausa" : "Martín está hablando…";
+}
+function barOff() { abar().classList.remove("on"); }
+function hablar(texto) {
+  return new Promise(res => {
+    fetch(API + "/api/martin-financiero/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: texto }) })
+      .then(r => r.json()).then(d => {
+        if (!d.audio) return res();
+        if (audioActual) { audioActual.onended = null; audioActual.pause(); }
+        const a = new Audio("data:audio/mp3;base64," + d.audio);
+        audioActual = a;
+        a.onplay = () => { bocaOn(); barOn(false); };
+        a.onpause = () => { if (!a.ended) { bocaOff(); barOn(true); } };
+        a.onended = () => { bocaOff(); barOff(); res(); };
+        a.onerror = () => { bocaOff(); barOff(); res(); };
+        a.play().catch(() => { bocaOff(); barOff(); res(); });
+      }).catch(() => res());
+  });
+}
+function pausarVoz() { if (audioActual && !audioActual.paused) audioActual.pause(); }
+function continuarVoz() { if (audioActual && audioActual.paused) audioActual.play().catch(() => {}); }
+function detenerVoz() {
+  if (EXP_ON) { stopExp(); }
+  if (audioActual) { const a = audioActual; a.onended = null; a.pause(); }
+  bocaOff(); barOff();
+}
+function pararVoz() { if (audioActual) { audioActual.onended = null; audioActual.pause(); } bocaOff(); barOff(); }
+
+/* ================= NAVEGACIÓN ================= */
+function verView(id, navId) {
+  document.querySelectorAll(".view").forEach(v => v.classList.remove("on"));
+  document.getElementById(id).classList.add("on");
+  document.querySelectorAll("nav button").forEach(b => b.classList.remove("on"));
+  if (navId) document.getElementById(navId).classList.add("on");
+  document.getElementById("fab").style.display = id === "v-chat" ? "none" : "block";
+}
+function irHome(scrollMods) {
+  pararVoz(); stopExp(true);
+  verView("v-home", scrollMods ? "nav-mods" : "nav-home");
+  if (scrollMods) setTimeout(() => document.getElementById("grid").scrollIntoView({ behavior: "smooth" }), 80);
+}
+function irChat() { verView("v-chat", "nav-chat"); }
+function abrirMod(id) {
+  const m = MODS.find(x => x.id === id);
+  document.getElementById("mod-titulo").textContent = m.icon + " " + m.t;
+  document.getElementById("mod-body").innerHTML = m.render();
+  verView("v-mod", "nav-mods");
+  document.getElementById("v-mod").scrollTop = 0;
+  if (m.init) m.init();
+}
+
+/* ================= MÓDULOS ================= */
+const MODS = [
+{ id:"partida", icon:"🔍", t:"Mi Punto de Partida", s:"Su diagnóstico financiero", col:"#FFF1C9",
+  render: () => `
+  <div class="card"><h3>¿Dónde está parado hoy?</h3>
+    <p>Antes de ordenar la plata hay que conocerla. Sume TODOS sus ingresos reales del mes (sueldo líquido, pololitos, arriendos) y compárelos con lo que gasta. Ese número, no el imponible, es su punto de partida.</p>
+    <button class="voz" onclick="hablar('Bienvenido a su punto de partida. Sume todos sus ingresos reales del mes y compárelos con sus gastos. Conocer ese número, sin juzgarse, es el primer paso del cambio. Hagámoslo juntos.')">🔊 Martín le cuenta</button></div>
+  <div class="card"><h3>Diagnóstico rápido</h3>
+    <input id="dg-ing" type="number" inputmode="numeric" placeholder="Ingresos totales del mes (ej: 800000)" data-testid="diag-ingresos">
+    <input id="dg-gas" type="number" inputmode="numeric" placeholder="Gastos totales del mes" data-testid="diag-gastos">
+    <input id="dg-deu" type="number" inputmode="numeric" placeholder="Cuotas de deudas al mes (opcional)">
+    <button class="btn" onclick="diag()" data-testid="diag-calcular">Ver mi diagnóstico</button>
+    <div class="res" id="dg-res"></div></div>
+  <div class="card"><h3>Lo que dice el Manual</h3><ul>
+    <li><b>¿En qué gasta realmente?</b> Anote 30 días de gastos, hasta el café. Un 15% suele irse en cosas que ni recuerda.</li>
+    <li><b>Gastos hormiga:</b> anote hoy 3. Solo verlos escritos ya los reduce.</li>
+    <li><b>Si da negativo, no se asuste:</b> identificarlo ya es el primer paso. De aquí solo se mejora.</li></ul></div>`,
+  init: () => {} },
+
+{ id:"presupuesto", icon:"🧾", t:"Mi Presupuesto Familiar", s:"50/30/20 y fondo de emergencia", col:"#DFF4FF",
+  render: () => `
+  <div class="card"><h3>La regla 50/30/20</h3>
+    <p>50% necesidades (casa, comida, cuentas) · 30% gustos · 20% ahorro y pago de deudas. Es una brújula, no una cárcel: ajústela a su realidad.</p>
+    <input id="pp-ing" type="number" inputmode="numeric" placeholder="Su ingreso líquido mensual" data-testid="pp-ingreso">
+    <button class="btn" onclick="calc5030()" data-testid="pp-calcular">Repartir mi plata</button>
+    <div class="pill3" id="pp-res" style="display:none"></div></div>
+  <div class="card"><h3>Ahorro automático</h3>
+    <p>Programe una transferencia automática el mismo día que le pagan. Lo que no ve, no se gasta. Usted también es una cuenta por pagar — y va primero.</p>
+    <button class="voz" onclick="hablar('El secreto del ahorro no es el monto, es la constancia. Programe una transferencia automática el mismo día que le paguen, aunque sean cinco mil pesos. Lo que no ve, no se gasta.')">🔊 Martín le cuenta</button></div>
+  <div class="card"><h3>Fondo de emergencia</h3>
+    <p>Meta: 3 meses de sus gastos básicos. Se construye de a poco y le evita endeudarse cuando la vida sorprende. $5.000 semanales son $260.000 al año.</p>
+    <ul><li>Parta con un mini fondo de $100.000 a $200.000.</li>
+    <li>Con ingresos variables, presupueste con su mes MÁS BAJO de los últimos 6.</li>
+    <li>Revisión de 10 minutos cada domingo: presupuestado vs real.</li></ul></div>` },
+
+{ id:"deudas", icon:"💳", t:"Salir de las Deudas", s:"Paso a paso, sin vergüenza", col:"#FFE3D9",
+  render: () => `
+  <div class="card"><h3>Método bola de nieve ❄️</h3>
+    <p>Pague el mínimo en todas y ataque primero la más pequeña. Cada deuda cerrada le da impulso. Anótelas aquí y Martín las ordena:</p>
+    <input id="dd-nom" placeholder="Deuda (ej: Casa comercial)">
+    <input id="dd-tot" type="number" inputmode="numeric" placeholder="Saldo pendiente">
+    <button class="btn mini" onclick="addDeuda()" data-testid="deuda-agregar">＋ Agregar deuda</button>
+    <div id="dd-lista"></div></div>
+  <div class="card"><h3>Cómo tratar con los bancos</h3><ul>
+    <li><b>Compare solo por la CAE</b> (Carga Anual Equivalente): es el precio real, incluye tasa, seguros y comisiones.</li>
+    <li><b>Nunca</b> tome deuda nueva para pagar deuda vieja sin comparar la CAE.</li>
+    <li><b>Renegocie antes de caer en mora:</b> los bancos prefieren repactar a perder. Pida por escrito la CAE de la repactación.</li>
+    <li><b>Regla del 25%:</b> sus cuotas totales no deben superar el 25% de su ingreso líquido.</li>
+    <li><b>Pago mínimo de la tarjeta = enemigo.</b> Úsela solo en compras que puede pagar en UNA cuota.</li></ul>
+    <button class="voz" onclick="hablar('Estar endeudado no lo define como persona. Millones de familias chilenas han pasado por lo mismo y han salido. Anote todas sus deudas, pague el mínimo de todas, y concentre toda su fuerza en la más pequeña. Cuando la cierre, va a sentir el impulso. De ahí, nadie lo para.')">🔊 Martín le anima</button></div>
+  <div class="card"><h3>Deuda buena vs deuda mala</h3>
+    <p><b>Buena:</b> construye patrimonio (vivienda, educación). <b>Mala:</b> financia consumo que pierde valor. Identifíquelas antes de firmar. Y revise gratis su informe de deudas en <b>cmfchile.cl</b> con su ClaveÚnica.</p></div>`,
+  init: () => pintarDeudas() },
+
+{ id:"casa", icon:"🏠", t:"Mi Sueño de Casa", s:"Subsidios DS1, DS19, DS49", col:"#E3F9EF",
+  render: () => `
+  <div class="card"><h3>Su casa propia sí es posible</h3>
+    <p>El Estado de Chile tiene subsidios para casi todas las realidades. Los requisitos de base: <b>Registro Social de Hogares</b> al día, <b>ClaveÚnica</b> y una <b>cuenta de ahorro para la vivienda</b>. Los montos y fechas cambian por llamado: confirme siempre en <b>minvu.gob.cl</b>.</p>
+    <button class="voz" onclick="hablar('Su casa propia sí es posible. En Chile existen subsidios para familias vulnerables, para sectores medios y para quien ya tiene un terreno. El primer paso es siempre el mismo: Registro Social de Hogares al día y una libreta de ahorro para la vivienda. Paso a paso, se llega.')">🔊 Martín le cuenta</button>
+    ${acc("🟡 DS49 — Fondo Solidario de Elección de Vivienda","Para familias <b>sin vivienda y en situación de vulnerabilidad</b> (tramo más bajo del RSH). Permite comprar o construir <b>sin crédito hipotecario</b>. Ahorro mínimo referencial: <b>10 UF</b>. Se postula individual o en comité, en llamados del MINVU.")}
+    ${acc("🔵 DS1 — Sectores Medios · Tramo 1","Para comprar viviendas de menor valor (referencia hasta ~1.100 UF, según llamado). Ahorro mínimo referencial <b>30 UF</b>. Es el tramo con mayor subsidio; puede no requerir crédito si el ahorro alcanza.")}
+    ${acc("🔵 DS1 — Sectores Medios · Tramo 2","Para viviendas de valor medio (referencia hasta ~1.600 UF). Ahorro mínimo referencial <b>40 UF</b>. Generalmente se complementa con crédito hipotecario. RSH y capacidad de ahorro demostrable.")}
+    ${acc("🔵 DS1 — Sectores Medios · Tramo 3","Para viviendas de hasta ~2.200 UF (referencial). Ahorro mínimo <b>80 UF</b> y requiere <b>pre-aprobación de crédito hipotecario</b>. Pensado para familias de ingresos medios con capacidad de dividendo.")}
+    ${acc("🟢 DS19 — Integración Social y Territorial","Proyectos habitacionales nuevos con el <b>subsidio ya incorporado</b>. Se postula directamente en el proyecto/inmobiliaria adherida. Mezcla familias vulnerables y de sectores medios en barrios con equipamiento.")}
+    ${acc("🟤 Subsidio a la Construcción (sitio propio)","Si usted ya tiene un <b>terreno propio o familiar</b>, puede postular a construir su vivienda ahí (programas de construcción en sitio propio y Habitabilidad Rural). Exige dominio del terreno regularizado.")}
+    ${acc("📋 Cómo postular, paso a paso","1) Regularice su <b>Registro Social de Hogares</b> en registrosocial.gob.cl. 2) Abra una <b>cuenta de ahorro para la vivienda</b> y deposite constante. 3) Junte el ahorro mínimo del subsidio elegido. 4) Revise los <b>llamados</b> en minvu.gob.cl y postule online con ClaveÚnica o en SERVIU. 5) Si necesita crédito, cotice en al menos 3 instituciones y compare por CAE.")}</div>` },
+
+{ id:"emprender", icon:"🚀", t:"Quiero Emprender", s:"Innovación y negocio sano", col:"#EDE7FF",
+  render: () => `
+  <div class="card"><h3>Primeros pasos</h3><ul>
+    <li><b>Idea + oportunidad:</b> innovar es una buena idea gestionada hasta que llega a la gente. Sin clientes reales, no hay negocio.</li>
+    <li><b>Parta chico (MVP):</b> haga la versión más simple vendible de su producto y pruébela con clientes de verdad ANTES de endeudarse.</li>
+    <li><b>Valide siempre:</b> 10 ventas de prueba enseñan más que 10 meses de planificación.</li>
+    <li><b>Mentalidad:</b> persistencia, aprender de los errores y adaptarse. El fracaso bien mirado es información.</li></ul>
+    <button class="voz" onclick="hablar('Emprender no es tirarse al vacío, es aprender a volar por etapas. Parta con una prueba chica, valide que alguien quiera pagar por lo suyo, y recién ahí crezca. Y una regla de amigo: nunca mezcle la plata del negocio con la plata de la casa.')">🔊 Martín le cuenta</button></div>
+  <div class="card"><h3>Las finanzas del negocio</h3><ul>
+    <li><b>Separe SIEMPRE las platas:</b> una cuenta para el negocio, otra para la casa. Páguese un "sueldo" fijo.</li>
+    <li><b>Calcule el costo real</b> por unidad (materiales + tiempo + traslado) antes de poner precio.</li>
+    <li><b>No arriesgue el fondo de emergencia familiar</b> ni pida créditos de consumo caros para partir.</li>
+    <li><b>Modelo de negocio:</b> cómo crea, entrega y captura valor. Debe ser rentable, repetible y ojalá escalable.</li></ul></div>
+  <div class="card"><h3>Apoyos y financiamiento sano</h3><ul>
+    <li><b>Sercotec:</b> Capital Semilla y Capital Abeja para emprender.</li>
+    <li><b>FOSIS:</b> programa Yo Emprendo para negocios que parten.</li>
+    <li><b>Corfo:</b> apoyo a emprendimientos con innovación.</li>
+    <li><b>Formalice a tiempo:</b> "Empresa en un Día" (registroempresasysociedades.cl) e inicio de actividades en el SII.</li>
+    <li><b>Su pitch en 1 minuto:</b> equipo, producto, tracción, modelo y mercado.</li></ul></div>` },
+
+{ id:"quererme", icon:"💛", t:"Me Quiero a Mí", s:"Autoestima y calma financiera", col:"#FFF1C9",
+  render: () => `
+  <div class="card"><h3>Su valor no es su billetera</h3>
+    <p>La autoestima es el valor que nos damos a nosotros mismos, y se construye toda la vida. Una situación económica difícil <b>no define</b> lo que usted vale.</p>
+    <ul><li><b>Autoconocimiento:</b> conozca sus fortalezas, no solo sus cuentas.</li>
+    <li><b>Autorrespeto:</b> háblese bien. La autocrítica excesiva paraliza.</li>
+    <li><b>Autoaceptación:</b> virtudes y límites, tal como es.</li>
+    <li><b>Autoeficacia:</b> confianza en que puede superar los retos, paso a paso.</li></ul>
+    <button class="voz" onclick="hablar('Escúcheme bien: usted vale mucho más que su billetera. Las deudas, los meses malos y los errores son circunstancias, no son su identidad. Háblese con el mismo respeto con que le hablaría a un amigo querido que está pasando por lo mismo.')">🔊 Martín le contiene</button></div>
+  <div class="card"><h3>Cuando la plata angustia</h3><ul>
+    <li>El estrés económico se siente en el cuerpo: mal dormir, irritabilidad, aislamiento. Es normal, y tiene salida.</li>
+    <li>Escriba el problema en una hoja y divídalo en pasos chicos: un problema escrito pesa menos.</li>
+    <li>No se compare con otros: respete su propio ritmo.</li>
+    <li>Aprenda a decir <b>no</b> con respeto — también a gastos y presiones.</li>
+    <li>Muchas compras no son necesidad: son cansancio o pena buscando alivio. Dormir bien y caminar cuestan poco y reducen el gasto impulsivo.</li></ul></div>
+  <div class="card"><h3>Pedir ayuda es de valientes</h3>
+    <p>Si la angustia no lo deja funcionar, busque apoyo: alguien de confianza, su CESFAM o <b>Salud Responde 600 360 7777</b>. Es un acto de fortaleza, no de debilidad. Y hablar de plata en familia 15 minutos al mes evita el 80% de los conflictos del hogar.</p></div>` },
+
+{ id:"experiencias", icon:"🧘", t:"Experiencias Guiadas", s:"La voz de Martín le guía", col:"#DFF4FF",
+  render: () => `
+  <div class="card"><h3>Un momento para usted</h3>
+    <p>Ejercicios de 3 a 7 minutos conducidos por la voz de Martín: respiración, paz interior, soltar el estrés económico y claridad para decidir. Busque un lugar tranquilo, suba el volumen y presione Comenzar.</p></div>
+  <div id="exp-lista"><div class="card"><p>Cargando experiencias…</p></div></div>`,
+  init: () => cargarExps() },
+
+{ id:"chat", icon:"💬", t:"Conversación Libre", s:"Pregunte lo que quiera", col:"#FFE3D9",
+  render: () => "", abre: () => irChat() },
+];
+
+function acc(t, d) { return `<div class="acc"><b onclick="this.parentElement.classList.toggle('open')">${t}<span class="ar">▸</span></b><div>${d}</div></div>`; }
+
+const grid = document.getElementById("grid");
+grid.innerHTML = MODS.map((m, i) =>
+  `<div class="mcard" style="animation-delay:${i * .06}s" onclick="${m.abre ? "irChat()" : `abrirMod('${m.id}')`}" data-testid="card-${m.id}">
+    <div class="ic" style="background:${m.col}">${m.icon}</div><b>${m.t}</b><span>${m.s}</span></div>`).join("");
+
+/* ================= Interacciones ================= */
+function diag() {
+  const ing = +document.getElementById("dg-ing").value || 0, gas = +document.getElementById("dg-gas").value || 0, deu = +document.getElementById("dg-deu").value || 0;
+  if (!ing) return alert("Ingrese sus ingresos del mes");
+  const saldo = ing - gas, pctDeu = ing ? Math.round(deu / ing * 100) : 0;
+  const r = document.getElementById("dg-res"); r.style.display = "block";
+  let msg, col;
+  if (saldo > ing * 0.15 && pctDeu <= 25) { col = "#E3F9EF"; msg = `<b>💚 Va bien encaminado.</b> Le sobra ${fmt(saldo)} al mes. Consejo: automatice ese excedente hacia ahorro el día de pago.`; }
+  else if (saldo >= 0) { col = "#FFF1C9"; msg = `<b>💛 Está al límite.</b> Saldo mensual: ${fmt(saldo)}. ${pctDeu > 25 ? `Sus deudas ocupan el ${pctDeu}% del ingreso (ideal: máx 25%). ` : ""}Revise 30 días de gastos: ahí suele esconderse un 15%.`; }
+  else { col = "#FFE3D9"; msg = `<b>🧡 Está gastando más de lo que gana</b> (${fmt(saldo)} al mes). No se asuste: identificarlo ya es el primer paso. Parta por anotar TODO 30 días y converse con Martín el plan de salida.`; }
+  r.style.background = col; r.innerHTML = msg;
+  hablar(msg.replace(/<[^>]+>/g, ""));
+}
+function calc5030() {
+  const v = +document.getElementById("pp-ing").value || 0;
+  if (v < 10000) return alert("Ingrese su ingreso líquido mensual");
+  const r = document.getElementById("pp-res"); r.style.display = "grid";
+  r.innerHTML = `<div style="background:#DFF4FF">Necesidades 50%<b>${fmt(v * .5)}</b></div>
+    <div style="background:#FFF1C9">Gustos 30%<b>${fmt(v * .3)}</b></div>
+    <div style="background:#E3F9EF">Ahorro 20%<b>${fmt(v * .2)}</b></div>`;
+  hablar(`Con un ingreso de ${Math.round(v / 1000)} mil pesos: la mitad para necesidades, un treinta por ciento para gustos, y un veinte por ciento para su ahorro y sus deudas. Su futuro se paga primero.`);
+}
+function lsGet(k) { try { return JSON.parse(localStorage.getItem(k)) || []; } catch (e) { return []; } }
+function pintarDeudas() {
+  const ds = lsGet("ma_deudas").sort((a, b) => a.tot - b.tot);
+  const el = document.getElementById("dd-lista"); if (!el) return;
+  el.innerHTML = ds.map((d, i) =>
+    `<div class="acc open" style="margin-top:9px"><b style="cursor:default">${i + 1}° ${d.nom} — ${fmt(d.tot)} ${i === 0 ? "🎯" : ""}
+     <button class="btn mini coral" style="margin:0" onclick="delDeuda('${d.nom}')">✔ Pagada</button></b>
+     ${i === 0 ? "<div style='display:block'>Ataque esta primero: es la más chica y cerrar deudas da impulso.</div>" : ""}</div>`).join("")
+    || "<p style='font-size:.76rem;color:#6B7280;margin-top:10px'>Sin deudas anotadas. Si tiene, anótelas: verlas ordenadas es el primer paso.</p>";
+}
+function addDeuda() {
+  const nom = document.getElementById("dd-nom").value.trim(), tot = +document.getElementById("dd-tot").value;
+  if (!nom || !tot) return alert("Complete nombre y saldo");
+  const ds = lsGet("ma_deudas"); ds.push({ nom, tot });
+  localStorage.setItem("ma_deudas", JSON.stringify(ds));
+  document.getElementById("dd-nom").value = ""; document.getElementById("dd-tot").value = "";
+  pintarDeudas();
+}
+function delDeuda(nom) {
+  localStorage.setItem("ma_deudas", JSON.stringify(lsGet("ma_deudas").filter(d => d.nom !== nom)));
+  pintarDeudas();
+  hablar("¡Felicitaciones! Cerró una deuda. Ese impulso es exactamente la bola de nieve. Vamos por la siguiente.");
+}
+
+/* ================= Experiencias ================= */
+let EXP_CANCEL = false, EXP_ON = null;
+async function cargarExps() {
+  try {
+    const r = await fetch(API + "/api/martin-financiero/experiencias");
+    const d = await r.json();
+    document.getElementById("exp-lista").innerHTML = d.experiencias.map(e =>
+      `<div class="card"><h3>${e.icono} ${e.titulo} · ${e.min} min</h3><p>${e.proposito}</p>
+       <button class="btn azul" onclick="playExp('${e.id}','${e.titulo.replace(/'/g, "")}')" data-testid="exp-${e.id}">▶ Comenzar</button></div>`).join("");
+  } catch (e) { document.getElementById("exp-lista").innerHTML = "<div class='card'><p>No pude cargar las experiencias. Revise su conexión.</p></div>"; }
+}
+async function playExp(id, titulo) {
+  EXP_CANCEL = false; EXP_ON = id;
+  document.getElementById("player").classList.add("on");
+  document.getElementById("pl-titulo").textContent = titulo;
+  try {
+    const r = await fetch(API + "/api/martin-financiero/experiencias/" + id);
+    const e = await r.json();
+    for (let i = 0; i < e.pasos.length; i++) {
+      if (EXP_CANCEL) return;
+      document.getElementById("pl-prog").textContent = `PASO ${i + 1} DE ${e.pasos.length}`;
+      const p = document.getElementById("pl-paso"); p.style.animation = "none"; void p.offsetWidth; p.style.animation = ""; p.textContent = e.pasos[i].texto;
+      await hablar(e.pasos[i].texto);
+      if (EXP_CANCEL) return;
+      if (e.pasos[i].pausa) await new Promise(res => setTimeout(res, e.pasos[i].pausa * 1000));
+    }
+    if (!EXP_CANCEL) { document.getElementById("pl-prog").textContent = "✨ COMPLETADA"; document.getElementById("pl-paso").textContent = "Gracias por regalarse este momento. Llévelo con usted al resto del día."; }
+  } catch (err) { document.getElementById("pl-paso").textContent = "No pude cargar la experiencia."; }
+  EXP_ON = null;
+}
+function stopExp(silencio) {
+  EXP_CANCEL = true; EXP_ON = null;
+  pararVoz();
+  document.getElementById("player").classList.remove("on");
+}
+
+/* ================= Chat ================= */
+async function cargarTemas() {
+  try {
+    const r = await fetch(API + "/api/martin-financiero/temas");
+    const d = await r.json();
+    document.getElementById("temas").innerHTML = d.temas.map(t =>
+      `<button onclick='preguntar(${JSON.stringify(t.pregunta)})' data-testid="tema-${t.titulo.toLowerCase()}">${t.icono} ${t.titulo}</button>`).join("");
+  } catch (e) {}
+}
+function preguntar(q) { document.getElementById("q").value = q; enviar(); }
+let PENSANDO = false;
+async function enviar() {
+  const q = document.getElementById("q").value.trim();
+  if (!q || PENSANDO) return;
+  PENSANDO = true;
+  document.getElementById("q").value = "";
+  const chat = document.getElementById("chat");
+  chat.innerHTML += `<div class='mU'>${q}</div><div class='mM' id='esp'><b>MARTÍN 💛</b>Pensando…</div>`;
+  chat.scrollTop = chat.scrollHeight;
+  try {
+    const r = await fetch(API + "/api/martin-financiero/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: q, session_id: SES }) });
+    const d = await r.json();
+    document.getElementById("esp").outerHTML = `<div class='mM'><b>MARTÍN 💛</b>${(d.response || d.detail || "").replace(/\*\*(.*?)\*\*/g, "<b>$1</b>")}</div>`;
+    if (d.response) hablar(d.response);
+  } catch (e) { document.getElementById("esp").outerHTML = "<div class='mM'><b>MARTÍN 💛</b>No pude responderle, intente de nuevo.</div>"; }
+  chat.scrollTop = chat.scrollHeight;
+  PENSANDO = false;
+}
+
+/* ================= Tip del día ================= */
+fetch(API + "/api/martin-financiero/contenido").then(r => r.json()).then(d => {
+  document.getElementById("tipdia").innerHTML = "💡 <b>Tip del día:</b> " + d.tip_del_dia;
+}).catch(() => { document.getElementById("tipdia").innerHTML = "💡 <b>Tip del día:</b> guarde las monedas en un frasco: es su primer fondo de emergencia."; });
+/* ================= Registro diario + presupuesto mensual ================= */
+function regGet() { try { return JSON.parse(localStorage.getItem("ma_registro")) || {}; } catch (e) { return {}; } }
+function hoyKey() { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+let regPidioDetalle = false;
+async function registrarDia() {
+  const g = +document.getElementById("reg-gasto").value || 0;
+  const a = +document.getElementById("reg-ahorro").value || 0;
+  const det = (document.getElementById("reg-detalle") || {}).value?.trim() || "";
+  if (!g && !a) return alert("Cuéntele a Martín cuánto gastó o ahorró hoy");
+  if (a <= 0 && !det && !regPidioDetalle) {
+    regPidioDetalle = true;
+    document.getElementById("reg-det-wrap").style.display = "block";
+    const frase = "Cuénteme qué gastó hoy, así vemos juntos en qué podríamos guardar algo.";
+    const r = document.getElementById("reg-resp"); r.style.display = "block";
+    r.innerHTML = "<b>MARTÍN 💛</b> " + frase;
+    hablar(frase);
+    return;
+  }
+  const reg = regGet();
+  reg[hoyKey()] = { g, a, det };
+  localStorage.setItem("ma_registro", JSON.stringify(reg));
+  regPidioDetalle = false;
+  pintarProgreso();
+  const r = document.getElementById("reg-resp"); r.style.display = "block";
+  r.innerHTML = "<b>MARTÍN 💛</b> Pensando su consejo del día…";
+  try {
+    const resp = await fetch(API + "/api/martin-financiero/chat", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: SES, message: `[REGISTRO DIARIO DE LA APP] Hoy gasté ${fmt(g)} y ahorré ${fmt(a)}.${det ? " En qué gasté: " + det + "." : ""} Déme un consejo práctico y personalizado para ahorrar mejor mañana, en 2 o 3 frases, cálido y motivador.` }) });
+    const d = await resp.json();
+    const txt = (d.response || "Registrado. ¡Cada día anotado es un paso más cerca de sus metas!").replace(/\*\*(.*?)\*\*/g, "<b>$1</b>");
+    r.innerHTML = "<b>MARTÍN 💛</b> " + txt;
+    if (d.response) hablar(d.response);
+  } catch (e) { r.innerHTML = "<b>MARTÍN 💛</b> Quedó registrado su día. ¡Sigamos mañana!"; }
+}
+function fraseMot(dias, a, g) {
+  if (!dias) return "Parta hoy: su primer registro vale oro. ✨";
+  if (a <= 0) return "Registrar ya es avanzar. Mañana buscamos ese primer ahorro, aunque sea una luca. 💪";
+  const pct = a / (a + g || 1);
+  if (pct >= 0.2) return "¡Tremendo! Está ahorrando sobre el 20%: nivel maestro de las finanzas del hogar. 🏆";
+  if (pct >= 0.1) return "¡Muy bien! Su ahorro va tomando vuelo. La constancia le gana al monto. 🚀";
+  return "¡Buen comienzo! Cada peso guardado es futuro. Vamos subiendo de a poquito. 🌱";
+}
+function pintarProgreso() {
+  const reg = regGet();
+  const mes = hoyKey().slice(0, 7);
+  const dias = Object.keys(reg).filter(k => k.startsWith(mes));
+  const tg = dias.reduce((s, k) => s + (reg[k].g || 0), 0);
+  const ta = dias.reduce((s, k) => s + (reg[k].a || 0), 0);
+  const pct = Math.min(100, Math.round(ta / ((ta + tg) || 1) * 100));
+  document.getElementById("progreso").innerHTML =
+    `<h3>📈 Su mes en construcción</h3>
+     <div class="pill3">
+       <div style="background:#FFE3D9">Gastado<b>${fmt(tg)}</b></div>
+       <div style="background:#E3F9EF">Ahorrado<b>${fmt(ta)}</b></div>
+       <div style="background:#DFF4FF">Días<b>${dias.length}</b></div>
+     </div>
+     <p style="margin-top:10px;font-size:.72rem">Ahorro del mes: <b>${pct}%</b> de lo que ha movido</p>
+     <div class="barra"><i style="width:${pct}%"></i></div>
+     <p style="margin-top:10px;font-weight:700;color:var(--azul)">${fraseMot(dias.length, ta, tg)}</p>`;
+}
+pintarProgreso();
+
+/* ================= Saludo proactivo + Recordatorio ================= */
+async function saludoProactivo() {
+  try {
+    const r = await fetch(API + "/api/martin-financiero/saludo", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ session_id: SES }) });
+    const d = await r.json();
+    if (!d.saludo) return;
+    document.getElementById("saludo-txt").textContent = d.saludo;
+    document.getElementById("saludo").classList.add("on");
+    document.getElementById("chat").insertAdjacentHTML("afterbegin", `<div class='mM'><b>MARTÍN 💛</b>${d.saludo}</div>`);
+    hablar(d.saludo).catch(() => {});
+    const unaVez = () => { if (audioActual && audioActual.paused && !audioActual.ended) audioActual.play().catch(() => {}); document.removeEventListener("pointerdown", unaVez); };
+    document.addEventListener("pointerdown", unaVez);
+  } catch (e) {}
+}
+function toggleRec() {
+  const sw = document.getElementById("sw-rec");
+  const activo = sw.classList.toggle("on");
+  localStorage.setItem("ma_rec", activo ? "1" : "0");
+  if (activo && "Notification" in window && Notification.permission !== "granted") Notification.requestPermission();
+  if (activo) hablar("¡Listo! Cada mañana le voy a recordar anotar sus gastos del día. Un hábito chiquitito que ordena toda la casa.");
+}
+function checkMatutino() {
+  if (localStorage.getItem("ma_rec") !== "1") return;
+  const h = new Date().getHours(), hoy = new Date().toDateString();
+  if (h >= 6 && h < 12 && localStorage.getItem("ma_rec_dia") !== hoy) {
+    localStorage.setItem("ma_rec_dia", hoy);
+    const msg = "¡Buenos días! ☀️ Martín le recuerda: anote los gastos de ayer y revise sus metas. 2 minutos que valen oro.";
+    if ("Notification" in window && Notification.permission === "granted") new Notification("Martín Suma UC", { body: msg, icon: "martin-avatar.jpeg" });
+    document.getElementById("tipdia").innerHTML = "🔔 <b>Martín:</b> " + msg;
+  }
+}
+if (localStorage.getItem("ma_rec") === "1") document.getElementById("sw-rec").classList.add("on");
+checkMatutino();
+setInterval(checkMatutino, 10 * 60 * 1000);
+saludoProactivo();
+cargarTemas();
+</script>
+</body></html>

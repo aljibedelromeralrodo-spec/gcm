@@ -63,8 +63,13 @@ SISTEMA = (
     "BASE DE CONOCIMIENTO: Manual de Finanzas Personales y de Familia, manual de Educación Financiera, prácticas de bienestar "
     "e introspección personal (solo su dimensión íntima y de desarrollo interior), la Guía de Autoestima y Convivencia, "
     "la Guía de Innovación y Emprendimiento, y la Santa Biblia. "
+    "ESPAÑOL CHILENO NATURAL: hable como chileno, con chilenismos suaves y respetuosos cuando calcen (al tiro, pololito, "
+    "una luca, la feria, cachar — con moderación), humor sano y calidez directa, SIEMPRE de usted. "
+    "PROACTIVO Y MENTOR: usted guía la conversación, no espera que le pregunten. Cuando corresponda, pregunte cómo está la "
+    "persona, cómo le fue en el día, si anotó sus gastos y cómo van sus metas. Cierre invitando al siguiente paso concreto. "
     "REGLAS DURAS: 1) No recomiende productos financieros específicos ni haga oferta comercial de Central Mutuos. "
-    "2) Jamás pida transferencias ni datos bancarios. 3) Respuestas breves (máximo 5 frases), con UN consejo accionable al final. "
+    "2) Jamás pida transferencias ni datos bancarios. 3) Respuestas conversacionales de 3 a 6 frases COMPLETAS (nunca deje "
+    "una frase a medias); puede extenderse cuando la persona necesite contención o una explicación paso a paso. "
     "4) Si le preguntan por créditos hipotecarios de Central Mutuos, derive amablemente al sitio oficial. "
     "5) En montos o plazos de subsidios que cambian año a año, dé la orientación general y sugiera confirmar en el sitio oficial. "
     "6) Cierre siempre motivando un hábito pequeño y concreto.")
@@ -309,6 +314,47 @@ async def experiencia(exp_id: str):
         if e["id"] == exp_id:
             return e
     raise HTTPException(status_code=404, detail="Experiencia no encontrada")
+
+
+@mfin.post("/saludo")
+async def saludo_proactivo(payload: dict):
+    session = (payload or {}).get("session_id") or f"mf-{uuid.uuid4()}"
+    try:
+        from zoneinfo import ZoneInfo
+        hora = datetime.now(ZoneInfo("America/Santiago"))
+    except Exception:
+        hora = datetime.now()
+    momento = "la mañana" if hora.hour < 12 else ("la tarde" if hora.hour < 20 else "la noche")
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        key = (os.environ.get("EMERGENT_LLM_KEY") or "").strip('"')
+        chat = LlmChat(api_key=key, session_id=session, system_message=SISTEMA).with_model("openai", "gpt-5.4-mini")
+        prompt = (f"[SALUDO PROACTIVO DE APERTURA — es {momento} en Chile, {hora.strftime('%H:%M')} hrs] "
+                  "La persona acaba de abrir la app. Salúdela USTED PRIMERO como mentor y amigo, breve y cálido (2 a 3 "
+                  "frases, chileno suave, de usted, sin listas ni negritas), y termine SIEMPRE preguntando exactamente: "
+                  "'¿Cuánto gastó hoy y cuánto pudo ahorrar?'")
+        resp = await chat.send_message(UserMessage(text=prompt))
+        texto = str(resp)
+    except Exception:
+        texto = (f"¡Hola! Qué gusto tenerle por acá esta {momento}. Cuénteme al tiro: "
+                 "¿cuánto gastó hoy y cuánto pudo ahorrar?")
+    return {"saludo": texto, "session_id": session}
+
+
+@mfin.post("/tts")
+async def tts_martin(payload: dict):
+    text = ((payload or {}).get("text") or "").strip()
+    if len(text) > 4000:
+        text = text[:4000]
+    if not text:
+        raise HTTPException(status_code=400, detail="Sin texto")
+    try:
+        from emergentintegrations.llm.openai import OpenAITextToSpeech
+        tts = OpenAITextToSpeech(api_key=(os.environ.get("EMERGENT_LLM_KEY") or "").strip('"'))
+        audio_b64 = await tts.generate_speech_base64(text=text, model="tts-1", voice="onyx")
+        return {"audio": audio_b64}
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Voz no disponible: {str(e)[:100]}")
 
 
 @mfin.get("/temas")
