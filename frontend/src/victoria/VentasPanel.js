@@ -48,6 +48,17 @@ export default function VentasPanel({ ejecutivo, onAbrirCliente }) {
     return () => clearInterval(poll.current);
   }, [ejecutivo]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const hiloFrio = async (c) => {
+    if (!window.confirm(`🧊 HILO FRÍO: ¿enviar correo de seguimiento institucional a ${c.nombre} (${c.semaforo?.dias_sin_movimiento} día(s) sin movimiento)?`)) return;
+    const pin = window.prompt("🏛 REGLA ORO-75 — Ingrese el PIN maestro para autorizar el envío:") || "";
+    if (!pin.trim()) return toast.warning("Envío cancelado: sin PIN maestro no se ejecuta ningún envío (ORO-75)");
+    try {
+      const r = await axios.post(`${API_URL}/api/ventas/clientes/${c.id}/hilo-frio`, { master_pin: pin });
+      toast.success(r.data.mensaje);
+      cargar();
+    } catch (e) { toast.error(e.response?.data?.detail || "No se pudo enviar el seguimiento"); }
+  };
+
   const crear = async (e) => {
     e.preventDefault();
     setCreando(true);
@@ -105,8 +116,15 @@ export default function VentasPanel({ ejecutivo, onAbrirCliente }) {
                 </div>
                 {!c.docs_completos && <div style={{ color: "#f59e0b", fontSize: "0.9rem", marginTop: 4 }}>Faltan: {c.faltantes.join(", ")}</div>}
               </div>
-              <button data-testid={`ventas-abrir-${c.id}`} onClick={() => onAbrirCliente(c)}
-                style={{ ...S.btnGold, ...S.btnSmall, padding: "0.7rem 1.3rem" }}>Abrir ficha y gestión del cliente →</button>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-end" }}>
+                {c.hilo_frio && (
+                  <button data-testid={`ventas-hilo-frio-${c.id}`} onClick={() => hiloFrio(c)}
+                    style={{ background: "rgba(56,189,248,0.1)", color: "#7dd3fc", border: "1px solid rgba(56,189,248,0.45)", borderRadius: 8, padding: "0.55rem 1.1rem", fontWeight: 800, cursor: "pointer", fontSize: "0.8rem" }}>
+                    🧊 Hilo Frío · {c.semaforo?.dias_sin_movimiento} días inactivo → enviar seguimiento</button>
+                )}
+                <button data-testid={`ventas-abrir-${c.id}`} onClick={() => onAbrirCliente(c)}
+                  style={{ ...S.btnGold, ...S.btnSmall, padding: "0.7rem 1.3rem" }}>Abrir ficha y gestión del cliente →</button>
+              </div>
             </div>
           ))}
         </div>

@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Martín — Asistente Financiero | Central Mutuos · Educación financiera para su hogar</title>
+<meta name="description" content="Martín, el asistente financiero gratuito de Central Mutuos: presupuesto familiar, ahorro con metas, manejo de deudas y educación financiera simple, en lenguaje claro.">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800;900&display=swap" rel="stylesheet">
+<style>
+:root{--azul:#16307c;--azul2:#0d1f56;--cel:#38bdf8;--ama:#facc15;--crema:#fefce8;--blanco:#fff}
+*{margin:0;box-sizing:border-box}
+body{background:linear-gradient(160deg,var(--azul) 0%,var(--azul2) 70%);font-family:Outfit,Arial,sans-serif;color:#fff;min-height:100vh}
+.wrap{max-width:960px;margin:0 auto;padding:0 18px}
+.hero{text-align:center;padding:44px 0 26px}
+.avatar{width:88px;height:88px;border-radius:50%;background:var(--ama);display:flex;align-items:center;justify-content:center;font-size:44px;margin:0 auto 14px;box-shadow:0 0 0 5px var(--cel),0 14px 40px rgba(0,0,0,.4)}
+h1{font-size:clamp(26px,4.5vw,40px);font-weight:900}
+h1 em{color:var(--ama);font-style:normal}
+.sub{color:var(--cel);font-weight:700;letter-spacing:2px;font-size:11.5px;margin-top:6px}
+.tipbar{background:rgba(250,204,21,.14);border:1.5px solid rgba(250,204,21,.5);border-radius:16px;padding:12px 18px;margin:20px auto;max-width:720px;font-size:14px}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:10px 0 22px}
+.tab{background:rgba(255,255,255,.1);border:1.5px solid rgba(56,189,248,.35);color:#fff;border-radius:999px;padding:9px 18px;cursor:pointer;font-weight:700;font-size:13px;font-family:Outfit;transition:transform .15s,background .15s}
+.tab:hover{transform:translateY(-2px)}
+.tab.on{background:var(--ama);color:var(--azul);border-color:var(--ama)}
+.panel{display:none;animation:in .5s ease both}
+.panel.on{display:block}
+@keyframes in{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+.card{background:rgba(255,255,255,.07);border:1px solid rgba(56,189,248,.25);border-radius:20px;padding:22px;margin-bottom:14px;backdrop-filter:blur(8px)}
+.lec{background:var(--crema);color:#1f2937;border-radius:14px;padding:14px 16px;margin-top:10px;cursor:pointer}
+.lec b{color:var(--azul);font-size:14.5px}
+.lec p{font-size:13px;line-height:1.6;margin-top:5px;display:none}
+.lec.open p{display:block}
+input,select{background:#fff;border:0;border-radius:12px;padding:11px 14px;font-size:14px;color:#111;font-family:Outfit}
+.btn{background:var(--ama);color:var(--azul);border:0;border-radius:999px;padding:11px 22px;font-weight:900;cursor:pointer;font-size:14px;font-family:Outfit}
+.res5030{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
+.res5030 div{border-radius:14px;padding:14px;text-align:center}
+.barra{background:rgba(255,255,255,.15);border-radius:999px;height:14px;overflow:hidden;margin-top:8px}
+.barra i{display:block;height:100%;background:linear-gradient(90deg,var(--cel),var(--ama));border-radius:999px;transition:width .6s}
+.chatbox{max-height:300px;overflow-y:auto;padding:6px 0}
+.mM{background:var(--crema);color:#1f2937;border-radius:16px 16px 16px 4px;padding:10px 14px;max-width:85%;font-size:13.5px;line-height:1.6;margin:8px 0}
+.mU{background:var(--ama);color:#1f2937;border-radius:16px 16px 4px 16px;padding:10px 14px;max-width:85%;font-size:13.5px;margin:8px 0 8px auto}
+.faqq{background:rgba(255,255,255,.09);border:1px solid rgba(56,189,248,.3);border-radius:14px;padding:13px 16px;margin-top:10px;cursor:pointer;font-weight:700;font-size:14px}
+footer{text-align:center;color:rgba(255,255,255,.5);font-size:11px;padding:28px 0;line-height:1.8}
+@media(max-width:640px){.res5030{grid-template-columns:1fr}}
+</style></head>
+<body>
+<div class="wrap">
+  <header class="hero">
+    <div class="avatar">🧑‍🏫</div>
+    <h1>Hola, soy <em>Martín</em> 💛</h1>
+    <p style="max-width:620px;margin:12px auto 0;font-size:15.5px;line-height:1.7;color:#e0e7ff">Su asistente de educación financiera, gratuito y para todas las personas. Le acompaño a ordenar la plata de su hogar, orientarle en subsidios habitacionales y beneficios del Estado, y acompañarle en el bienestar — <b>de usted</b>, con lenguaje simple, sin tecnicismos y sin juicios.</p>
+    <div class="sub">RESPONSABILIDAD SOCIAL · CENTRAL MUTUOS CON CRECES</div>
+    <div style="margin-top:14px"><button class="btn" onclick="hablar('Hola, soy Martín, su asistente financiero. Estoy aquí para ayudarle a ordenar las finanzas de su hogar, paso a paso y sin juicios. Elija un módulo y partamos hoy mismo.')">🔊 Escuchar a Martín</button></div>
+  </header>
+
+  <div class="tipbar" id="tipdia">💡 <b>Tip del día:</b> cargando…</div>
+
+  <nav class="tabs" id="tabs">
+    <button class="tab on" data-p="inicio">🏠 Inicio</button>
+    <button class="tab" data-p="presupuesto">🧾 Presupuesto</button>
+    <button class="tab" data-p="ahorro">🐷 Ahorro</button>
+    <button class="tab" data-p="deudas">💳 Deudas</button>
+    <button class="tab" data-p="exper">🧘 Experiencias</button>
+    <button class="tab" data-p="aprende">🎓 Aprenda</button>
+    <button class="tab" data-p="faq">❓ Preguntas</button>
+  </nav>
+
+  <section class="panel on" id="p-inicio">
+    <div class="card"><b style="color:var(--ama);font-size:16px">Converse con Martín</b>
+      <div class="chatbox" id="chat"><div class="mM"><b style="color:var(--azul)">MARTÍN 💛</b><br>¿Sobre qué le gustaría conversar hoy? Puedo ayudarle con ahorro, presupuesto, deudas, subsidios habitacionales (DS49, DS1, DS19), beneficios del Estado, trámites financieros y también con el manejo del estrés económico. Estoy aquí para escucharle y orientarle, sin juzgar.</div></div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <input id="q" style="flex:1" placeholder="Escríbale su pregunta a Martín…" onkeydown="if(event.key==='Enter')enviar()">
+        <button class="btn" onclick="enviar()">Enviar ➤</button>
+      </div>
+    </div>
+    <div class="card" id="mods-resumen"></div>
+  </section>
+
+  <section class="panel" id="p-presupuesto">
+    <div class="card"><b style="color:var(--ama);font-size:16px">🧾 Su presupuesto 50/30/20</b>
+      <p style="font-size:13.5px;color:#dbeafe;margin:8px 0">Ingrese su ingreso líquido mensual y Martín le muestra cómo repartirlo.</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap"><input id="ingreso" type="number" placeholder="Ingreso líquido (ej: 800000)" style="flex:1;min-width:200px"><button class="btn" onclick="calc5030()">Calcular</button></div>
+      <div class="res5030" id="r5030" style="display:none">
+        <div style="background:rgba(56,189,248,.2)"><b>Necesidades 50%</b><div id="n50" style="font-size:20px;font-weight:900;color:var(--cel)"></div><small>arriendo, cuentas, comida</small></div>
+        <div style="background:rgba(250,204,21,.15)"><b>Gustos 30%</b><div id="n30" style="font-size:20px;font-weight:900;color:var(--ama)"></div><small>salidas, gustitos</small></div>
+        <div style="background:rgba(52,211,153,.15)"><b>Ahorro y deudas 20%</b><div id="n20" style="font-size:20px;font-weight:900;color:#34d399"></div><small>su futuro primero</small></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" id="p-ahorro">
+    <div class="card"><b style="color:var(--ama);font-size:16px">🐷 Sus metas de ahorro</b>
+      <p style="font-size:13.5px;color:#dbeafe;margin:8px 0">Póngale nombre, monto y avance. Se guardan en su dispositivo.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><input id="m-nom" placeholder="Meta (ej: Fondo de emergencia)" style="flex:2;min-width:160px"><input id="m-tot" type="number" placeholder="Monto meta" style="flex:1;min-width:110px"><input id="m-ava" type="number" placeholder="Llevo ahorrado" style="flex:1;min-width:110px"><button class="btn" onclick="addMeta()">＋ Agregar</button></div>
+      <div id="metas"></div>
+    </div>
+  </section>
+
+  <section class="panel" id="p-deudas">
+    <div class="card"><b style="color:var(--ama);font-size:16px">💳 Plan bola de nieve</b>
+      <p style="font-size:13.5px;color:#dbeafe;margin:8px 0">Anote sus deudas y Martín las ordena: primero la más pequeña, para tomar impulso.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><input id="d-nom" placeholder="Deuda (ej: Casa comercial)" style="flex:2;min-width:160px"><input id="d-tot" type="number" placeholder="Saldo" style="flex:1;min-width:110px"><button class="btn" onclick="addDeuda()">＋ Agregar</button></div>
+      <div id="deudas"></div>
+    </div>
+  </section>
+
+  <section class="panel" id="p-exper">
+    <div class="card"><b style="color:var(--ama);font-size:16px">🧘 Experiencias guiadas por Martín</b>
+      <p style="font-size:13px;color:#dbeafe;margin:8px 0">Ejercicios de 3 a 7 minutos con la voz de Martín: respiración, paz interior, manejo del estrés económico, reconciliación personal y claridad para decidir. Busque un lugar tranquilo y presione Comenzar.</p>
+      <div id="exp-estado" style="display:none;background:rgba(250,204,21,.12);border:1px solid rgba(250,204,21,.4);border-radius:14px;padding:12px 16px;margin-bottom:6px;font-size:13.5px"></div>
+      <div id="exps"></div>
+    </div>
+  </section>
+
+  <section class="panel" id="p-aprende"><div id="modulos"></div></section>
+
+  <section class="panel" id="p-faq">
+    <div class="card"><b style="color:var(--ama);font-size:16px">❓ Preguntas frecuentes — Martín le responde con voz</b><div id="faq"></div></div>
+  </section>
+</div>
+<footer>MARTÍN ENTREGA EDUCACIÓN FINANCIERA GENERAL, NO ASESORÍA PERSONALIZADA NI OFERTA COMERCIAL<br>DISEÑADO PARA EXPORTARSE COMO APP MÓVIL INDEPENDIENTE · CENTRAL MUTUOS CON CRECES</footer>
+
+<script>
+const API = "";
+let CONT = null, SES = "mf-" + Date.now();
+const fmt = n => "$" + Math.round(n).toLocaleString("es-CL");
+
+document.getElementById("tabs").addEventListener("click", e => {
+  if (!e.target.dataset.p) return;
+  document.querySelectorAll(".tab").forEach(t => t.classList.remove("on"));
+  document.querySelectorAll(".panel").forEach(p => p.classList.remove("on"));
+  e.target.classList.add("on");
+  document.getElementById("p-" + e.target.dataset.p).classList.add("on");
+});
+
+function hablar(txt) {
+  try {
+    speechSynthesis.cancel();
+    (txt.match(/[^.!?…]+[.!?…]+\s*|[^.!?…]+$/g) || [txt]).forEach(f => {
+      const u = new SpeechSynthesisUtterance(f);
+      u.lang = "es-CL"; u.rate = 1;
+      const v = speechSynthesis.getVoices().filter(x => x.lang.toLowerCase().startsWith("es"))[0];
+      if (v) u.voice = v;
+      speechSynthesis.speak(u);
+    });
+  } catch (e) {}
+}
+
+async function cargar() {
+  const r = await fetch(API + "/api/martin-financiero/contenido");
+  CONT = await r.json();
+  document.getElementById("tipdia").innerHTML = "💡 <b>Tip del día:</b> " + CONT.tip_del_dia;
+  document.getElementById("mods-resumen").innerHTML = "<b style='color:var(--ama);font-size:16px'>🎓 Sus " + CONT.modulos.length + " módulos de educación financiera y bienestar</b>" +
+    CONT.modulos.map(m => `<div class='lec' onclick="irAprende(${m.n})"><b>${m.icono} Módulo ${m.n} — ${m.titulo}</b></div>`).join("");
+  document.getElementById("modulos").innerHTML = CONT.modulos.map(m =>
+    `<div class='card'><b style='color:var(--ama);font-size:16px'>${m.icono} Módulo ${m.n} — ${m.titulo}</b>` +
+    m.lecciones.map(l => `<div class='lec' onclick='this.classList.toggle("open")'><b>▸ ${l.t}</b><p>${l.d} <button class="btn" style="padding:5px 12px;font-size:11px;margin-top:6px" onclick="event.stopPropagation();hablar(${JSON.stringify(l.d)})">🔊 Escuchar</button></p></div>`).join("") + "</div>").join("");
+  document.getElementById("faq").innerHTML = CONT.faq.map(f =>
+    `<div class='faqq' onclick='faqResp(${JSON.stringify(f.q)}, ${JSON.stringify(f.a)}, this)'>${f.q}<p style="display:none;font-weight:400;font-size:13px;line-height:1.6;margin-top:8px;color:#dbeafe"></p></div>`).join("");
+}
+function irAprende(n) { document.querySelector('[data-p="aprende"]').click(); }
+function faqResp(q, a, el) {
+  const p = el.querySelector("p");
+  p.style.display = p.style.display === "none" ? "block" : "none";
+  p.textContent = a;
+  if (p.style.display === "block") hablar(a);
+}
+function calc5030() {
+  const v = +document.getElementById("ingreso").value || 0;
+  if (v < 10000) return alert("Ingrese su ingreso líquido mensual");
+  document.getElementById("r5030").style.display = "grid";
+  document.getElementById("n50").textContent = fmt(v * .5);
+  document.getElementById("n30").textContent = fmt(v * .3);
+  document.getElementById("n20").textContent = fmt(v * .2);
+  hablar("Con un ingreso de " + Math.round(v/1000) + " mil pesos, destine la mitad a necesidades, un treinta por ciento a gustos, y un veinte por ciento a su ahorro y al pago de deudas. Su futuro se paga primero.");
+}
+function lsGet(k) { try { return JSON.parse(localStorage.getItem(k)) || []; } catch (e) { return []; } }
+function pintarMetas() {
+  const ms = lsGet("mf_metas");
+  document.getElementById("metas").innerHTML = ms.map((m, i) => {
+    const pct = Math.min(100, Math.round(m.ava / m.tot * 100));
+    return `<div class='lec open'><b>${m.nom}</b> — ${fmt(m.ava)} de ${fmt(m.tot)} (${pct}%)
+      <div class='barra'><i style='width:${pct}%'></i></div>
+      <button class='btn' style='padding:4px 10px;font-size:11px;margin-top:8px' onclick='delMeta(${i})'>Quitar</button></div>`;
+  }).join("") || "<p style='font-size:13px;color:#dbeafe;margin-top:10px'>Aún no tiene metas. ¡Cree la primera!</p>";
+}
+function addMeta() {
+  const nom = document.getElementById("m-nom").value.trim(), tot = +document.getElementById("m-tot").value, ava = +document.getElementById("m-ava").value || 0;
+  if (!nom || !tot) return alert("Complete el nombre y el monto de la meta");
+  const ms = lsGet("mf_metas"); ms.push({ nom, tot, ava });
+  localStorage.setItem("mf_metas", JSON.stringify(ms)); pintarMetas();
+}
+function delMeta(i) { const ms = lsGet("mf_metas"); ms.splice(i, 1); localStorage.setItem("mf_metas", JSON.stringify(ms)); pintarMetas(); }
+function pintarDeudas() {
+  const ds = lsGet("mf_deudas").sort((a, b) => a.tot - b.tot);
+  document.getElementById("deudas").innerHTML = ds.map((d, i) =>
+    `<div class='lec open'><b>${i + 1}° ${d.nom}</b> — saldo ${fmt(d.tot)} ${i === 0 ? "← <b style='color:#b45309'>ATAQUE ESTA PRIMERO</b>" : ""}
+     <button class='btn' style='padding:4px 10px;font-size:11px;margin-left:8px' onclick='delDeuda("${d.nom}")'>✔ Pagada</button></div>`).join("")
+    || "<p style='font-size:13px;color:#dbeafe;margin-top:10px'>Sin deudas anotadas. Si tiene, anótelas: verlas es el primer paso.</p>";
+}
+function addDeuda() {
+  const nom = document.getElementById("d-nom").value.trim(), tot = +document.getElementById("d-tot").value;
+  if (!nom || !tot) return alert("Complete el nombre y saldo de la deuda");
+  const ds = lsGet("mf_deudas"); ds.push({ nom, tot });
+  localStorage.setItem("mf_deudas", JSON.stringify(ds)); pintarDeudas();
+}
+function delDeuda(nom) {
+  const ds = lsGet("mf_deudas").filter(d => d.nom !== nom);
+  localStorage.setItem("mf_deudas", JSON.stringify(ds)); pintarDeudas();
+  hablar("¡Felicitaciones! Cerró una deuda. Ese impulso es exactamente la bola de nieve. Vamos por la siguiente.");
+}
+async function enviar() {
+  const q = document.getElementById("q").value.trim();
+  if (!q) return;
+  document.getElementById("q").value = "";
+  const chat = document.getElementById("chat");
+  chat.innerHTML += `<div class='mU'>${q}</div><div class='mM' id='esp'>Martín está pensando…</div>`;
+  chat.scrollTop = chat.scrollHeight;
+  try {
+    const r = await fetch(API + "/api/martin-financiero/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: q, session_id: SES }) });
+    const d = await r.json();
+    document.getElementById("esp").outerHTML = `<div class='mM'><b style='color:var(--azul)'>MARTÍN 💛</b><br>${d.response || d.detail}</div>`;
+    if (d.response) hablar(d.response);
+  } catch (e) { document.getElementById("esp").textContent = "No pude responderle, intente de nuevo."; }
+  chat.scrollTop = chat.scrollHeight;
+}
+let EXP_CANCEL = false, EXP_ON = null;
+async function cargarExps() {
+  try {
+    const r = await fetch(API + "/api/martin-financiero/experiencias");
+    const d = await r.json();
+    document.getElementById("exps").innerHTML = d.experiencias.map(e =>
+      `<div class='lec open'><b>${e.icono} ${e.titulo}</b> · ${e.min} min<p style='display:block'>${e.proposito}<br><button class='btn' style='padding:6px 14px;font-size:12px;margin-top:8px' onclick='playExp("${e.id}")'>▶ Comenzar</button></p></div>`).join("");
+  } catch (e) {}
+}
+function fraseAsync(f) {
+  return new Promise(res => {
+    const u = new SpeechSynthesisUtterance(f);
+    u.lang = "es-CL"; u.rate = 0.95;
+    const v = speechSynthesis.getVoices().filter(x => x.lang.toLowerCase().startsWith("es"))[0];
+    if (v) u.voice = v;
+    u.onend = res; u.onerror = res;
+    speechSynthesis.speak(u);
+  });
+}
+async function hablarAsync(txt) {
+  const frases = txt.match(/[^.!?…]+[.!?…]+\s*|[^.!?…]+$/g) || [txt];
+  for (const f of frases) { if (EXP_CANCEL) break; await fraseAsync(f); }
+}
+function stopExp() {
+  EXP_CANCEL = true; EXP_ON = null;
+  try { speechSynthesis.cancel(); } catch (e) {}
+  const est = document.getElementById("exp-estado");
+  est.style.display = "block";
+  est.innerHTML = "Experiencia detenida. Cuando quiera, retomamos con calma.";
+}
+async function playExp(id) {
+  if (EXP_ON) { stopExp(); await new Promise(r => setTimeout(r, 400)); }
+  EXP_CANCEL = false; EXP_ON = id;
+  const est = document.getElementById("exp-estado");
+  est.style.display = "block";
+  try {
+    const r = await fetch(API + "/api/martin-financiero/experiencias/" + id);
+    const e = await r.json();
+    for (let i = 0; i < e.pasos.length; i++) {
+      if (EXP_CANCEL || EXP_ON !== id) return;
+      est.innerHTML = `🧘 <b>${e.titulo}</b> — paso ${i + 1} de ${e.pasos.length} <button class='btn' style='padding:4px 12px;font-size:11px;margin-left:8px' onclick='stopExp()'>⏹ Detener</button><br><span style='color:#dbeafe'>${e.pasos[i].texto}</span>`;
+      await hablarAsync(e.pasos[i].texto);
+      if (EXP_CANCEL || EXP_ON !== id) return;
+      if (e.pasos[i].pausa) await new Promise(res => setTimeout(res, e.pasos[i].pausa * 1000));
+    }
+    if (!EXP_CANCEL) est.innerHTML = "✨ <b>Hemos terminado.</b> Gracias por regalarse este momento; llévelo con usted al resto del día.";
+  } catch (err) { est.innerHTML = "No pude cargar la experiencia, intente nuevamente."; }
+  EXP_ON = null;
+}
+cargar(); pintarMetas(); pintarDeudas(); cargarExps();
+</script>
+</body></html>

@@ -12,17 +12,32 @@ export function elegirVozEspanol() {
   return es[0];
 }
 
+// Divide por frases completas (~200 chars): Chrome corta utterances largas (~15s)
+function frasesCompletas(texto, max = 200) {
+  const frases = texto.match(/[^.!?…]+[.!?…]+[\s]*|[^.!?…]+$/g) || [texto];
+  const chunks = [];
+  let cur = "";
+  for (const f of frases) {
+    if (cur && (cur + f).length > max) { chunks.push(cur.trim()); cur = f; }
+    else cur += f;
+  }
+  if (cur.trim()) chunks.push(cur.trim());
+  return chunks;
+}
+
 export function hablarMartin(texto) {
   try {
     const synth = window.speechSynthesis;
     if (!synth) return;
     synth.cancel();
-    const u = new SpeechSynthesisUtterance(texto);
     const v = elegirVozEspanol();
-    if (v) { u.voice = v; u.lang = v.lang; }
-    else u.lang = "es-419";
-    u.rate = 1.0;
-    u.pitch = 1.0;
-    synth.speak(u);
+    for (const frase of frasesCompletas(texto)) {
+      const u = new SpeechSynthesisUtterance(frase);
+      if (v) { u.voice = v; u.lang = v.lang; }
+      else u.lang = "es-419";
+      u.rate = 1.0;
+      u.pitch = 1.0;
+      synth.speak(u);
+    }
   } catch {}
 }

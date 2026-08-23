@@ -43,3 +43,10 @@ incluido el Administrador. Complementos permanentes:
 ---
 *Registradas el 2026-08-22 en dashai_eventos como Reglas de Oro #73 y #74 (inamovibles, nivel de
 calibración 100). ORO-75 registrada el 2026-08-23. Cualquier modificación requiere PIN maestro.*
+
+## REGLA MAESTRA — APROBACIÓN VISUAL PREVIA (2026-06, mandato del Administrador)
+Antes de aplicar CUALQUIER cambio de diseño o estilo en la plataforma:
+1. Mostrar primero una captura de pantalla o mockup visual de cómo quedaría el nuevo estilo, indicando claramente los colores (códigos hex) que se usarán.
+2. Preguntar al Administrador si aprueba el diseño.
+3. PROHIBIDO aplicar cambios visuales sin confirmación explícita del Administrador.
+Aplica a todos los agentes presentes y futuros. Los cambios funcionales (backend, lógica) no requieren mockup, solo los visuales.

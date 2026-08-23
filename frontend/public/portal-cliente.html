@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Portal del Cliente — Central Mutuos | Firma electrónica avanzada E-Ser Chile</title>
+<meta name="description" content="Portal del Cliente Central Mutuos: estado de su crédito en tiempo real, firma electrónica avanzada E-Ser Chile con Clave Única, documentos con validez legal completa.">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--oro:#d4af37;--negro:#09090a;--panel:#101012;--blanco:#f5f5f3;--gris:#8f8f89;--linea:rgba(212,175,55,.28);--verde:#34d399;--ambar:#fbbf24}
+*{margin:0;box-sizing:border-box}
+body{background:var(--negro);color:var(--blanco);font-family:'Space Grotesk',Arial,sans-serif}
+.mono{font-family:'IBM Plex Mono',monospace}
+.wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+nav{position:sticky;top:0;background:rgba(9,9,10,.94);backdrop-filter:blur(10px);border-bottom:1px solid var(--linea);z-index:20}
+nav .wrap{display:flex;align-items:center;justify-content:space-between;padding:14px 24px}
+.logo{display:flex;align-items:center;gap:12px;text-decoration:none;color:var(--blanco)}
+.lgx{width:42px;height:42px;border:1.5px solid var(--oro);display:flex;align-items:center;justify-content:center;color:var(--oro);font-size:15px;font-weight:700;clip-path:polygon(0 0,100% 0,100% 75%,75% 100%,0 100%)}
+.lname{font-size:14px;letter-spacing:3px;font-weight:700}.lsub{font-size:8.5px;letter-spacing:4px;color:var(--oro)}
+.badge-eser{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--linea);padding:7px 14px;font-size:11px;color:var(--gris)}
+.badge-eser b{color:var(--oro)}
+.btn{display:inline-block;padding:14px 32px;text-decoration:none;font-weight:700;font-size:14px;letter-spacing:.5px;border:0;cursor:pointer;clip-path:polygon(0 0,100% 0,100% 70%,92% 100%,0 100%);transition:opacity .15s}
+.btn:hover{opacity:.85}
+.btn-oro{background:var(--oro);color:#0a0a0a}
+.grid-bg{position:relative}
+.grid-bg::before{content:"";position:absolute;inset:0;background:linear-gradient(var(--linea) 1px,transparent 1px),linear-gradient(90deg,var(--linea) 1px,transparent 1px);background-size:64px 64px;opacity:.12;pointer-events:none}
+.login{min-height:78vh;display:flex;align-items:center;justify-content:center;padding:60px 0}
+.login-card{position:relative;background:var(--panel);border:1px solid var(--linea);padding:44px;width:min(460px,92vw)}
+.login-card::before{content:"";position:absolute;top:-1px;left:-1px;width:46px;height:46px;border-top:2px solid var(--oro);border-left:2px solid var(--oro)}
+.login-card::after{content:"";position:absolute;bottom:-1px;right:-1px;width:46px;height:46px;border-bottom:2px solid var(--oro);border-right:2px solid var(--oro)}
+label{display:block;font-size:11px;letter-spacing:2.5px;color:var(--oro);margin-bottom:7px;font-weight:700}
+input{width:100%;background:#0c0c0e;border:1px solid var(--linea);color:var(--blanco);padding:13px 15px;font-family:'Space Grotesk';font-size:15px;margin-bottom:18px}
+section{padding:56px 0}
+h2{font-size:clamp(22px,2.6vw,32px)}
+.sec-n{color:var(--oro);font-size:13px}
+.cardp{background:var(--panel);border:1px solid var(--linea);padding:26px;position:relative}
+.timeline{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-top:22px}
+.etapa{background:#0c0c0e;border:1px solid var(--linea);padding:16px 12px;text-align:center;position:relative}
+.etapa .dot{width:14px;height:14px;border-radius:50%;margin:0 auto 8px;border:2px solid var(--gris)}
+.etapa.done .dot{background:var(--verde);border-color:var(--verde);box-shadow:0 0 10px rgba(52,211,153,.6)}
+.etapa.activa{border-color:var(--oro)}
+.etapa.activa .dot{background:var(--oro);border-color:var(--oro);animation:pulso 1.6s infinite}
+.etapa.alerta{border-color:var(--ambar)}
+.etapa.alerta .dot{background:var(--ambar);border-color:var(--ambar)}
+@keyframes pulso{0%,100%{box-shadow:0 0 0 0 rgba(212,175,55,.5)}50%{box-shadow:0 0 0 9px rgba(212,175,55,0)}}
+.etapa .t{font-size:11px;letter-spacing:1px;color:var(--gris)}
+.etapa.done .t,.etapa.activa .t{color:var(--blanco)}
+.chipa{display:inline-block;padding:4px 12px;font-size:10.5px;letter-spacing:1.5px;font-weight:700}
+.chipa.v{background:rgba(52,211,153,.12);color:var(--verde);border:1px solid rgba(52,211,153,.4)}
+.chipa.a{background:rgba(251,191,36,.1);color:var(--ambar);border:1px solid rgba(251,191,36,.4)}
+.chipa.o{background:rgba(212,175,55,.1);color:var(--oro);border:1px solid var(--linea)}
+.doc{display:flex;align-items:center;gap:14px;border:1px solid var(--linea);background:#0c0c0e;padding:16px 18px;margin-top:10px;flex-wrap:wrap}
+.doc .ic{width:40px;height:40px;border:1px solid var(--oro);display:flex;align-items:center;justify-content:center;color:var(--oro);font-size:16px}
+.doc b{font-size:14.5px}.doc small{color:var(--gris);display:block;font-size:12px}
+.pasos4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:20px}
+.paso{background:#0c0c0e;border:1px solid var(--linea);padding:22px 16px;position:relative;transition:border-color .3s,transform .3s}
+.paso .n{font-family:'IBM Plex Mono';color:var(--oro);font-size:12px;letter-spacing:2px}
+.paso h4{font-size:15px;margin:8px 0 6px}
+.paso p{color:var(--gris);font-size:12.5px;line-height:1.6}
+.paso.on{border-color:var(--oro);transform:translateY(-4px);box-shadow:0 12px 30px rgba(0,0,0,.5)}
+.paso.hecho{border-color:rgba(52,211,153,.5)}
+.paso .check{position:absolute;top:12px;right:14px;color:var(--verde);font-weight:700;opacity:0;transition:opacity .3s}
+.paso.hecho .check{opacity:1}
+.eser-banner{border:1px solid var(--oro);background:linear-gradient(135deg,#14120a,#0c0c0e);padding:24px 28px;display:flex;align-items:center;gap:20px;flex-wrap:wrap;margin-top:22px}
+.eser-logo{width:64px;height:64px;border:2px solid var(--oro);display:flex;align-items:center;justify-content:center;color:var(--oro);font-weight:700;font-size:13px;letter-spacing:1px}
+.notif{border-left:2px solid var(--oro);padding:10px 16px;margin-top:10px;background:#0c0c0e}
+.notif small{color:var(--gris);font-size:11px}
+.notif p{font-size:13.5px;margin-top:2px}
+.dl{display:flex;align-items:center;gap:14px;border:1px solid rgba(52,211,153,.4);background:#0c100e;padding:16px 18px;margin-top:10px;flex-wrap:wrap}
+.sello{margin-left:auto;border:1px dashed var(--oro);color:var(--oro);font-size:10px;letter-spacing:2px;padding:6px 12px}
+footer{border-top:1px solid var(--linea);padding:40px 0;background:#070708;text-align:center}
+footer p{color:var(--gris);font-size:12px;letter-spacing:2px}
+#dashboard{display:none}
+.fade{animation:in .8s ease both}
+@keyframes in{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
+@media(max-width:880px){.timeline{grid-template-columns:repeat(3,1fr)}.pasos4{grid-template-columns:1fr 1fr}}
+</style></head>
+<body>
+<nav><div class="wrap">
+  <a class="logo" href="/landing-opcion-c.html"><div class="lgx">CM</div><div><div class="lname">CENTRAL MUTUOS</div><div class="lsub">PORTAL DEL CLIENTE</div></div></a>
+  <span class="badge-eser">🔏 Firma electrónica avanzada por <b>&nbsp;E-Ser Chile</b>&nbsp;· la más consolidada de Chile</span>
+</div></nav>
+
+<!-- ══ LOGIN ══ -->
+<div id="login" class="login grid-bg">
+  <div class="login-card fade">
+    <div class="mono" style="color:var(--oro);font-size:12px;letter-spacing:3px;margin-bottom:10px">ACCESO SEGURO</div>
+    <h2 style="margin-bottom:8px">Portal del Cliente</h2>
+    <p style="color:var(--gris);font-size:14px;line-height:1.7;margin-bottom:26px">Ingrese con su RUT y el correo registrado en su solicitud para ver su proceso completo en tiempo real.</p>
+    <label>RUT</label><input id="rut" placeholder="12.345.678-9" value="12.345.678-9">
+    <label>CORREO ELECTRÓNICO</label><input id="mail" type="email" placeholder="su.correo@ejemplo.cl" value="maria.rojas@ejemplo.cl">
+    <button class="btn btn-oro" style="width:100%" onclick="entrar()" id="btn-entrar">Ingresar a mi proceso →</button>
+    <p class="mono" style="color:var(--gris);font-size:10.5px;margin-top:16px;letter-spacing:1px">🔒 CONEXIÓN CIFRADA · VERIFICACIÓN EN DOS PASOS · REGISTRO INMUTABLE</p>
+  </div>
+</div>
+
+<!-- ══ DASHBOARD ══ -->
+<div id="dashboard">
+<section class="grid-bg" style="padding-top:44px"><div class="wrap fade">
+  <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap">
+    <h2>Bienvenida, María Fernanda Rojas</h2>
+    <span class="chipa v">● SESIÓN VERIFICADA</span>
+  </div>
+  <p style="color:var(--gris);font-size:14px;margin-top:6px">Crédito hipotecario UF 3.200 · Proyecto Parque Mirador Oriente (Besalco) · Ejecutiva: Deisy Salazar</p>
+
+  <div class="cardp" style="margin-top:26px">
+    <span class="sec-n mono">/01 · ESTADO DE SU CRÉDITO EN TIEMPO REAL</span>
+    <div class="timeline">
+      <div class="etapa done"><div class="dot"></div><div class="t">EVALUACIÓN</div><span class="chipa v">OK</span></div>
+      <div class="etapa done"><div class="dot"></div><div class="t">APROBACIÓN MESA</div><span class="chipa v">OK</span></div>
+      <div class="etapa done"><div class="dot"></div><div class="t">TASACIÓN</div><span class="chipa v">OK</span></div>
+      <div class="etapa activa"><div class="dot"></div><div class="t">ESTUDIO DE TÍTULO</div><span class="chipa o">EN CURSO</span></div>
+      <div class="etapa alerta"><div class="dot"></div><div class="t">FIRMA ESCRITURA</div><span class="chipa a">⚠ REQUIERE SU FIRMA</span></div>
+      <div class="etapa"><div class="dot"></div><div class="t">ENTREGA</div><span class="chipa o">PENDIENTE</span></div>
+    </div>
+  </div>
+
+  <div class="cardp" style="margin-top:18px" id="docs">
+    <span class="sec-n mono">/02 · DOCUMENTOS PENDIENTES DE FIRMA</span>
+    <div class="doc"><div class="ic">✒</div><div><b>Escritura de compraventa y mutuo hipotecario</b><small>Requiere firma electrónica avanzada · vence en 5 días</small></div><span class="chipa a" style="margin-left:auto">PENDIENTE</span></div>
+    <div class="doc"><div class="ic">✒</div><div><b>Mandato de pago dividendos</b><small>Requiere firma electrónica avanzada</small></div><span class="chipa a" style="margin-left:auto">PENDIENTE</span></div>
+  </div>
+
+  <div class="cardp" style="margin-top:18px" id="firma">
+    <span class="sec-n mono">/03 · FIRME EN 4 PASOS — E-SER CHILE</span>
+    <div class="eser-banner">
+      <div class="eser-logo">E-SER</div>
+      <div style="flex:1;min-width:240px">
+        <b style="font-size:16px;color:var(--oro)">E-Ser Chile — la empresa de firma electrónica avanzada más consolidada de Chile</b>
+        <p style="color:var(--gris);font-size:13px;margin-top:4px;line-height:1.6">Firma con validez legal completa (Ley 19.799), verificación de identidad con cédula y Clave Única del Estado, y registro inmutable de cada firma.</p>
+      </div>
+    </div>
+    <div class="pasos4">
+      <div class="paso" id="p1"><span class="check">✔</span><div class="n">PASO 01</div><h4>Ingresar al portal</h4><p>Acceso seguro con su RUT y correo registrado.</p></div>
+      <div class="paso" id="p2"><span class="check">✔</span><div class="n">PASO 02</div><h4>Revisar documentos</h4><p>Lea en pantalla cada documento antes de firmar.</p></div>
+      <div class="paso" id="p3"><span class="check">✔</span><div class="n">PASO 03</div><h4>Verificar identidad</h4><p>Cédula de identidad + Clave Única del Estado.</p></div>
+      <div class="paso" id="p4"><span class="check">✔</span><div class="n">PASO 04</div><h4>Firmar con FEA</h4><p>Firma electrónica avanzada con validez legal completa.</p></div>
+    </div>
+    <div style="margin-top:20px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+      <button class="btn btn-oro" id="btn-firmar" onclick="firmar()">🔏 Iniciar proceso de firma E-Ser</button>
+      <span id="firma-estado" class="mono" style="color:var(--gris);font-size:12px"></span>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:18px" id="fila-final">
+    <div class="cardp" id="notifs">
+      <span class="sec-n mono">/04 · NOTIFICACIONES AUTOMÁTICAS</span>
+      <div class="notif"><small class="mono">HOY · 09:12</small><p>⚠ Su escritura está lista para firma electrónica avanzada.</p></div>
+      <div class="notif"><small class="mono">AYER · 17:40</small><p>✅ Tasación aprobada: UF 3.560 (Value Property).</p></div>
+      <div class="notif"><small class="mono">12/06 · 11:05</small><p>✅ Su crédito fue aprobado por mesa. ¡Felicitaciones!</p></div>
+      <p style="color:var(--gris);font-size:12px;margin-top:12px">📧 Cada avance de su proceso le llega automáticamente a su correo.</p>
+    </div>
+    <div class="cardp" id="descargas">
+      <span class="sec-n mono">/05 · SUS DOCUMENTOS FIRMADOS</span>
+      <div class="dl"><div class="ic" style="border-color:var(--verde);color:var(--verde)">⬇</div><div><b>Carta de aprobación</b><small class="mono" style="color:var(--gris)">PDF · firmado 12/06/2026</small></div><span class="sello">SELLO E-SER ✔</span></div>
+      <div class="dl"><div class="ic" style="border-color:var(--verde);color:var(--verde)">⬇</div><div><b>Contrato de apertura</b><small class="mono" style="color:var(--gris)">PDF · firmado 15/06/2026</small></div><span class="sello">SELLO E-SER ✔</span></div>
+      <p style="color:var(--gris);font-size:12px;margin-top:12px">Cada documento descargable incluye el sello de integridad E-Ser Chile y su registro inmutable.</p>
+    </div>
+  </div>
+</div></section>
+</div>
+
+<footer><div class="wrap"><p>CENTRAL MUTUOS CON CRECES · MUTUARIA REGULADA POR LA CMF · FIRMA ELECTRÓNICA AVANZADA E-SER CHILE</p></div></footer>
+
+<div style="position:fixed;bottom:18px;right:18px;z-index:30;background:#000;border:1px solid var(--oro);padding:8px 12px;font-size:12px">
+  <a href="/landing-opcion-a.html" style="color:var(--oro);text-decoration:none;margin:0 6px;font-weight:700">A</a>
+  <a href="/landing-opcion-b.html" style="color:var(--oro);text-decoration:none;margin:0 6px;font-weight:700">B</a>
+  <a href="/landing-opcion-c.html" style="color:var(--oro);text-decoration:none;margin:0 6px;font-weight:700">C</a>
+  <span style="color:var(--oro);margin:0 6px;font-weight:700;text-decoration:underline">PORTAL</span>
+</div>
+
+<script>
+function entrar() {
+  var rut = document.getElementById('rut').value.trim(), mail = document.getElementById('mail').value.trim();
+  if (!rut || !mail.includes('@')) { alert('Ingrese su RUT y correo registrado.'); return; }
+  document.getElementById('login').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'block';
+  window.scrollTo(0, 0);
+}
+function firmar() {
+  var est = document.getElementById('firma-estado'), btn = document.getElementById('btn-firmar');
+  btn.disabled = true;
+  var pasos = [
+    ['p1', 'Portal verificado…'],
+    ['p2', 'Documentos revisados en pantalla…'],
+    ['p3', 'Identidad verificada: cédula + Clave Única ✔'],
+    ['p4', 'Firmando con firma electrónica avanzada…']];
+  var i = 0;
+  var iv = setInterval(function () {
+    if (i > 0) { document.getElementById(pasos[i-1][0]).classList.remove('on'); document.getElementById(pasos[i-1][0]).classList.add('hecho'); }
+    if (i >= pasos.length) {
+      clearInterval(iv);
+      est.style.color = '#34d399';
+      est.textContent = '✅ DOCUMENTO FIRMADO CON VALIDEZ LEGAL COMPLETA · SELLO E-SER CHILE · REGISTRO INMUTABLE';
+      btn.textContent = '🔏 Firma completada';
+      return;
+    }
+    document.getElementById(pasos[i][0]).classList.add('on');
+    est.style.color = '#d4af37';
+    est.textContent = pasos[i][1];
+    i++;
+  }, 1400);
+}
+</script>
+</body></html>

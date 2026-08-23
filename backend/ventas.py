@@ -81,9 +81,68 @@ async def _resumen_cliente(c):
             "ultimo_contacto": (contactos[-1] if contactos else None),
             "n_contactos": len(contactos),
             "cerrado_en": v.get("cerrado_en", ""),
-            **(lambda r: {"semaforo": _semaforo(v, r), "etapa_embudo": _etapa_embudo(r)})(
+            **(lambda r: (lambda sem: {"semaforo": sem, "etapa_embudo": _etapa_embudo(r),
+                                       "hilo_frio": sem["color"] != "cerrado" and sem["dias_sin_movimiento"] >= 7})(_semaforo(v, r)))(
                 {"estado": v.get("estado", "en_gestion"), "docs_completos": not faltantes,
                  "n_contactos": len(contactos)})}
+
+
+@vtas.post("/clientes/{cid}/hilo-frio")
+async def hilo_frio(cid: str, payload: dict, request: Request):
+    """🧊 HILO FRÍO: correo de seguimiento institucional a clientes inactivos 7+ días.
+    Visible solo para Administrador y ejecutivos de Ventas · exige MASTER_PIN (ORO-75)."""
+    u = _exigir(request)
+    if u.get("rol") not in ("admin", "maestro") and (u.get("perfil") or "") != "ventas":
+        raise HTTPException(status_code=403, detail="Hilo Frío: exclusivo del Administrador y de los ejecutivos de Ventas")
+    from publicidad import _exigir_pin_maestro
+    _exigir_pin_maestro(payload)
+    c = await db.victoria_clientes.find_one({"id": cid, "ventas": {"$exists": True}}, {"_id": 0})
+    if not c:
+        raise HTTPException(status_code=404, detail="Cliente no encontrado en el Módulo Ventas")
+    v = c.get("ventas") or {}
+    sem = _semaforo(v, {"estado": v.get("estado", "en_gestion")})
+    if sem["color"] == "cerrado":
+        raise HTTPException(status_code=400, detail="El caso ya está cerrado: Hilo Frío no aplica")
+    if sem["dias_sin_movimiento"] < 7:
+        raise HTTPException(status_code=400, detail=f"Hilo Frío aplica solo a clientes inactivos por 7 o más días (lleva {sem['dias_sin_movimiento']})")
+    email_dest = (c.get("email") or "").strip().lower()
+    if not email_dest or "@" not in email_dest:
+        raise HTTPException(status_code=400, detail="El cliente no tiene correo registrado: guárdelo primero en la ficha")
+    ejecutivo = v.get("ejecutivo_nombre") or "Su ejecutivo asignado"
+    primer = (c.get("nombre") or "").split()[0].title() or "cliente"
+    asunto = "Seguimiento de su proceso hipotecario — Central Mutuos"
+    html = (
+        "<div style='background:#0a0a0a;padding:30px 18px;font-family:Georgia,serif'>"
+        "<table role='presentation' width='100%' cellpadding='0' cellspacing='0' style='max-width:620px;margin:0 auto'>"
+        "<tr><td style='text-align:center;padding-bottom:18px'>"
+        "<div style='display:inline-block;border:2px solid #d4af37;width:48px;height:48px;line-height:48px;color:#d4af37;font-size:18px;font-weight:bold'>CM</div>"
+        "<div style='color:#f4f2ec;letter-spacing:4px;font-size:13px;margin-top:8px;font-weight:bold'>CENTRAL MUTUOS</div>"
+        "<div style='color:#d4af37;letter-spacing:5px;font-size:9px;margin-top:2px'>CON CRECES</div></td></tr>"
+        "<tr><td style='border-top:2px solid #d4af37;padding-top:22px'>"
+        f"<p style='color:#f4f2ec;font-size:15px;line-height:1.75'>Estimado(a) {primer}:</p>"
+        "<p style='color:#f4f2ec;font-size:15px;line-height:1.75'>Junto con saludarle cordialmente, nos permitimos "
+        "recordarle que <b style='color:#d4af37'>Central Mutuos se encuentra a su entera disposición</b> para "
+        "ayudarle a continuar con su proceso de crédito hipotecario.</p>"
+        "<p style='color:#f4f2ec;font-size:15px;line-height:1.75'>Sabemos que reunir la documentación y avanzar en "
+        "cada etapa puede tomar tiempo. Si tiene alguna duda, o si desea que le acompañemos en el siguiente paso, "
+        "no dude en responder este correo o comunicarse directamente con su ejecutivo, quien le atenderá con gusto.</p>"
+        "<p style='color:#f4f2ec;font-size:15px;line-height:1.75'>Quedamos atentos a sus comentarios.</p>"
+        f"<p style='color:#f4f2ec;font-size:15px;line-height:1.7'>Atentamente,<br><b style='color:#d4af37'>{ejecutivo}</b><br>"
+        "<span style='color:#9c9a92;font-size:13px'>Central Mutuos &middot; Con Creces</span></p></td></tr>"
+        "<tr><td style='border-top:1px solid rgba(212,175,55,.4);padding-top:14px;text-align:center'>"
+        "<p style='color:#9c9a92;font-size:11px;letter-spacing:2px'>CENTRAL MUTUOS CON CRECES &middot; MUTUARIA REGULADA POR LA CMF</p>"
+        "</td></tr></table></div>")
+    import asyncio as _aio
+    import email_service as mail
+    r = await _aio.to_thread(mail.send_mail, email_dest, asunto, html, None, "secundaria")
+    if not r.get("success"):
+        raise HTTPException(status_code=502, detail=f"No se pudo enviar el correo: {str(r.get('error'))[:120]}")
+    reg = {"canal": "correo", "nota": f"🧊 Hilo Frío: correo de seguimiento institucional enviado a {email_dest} (inactivo {sem['dias_sin_movimiento']} días)",
+           "por": u.get("sub", ""), "fecha": _now()}
+    await db.victoria_clientes.update_one({"id": cid}, {
+        "$push": {"ventas.contactos": reg}, "$set": {"ventas.ultimo_contacto": _now()}})
+    await _evento(cid, f"🧊 Hilo Frío enviado a {email_dest} tras {sem['dias_sin_movimiento']} día(s) sin movimiento (ORO-75 validado)", u.get("sub", ""))
+    return {"ok": True, "mensaje": f"Correo de seguimiento Hilo Frío enviado a {email_dest}"}
 
 
 @vtas.get("/panel/{ejecutivo}")

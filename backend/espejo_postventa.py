@@ -1561,6 +1561,65 @@ def leer_simulador_sync(nombre_folder):
     return None
 
 
+async def _avisar_mora_cliente(doc, cm):
+    """📧 SOLICITUD DE CRÉDITO — aviso institucional automático al CLIENTE (usted) al
+    detectar deuda CMF, con portal para subir el comprobante de pago a SU acreedor.
+    REGLA DURA: jamás se incluyen cuentas ni instrucciones de pago hacia Central Mutuos."""
+    try:
+        email_cliente = (doc.get("email") or doc.get("email_cliente")
+                         or (doc.get("credit_request") or {}).get("email_cliente") or "").strip()
+        if not email_cliente or "@" not in email_cliente:
+            return
+        token = str(uuid.uuid4())
+        claim = await db.folders.update_one(
+            {"id": doc["id"], "cmf_morosidad.aviso_cliente_at": {"$exists": False}},
+            {"$set": {"cmf_morosidad.aviso_cliente_at": _now(),
+                      "cmf_morosidad.portal_token": token}})
+        if not claim.modified_count:
+            return
+        import email_service as mail
+        app_url = ""
+        try:
+            for line in open("/app/frontend/.env"):
+                if line.startswith("REACT_APP_BACKEND_URL="):
+                    app_url = line.split("=", 1)[1].strip().strip('"').rstrip("/")
+        except Exception:
+            pass
+        link = f"{app_url}/api/mora/portal/{token}"
+        nombre = (doc.get("nombre") or "").title()
+        entidad = cm.get("entidad") or "la institución financiera informada en su Informe CMF"
+        monto = f"${float(cm.get('morosidad_clp') or 0):,.0f}"
+        cuerpo = (
+            "<div style='background:#0a0a0a;padding:30px 18px;font-family:Georgia,serif'>"
+            "<table role='presentation' width='100%' cellpadding='0' cellspacing='0' style='max-width:620px;margin:0 auto'>"
+            "<tr><td style='text-align:center;padding-bottom:18px'>"
+            "<div style='display:inline-block;border:2px solid #d4af37;width:48px;height:48px;line-height:48px;color:#d4af37;font-size:18px;font-weight:bold'>CM</div>"
+            "<div style='color:#f4f2ec;letter-spacing:4px;font-size:13px;margin-top:8px;font-weight:bold'>CENTRAL MUTUOS</div>"
+            "<div style='color:#d4af37;letter-spacing:5px;font-size:9px;margin-top:2px'>CON CRECES</div></td></tr>"
+            "<tr><td style='border-top:2px solid #d4af37;padding-top:22px'>"
+            f"<p style='color:#f4f2ec;font-size:15px;line-height:1.8'>Estimado/a {nombre}, hemos detectado una deuda "
+            f"registrada en la CMF con <b style='color:#d4af37'>{entidad}</b> por <b style='color:#d4af37'>{monto}</b>. "
+            "Para continuar con su solicitud de crédito, le solicitamos adjuntar el comprobante de pago de dicha deuda.</p>"
+            "<p style='color:#f4f2ec;font-size:15px;line-height:1.8'>Puede subir su comprobante de forma segura en el "
+            "siguiente portal; el sistema lo validará automáticamente contra el registro CMF:</p>"
+            f"<p style='text-align:center;margin:22px 0'><a href='{link}' style='display:inline-block;background:#d4af37;"
+            "color:#0a0a0a;text-decoration:none;font-weight:bold;font-size:14px;letter-spacing:1px;padding:13px 32px'>"
+            "Adjuntar comprobante de pago</a></p>"
+            f"<p style='color:#9c9a92;font-size:12px;word-break:break-all'>{link}</p>"
+            "<p style='color:#9c9a92;font-size:12px;line-height:1.7'>Importante: el pago debe realizarse directamente a la "
+            "entidad acreedora de su deuda. Central Mutuos <b>nunca</b> le solicitará transferencias a cuentas propias por este concepto.</p>"
+            "<p style='color:#f4f2ec;font-size:15px;line-height:1.7'>Atentamente,<br><b style='color:#d4af37'>Central Mutuos</b><br>"
+            "<span style='color:#9c9a92;font-size:13px'>Mutuaria regulada por la CMF</span></p></td></tr></table></div>")
+        r = await asyncio.to_thread(mail.send_mail, email_cliente,
+                                    "Solicitud de Crédito — Regularización de deuda CMF",
+                                    cuerpo, [], "secundaria")
+        await db.folders.update_one({"id": doc["id"]}, {"$push": {"historial": {"fecha": _now(), "accion": (
+            f"📧 Aviso automático de deuda CMF enviado al CLIENTE ({email_cliente}) con portal de comprobante"
+            f"{'' if r.get('success') else ' — ⚠ envío falló: ' + str(r.get('error'))[:80]}")}}})
+    except Exception as e:
+        logging.warning(f"aviso mora cliente: {e}")
+
+
 async def _avisar_mora_ejecutivo(doc, cm):
     """📧 Aviso de Mora (ORO-73): un solo correo al ejecutivo apenas la auditoría
     detecta mora, con el link directo a la ficha para subir el comprobante."""
@@ -1799,6 +1858,8 @@ async def auditar_folder(doc):
                 fuente="Bóveda btg_pactual.morosidad_permitida · Informe CMF real (04_cmf)")
             if not cm.get("aviso_ejecutivo_at"):
                 asyncio.create_task(_avisar_mora_ejecutivo(doc, cm))
+            if not cm.get("aviso_cliente_at"):
+                asyncio.create_task(_avisar_mora_cliente(doc, cm))
 
     edad = None
     try:

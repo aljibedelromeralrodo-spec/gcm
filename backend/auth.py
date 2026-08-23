@@ -71,6 +71,8 @@ PERFIL_RUTAS_BLOQUEADAS = {
     ),
 }
 PUBLIC_PREFIXES = (
+    "/api/mora/portal",            # Portal público del cliente para subir comprobante de deuda CMF (token único)
+    "/api/martin-financiero",      # Martín Asistente Financiero — educación financiera abierta (responsabilidad social)
     "/api/publicidad/contacto",    # Formulario público "Quiero ser contactado" (campañas)
     "/api/publicidad/antecedentes",  # Portal público de envío de antecedentes (campañas WhatsApp)
     "/api/calificar",              # Portal de Captura Autónoma (token = oid)

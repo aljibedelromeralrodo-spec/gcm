@@ -7,6 +7,22 @@ const CENTRAL_AVATAR = "/martin-avatar.jpeg";
 
 let currentAudio = null;
 let lastSpeakArgs = null;
+let speakSession = 0;
+
+// Divide el texto en trozos por FRASES COMPLETAS (nunca corta a mitad de frase).
+// El primer trozo es más corto para que el audio comience casi de inmediato.
+function splitSpeechChunks(texto, primerMax = 150, restoMax = 320) {
+  const frases = texto.match(/[^.!?…]+[.!?…]+[\s]*|[^.!?…]+$/g) || [texto];
+  const chunks = [];
+  let cur = "";
+  for (const f of frases) {
+    const max = chunks.length === 0 ? primerMax : restoMax;
+    if (cur && (cur + f).length > max) { chunks.push(cur.trim()); cur = f; }
+    else cur += f;
+  }
+  if (cur.trim()) chunks.push(cur.trim());
+  return chunks;
+}
 
 function pauseSpeaking() {
   if (currentAudio) { try { currentAudio.pause(); } catch (e) { console.error(e); } }
@@ -19,11 +35,10 @@ function resumeSpeaking() {
 }
 
 function restartSpeaking() {
-  if (currentAudio) {
-    try { currentAudio.currentTime = 0; currentAudio.play(); } catch (e) { console.error(e); }
-  } else if (lastSpeakArgs) {
-    window.speechSynthesis?.cancel();
+  if (lastSpeakArgs) {
     speakText(lastSpeakArgs.text, lastSpeakArgs.onEnd);
+  } else if (currentAudio) {
+    try { currentAudio.currentTime = 0; currentAudio.play(); } catch (e) { console.error(e); }
   }
 }
 
@@ -51,36 +66,67 @@ function renderTextWithLinks(text) {
 
 
 async function speakText(text, onEnd) {
-  const clean = text.replace(/[*#_>`]/g, "").replace(/\n+/g, ". ").slice(0, 4000);
+  let clean = text.replace(/[*#_>`]/g, "").replace(/\n+/g, ". ");
+  if (clean.length > 4000) {
+    const corte = Math.max(clean.lastIndexOf(". ", 4000), clean.lastIndexOf("! ", 4000), clean.lastIndexOf("? ", 4000));
+    clean = corte > 0 ? clean.slice(0, corte + 1) : clean.slice(0, 4000);
+  }
   lastSpeakArgs = { text, onEnd };
-  if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+  stopSpeaking();
+  const session = speakSession;
 
-  // Try Martin's chosen voice (OpenAI TTS) first
-  try {
-    const r = await axios.post(`${API}/api/central/tts`, { text: clean });
-    if (r.data?.audio) {
-      const audio = new Audio(`data:audio/mp3;base64,${r.data.audio}`);
-      currentAudio = audio;
-      audio.onended = () => { currentAudio = null; onEnd?.(); };
-      audio.onerror = () => { currentAudio = null; onEnd?.(); };
-      await audio.play();
+  // Pipeline por trozos: el primer trozo es corto (audio casi inmediato) y los
+  // siguientes se sintetizan EN PARALELO mientras se reproduce el anterior.
+  const chunks = splitSpeechChunks(clean);
+  const fetches = chunks.map(c =>
+    axios.post(`${API}/api/central/tts`, { text: c }).then(r => r.data?.audio || null).catch(() => null));
+
+  for (let i = 0; i < chunks.length; i++) {
+    if (session !== speakSession) return;
+    const b64 = await fetches[i];
+    if (session !== speakSession) return;
+    if (!b64) {
+      // Fallback navegador para lo que falta, en frases completas
+      speakWithBrowser(chunks.slice(i).join(" "), session, onEnd);
       return;
     }
-  } catch (e) { console.error(e); }
+    const ok = await playB64(b64, session);
+    if (!ok) return;
+  }
+  if (session === speakSession) onEnd?.();
+}
 
-  // Fallback: browser speech synthesis
+function playB64(b64, session) {
+  return new Promise(resolve => {
+    if (session !== speakSession) return resolve(false);
+    const audio = new Audio(`data:audio/mp3;base64,${b64}`);
+    currentAudio = audio;
+    audio.onended = () => { if (currentAudio === audio) currentAudio = null; resolve(session === speakSession); };
+    audio.onerror = () => { if (currentAudio === audio) currentAudio = null; resolve(session === speakSession); };
+    audio.play().catch(() => resolve(false));
+  });
+}
+
+function speakWithBrowser(texto, session, onEnd) {
   if (!window.speechSynthesis) { onEnd?.(); return; }
   window.speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(clean);
+  // Chrome corta utterances largas (~15s): encolar por frases completas
+  const frases = splitSpeechChunks(texto, 200, 200);
   const vSel = elegirVozEspanol();
-  if (vSel) { u.voice = vSel; u.lang = vSel.lang; } else u.lang = "es-419";
-  u.rate = 1.0; u.pitch = 1.0;
-  u.onend = () => onEnd?.();
-  u.onerror = () => onEnd?.();
-  window.speechSynthesis.speak(u);
+  frases.forEach((f, idx) => {
+    const u = new SpeechSynthesisUtterance(f);
+    if (vSel) { u.voice = vSel; u.lang = vSel.lang; } else u.lang = "es-419";
+    u.rate = 1.0; u.pitch = 1.0;
+    if (idx === frases.length - 1) {
+      u.onend = () => { if (session === speakSession) onEnd?.(); };
+      u.onerror = () => { if (session === speakSession) onEnd?.(); };
+    }
+    window.speechSynthesis.speak(u);
+  });
 }
 
 function stopSpeaking() {
+  speakSession += 1;
   if (currentAudio) { currentAudio.pause(); currentAudio = null; }
   window.speechSynthesis?.cancel();
 }

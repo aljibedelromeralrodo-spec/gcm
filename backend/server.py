@@ -433,6 +433,7 @@ async def _task_blindada(coro_fn, nombre):
 NORMATIVAS_FIJAS = [
     ("NAVEGACION VOLVER", "NORMATIVA FIJA — NAVEGACIÓN UNIVERSAL E INAMOVIBLE: cada vez que el usuario presione 'Volver' en cualquier parte del sistema, debe regresar exactamente al estado anterior: misma pantalla, mismo scroll, mismo filtro activo, mismo día del calendario, misma carpeta seleccionada. El sistema nunca reinicia una vista al volver, solo retrocede un paso en el estado exacto en que estaba. Aplica a todos los módulos: calendario, carpetas, dashboard, visualizador cognitivo y cualquier módulo futuro."),
     ("CORREOS DEL SISTEMA", "NORMATIVA FIJA — CORREOS DEL SISTEMA (PERMANENTE E INAMOVIBLE): PROHIBIDO enviar correos automáticos de prueba, notificaciones individuales de estado, avisos de errores de entrega o cualquier correo operacional durante el día. Solo se permite el resumen diario o una respuesta directa a un cliente o ejecutivo. Direcciones con dominio de prueba (test.cl, qa.audit, example) están BLOQUEADAS a nivel de envío. EXCEPCIÓN DE ARRANQUE (única e irrepetible): el primer correo se envía a las 8:00 AM a gerardo.ext@centralmutuos.cl con el listado completo de clientes con carpetas pendientes de las últimas dos semanas (nombre, estado, días sin movimiento, documentos faltantes). DESDE EL DÍA SIGUIENTE: todos los días a las 8:00 AM UN SOLO correo a gerardo.ext@centralmutuos.cl con: carpetas nuevas de ayer, pendientes sin movimiento +2 días hábiles, correos que no generaron carpeta, aprobaciones y rechazos enviados, documentos faltantes por solicitar, cambios de tasas o criterios desde mesa y alertas activas. Un solo correo diario, ordenado, sin repeticiones ni correos de prueba."),
+    ("AISLAMIENTO GASTO OPERACIONAL", "NORMATIVA CONSTITUCIONAL — SEGURIDAD FINANCIERA (INAMOVIBLE, mandato del Administrador): PROHIBIDO que el módulo de Servicio al Cliente o cualquier otro módulo fuera de Gasto Operacional genere, sugiera o procese vouchers de pago, transferencias o cualquier movimiento financiero vinculado a las fuentes de pago operacional de Mutuaria y Leasing (Mercado Pago, MUTUARIAS Y LEASING LIMITADA). Ante cualquier intento fuera del módulo correcto el sistema BLOQUEA la acción y muestra: 'Esta acción solo puede realizarse desde el módulo de Gasto Operacional.' Solo el Administrador y Deisy Salazar pueden generar y enviar gastos operacionales desde su módulo; ningún otro rol tiene acceso. Todo envío o procesamiento de un gasto operacional vinculado a Mercado Pago, Mutuaria o Leasing Ilimitada exige el MASTER_PIN como confirmación final: sin PIN la operación queda bloqueada sin excepción, para todos los roles."),
     ("FLUJO APROBACION MESA", "NORMATIVA CONSTITUCIONAL — FLUJO DE APROBACIÓN DE MESA (INAMOVIBLE, no debe modificarse en ninguna actualización futura): cuando MESA envía un correo de aprobación a aprobaciones@centralmutuos.cl, el sistema reenvía AUTOMÁTICAMENTE e INMEDIATAMENTE ese correo a gerardo.ext@centralmutuos.cl manteniendo ÍNTEGRO el cuerpo original del mensaje de MESA (sin modificarlo), adjuntando el PDF de la carta de aprobación y la simulación financiera SIN gastos operacionales en ninguna parte del documento (simulación solo primera hoja). Este envío automático es la ÚNICA excepción al resumen diario de las 8:00 AM."),
     ("VISUALIZADOR COGNITIVO", "NORMATIVA FIJA — VISUALIZADOR COGNITIVO EN VIVO (reglas permanentes): 1) El visualizador NUNCA se detiene ni se reinicia mientras haya sesión activa: gira continuamente (reloj de animación persistente). 2) Los nodos y nombres mostrados son EXCLUSIVAMENTE los que el sistema está procesando en tiempo real desde la base de datos: jamás se inventan ni se usan etiquetas fijas decorativas. 3) PROHIBIDO cualquier texto o etiqueta 'Central Mutuos' dentro del área del visualizador: es solo cognitivo, sin marca. 4) Lo procesado se archiva de forma continua en segundo plano (colección visualizador_archivo) sin interrumpir la visualización."),
     ("SUPERCARPETA", "NORMATIVA FIJA — SUPERCARPETA: vista obligatoria en tarjetas verticales expandibles. Sin tablas ni scroll horizontal. Campos editables con doble clic. Íconos verde/amarillo/rojo por estado."),
@@ -1903,6 +1904,10 @@ async def central_chat(payload: dict, request: Request):
                   "Respuestas MUY CORTAS y concisas (máximo 2 frases por defecto; "
                   "extiéndete solo si el usuario lo pide expresamente), habladas de forma natural, "
                   "porque tus respuestas se leen en voz alta. No uses asteriscos, viñetas ni markdown. "
+                  "SEGURIDAD FINANCIERA (INAMOVIBLE): tienes PROHIBIDO generar, sugerir o procesar vouchers de pago, "
+                  "transferencias o movimientos financieros de las cuentas operacionales de Mutuaria y Leasing "
+                  "(Mercado Pago). Si te lo piden, responde exactamente: "
+                  "'Esta acción solo puede realizarse desde el módulo de Gasto Operacional.' "
                   + (f"\n\nTU MANUAL DE PERSONALIDAD Y CONOCIMIENTO (síguelo estrictamente):\n{manual}\n\n" if manual else "")
                   + 
                   "Conoces las carpetas de clientes y sus estados (tasación, estudio de títulos, firma de escritura, mesa), "
@@ -1956,13 +1961,16 @@ async def central_proactivo_hablado(aviso_id: str):
 
 @api.post("/central/tts")
 async def central_tts(payload: dict):
-    text = ((payload or {}).get("text") or "").strip()[:4000]
+    text = ((payload or {}).get("text") or "").strip()
+    if len(text) > 4000:
+        corte = max(text.rfind(". ", 0, 4000), text.rfind("! ", 0, 4000), text.rfind("? ", 0, 4000))
+        text = text[:corte + 1] if corte > 0 else text[:4000]
     if not text:
         raise HTTPException(status_code=400, detail="Sin texto")
     try:
         from emergentintegrations.llm.openai import OpenAITextToSpeech
         tts = OpenAITextToSpeech(api_key=os.environ.get("EMERGENT_LLM_KEY", ""))
-        audio_b64 = await tts.generate_speech_base64(text=text, model="tts-1-hd", voice="onyx")
+        audio_b64 = await tts.generate_speech_base64(text=text, model="tts-1", voice="onyx")
         return {"audio": audio_b64}
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"TTS no disponible: {str(e)[:100]}")
@@ -2596,23 +2604,56 @@ async def _mesa_respuesta_folder(d, segs=None, archivos=None):
 
 
 def _criterios_folder(d, archivos=None):
+    import clasificador_documental as clasif
     if archivos is None:
         archivos = fsvc.scan_archivos(d.get("nombre", ""))
-    cats = {fsvc.cat_de_archivo(a["nombre"], a["subfolder"]) for a in archivos} - {"combinado", "codeudor", "estudio_titulo"}
+    cats_all = {fsvc.cat_de_archivo(a["nombre"], a["subfolder"]) for a in archivos}
+    cats = cats_all - {"combinado", "codeudor", "estudio_titulo"}
     cr = d.get("credit_request") or {}
-    tipo_cliente = cr.get("client_type") or "dependiente"
+    tipo_cliente = (cr.get("client_type") or "dependiente").lower()
     df = d.get("datos_financieros") or {}
-    if tipo_cliente == "independiente":
-        docs_req = [("Cédula de identidad", "cedula"), ("Impuesto a la renta", "imp_renta"),
-                    ("Boletas de honorarios", "boletas"), ("Informe CMF", "cmf")]
-    else:
-        docs_req = [("Cédula de identidad", "cedula"), ("Liquidaciones de sueldo", "liquidacion"),
-                    ("Cotizaciones AFP", "afp"), ("Informe CMF", "cmf")]
+    docs_req = clasif.reglas_documentales(tipo_cliente, exento_afp=bool(cr.get("exento_afp")))
     criterios = [{"nombre": lbl, "ok": cat in cats} for lbl, cat in docs_req]
+    if cr.get("exento_afp"):
+        criterios.append({"nombre": f"Exento de AFP ({cr.get('exento_afp_institucion') or 'institución uniformada'})", "ok": True})
+    if (d.get("codeudor_nombre") or "").strip() or "codeudor" in cats_all:
+        ctip = (cr.get("codeudor_tipo") or "").strip()
+        criterios.append({"nombre": f"Documentos del codeudor{f' ({ctip})' if ctip else ''}",
+                          "ok": "codeudor" in cats_all})
     criterios.append({"nombre": "Datos financieros completos",
                       "ok": bool(df.get("valor_propiedad") and df.get("monto_credito"))})
     criterios.append({"nombre": "Enviada a mesa", "ok": bool(d.get("emails_sent_count"))})
     return criterios
+
+
+@api.post("/clientes/clasificacion/barrido")
+async def clasificacion_barrido(request: Request):
+    """🧠 Barrido de aprendizaje: revisa solicitudes de los últimos 6 meses y corrige clasificaciones."""
+    claims = getattr(request.state, "user", {}) or {}
+    if claims.get("rol") not in ("admin", "maestro"):
+        raise HTTPException(status_code=403, detail="Barrido de clasificación: exclusivo del Administrador")
+    import clasificador_documental as clasif
+    return await clasif.barrido_6_meses(aplicar=True)
+
+
+@api.get("/clientes/roots/auditoria")
+async def roots_auditoria(request: Request):
+    """🌳 Auditoría de roots: carpetas inválidas (sin root) e inconsistencias de correspondencia."""
+    claims = getattr(request.state, "user", {}) or {}
+    if claims.get("rol") not in ("admin", "maestro"):
+        raise HTTPException(status_code=403, detail="Auditoría de roots: exclusiva del Administrador")
+    import raiz_guard
+    return await raiz_guard.auditoria_general()
+
+
+@api.post("/clientes/roots/purga")
+async def roots_purga(request: Request):
+    """🌳 Elimina las carpetas sin root (se archivan en papelera para trazabilidad)."""
+    claims = getattr(request.state, "user", {}) or {}
+    if claims.get("rol") not in ("admin", "maestro"):
+        raise HTTPException(status_code=403, detail="Purga de carpetas: exclusiva del Administrador")
+    import raiz_guard
+    return await raiz_guard.purgar_sin_root(ejecutado_por=claims.get("sub", "admin"))
 
 
 @api.get("/clientes/folders-light")
@@ -4036,6 +4077,108 @@ def _fin_resumen_html(doc):
     return f"<table style='border-collapse:collapse'>{rows}</table>"
 
 
+# ══ PORTAL PÚBLICO DE COMPROBANTE DE DEUDA CMF (Solicitud de Crédito) ═══════
+# REGLA DURA: este portal solo recibe el comprobante del pago hecho por el cliente
+# a SU acreedor. La plataforma JAMÁS solicita transferencias hacia Central Mutuos
+# fuera del módulo de Gasto Operacional con MASTER_PIN.
+
+@api.get("/mora/portal/{token}")
+async def mora_portal(token: str):
+    from fastapi.responses import HTMLResponse
+    doc = await db.folders.find_one({"cmf_morosidad.portal_token": token})
+    if not doc:
+        return HTMLResponse("<h3 style='font-family:Georgia;text-align:center;margin-top:80px'>Enlace inválido o vencido. Contacte a su ejecutivo de Central Mutuos.</h3>", status_code=404)
+    cm = doc.get("cmf_morosidad") or {}
+    nombre = (doc.get("nombre") or "").title()
+    entidad = cm.get("entidad") or "la institución financiera informada en su Informe CMF"
+    monto = f"${float(cm.get('morosidad_clp') or 0):,.0f}"
+    ya = cm.get("aclarada")
+    cuerpo_estado = ("<p style='background:#10331f;border:1px solid #22c55e;color:#a7f3d0;padding:14px 18px;font-size:15px'>"
+                     "✅ Su deuda ya fue validada y marcada como <b>regularizada</b>. Su solicitud de crédito continúa su proceso.</p>") if ya else f"""
+    <p style='color:#f4f2ec;font-size:15px;line-height:1.8'>Estimado/a {nombre}, hemos detectado una deuda registrada en la
+    CMF con <b style='color:#d4af37'>{entidad}</b> por <b style='color:#d4af37'>{monto}</b>. Para continuar con su solicitud
+    de crédito, le solicitamos adjuntar el comprobante de pago de dicha deuda.</p>
+    <div style='border:1px solid rgba(212,175,55,.5);padding:20px;margin:18px 0;background:#111113'>
+      <p style='color:#d4af37;font-size:12px;letter-spacing:2px;margin:0 0 10px'>SUBA SU COMPROBANTE (PDF O FOTO CLARA)</p>
+      <input id='archivo' type='file' accept='.pdf,image/*' style='color:#f4f2ec;font-size:14px;width:100%'>
+      <button id='btn' onclick='subir()' style='margin-top:16px;background:#d4af37;color:#0a0a0a;border:0;font-weight:bold;
+        font-size:14px;letter-spacing:1px;padding:13px 32px;cursor:pointer;width:100%'>Enviar comprobante para validación</button>
+      <p id='estado' style='font-size:14px;line-height:1.6;margin:12px 0 0'></p>
+    </div>
+    <p style='color:#9c9a92;font-size:12px;line-height:1.7'>El sistema validará automáticamente que el comprobante coincida
+    con la entidad, el monto y la fecha registrados en la CMF. Importante: el pago se realiza directamente a su entidad
+    acreedora — Central Mutuos <b>nunca</b> le solicitará transferencias a cuentas propias por este concepto.</p>
+    <script>
+    async function subir() {{
+      const f = document.getElementById('archivo').files[0];
+      const est = document.getElementById('estado'), btn = document.getElementById('btn');
+      if (!f) {{ est.style.color='#fca5a5'; est.textContent='Seleccione primero el archivo del comprobante.'; return; }}
+      btn.disabled = true; est.style.color='#d4af37'; est.textContent='Validando su comprobante, un momento…';
+      const fd = new FormData(); fd.append('file', f);
+      try {{
+        const r = await fetch('/api/mora/portal/{token}/subir', {{ method: 'POST', body: fd }});
+        const d = await r.json();
+        if (r.ok && d.ok) {{ est.style.color='#4ade80'; est.textContent=d.mensaje; btn.style.display='none'; }}
+        else {{ est.style.color='#fca5a5'; est.textContent=d.detail || 'No se pudo validar el comprobante.'; btn.disabled=false; }}
+      }} catch (e) {{ est.style.color='#fca5a5'; est.textContent='Error de conexión. Intente nuevamente.'; btn.disabled=false; }}
+    }}
+    </script>"""
+    html = f"""<!DOCTYPE html><html lang='es'><head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width,initial-scale=1'><title>Central Mutuos — Regularización de deuda CMF</title></head>
+<body style='margin:0;background:#0a0a0a;font-family:Georgia,serif'>
+<div style='max-width:640px;margin:0 auto;padding:36px 22px'>
+  <div style='text-align:center;padding-bottom:18px'>
+    <div style='display:inline-block;border:2px solid #d4af37;width:52px;height:52px;line-height:52px;color:#d4af37;font-size:19px;font-weight:bold'>CM</div>
+    <div style='color:#f4f2ec;letter-spacing:4px;font-size:14px;margin-top:8px;font-weight:bold'>CENTRAL MUTUOS</div>
+    <div style='color:#d4af37;letter-spacing:5px;font-size:9px;margin-top:2px'>CON CRECES</div>
+  </div>
+  <div style='border-top:2px solid #d4af37;padding-top:22px'>
+    <h1 style='color:#d4af37;font-size:21px;margin:0 0 14px'>Regularización de deuda CMF</h1>
+    {cuerpo_estado}
+    <p style='color:#9c9a92;font-size:11px;letter-spacing:2px;text-align:center;margin-top:26px'>CENTRAL MUTUOS CON CRECES · MUTUARIA REGULADA POR LA CMF</p>
+  </div>
+</div></body></html>"""
+    return HTMLResponse(html)
+
+
+@api.post("/mora/portal/{token}/subir")
+async def mora_portal_subir(token: str, file: UploadFile = File(...)):
+    import espejo_postventa as _apm
+    doc = await db.folders.find_one({"cmf_morosidad.portal_token": token})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Enlace inválido o vencido.")
+    cm = doc.get("cmf_morosidad") or {}
+    if cm.get("aclarada"):
+        return {"ok": True, "mensaje": "✅ Su deuda ya fue marcada como regularizada. Su solicitud continúa su proceso."}
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(status_code=400, detail="Archivo vacío. Suba el comprobante nuevamente.")
+    nombre_archivo = file.filename or "comprobante"
+    try:
+        raw, nombre_archivo, _conv = pdfs.convertir_a_pdf(raw, nombre_archivo)
+    except ValueError:
+        pass
+    res = await asyncio.to_thread(_apm.validar_comprobante_mora, raw, nombre_archivo,
+                                  float(cm.get("morosidad_clp") or 0))
+    if not res["ok"]:
+        raise HTTPException(status_code=422, detail=f"❌ Comprobante NO validado: {res['motivo']}")
+    nombre_archivo = f"COMPROBANTE_PAGO_MORA_CLIENTE_{now_iso()[:10]}_{nombre_archivo}"
+    await asyncio.to_thread(fsvc.guardar_archivo, doc.get("nombre", ""), nombre_archivo, raw, "04_cmf")
+    await db.folders.update_one({"id": doc["id"]}, {
+        "$set": {"cmf_morosidad.aclarada": True, "cmf_morosidad.aclarada_at": now_iso(),
+                 "cmf_morosidad.aclarada_via": "comprobante_cliente",
+                 "cmf_morosidad.comprobante": {"archivo": nombre_archivo,
+                                               "monto_detectado": res.get("monto_detectado", 0),
+                                               "subido_por": "cliente (portal público)"}},
+        "$push": {"historial": {"fecha": now_iso(), "accion": (
+            f"🧾 Mora CMF ACLARADA: el CLIENTE subió su comprobante desde el portal — '{nombre_archivo}' "
+            f"validado automáticamente (pago detectado ${res.get('monto_detectado', 0):,.0f} vs "
+            f"mora ${float(cm.get('morosidad_clp') or 0):,.0f}). El proceso de crédito continúa.")}}})
+    await _apm.cerrar_alertas_mora(doc["id"])
+    return {"ok": True, "mensaje": ("✅ Comprobante validado: coincide con el registro CMF. Su deuda queda marcada "
+                                    "como regularizada y su solicitud de crédito continúa su proceso. Gracias.")}
+
+
 @api.post("/clientes/folders/{fid}/aclarar-mora")
 async def folder_aclarar_mora(fid: str, request: Request, file: UploadFile = File(...), tipo: str = Form("comprobante")):
     """🧾 Regla de Oro #73: el ejecutivo sube comprobante de pago o formulario de regularización;
@@ -4099,8 +4242,10 @@ async def folder_aclarar_mora(fid: str, request: Request, file: UploadFile = Fil
 
 @api.post("/clientes/folders/{fid}/mora-link-pago")
 async def folder_mora_link_pago(fid: str, request: Request):
-    """💳 Regla de Oro #73a: envía al cliente el link/instrucciones de pago de su mora
-    (monto + cuenta oficial MUTUARIAS Y LEASING LIMITADA)."""
+    """💳 Regla de Oro #73a — BLOQUEADO por SEGURIDAD FINANCIERA (mandato 2026-06):
+    ningún módulo fuera de Gasto Operacional puede generar instrucciones de pago
+    vinculadas a las fuentes operacionales de Mutuaria y Leasing."""
+    raise HTTPException(status_code=403, detail=GASTOS_MSG_AISLAMIENTO)
     doc = await _get_folder_doc(fid)
     cm = doc.get("cmf_morosidad") or {}
     if not cm.get("morosidad_clp") or cm.get("aclarada"):
@@ -4169,6 +4314,12 @@ async def folder_auditoria(fid: str):
 @api.post("/clientes/folders/{fid}/send-email")
 async def folder_send_email(fid: str, payload: dict):
     doc = await _get_folder_doc(fid)
+    # 🌳 RAÍZ GUARD: los roots deben coincidir entre sí antes de avanzar a mesa
+    import raiz_guard
+    _probs_root = raiz_guard.validar_roots(doc)
+    if _probs_root:
+        await raiz_guard.alertar_admin(doc, _probs_root)
+        raise HTTPException(status_code=422, detail="🌳 BLOQUEADO POR ROOTS INCONSISTENTES: " + " · ".join(_probs_root))
     payload = payload or {}
     to = (payload.get("to_addr") or "").strip()
     # DESTINO ÚNICO: las carpetas a Mesa van EXCLUSIVAMENTE a la casilla oficial
@@ -7237,13 +7388,43 @@ async def _gastos_defaults():
     return base
 
 
+# ══ SEGURIDAD FINANCIERA — GASTO OPERACIONAL (mandato del Administrador) ═══
+GASTOS_MSG_AISLAMIENTO = "Esta acción solo puede realizarse desde el módulo de Gasto Operacional."
+GASTOS_USUARIOS_AUTORIZADOS = ("deysi.salazar@centralmutuos.cl", "deysi")
+
+
+def _guard_gastos(request: Request):
+    """Solo el Administrador y Deisy Salazar acceden a Gasto Operacional."""
+    claims = getattr(request.state, "user", {}) or {}
+    rol = claims.get("rol", "")
+    sub = str(claims.get("sub") or "").strip().lower()
+    if rol in ("admin", "maestro") or sub in GASTOS_USUARIOS_AUTORIZADOS:
+        return claims
+    raise HTTPException(status_code=403, detail=(
+        "🔒 SEGURIDAD FINANCIERA: el módulo de Gasto Operacional es exclusivo del "
+        "Administrador y de Deisy Salazar. Ningún otro rol tiene acceso."))
+
+
+def _pin_gastos(payload):
+    """MASTER_PIN obligatorio: sin PIN ningún gasto operacional se envía ni procesa."""
+    pin_ok = str(os.environ.get("MASTER_PIN") or "").strip()
+    pin = str((payload or {}).get("master_pin") or "").strip()
+    if not pin_ok or pin != pin_ok:
+        raise HTTPException(status_code=403, detail=(
+            "🏛 SEGURIDAD FINANCIERA (ORO-75): ningún gasto operacional vinculado a Mercado Pago / "
+            "Mutuaria y Leasing Ilimitada se envía ni procesa sin el MASTER_PIN como confirmación "
+            "final del Administrador o de Deisy Salazar. Operación bloqueada sin excepción."))
+
+
 @api.get("/gastos-operacionales/defaults")
-async def gastos_defaults():
+async def gastos_defaults(request: Request):
+    _guard_gastos(request)
     return await _gastos_defaults()
 
 
 @api.patch("/gastos-operacionales/defaults")
-async def gastos_defaults_patch(payload: dict):
+async def gastos_defaults_patch(payload: dict, request: Request):
+    _guard_gastos(request)
     upd = {k: payload[k] for k in ("intro", "items", "datos_pago") if k in payload}
     if upd:
         await db.config.update_one({"_key": "gastos_op"}, {"$set": upd}, upsert=True)
@@ -7468,7 +7649,8 @@ async def _cobro_tasacion_loop():
 
 
 @api.get("/gastos-operacionales/cobros-tasacion")
-async def cobros_tasacion_list():
+async def cobros_tasacion_list(request: Request):
+    _guard_gastos(request)
     docs = await db.tasacion_cobros.find({"ignorado": {"$ne": True}}).sort("detectado_en", -1).limit(30).to_list(30)
     uf = await get_valor_uf()
     mes = datetime.now(timezone.utc).strftime("%Y-%m")
@@ -7486,7 +7668,8 @@ async def cobros_tasacion_list():
 
 
 @api.get("/gastos-operacionales/cobros-tasacion/historial")
-async def cobros_tasacion_historial():
+async def cobros_tasacion_historial(request: Request):
+    _guard_gastos(request)
     docs = await db.tasacion_cobros.find({"pagado": True, "ignorado": {"$ne": True}}
                                          ).sort("pagado_at", -1).limit(300).to_list(300)
     uf = await get_valor_uf()
@@ -7512,14 +7695,17 @@ async def cobros_tasacion_historial():
 
 
 @api.post("/gastos-operacionales/cobros-tasacion/scan")
-async def cobros_tasacion_scan():
+async def cobros_tasacion_scan(request: Request):
+    _guard_gastos(request)
     nuevos = await _procesar_cobros_tasacion()
     await _detectar_pagos_tasacion()
     return {"ok": True, "nuevos": len(nuevos)}
 
 
 @api.post("/gastos-operacionales/cobros-tasacion/{cid}/pagado")
-async def cobros_tasacion_pagado(cid: str, payload: dict = None):
+async def cobros_tasacion_pagado(cid: str, request: Request, payload: dict = None):
+    _guard_gastos(request)
+    _pin_gastos(payload)
     pagado = bool((payload or {}).get("pagado", True))
     r = await db.tasacion_cobros.update_one({"id": cid}, {"$set": {
         "pagado": pagado, "pagado_at": now_iso() if pagado else None}})
@@ -7529,8 +7715,11 @@ async def cobros_tasacion_pagado(cid: str, payload: dict = None):
 
 
 @api.post("/gastos-operacionales/cobros-tasacion/manual")
-async def cobros_tasacion_manual(payload: dict):
+async def cobros_tasacion_manual(payload: dict, request: Request):
+    _guard_gastos(request)
     payload = payload or {}
+    if payload.get("confirm"):
+        _pin_gastos(payload)
     to = (payload.get("email") or "").strip()
     cliente = (payload.get("cliente") or "").strip()
     if not to or "@" not in to:
@@ -7553,7 +7742,8 @@ async def cobros_tasacion_manual(payload: dict):
 
 
 @api.get("/gastos-operacionales/buscar-cliente")
-async def gastos_buscar_cliente(q: str = ""):
+async def gastos_buscar_cliente(request: Request, q: str = ""):
+    _guard_gastos(request)
     q = (q or "").strip()
     if len(q) < 2:
         return {"resultados": []}
@@ -7573,7 +7763,8 @@ async def gastos_buscar_cliente(q: str = ""):
 
 
 @api.get("/gastos-operacionales/prefill")
-async def gastos_prefill(nombre: str = ""):
+async def gastos_prefill(request: Request, nombre: str = ""):
+    _guard_gastos(request)
     """Lee con IA los correos (asunto + cuerpo) y documentos del cliente para pre-llenar
     gastos operacionales. PROHIBIDO inventar datos: lo que no aparece queda vacío."""
     nombre = (nombre or "").strip()
@@ -8204,8 +8395,11 @@ def _gastos_html(payload):
 
 
 @api.post("/gastos-operacionales/enviar")
-async def gastos_enviar(payload: dict):
+async def gastos_enviar(payload: dict, request: Request):
+    _guard_gastos(request)
     payload = payload or {}
+    if payload.get("confirm"):
+        _pin_gastos(payload)
     to = (payload.get("email_cliente") or "").strip()
     extras_raw = payload.get("emails_extra") or []
     if isinstance(extras_raw, str):
@@ -8249,7 +8443,8 @@ async def gastos_enviar(payload: dict):
 
 
 @api.get("/gastos-operacionales/log")
-async def gastos_log():
+async def gastos_log(request: Request):
+    _guard_gastos(request)
     docs = await db.gastos_op_log.find({}).sort("enviado_en", -1).limit(20).to_list(20)
     out = []
     for d in docs:
@@ -8264,7 +8459,9 @@ async def gastos_log():
 
 
 @api.post("/gastos-operacionales/log/{lid}/pago")
-async def gastos_registrar_pago(lid: str, payload: dict):
+async def gastos_registrar_pago(lid: str, payload: dict, request: Request):
+    _guard_gastos(request)
+    _pin_gastos(payload)
     """Registra un pago (manual o auto) sobre un envío de gastos operacionales."""
     payload = payload or {}
     try:
@@ -8290,7 +8487,9 @@ async def gastos_registrar_pago(lid: str, payload: dict):
 
 
 @api.delete("/gastos-operacionales/log/{lid}/pago/{idx}")
-async def gastos_eliminar_pago(lid: str, idx: int):
+async def gastos_eliminar_pago(lid: str, idx: int, request: Request, master_pin: str = ""):
+    _guard_gastos(request)
+    _pin_gastos({"master_pin": master_pin})
     doc = await db.gastos_op_log.find_one({"id": lid})
     if not doc:
         raise HTTPException(status_code=404, detail="Envío no encontrado")
@@ -8313,7 +8512,8 @@ def _sin_acentos(s):
 
 
 @api.post("/gastos-operacionales/pagos/scan")
-async def gastos_pagos_scan():
+async def gastos_pagos_scan(request: Request):
+    _guard_gastos(request)
     """Revisa correos recientes buscando comprobantes de transferencia que
     coincidan con clientes con saldo pendiente y registra el pago automático."""
     pendientes = await db.gastos_op_log.find(
@@ -15393,6 +15593,10 @@ api.include_router(_bodega_mod.control)
 # 🕸️ MALLA DE INTELIGENCIA + BROKERS + FLUJOS + MI CORREO (Reglas #34, #36, #37, #38)
 import malla_inteligencia as _malla_mod
 import gestion_ejecutivos as _gest_mod
+import registro_emmy as _emmy_mod
+import martin_financiero as _mfin_mod
+api.include_router(_emmy_mod.emmy)
+api.include_router(_mfin_mod.mfin)
 api.include_router(_gest_mod.gestion)
 api.include_router(_malla_mod.broker)
 api.include_router(_malla_mod.fuentes)

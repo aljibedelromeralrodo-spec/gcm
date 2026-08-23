@@ -39,8 +39,11 @@ export default function PublicidadModule() {
   const [waLinks, setWaLinks] = useState([]);
   const [bases, setBases] = useState([]);
   const [cantEnvio, setCantEnvio] = useState("");
+  const [hist, setHist] = useState([]);
+  const [histTipo, setHistTipo] = useState("");
   const [twilio, setTwilio] = useState({ sid: "", token: "", numero: "" });
   const [showTwilio, setShowTwilio] = useState(false);
+  const [preview, setPreview] = useState(null);
   const fileCorreo = useRef(null);
   const fileWa = useRef(null);
   const fileDs19 = useRef(null);
@@ -52,6 +55,10 @@ export default function PublicidadModule() {
     axios.get(`${API}/api/publicidad/pendientes`).then(r => setPend(r.data)).catch(() => {});
     axios.get(`${API}/api/publicidad/estado-bases`).then(r => setBases(r.data.bases || [])).catch(() => {});
   }, []);
+  useEffect(() => {
+    axios.get(`${API}/api/publicidad/historial-contactados`, { params: { tipo: histTipo } })
+      .then(r => setHist(r.data.contactados || [])).catch(() => {});
+  }, [histTipo, envios]);
   useEffect(() => { cargar(); }, [cargar]);
   useEffect(() => {
     if (!envios.some(e => e.estado === "enviando")) return;
@@ -85,31 +92,65 @@ export default function PublicidadModule() {
     return axios.post(`${API}/api/publicidad/listados/importar`, fd);
   });
 
-  const enviarCampana = (prueba) => accion(async () => {
-    let master_pin = "";
-    if (!prueba) {
-      if (!window.confirm(`¿Confirmas el envío REAL de la campaña${camp.limite ? ` (solo los primeros ${camp.limite})` : " a todo el listado"}? Los contactos con publicidad hace menos de 3 meses se excluyen automáticamente.`)) return { data: { mensaje: "Envío cancelado" } };
-      master_pin = window.prompt("🏛 REGLA ORO-75 — Ingresa el PIN maestro para autorizar la campaña:") || "";
-      if (!master_pin.trim()) return { data: { mensaje: "Envío cancelado: sin PIN maestro no se ejecuta ninguna campaña (ORO-75)" } };
-    }
-    return axios.post(`${API}/api/publicidad/enviar`, { ...camp, limite: Number(camp.limite) || 0, prueba, confirmado: !prueba, master_pin });
-  });
+  const enviarCampana = async (prueba) => {
+    setBusy(true);
+    try {
+      const r = await axios.post(`${API}/api/publicidad/preview-campana`, {
+        canal: "correo", template: camp.template, asunto: camp.asunto,
+        listado_id: prueba ? "" : camp.listado_id, limite: Number(camp.limite) || 0 });
+      setPreview({ ...r.data, prueba });
+    } catch (e) { setMsg("❌ " + (e.response?.data?.detail || "Error")); }
+    finally { setBusy(false); }
+  };
 
-  const generarWa = () => accion(async () => {
-    const master_pin = window.prompt("🏛 REGLA ORO-75 — Ingresa el PIN maestro para autorizar la campaña de WhatsApp:") || "";
-    if (!master_pin.trim()) return { data: { mensaje: "Campaña cancelada: sin PIN maestro no se ejecuta ninguna campaña (ORO-75)" } };
-    const r = await axios.post(`${API}/api/publicidad/whatsapp-links`, { ...wa, limite: Number(wa.limite) || 0, master_pin });
-    setWaLinks(r.data.links || []);
-    r.data.mensaje = `${(r.data.links || []).length} enlace(s) de WhatsApp generados`
-      + (r.data.excluidos_3m ? ` · ${r.data.excluidos_3m} excluido(s) por regla de 3 meses` : "");
-    return r;
-  });
+  const generarWa = async () => {
+    setBusy(true);
+    try {
+      const r = await axios.post(`${API}/api/publicidad/preview-campana`, {
+        canal: "whatsapp", mensaje: wa.mensaje, listado_id: wa.listado_id, limite: Number(wa.limite) || 0 });
+      setPreview({ ...r.data, prueba: false });
+    } catch (e) { setMsg("❌ " + (e.response?.data?.detail || "Error")); }
+    finally { setBusy(false); }
+  };
+
+  const aprobarPreview = async () => {
+    const p = preview;
+    setPreview(null);
+    if (p.canal === "correo" && p.prueba) {
+      return accion(async () => axios.post(`${API}/api/publicidad/enviar`,
+        { ...camp, limite: Number(camp.limite) || 0, prueba: true, confirmado: false, master_pin: "" }));
+    }
+    const master_pin = window.prompt("🏛 REGLA ORO-75 — Diseño aprobado visualmente. Ingresa el PIN maestro para confirmar el envío:") || "";
+    if (!master_pin.trim()) { setMsg("❌ Envío cancelado: sin PIN maestro no se ejecuta ningún envío (ORO-75)"); return; }
+    if (p.canal === "correo") {
+      return accion(async () => axios.post(`${API}/api/publicidad/enviar`,
+        { ...camp, limite: Number(camp.limite) || 0, prueba: false, confirmado: true, master_pin }));
+    }
+    return accion(async () => {
+      const r = await axios.post(`${API}/api/publicidad/whatsapp-links`, { ...wa, limite: Number(wa.limite) || 0, master_pin });
+      setWaLinks(r.data.links || []);
+      r.data.mensaje = `${(r.data.links || []).length} enlace(s) de WhatsApp generados`
+        + (r.data.excluidos_3m ? ` · ${r.data.excluidos_3m} excluido(s) por regla de 3 meses` : "");
+      return r;
+    });
+  };
 
   const guardarTwilio = () => accion(async () => {
     const r = await axios.post(`${API}/api/whatsapp-twilio/credenciales`, twilio);
     setShowTwilio(false);
     return r;
   });
+
+  const exportarHistorial = async () => {
+    try {
+      const r = await axios.get(`${API}/api/publicidad/historial-contactados/excel`, { params: { tipo: histTipo }, responseType: "blob" });
+      const url = URL.createObjectURL(r.data);
+      const a = document.createElement("a");
+      a.href = url; a.download = `historial_contactados${histTipo ? "_" + histTipo : ""}.xlsx`; a.click();
+      URL.revokeObjectURL(url);
+      setMsg("✅ Historial exportado a Excel");
+    } catch { setMsg("❌ No se pudo exportar el historial"); }
+  };
 
   const listadosCorreo = data.listados.filter(l => (l.contactos || []).some(c => c.tipo === "correo"));
   const listadosTel = data.listados.filter(l => (l.contactos || []).some(c => c.tipo === "telefono"));
@@ -193,6 +234,53 @@ export default function PublicidadModule() {
             onChange={e => { setCantEnvio(e.target.value); setCamp(c => ({ ...c, limite: e.target.value })); setWa(w => ({ ...w, limite: e.target.value })); }} />
           <span style={{ color: "#8a8fa3", fontSize: "0.62rem" }}>Se aplica a la campaña de correo y de WhatsApp (ej: enviar solo a los primeros 50 disponibles)</span>
         </div>
+      </div>
+
+      {/* ══ HISTORIAL DE CONTACTADOS ══ */}
+      <div style={sec} data-testid="historial-contactados">
+        <Encabezado n="🕓" titulo="Historial de Contactados" sub="Quién recibió publicidad, por qué canal y cuándo se desbloquea (regla de 3 meses)" />
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+          <label style={{ color: ORO, fontSize: "0.68rem", fontWeight: 800, letterSpacing: 1 }}>FILTRAR POR BASE:</label>
+          <select data-testid="historial-filtro-base" style={{ ...inp, width: 210 }} value={histTipo} onChange={e => setHistTipo(e.target.value)}>
+            <option value="">Todas las bases</option>
+            <option value="inmobiliaria">Inmobiliaria</option>
+            <option value="broker_inmobiliario">Brokers</option>
+            <option value="cliente_directo">Clientes Directos</option>
+            <option value="cliente_individual">Cliente Individual</option>
+          </select>
+          <button data-testid="historial-exportar-excel" style={ghostBtn} onClick={exportarHistorial}>📥 Exportar a Excel</button>
+          <span style={{ color: "#8a8fa3", fontSize: "0.64rem" }}>{hist.length} contacto(s) en el historial</span>
+        </div>
+        {hist.length === 0 && <p style={{ color: "#64748b", fontSize: "0.7rem" }}>Aún no hay contactados registrados{histTipo ? " para esta base" : ""} — se registran automáticamente con cada campaña real.</p>}
+        {hist.length > 0 && (
+          <div style={{ overflowX: "auto", maxHeight: 340, overflowY: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.7rem" }}>
+              <thead><tr style={{ color: ORO, textAlign: "left", letterSpacing: 1 }}>
+                <th style={{ padding: "6px 8px" }}>NOMBRE</th><th style={{ padding: "6px 8px" }}>CORREO</th>
+                <th style={{ padding: "6px 8px" }}>TELÉFONO</th><th style={{ padding: "6px 8px" }}>CANAL</th>
+                <th style={{ padding: "6px 8px" }}>BASE</th><th style={{ padding: "6px 8px" }}>CONTACTADO</th>
+                <th style={{ padding: "6px 8px" }}>DESBLOQUEO (3M)</th><th style={{ padding: "6px 8px" }}>ESTADO</th>
+              </tr></thead>
+              <tbody>
+                {hist.map((h, i) => (
+                  <tr key={i} data-testid={`historial-fila-${i}`} style={{ borderTop: "1px solid rgba(148,163,184,0.12)", color: "#e2e8f0" }}>
+                    <td style={{ padding: "7px 8px", fontWeight: 700 }}>{h.nombre}</td>
+                    <td style={{ padding: "7px 8px", color: "#93c5fd" }}>{h.correo || "—"}</td>
+                    <td style={{ padding: "7px 8px" }}>{h.telefono || "—"}</td>
+                    <td style={{ padding: "7px 8px" }}>{h.canal === "WhatsApp" ? "💬 WhatsApp" : "✉ Correo"}</td>
+                    <td style={{ padding: "7px 8px", color: "#8a8fa3" }}>{h.base}</td>
+                    <td style={{ padding: "7px 8px" }}>{String(h.fecha_contactado || "").slice(0, 16).replace("T", " ")}</td>
+                    <td style={{ padding: "7px 8px", color: ORO, fontWeight: 700 }}>{String(h.fecha_desbloqueo || "").slice(0, 16).replace("T", " ")}</td>
+                    <td style={{ padding: "7px 8px" }}>
+                      <span style={chip(h.bloqueado ? "rgba(251,113,133,0.15)" : "rgba(52,234,185,0.12)", h.bloqueado ? "#fb7185" : "#34eab9")}>
+                        {h.bloqueado ? "⛔ BLOQUEADO 3M" : "✅ DESBLOQUEADO"}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       <div style={sec} data-testid="campanas-correo">
@@ -327,6 +415,47 @@ export default function PublicidadModule() {
           </>
         )}
       </div>
+      {/* ══ PREVIEW A PANTALLA COMPLETA (aprobación visual + ORO-75) ══ */}
+      {preview && (
+        <div data-testid="preview-fullscreen" style={{ position: "fixed", inset: 0, zIndex: 2000, background: "rgba(4,4,7,0.98)", display: "flex", flexDirection: "column" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "0.9rem 1.4rem", borderBottom: `1px solid ${ORO}`, flexWrap: "wrap" }}>
+            <b style={{ color: ORO, fontSize: "0.95rem", letterSpacing: 1 }}>
+              👁 PREVIEW {preview.canal === "whatsapp" ? "WHATSAPP" : "CORREO"} {preview.prueba ? "· ENVÍO DE PRUEBA" : "· CAMPAÑA REAL"}</b>
+            {preview.canal === "correo" && <span style={{ color: "#e2e8f0", fontSize: "0.72rem" }}>Asunto: <b>{preview.asunto || "(sin asunto)"}</b> · De: {preview.remitente}</span>}
+            {preview.resumen?.listado && (
+              <span style={{ color: "#8a8fa3", fontSize: "0.7rem" }}>
+                Base: <b style={{ color: "#fff" }}>{preview.resumen.listado}</b> · se enviará a <b style={{ color: ORO }}>{preview.resumen.destinatarios}</b> destinatario(s)
+                {preview.resumen.excluidos_3m ? ` · ${preview.resumen.excluidos_3m} excluido(s) por regla 3 meses` : ""}</span>
+            )}
+            <div style={{ marginLeft: "auto", display: "flex", gap: 10 }}>
+              <button data-testid="preview-cancelar" style={{ ...ghostBtn, color: "#ef4444", borderColor: "#ef4444" }} onClick={() => setPreview(null)}>✖ Cancelar</button>
+              <button data-testid="preview-aprobar" style={goldBtn} onClick={aprobarPreview}>
+                ✅ Apruebo el diseño {preview.prueba ? "→ enviar prueba" : "→ pedir MASTER_PIN"}</button>
+            </div>
+          </div>
+          <div style={{ flex: 1, overflow: "auto", display: "flex", justifyContent: "center", padding: "1.2rem" }}>
+            {preview.canal === "correo" ? (
+              <iframe title="preview-correo" data-testid="preview-iframe-correo" srcDoc={preview.html}
+                style={{ width: "min(780px, 100%)", height: "100%", minHeight: 600, border: `1px solid ${ORO}`, borderRadius: 8, background: "#fff" }} />
+            ) : (
+              <div data-testid="preview-wa-chat" style={{ width: "min(430px, 100%)", background: "#0b141a", borderRadius: 14, border: "1px solid rgba(37,211,102,0.4)", alignSelf: "flex-start" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#202c33", padding: "0.7rem 1rem", borderRadius: "14px 14px 0 0" }}>
+                  <div style={{ width: 38, height: 38, borderRadius: "50%", background: ORO, color: "#111", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900 }}>CM</div>
+                  <div><div style={{ color: "#fff", fontWeight: 700, fontSize: "0.82rem" }}>Central Mutuos · Con Creces</div>
+                    <div style={{ color: "#8696a0", fontSize: "0.62rem" }}>en línea</div></div>
+                </div>
+                <div style={{ padding: "1.2rem 0.9rem 1.4rem", backgroundImage: "radial-gradient(rgba(255,255,255,0.03) 1px, transparent 1px)", backgroundSize: "18px 18px", minHeight: 260 }}>
+                  <div style={{ background: "#202c33", color: "#e9edef", borderRadius: "0 10px 10px 10px", padding: "0.65rem 0.8rem", maxWidth: "88%", fontSize: "0.82rem", lineHeight: 1.55, whiteSpace: "pre-wrap", boxShadow: "0 1px 2px rgba(0,0,0,0.4)" }}>
+                    {preview.mensaje}
+                    <div style={{ textAlign: "right", color: "#8696a0", fontSize: "0.6rem", marginTop: 5 }}>
+                      {new Date().toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" })} ✓✓</div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

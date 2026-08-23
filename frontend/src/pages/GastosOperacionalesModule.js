@@ -40,13 +40,22 @@ export default function GastosOperacionalesModule({ onNavigate }) {
 
   const setPagoInput = (id, campo, valor) => setPagoInputs(prev => ({ ...prev, [id]: { ...(prev[id] || {}), [campo]: valor } }));
 
+  // 🏛 SEGURIDAD FINANCIERA: MASTER_PIN obligatorio para enviar/procesar gastos operacionales
+  const pedirPIN = () => {
+    const pin = window.prompt("🏛 SEGURIDAD FINANCIERA (ORO-75) — Ingrese el MASTER_PIN para confirmar la operación:") || "";
+    if (!pin.trim()) { setMsg("❌ Operación bloqueada: sin MASTER_PIN no se envía ni procesa ningún gasto operacional."); return null; }
+    return pin.trim();
+  };
+
   const registrarPago = async (l) => {
     const pi = pagoInputs[l.id] || {};
     if (!pi.monto || parseFloat(pi.monto) <= 0) { setMsg("Ingresá el monto pagado (UF)."); return; }
+    const master_pin = pedirPIN();
+    if (!master_pin) return;
     setPagoLoading(true);
     try {
       const r = await axios.post(`${API}/api/gastos-operacionales/log/${l.id}/pago`, {
-        monto: parseFloat(pi.monto), fecha: pi.fecha || undefined, origen: "manual",
+        monto: parseFloat(pi.monto), fecha: pi.fecha || undefined, origen: "manual", master_pin,
       });
       setMsg(`✅ Pago registrado a ${l.nombre}: ${pi.monto} UF — Saldo pendiente: ${r.data.saldo} UF`);
       setPagoInputs(prev => ({ ...prev, [l.id]: {} }));
@@ -57,8 +66,10 @@ export default function GastosOperacionalesModule({ onNavigate }) {
 
   const eliminarPago = async (l, idx) => {
     if (!window.confirm("¿Eliminar este pago registrado?")) return;
+    const master_pin = pedirPIN();
+    if (!master_pin) return;
     try {
-      await axios.delete(`${API}/api/gastos-operacionales/log/${l.id}/pago/${idx}`);
+      await axios.delete(`${API}/api/gastos-operacionales/log/${l.id}/pago/${idx}`, { params: { master_pin } });
       loadDefaults();
     } catch (e) { setMsg("Error: " + (e.response?.data?.detail || e.message)); }
   };
@@ -150,9 +161,11 @@ export default function GastosOperacionalesModule({ onNavigate }) {
 
   const enviarCobroManual = async () => {
     if (!window.confirm(`¿Enviar la solicitud de datos + cobro de tasación (${cobros.monto_uf} UF ≈ ${cobros.monto_clp}) a ${cobroEmail}? (sin copia a nadie)`)) return;
+    const master_pin = pedirPIN();
+    if (!master_pin) return;
     setCobroLoading(true);
     try {
-      await axios.post(`${API}/api/gastos-operacionales/cobros-tasacion/manual`, { email: cobroEmail, cliente: cobroCliente, confirm: true });
+      await axios.post(`${API}/api/gastos-operacionales/cobros-tasacion/manual`, { email: cobroEmail, cliente: cobroCliente, confirm: true, master_pin });
       setMsg(`✅ Solicitud de datos y cobro de tasación enviada a ${cobroEmail}`);
       setCobroEmail(""); setCobroCliente("");
       loadCobros();
@@ -171,8 +184,10 @@ export default function GastosOperacionalesModule({ onNavigate }) {
   };
 
   const marcarPagado = async (c) => {
+    const master_pin = pedirPIN();
+    if (!master_pin) return;
     try {
-      await axios.post(`${API}/api/gastos-operacionales/cobros-tasacion/${c.id}/pagado`, { pagado: !c.pagado });
+      await axios.post(`${API}/api/gastos-operacionales/cobros-tasacion/${c.id}/pagado`, { pagado: !c.pagado, master_pin });
       loadCobros();
       loadHistorial();
     } catch (e) { setMsg("Error: " + (e.response?.data?.detail || e.message)); }
@@ -269,9 +284,11 @@ export default function GastosOperacionalesModule({ onNavigate }) {
   const enviar = async () => {
     const extrasTxt = emailsExtra.trim() ? ` (+ copias: ${emailsExtra.trim()})` : "";
     if (!window.confirm(`¿Enviar los gastos operacionales a ${emailCliente}${extrasTxt}?`)) return;
+    const master_pin = pedirPIN();
+    if (!master_pin) return;
     setLoading(true); setMsg("");
     try {
-      const r = await axios.post(`${API}/api/gastos-operacionales/enviar`, { ...payload(), confirm: true });
+      const r = await axios.post(`${API}/api/gastos-operacionales/enviar`, { ...payload(), confirm: true, master_pin });
       setMsg(`✅ Enviado a ${r.data.to} desde ${r.data.sender} (Total ${r.data.total} UF)`);
       setPreview(null);
       loadDefaults();

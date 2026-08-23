@@ -530,6 +530,47 @@ async def whatsapp_links(payload: dict, request: Request):
     return {"ok": True, "links": links, "excluidos_3m": len(excluidos)}
 
 
+@pub.post("/preview-campana")
+async def preview_campana(payload: dict, request: Request):
+    """👁 Preview a pantalla completa: el Admin aprueba VISUALMENTE antes del PIN (ORO-75)."""
+    _exigir_admin(request)
+    canal = payload.get("canal") or "correo"
+    try:
+        limite = int(payload.get("limite") or 0)
+    except (TypeError, ValueError):
+        limite = 0
+    listado = None
+    if payload.get("listado_id"):
+        listado = await db.publicidad_listados.find_one({"id": payload["listado_id"]}, {"_id": 0})
+        if not listado:
+            raise HTTPException(status_code=404, detail="Listado no encontrado")
+    resumen = {}
+    if canal == "whatsapp":
+        mensaje = (payload.get("mensaje") or "").strip()
+        if not mensaje:
+            raise HTTPException(status_code=400, detail="Escribe el mensaje de WhatsApp antes del preview")
+        if listado:
+            tels = [c["valor"] for c in listado.get("contactos", []) if c["tipo"] == "telefono"]
+            exc = await _contactados_recientes(tels, "whatsapp")
+            disp = [t for t in tels if t not in exc]
+            resumen = {"listado": listado["nombre"], "total": len(tels), "excluidos_3m": len(exc),
+                       "destinatarios": min(limite, len(disp)) if limite > 0 else len(disp)}
+        return {"canal": "whatsapp", "mensaje": mensaje,
+                "remitente": "Central Mutuos · Con Creces", "resumen": resumen}
+    template = payload.get("template") or ""
+    if template not in [t["archivo"] for t in TEMPLATES]:
+        raise HTTPException(status_code=400, detail="Selecciona un template válido antes del preview")
+    html = _render_campana((PUBLIC_DIR / template).read_text())
+    if listado:
+        cors = [c["valor"] for c in listado.get("contactos", []) if c["tipo"] == "correo"]
+        exc = await _contactados_recientes(cors, "correo")
+        disp = [c for c in cors if c not in exc]
+        resumen = {"listado": listado["nombre"], "total": len(cors), "excluidos_3m": len(exc),
+                   "destinatarios": min(limite, len(disp)) if limite > 0 else len(disp)}
+    return {"canal": "correo", "html": html, "asunto": (payload.get("asunto") or "").strip(),
+            "remitente": "Central Mutuos <gerardo.ext@centralmutuos.cl>", "resumen": resumen}
+
+
 # ══ FORMULARIO PÚBLICO "QUIERO SER CONTACTADO" (campañas clientes directos) ══
 FORM_CONTACTO_HTML = """<!DOCTYPE html>
 <html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -693,3 +734,87 @@ async def estado_bases(request: Request):
             "tels_total": len(tels), "tels_disponibles": len(tels) - len(exc_tel),
             "bloqueados_3m": len(exc_mail) + len(exc_tel)})
     return {"bases": bases}
+
+
+async def _historial_data(tipo=""):
+    """Historial permanente de contactados enriquecido con nombre/correo/teléfono/base."""
+    regs = await db.publicidad_contactados.find({}, {"_id": 0}).sort("fecha", -1).to_list(5000)
+    listados = await db.publicidad_listados.find(
+        {}, {"_id": 0, "nombre": 1, "tipo_destinatario": 1, "contactos": 1}).to_list(200)
+    info, por_nombre = {}, {}
+    for l in listados:
+        base = l.get("tipo_destinatario") or "broker_inmobiliario"
+        for ct in l.get("contactos", []):
+            info.setdefault(ct["valor"], {"nombre": ct.get("nombre", ""), "base": base, "listado": l["nombre"]})
+            if ct.get("nombre"):
+                d = por_nombre.setdefault((l["nombre"], ct["nombre"]), {})
+                d["correo" if ct["tipo"] == "correo" else "telefono"] = ct["valor"]
+    out = []
+    for r in regs:
+        i = info.get(r.get("valor"), {})
+        base = i.get("base", "")
+        if tipo and base != tipo:
+            continue
+        nombre = i.get("nombre", "")
+        listado = i.get("listado") or r.get("listado", "")
+        her = por_nombre.get((listado, nombre), {}) if nombre else {}
+        canal = r.get("canal", "")
+        try:
+            f = datetime.fromisoformat(str(r.get("fecha", "")).replace("Z", "+00:00"))
+            fecha, desbloqueo = f.isoformat(), (f + timedelta(days=COOLDOWN_DIAS)).isoformat()
+            bloqueado = datetime.now(timezone.utc) < f + timedelta(days=COOLDOWN_DIAS)
+        except Exception:
+            fecha, desbloqueo, bloqueado = r.get("fecha", ""), "", False
+        out.append({"nombre": nombre or "—",
+                    "correo": r["valor"] if canal == "correo" else her.get("correo", ""),
+                    "telefono": r["valor"] if canal == "whatsapp" else her.get("telefono", ""),
+                    "canal": "WhatsApp" if canal == "whatsapp" else "Correo",
+                    "base": TIPOS_DESTINATARIO.get(base, base or "—"), "listado": listado,
+                    "fecha_contactado": fecha, "fecha_desbloqueo": desbloqueo,
+                    "bloqueado": bloqueado})
+    return out
+
+
+@pub.get("/historial-contactados")
+async def historial_contactados(request: Request, tipo: str = ""):
+    _exigir_admin(request)
+    out = await _historial_data(tipo)
+    return {"contactados": out, "total": len(out),
+            "tipos": {"": "Todas las bases", **TIPOS_DESTINATARIO}}
+
+
+@pub.get("/historial-contactados/excel")
+async def historial_contactados_excel(request: Request, tipo: str = ""):
+    _exigir_admin(request)
+    out = await _historial_data(tipo)
+    import io
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Historial de Contactados"
+    cols = [("Nombre", "nombre", 30), ("Correo electrónico", "correo", 34), ("Teléfono", "telefono", 18),
+            ("Canal", "canal", 12), ("Base", "base", 20), ("Listado", "listado", 26),
+            ("Fecha contactado", "fecha_contactado", 22), ("Fecha desbloqueo (3 meses)", "fecha_desbloqueo", 24),
+            ("Estado", "bloqueado", 16)]
+    oro = PatternFill(start_color="D4AF37", end_color="D4AF37", fill_type="solid")
+    for j, (titulo, _, ancho) in enumerate(cols, 1):
+        cell = ws.cell(row=1, column=j, value=titulo)
+        cell.font = Font(bold=True, color="0A0A0A")
+        cell.fill = oro
+        ws.column_dimensions[cell.column_letter].width = ancho
+    for i, reg in enumerate(out, 2):
+        for j, (_, k, _a) in enumerate(cols, 1):
+            v = reg[k]
+            if k in ("fecha_contactado", "fecha_desbloqueo"):
+                v = str(v)[:16].replace("T", " ")
+            elif k == "bloqueado":
+                v = "BLOQUEADO 3M" if reg["bloqueado"] else "DESBLOQUEADO"
+            ws.cell(row=i, column=j, value=v)
+    buf = io.BytesIO()
+    wb.save(buf)
+    from fastapi.responses import Response as _Resp
+    nombre = f"historial_contactados{('_' + tipo) if tipo else ''}.xlsx"
+    return _Resp(content=buf.getvalue(),
+                 media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                 headers={"Content-Disposition": f'attachment; filename="{nombre}"'})

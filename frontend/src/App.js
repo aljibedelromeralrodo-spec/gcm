@@ -39,6 +39,8 @@ const SetCreditoModule = lazy(() => import("./pages/SetCreditoModule"));
 const EmailProcessingModule = lazy(() => import("./pages/EmailProcessingModule"));
 const CierresModule = lazy(() => import("./pages/CierresModule"));
 const AprendizajeModule = lazy(() => import("./pages/AprendizajeModule"));
+const RegistroEmmyModule = lazy(() => import("./pages/RegistroEmmyModule"));
+const MartinFinancieroModule = lazy(() => import("./pages/MartinFinancieroModule"));
 const SaludModule = lazy(() => import("./pages/SaludModule"));
 const BuzonRescateModule = lazy(() => import("./pages/BuzonRescateModule"));
 const OportunidadesModule = lazy(() => import("./pages/OportunidadesModule"));
@@ -85,6 +87,7 @@ const MODULE_TITLES = {
   'procesamiento': 'Procesamiento de Correo',
   basehistorica: '🏛 Base de Datos Histórica — Archivo Nacional',
   gastos: 'Gastos Operacionales',
+  emmy: '📔 Registro Emmy',
   aprobacion: 'Envío Aprobación Cliente',
   cierres: 'Cierres — Seguimiento de Aprobaciones',
   aprendizaje: 'Aprendizaje IA — Flujo Comercial',
@@ -124,10 +127,10 @@ const PERMISOS_LEGADO = {
 const SUPERMODULOS = [
   { key: 'sm_ventas', icon: 'fa-diamond', label: 'Ventas', mods: ['ventas_ws', 'oportunidades', 'cierres', 'aprobacion', 'seguimiento'] },
   { key: 'sm_simulacion', icon: 'fa-calculator', label: 'Simulación y Análisis', mods: ['simulador', 'calculadora', 'historial', 'formato', 'setcredito'] },
-  { key: 'sm_captacion', icon: 'fa-bullhorn', label: 'Captación y Publicidad', mods: ['publicidad', 'brokers', 'aprendizaje'] },
+  { key: 'sm_captacion', icon: 'fa-bullhorn', label: 'Captación y Publicidad', mods: ['publicidad', 'brokers', 'aprendizaje', 'martinfin'] },
   { key: 'sm_operacion', icon: 'fa-folder-open', label: 'Operación y Clientes', mods: ['clientes', 'supercarpeta', 'tasacion', 'estudio', 'escritura', 'gastos', 'procesamiento', 'rescate', 'autocorreo', 'micorreo', 'crece'] },
   { key: 'sm_control', icon: 'fa-shield', label: 'Control y Postventa', mods: ['postventa', 'contralor', 'contraloria', 'auditoria', 'gerencia', 'mod_daniela', 'mod_victoria'] },
-  { key: 'sm_sistema', icon: 'fa-cogs', label: 'Administración y Sistema', mods: ['dashboard', 'usuarios', 'criterios', 'administracion', 'dashai', 'whatsapp', 'basehistorica', 'salud', 'despacho'] },
+  { key: 'sm_sistema', icon: 'fa-cogs', label: 'Administración y Sistema', mods: ['dashboard', 'usuarios', 'criterios', 'administracion', 'dashai', 'emmy', 'whatsapp', 'basehistorica', 'salud', 'despacho'] },
 ];
 
 // ═══ PERFILES DE ACCESO (los módulos no listados NO se ven ni se pueden abrir) ═══
@@ -145,9 +148,16 @@ const PERFIL_MODS = {
 };
 
 function accesoModulo(user, key) {
+  // 📔 EMMY: exclusivo del Administrador, sin excepciones
+  if (key === 'emmy' && !['admin', 'maestro'].includes(user.rol)) return 'bloqueado';
   // PERFILES ESTRICTOS: ventas / gerencia_comercial (admin y maestro quedan exentos)
   if (PERFIL_MODS[user.perfil] && !['admin', 'maestro'].includes(user.rol)) {
     const P = PERFIL_MODS[user.perfil];
+    // 🔒 SEGURIDAD FINANCIERA: Gasto Operacional exclusivo del Admin y Deisy Salazar
+    if (key === 'gastos') {
+      const idU = String(user.codigo || user.sub || user.nombre || '').toLowerCase();
+      return (idU.startsWith('deysi') || idU.startsWith('deisy')) ? 'total' : 'bloqueado';
+    }
     if (P.total.includes(key)) return key === 'contraloria' ? 'lectura' : 'total';
     if (P.lectura.includes(key)) return 'lectura';
     return 'bloqueado';
@@ -435,6 +445,8 @@ function MainApp() {
     { key: 'contralor', icon: 'fa-eye', label: 'Módulo Contralor' },
     { key: 'postventa', icon: 'fa-heart', label: 'Postventa' },
     { key: 'dashai', icon: 'fa-lightbulb-o', label: '🧠 Cerebro DashAI' },
+    { key: 'emmy', icon: 'fa-book', label: '📔 Registro Emmy' },
+    { key: 'martinfin', icon: 'fa-heart-o', label: '💛 Martín — Asistente Financiero' },
     { key: 'auditoria', icon: 'fa-balance-scale', label: '📋 Auditoría Forense' },
     { key: 'despacho', icon: 'fa-rocket', label: '🚀 Despacho Veloz' },
     { key: 'cierres', icon: 'fa-handshake-o', label: 'Cierres' },
@@ -730,6 +742,8 @@ function MainApp() {
         {activeModule === 'salud' && <SaludModule />}
         {activeModule === 'rescate' && <BuzonRescateModule />}
         {activeModule === 'aprendizaje' && <AprendizajeModule />}
+        {activeModule === 'emmy' && <RegistroEmmyModule />}
+        {activeModule === 'martinfin' && <MartinFinancieroModule />}
         {activeModule === 'oportunidades' && <OportunidadesModule />}
         {activeModule === 'tasacion' && <TasacionModule />}
         {activeModule === 'estudio' && <EstudioTituloModule />}

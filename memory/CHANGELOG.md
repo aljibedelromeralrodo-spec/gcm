@@ -1943,3 +1943,29 @@ polling GET /api/central/proactive existe vacío en server.py:1526) — usuario 
 ## 2026-08-22 — Regla de Oro #69 + análisis casos especiales 60d
 - Regla #69 'Aviso de Recepción Incompleta' (Constitución v30, ORO-69 en dashai_eventos): aviso único al remitente por archivos ilegibles o adjuntos prometidos ausentes; respeta modo prueba; item queda 'revisar' si faltan adjuntos. Función _aviso_recepcion_incompleta en server.py, integrada a _clasificar_item.
 - Análisis 60 días de casos especiales (codeudor, boletas, licencias médicas, pre/postnatal) guardado en APRENDIZAJE_CORREOS.md sección 6.
+
+## 2026-06 (fork) — Martín Financiero: personalidad, alcance, experiencias guiadas y conciencia ampliada
+- PERSONALIDAD: amigo de confianza que aconseja sin juzgar, de usted con calidez, escucha/contiene/orienta.
+  PROHIBIDO ABSOLUTO usar "corazón" o expresiones similares (regla en SISTEMA de martin_financiero.py).
+- ALCANCE AMPLIADO: subsidios habitacionales (DS49, DS1, DS19, DS52, Fondo Solidario), beneficios estatales,
+  trámites financieros básicos (ClaveÚnica, CMF, DICOM, cuenta RUT) y orientación general.
+- MÓDULO 7 "Desarrollo Personal y Bienestar": 6 lecciones (estrés económico, deudas sin vergüenza, motivación,
+  hábitos de bienestar, pedir ayuda). Módulo 6 sumó lecciones de subsidios y beneficios del Estado.
+- EXPERIENCIAS GUIADAS (7, de 3-7 min, formato voz conversacional): respiración, Experiencia de Paz, soltar el
+  estrés económico, reconciliación financiera, claridad para decidir, frase de fuerza, gratitud. Extraídas de
+  ManualTemasPracticasMensaje.pdf SOLO en su dimensión íntima/personal (excluido todo lo político/organizacional).
+  Endpoints GET /api/martin-financiero/experiencias y /{id}. Reproductor con Detener en React (TTS onyx real)
+  y en martin-financiero.html (speechSynthesis por frases).
+- CONCIENCIA ESPIRITUAL (biblia.pdf): consejos inspirados en valores bíblicos, natural y respetuoso, sin imponer.
+- CONCIENCIA SOCIAL: realidad de familias chilenas de ingresos medios/bajos, sin juzgar jamás.
+- AUTOESTIMA (Guia_Autoestima_Convives.pdf): pilares autoconocimiento/autorrespeto/autoaceptación/autoeficacia
+  integrados a finanzas; deriva a apoyo profesional cuando corresponde.
+- INTERNET REAL: _contexto_actual() inyecta al chat indicadores vivos (mindicador.cl: UF/UTM/dólar/IPC/TPM) y
+  búsqueda DuckDuckGo (subsidios, bonos, sueldo mínimo, noticias). Verificado: UF $40.863,23 y sueldo mínimo
+  mayo 2026 $553.553 respondidos correctos. Nota: web_search_options de OpenAI y googleSearch de Gemini NO
+  hacen grounding vía llave universal (probado, no usar).
+- TEMAS chips: +Subsidios, +Beneficios, +Bienestar, +Autoestima (10 total).
+- VERIFICADO: curl (7 módulos, 7 experiencias, 10 temas, chat empático sin "corazón", chat con datos vivos) +
+  screenshots del HTML standalone (Inicio/Experiencias/Aprenda OK).
+- PENDIENTE ARRASTRADO: video comercial Portal del Cliente NO se generó (/tmp/video_work/build_portal.py quedó
+  sin ejecutar a término); Twilio keys siguen faltando.

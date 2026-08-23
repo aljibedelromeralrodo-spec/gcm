@@ -1430,3 +1430,14 @@ actual; todo lo demás permanece intacto.
 - Enviado correo HTML (negro #0a0a0a / dorado #d4af37 / blanco, estilo campañas) a gerardo.ext@centralmutuos.cl. Asunto: "Propuesta Sitio Web Institucional — Central Mutuos". Dirigido a Rodrigo y René.
 - Incluye: 3 tarjetas con links de prototipos A/B/C, botón dorado de descarga del video, y el video adjunto (Presentacion_Sitio_Web_Central_Mutuos.mp4, 7.7MB).
 - Resultado SMTP 250 OK · remitente ethangerardobarr@gmail.com (capa anti auto-envío activó cuenta principal al detectar destino = cuenta secundaria) · tamaño total 10.2MB.
+
+## 2026-06 (fork) — Historial de Contactados + Botón Hilo Frío
+### Historial de Contactados (Módulo Publicidad)
+- GET /api/publicidad/historial-contactados?tipo= → por contactado: nombre, correo, teléfono, canal, fecha contactado, fecha desbloqueo (+90 días), estado bloqueado/desbloqueado, base y listado. Enriquecimiento cruzando publicidad_contactados con publicidad_listados (hermanos por nombre para correo↔teléfono).
+- GET /api/publicidad/historial-contactados/excel?tipo= → export .xlsx (openpyxl, encabezado dorado).
+- Frontend: sección "Historial de Contactados" en PublicidadModule.js con filtro por base (Inmobiliaria/Brokers/Clientes Directos/Individual) y botón Exportar a Excel (blob). data-testids: historial-contactados, historial-filtro-base, historial-exportar-excel, historial-fila-{i}.
+### Botón Hilo Frío (Módulo Ventas)
+- _resumen_cliente ahora expone hilo_frio=true si semáforo dias_sin_movimiento>=7 y caso no cerrado.
+- POST /api/ventas/clientes/{cid}/hilo-frio: solo admin/maestro o perfil "ventas"; exige MASTER_PIN (ORO-75 vía _exigir_pin_maestro); valida inactividad>=7 días y correo en ficha; envía correo institucional (usted, negro/dorado) firmado por el ejecutivo asignado; registra en ventas.contactos + timeline (resetea semáforo).
+- Frontend VentasPanel.js: botón "🧊 Hilo Frío · N días inactivo" (data-testid ventas-hilo-frio-{id}) con confirm + prompt de PIN maestro.
+- TESTEADO E2E: PIN inválido→403 ORO-75, PIN válido→correo enviado (SMTP OK), re-envío inmediato→400 (<7 días), excel con Content-Disposition correcto, UI verificada con screenshot. Datos de prueba eliminados tras el test.
