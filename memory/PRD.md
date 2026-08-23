@@ -1419,3 +1419,9 @@ actual; todo lo demás permanece intacto.
 - Descarga pública directa: {REACT_APP_BACKEND_URL}/demo-proyectos-web.mp4 (en /app/frontend/public/).
 - También integrado al endpoint autenticado de demos: GET /api/victoria/demo/video?modulo=web (archivo /app/backend/demos/demo_web.mp4; mapeo "web" agregado en victoria_independiente.py).
 - Verificado: HTTP 200 (8.168.126 bytes), frames revisados en 40s/70s/100s/118s confirman los 5 segmentos.
+
+## 2026-06 (fork) — Video comercial v2 (2:07) + links de preview
+- Regrabado video con guion ampliado (8 fortalezas: simulador 30s→leads, galería Ecomac/Besalco/Boetch, panel Mi Crédito, pago AMH, noticias SEO, diseño negro/dorado/blanco, velocidad móvil, 3 identidades visuales).
+- Placa final de 25s con los 3 links de preview etiquetados (Prototipo A/B/C) en tarjetas doradas.
+- Reemplazó /app/frontend/public/demo-proyectos-web.mp4 y /app/backend/demos/demo_web.mp4 (7.7MB, 127s). Verificado HTTP 200 + frame de placa final.
+- Links entregados al usuario: /landing-opcion-{a,b,c}.html sobre el preview URL.
