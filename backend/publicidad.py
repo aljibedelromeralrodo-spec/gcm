@@ -172,7 +172,8 @@ async def borrar_listado(lid: str, request: Request):
 
 TIPOS_DESTINATARIO = {"broker_inmobiliario": "Broker Inmobiliario",
                       "cliente_directo": "Cliente Directo",
-                      "cliente_individual": "Cliente Individual"}
+                      "cliente_individual": "Cliente Individual",
+                      "inmobiliaria": "Inmobiliaria"}
 
 
 def _parsear_filas_xlsx(raw):
@@ -185,7 +186,7 @@ def _parsear_filas_xlsx(raw):
     rx_tel = re.compile(r"^\+?\d{8,12}$")
     rx_celda_tel = re.compile(r"^[+\d][\d\s().-]*$")
     for ws in wb.worksheets:
-        idx_nombre = idx_apellido = None
+        idx_nombre = idx_apellido = idx_empresa = idx_contacto = None
         for fila_n, row in enumerate(ws.iter_rows(values_only=True)):
             celdas = [("" if c is None else str(c).strip()) for c in row]
             if fila_n == 0:
@@ -195,6 +196,10 @@ def _parsear_filas_xlsx(raw):
                         idx_nombre = i
                     if h == "apellido" and idx_apellido is None:
                         idx_apellido = i
+                    if ("inmobiliaria" in h or h == "empresa") and idx_empresa is None:
+                        idx_empresa = i
+                    if "contacto" in h and idx_contacto is None:
+                        idx_contacto = i
             correo, telefono = "", ""
             for c in celdas:
                 cl = c.lower()
@@ -210,11 +215,17 @@ def _parsear_filas_xlsx(raw):
             if not correo and not telefono:
                 continue
             nombre_reg = ""
-            if idx_nombre is not None and idx_nombre < len(celdas):
+            if idx_contacto is not None and idx_contacto < len(celdas) and celdas[idx_contacto]:
+                nombre_reg = celdas[idx_contacto]
+            elif idx_nombre is not None and idx_nombre < len(celdas):
                 nombre_reg = celdas[idx_nombre]
                 if idx_apellido is not None and idx_apellido < len(celdas) and celdas[idx_apellido]:
                     nombre_reg = f"{nombre_reg} {celdas[idx_apellido]}".strip()
-            registros.append({"nombre": nombre_reg.title()[:80], "correo": correo, "telefono": telefono})
+            empresa = ""
+            if idx_empresa is not None and idx_empresa < len(celdas):
+                empresa = celdas[idx_empresa].title()[:80]
+            registros.append({"nombre": nombre_reg.title()[:80], "empresa": empresa,
+                              "correo": correo, "telefono": telefono})
     # Dedupe de registros por (correo, telefono) y construcción de contactos
     contactos, vistos = [], set()
     con_correo = con_wa = con_ambos = total = 0
@@ -233,10 +244,12 @@ def _parsear_filas_xlsx(raw):
             con_ambos += 1
         if r["correo"] and r["correo"] not in vistos:
             vistos.add(r["correo"])
-            contactos.append({"valor": r["correo"], "tipo": "correo", "nombre": r["nombre"]})
+            contactos.append({"valor": r["correo"], "tipo": "correo",
+                              "nombre": r["nombre"], "empresa": r.get("empresa", "")})
         if r["telefono"] and r["telefono"] not in vistos:
             vistos.add(r["telefono"])
-            contactos.append({"valor": r["telefono"], "tipo": "telefono", "nombre": r["nombre"]})
+            contactos.append({"valor": r["telefono"], "tipo": "telefono",
+                              "nombre": r["nombre"], "empresa": r.get("empresa", "")})
     detalle = {"registros": total, "con_correo": con_correo,
                "con_whatsapp": con_wa, "con_ambos": con_ambos}
     return contactos, detalle

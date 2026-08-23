@@ -1370,3 +1370,8 @@ actual; todo lo demás permanece intacto.
 - Controles: límite manual de registros por envío, registro publicidad_contactados (valor, canal, fecha, campaña), exclusión automática de contactos con publicidad <3 meses + aviso de cuántos fueron excluidos (al cargar y al enviar).
 - Plantillas activadas: correo "Clientes Directos — carta corporativa" (opción C, asunto precargado, botón → formulario público /api/publicidad/contacto → solicitudes_llamada) y WhatsApp opción B (botón "Plantilla Clientes Directos", links → /api/publicidad/antecedentes que crea prospecto y abre portal calificar, y /api/publicidad/contacto).
 - Todo verificado por curl end-to-end.
+
+## 2026-08-23 — Base de Inmobiliarias en Publicidad
+- Nuevo tipo de destinatario "Inmobiliaria" (backend TIPOS_DESTINATARIO + selectores UI correo/WA) — bases separadas de clientes directos por tipo_destinatario.
+- Parser Excel por fila ahora captura columnas "Inmobiliaria/Empresa" y "Nombre de Contacto" (guardadas por contacto como empresa/nombre). Resumen al cargar: registros / con correo / con WhatsApp / con ambos.
+- ORO-75 (PIN maestro) y regla anti-fatiga 3 meses aplican automáticamente (mismos endpoints). Verificado: import con empresa+contacto correctos, 403 sin PIN.

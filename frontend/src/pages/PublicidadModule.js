@@ -15,6 +15,7 @@ const TIPO_DEST = {
   broker_inmobiliario: "Broker Inmobiliario",
   cliente_directo: "Cliente Directo",
   cliente_individual: "Cliente Individual",
+  inmobiliaria: "Inmobiliaria",
 };
 const etiquetaTipo = (l) => TIPO_DEST[l.tipo_destinatario] || "Broker Inmobiliario";
 
@@ -164,6 +165,7 @@ export default function PublicidadModule() {
             <option value="broker_inmobiliario">👔 Broker Inmobiliario</option>
             <option value="cliente_directo">🏠 Cliente Directo</option>
             <option value="cliente_individual">👤 Cliente Individual</option>
+            <option value="inmobiliaria">🏢 Inmobiliaria</option>
           </select>
           <select data-testid="pub-camp-listado" style={inp} value={camp.listado_id} onChange={e => setCamp({ ...camp, listado_id: e.target.value })}>
             <option value="">— Listado de contactos —</option>
@@ -210,6 +212,7 @@ export default function PublicidadModule() {
             <option value="broker_inmobiliario">👔 Broker Inmobiliario</option>
             <option value="cliente_directo">🏠 Cliente Directo</option>
             <option value="cliente_individual">👤 Cliente Individual</option>
+            <option value="inmobiliaria">🏢 Inmobiliaria</option>
           </select>
           <select data-testid="pub-wa-listado" style={inp} value={wa.listado_id} onChange={e => setWa({ ...wa, listado_id: e.target.value })}>
             <option value="">— Listado con teléfonos —</option>
