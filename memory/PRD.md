@@ -1401,3 +1401,6 @@ actual; todo lo demás permanece intacto.
 - /api/victoria/panel: usuarios no-admin (Daniela/Victoria, rol administracion) solo ven clientes origen="manual" (subidos por el Admin) Y con doc de escritura (etapa escrituración). Cero correlación automática. Admin ve todo. Verificado con caso negativo (0 de 5 automáticos) y positivo (1 manual con escritura).
 - EJECUTIVOS_VENTAS += gerardo ("Gerardo Barrera"). Usuario seed idempotente `gerardo.barrera` (email vacío, clave temporal Gerardo2026). Selector admin de VentasWorkspace incluye a Gerardo.
 - asignar_a_ventas_si_corresponde reescrito: ficha COMPLETA → Gerardo automático (reasignable por admin); ficha INCOMPLETA → random.choice entre Yerile y Deisy (reemplaza el balance/round-robin).
+
+## 2026-06 (fork) — Verificación Panel Estado de Bases
+- Verificado E2E en preview: endpoint /api/publicidad/estado-bases responde (2 bases: inmobiliarias ds19 y base usa tu subsidio 01), panel visible en Publicidad y Captación con campo de cantidad manual y botón "Usar esta base". ORO-75 (Master PIN) confirmado en código antes de cualquier envío. Sin cambios de código necesarios.
