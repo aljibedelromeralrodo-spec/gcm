@@ -21,10 +21,16 @@ body{font-family:Outfit,system-ui,sans-serif;background:var(--crema);color:var(-
 .alive .fTalk,.alive .fBlink{opacity:0;transition:opacity .07s linear}
 .alive.mo .fTalk{opacity:1}
 .alive.blk .fBlink{opacity:1}
-@keyframes sway{0%,100%{transform:rotate(-1.1deg) translateY(0)}25%{transform:rotate(.6deg) translateY(-1.5px)}55%{transform:rotate(1.2deg) translateY(.5px)}80%{transform:rotate(-.5deg) translateY(-1px)}}
+@keyframes sway{0%,100%{transform:rotate(-.35deg) translateY(0)}30%{transform:rotate(.25deg) translateY(-.7px)}60%{transform:rotate(.4deg) translateY(.3px)}85%{transform:rotate(-.2deg) translateY(-.4px)}}
 .aliveRing{padding:3px;border-radius:50%;background:conic-gradient(var(--ama),var(--coral),var(--cel),var(--ama));flex:none}
-body.talking .aliveRing{animation:pulseRing 1s ease-in-out infinite}
-@keyframes pulseRing{0%,100%{box-shadow:0 0 0 0 rgba(255,201,60,.55)}50%{box-shadow:0 0 0 9px rgba(255,201,60,0)}}
+body.talking .aliveRing{animation:pulseRing 1.6s ease-in-out infinite}
+@keyframes pulseRing{0%,100%{box-shadow:0 0 0 0 rgba(255,201,60,.35)}50%{box-shadow:0 0 0 6px rgba(255,201,60,0)}}
+/* ===== Modo inmersivo ===== */
+#inmersivo{position:fixed;inset:0;z-index:70;background:radial-gradient(circle at 50% 30%,#22399B,#0E1A4E 75%);display:none;flex-direction:column;align-items:center;justify-content:center;padding:28px;text-align:center;max-width:480px;margin:0 auto}
+#inmersivo.on{display:flex}
+#inm-caption{color:#dbe4ff;font-size:1rem;line-height:1.75;margin-top:26px;min-height:120px;max-height:40vh;overflow-y:auto;animation:up .4s both}
+#inm-cerrar{position:absolute;top:calc(env(safe-area-inset-top) + 14px);right:16px;width:42px;height:42px;border-radius:50%;background:rgba(255,255,255,.14);border:0;color:#fff;font-size:20px;cursor:pointer}
+.fsBtn{width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,.16);border:0;color:#fff;font-size:17px;cursor:pointer;flex:none}
 /* ===== Home ===== */
 .hero{background:linear-gradient(160deg,var(--azul) 0%,#1D3494 60%,var(--azul2) 100%);border-radius:0 0 34px 34px;padding:calc(env(safe-area-inset-top) + 22px) 22px 26px;color:#fff;position:relative;overflow:hidden}
 .hero::after{content:"";position:absolute;width:190px;height:190px;border-radius:50%;background:rgba(255,201,60,.14);top:-70px;right:-60px}
@@ -83,6 +89,11 @@ input,select{width:100%;background:#F6F1E2;border:1.5px solid #EDE4C8;border-rad
 .inputRow{display:flex;gap:8px;padding:10px 14px calc(env(safe-area-inset-bottom) + 86px);background:var(--crema)}
 .inputRow input{flex:1;margin:0;border-radius:999px}
 .inputRow button{background:var(--ama);border:0;border-radius:50%;width:48px;height:48px;font-size:19px;cursor:pointer;flex:none;color:var(--azul)}
+#mic{background:var(--coral);color:#fff;transition:transform .15s}
+#mic.rec{background:#dc2626;animation:recPulse 1s ease-in-out infinite}
+#mic.proc{background:#9AA1BD}
+@keyframes recPulse{0%,100%{box-shadow:0 0 0 0 rgba(220,38,38,.5)}50%{box-shadow:0 0 0 10px rgba(220,38,38,0)}}
+.emoChip{display:inline-block;font-size:.58rem;font-weight:800;letter-spacing:.5px;border-radius:999px;padding:3px 10px;margin-bottom:5px;background:rgba(76,201,240,.15);color:#0b6e8f;border:1px solid rgba(76,201,240,.4)}
 /* ===== Player experiencias ===== */
 #player{position:fixed;inset:0;z-index:60;background:linear-gradient(170deg,#101E5E,var(--azul2));display:none;flex-direction:column;align-items:center;justify-content:center;padding:30px;text-align:center;color:#fff;max-width:480px;margin:0 auto}
 #player.on{display:flex}
@@ -184,6 +195,7 @@ footer{font-size:.6rem;color:#9AA1BD;text-align:center;padding:8px 24px 14px;lin
     <div class="topbar">
       <button class="back" onclick="irHome()">←</button>
       <h2>Converse con Martín</h2>
+      <button class="fsBtn" onclick="abrirInmersivo()" data-testid="btn-inmersivo" title="Ver a Martín en pantalla completa">⛶</button>
       <div class="aliveRing"><div class="alive" style="width:42px;height:42px" data-testid="avatar-chat"></div></div>
     </div>
     <div class="temasRow" id="temas"></div>
@@ -191,7 +203,8 @@ footer{font-size:.6rem;color:#9AA1BD;text-align:center;padding:8px 24px 14px;lin
       <div class="mM"><b>MARTÍN 💛</b>¿Sobre qué le gustaría conversar hoy? Puedo ayudarle con ahorro, deudas, subsidios habitacionales, emprendimiento, trámites y también con el ánimo cuando la plata pesa. Estoy para escucharle, sin juzgar.</div>
     </div>
     <div class="inputRow">
-      <input id="q" placeholder="Escríbale a Martín…" data-testid="chat-input" onkeydown="if(event.key==='Enter')enviar()">
+      <input id="q" placeholder="Escríbale o háblele a Martín…" data-testid="chat-input" onkeydown="if(event.key==='Enter')enviar()">
+      <button id="mic" onclick="toggleMic()" data-testid="chat-mic">🎤</button>
       <button onclick="enviar()" data-testid="chat-enviar">➤</button>
     </div>
   </section>
@@ -214,6 +227,13 @@ footer{font-size:.6rem;color:#9AA1BD;text-align:center;padding:8px 24px 14px;lin
   <button class="abtn d" onclick="detenerVoz()" data-testid="audio-detener"><i>⏹</i>Detener</button>
 </div>
 
+<!-- Modo inmersivo -->
+<div id="inmersivo" data-testid="modo-inmersivo">
+  <button id="inm-cerrar" onclick="cerrarInmersivo()">✕</button>
+  <div class="aliveRing"><div class="alive" style="width:210px;height:210px" data-testid="avatar-inmersivo"></div></div>
+  <div id="inm-caption">Aquí verá a Martín mientras le habla. Envíele un mensaje o use el micrófono.</div>
+</div>
+
 <button id="fab" onclick="irChat()" data-testid="fab-martin">
   <div class="aliveRing"><div class="alive" style="width:58px;height:58px"></div></div>
 </button>
@@ -226,37 +246,119 @@ footer{font-size:.6rem;color:#9AA1BD;text-align:center;padding:8px 24px 14px;lin
 
 <script>
 const API = "";
-const SES = "app-" + Date.now();
+const UID = localStorage.getItem("ma_uid") || (() => { const u = "u-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8); localStorage.setItem("ma_uid", u); return u; })();
+const SES = UID;
 const fmt = n => "$" + Math.round(n).toLocaleString("es-CL");
+
+/* ================= CONCIENCIA (memoria privada del teléfono) ================= */
+function conGet() { try { return JSON.parse(localStorage.getItem("ma_conciencia")) || { corto: [], largo: null, nuevos: 0 }; } catch (e) { return { corto: [], largo: null, nuevos: 0 }; } }
+function conSave(c) { localStorage.setItem("ma_conciencia", JSON.stringify(c)); }
+function conLog(quien, texto, emocion) {
+  const c = conGet();
+  c.corto.push({ f: new Date().toISOString().slice(0, 16).replace("T", " "), q: quien, t: String(texto).slice(0, 220), e: emocion || null });
+  if (c.corto.length > 40) c.corto = c.corto.slice(-40);
+  c.nuevos = (c.nuevos || 0) + 1;
+  conSave(c);
+  if (c.nuevos >= 12) consolidarConciencia();
+}
+function conCtx() {
+  const c = conGet(), reg = regGet(), dias = Object.keys(reg).sort(), ult = dias[dias.length - 1];
+  const ue = [...c.corto].reverse().find(x => x.e && x.e !== "neutral");
+  return { memoria_larga: c.largo || "aún sin perfil consolidado — se están conociendo",
+           recientes: c.corto.slice(-8),
+           ultimo_registro: ult ? { fecha: ult, gasto: reg[ult].g, ahorro: reg[ult].a, detalle: reg[ult].det } : null,
+           ultima_emocion: ue ? ue.e : null };
+}
+async function consolidarConciencia() {
+  const c = conGet();
+  if (!c.corto.length) return;
+  try {
+    const r = await fetch(API + "/api/martin-financiero/conciencia/resumir", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ resumen_anterior: c.largo || {}, eventos: c.corto }) });
+    const d = await r.json();
+    if (d.largo) {
+      c.largo = d.largo; c.largo.actualizado = new Date().toLocaleString("es-CL"); c.nuevos = 0;
+      conSave(c);
+      if (document.getElementById("con-largo")) pintarConciencia();
+    }
+  } catch (e) {}
+}
+function borrarConciencia() {
+  if (!confirm("¿Seguro que quiere borrar toda la memoria de Martín sobre usted? Esta acción no se puede deshacer.")) return;
+  localStorage.removeItem("ma_conciencia");
+  pintarConciencia();
+  hablar("Listo, he borrado mi memoria. Empezamos de cero, pero con las mismas ganas de acompañarle.");
+}
+function pintarConciencia() {
+  const c = conGet(), L = c.largo;
+  const el1 = document.getElementById("con-largo"), el2 = document.getElementById("con-corto");
+  if (!el1) return;
+  el1.innerHTML = L ? `<h3>📚 Memoria de largo plazo</h3>
+    <p><b>Quién es usted para Martín:</b> ${L.perfil || "—"}</p>
+    <p style="margin-top:6px"><b>Personalidad detectada:</b> ${L.personalidad || "—"}</p>
+    <p style="margin-top:6px"><b>Patrones emocionales:</b> ${L.patrones_emocionales || "—"}</p>
+    ${(L.metas_pendientes || []).length ? `<p style="margin-top:6px"><b>Metas pendientes:</b></p><ul>${L.metas_pendientes.map(m => "<li>" + m + "</li>").join("")}</ul>` : ""}
+    ${(L.metas_cumplidas || []).length ? `<p style="margin-top:6px"><b>Metas cumplidas 🏆:</b></p><ul>${L.metas_cumplidas.map(m => "<li>" + m + "</li>").join("")}</ul>` : ""}
+    ${(L.temas_recurrentes || []).length ? `<p style="margin-top:6px"><b>Temas recurrentes:</b> ${L.temas_recurrentes.join(" · ")}</p>` : ""}
+    <p style="margin-top:8px;font-size:.68rem;color:#9AA1BD">Última consolidación: ${L.actualizado || "—"}</p>
+    <button class="btn mini azul" onclick="consolidarConciencia()">🔄 Actualizar perfil ahora</button>`
+  : `<h3>📚 Memoria de largo plazo</h3><p>Todavía nos estamos conociendo. Mientras más conversen, más completo será el perfil que Martín construye de usted.</p>
+     ${c.corto.length >= 4 ? '<button class="btn mini azul" onclick="consolidarConciencia()">🔄 Consolidar ahora</button>' : ""}`;
+  el2.innerHTML = `<h3>🕐 Memoria de corto plazo</h3>
+    <p style="font-size:.68rem;color:#9AA1BD">${c.corto.length} recuerdos recientes guardados en este teléfono</p>` +
+    (c.corto.slice(-12).reverse().map(x =>
+      `<div style="border-left:3px solid ${x.q === "martin" ? "var(--ama)" : x.q === "evento" ? "var(--verde)" : "var(--cel)"};padding:6px 10px;margin-top:8px;background:#FBF7EA;border-radius:0 10px 10px 0">
+       <span style="font-size:.58rem;color:#9AA1BD">${x.f} · ${x.q.toUpperCase()}${x.e ? " · " + x.e : ""}</span><br>
+       <span style="font-size:.74rem">${x.t}</span></div>`).join("") || "<p>Sin recuerdos aún. ¡Converse con Martín!</p>");
+}
 
 /* ================= AVATAR VIVO ================= */
 document.querySelectorAll(".alive").forEach(a => {
   a.innerHTML = '<img src="martin-avatar.jpeg" alt="Martín"><img src="martin-avatar-talk.jpeg" class="fTalk" alt=""><img src="martin-avatar-blink.jpeg" class="fBlink" alt="">';
 });
 function blinkLoop() {
-  const t = 2600 + Math.random() * 2600;
+  const t = 3200 + Math.random() * 3600;
   setTimeout(() => {
-    if (!document.body.classList.contains("talking")) {
-      document.querySelectorAll(".alive").forEach(a => a.classList.add("blk"));
-      setTimeout(() => document.querySelectorAll(".alive").forEach(a => a.classList.remove("blk")), 140);
-    }
+    document.querySelectorAll(".alive").forEach(a => a.classList.add("blk"));
+    setTimeout(() => document.querySelectorAll(".alive").forEach(a => a.classList.remove("blk")), 120);
     blinkLoop();
   }, t);
 }
 blinkLoop();
 let mouthTimer = null;
+function bocaAbierta(abrir) { document.querySelectorAll(".alive").forEach(a => a.classList.toggle("mo", abrir)); }
 function bocaOn() {
   document.body.classList.add("talking");
   clearInterval(mouthTimer);
-  mouthTimer = setInterval(() => {
-    const abrir = Math.random() > 0.42;
-    document.querySelectorAll(".alive").forEach(a => a.classList.toggle("mo", abrir));
-  }, 105);
+  mouthTimer = setInterval(() => bocaAbierta(Math.random() > 0.5), 130);
 }
 function bocaOff() {
   document.body.classList.remove("talking");
   clearInterval(mouthTimer);
-  document.querySelectorAll(".alive").forEach(a => a.classList.remove("mo"));
+  bocaAbierta(false);
+}
+/* Sincronización labial por amplitud real del audio */
+let ACTX = null;
+function vincularBoca(a) {
+  try {
+    ACTX = ACTX || new (window.AudioContext || window.webkitAudioContext)();
+    if (ACTX.state === "suspended") ACTX.resume();
+    const src = ACTX.createMediaElementSource(a);
+    const an = ACTX.createAnalyser(); an.fftSize = 512;
+    src.connect(an); an.connect(ACTX.destination);
+    const buf = new Uint8Array(an.frequencyBinCount);
+    let ema = 0;
+    const loop = () => {
+      if (a.paused || a.ended) { bocaAbierta(false); return; }
+      an.getByteFrequencyData(buf);
+      let s = 0; for (let i = 2; i < 42; i++) s += buf[i];
+      const v = s / 40 / 255;
+      ema = ema * 0.55 + v * 0.45;
+      bocaAbierta(ema > 0.11);
+      requestAnimationFrame(loop);
+    };
+    loop();
+    return true;
+  } catch (e) { return false; }
 }
 
 /* ================= VOZ REAL DE MARTÍN + CONTROLES ================= */
@@ -272,13 +374,15 @@ function barOn(paused) {
 function barOff() { abar().classList.remove("on"); }
 function hablar(texto) {
   return new Promise(res => {
+    document.getElementById("inm-caption").textContent = texto;
     fetch(API + "/api/martin-financiero/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: texto }) })
       .then(r => r.json()).then(d => {
         if (!d.audio) return res();
         if (audioActual) { audioActual.onended = null; audioActual.pause(); }
         const a = new Audio("data:audio/mp3;base64," + d.audio);
         audioActual = a;
-        a.onplay = () => { bocaOn(); barOn(false); };
+        const sync = vincularBoca(a);
+        a.onplay = () => { document.body.classList.add("talking"); if (!sync) bocaOn(); barOn(false); };
         a.onpause = () => { if (!a.ended) { bocaOff(); barOn(true); } };
         a.onended = () => { bocaOff(); barOff(); res(); };
         a.onerror = () => { bocaOff(); barOff(); res(); };
@@ -430,6 +534,18 @@ const MODS = [
   <div id="exp-lista"><div class="card"><p>Cargando experiencias…</p></div></div>`,
   init: () => cargarExps() },
 
+{ id:"conciencia", icon:"🧠", t:"Conciencia", s:"Todo lo que Martín recuerda de usted", col:"#E9E4FF", wide:true,
+  render: () => `
+  <div class="card"><h3>🧠 La Conciencia de Martín</h3>
+    <p>Aquí vive la memoria completa de Martín sobre usted: sus conversaciones, sus registros, sus metas y su historia. Martín la lee al comenzar cada sesión para no partir nunca de cero.</p>
+    <button class="voz" onclick="hablar('Esta es mi conciencia: todo lo que hemos conversado y construido juntos vive aquí, solo en su teléfono. Yo la leo cada vez que usted llega, para recordarle, notarle los cambios y acompañarle como corresponde a un amigo.')">🔊 Martín le cuenta</button></div>
+  <div class="card" id="con-largo"></div>
+  <div class="card" id="con-corto"></div>
+  <div class="card"><h3>🔒 Privacidad absoluta</h3>
+    <p>La Conciencia es privada: vive dentro de este teléfono y nunca se comparte con nadie. Es la relación de Martín con usted, y usted manda.</p>
+    <button class="btn coral" onclick="borrarConciencia()" data-testid="conciencia-borrar">🗑 Borrar mi Conciencia</button></div>`,
+  init: () => pintarConciencia() },
+
 { id:"chat", icon:"💬", t:"Conversación Libre", s:"Pregunte lo que quiera", col:"#FFE3D9",
   render: () => "", abre: () => irChat() },
 ];
@@ -438,7 +554,7 @@ function acc(t, d) { return `<div class="acc"><b onclick="this.parentElement.cla
 
 const grid = document.getElementById("grid");
 grid.innerHTML = MODS.map((m, i) =>
-  `<div class="mcard" style="animation-delay:${i * .06}s" onclick="${m.abre ? "irChat()" : `abrirMod('${m.id}')`}" data-testid="card-${m.id}">
+  `<div class="mcard" style="animation-delay:${i * .06}s${m.wide ? ";grid-column:1/-1" : ""}" onclick="${m.abre ? "irChat()" : `abrirMod('${m.id}')`}" data-testid="card-${m.id}">
     <div class="ic" style="background:${m.col}">${m.icon}</div><b>${m.t}</b><span>${m.s}</span></div>`).join("");
 
 /* ================= Interacciones ================= */
@@ -523,7 +639,115 @@ function stopExp(silencio) {
   document.getElementById("player").classList.remove("on");
 }
 
-/* ================= Chat ================= */
+/* ================= Chat conversacional ================= */
+function preguntar(q) { document.getElementById("q").value = q; enviar(); }
+const EMOS = { entusiasmo: "⚡ Martín percibe entusiasmo", tristeza: "🫂 Martín percibe ánimo bajo — contención", soledad: "🤝 Martín percibe soledad — acompañando", estres: "🧯 Martín percibe estrés financiero — modo práctico" };
+const TEMAS_KW = [["deuda", "deudas"], ["ahorr", "ahorro"], ["subsidio", "subsidios"], ["emprend", "emprendimiento"], ["negocio", "emprendimiento"], ["triste", "bienestar"], ["estres", "bienestar"], ["estrés", "bienestar"], ["solo", "bienestar"], ["sola", "bienestar"], ["presupuesto", "presupuesto"], ["casa", "vivienda"], ["arriendo", "vivienda"], ["biblia", "espiritualidad"], ["dios", "espiritualidad"]];
+function temaDe(t) { const m = t.toLowerCase(); for (const [k, v] of TEMAS_KW) if (m.includes(k)) return v; return "otros"; }
+let PENSANDO = false;
+async function enviar(textoOpt, voz) {
+  const q = (textoOpt || document.getElementById("q").value).trim();
+  if (!q || PENSANDO) return;
+  PENSANDO = true;
+  document.getElementById("q").value = "";
+  const chat = document.getElementById("chat");
+  chat.innerHTML += `<div class='mU'>${q}${voz ? " 🎤" : ""}</div><div class='mM' id='esp'><b>MARTÍN 💛</b>Escuchándole…</div>`;
+  chat.scrollTop = chat.scrollHeight;
+  conLog("usuario", q, null);
+  try {
+    const r = await fetch(API + "/api/martin-financiero/chat", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: q, session_id: SES, voz: voz || null, conciencia: conCtx() }) });
+    const d = await r.json();
+    const chip = EMOS[d.emocion] ? `<span class="emoChip">${EMOS[d.emocion]}</span><br>` : "";
+    document.getElementById("esp").outerHTML = `<div class='mM'>${chip}<b>MARTÍN 💛</b>${(d.response || d.detail || "").replace(/\*\*(.*?)\*\*/g, "<b>$1</b>")}</div>`;
+    if (d.response) {
+      conLog("martin", d.response, d.emocion);
+      fetch(API + "/api/martin-financiero/cerebro/aprendizaje", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tema: temaDe(q), emocion: d.emocion || "neutral" }) }).catch(() => {});
+      hablar(d.response);
+    }
+  } catch (e) { document.getElementById("esp").outerHTML = "<div class='mM'><b>MARTÍN 💛</b>No pude responderle, intente de nuevo.</div>"; }
+  chat.scrollTop = chat.scrollHeight;
+  PENSANDO = false;
+}
+
+/* ================= Micrófono con detección de tono ================= */
+let MREC = null, MCHUNKS = [], MRMS = [], MSTART = 0, MIV = null, MSTREAM = null;
+async function toggleMic() {
+  const b = document.getElementById("mic");
+  if (MREC && MREC.state === "recording") { MREC.stop(); return; }
+  try {
+    MSTREAM = await navigator.mediaDevices.getUserMedia({ audio: true });
+    MCHUNKS = []; MRMS = []; MSTART = Date.now();
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const src = ctx.createMediaStreamSource(MSTREAM);
+    const an = ctx.createAnalyser(); an.fftSize = 2048; src.connect(an);
+    const buf = new Float32Array(an.fftSize);
+    MIV = setInterval(() => { an.getFloatTimeDomainData(buf); let s = 0; for (let i = 0; i < buf.length; i++) s += buf[i] * buf[i]; MRMS.push(Math.sqrt(s / buf.length)); }, 120);
+    MREC = new MediaRecorder(MSTREAM);
+    MREC.ondataavailable = e => MCHUNKS.push(e.data);
+    MREC.onstop = async () => {
+      clearInterval(MIV); MSTREAM.getTracks().forEach(t => t.stop()); ctx.close();
+      b.classList.remove("rec"); b.classList.add("proc"); b.textContent = "…";
+      const dur = (Date.now() - MSTART) / 1000;
+      const blob = new Blob(MCHUNKS, { type: "audio/webm" });
+      const b64 = await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(blob); });
+      try {
+        const r = await fetch(API + "/api/martin-financiero/stt", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ audio: b64 }) });
+        const d = await r.json();
+        if (d.texto) {
+          const rms = MRMS.length ? MRMS.reduce((a, x) => a + x, 0) / MRMS.length : 0;
+          const rate = d.texto.split(/\s+/).length / Math.max(dur, 1);
+          const energia = (rms > 0.055 && rate >= 2.3) ? "alta" : ((rms < 0.02 || rate < 1.3) ? "baja" : "media");
+          const ritmo = rate >= 2.6 ? "rápido" : (rate < 1.5 ? "lento" : "normal");
+          enviar(d.texto, { energia, ritmo, duracion: Math.round(dur) });
+        } else alert("No le escuché bien, intente de nuevo");
+      } catch (e) { alert("No pude procesar el audio, intente de nuevo"); }
+      b.classList.remove("proc"); b.textContent = "🎤";
+    };
+    MREC.start();
+    b.classList.add("rec"); b.textContent = "⏹";
+  } catch (e) { alert("Permita el acceso al micrófono para hablarle a Martín"); }
+}
+
+/* ================= Modo inmersivo ================= */
+function abrirInmersivo() { document.getElementById("inmersivo").classList.add("on"); }
+function cerrarInmersivo() { document.getElementById("inmersivo").classList.remove("on"); }
+
+/* ================= Red de Martins — sincronización con El Cerebro ================= */
+let CEREBRO = null;
+async function cerebroSync() {
+  try {
+    const r = await fetch(API + "/api/martin-financiero/cerebro/sync");
+    CEREBRO = await r.json();
+    if ((CEREBRO.avisos || []).length) {
+      const av = CEREBRO.avisos[0];
+      if (localStorage.getItem("ma_aviso_visto") !== av.id) {
+        document.getElementById("tipdia").innerHTML = `🛰 <b>Novedad de la red${av.titulo ? " — " + av.titulo : ""}:</b> ${av.texto} <span style="cursor:pointer;text-decoration:underline" onclick="localStorage.setItem('ma_aviso_visto','${av.id}');location.reload()">ok</span>`;
+      }
+    }
+    if (CEREBRO.marca) {
+      document.querySelector(".chip").textContent = "MARTÍN SUMA UC · " + CEREBRO.marca.toUpperCase();
+    }
+    (CEREBRO.modulos || []).forEach((m, i) => {
+      if (document.querySelector(`[data-testid="card-remoto-${m.id}"]`)) return;
+      grid.insertAdjacentHTML("beforeend",
+        `<div class="mcard" style="border-color:${m.color}" onclick="abrirRemoto('${m.id}')" data-testid="card-remoto-${m.id}">
+         <div class="ic" style="background:${m.color}">${m.icono}</div><b>${m.titulo}</b><span>${m.sub || "Nuevo módulo de la red"} 🛰</span></div>`);
+    });
+  } catch (e) {}
+}
+function abrirRemoto(id) {
+  const m = (CEREBRO?.modulos || []).find(x => x.id === id);
+  if (!m) return;
+  document.getElementById("mod-titulo").textContent = m.icono + " " + m.titulo;
+  document.getElementById("mod-body").innerHTML =
+    `<div class="card"><h3>${m.icono} ${m.titulo}</h3><p style="white-space:pre-wrap">${m.cuerpo}</p>
+     <button class="voz" onclick='hablar(${JSON.stringify(m.cuerpo.slice(0, 900))})'>🔊 Martín se lo cuenta</button>
+     <p style="margin-top:10px;font-size:.62rem;color:#9AA1BD">🛰 Módulo enviado por El Cerebro a toda la red de Martins</p></div>`;
+  verView("v-mod", "nav-mods");
+}
+cerebroSync();
+setInterval(cerebroSync, 5 * 60 * 1000);
 async function cargarTemas() {
   try {
     const r = await fetch(API + "/api/martin-financiero/temas");
@@ -532,25 +756,7 @@ async function cargarTemas() {
       `<button onclick='preguntar(${JSON.stringify(t.pregunta)})' data-testid="tema-${t.titulo.toLowerCase()}">${t.icono} ${t.titulo}</button>`).join("");
   } catch (e) {}
 }
-function preguntar(q) { document.getElementById("q").value = q; enviar(); }
-let PENSANDO = false;
-async function enviar() {
-  const q = document.getElementById("q").value.trim();
-  if (!q || PENSANDO) return;
-  PENSANDO = true;
-  document.getElementById("q").value = "";
-  const chat = document.getElementById("chat");
-  chat.innerHTML += `<div class='mU'>${q}</div><div class='mM' id='esp'><b>MARTÍN 💛</b>Pensando…</div>`;
-  chat.scrollTop = chat.scrollHeight;
-  try {
-    const r = await fetch(API + "/api/martin-financiero/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: q, session_id: SES }) });
-    const d = await r.json();
-    document.getElementById("esp").outerHTML = `<div class='mM'><b>MARTÍN 💛</b>${(d.response || d.detail || "").replace(/\*\*(.*?)\*\*/g, "<b>$1</b>")}</div>`;
-    if (d.response) hablar(d.response);
-  } catch (e) { document.getElementById("esp").outerHTML = "<div class='mM'><b>MARTÍN 💛</b>No pude responderle, intente de nuevo.</div>"; }
-  chat.scrollTop = chat.scrollHeight;
-  PENSANDO = false;
-}
+function preguntar2_eliminado() {}
 
 /* ================= Tip del día ================= */
 fetch(API + "/api/martin-financiero/contenido").then(r => r.json()).then(d => {
@@ -577,6 +783,7 @@ async function registrarDia() {
   const reg = regGet();
   reg[hoyKey()] = { g, a, det };
   localStorage.setItem("ma_registro", JSON.stringify(reg));
+  conLog("evento", `Registró su día: gastó ${fmt(g)}, ahorró ${fmt(a)}${det ? " (en " + det + ")" : ""}`, null);
   regPidioDetalle = false;
   pintarProgreso();
   const r = document.getElementById("reg-resp"); r.style.display = "block";
@@ -621,7 +828,7 @@ pintarProgreso();
 /* ================= Saludo proactivo + Recordatorio ================= */
 async function saludoProactivo() {
   try {
-    const r = await fetch(API + "/api/martin-financiero/saludo", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ session_id: SES }) });
+    const r = await fetch(API + "/api/martin-financiero/saludo", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ session_id: SES, conciencia: conCtx() }) });
     const d = await r.json();
     if (!d.saludo) return;
     document.getElementById("saludo-txt").textContent = d.saludo;

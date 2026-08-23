@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>El Cerebro — Admin Martín Suma UC</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:Outfit,sans-serif;background:#0E1A4E;color:#E7ECFF;min-height:100vh;padding:20px}
+.wrap{max-width:760px;margin:0 auto}
+h1{font-size:1.4rem;font-weight:900}h1 em{color:#FFC93C;font-style:normal}
+.sub{font-size:.7rem;color:#8FA0D8;letter-spacing:1.5px;font-weight:700;margin:4px 0 20px}
+.card{background:#16297C;border:1px solid #2743A6;border-radius:18px;padding:18px;margin-bottom:16px}
+.card h2{font-size:.95rem;color:#FFC93C;margin-bottom:10px}
+input,textarea{width:100%;background:#0E1A4E;border:1.5px solid #2743A6;border-radius:12px;padding:11px 13px;color:#E7ECFF;font-family:Outfit;font-size:.85rem;margin-top:8px}
+textarea{min-height:90px;resize:vertical}
+button{background:#FFC93C;color:#16297C;border:0;border-radius:999px;padding:10px 20px;font-weight:900;font-family:Outfit;font-size:.8rem;cursor:pointer;margin-top:12px}
+button.rojo{background:#FF7A59;color:#fff}
+button.azul{background:#4CC9F0;color:#0E1A4E}
+.stat{display:inline-block;background:#0E1A4E;border-radius:12px;padding:10px 16px;margin:6px 6px 0 0;font-size:.75rem}
+.stat b{color:#FFC93C;font-size:1.1rem;display:block}
+.item{background:#0E1A4E;border-radius:12px;padding:11px 14px;margin-top:10px;font-size:.78rem;display:flex;justify-content:space-between;align-items:center;gap:10px}
+.msg{font-size:.75rem;color:#7CE8B5;margin-top:8px;min-height:16px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:560px){.row{grid-template-columns:1fr}}
+pre{white-space:pre-wrap;font-family:Outfit;font-size:.78rem;color:#C9D4F5;line-height:1.6}
+</style></head>
+<body><div class="wrap">
+<h1>🧠 El Cerebro — <em>Martín Suma UC</em></h1>
+<p class="sub">PANEL DE ADMINISTRACIÓN · RED DE MARTINS CONECTADOS</p>
+
+<div class="card" id="login">
+  <h2>🔐 Acceso administrador</h2>
+  <input id="clave" type="password" placeholder="Clave de administrador" data-testid="admin-clave">
+  <button onclick="entrar()" data-testid="admin-entrar">Entrar</button>
+  <p class="msg" id="login-msg"></p>
+</div>
+
+<div id="panel" style="display:none">
+  <div class="card">
+    <h2>📡 Estado de la red</h2>
+    <div id="stats"></div>
+    <button class="azul" onclick="procesar()" data-testid="btn-procesar">⚙️ Procesar aprendizajes (El Cerebro)</button>
+    <p class="msg" id="proc-msg"></p>
+    <pre id="conocimiento"></pre>
+  </div>
+
+  <div class="card">
+    <h2>🛰 Módulos remotos — se envían a todos los Martins al instante</h2>
+    <div class="row">
+      <input id="m-icono" placeholder="Ícono (emoji, ej: 📚)" maxlength="4">
+      <input id="m-color" placeholder="Color (ej: #E9E4FF)" value="#E9E4FF">
+    </div>
+    <input id="m-titulo" placeholder="Título del módulo" data-testid="mod-titulo">
+    <input id="m-sub" placeholder="Subtítulo corto">
+    <textarea id="m-cuerpo" placeholder="Contenido del módulo (texto que verán y podrá leer Martín en voz alta)" data-testid="mod-cuerpo"></textarea>
+    <button onclick="guardarModulo()" data-testid="mod-guardar">🚀 Enviar a toda la red</button>
+    <p class="msg" id="mod-msg"></p>
+    <div id="mods"></div>
+  </div>
+
+  <div class="card">
+    <h2>📢 Avisos a todos los Martins</h2>
+    <input id="a-titulo" placeholder="Título (opcional)">
+    <textarea id="a-texto" placeholder="Texto del aviso que verán todos los usuarios al abrir la app"></textarea>
+    <button onclick="guardarAviso()" data-testid="aviso-guardar">📤 Difundir aviso</button>
+    <p class="msg" id="aviso-msg"></p>
+    <div id="avisos"></div>
+  </div>
+
+  <div class="card">
+    <h2>🏛 Identidad de la institución</h2>
+    <input id="marca" placeholder="Nombre de su institución (aparecerá en todos los Martins de su red)" data-testid="marca-input">
+    <button onclick="guardarMarca()" data-testid="marca-guardar">💾 Aplicar identidad</button>
+    <p class="msg" id="marca-msg"></p>
+  </div>
+
+  <div class="card">
+    <h2>🎭 Ajuste de personalidad (tiempo real, toda la red)</h2>
+    <textarea id="p-texto" placeholder="Instrucción extra de personalidad para todos los Martins (ej: 'Esta semana enfatice el ahorro navideño')"></textarea>
+    <button onclick="guardarPers()" data-testid="pers-guardar">💾 Aplicar a toda la red</button>
+    <p class="msg" id="pers-msg"></p>
+  </div>
+</div>
+
+<script>
+const API = "";
+let CLAVE = sessionStorage.getItem("mtn_admin") || "";
+const $ = id => document.getElementById(id);
+async function post(path, body) {
+  const r = await fetch(API + "/api/martin-financiero" + path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...body, clave: CLAVE }) });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.detail || "error");
+  return d;
+}
+async function entrar() {
+  CLAVE = $("clave").value.trim();
+  try { await cargar(); sessionStorage.setItem("mtn_admin", CLAVE); $("login").style.display = "none"; $("panel").style.display = "block"; }
+  catch (e) { $("login-msg").textContent = "❌ " + e.message; $("login-msg").style.color = "#FF7A59"; }
+}
+async function cargar() {
+  const d = await post("/cerebro/estado", {});
+  $("stats").innerHTML =
+    `<span class="stat"><b>${d.aprendizajes_total}</b>aprendizajes anónimos</span>
+     <span class="stat"><b>${(d.modulos || []).filter(m => m.activo).length}</b>módulos remotos</span>
+     <span class="stat"><b>${(d.avisos || []).filter(a => a.activo).length}</b>avisos activos</span>
+     <span class="stat"><b>${Object.entries(d.por_emocion || {}).sort((a, b) => b[1] - a[1])[0]?.[0] || "—"}</b>emoción dominante</span>
+     <span class="stat"><b>${Object.entries(d.por_tema || {}).sort((a, b) => b[1] - a[1])[0]?.[0] || "—"}</b>tema dominante</span>`;
+  $("conocimiento").textContent = d.conocimiento ? "🧠 Conocimiento colectivo vigente (" + (d.conocimiento_fecha || "").slice(0, 16) + "):\n" + d.conocimiento : "Aún sin conocimiento colectivo procesado.";
+  $("mods").innerHTML = (d.modulos || []).filter(m => m.activo).map(m =>
+    `<div class="item"><span>${m.icono} <b>${m.titulo}</b> — ${m.sub || ""}</span>
+     <button class="rojo" style="margin:0;padding:6px 12px" onclick="delModulo('${m.id}')">Quitar</button></div>`).join("") || "<p class='msg'>Sin módulos remotos.</p>";
+  $("avisos").innerHTML = (d.avisos || []).filter(a => a.activo).map(a =>
+    `<div class="item"><span><b>${a.titulo || "Aviso"}:</b> ${a.texto.slice(0, 90)}</span>
+     <button class="rojo" style="margin:0;padding:6px 12px" onclick="delAviso('${a.id}')">Quitar</button></div>`).join("") || "<p class='msg'>Sin avisos activos.</p>";
+  if (d.personalidad_extra) $("p-texto").value = d.personalidad_extra;
+}
+async function guardarModulo() {
+  try {
+    await post("/cerebro/modulo", { icono: $("m-icono").value || "🛰", color: $("m-color").value, titulo: $("m-titulo").value, sub: $("m-sub").value, cuerpo: $("m-cuerpo").value });
+    $("mod-msg").textContent = "✅ Módulo enviado a toda la red";
+    $("m-titulo").value = ""; $("m-sub").value = ""; $("m-cuerpo").value = "";
+    cargar();
+  } catch (e) { $("mod-msg").textContent = "❌ " + e.message; }
+}
+async function delModulo(id) { await post("/cerebro/modulo/eliminar", { id }); cargar(); }
+async function guardarAviso() {
+  try { await post("/cerebro/aviso", { titulo: $("a-titulo").value, texto: $("a-texto").value }); $("aviso-msg").textContent = "✅ Aviso difundido"; $("a-titulo").value = ""; $("a-texto").value = ""; cargar(); }
+  catch (e) { $("aviso-msg").textContent = "❌ " + e.message; }
+}
+async function guardarPers() {
+  try { await post("/cerebro/personalidad", { texto: $("p-texto").value }); $("pers-msg").textContent = "✅ Personalidad actualizada en toda la red"; }
+  catch (e) { $("pers-msg").textContent = "❌ " + e.message; }
+}
+async function guardarMarca() {
+  try { await post("/cerebro/marca", { nombre: $("marca").value }); $("marca-msg").textContent = "✅ Identidad aplicada a toda la red"; }
+  catch (e) { $("marca-msg").textContent = "❌ " + e.message; }
+}
+async function procesar() {
+  $("proc-msg").textContent = "Procesando…";
+  try { const d = await post("/cerebro/procesar", {}); $("proc-msg").textContent = `✅ Procesadas ${d.muestras} muestras`; cargar(); }
+  catch (e) { $("proc-msg").textContent = "❌ " + e.message; }
+}
+if (CLAVE) { entrar(); }
+</script>
+</div></body></html>

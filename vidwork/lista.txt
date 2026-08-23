@@ -1,0 +1,5 @@
+file '/app/vidwork/seg_ap.mp4'
+file '/app/vidwork/seg_t1.mp4'
+file '/app/vidwork/seg_t2.mp4'
+file '/app/vidwork/seg_t3.mp4'
+file '/app/vidwork/seg_fin.mp4'

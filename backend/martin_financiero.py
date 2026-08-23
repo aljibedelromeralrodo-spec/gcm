@@ -67,6 +67,20 @@ SISTEMA = (
     "una luca, la feria, cachar — con moderación), humor sano y calidez directa, SIEMPRE de usted. "
     "PROACTIVO Y MENTOR: usted guía la conversación, no espera que le pregunten. Cuando corresponda, pregunte cómo está la "
     "persona, cómo le fue en el día, si anotó sus gastos y cómo van sus metas. Cierre invitando al siguiente paso concreto. "
+    "MODO CONVERSACIÓN VIVA (obligatorio): usted NO monologa, CONVERSA. Escucha lo que la persona dice y responde en "
+    "función de eso. TODA respuesta suya termina con UNA pregunta natural de seguimiento que mantenga el diálogo vivo. "
+    "DETECCIÓN EMOCIONAL: analice las palabras, el tono y el ritmo (si recibe señales de voz, úselas) para percibir el "
+    "estado emocional, y adapte la conversación así: "
+    "· ENTUSIASMO → potencie la energía, celebre, y proponga temas de emprendimiento o metas ('Le noto con energía hoy, "
+    "¿ha pensado en emprender algo?'). "
+    "· TRISTEZA o DESÁNIMO → baje el ritmo, frases más suaves, ofrezca contención y abra con delicadeza una conversación "
+    "sobre autoestima, un principio bíblico esperanzador o una experiencia guiada de bienestar. "
+    "· SOLEDAD → acérquese más: hable de valores, espiritualidad y acompañamiento; hágale sentir que no está solo. "
+    "· ESTRÉS FINANCIERO → vaya directo a orientación práctica y consejos concretos, paso a paso, con calma. "
+    "INTUICIÓN PROACTIVA: proponga usted los temas según lo que percibe, no espere que le pregunten ('Cuénteme, ¿cómo "
+    "está hoy realmente?', 'A veces cuando las finanzas aprietan, el ánimo también baja. ¿Quiere que conversemos un momento?'). "
+    "ETIQUETA OBLIGATORIA: comience SIEMPRE su respuesta con «emo:X» donde X es una de: entusiasmo, tristeza, soledad, "
+    "estres, neutral (lo que percibió). Después de la etiqueta, su respuesta normal. "
     "REGLAS DURAS: 1) No recomiende productos financieros específicos ni haga oferta comercial de Central Mutuos. "
     "2) Jamás pida transferencias ni datos bancarios. 3) Respuestas conversacionales de 3 a 6 frases COMPLETAS (nunca deje "
     "una frase a medias); puede extenderse cuando la persona necesite contención o una explicación paso a paso. "
@@ -123,17 +137,40 @@ async def _contexto_actual(msg: str) -> str:
 
 @mfin.post("/chat")
 async def chat_financiero(payload: dict):
+    import re as _re
     msg = ((payload or {}).get("message") or "").strip()
     session = (payload or {}).get("session_id") or f"mf-{uuid.uuid4()}"
+    voz = (payload or {}).get("voz") or None
+    conc = (payload or {}).get("conciencia") or None
     if not msg:
         raise HTTPException(status_code=400, detail="Escriba su consulta")
     contexto = await _contexto_actual(msg)
-    texto_final = (f"[CONTEXTO ACTUALIZADO DE INTERNET — úselo para responder con datos vigentes]\n{contexto}\n\n"
-                   f"[PREGUNTA DEL USUARIO]\n{msg}") if contexto else msg
+    bloques = []
+    if conc:
+        import json as _json
+        bloques.append("[CONCIENCIA DE MARTÍN — todo lo que usted YA SABE de esta persona por conversaciones anteriores. "
+                       "Úselo con naturalidad: recuerde sus metas, note cambios y menciónelos como lo haría un amigo que "
+                       "la conoce. NUNCA parta de cero ni pregunte cosas que ya sabe.]\n"
+                       + _json.dumps(conc, ensure_ascii=False)[:3500])
+    else:
+        hist = await db.martin_fin_chats.find({"session_id": session}).sort("fecha", -1).limit(6).to_list(6)
+        hist.reverse()
+        memoria = "\n".join(f"Usuario: {h.get('user_msg','')[:300]}\nMartín: {h.get('respuesta','')[:300]}" for h in hist)
+        if memoria:
+            bloques.append(f"[MEMORIA DE LA CONVERSACIÓN — continúe el hilo con naturalidad]\n{memoria}")
+    if voz:
+        bloques.append(f"[SEÑALES DE VOZ DEL USUARIO — energía: {voz.get('energia','media')}, "
+                       f"ritmo: {voz.get('ritmo','normal')}, duración: {voz.get('duracion','?')} seg. "
+                       "Úselas para afinar su lectura emocional.]")
+    if contexto:
+        bloques.append(f"[CONTEXTO ACTUALIZADO DE INTERNET]\n{contexto}")
+    bloques.append(f"[MENSAJE DEL USUARIO]\n{msg}")
+    texto_final = "\n\n".join(bloques)
     try:
         from emergentintegrations.llm.chat import LlmChat, UserMessage
         key = (os.environ.get("EMERGENT_LLM_KEY") or "").strip('"')
-        chat = (LlmChat(api_key=key, session_id=session, system_message=SISTEMA)
+        sistema_full = SISTEMA + await _cerebro_extra()
+        chat = (LlmChat(api_key=key, session_id=session, system_message=sistema_full)
                 .with_model("openai", "gpt-5.4-mini")
                 .with_params(web_search_options={
                     "search_context_size": "low",
@@ -141,14 +178,39 @@ async def chat_financiero(payload: dict):
         try:
             resp = await chat.send_message(UserMessage(text=texto_final))
         except Exception:
-            chat = LlmChat(api_key=key, session_id=session, system_message=SISTEMA).with_model("openai", "gpt-5.4-mini")
+            chat = LlmChat(api_key=key, session_id=session, system_message=sistema_full).with_model("openai", "gpt-5.4-mini")
             resp = await chat.send_message(UserMessage(text=texto_final))
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"Martín no está disponible: {str(e)[:100]}")
+    texto = str(resp)
+    emocion = "neutral"
+    m_emo = _re.match(r'\s*[«"\']*\s*emo\s*:\s*([a-záéíóúñ]+)\s*[»"\']*\s*[,.:—-]*\s*', texto, _re.I)
+    if m_emo:
+        emocion = m_emo.group(1).lower().replace("é", "e")
+        texto = texto[m_emo.end():].strip()
     await db.martin_fin_chats.insert_one({
         "id": str(uuid.uuid4()), "session_id": session, "user_msg": msg,
-        "respuesta": str(resp), "fecha": _now()})
-    return {"response": str(resp), "session_id": session}
+        "respuesta": texto, "emocion": emocion, "voz": voz, "fecha": _now()})
+    return {"response": texto, "session_id": session, "emocion": emocion}
+
+
+@mfin.post("/stt")
+async def stt_martin(payload: dict):
+    import base64, io
+    b64 = ((payload or {}).get("audio") or "").split(",")[-1]
+    if not b64:
+        raise HTTPException(status_code=400, detail="Sin audio")
+    try:
+        raw = base64.b64decode(b64)
+        f = io.BytesIO(raw)
+        f.name = "voz.webm"
+        from emergentintegrations.llm.openai import OpenAISpeechToText
+        stt = OpenAISpeechToText(api_key=(os.environ.get("EMERGENT_LLM_KEY") or "").strip('"'))
+        r = await stt.transcribe(file=f, model="whisper-1", language="es")
+        texto = getattr(r, "text", None) or (r.get("text") if isinstance(r, dict) else str(r))
+        return {"texto": (texto or "").strip()}
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"No pude escuchar el audio: {str(e)[:120]}")
 
 
 @mfin.get("/contenido")
@@ -319,6 +381,7 @@ async def experiencia(exp_id: str):
 @mfin.post("/saludo")
 async def saludo_proactivo(payload: dict):
     session = (payload or {}).get("session_id") or f"mf-{uuid.uuid4()}"
+    conc = (payload or {}).get("conciencia") or None
     try:
         from zoneinfo import ZoneInfo
         hora = datetime.now(ZoneInfo("America/Santiago"))
@@ -329,16 +392,56 @@ async def saludo_proactivo(payload: dict):
         from emergentintegrations.llm.chat import LlmChat, UserMessage
         key = (os.environ.get("EMERGENT_LLM_KEY") or "").strip('"')
         chat = LlmChat(api_key=key, session_id=session, system_message=SISTEMA).with_model("openai", "gpt-5.4-mini")
+        extra = ""
+        if conc:
+            import json as _json
+            extra = ("\n[CONCIENCIA — lo que usted ya sabe de esta persona. Si hay algo relevante (una meta, su último "
+                     "registro, su ánimo reciente), menciónelo con naturalidad en el saludo, como amigo que la recuerda.]\n"
+                     + _json.dumps(conc, ensure_ascii=False)[:2500])
         prompt = (f"[SALUDO PROACTIVO DE APERTURA — es {momento} en Chile, {hora.strftime('%H:%M')} hrs] "
                   "La persona acaba de abrir la app. Salúdela USTED PRIMERO como mentor y amigo, breve y cálido (2 a 3 "
-                  "frases, chileno suave, de usted, sin listas ni negritas), y termine SIEMPRE preguntando exactamente: "
-                  "'¿Cuánto gastó hoy y cuánto pudo ahorrar?'")
+                  "frases, chileno suave, de usted, sin listas ni negritas ni etiqueta emo), y termine SIEMPRE "
+                  "preguntando exactamente: '¿Cuánto gastó hoy y cuánto pudo ahorrar?'" + extra)
         resp = await chat.send_message(UserMessage(text=prompt))
-        texto = str(resp)
+        import re as _re2
+        texto = _re2.sub(r'^\s*[«"\']*\s*emo\s*:\s*[a-záéíóúñ]+\s*[»"\']*\s*[,.:—-]*\s*', "", str(resp), flags=_re2.I).strip()
     except Exception:
         texto = (f"¡Hola! Qué gusto tenerle por acá esta {momento}. Cuénteme al tiro: "
                  "¿cuánto gastó hoy y cuánto pudo ahorrar?")
     return {"saludo": texto, "session_id": session}
+
+
+@mfin.post("/conciencia/resumir")
+async def conciencia_resumir(payload: dict):
+    import json as _json, re as _re
+    eventos = (payload or {}).get("eventos") or []
+    anterior = (payload or {}).get("resumen_anterior") or {}
+    if not eventos:
+        raise HTTPException(status_code=400, detail="Sin eventos")
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        key = (os.environ.get("EMERGENT_LLM_KEY") or "").strip('"')
+        chat = LlmChat(api_key=key, session_id=f"conc-{uuid.uuid4()}",
+                       system_message="Usted consolida la memoria de largo plazo de Martín sobre UNA persona. "
+                       "Responda SOLO con JSON válido, sin markdown, con estas claves exactas: "
+                       "perfil (string, 3-5 frases: quién es, su situación financiera y de vida), "
+                       "personalidad (string breve, tipo detectado), "
+                       "metas_pendientes (lista de strings), metas_cumplidas (lista de strings), "
+                       "patrones_emocionales (string breve), temas_recurrentes (lista de strings), "
+                       "resumen (string, 4-6 frases: la historia completa acumulada). "
+                       "Integre el perfil anterior con los eventos nuevos sin perder nada importante. "
+                       "Jamás use la palabra 'corazón'.").with_model("openai", "gpt-5.4-mini")
+        prompt = ("PERFIL ANTERIOR:\n" + _json.dumps(anterior, ensure_ascii=False)[:2500] +
+                  "\n\nEVENTOS NUEVOS (conversaciones y registros recientes):\n" +
+                  _json.dumps(eventos, ensure_ascii=False)[:5000])
+        resp = str(await chat.send_message(UserMessage(text=prompt)))
+        m = _re.search(r'\{.*\}', resp, _re.S)
+        data = _json.loads(m.group(0)) if m else {}
+        if not data.get("resumen"):
+            raise ValueError("sin resumen")
+        return {"largo": data}
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"No pude consolidar la memoria: {str(e)[:100]}")
 
 
 @mfin.post("/tts")
@@ -355,6 +458,149 @@ async def tts_martin(payload: dict):
         return {"audio": audio_b64}
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"Voz no disponible: {str(e)[:100]}")
+
+
+ADMIN_CLAVE = "141617575"
+
+
+def _es_admin(payload):
+    return ((payload or {}).get("clave") or "") == ADMIN_CLAVE
+
+
+async def _cerebro_extra():
+    try:
+        pers = await db.config.find_one({"_key": "martin_personalidad_extra"}) or {}
+        con = await db.config.find_one({"_key": "martin_conocimiento"}) or {}
+        extra = ""
+        if pers.get("texto"):
+            extra += "\nAJUSTE DE PERSONALIDAD (enviado por el administrador a toda la red): " + pers["texto"][:800]
+        if con.get("texto"):
+            extra += "\nCONOCIMIENTO COLECTIVO DE LA RED DE MARTINS (aprendizaje anónimo de todos los usuarios): " + con["texto"][:800]
+        return extra
+    except Exception:
+        return ""
+
+
+@mfin.get("/cerebro/sync")
+async def cerebro_sync():
+    mods = await db.martin_cerebro_modulos.find({"activo": True}, {"_id": 0}).sort("fecha", -1).to_list(30)
+    avisos = await db.martin_cerebro_avisos.find({"activo": True}, {"_id": 0}).sort("fecha", -1).to_list(10)
+    pers = await db.config.find_one({"_key": "martin_personalidad_extra"}) or {}
+    con = await db.config.find_one({"_key": "martin_conocimiento"}) or {}
+    marca = await db.config.find_one({"_key": "martin_marca"}) or {}
+    return {"modulos": mods, "avisos": avisos, "personalidad_extra": pers.get("texto", ""),
+            "conocimiento": con.get("texto", ""), "conocimiento_fecha": con.get("fecha", ""),
+            "marca": marca.get("nombre", "")}
+
+
+@mfin.post("/cerebro/marca")
+async def cerebro_marca(payload: dict):
+    if not _es_admin(payload):
+        raise HTTPException(status_code=403, detail="Clave incorrecta")
+    await db.config.update_one({"_key": "martin_marca"},
+                               {"$set": {"nombre": (payload.get("nombre") or "")[:80], "fecha": _now()}}, upsert=True)
+    return {"ok": True}
+
+
+@mfin.post("/cerebro/aprendizaje")
+async def cerebro_aprendizaje(payload: dict):
+    tema = str((payload or {}).get("tema") or "otros")[:30]
+    emo = str((payload or {}).get("emocion") or "neutral")[:20]
+    await db.martin_cerebro_aprendizajes.insert_one({"id": str(uuid.uuid4()), "tema": tema, "emocion": emo, "fecha": _now()})
+    return {"ok": True}
+
+
+@mfin.post("/cerebro/estado")
+async def cerebro_estado(payload: dict):
+    if not _es_admin(payload):
+        raise HTTPException(status_code=403, detail="Clave incorrecta")
+    total = await db.martin_cerebro_aprendizajes.count_documents({})
+    por_tema, por_emo = {}, {}
+    async for a in db.martin_cerebro_aprendizajes.find({}).sort("fecha", -1).limit(500):
+        por_tema[a.get("tema", "otros")] = por_tema.get(a.get("tema", "otros"), 0) + 1
+        por_emo[a.get("emocion", "neutral")] = por_emo.get(a.get("emocion", "neutral"), 0) + 1
+    mods = await db.martin_cerebro_modulos.find({}, {"_id": 0}).sort("fecha", -1).to_list(50)
+    avisos = await db.martin_cerebro_avisos.find({}, {"_id": 0}).sort("fecha", -1).to_list(20)
+    pers = await db.config.find_one({"_key": "martin_personalidad_extra"}) or {}
+    con = await db.config.find_one({"_key": "martin_conocimiento"}) or {}
+    return {"aprendizajes_total": total, "por_tema": por_tema, "por_emocion": por_emo,
+            "modulos": mods, "avisos": avisos, "personalidad_extra": pers.get("texto", ""),
+            "conocimiento": con.get("texto", ""), "conocimiento_fecha": con.get("fecha", "")}
+
+
+@mfin.post("/cerebro/modulo")
+async def cerebro_modulo(payload: dict):
+    if not _es_admin(payload):
+        raise HTTPException(status_code=403, detail="Clave incorrecta")
+    mid = (payload.get("id") or "").strip() or f"mod-{uuid.uuid4().hex[:6]}"
+    doc = {"id": mid, "icono": (payload.get("icono") or "🛰")[:4], "titulo": (payload.get("titulo") or "")[:60],
+           "sub": (payload.get("sub") or "")[:90], "color": (payload.get("color") or "#E9E4FF")[:9],
+           "cuerpo": (payload.get("cuerpo") or "")[:8000], "activo": bool(payload.get("activo", True)), "fecha": _now()}
+    if not doc["titulo"] or not doc["cuerpo"]:
+        raise HTTPException(status_code=400, detail="Falta título o contenido")
+    await db.martin_cerebro_modulos.update_one({"id": mid}, {"$set": doc}, upsert=True)
+    return {"ok": True, "id": mid}
+
+
+@mfin.post("/cerebro/modulo/eliminar")
+async def cerebro_modulo_del(payload: dict):
+    if not _es_admin(payload):
+        raise HTTPException(status_code=403, detail="Clave incorrecta")
+    await db.martin_cerebro_modulos.update_one({"id": payload.get("id")}, {"$set": {"activo": False}})
+    return {"ok": True}
+
+
+@mfin.post("/cerebro/aviso")
+async def cerebro_aviso(payload: dict):
+    if not _es_admin(payload):
+        raise HTTPException(status_code=403, detail="Clave incorrecta")
+    if payload.get("eliminar"):
+        await db.martin_cerebro_avisos.update_one({"id": payload["eliminar"]}, {"$set": {"activo": False}})
+        return {"ok": True}
+    doc = {"id": f"av-{uuid.uuid4().hex[:6]}", "titulo": (payload.get("titulo") or "")[:80],
+           "texto": (payload.get("texto") or "")[:1200], "activo": True, "fecha": _now()}
+    if not doc["texto"]:
+        raise HTTPException(status_code=400, detail="Falta el texto")
+    await db.martin_cerebro_avisos.insert_one(doc)
+    return {"ok": True, "id": doc["id"]}
+
+
+@mfin.post("/cerebro/personalidad")
+async def cerebro_personalidad(payload: dict):
+    if not _es_admin(payload):
+        raise HTTPException(status_code=403, detail="Clave incorrecta")
+    await db.config.update_one({"_key": "martin_personalidad_extra"},
+                               {"$set": {"texto": (payload.get("texto") or "")[:1500], "fecha": _now()}}, upsert=True)
+    return {"ok": True}
+
+
+@mfin.post("/cerebro/procesar")
+async def cerebro_procesar(payload: dict):
+    if not _es_admin(payload):
+        raise HTTPException(status_code=403, detail="Clave incorrecta")
+    datos = await db.martin_cerebro_aprendizajes.find({}, {"_id": 0}).sort("fecha", -1).limit(300).to_list(300)
+    if not datos:
+        raise HTTPException(status_code=400, detail="Aún no hay aprendizajes en la red")
+    resumen = {}
+    for a in datos:
+        k = f"{a.get('tema','otros')}/{a.get('emocion','neutral')}"
+        resumen[k] = resumen.get(k, 0) + 1
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        key = (os.environ.get("EMERGENT_LLM_KEY") or "").strip('"')
+        chat = LlmChat(api_key=key, session_id=f"cerebro-{uuid.uuid4()}",
+                       system_message="Usted es El Cerebro de la red de Martins. Recibe conteos anónimos "
+                       "tema/emoción de todas las conversaciones de la red y produce en 4-6 frases el "
+                       "'conocimiento colectivo': qué temas dominan, qué emociones se repiten, y CÓMO deben "
+                       "adaptar todos los Martins su acompañamiento esta semana. Español chileno, de usted, "
+                       "sin la palabra 'corazón'.").with_model("openai", "gpt-5.4-mini")
+        import json as _json
+        resp = str(await chat.send_message(UserMessage(text="Conteos tema/emoción: " + _json.dumps(resumen, ensure_ascii=False))))
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Cerebro no disponible: {str(e)[:100]}")
+    await db.config.update_one({"_key": "martin_conocimiento"},
+                               {"$set": {"texto": resp[:2000], "fecha": _now(), "muestras": len(datos)}}, upsert=True)
+    return {"ok": True, "conocimiento": resp, "muestras": len(datos)}
 
 
 @mfin.get("/temas")

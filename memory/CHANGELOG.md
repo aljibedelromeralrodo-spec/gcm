@@ -2000,3 +2000,26 @@ polling GET /api/central/proactive existe vacío en server.py:1526) — usuario 
 - RENOMBRE pedido por usuario: la app móvil se llama "Martín Suma UC" (title, hero, chip, footer).
 - VERIFICADO: curl saludo/tts + screenshots móviles 390x844 del flujo completo de registro
   (frase cálida sin ahorro → consejo personalizado delivery/bencina → progreso mensual → barra audio).
+
+## 2026-06 (fork) — Ecosistema Martín Suma UC completo
+- CHAT CONVERSACIONAL REAL: memoria por sesión (Conciencia enviada al backend), toda respuesta
+  termina con pregunta de seguimiento, etiqueta «emo:X» detectada y devuelta (entusiasmo/tristeza/
+  soledad/estres/neutral) con adaptación de tono; chip "Martín percibe..." en UI. Saludo con strip de emo tag (bug corregido).
+- MICRÓFONO: MediaRecorder + /api/martin-financiero/stt (Whisper) + análisis RMS/ritmo → señales
+  de voz {energia, ritmo, duracion} enviadas al chat.
+- ANIMACIÓN REFINADA: sincronización labial por amplitud real (WebAudio AnalyserNode sobre el TTS,
+  fallback aleatorio), sway/blink sutiles, modo inmersivo pantalla completa (⛶ en chat) con caption.
+- CONCIENCIA: memoria privada 2 capas en localStorage (corto: 40 eventos; largo: perfil consolidado
+  vía /conciencia/resumir LLM cada 12 eventos). Módulo UI 🧠 con timeline, perfil, borrar. UID persistente.
+- EL CEREBRO (red de Martins): endpoints /cerebro/{sync,aprendizaje,estado,modulo,aviso,personalidad,
+  marca,procesar} (admin clave 141617575). Apps sincronizan cada 5 min: módulos remotos 🛰, avisos,
+  personalidad extra + conocimiento colectivo inyectados al SISTEMA. Aprendizajes ANÓNIMOS (tema+emoción).
+- PANEL ADMIN: /martin-admin.html (estado de red, módulos remotos, avisos, personalidad, identidad institucional, procesar Cerebro).
+- PAQUETE EXPORTABLE (regalo institucional): /martin-suma-uc-paquete.zip (app+admin+avatares+backend
+  standalone main.py/database.py/martin_financiero.py con MARTIN_ADMIN_CLAVE env + LEEME.md).
+- VIDEO PRESENTACIÓN OFICIAL (2:05): /video-martin-suma-uc.mp4 — apertura con 6 imágenes chilenas en
+  crossfade+zoompan y locución EXACTA del usuario (tts-1-hd onyx 0.95), tour real de la app grabado
+  con Playwright (390x780 → pad 1280x720), cierre con logo y frase final. Workdir /app/vidwork
+  (⚠️ /tmp purga archivos en minutos — NO usar /tmp para pipelines largos).
+- VERIFICADO: smoke móvil (9 tarjetas, mic, inmersivo, 0 errores JS), curl cerebro/sync+estado,
+  fotogramas del video (apertura/tour/cierre) OK.
