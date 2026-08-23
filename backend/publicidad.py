@@ -189,17 +189,20 @@ def _parsear_filas_xlsx(raw):
         idx_nombre = idx_apellido = idx_empresa = idx_contacto = None
         for fila_n, row in enumerate(ws.iter_rows(values_only=True)):
             celdas = [("" if c is None else str(c).strip()) for c in row]
-            if fila_n == 0:
+            if fila_n < 3 and (idx_nombre is None and idx_empresa is None and idx_contacto is None):
                 bajas = [c.lower() for c in celdas]
-                for i, h in enumerate(bajas):
-                    if h == "nombre" and idx_nombre is None:
-                        idx_nombre = i
-                    if h == "apellido" and idx_apellido is None:
-                        idx_apellido = i
-                    if ("inmobiliaria" in h or h == "empresa") and idx_empresa is None:
-                        idx_empresa = i
-                    if "contacto" in h and idx_contacto is None:
-                        idx_contacto = i
+                if any(h in ("nombre", "name", "email", "correo", "contact", "contacto",
+                             "phone", "telefono", "teléfono", "whatsapp") for h in bajas):
+                    for i, h in enumerate(bajas):
+                        if h == "nombre" and idx_nombre is None:
+                            idx_nombre = i
+                        if h == "apellido" and idx_apellido is None:
+                            idx_apellido = i
+                        if ("inmobiliaria" in h or h in ("empresa", "name", "proyecto")) and idx_empresa is None:
+                            idx_empresa = i
+                        if "contact" in h and idx_contacto is None:
+                            idx_contacto = i
+                    continue
             correo, telefono = "", ""
             for c in celdas:
                 cl = c.lower()

@@ -1375,3 +1375,8 @@ actual; todo lo demás permanece intacto.
 - Nuevo tipo de destinatario "Inmobiliaria" (backend TIPOS_DESTINATARIO + selectores UI correo/WA) — bases separadas de clientes directos por tipo_destinatario.
 - Parser Excel por fila ahora captura columnas "Inmobiliaria/Empresa" y "Nombre de Contacto" (guardadas por contacto como empresa/nombre). Resumen al cargar: registros / con correo / con WhatsApp / con ambos.
 - ORO-75 (PIN maestro) y regla anti-fatiga 3 meses aplican automáticamente (mismos endpoints). Verificado: import con empresa+contacto correctos, 403 sin PIN.
+
+## 2026-08-23 — Base "inmobiliarias ds19" cargada (pendiente histórico resuelto)
+- Parser mejorado: detecta la fila de encabezados en las primeras 3 filas y soporta títulos en inglés (Name/Phone/Email/Contact).
+- Base real importada como tipo Inmobiliaria: 63 registros con contacto (de 174 proyectos usatusubsidio.cl) → 51 con correo · 44 con WhatsApp · 32 con ambos → 50 correos y 44 teléfonos distribuidos a sus campañas.
+- NOTA: en producción habrá que recargar el mismo archivo (la base vive en la BD de preview).
