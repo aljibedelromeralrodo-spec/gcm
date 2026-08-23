@@ -2,198 +2,185 @@
 <html lang="es">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Central Mutuos con Creces — Tu crédito hipotecario, incluso si otros te dijeron que no</title>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Manrope:wght@400;600;800&display=swap" rel="stylesheet">
+<title>Central Mutuos — Financiamiento hipotecario inteligente | Hasta UF 12.000</title>
+<meta name="description" content="Plataforma de financiamiento hipotecario: simula en 30 segundos, hasta UF 12.000, 90% de financiamiento, compatible DS19/DS01. Central Mutuos, mutuaria regulada CMF.">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
-:root{--oro:#d4af37;--negro:#0b0b0d;--panel:#121215;--blanco:#f5f5f2;--gris:#9c9c96}
+:root{--oro:#d4af37;--negro:#09090a;--panel:#101012;--blanco:#f5f5f3;--gris:#8f8f89;--linea:rgba(212,175,55,.28)}
 *{margin:0;box-sizing:border-box}
-body{background:var(--negro);color:var(--blanco);font-family:Manrope,Arial,sans-serif}
-h1,h2,h3{font-family:'Cormorant Garamond',Georgia,serif;font-weight:600}
-body::before{content:'';position:fixed;left:0;top:0;bottom:0;width:5px;background:var(--oro);z-index:20}
-.wrap{max-width:1080px;margin:0 auto;padding:0 24px}
-nav{position:sticky;top:0;background:rgba(11,11,13,.92);backdrop-filter:blur(10px);border-bottom:1px solid rgba(212,175,55,.25);z-index:10}
-nav .wrap{display:flex;align-items:center;justify-content:space-between;padding:14px 24px}
+body{background:var(--negro);color:var(--blanco);font-family:'Space Grotesk',Arial,sans-serif}
+.mono{font-family:'IBM Plex Mono',monospace}
+.wrap{max-width:1160px;margin:0 auto;padding:0 26px}
+nav{position:sticky;top:0;background:rgba(9,9,10,.94);backdrop-filter:blur(10px);border-bottom:1px solid var(--linea);z-index:20}
+nav .wrap{display:flex;align-items:center;justify-content:space-between;padding:14px 26px}
 .logo{display:flex;align-items:center;gap:12px;text-decoration:none;color:var(--blanco)}
-.mono{width:44px;height:44px;border:2px solid var(--oro);border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;color:var(--oro);font-size:17px;font-weight:700;background:#000}
-.lname{font-size:15px;letter-spacing:3px;font-weight:800}.lsub{font-size:9px;letter-spacing:4px;color:var(--oro)}
-nav a.mi{color:var(--gris);text-decoration:none;font-size:13px;margin-left:22px}nav a.mi:hover{color:var(--oro)}
-.btn{display:inline-block;padding:13px 32px;text-decoration:none;font-weight:800;font-size:14px;letter-spacing:.5px;transition:opacity .2s,transform .2s}
-.btn:hover{opacity:.85;transform:translateY(-1px)}
-.btn-oro{background:var(--oro);color:#111}.btn-line{border:1px solid var(--oro);color:var(--oro)}
-.hero{position:relative;text-align:center;padding:110px 24px 90px;background:linear-gradient(rgba(8,8,10,.72),rgba(11,11,13,.94)),url('/landing-assets/familia.jpg') center/cover}
-.hero h1{font-size:clamp(30px,4.6vw,52px);line-height:1.15;max-width:820px;margin:22px auto 18px}
+.lgx{width:42px;height:42px;border:1.5px solid var(--oro);display:flex;align-items:center;justify-content:center;color:var(--oro);font-size:15px;font-weight:700;clip-path:polygon(0 0,100% 0,100% 75%,75% 100%,0 100%)}
+.lname{font-size:14px;letter-spacing:3px;font-weight:700}.lsub{font-size:8.5px;letter-spacing:4px;color:var(--oro)}
+nav a.mi{color:var(--gris);text-decoration:none;font-size:13px;margin-left:20px}nav a.mi:hover{color:var(--oro)}
+.btn{display:inline-block;padding:14px 32px;text-decoration:none;font-weight:700;font-size:14px;letter-spacing:.5px;clip-path:polygon(0 0,100% 0,100% 70%,92% 100%,0 100%);transition:opacity .15s}
+.btn:hover{opacity:.85}
+.btn-oro{background:var(--oro);color:#0a0a0a}.btn-line{border:1px solid var(--oro);color:var(--oro);clip-path:none}
+.hero{position:relative;padding:90px 0 70px;overflow:hidden}
+.hero::before{content:"";position:absolute;inset:0;background:
+ linear-gradient(var(--linea) 1px,transparent 1px),linear-gradient(90deg,var(--linea) 1px,transparent 1px);
+ background-size:64px 64px;opacity:.14;pointer-events:none}
+.hero::after{content:"";position:absolute;top:-140px;right:-140px;width:420px;height:420px;border:1px solid var(--oro);transform:rotate(45deg);opacity:.18;pointer-events:none}
+.tagm{color:var(--oro);font-size:12px;letter-spacing:3px;border-left:2px solid var(--oro);padding-left:14px}
+.hero h1{font-size:clamp(34px,5vw,60px);line-height:1.06;margin:24px 0 18px;max-width:800px}
 .hero h1 em{color:var(--oro);font-style:normal}
-.hero p{color:#d8d8d2;max-width:640px;margin:0 auto 34px;font-size:16px;line-height:1.7}
-.kicker{color:var(--oro);letter-spacing:5px;font-size:11px;font-weight:800}
-.hr-oro{width:80px;height:2px;background:var(--oro);margin:26px auto}
+.hero p{color:#d5d4cc;max-width:560px;line-height:1.7;font-size:16.5px;margin-bottom:36px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--linea);border:1px solid var(--linea);margin-top:64px}
+.stat{background:var(--panel);padding:26px 22px}
+.stat .n{font-size:34px;font-weight:700;color:var(--oro)}
+.stat .l{color:var(--gris);font-size:12px;letter-spacing:1.5px;margin-top:6px}
 section{padding:84px 0}
-.sec-t{text-align:left;margin-bottom:48px}.sec-t h2{font-size:clamp(30px,4vw,48px);font-style:italic}
-.sec-t p{color:var(--gris);margin-top:10px}
-.card{background:var(--panel);border:1px solid rgba(212,175,55,.2);padding:28px}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:22px}
-.grid4{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:18px}
-input,select{width:100%;background:#0f0f11;border:1px solid rgba(212,175,55,.35);color:var(--blanco);padding:13px 14px;font-family:Manrope;font-size:14px;margin-bottom:14px}
-label{display:block;font-size:11px;letter-spacing:2px;color:var(--oro);margin-bottom:6px;font-weight:800}
-.res{display:none;margin-top:8px;padding:18px;border-left:3px solid var(--oro);background:#161612;font-size:14px;line-height:1.7}
-.news-img{height:150px;background:linear-gradient(rgba(11,11,13,.35),rgba(11,11,13,.55)),url('/landing-assets/viviendas.jpg') center/cover}
-.tagf{display:inline-block;font-size:10px;letter-spacing:1px;color:var(--oro);border:1px solid rgba(212,175,55,.4);padding:2px 10px;margin-bottom:10px}
-footer{border-top:1px solid rgba(212,175,55,.25);padding:56px 0 40px;background:#08080a}
+.sec-t{margin-bottom:44px;display:flex;align-items:baseline;gap:18px}
+.sec-t .num{color:var(--oro);font-size:14px}
+.sec-t h2{font-size:clamp(24px,3vw,38px)}
+.sec-t p{color:var(--gris);margin-top:8px;font-size:15px}
+.simc{background:var(--panel);border:1px solid var(--linea);padding:36px;display:grid;grid-template-columns:1fr 1fr;gap:36px;position:relative}
+.simc::before{content:"";position:absolute;top:-1px;left:-1px;width:46px;height:46px;border-top:2px solid var(--oro);border-left:2px solid var(--oro)}
+.simc::after{content:"";position:absolute;bottom:-1px;right:-1px;width:46px;height:46px;border-bottom:2px solid var(--oro);border-right:2px solid var(--oro)}
+label{display:block;font-size:11px;letter-spacing:2.5px;color:var(--oro);margin-bottom:7px;font-weight:700}
+input,select{width:100%;background:#0c0c0e;border:1px solid var(--linea);color:var(--blanco);padding:13px 15px;font-family:'Space Grotesk';font-size:15px;margin-bottom:16px}
+.barra{height:10px;background:#1c1c1f;border:1px solid var(--linea);margin:18px 0 10px;overflow:hidden}
+.barra .fill{height:100%;width:0;background:linear-gradient(90deg,#8a6f1f,var(--oro));transition:width 1.4s cubic-bezier(.2,.8,.2,1)}
+.pasos{display:flex;justify-content:space-between;font-size:11px;color:var(--gris);letter-spacing:1px}
+.res-c{opacity:0;transform:translateY(8px);transition:opacity .5s .9s,transform .5s .9s;border:1px solid var(--oro);background:#131208;padding:24px;margin-top:16px}
+.res-c.on{opacity:1;transform:none}
+.res-c .big{font-size:38px;font-weight:700;color:var(--oro)}
+.grid3c{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.propc{background:var(--panel);border:1px solid var(--linea);overflow:hidden;transition:border-color .2s}
+.propc:hover{border-color:var(--oro)}
+.propc img{width:100%;height:150px;object-fit:cover;display:block;filter:saturate(.9)}
+.propc .cont{padding:16px 18px}
+.propc h3{font-size:16px;margin:6px 0 4px}
+.propc p{color:var(--gris);font-size:13px;line-height:1.6}
+.sello{font-size:10px;letter-spacing:2px;color:var(--oro)}
+.dato{color:var(--oro);font-size:13px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+.card{background:var(--panel);border:1px solid var(--linea);padding:30px;position:relative}
+.mc li{list-style:none;padding:12px 0;border-bottom:1px solid rgba(212,175,55,.14);font-size:14.5px}
+.mc li::before{content:"▸ ";color:var(--oro)}
+.news{background:var(--panel);border:1px solid var(--linea);padding:24px;transition:border-color .2s}
+.news:hover{border-color:var(--oro)}
+.news h3{font-size:17px;margin:10px 0 8px}.news p{color:var(--gris);font-size:13.5px;line-height:1.65}
+.fecha{color:var(--oro);font-size:11px;letter-spacing:2px}
+footer{border-top:1px solid var(--linea);padding:56px 0 42px;background:#070708}
 footer h4{color:var(--oro);font-size:12px;letter-spacing:3px;margin-bottom:14px}
-footer p,footer a{color:var(--gris);font-size:13px;line-height:1.9;text-decoration:none}
-ul.gl{list-style:none;color:#cfcfc9;font-size:13.5px;line-height:2}
-ul.gl li::before{content:"— ";color:var(--oro)}
-@media(max-width:760px){.grid2{grid-template-columns:1fr}nav a.mi{display:none}}
+footer p,footer a{color:var(--gris);font-size:13px;line-height:2;text-decoration:none}
+.switch{position:fixed;bottom:18px;right:18px;z-index:30;background:#000;border:1px solid var(--oro);padding:8px 12px;font-size:12px}
+.switch a{color:var(--oro);text-decoration:none;margin:0 6px;font-weight:700}
+@media(max-width:880px){.stats{grid-template-columns:1fr 1fr}.simc,.grid3c,.grid2{grid-template-columns:1fr}nav a.mi{display:none}}
 </style></head>
 <body>
 <nav><div class="wrap">
-  <a class="logo" href="#"><div class="mono">CM</div><div><div class="lname">CENTRAL MUTUOS</div><div class="lsub">CON CRECES</div></div></a>
-  <div><a class="mi" href="#preaprobador">Simulador</a><a class="mi" href="#proyectos">Proyectos</a><a class="mi" href="#micredito">Mi Crédito</a><a class="mi" href="#portalcliente">Portal Cliente</a><a class="mi" href="#noticias">Noticias</a><a class="mi" href="#guia">Guía</a><a class="mi" href="#contacto">Contacto</a><a class="mi" href="https://portal.amhpago.cl/portalpago/portalpago?codigocliente=559D4E30-3459-4928-8CB9-2DC7EAA6B427" target="_blank" rel="noopener" style="border:1px solid var(--oro);color:var(--oro);padding:8px 16px;font-weight:800">💳 Portal de Pago</a></div>
+  <a class="logo" href="#"><div class="lgx">CM</div><div><div class="lname">CENTRAL MUTUOS</div><div class="lsub">CON CRECES</div></div></a>
+  <div><a class="mi" href="#simulador">Simulador</a><a class="mi" href="#proyectos">Proyectos</a><a class="mi" href="#micredito">Mi Crédito</a><a class="mi" href="#noticias">Insights</a>
+  <a class="mi mono" href="https://portal.amhpago.cl/portalpago/portalpago?codigocliente=559D4E30-3459-4928-8CB9-2DC7EAA6B427" target="_blank" rel="noopener" style="border:1px solid var(--oro);color:var(--oro);padding:8px 16px">[ PAGAR → AMH ]</a></div>
 </div></nav>
 
-<header class="hero" style="text-align:left;padding:130px 24px 100px;background:linear-gradient(100deg,rgba(8,8,10,.95) 38%,rgba(8,8,10,.45)),url('/landing-assets/familia.jpg') center/cover">
-  <div class="wrap">
-    <div class="kicker">Nº 01 — MUTUARIA REGULADA POR LA CMF</div>
-    <h1 style="font-size:clamp(44px,7vw,84px);line-height:1.02;max-width:760px;margin:24px 0 22px;font-style:italic">Tu Casa, <span style="color:var(--oro);font-style:normal">Tu Decisión.</span></h1>
-    <div style="width:80px;height:2px;background:var(--oro);margin:0 0 24px"></div>
-    <p style="color:#d8d8d2;max-width:560px;font-size:16px;line-height:1.8;margin-bottom:36px">Tu crédito hipotecario incluso si otros te dijeron que no. Mutuos con subsidio DS19 y DS01, y sin subsidio hasta UF 12.000.</p>
-    <a class="btn btn-oro" href="https://wa.me/56900000000?text=Hola,%20quiero%20informaci%C3%B3n%20sobre%20mi%20cr%C3%A9dito%20hipotecario" target="_blank" rel="noopener">💬 WhatsApp directo</a>
-    &nbsp;<a class="btn btn-line" href="#contacto">Quiero ser contactado</a>
+<header class="hero"><div class="wrap">
+  <div class="tagm mono">MUTUARIA REGULADA CMF · SANTIAGO DE CHILE</div>
+  <h1>Financiamiento hipotecario, <em>a la velocidad de tus datos</em></h1>
+  <p>Motor de evaluación propio, respuesta preliminar en minutos y seguimiento 100% digital. Mutuos con DS19, DS01 o sin subsidio hasta UF 12.000.</p>
+  <a class="btn btn-oro" href="#simulador">Simular ahora</a>&nbsp;&nbsp;
+  <a class="btn btn-line" href="#micredito">Panel Mi Crédito</a>
+  <div class="stats">
+    <div class="stat"><div class="n mono">30<span style="font-size:18px">seg</span></div><div class="l">SIMULACIÓN COMPLETA</div></div>
+    <div class="stat"><div class="n mono">UF 12.000</div><div class="l">FINANCIAMIENTO MÁXIMO</div></div>
+    <div class="stat"><div class="n mono">90%</div><div class="l">DEL VALOR DE LA PROPIEDAD</div></div>
+    <div class="stat"><div class="n mono">40<span style="font-size:18px">años</span></div><div class="l">PLAZO MÁXIMO</div></div>
   </div>
-</header>
+</div></header>
 
-<section id="preaprobador"><div class="wrap">
-  <div class="sec-t"><div class="kicker">Nº 02 — SIMULADOR · RESULTADO EN 30 SEGUNDOS</div><h2>Simula tu crédito ahora</h2><p>Ingresa tu renta, plazo y tipo de subsidio: obtén tu resultado al instante.</p></div>
+<section id="simulador"><div class="wrap">
+  <div class="sec-t"><span class="num mono">/01</span><div><h2>Simulador de crédito</h2><p>Ingresa 3 datos. El motor procesa tu dividendo en tiempo real.</p></div></div>
+  <div class="simc">
+    <div>
+      <label>MONTO (UF)</label><input id="c-monto" type="number" value="3000" min="200" max="12000">
+      <label>PLAZO (AÑOS)</label>
+      <select id="c-plazo"><option>15</option><option>20</option><option selected>25</option><option>30</option><option>40</option></select>
+      <label>PIE DISPONIBLE (%)</label>
+      <select id="c-pie"><option>0</option><option selected>10</option><option>15</option><option>20</option><option>30</option></select>
+      <a class="btn btn-oro" style="width:100%;text-align:center" href="javascript:simularC()">▸ Ejecutar simulación</a>
+    </div>
+    <div>
+      <div class="mono" style="font-size:12px;color:var(--gris);letter-spacing:2px">MOTOR DE EVALUACIÓN <span id="c-status" style="color:var(--oro)">EN ESPERA</span></div>
+      <div class="barra"><div class="fill" id="c-fill"></div></div>
+      <div class="pasos mono"><span>DATOS</span><span>TASA</span><span>DIVIDENDO</span><span>RESULTADO</span></div>
+      <div class="res-c" id="c-res">
+        <div class="mono" style="font-size:11px;letter-spacing:2px;color:var(--gris)">DIVIDENDO MENSUAL ESTIMADO</div>
+        <div class="big mono" id="c-div">—</div>
+        <div class="mono" style="color:var(--gris);font-size:13px;margin-top:6px" id="c-det"></div>
+      </div>
+    </div>
+  </div>
+</div></section>
+
+<section id="proyectos" style="background:#0c0c0e;border-top:1px solid var(--linea);border-bottom:1px solid var(--linea)"><div class="wrap">
+  <div class="sec-t"><span class="num mono">/02</span><div><h2>Proyectos financiables</h2><p>Grid de propiedades con convenio activo.</p></div></div>
+  <div class="grid3c">
+    <div class="propc"><img src="/landing-assets/p-ecomac.jpg" alt="Proyecto Ecomac"><div class="cont"><span class="sello mono">ECOMAC · LA SERENA</span><h3>Altos del Valle</h3><p>2D-3D · <span class="dato mono">desde UF 2.400</span> · DS19 ✓</p></div></div>
+    <div class="propc"><img src="/landing-assets/p-besalco.jpg" alt="Proyecto Besalco"><div class="cont"><span class="sello mono">BESALCO · PUENTE ALTO</span><h3>Parque Mirador Oriente</h3><p>Casas 3D-2B · <span class="dato mono">desde UF 3.800</span> · entrega inmediata</p></div></div>
+    <div class="propc"><img src="/landing-assets/p-boetch.jpg" alt="Proyecto Boetch"><div class="cont"><span class="sello mono">BOETCH · ÑUÑOA</span><h3>Vista Cordillera</h3><p>1D-2D · <span class="dato mono">desde UF 2.100</span> · ideal inversión</p></div></div>
+  </div>
+</div></section>
+
+<section id="micredito"><div class="wrap">
+  <div class="sec-t"><span class="num mono">/03</span><div><h2>Panel Mi Crédito</h2><p>Tu operación monitoreada como un dashboard.</p></div></div>
   <div class="grid2">
     <div class="card">
-      <label>RENTA LÍQUIDA MENSUAL (CLP)</label><input id="pa-renta" inputmode="numeric" placeholder="$ 900.000">
-      <label>PLAZO DESEADO</label><select id="pa-plazo"><option value="15">15 años</option><option value="20">20 años</option><option value="25">25 años</option><option value="30" selected>30 años</option><option value="40">40 años</option></select>
-      <label>TIPO DE SUBSIDIO</label><select id="pa-tipo"><option value="ds19">Con subsidio DS19</option><option value="ds01">Con subsidio DS01 (Tramo 2 y 3)</option><option value="sin">Sin subsidio</option></select>
-      <button class="btn btn-oro" style="border:none;width:100%;cursor:pointer" onclick="preaprobar()">Simular en 30 segundos</button>
-      <div class="res" id="pa-result"></div>
+      <h3 style="color:var(--oro);font-size:19px;margin-bottom:12px">Trazabilidad total de tu operación</h3>
+      <ul class="mc">
+        <li>Timeline de tu carpeta: evaluación → tasación → escrituración</li>
+        <li>Certificados y calendario de dividendos descargables</li>
+        <li>Alertas automáticas antes de cada vencimiento</li>
+        <li>Canal directo con tu ejecutivo asignado</li>
+      </ul>
+      <div style="margin-top:24px"><a class="btn btn-line" href="#contacto">Acceder al panel</a></div>
     </div>
-    <div class="card" style="padding:0;overflow:hidden"><div style="height:100%;min-height:340px;background:linear-gradient(rgba(11,11,13,.15),rgba(11,11,13,.5)),url('/landing-assets/viviendas.jpg') center/cover"></div></div>
+    <div class="card" style="display:flex;flex-direction:column;justify-content:center">
+      <div class="mono" style="color:var(--oro);font-size:12px;letter-spacing:3px;margin-bottom:10px">[ PAGO EN LÍNEA ]</div>
+      <h3 style="font-size:19px;margin-bottom:12px">Dividendo pagado en menos de 60 segundos</h3>
+      <p style="color:var(--gris);font-size:14px;line-height:1.7;margin-bottom:24px">Infraestructura de pago AMH: tarjetas y transferencia con comprobante inmediato.</p>
+      <a class="btn btn-oro" href="https://portal.amhpago.cl/portalpago/portalpago?codigocliente=559D4E30-3459-4928-8CB9-2DC7EAA6B427" target="_blank" rel="noopener">Pagar en Portal AMH →</a>
+    </div>
   </div>
 </div></section>
 
-
-<section id="proyectos" style="background:#0e0e11"><div class="wrap">
-  <div class="sec-t"><div class="kicker">Nº 03 — GALERÍA DE PROYECTOS</div><h2>Proyectos de nuestras alianzas</h2><p>Trabajamos con las principales inmobiliarias del país. Elige tu proyecto y financia con nosotros.</p></div>
-  <div class="grid4" style="grid-template-columns:repeat(auto-fit,minmax(280px,1fr))">
-    <div class="card" style="padding:0"><img src="/landing-assets/p-ecomac.jpg" alt="Proyecto Ecomac" style="width:100%;height:190px;object-fit:cover;display:block"><div style="padding:22px"><span class="tagf">ALIANZA ECOMAC</span><h3 style="font-size:18px">Condominios costeros y del norte</h3><p style="color:var(--gris);font-size:13px;margin:10px 0 16px;line-height:1.6">Casas y departamentos nuevos con entrega inmediata, compatibles con subsidio DS19.</p><button class="btn btn-oro" style="border:none;width:100%;cursor:pointer" onclick="financiar('Ecomac')">Financiar este proyecto</button></div></div>
-    <div class="card" style="padding:0"><img src="/landing-assets/p-besalco.jpg" alt="Proyecto Besalco" style="width:100%;height:190px;object-fit:cover;display:block"><div style="padding:22px"><span class="tagf">ALIANZA BESALCO</span><h3 style="font-size:18px">Departamentos urbanos en Santiago</h3><p style="color:var(--gris);font-size:13px;margin:10px 0 16px;line-height:1.6">Edificios modernos con áreas verdes, ideales para DS01 Tramo 2 y 3 y sectores medios.</p><button class="btn btn-oro" style="border:none;width:100%;cursor:pointer" onclick="financiar('Besalco')">Financiar este proyecto</button></div></div>
-    <div class="card" style="padding:0"><img src="/landing-assets/p-boetch.jpg" alt="Proyecto Boetch" style="width:100%;height:190px;object-fit:cover;display:block"><div style="padding:22px"><span class="tagf">ALIANZA BOETCH</span><h3 style="font-size:18px">Condominios familiares con patio</h3><p style="color:var(--gris);font-size:13px;margin:10px 0 16px;line-height:1.6">Casas para familias que buscan espacio y comunidad, con y sin subsidio.</p><button class="btn btn-oro" style="border:none;width:100%;cursor:pointer" onclick="financiar('Boetch')">Financiar este proyecto</button></div></div>
+<section id="noticias" style="background:#0c0c0e;border-top:1px solid var(--linea)"><div class="wrap">
+  <div class="sec-t"><span class="num mono">/04</span><div><h2>Insights hipotecarios</h2><p>Datos y análisis del mercado, sin humo.</p></div></div>
+  <div class="grid3c">
+    <article class="news"><span class="fecha mono">2026-06</span><h3>DS19 en cifras: montos y plazos de este año</h3><p>Todo lo que cambió en el subsidio de integración social, resumido en una tabla que entiendes en 2 minutos.</p></article>
+    <article class="news"><span class="fecha mono">2026-06</span><h3>Mutuaria vs banco: comparativa de tasas reales</h3><p>Benchmarks actualizados de financiamiento hipotecario en Chile y dónde conviene cada perfil.</p></article>
+    <article class="news"><span class="fecha mono">2026-05</span><h3>UF proyectada: qué dicen los modelos para 2026</h3><p>Escenarios de inflación y su impacto directo en tu dividendo, explicado con datos.</p></article>
   </div>
 </div></section>
 
-<section id="micredito"><div class="wrap" style="max-width:720px">
-  <div class="sec-t"><div class="kicker">Nº 04 — PANEL «MI CRÉDITO»</div><h2>Consulta con tu RUT, sin registro</h2><p>Ingresa tu RUT y tu renta: verás tu capacidad de crédito estimada al instante. Sin cuentas, sin contraseñas.</p></div>
-  <div class="card">
-    <label>RUT</label><input id="mc-rut" placeholder="12.345.678-9" maxlength="12">
-    <label>RENTA LÍQUIDA MENSUAL (CLP)</label><input id="mc-renta" inputmode="numeric" placeholder="$ 900.000">
-    <button class="btn btn-oro" style="border:none;width:100%;cursor:pointer" onclick="miCredito()">Ver mi capacidad de crédito</button>
-    <div class="res" id="mc-result"></div>
-  </div>
-</div></section>
+<footer id="contacto"><div class="wrap" style="display:grid;grid-template-columns:repeat(3,1fr);gap:24px">
+  <div><h4>CENTRAL MUTUOS CON CRECES</h4><p>Mutuaria inscrita y regulada por la CMF. Financiamiento hipotecario con motor de evaluación propio. Santiago de Chile.</p></div>
+  <div><h4>CONTACTO</h4><p class="mono">contacto@centralmutuos.cl<br>+56 9 0000 0000<br>L-V · 09:00-18:30</p></div>
+  <div><h4>ACCESOS</h4><p><a href="#simulador">Simulador 30s</a><br><a href="#micredito">Panel Mi Crédito</a><br><a href="https://portal.amhpago.cl/portalpago/portalpago?codigocliente=559D4E30-3459-4928-8CB9-2DC7EAA6B427" target="_blank" rel="noopener">Portal de Pago AMH</a></p></div>
+</div></footer>
 
-<section id="portalcliente" style="background:#0e0e11"><div class="wrap">
-  <div class="sec-t"><div class="kicker">Nº 05 — PORTAL DEL CLIENTE</div><h2>Todo tu crédito en un solo lugar</h2><p>Si ya eres cliente de Central Mutuos, gestiona tu crédito sin trámites presenciales.</p></div>
-  <div class="grid4" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr))">
-    <div class="card" style="text-align:center"><div style="font-size:34px;margin-bottom:12px">📄</div><h3 style="font-size:17px;margin-bottom:10px">Ver mi crédito</h3><p style="color:var(--gris);font-size:13px;line-height:1.6;margin-bottom:18px">Consulta el estado y tu capacidad estimada ingresando solo tu RUT.</p><a class="btn btn-line" href="#micredito">Consultar ahora</a></div>
-    <div class="card" style="text-align:center"><div style="font-size:34px;margin-bottom:12px">✍️</div><h3 style="font-size:17px;margin-bottom:10px">Firmar cesión de crédito</h3><p style="color:var(--gris);font-size:13px;line-height:1.6;margin-bottom:18px">Un ejecutivo te acompaña paso a paso en la firma digital de tu cesión.</p><a class="btn btn-line" href="#contacto">Solicitar firma</a></div>
-    <div class="card" style="text-align:center;border-color:var(--oro)"><div style="font-size:34px;margin-bottom:12px">💳</div><h3 style="font-size:17px;margin-bottom:10px">Pagar mi dividendo</h3><p style="color:var(--gris);font-size:13px;line-height:1.6;margin-bottom:18px">Paga en línea de forma segura a través del portal AMH Pago.</p><a class="btn btn-oro" href="https://portal.amhpago.cl/portalpago/portalpago?codigocliente=559D4E30-3459-4928-8CB9-2DC7EAA6B427" target="_blank" rel="noopener">Ir a pagar</a></div>
-  </div>
-</div></section>
-
-<section id="noticias"><div class="wrap">
-  <div class="sec-t"><div class="kicker">Nº 06 — NOTICIAS Y ACTUALIDAD</div><h2>Subsidios, normativa y vivienda</h2><p>Actualización automática periódica desde fuentes oficiales (Minvu, CMF, gob.cl).</p></div>
-  <div class="grid4" id="news-grid">
-    <div class="card" style="padding:0"><div class="news-img"></div><div style="padding:20px"><span class="tagf">MINVU · SUBSIDIOS</span><h3 style="font-size:16px;line-height:1.4">Sube a UF 1.600 el límite del DS01 para viviendas en stock</h3><p style="color:var(--gris);font-size:12.5px;margin-top:8px">Nuevas medidas amplían el acceso de los sectores medios a viviendas con entrega inmediata.</p></div></div>
-    <div class="card" style="padding:0"><div class="news-img"></div><div style="padding:20px"><span class="tagf">MINVU · DS19</span><h3 style="font-size:16px;line-height:1.4">DS19: proyectos de Integración Social con entrega inmediata</h3><p style="color:var(--gris);font-size:12.5px;margin-top:8px">Cómo aprovechar el subsidio de Integración Social y Territorial en proyectos disponibles hoy.</p></div></div>
-    <div class="card" style="padding:0"><div class="news-img"></div><div style="padding:20px"><span class="tagf">CMF · NORMATIVA</span><h3 style="font-size:16px;line-height:1.4">Qué revisar antes de firmar tu mutuo hipotecario endosable</h3><p style="color:var(--gris);font-size:12.5px;margin-top:8px">La CMF regula a las mutuarias: conoce tus derechos, seguros asociados y costos totales.</p></div></div>
-    <div class="card" style="padding:0"><div class="news-img"></div><div style="padding:20px"><span class="tagf">BENEFICIOS</span><h3 style="font-size:16px;line-height:1.4">Subsidio al buen pagador: abono de 10%–20% del dividendo</h3><p style="color:var(--gris);font-size:12.5px;margin-top:8px">Paga puntual en los primeros 10 días y recibe una bonificación mensual respaldada por el Estado.</p></div></div>
-  </div>
-</div></section>
-
-<section id="guia"><div class="wrap">
-  <div class="sec-t"><div class="kicker">Nº 07 — GUÍA DE SUBSIDIOS</div><h2>Cómo postular al DS19 y DS01</h2><p>Información basada en fuentes oficiales del Ministerio de Vivienda y Urbanismo.</p></div>
-  <div class="grid2">
-    <div class="card"><h3 style="color:var(--oro);font-size:20px;margin-bottom:14px">Subsidio DS19 — Integración Social y Territorial</h3>
-      <ul class="gl"><li>Postulación directa en el proyecto habitacional (sin llamado)</li><li>Registro Social de Hogares vigente</li><li>Ahorro mínimo según tramo (desde UF 30 en cuenta de ahorro para la vivienda)</li><li>No ser propietario de otra vivienda</li><li>Documentos: cédula de identidad, comprobante de ahorro, RSH</li><li>Pasos: elegir proyecto DS19 → reservar → acreditar ahorro → firma de promesa → escrituración</li></ul></div>
-    <div class="card"><h3 style="color:var(--oro);font-size:20px;margin-bottom:14px">Subsidio DS01 — Sectores Medios (Tramo 2 y 3)</h3>
-      <ul class="gl"><li>Postulación en minvu.gob.cl con ClaveÚnica en llamados oficiales</li><li>Ahorro mínimo: UF 40 (Tramo 2) · UF 80 (Tramo 3)</li><li>Precio máximo de vivienda según tramo (hoy hasta UF 1.600 en stock)</li><li>Acreditar renta y capacidad de pago del crédito complementario</li><li>Documentos: cédula, ahorro, RSH, acreditación de renta</li><li>Pasos: postular al llamado → obtener certificado → buscar vivienda → crédito hipotecario → escrituración</li></ul></div>
-  </div>
-  <p style="text-align:center;color:var(--gris);font-size:12px;margin-top:26px">Fuentes: minvu.gob.cl · gob.cl · reddeproteccion.cl — En Central Mutuos te acompañamos en todo el proceso.</p>
-</div></section>
-
-<section id="contacto" style="background:#0e0e11"><div class="wrap" style="max-width:640px">
-  <div class="sec-t"><div class="kicker">Nº 08 — CONTACTO</div><h2>Un ejecutivo te llama</h2><p>Déjanos tus datos y te contactamos a la brevedad.</p></div>
-  <div class="card">
-    <label>NOMBRE</label><input id="c-nombre" placeholder="Tu nombre completo">
-    <label>TELÉFONO</label><input id="c-fono" placeholder="+56 9 XXXX XXXX">
-    <button class="btn btn-oro" style="border:none;width:100%;cursor:pointer" onclick="contactar()">Quiero ser contactado</button>
-    <div class="res" id="c-result"></div>
-  </div>
-</div></section>
-
-<footer><div class="wrap" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:32px">
-  <div><a class="logo" href="#"><div class="mono">CM</div><div><div class="lname">CENTRAL MUTUOS</div><div class="lsub">CON CRECES</div></div></a><p style="margin-top:14px">Mutuaria inscrita y regulada por la Comisión para el Mercado Financiero (CMF). La opción legal, segura y confiable para tu crédito.</p></div>
-  <div><h4>CONTACTO</h4><p><a href="mailto:contacto@centralmutuos.cl">contacto@centralmutuos.cl</a><br><a href="https://wa.me/56900000000" target="_blank" rel="noopener">WhatsApp directo</a><br>Av. La Dehesa 1822, Of. 511, Torre Sur, Lo Barnechea<br><a href="https://portal.amhpago.cl/portalpago/portalpago?codigocliente=559D4E30-3459-4928-8CB9-2DC7EAA6B427" target="_blank" rel="noopener" style="color:var(--oro);font-weight:800">💳 Portal de Pago en línea (paga tu dividendo aquí)</a></p></div>
-  <div><h4>LEGAL</h4><p>Aprobación sujeta a revisión de antecedentes crediticios según la normativa vigente y las políticas de crédito internas de nuestra compañía.</p></div>
-</div><p style="text-align:center;color:#5c5c58;font-size:11px;margin-top:38px">© 2026 Central Mutuos · Con Creces — Todos los derechos reservados</p></footer>
+<div class="switch">PROTOTIPO <a href="/landing-opcion-a.html">A</a><a href="/landing-opcion-b.html">B</a><a href="/landing-opcion-c.html" style="text-decoration:underline">C</a></div>
 
 <script>
-var UF=39500,TASA=0.06;
-document.getElementById('pa-renta').addEventListener('input',function(){var v=this.value.replace(/\D/g,'');this.value=v?'$ '+Number(v).toLocaleString('es-CL'):'';});
-function preaprobar(){
-  var renta=parseInt(document.getElementById('pa-renta').value.replace(/\D/g,''))||0;
-  var plazo=parseInt(document.getElementById('pa-plazo').value)||30;
-  var tipo=document.getElementById('pa-tipo').value;
-  var out=document.getElementById('pa-result');out.style.display='block';
-  if(renta<300000){out.innerHTML='Ingresa tu renta líquida mensual (desde $300.000). Si tu renta es menor, puedes complementarla con un codeudor.';return;}
-  var i=TASA/12,n=plazo*12,divMax=renta*0.40;
-  var monto=divMax*((1-Math.pow(1+i,-n))/i),uf=Math.floor(monto/UF);
-  var clp=Math.round(uf*UF);
-  if(tipo==='sin'&&uf<2000){out.innerHTML='<b style="color:#d4af37">Aún no calificas para una operación sin subsidio.</b><br>Tu capacidad estimada es de UF '+uf.toLocaleString('es-CL')+' y el mínimo sin subsidio es UF 2.000. Puedes calificar sumando la renta de un codeudor o postulando con subsidio DS19/DS01. Escríbenos y lo evaluamos contigo.';return;}
-  if(uf<800){out.innerHTML='<b style="color:#d4af37">Estás cerca de calificar.</b><br>Tu capacidad estimada es de UF '+uf.toLocaleString('es-CL')+' y nuestras operaciones con subsidio parten en UF 800. Con un codeudor que complemente tu renta puedes lograrlo — escríbenos.';return;}
-  if(tipo==='sin'&&uf>12000)uf=12000;
-  out.innerHTML='<b style="color:#d4af37">✔ ¡Calificas! Preaprobación estimada: hasta UF '+uf.toLocaleString('es-CL')+'</b> (~$'+clp.toLocaleString('es-CL')+')<br>Dividendo aproximado: $'+Math.round(divMax).toLocaleString('es-CL')+'/mes a '+plazo+' años ('+(tipo==='sin'?'sin subsidio':'con subsidio '+tipo.toUpperCase())+').<br><span style="color:#9c9c96;font-size:12px">Cálculo referencial con carga financiera máxima del 40% de tu renta y tasa referencial 6,0% anual. Sujeto a evaluación de antecedentes.</span>';
-}
-
-function financiar(proyecto){
-  document.getElementById('pa-tipo').value='ds19';
-  document.getElementById('preaprobador').scrollIntoView({behavior:'smooth'});
-  var out=document.getElementById('pa-result');out.style.display='block';
-  out.innerHTML='Estás simulando el financiamiento de un proyecto <b style="color:#d4af37">'+proyecto+'</b>. Ingresa tu renta y plazo, y presiona «Simular en 30 segundos».';
-}
-document.getElementById('mc-renta').addEventListener('input',function(){var v=this.value.replace(/\D/g,'');this.value=v?'$ '+Number(v).toLocaleString('es-CL'):'';});
-document.getElementById('mc-rut').addEventListener('input',function(){
-  var v=this.value.replace(/[^\dkK]/g,'').toUpperCase().slice(0,9);
-  if(v.length>1){var c=v.slice(-1),n=v.slice(0,-1);this.value=n.replace(/\B(?=(\d{3})+(?!\d))/g,'.')+'-'+c;}else{this.value=v;}
-});
-function rutValido(r){
-  r=r.replace(/[^\dkK]/g,'').toUpperCase();if(r.length<8)return false;
-  var c=r.slice(-1),n=r.slice(0,-1),s=0,m=2;
-  for(var i=n.length-1;i>=0;i--){s+=parseInt(n[i])*m;m=m===7?2:m+1;}
-  var d=11-(s%11);d=d===11?'0':d===10?'K':String(d);return d===c;
-}
-function miCredito(){
-  var rut=document.getElementById('mc-rut').value.trim();
-  var renta=parseInt(document.getElementById('mc-renta').value.replace(/\D/g,''))||0;
-  var out=document.getElementById('mc-result');out.style.display='block';
-  if(!rutValido(rut)){out.textContent='Ingresa un RUT válido (ej: 12.345.678-9).';return;}
-  if(renta<300000){out.textContent='Ingresa tu renta líquida mensual (desde $300.000).';return;}
-  var i=TASA/12,n=30*12,divMax=renta*0.40;
-  var monto=divMax*((1-Math.pow(1+i,-n))/i),uf=Math.floor(monto/UF);
-  out.innerHTML='<b style="color:#d4af37">RUT '+rut+' — Capacidad de crédito estimada: hasta UF '+uf.toLocaleString('es-CL')+'</b> (~$'+Math.round(uf*UF).toLocaleString('es-CL')+') a 30 años.<br>Dividendo aproximado: $'+Math.round(divMax).toLocaleString('es-CL')+'/mes.<br><span style="color:#9c9c96;font-size:12px">Estimación referencial sin registro previo, con carga financiera del 40% y tasa 6,0% anual. Un ejecutivo puede afinar tu evaluación por WhatsApp.</span>';
-}
-
-function contactar(){
-  var n=document.getElementById('c-nombre').value.trim(),f=document.getElementById('c-fono').value.trim();
-  var out=document.getElementById('c-result');out.style.display='block';
-  if(n.length<3||f.replace(/\D/g,'').length<8){out.textContent='Ingresa tu nombre y un teléfono válido.';return;}
-  fetch('/api/publicidad/contacto',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nombre:n,telefono:f})})
-    .then(function(r){return r.json();}).then(function(d){out.innerHTML=d.ok?'<b style="color:#d4af37">'+d.mensaje+'</b>':(d.detail||'Intenta nuevamente.');})
-    .catch(function(){out.textContent='Error de conexión. Intenta nuevamente.';});
+function simularC(){
+  var m=+document.getElementById('c-monto').value||0, y=+document.getElementById('c-plazo').value, pie=+document.getElementById('c-pie').value;
+  if(m<200){alert('Monto mínimo: UF 200');return}
+  var fill=document.getElementById('c-fill'), res=document.getElementById('c-res'), st=document.getElementById('c-status');
+  res.classList.remove('on'); fill.style.transition='none'; fill.style.width='0';
+  st.textContent='PROCESANDO…';
+  setTimeout(function(){
+    fill.style.transition='width 1.4s cubic-bezier(.2,.8,.2,1)'; fill.style.width='100%';
+    var fin=m*(1-pie/100), n=y*12, r=0.045/12, div=fin*r/(1-Math.pow(1+r,-n)), uf=39250;
+    document.getElementById('c-div').textContent='UF '+div.toFixed(2);
+    document.getElementById('c-det').textContent='≈ $'+Math.round(div*uf).toLocaleString('es-CL')+'/mes · financia UF '+Math.round(fin).toLocaleString('es-CL')+' · tasa ref. 4,5% anual';
+    res.classList.add('on');
+    setTimeout(function(){st.textContent='RESULTADO LISTO'},1400);
+  },60);
 }
 </script>
 </body></html>

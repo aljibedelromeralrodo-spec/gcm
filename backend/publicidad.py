@@ -647,12 +647,12 @@ async def antecedentes_submit(payload: dict):
 
 # ══ PROYECTOS WEB PENDIENTES (prototipos guardados para aprobación de directivos) ══
 PROTOTIPOS_WEB = [
-    {"opcion": "A", "nombre": "Clásico Institucional", "archivo": "landing-opcion-a.html",
-     "descripcion": "Hero centrado sobre foto de familia, tipografía serif Playfair, líneas doradas finas, secciones simétricas."},
-    {"opcion": "B", "nombre": "Moderno Asimétrico", "archivo": "landing-opcion-b.html",
-     "descripcion": "Hero dividido con foto enmarcada en dorado, tipografía sans Sora, cifras destacadas (30 seg · 40 años · UF 12.000)."},
-    {"opcion": "C", "nombre": "Editorial Premium", "archivo": "landing-opcion-c.html",
-     "descripcion": "Titular gigante en cursiva serif sobre imagen completa, banda dorada lateral, secciones numeradas Nº 01-08."},
+    {"opcion": "A", "nombre": "Banco Privado", "archivo": "landing-opcion-a.html",
+     "descripcion": "Estilo banco privado: tipografía serif Cormorant/Garamond, bloques dorados estructurados con filetes, sensación institucional formal."},
+    {"opcion": "B", "nombre": "Emocional Cercano", "archivo": "landing-opcion-b.html",
+     "descripcion": "Estilo emocional cercano: sans-serif Outfit, hero con foto de familia, simulador como calculadora visual interactiva con sliders en vivo."},
+    {"opcion": "C", "nombre": "Fintech Moderno", "archivo": "landing-opcion-c.html",
+     "descripcion": "Estilo fintech: líneas geométricas doradas sutiles, cifras destacadas (30s · UF 12.000 · 90% · 40 años), simulador con barra de progreso animada, galería en grid compacto."},
 ]
 
 

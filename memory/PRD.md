@@ -1404,3 +1404,11 @@ actual; todo lo demás permanece intacto.
 
 ## 2026-06 (fork) — Verificación Panel Estado de Bases
 - Verificado E2E en preview: endpoint /api/publicidad/estado-bases responde (2 bases: inmobiliarias ds19 y base usa tu subsidio 01), panel visible en Publicidad y Captación con campo de cantidad manual y botón "Usar esta base". ORO-75 (Master PIN) confirmado en código antes de cualquier envío. Sin cambios de código necesarios.
+
+## 2026-06 (fork) — Rediseño de los 3 prototipos de landing (nuevas especificaciones)
+- Reconstruidos landing-opcion-a/b/c.html en /app/frontend/public/ según nuevo brief:
+  - A "Banco Privado": serif Cormorant/Garamond, bloques dorados estructurados, filetes ◆, formal institucional.
+  - B "Emocional Cercano": sans Outfit, hero con foto de familia, calculadora interactiva con 3 sliders (monto/plazo/pie) y recálculo en vivo.
+  - C "Fintech Moderno": Space Grotesk + IBM Plex Mono, grid geométrico dorado, cifras destacadas (30s/UF12.000/90%/40años), simulador con barra de progreso animada, galería grid compacto.
+- Los 3 incluyen: simulador 30s, galería Ecomac/Besalco/Boetch, panel Mi Crédito, botón pago AMH (portal.amhpago.cl), noticias SEO, switcher A/B/C flotante.
+- Seed PROTOTIPOS_WEB actualizado en publicidad.py (nombres/descripciones nuevas). Verificado E2E: 3 páginas HTTP 200, simuladores calculan correctamente (A: UF 16.67, B: recálculo live, C: barra animada + resultado).
