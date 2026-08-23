@@ -2023,3 +2023,16 @@ polling GET /api/central/proactive existe vacío en server.py:1526) — usuario 
   (⚠️ /tmp purga archivos en minutos — NO usar /tmp para pipelines largos).
 - VERIFICADO: smoke móvil (9 tarjetas, mic, inmersivo, 0 errores JS), curl cerebro/sync+estado,
   fotogramas del video (apertura/tour/cierre) OK.
+
+## 2026-06 (fork) — Metas, semana, Cerebro probado y correos enviados
+- METAS DE AHORRO: fijar meta mensual (ma_meta), barra de progreso, celebración única/mes
+  (confetti 46 emojis + voz + registro en Conciencia). Verificado con screenshot.
+- HISTORIAL SEMANAL: tarjeta "Su semana" con últimos 7 días, mejor día 🌟 (menor gasto-ahorro) y
+  día más gastador 🔥, comentario personalizado de Martín vía /chat con voz. Verificado.
+- EL CEREBRO PROBADO: módulo remoto "Consejo de la Semana" (id consejo-semana) creado vía API y
+  visible/navegable en la app con TTS. 
+- CORREOS: video Portal del Cliente enviado a gerardo.ext@centralmutuos.cl CC rodrigo@ y rene@
+  (SMTP 250, diseño institucional blanco/dorado de campañas, ventajas + link + adjunto).
+  Video Martín Suma UC ya había sido enviado antes (SMTP 250).
+- REPORTE 6 MESES: /tmp/barrido_result.json respaldado en /app/memory/barrido_result.json
+  (123 carpetas, 9 correcciones, stats por tipo).

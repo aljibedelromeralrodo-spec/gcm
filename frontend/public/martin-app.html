@@ -134,6 +134,13 @@ footer{font-size:.6rem;color:#9AA1BD;text-align:center;padding:8px 24px 14px;lin
 .sw::after{content:"";position:absolute;width:24px;height:24px;border-radius:50%;background:#fff;top:3px;left:3px;transition:left .2s;box-shadow:0 2px 6px rgba(0,0,0,.2)}
 .sw.on{background:var(--verde)}
 .sw.on::after{left:25px}
+/* ===== Confetti ===== */
+#confetti{position:fixed;inset:0;pointer-events:none;z-index:80;overflow:hidden}
+#confetti span{position:absolute;top:-40px;font-size:22px;animation:caer linear forwards}
+@keyframes caer{to{transform:translateY(110vh) rotate(720deg);opacity:.7}}
+.diaRow{display:flex;justify-content:space-between;align-items:center;font-size:.74rem;padding:7px 10px;border-radius:10px;margin-top:6px;background:#FBF7EA}
+.diaRow.mejor{background:#E3F9EF;border:1.5px solid #2EC4A6}
+.diaRow.peor{background:#FFE3D9;border:1.5px solid #FF7A59}
 </style></head>
 <body>
 <div id="app">
@@ -164,6 +171,8 @@ footer{font-size:.6rem;color:#9AA1BD;text-align:center;padding:8px 24px 14px;lin
     </div>
     <!-- ===== PROGRESO MENSUAL ===== -->
     <div class="card" style="margin:13px 18px 0" id="progreso" data-testid="progreso-mensual"></div>
+    <!-- ===== HISTORIAL SEMANAL ===== -->
+    <div class="card" style="margin:13px 18px 0" id="semana" data-testid="historial-semanal"></div>
     <div class="tipCard" id="tipdia" style="margin-top:13px">💡 <b>Tip del día:</b> cargando…</div>
     <div id="saludo" data-testid="saludo-martin">
       <div class="aliveRing"><div class="alive" style="width:46px;height:46px"></div></div>
@@ -812,6 +821,29 @@ function pintarProgreso() {
   const tg = dias.reduce((s, k) => s + (reg[k].g || 0), 0);
   const ta = dias.reduce((s, k) => s + (reg[k].a || 0), 0);
   const pct = Math.min(100, Math.round(ta / ((ta + tg) || 1) * 100));
+  const meta = +localStorage.getItem("ma_meta") || 0;
+  let metaHtml;
+  if (meta) {
+    const pm = Math.min(100, Math.round(ta / meta * 100));
+    const cumplida = ta >= meta;
+    metaHtml = `<p style="margin-top:12px;font-size:.74rem"><b>🎯 Meta de ahorro del mes: ${fmt(meta)}</b>
+      <u style="cursor:pointer;color:#9AA1BD;font-weight:400" onclick="fijarMeta(true)" data-testid="meta-cambiar">cambiar</u></p>
+      <div class="barra"><i style="width:${pm}%;background:${cumplida ? "linear-gradient(90deg,#2EC4A6,#FFC93C)" : ""}"></i></div>
+      <p style="margin-top:6px;font-size:.72rem;font-weight:800;color:${cumplida ? "var(--verde)" : "var(--azul)"}" data-testid="meta-estado">
+      ${cumplida ? "🏆 ¡META CUMPLIDA! Usted es tremendo." : `Lleva ${pm}% — le faltan ${fmt(meta - ta)}`}</p>`;
+    if (cumplida && localStorage.getItem("ma_meta_celebrada") !== mes) {
+      localStorage.setItem("ma_meta_celebrada", mes);
+      setTimeout(() => {
+        confetti();
+        hablar(`¡Felicitaciones! Cumplió su meta de ahorro del mes: ${Math.round(meta / 1000)} mil pesos guardados. Esto merece celebrarse: usted le está ganando la carrera al gasto. ¡Tremendo orgullo, sigamos así!`);
+        conLog("evento", `🏆 Cumplió su meta de ahorro mensual de ${fmt(meta)}`, "entusiasmo");
+      }, 800);
+    }
+  } else {
+    metaHtml = `<div style="margin-top:12px;display:flex;gap:8px;align-items:center">
+      <input id="meta-inp" type="number" inputmode="numeric" placeholder="Meta de ahorro del mes (ej: 30000)" style="margin:0;flex:1" data-testid="meta-input">
+      <button class="btn mini" style="margin:0" onclick="fijarMeta()" data-testid="meta-fijar">🎯 Fijar</button></div>`;
+  }
   document.getElementById("progreso").innerHTML =
     `<h3>📈 Su mes en construcción</h3>
      <div class="pill3">
@@ -821,7 +853,75 @@ function pintarProgreso() {
      </div>
      <p style="margin-top:10px;font-size:.72rem">Ahorro del mes: <b>${pct}%</b> de lo que ha movido</p>
      <div class="barra"><i style="width:${pct}%"></i></div>
+     ${metaHtml}
      <p style="margin-top:10px;font-weight:700;color:var(--azul)">${fraseMot(dias.length, ta, tg)}</p>`;
+  pintarSemana();
+}
+function fijarMeta(cambiar) {
+  if (cambiar) { localStorage.removeItem("ma_meta"); localStorage.removeItem("ma_meta_celebrada"); pintarProgreso(); return; }
+  const v = +document.getElementById("meta-inp").value || 0;
+  if (v < 1000) return alert("Fije una meta de al menos $1.000");
+  localStorage.setItem("ma_meta", v);
+  localStorage.removeItem("ma_meta_celebrada");
+  conLog("evento", `Fijó meta de ahorro mensual: ${fmt(v)}`, null);
+  pintarProgreso();
+  hablar(`¡Buena decisión! Su meta del mes queda en ${Math.round(v / 1000)} mil pesos. Yo se la voy recordando, y cuando la cumpla, celebramos juntos.`);
+}
+function confetti() {
+  const c = document.createElement("div"); c.id = "confetti";
+  const em = ["🎉", "💛", "⭐", "🎊", "🏆"];
+  for (let i = 0; i < 46; i++) {
+    const s = document.createElement("span");
+    s.textContent = em[i % em.length];
+    s.style.left = Math.random() * 100 + "vw";
+    s.style.animationDuration = 2.4 + Math.random() * 2 + "s";
+    s.style.animationDelay = Math.random() * 1.2 + "s";
+    c.appendChild(s);
+  }
+  document.body.appendChild(c);
+  setTimeout(() => c.remove(), 5200);
+}
+const DSEM = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
+function pintarSemana() {
+  const reg = regGet(), filas = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(); d.setDate(d.getDate() - i);
+    const k = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+    if (reg[k]) filas.push({ k, dia: DSEM[d.getDay()], ...reg[k] });
+  }
+  const el = document.getElementById("semana");
+  if (!filas.length) {
+    el.innerHTML = `<h3>📅 Su semana</h3><p style="font-size:.74rem;color:#6B7280">Aún no hay registros esta semana. Anote su día arriba y aquí verá su resumen con el comentario de Martín.</p>`;
+    return;
+  }
+  const mejor = filas.reduce((a, b) => (b.g - b.a) < (a.g - a.a) ? b : a);
+  const peor = filas.reduce((a, b) => b.g > a.g ? b : a);
+  const tg = filas.reduce((s, f) => s + f.g, 0), ta = filas.reduce((s, f) => s + f.a, 0);
+  el.innerHTML = `<h3>📅 Su semana</h3>
+    <p style="font-size:.72rem;color:#6B7280">${filas.length} día(s) registrados · Gastó ${fmt(tg)} · Ahorró ${fmt(ta)}</p>
+    ${filas.map(f => `<div class="diaRow ${f === mejor ? "mejor" : f === peor ? "peor" : ""}">
+      <span><b>${f.dia}</b> ${f === mejor ? "🌟 su mejor día" : f === peor ? "🔥 su día más gastador" : ""}</span>
+      <span>-${fmt(f.g)} / +${fmt(f.a)}</span></div>`).join("")}
+    <button class="btn mini azul" onclick="comentarSemana()" data-testid="semana-comentar">🔊 Comentario de Martín</button>
+    <div class="res" id="sem-com" style="background:#DFF4FF"></div>`;
+}
+async function comentarSemana() {
+  const r = document.getElementById("sem-com");
+  r.style.display = "block"; r.innerHTML = "<b>MARTÍN 💛</b> Mirando su semana…";
+  const reg = regGet(), filas = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(); d.setDate(d.getDate() - i);
+    const k = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+    if (reg[k]) filas.push(`${DSEM[d.getDay()]}: gastó ${fmt(reg[k].g)}, ahorró ${fmt(reg[k].a)}${reg[k].det ? " (" + reg[k].det + ")" : ""}`);
+  }
+  try {
+    const resp = await fetch(API + "/api/martin-financiero/chat", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: SES, conciencia: conCtx(), message: `[RESUMEN SEMANAL DE LA APP] Mi semana fue: ${filas.join("; ")}. Coménteme mi semana: destaque mi mejor día y mi día más gastador, y déme un consejo concreto para la próxima semana. 3 a 4 frases.` }) });
+    const d = await resp.json();
+    const txt = (d.response || "Su semana quedó registrada, ¡sigamos construyendo!").replace(/\*\*(.*?)\*\*/g, "<b>$1</b>");
+    r.innerHTML = "<b>MARTÍN 💛</b> " + txt;
+    if (d.response) { hablar(d.response); conLog("martin", d.response, d.emocion); }
+  } catch (e) { r.innerHTML = "<b>MARTÍN 💛</b> No pude comentar ahora, intente de nuevo."; }
 }
 pintarProgreso();
 
