@@ -6,9 +6,13 @@ import VentasPanel from "../victoria/VentasPanel";
 import VentasFicha from "../victoria/VentasFicha";
 
 const NAV_KEY = "ventas_nav_v1";
+const EJECUTIVOS_VENTAS = { yerile: "Yerile Barrera", deysi: "Deisy Salazar" };
 
 export default function VentasWorkspace({ user, onLogout, onUserUpdate }) {
   const [showClave, setShowClave] = useState(false);
+  const [ejSel, setEjSel] = useState(() => sessionStorage.getItem("ventas_ej_sel") || "");
+  const ejecutivo = user.ventas_ejecutivo || ejSel;
+  const elegirEj = (v) => { setEjSel(v); sessionStorage.setItem("ventas_ej_sel", v); };
   const [nav, setNavRaw] = useState(() => {
     try {
       const s = JSON.parse(sessionStorage.getItem(NAV_KEY));
@@ -72,8 +76,23 @@ export default function VentasWorkspace({ user, onLogout, onUserUpdate }) {
         </div>
       )}
 
+      {!user.ventas_ejecutivo && (
+        <div data-testid="ventas-selector-bar" style={{ margin: "16px 3rem 0", background: "rgba(212,175,55,0.06)",
+          border: "1px solid rgba(212,175,55,0.4)", borderRadius: 4, padding: "0.8rem 1.2rem",
+          display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+          <span style={{ color: "#FCF6BA", fontSize: "0.9rem", fontWeight: 700 }}>
+            <i className="fa fa-users" style={{ marginRight: 7 }}></i>Vista de administrador — Seleccione un ejecutivo de Ventas:</span>
+          <select data-testid="ventas-selector-ejecutivo" value={ejSel} onChange={e => elegirEj(e.target.value)}
+            style={{ background: "#0a0a0a", color: "#e4e4e7", border: "1px solid rgba(212,175,55,0.5)",
+              borderRadius: 4, padding: "0.5rem 0.9rem", fontSize: "0.9rem", fontWeight: 700 }}>
+            <option value="">— Elegir ejecutivo —</option>
+            {Object.entries(EJECUTIVOS_VENTAS).map(([cod, nom]) => <option key={cod} value={cod}>{nom}</option>)}
+          </select>
+        </div>
+      )}
+
       {nav.view === "panel" ? (
-        <VentasPanel ejecutivo={user.ventas_ejecutivo} onAbrirCliente={abrirCliente} />
+        <VentasPanel ejecutivo={ejecutivo} onAbrirCliente={abrirCliente} />
       ) : (
         <VentasFicha cid={nav.cid} onVolver={volver} />
       )}

@@ -1388,3 +1388,7 @@ actual; todo lo demás permanece intacto.
 
 ## 2026-08-23 — .dockerignore (PASO 3)
 - Creado /app/.dockerignore: excluye backend/storage/ (1.8 GB de archivos de clientes que viven en GridFS), node_modules, build, __pycache__, logs y test_reports de la imagen de despliegue.
+
+## 2026-08-23 — Módulo Ventas: guard de ejecutivo vacío + selector admin
+- VentasPanel.js: si ejecutivo viene vacío NO llama a /api/ventas/panel/ y muestra "Seleccione un ejecutivo de Ventas" (antes quedaba en Cargando infinito).
+- VentasWorkspace.js: admin sin ventas_ejecutivo ve barra selectora (Yerile Barrera / Deisy Salazar), persistida en sessionStorage. Verificado con screenshots.

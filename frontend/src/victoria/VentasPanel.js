@@ -27,16 +27,22 @@ export default function VentasPanel({ ejecutivo, onAbrirCliente }) {
   };
 
   useEffect(() => {
+    if (!ejecutivo) return;
     axios.get(`${API_URL}/api/ventas/avisos-email`)
       .then(r => setEmailsAviso((r.data[ejecutivo] || []).join(", ")))
       .catch(() => {});
   }, [ejecutivo]);
 
-  const cargar = () => axios.get(`${API_URL}/api/ventas/panel/${ejecutivo}`)
-    .then(r => setData(r.data))
-    .catch(e => toast.error(e.response?.data?.detail || "No se pudo cargar el panel de Ventas"));
+  const cargar = () => {
+    if (!ejecutivo) return Promise.resolve();
+    return axios.get(`${API_URL}/api/ventas/panel/${ejecutivo}`)
+      .then(r => setData(r.data))
+      .catch(e => toast.error(e.response?.data?.detail || "No se pudo cargar el panel de Ventas"));
+  };
 
   useEffect(() => {
+    setData(null);
+    if (!ejecutivo) return;
     cargar();
     poll.current = setInterval(cargar, 30000);
     return () => clearInterval(poll.current);
@@ -54,6 +60,13 @@ export default function VentasPanel({ ejecutivo, onAbrirCliente }) {
     setCreando(false);
   };
 
+  if (!ejecutivo) return (
+    <div data-testid="ventas-sin-ejecutivo" style={{ padding: "4rem", textAlign: "center" }}>
+      <i className="fa fa-user-circle" style={{ fontSize: "2.4rem", color: "#BF953F" }}></i>
+      <div style={{ color: "#e4e4e7", fontSize: "1.2rem", fontWeight: 700, marginTop: 14 }}>Seleccione un ejecutivo de Ventas</div>
+      <div style={{ color: "#a1a1aa", fontSize: "0.9rem", marginTop: 8 }}>Use el selector superior para ver el panel de Yerile o Deisy.</div>
+    </div>
+  );
   if (!data) return <div style={{ padding: "4rem", color: "#a1a1aa", fontSize: "1.1rem" }}>Cargando panel de Ventas…</div>;
   const k = data.kpis;
 
