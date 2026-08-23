@@ -171,14 +171,19 @@ async def gcom_panel(request: Request):
     docs_pend = await db.docs_sin_clasificar.count_documents({})
     pv_activos = await db.postventa_casos.count_documents({"etapa_actual": {"$exists": True}})
     pv_completos = await db.postventa_aprendizaje.count_documents({})
+    vistos_ej = set()
     for u in await db.users.find({"rol": {"$in": ["administracion", "postventa"]}, "activo": {"$ne": False}},
                                  {"_id": 0, "codigo": 1, "nombre": 1, "rol": 1}).to_list(20):
+        nombre_ej = u.get("nombre") or u["codigo"]
+        if nombre_ej in vistos_ej:
+            continue
+        vistos_ej.add(nombre_ej)
         if u["rol"] == "postventa":
             act, cerr = pv_activos, pv_completos
         else:
             act, cerr = docs_pend, escrituradas
         ratio_av = round(cerr / (act + cerr) * 100) if (act + cerr) else 0
-        ejecutivos.append({"nombre": u.get("nombre") or u["codigo"], "rol": u["rol"],
+        ejecutivos.append({"nombre": nombre_ej, "rol": u["rol"],
                            "ops_activas": act, "completadas": cerr, "ratio_avance": ratio_av,
                            "aporte_pct": round(cerr / total_ops * 100)})
 

@@ -1352,3 +1352,9 @@ actual; todo lo demás permanece intacto.
 - `_task_blindada` (server.py) ahora espera liderazgo antes de ejecutar cada loop → los ~40 loops 24/7 (ingesta_carpetas, mesa, espejo, resúmenes, etc.) corren SOLO en la instancia líder.
 - El lease (`lider_loop`) corre en TODAS las réplicas vía `_task_blindada_sin_guard`. Shutdown libera el lock para traspaso inmediato.
 - Verificado: claim exclusivo (réplica 2 no roba lease vigente), takeover con lease expirado, renovación propia, liberación en shutdown y recuperación automática del backend real.
+
+## 2026-08-23 — Limpieza de consola React
+- Causa raíz keys duplicadas: dos usuarias "Daniela Galindo" en `users` (códigos `daniela` y `daniela.galindo@centralmutuos.cl`) duplicaban filas en el Panel Ejecutivo del Centro de Mando (key={e.nombre}).
+- Fix: dedupe por nombre en backend (gerencia_comercial.py, panel ejecutivos) + key compuesta nombre-rol-índice en GerenciaCommandCenter.js.
+- Warning span-dentro-de-option: NO existe en el código actual (barrido estático de todos los <option>/<select> del frontend + recorrido de 38 módulos como admin y módulos gerencia con captura de consola = 0 ocurrencias). Probablemente era efecto del render duplicado ya corregido.
+- Verificado: consola impecable (0 warnings/errores React) en ambos perfiles.

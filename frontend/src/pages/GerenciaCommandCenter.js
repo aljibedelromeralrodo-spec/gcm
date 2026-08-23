@@ -450,8 +450,8 @@ export function PanelComercial() {
         </div>
         <div style={{ ...card, flex: "1 1 300px" }} data-testid="gc-ejecutivos">
           <h2 style={h2}>🧭 Panel Ejecutivo</h2>
-          {p.ejecutivos.map(e => (
-            <div key={e.nombre} style={{ borderTop: "1px solid rgba(148,163,184,0.1)", padding: "6px 0" }}>
+          {p.ejecutivos.map((e, ei) => (
+            <div key={`${e.nombre}-${e.rol}-${ei}`} style={{ borderTop: "1px solid rgba(148,163,184,0.1)", padding: "6px 0" }}>
               <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
                 <b style={{ color: "#f8fafc", fontSize: "0.8rem" }}>{e.nombre}</b>
                 <span style={{ color: "#94a3b8", fontSize: "0.6rem", textTransform: "uppercase" }}>{e.rol}</span>
