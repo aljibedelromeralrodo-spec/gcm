@@ -1381,7 +1381,7 @@ def _blindaje_responsivo(html):
     return html, problemas
 
 
-def send_mail(to, subject, body_html, attachments=None, desde="secundaria", cc=None, headers=None, clave_sin_ajuste="", bcc=None, registro_fallo=True, permitir_duplicado=False):
+def send_mail(to, subject, body_html, attachments=None, desde="secundaria", cc=None, headers=None, clave_sin_ajuste="", bcc=None, registro_fallo=True, permitir_duplicado=False, body_text=None):
     """Envia un correo con envío controlado (throttling):
     1) pausa mínima de 10s entre correos, 2) 1 reintento automático tras 60s si falla,
     3) todo error SMTP queda en la colección 'log_errores_correo' (fecha + destinatario).
@@ -1451,7 +1451,13 @@ def send_mail(to, subject, body_html, attachments=None, desde="secundaria", cc=N
     msg["Subject"] = subject
     # VERIFICACIÓN AUTOMÁTICA (Regla Maserati #1): mini-render móvil pre-envío
     body_html, _resp_fixes = _blindaje_responsivo(body_html or "")
-    msg.attach(MIMEText(body_html, "html", "utf-8"))
+    if body_text:
+        _alt = MIMEMultipart("alternative")
+        _alt.attach(MIMEText(body_text, "plain", "utf-8"))
+        _alt.attach(MIMEText(body_html, "html", "utf-8"))
+        msg.attach(_alt)
+    else:
+        msg.attach(MIMEText(body_html, "html", "utf-8"))
     try:
         attachments, _blindados = _blindaje_simulaciones(attachments, clave_sin_ajuste)
     except ValueError as e:

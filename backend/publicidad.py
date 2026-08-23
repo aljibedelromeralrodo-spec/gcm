@@ -17,6 +17,8 @@ TEMPLATES = [
     {"archivo": "template-brokers-concreces.html", "nombre": "Brokers — dorado (oficial)"},
     {"archivo": "template-inmobiliarias-concreces.html", "nombre": "Inmobiliarias — dorado (bloques)"},
     {"archivo": "template-inmobiliarias-corporativo.html", "nombre": "Inmobiliarias — corporativo sobrio"},
+    {"archivo": "template-clientes-directos-c.html", "nombre": "Clientes Directos — carta corporativa",
+     "asunto": "Crédito Hipotecario / Viviendas Nuevas y Usadas con Entrega Inmediata"},
 ]
 RX_MAIL = re.compile(r"^[\w.\-+]+@[\w\-]+(\.[\w\-]+)+$")
 PAUSA_SEG = 6
@@ -212,12 +214,13 @@ async def quitar_contacto(lid: str, payload: dict, request: Request):
     return {"ok": True}
 
 
-async def _envio_bg(eid, correos, html, asunto):
+async def _envio_bg(eid, correos, html, asunto, texto=""):
     import email_service as mail
     enviados, fallidos = 0, []
     for i, correo in enumerate(correos):
         try:
-            r = await asyncio.to_thread(mail.send_mail, correo, asunto, html, None, "secundaria")
+            r = await asyncio.to_thread(mail.send_mail, correo, asunto, html, None, "secundaria",
+                                        body_text=texto or None)
             if r.get("success"):
                 enviados += 1
             else:
@@ -233,6 +236,35 @@ async def _envio_bg(eid, correos, html, asunto):
     logging.info(f"📣 Campaña {eid}: {enviados}/{len(correos)} enviados, {len(fallidos)} fallidos")
 
 
+def _app_url():
+    try:
+        for line in open("/app/frontend/.env"):
+            if line.startswith("REACT_APP_BACKEND_URL="):
+                return line.split("=", 1)[1].strip().strip('"').rstrip("/")
+    except Exception:
+        pass
+    return ""
+
+
+def _render_campana(html):
+    """Reemplaza los placeholders del template: personalización + link del formulario público."""
+    return (html.replace("{{NOMBRE}}", "cliente")
+                .replace("{{LINK_CONTACTO}}", f"{_app_url()}/api/publicidad/contacto"))
+
+
+def _texto_plano(html):
+    """Versión texto plano alternativa (anti-spam): mismo contenido sin HTML."""
+    t = re.sub(r"<style.*?</style>", " ", html, flags=re.S | re.I)
+    t = re.sub(r"<br\s*/?>", "\n", t, flags=re.I)
+    t = re.sub(r"</(p|tr|table|div|h1|h2)>", "\n", t, flags=re.I)
+    t = re.sub(r"<a[^>]*href=[\"']([^\"']+)[\"'][^>]*>([^<]*)</a>", r"\2: \1", t, flags=re.I)
+    t = re.sub(r"<[^>]+>", " ", t)
+    t = t.replace("&nbsp;", " ").replace("&amp;", "&")
+    t = re.sub(r"[ \t]+", " ", t)
+    t = re.sub(r"\n\s+", "\n", t)
+    return t.strip()
+
+
 @pub.post("/enviar")
 async def enviar(payload: dict, request: Request):
     u = _exigir_admin(request)
@@ -242,11 +274,13 @@ async def enviar(payload: dict, request: Request):
     asunto = (payload.get("asunto") or "").strip()
     if not asunto:
         raise HTTPException(status_code=400, detail="Asunto obligatorio")
-    html = (PUBLIC_DIR / template).read_text()
+    html = _render_campana((PUBLIC_DIR / template).read_text())
+    texto = _texto_plano(html)
     if payload.get("prueba"):
         import email_service as mail
         r = await asyncio.to_thread(mail.send_mail, "ethangerardobarr@gmail.com",
-                                    f"[PRUEBA] {asunto}", html, None, "secundaria")
+                                    f"[PRUEBA] {asunto}", html, None, "secundaria",
+                                    body_text=texto)
         if not r.get("success"):
             raise HTTPException(status_code=500, detail=f"Prueba falló: {str(r.get('error'))[:120]}")
         return {"ok": True, "prueba": True,
@@ -265,7 +299,7 @@ async def enviar(payload: dict, request: Request):
         "template": template, "asunto": asunto, "total": len(correos), "enviados": 0,
         "fallidos": [], "progreso": 0, "estado": "enviando", "iniciado": _now(),
         "por": u.get("sub", "")})
-    asyncio.create_task(_envio_bg(eid, correos, html, asunto))
+    asyncio.create_task(_envio_bg(eid, correos, html, asunto, texto))
     return {"ok": True, "envio_id": eid, "total": len(correos),
             "mensaje": f"Campaña iniciada: {len(correos)} correo(s) en segundo plano con pausa de {PAUSA_SEG}s entre envíos (protección de reputación)."}
 
@@ -295,3 +329,76 @@ async def whatsapp_links(payload: dict, request: Request):
         "listado_id": listado["id"], "asunto": mensaje[:80], "total": len(tels),
         "enviados": 0, "fallidos": [], "estado": "manual", "iniciado": _now(), "por": u.get("sub", "")})
     return {"ok": True, "links": links}
+
+
+# ══ FORMULARIO PÚBLICO "QUIERO SER CONTACTADO" (campañas clientes directos) ══
+FORM_CONTACTO_HTML = """<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Central Mutuos — Quiero ser contactado</title></head>
+<body style="margin:0;background:#ededee;font-family:Georgia,'Times New Roman',serif;">
+<div style="max-width:480px;margin:40px auto;background:#fff;">
+  <div style="background:#0e0e10;padding:26px 34px;">
+    <div style="font-size:20px;letter-spacing:5px;color:#d4af37;">CENTRAL MUTUOS</div>
+    <div style="font-size:10px;letter-spacing:4px;color:#f5e7b8;margin-top:4px;">CON CRECES</div>
+  </div>
+  <div style="height:4px;background:#d4af37;"></div>
+  <div style="padding:30px 34px 34px;">
+    <h1 style="margin:0 0 6px;font-size:19px;color:#111;font-weight:normal;">Quiero ser contactado</h1>
+    <div style="height:2px;background:#d4af37;width:60px;margin:0 0 16px;"></div>
+    <p style="margin:0 0 20px;font-size:13.5px;color:#3a3a3a;line-height:1.6;">Déjanos tu nombre y teléfono y un ejecutivo de Central Mutuos te contactará para orientarte en tu crédito hipotecario.</p>
+    <form id="f">
+      <label style="display:block;font-size:12px;color:#8a6a0f;letter-spacing:1px;margin-bottom:4px;">NOMBRE</label>
+      <input id="nombre" required minlength="3" maxlength="80" style="width:100%;box-sizing:border-box;padding:11px 12px;border:1px solid #cfc7ad;font-family:Georgia,serif;font-size:14px;margin-bottom:14px;" placeholder="Tu nombre completo">
+      <label style="display:block;font-size:12px;color:#8a6a0f;letter-spacing:1px;margin-bottom:4px;">TEL&Eacute;FONO</label>
+      <input id="telefono" required style="width:100%;box-sizing:border-box;padding:11px 12px;border:1px solid #cfc7ad;font-family:Georgia,serif;font-size:14px;margin-bottom:20px;" placeholder="+56 9 XXXX XXXX">
+      <button id="btn" type="submit" style="width:100%;background:#0e0e10;color:#d4af37;border:none;border-bottom:2px solid #d4af37;padding:13px;font-family:Georgia,serif;font-size:14px;letter-spacing:1px;cursor:pointer;">Enviar solicitud</button>
+    </form>
+    <div id="msg" style="display:none;margin-top:16px;padding:12px 14px;font-size:13px;line-height:1.5;"></div>
+    <p style="margin:22px 0 0;font-size:10px;color:#999;line-height:1.5;">Aprobación sujeta a revisión de antecedentes crediticios según la normativa vigente y las políticas de crédito internas de nuestra compañía. Mutuaria regulada por la CMF.</p>
+  </div>
+</div>
+<script>
+document.getElementById('f').addEventListener('submit',async function(e){
+  e.preventDefault();
+  var b=document.getElementById('btn'),m=document.getElementById('msg');
+  b.disabled=true;b.textContent='Enviando…';
+  try{
+    var r=await fetch(window.location.pathname,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({nombre:document.getElementById('nombre').value,telefono:document.getElementById('telefono').value})});
+    var d=await r.json();m.style.display='block';
+    if(r.ok&&d.ok){m.style.background='#f0f7f1';m.style.border='1px solid #2e7d43';m.style.color='#2e7d43';
+      m.textContent=d.mensaje;document.getElementById('f').style.display='none';}
+    else{m.style.background='#fdf1f1';m.style.border='1px solid #b91c1c';m.style.color='#b91c1c';
+      m.textContent=(d.detail||'No se pudo enviar. Intenta nuevamente.');b.disabled=false;b.textContent='Enviar solicitud';}
+  }catch(err){m.style.display='block';m.style.background='#fdf1f1';m.style.border='1px solid #b91c1c';
+    m.style.color='#b91c1c';m.textContent='Error de conexión. Intenta nuevamente.';b.disabled=false;b.textContent='Enviar solicitud';}
+});
+</script>
+</body></html>"""
+
+
+@pub.get("/contacto")
+async def contacto_form():
+    from fastapi.responses import HTMLResponse
+    return HTMLResponse(FORM_CONTACTO_HTML)
+
+
+@pub.post("/contacto")
+async def contacto_submit(payload: dict):
+    nombre = (payload.get("nombre") or "").strip()[:80]
+    tel = re.sub(r"[^\d+]", "", payload.get("telefono") or "")
+    if len(nombre) < 3:
+        raise HTTPException(status_code=400, detail="Ingresa tu nombre completo")
+    if not re.match(r"^\+?\d{8,15}$", tel):
+        raise HTTPException(status_code=400, detail="Ingresa un teléfono válido (+56 9 XXXX XXXX)")
+    ya = await db.solicitudes_llamada.find_one({
+        "telefono": tel, "origen": "campania_clientes_directos",
+        "creado_en": {"$gt": (datetime.now(timezone.utc) - __import__("datetime").timedelta(hours=24)).isoformat()}})
+    if not ya:
+        await db.solicitudes_llamada.insert_one({
+            "id": str(uuid.uuid4()), "cliente": nombre, "telefono": tel,
+            "horario": "Cuanto antes", "motivo": "campaña clientes directos",
+            "origen": "campania_clientes_directos", "creado_en": _now()})
+        logging.info(f"📣 Contacto de campaña recibido: {nombre} · {tel}")
+    return {"ok": True, "mensaje": ("¡Gracias! Recibimos tu solicitud. Un ejecutivo de Central Mutuos "
+                                    "te contactará a la brevedad.")}

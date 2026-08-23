@@ -144,7 +144,7 @@ export default function PublicidadModule() {
         <Encabezado n="2" titulo="Campañas de Correo" sub="Templates corporativos · envío pausado (6 s) para proteger la reputación del dominio" />
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
           {data.templates.map(t => (
-            <div key={t.archivo} data-testid={`template-${t.archivo}`} onClick={() => setCamp({ ...camp, template: t.archivo })}
+            <div key={t.archivo} data-testid={`template-${t.archivo}`} onClick={() => setCamp({ ...camp, template: t.archivo, asunto: camp.asunto || t.asunto || "" })}
               style={{ cursor: "pointer", border: `1.5px solid ${camp.template === t.archivo ? ORO : "rgba(148,163,184,0.25)"}`, borderRadius: 10, padding: "0.6rem 0.9rem", background: camp.template === t.archivo ? "rgba(212,175,55,0.08)" : "rgba(255,255,255,0.03)" }}>
               <div style={{ color: "#fff", fontWeight: 800, fontSize: "0.72rem" }}>✉ {t.nombre}</div>
               <a href={`/${t.archivo}`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ color: "#38bdf8", fontSize: "0.62rem" }}>👁 Ver template</a>
