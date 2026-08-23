@@ -370,8 +370,12 @@ def reclasificar_codeudor(nombre, codeudor_nombre="", codeudor_rut=""):
         target = dest / (p.name if p.name.upper().startswith("CODEUDOR_") else f"CODEUDOR_{p.name}")
         if target.exists():
             p.unlink()
+            import bunker as _bk
+            _bk.eliminar_bg(p)
         else:
             shutil.move(str(p), str(target))
+            import bunker as _bk
+            _bk.eliminar_bg(p)
         movidos.append(target.relative_to(base).as_posix())
     return movidos
 
@@ -555,6 +559,8 @@ def split_bundled(nombre, rel_path, route_to_codeudor=False, delete_original=Fal
     if delete_original:
         try:
             src.unlink()
+            import bunker as _bk
+            _bk.eliminar_bg(src)
             deleted = True
         except Exception:
             pass

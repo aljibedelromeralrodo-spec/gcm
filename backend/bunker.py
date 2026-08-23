@@ -80,7 +80,9 @@ def sync_en_background():
 
 
 def sync_diff():
-    """Espejo disco -> GridFS: sube nuevos/cambiados y elimina los borrados (el disco manda)."""
+    """Espejo disco -> GridFS: sube nuevos/cambiados. NUNCA borra entradas del
+    almacenamiento en base de datos basándose en el disco local de un pod:
+    GridFS es la FUENTE DE VERDAD. El borrado es solo explícito vía eliminar()."""
     if not _lock.acquire(blocking=False):
         return {"skipped": True}
     try:
@@ -89,7 +91,7 @@ def sync_diff():
         existentes = {d["filename"]: d for d in
                       files_col.find({}, {"filename": 1, "length": 1, "metadata": 1})}
         en_disco = set()
-        subidos = eliminados = 0
+        subidos = 0
         for rel, p in _walk():
             en_disco.add(rel)
             try:
@@ -105,13 +107,47 @@ def sync_diff():
                 subidos += 1
             except Exception as e:
                 logging.warning(f"bunker sync {rel}: {e}")
-        for rel, d in existentes.items():
-            if rel not in en_disco:
-                try:
-                    fs.delete(d["_id"])
-                    eliminados += 1
-                except Exception:
-                    pass
-        return {"subidos": subidos, "eliminados": eliminados, "total_disco": len(en_disco)}
+        return {"subidos": subidos, "eliminados": 0, "total_disco": len(en_disco)}
     finally:
         _lock.release()
+
+
+def eliminar(path):
+    """Borrado EXPLÍCITO e intencional: única vía para eliminar archivos del búnker
+    (GridFS = fuente de verdad). Acepta ruta absoluta de archivo o carpeta bajo
+    storage/; las rutas fuera del búnker son no-op. También limpia el disco local."""
+    import re as _re
+    import shutil as _sh
+    try:
+        p = Path(path)
+        rel = p.relative_to(ROOT).as_posix() if p.is_absolute() else str(path).replace("\\", "/").strip("/")
+    except ValueError:
+        return 0
+    if not rel or rel in SUBDIRS:
+        pass
+    fs, db = _fs()
+    files_col = db["bunker.files"]
+    n = 0
+    for d in files_col.find({"filename": {"$regex": "^" + _re.escape(rel) + "(/|$)"}}, {"_id": 1}):
+        try:
+            fs.delete(d["_id"])
+            n += 1
+        except Exception:
+            pass
+    try:
+        local = ROOT / rel
+        if local.is_dir():
+            _sh.rmtree(local, ignore_errors=True)
+        elif local.exists():
+            local.unlink()
+    except Exception:
+        pass
+    if n:
+        logging.info(f"🏦 BÚNKER: borrado explícito «{rel}» — {n} entrada(s) eliminadas de GridFS")
+    return n
+
+
+def eliminar_bg(path):
+    """eliminar() en hilo daemon: no bloquea el event loop."""
+    threading.Thread(target=eliminar, args=(str(path),), daemon=True).start()
+

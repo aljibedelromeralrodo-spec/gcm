@@ -1380,3 +1380,8 @@ actual; todo lo demás permanece intacto.
 - Parser mejorado: detecta la fila de encabezados en las primeras 3 filas y soporta títulos en inglés (Name/Phone/Email/Contact).
 - Base real importada como tipo Inmobiliaria: 63 registros con contacto (de 174 proyectos usatusubsidio.cl) → 51 con correo · 44 con WhatsApp · 32 con ambos → 50 correos y 44 teléfonos distribuidos a sus campañas.
 - NOTA: en producción habrá que recargar el mismo archivo (la base vive en la BD de preview).
+
+## 2026-08-23 — Leader election por BD + Búnker no destructivo
+- leader_guard.py reescrito: claim atómico con find_one_and_update sobre db.config (_key=leader_lock), identidad de pod vía HOSTNAME, heartbeat 15s / TTL 45s. Todos los loops periódicos (server.py startup, vía _task_blindada) corren solo en el pod líder.
+- bunker.sync_diff: YA NO borra entradas de GridFS según el disco local (GridFS = fuente de verdad). Nuevo bunker.eliminar()/eliminar_bg() para borrado explícito (GridFS + disco), conectado en los 11 puntos de eliminación intencional (server.py: borrar carpeta/archivo/set, reclasificar, reset drive; folders_service.py: moves de codeudor y split).
+- Verificado: claim exclusivo/expiración/liberación con HOSTNAME, sync no destructivo, restauración desde BD, borrado explícito end-to-end.

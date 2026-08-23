@@ -713,6 +713,7 @@ async def startup():
     try:
         import publicidad as _pub_seed
         asyncio.create_task(_pub_seed.seed_regla_oro_75())
+        asyncio.create_task(_pub_seed.seed_proyectos_web())
     except Exception as _e:
         logging.warning(f"seed regla oro 75: {_e}")
     import resumen_diario as _resdia
@@ -2447,6 +2448,7 @@ async def docs_sin_clasificar_asignar(did: str, payload: dict, request: Request)
     carpeta.mkdir(parents=True, exist_ok=True)
     (carpeta / reg["nombre_archivo"]).write_bytes(origen.read_bytes())
     origen.unlink()
+    bunker.eliminar_bg(origen)
     await db.folders.update_one({"id": fd["id"]},
                                 {"$addToSet": {"archivos": f"99_otros/{reg['nombre_archivo']}"}})
     await db.docs_sin_clasificar.delete_one({"id": did})
@@ -2467,6 +2469,7 @@ async def docs_sin_clasificar_delete(did: str, request: Request):
         p = _sc_dir() / f"{did}_{reg['nombre_archivo']}"
         if p.exists():
             p.unlink()
+        bunker.eliminar_bg(p)
         await db.docs_sin_clasificar.delete_one({"id": did})
         await db.storage_docs.update_one({"bandeja_id": did}, {"$set": {"is_deleted": True}})
     return {"ok": True}
@@ -3299,6 +3302,7 @@ async def delete_folder(fid: str):
     if doc:
         import shutil
         shutil.rmtree(fsvc.folder_dir(doc.get("nombre", "")), ignore_errors=True)
+        bunker.eliminar_bg(fsvc.folder_dir(doc.get("nombre", "")))
     await db.folders.delete_one({"id": fid})
     return {"ok": True}
 
@@ -3513,6 +3517,7 @@ async def folder_delete_file(fid: str, payload: dict):
     if not target.exists():
         raise HTTPException(status_code=404, detail="Archivo no encontrado")
     target.unlink()
+    bunker.eliminar_bg(target)
     return {"ok": True}
 
 
@@ -6442,6 +6447,7 @@ async def proc_reevaluar(payload: dict):
             if folder:
                 import shutil
                 shutil.rmtree(fsvc.folder_dir(folder.get("nombre", "")), ignore_errors=True)
+                bunker.eliminar_bg(fsvc.folder_dir(folder.get("nombre", "")))
                 await db.folders.delete_one({"id": folder["id"]})
                 borradas.append(f"{folder.get('nombre','')} — {motivo}")
             await db.proc_queue.update_one({"id": it["id"]}, {"$set": {
@@ -6573,6 +6579,7 @@ async def proc_upload_drive(qid: str, force: bool = False, clave: str = ""):
             for viejo in list(dest.rglob(fn_orig)) + list(dest.rglob(fn_dest)):
                 if viejo.parent != sd or viejo.name != fn_dest:
                     viejo.unlink(missing_ok=True)
+                    bunker.eliminar_bg(viejo)
             uploaded.append(f"{sub}/{fn_dest}")
     if rechazados_ley_rut:
         _nombres_rech = [r["filename"] for r in rechazados_ley_rut]
@@ -6774,6 +6781,7 @@ async def proc_purge():
         for d in CLIENTES_DIR.iterdir():
             if d.is_dir():
                 shutil.rmtree(d, ignore_errors=True)
+                bunker.eliminar_bg(d)
                 deleted += 1
     await db.proc_queue.update_many({}, {"$set": {"drive_folder_id": None}})
     return {"deleted": deleted, "errors": []}
@@ -10668,6 +10676,7 @@ async def aprobacion_eliminar_archivo(ruta: str = "", origen: str = "autocorreo"
     if not p.exists() or p.suffix.lower() != ".pdf":
         raise HTTPException(status_code=404, detail="Archivo no encontrado")
     p.unlink()
+    bunker.eliminar_bg(p)
     if origen == "clientes" and cliente.strip():
         await asyncio.to_thread(_regen_carpeta_cliente, cliente.strip())
     bunker.sync_en_background()
@@ -12036,6 +12045,7 @@ async def setcred_delete(sid: str):
     if doc:
         import shutil
         shutil.rmtree(_set_dir(doc.get("nombre", "")), ignore_errors=True)
+        bunker.eliminar_bg(_set_dir(doc.get("nombre", "")))
     await db.set_credito.delete_one({"id": sid})
     return {"ok": True}
 
@@ -12226,6 +12236,7 @@ async def setcred_delete_file(sid: str, payload: dict):
     if not target.exists():
         raise HTTPException(status_code=404, detail="Archivo no encontrado")
     target.unlink()
+    bunker.eliminar_bg(target)
     return {"ok": True}
 
 

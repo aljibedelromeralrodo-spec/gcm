@@ -643,3 +643,31 @@ async def antecedentes_submit(payload: dict):
     await db.prospectos.update_one({"id": oid}, {"$set": {"link_calificar": url}})
     return {"ok": True, "portal": url,
             "mensaje": "Portal creado. Redirigiendo a tu espacio privado…"}
+
+
+# ══ PROYECTOS WEB PENDIENTES (prototipos guardados para aprobación de directivos) ══
+PROTOTIPOS_WEB = [
+    {"opcion": "A", "nombre": "Clásico Institucional", "archivo": "landing-opcion-a.html",
+     "descripcion": "Hero centrado sobre foto de familia, tipografía serif Playfair, líneas doradas finas, secciones simétricas."},
+    {"opcion": "B", "nombre": "Moderno Asimétrico", "archivo": "landing-opcion-b.html",
+     "descripcion": "Hero dividido con foto enmarcada en dorado, tipografía sans Sora, cifras destacadas (30 seg · 40 años · UF 12.000)."},
+    {"opcion": "C", "nombre": "Editorial Premium", "archivo": "landing-opcion-c.html",
+     "descripcion": "Titular gigante en cursiva serif sobre imagen completa, banda dorada lateral, secciones numeradas Nº 01-08."},
+]
+
+
+async def seed_proyectos_web():
+    for p in PROTOTIPOS_WEB:
+        await db.proyectos_web.update_one(
+            {"opcion": p["opcion"]},
+            {"$set": {**p, "proyecto": "Página Web Institucional — Tu Casa, Tu Decisión",
+                      "estado": "pendiente_aprobacion_directivos"},
+             "$setOnInsert": {"id": str(uuid.uuid4()), "creado": _now()}},
+            upsert=True)
+
+
+@pub.get("/proyectos-web")
+async def proyectos_web(request: Request):
+    _exigir_admin(request)
+    regs = await db.proyectos_web.find({}, {"_id": 0}).sort("opcion", 1).to_list(20)
+    return {"proyectos": regs, "base_url": _app_url()}
