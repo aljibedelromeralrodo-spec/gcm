@@ -37,6 +37,8 @@ export default function PublicidadModule() {
   const [tipoDest, setTipoDest] = useState("broker_inmobiliario");
   const [wa, setWa] = useState({ listado_id: "", mensaje: "", limite: "" });
   const [waLinks, setWaLinks] = useState([]);
+  const [bases, setBases] = useState([]);
+  const [cantEnvio, setCantEnvio] = useState("");
   const [twilio, setTwilio] = useState({ sid: "", token: "", numero: "" });
   const [showTwilio, setShowTwilio] = useState(false);
   const fileCorreo = useRef(null);
@@ -48,6 +50,7 @@ export default function PublicidadModule() {
     axios.get(`${API}/api/publicidad/envios`).then(r => setEnvios(r.data.envios || [])).catch(() => {});
     axios.get(`${API}/api/publicidad/captacion`).then(r => setCapta(r.data)).catch(() => {});
     axios.get(`${API}/api/publicidad/pendientes`).then(r => setPend(r.data)).catch(() => {});
+    axios.get(`${API}/api/publicidad/estado-bases`).then(r => setBases(r.data.bases || [])).catch(() => {});
   }, []);
   useEffect(() => { cargar(); }, [cargar]);
   useEffect(() => {
@@ -149,6 +152,49 @@ export default function PublicidadModule() {
       </div>
 
       {/* ══ 2 · CAMPAÑAS DE CORREO ══ */}
+      <div style={sec} data-testid="estado-bases">
+        <Encabezado n="📊" titulo="Estado de Bases de Datos" sub="Revisa registros y disponibles antes de confirmar cualquier campaña · la regla de 3 meses descuenta a los ya contactados" />
+        {bases.length === 0 && <p style={{ color: "#8a8fa3", fontSize: "0.72rem" }}>Aún no hay bases cargadas.</p>}
+        {bases.length > 0 && (
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.72rem" }}>
+              <thead><tr style={{ color: ORO, textAlign: "left", letterSpacing: 1 }}>
+                <th style={{ padding: "6px 10px" }}>BASE</th><th style={{ padding: "6px 10px" }}>TIPO</th>
+                <th style={{ padding: "6px 10px" }}>REGISTROS</th>
+                <th style={{ padding: "6px 10px" }}>✉ CORREOS (disp./cargados)</th>
+                <th style={{ padding: "6px 10px" }}>💬 WHATSAPP (disp./cargados)</th>
+                <th style={{ padding: "6px 10px" }}>⛔ BLOQUEADOS 3M</th><th></th>
+              </tr></thead>
+              <tbody>
+                {bases.map(b => (
+                  <tr key={b.id} data-testid={`base-fila-${b.id}`} style={{ borderTop: "1px solid rgba(148,163,184,0.12)", color: "#e2e8f0" }}>
+                    <td style={{ padding: "8px 10px", fontWeight: 800 }}>{b.nombre}</td>
+                    <td style={{ padding: "8px 10px", color: "#8a8fa3" }}>{TIPO_DEST[b.tipo_destinatario] || b.tipo_destinatario}</td>
+                    <td style={{ padding: "8px 10px" }}>{b.registros}</td>
+                    <td style={{ padding: "8px 10px" }}><b style={{ color: b.correos_disponibles > 0 ? "#34eab9" : "#fb7185" }}>{b.correos_disponibles}</b> / {b.correos_total}</td>
+                    <td style={{ padding: "8px 10px" }}><b style={{ color: b.tels_disponibles > 0 ? "#34eab9" : "#fb7185" }}>{b.tels_disponibles}</b> / {b.tels_total}</td>
+                    <td style={{ padding: "8px 10px", color: b.bloqueados_3m ? "#fbbf24" : "#8a8fa3" }}>{b.bloqueados_3m}</td>
+                    <td style={{ padding: "8px 10px" }}>
+                      <button data-testid={`base-usar-${b.id}`} disabled={busy}
+                        style={{ background: "rgba(212,175,55,0.1)", color: ORO, border: "1px solid rgba(212,175,55,0.45)", padding: "0.35rem 0.9rem", fontSize: "0.68rem", fontWeight: 800, cursor: "pointer" }}
+                        onClick={() => { setCamp({ ...camp, listado_id: b.id, limite: cantEnvio }); setWa({ ...wa, listado_id: b.id, limite: cantEnvio }); setMsg(`✅ Base «${b.nombre}» seleccionada en Campañas de Correo y WhatsApp${cantEnvio ? ` · cantidad: primeros ${cantEnvio}` : ""}`); }}>
+                        Usar esta base</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 14, flexWrap: "wrap" }}>
+          <label style={{ color: ORO, fontSize: "0.68rem", fontWeight: 800, letterSpacing: 1 }}>CANTIDAD DE DESTINATARIOS PARA EL ENVÍO ACTUAL:</label>
+          <input data-testid="bases-cantidad-envio" type="number" min="1" value={cantEnvio} placeholder="ej: 50 (vacío = todos los disponibles)"
+            style={{ ...inp, width: 250 }}
+            onChange={e => { setCantEnvio(e.target.value); setCamp(c => ({ ...c, limite: e.target.value })); setWa(w => ({ ...w, limite: e.target.value })); }} />
+          <span style={{ color: "#8a8fa3", fontSize: "0.62rem" }}>Se aplica a la campaña de correo y de WhatsApp (ej: enviar solo a los primeros 50 disponibles)</span>
+        </div>
+      </div>
+
       <div style={sec} data-testid="campanas-correo">
         <Encabezado n="2" titulo="Campañas de Correo" sub="Templates corporativos · envío pausado (6 s) para proteger la reputación del dominio" />
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>

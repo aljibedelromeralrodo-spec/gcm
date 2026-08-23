@@ -671,3 +671,25 @@ async def proyectos_web(request: Request):
     _exigir_admin(request)
     regs = await db.proyectos_web.find({}, {"_id": 0}).sort("opcion", 1).to_list(20)
     return {"proyectos": regs, "base_url": _app_url()}
+
+
+@pub.get("/estado-bases")
+async def estado_bases(request: Request):
+    """Panel de estado: por cada base cargada, total de registros y disponibles
+    para enviar (descontando enviados/bloqueados por la regla de 3 meses)."""
+    _exigir_admin(request)
+    regs = await db.publicidad_listados.find({}, {"_id": 0}).sort("creado", -1).to_list(100)
+    bases = []
+    for l in regs:
+        correos = [c["valor"] for c in l.get("contactos", []) if c["tipo"] == "correo"]
+        tels = [c["valor"] for c in l.get("contactos", []) if c["tipo"] == "telefono"]
+        exc_mail = await _contactados_recientes(correos, "correo")
+        exc_tel = await _contactados_recientes(tels, "whatsapp")
+        bases.append({
+            "id": l["id"], "nombre": l["nombre"],
+            "tipo_destinatario": l.get("tipo_destinatario") or "broker_inmobiliario",
+            "registros": len(l.get("contactos", [])),
+            "correos_total": len(correos), "correos_disponibles": len(correos) - len(exc_mail),
+            "tels_total": len(tels), "tels_disponibles": len(tels) - len(exc_tel),
+            "bloqueados_3m": len(exc_mail) + len(exc_tel)})
+    return {"bases": bases}

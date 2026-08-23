@@ -1392,3 +1392,7 @@ actual; todo lo demás permanece intacto.
 ## 2026-08-23 — Módulo Ventas: guard de ejecutivo vacío + selector admin
 - VentasPanel.js: si ejecutivo viene vacío NO llama a /api/ventas/panel/ y muestra "Seleccione un ejecutivo de Ventas" (antes quedaba en Cargando infinito).
 - VentasWorkspace.js: admin sin ventas_ejecutivo ve barra selectora (Yerile Barrera / Deisy Salazar), persistida en sessionStorage. Verificado con screenshots.
+
+## 2026-08-23 — Panel Estado de Bases de Datos (Publicidad)
+- Nuevo endpoint GET /api/publicidad/estado-bases: por base → registros, correos disp./cargados, WhatsApp disp./cargados, bloqueados 3 meses.
+- Panel visible ANTES de las campañas con tabla por base + botón "Usar esta base" (selecciona el listado en correo y WA) + campo "Cantidad de destinatarios para el envío actual" que sincroniza el límite de ambas campañas. Verificado con screenshot (bases reales: ds19 94 reg · usa tu subsidio 2019 reg).
