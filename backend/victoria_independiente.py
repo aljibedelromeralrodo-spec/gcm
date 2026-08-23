@@ -1116,7 +1116,7 @@ DEMOS_DIR.mkdir(parents=True, exist_ok=True)
 @vict.get("/demo/video")
 async def demo_video(request: Request, modulo: str = "victoria"):
     _exigir(request)
-    archivo = {"victoria": "demo_victoria.mp4", "ventas": "demo_ventas.mp4", "mutuos": "demo_mutuos.mp4"}.get(modulo)
+    archivo = {"victoria": "demo_victoria.mp4", "ventas": "demo_ventas.mp4", "mutuos": "demo_mutuos.mp4", "web": "demo_web.mp4"}.get(modulo)
     if not archivo:
         raise HTTPException(status_code=400, detail="Módulo de demo inválido")
     p = DEMOS_DIR / archivo
@@ -1130,7 +1130,7 @@ async def demo_video(request: Request, modulo: str = "victoria"):
 async def demo_enviar(payload: dict, request: Request):
     u = _exigir(request)
     modulo = payload.get("modulo") or "victoria"
-    archivo = {"victoria": "demo_victoria.mp4", "ventas": "demo_ventas.mp4", "mutuos": "demo_mutuos.mp4"}.get(modulo)
+    archivo = {"victoria": "demo_victoria.mp4", "ventas": "demo_ventas.mp4", "mutuos": "demo_mutuos.mp4", "web": "demo_web.mp4"}.get(modulo)
     if not archivo:
         raise HTTPException(status_code=400, detail="Módulo de demo inválido")
     p = DEMOS_DIR / archivo

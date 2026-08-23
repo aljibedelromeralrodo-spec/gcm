@@ -1412,3 +1412,10 @@ actual; todo lo demás permanece intacto.
   - C "Fintech Moderno": Space Grotesk + IBM Plex Mono, grid geométrico dorado, cifras destacadas (30s/UF12.000/90%/40años), simulador con barra de progreso animada, galería grid compacto.
 - Los 3 incluyen: simulador 30s, galería Ecomac/Besalco/Boetch, panel Mi Crédito, botón pago AMH (portal.amhpago.cl), noticias SEO, switcher A/B/C flotante.
 - Seed PROTOTIPOS_WEB actualizado en publicidad.py (nombres/descripciones nuevas). Verificado E2E: 3 páginas HTTP 200, simuladores calculan correctamente (A: UF 16.67, B: recálculo live, C: barra animada + resultado).
+
+## 2026-06 (fork) — Video comercial de los 3 prototipos (2:04 min)
+- Generado video MP4 (1280x720, 8MB, 124s) con locución en español (OpenAI TTS tts-1-hd, voz onyx, Emergent LLM Key): intro con placa dorada → recorrido Prototipo A → B (calculadora en acción) → C (barra animada) → cierre "Tu Casa, Tu Decisión".
+- Pipeline: guion 5 segmentos → TTS mp3 → grabación Playwright (scroll suave + interacción con simuladores) → ffmpeg (x264+aac, concat).
+- Descarga pública directa: {REACT_APP_BACKEND_URL}/demo-proyectos-web.mp4 (en /app/frontend/public/).
+- También integrado al endpoint autenticado de demos: GET /api/victoria/demo/video?modulo=web (archivo /app/backend/demos/demo_web.mp4; mapeo "web" agregado en victoria_independiente.py).
+- Verificado: HTTP 200 (8.168.126 bytes), frames revisados en 40s/70s/100s/118s confirman los 5 segmentos.
