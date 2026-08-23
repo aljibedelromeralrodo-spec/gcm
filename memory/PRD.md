@@ -1346,3 +1346,9 @@ actual; todo lo demás permanece intacto.
 - Anti-duplicado: claim atómico en `cmf_morosidad.aviso_ejecutivo_at` (un solo aviso por carpeta). Respeta modo prueba (intercepta a gerardo.ext). Evento registrado en historial.
 - Deep-link nuevo: `/#cliente-{folderId}` abre directamente la ficha (App.js + ClientesModule.js).
 - Verificado: correo real enviado (SMTP success), anti-duplicado en 2ª auditoría, deep-link con screenshot.
+
+## 2026-08-23 — Leader Guard para loops periódicos (multi-réplica producción)
+- Nuevo `backend/leader_guard.py`: mutex distribuido con lease atómico en Mongo (config._key=leader_lock). Renovación cada 15s, expiración 45s, failover automático si el pod líder muere.
+- `_task_blindada` (server.py) ahora espera liderazgo antes de ejecutar cada loop → los ~40 loops 24/7 (ingesta_carpetas, mesa, espejo, resúmenes, etc.) corren SOLO en la instancia líder.
+- El lease (`lider_loop`) corre en TODAS las réplicas vía `_task_blindada_sin_guard`. Shutdown libera el lock para traspaso inmediato.
+- Verificado: claim exclusivo (réplica 2 no roba lease vigente), takeover con lease expirado, renovación propia, liberación en shutdown y recuperación automática del backend real.

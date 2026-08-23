@@ -369,19 +369,48 @@ _BG_TASKS = set()
 @app.on_event("shutdown")
 async def _cancelar_tareas_fondo():
     """Evita cuelgues en hot-reload: cancela todos los loops de fondo al apagar."""
+    try:
+        import leader_guard as _lg
+        await _lg.liberar()
+    except Exception:
+        pass
     for t in list(_BG_TASKS):
         t.cancel()
 
 
-async def _task_blindada(coro_fn, nombre):
-    """Supervisor: si un loop de fondo muere por error, se registra y se reinicia solo.
-    Si el loop retorna limpio (cliente Mongo cerrado en hot-reload), el supervisor termina."""
+async def _task_blindada_sin_guard(coro_fn, nombre):
+    """Igual que _task_blindada pero SIN leader guard (para el propio lease,
+    que debe correr en TODAS las réplicas)."""
     t = asyncio.current_task()
     if t is not None:
         _BG_TASKS.add(t)
         t.add_done_callback(_BG_TASKS.discard)
     while True:
         try:
+            await coro_fn()
+            break
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            if "after close" in str(e):
+                break
+            logging.warning(f"loop {nombre}: {str(e)[:200]}")
+            await asyncio.sleep(10)
+
+
+async def _task_blindada(coro_fn, nombre):
+    """Supervisor: si un loop de fondo muere por error, se registra y se reinicia solo.
+    Si el loop retorna limpio (cliente Mongo cerrado en hot-reload), el supervisor termina.
+    🔐 LEADER GUARD: con múltiples réplicas, cada loop espera a que esta instancia
+    sea la líder (mutex atómico en Mongo) antes de ejecutarse."""
+    import leader_guard as _lg
+    t = asyncio.current_task()
+    if t is not None:
+        _BG_TASKS.add(t)
+        t.add_done_callback(_BG_TASKS.discard)
+    while True:
+        try:
+            await _lg.esperar_liderazgo(nombre)
             await coro_fn()
             break  # retorno limpio = proceso en cierre: no revivir zombies
         except asyncio.CancelledError:
@@ -653,6 +682,10 @@ async def startup():
          "$setOnInsert": {"cutoff_iso": None, "destination": os.environ.get("MAIL2_USER", "")}},
         upsert=True)
     # BLINDADO 24/7: cada loop se reinicia solo si falla
+    # 🔐 LEADER GUARD: el lease corre en todas las réplicas; solo la líder ejecuta loops
+    import leader_guard as _lg
+    await _lg._intentar_liderazgo()
+    asyncio.create_task(_task_blindada_sin_guard(_lg.lider_loop, "leader_guard"))
     _ai_stop = os.environ.get("AI_EMERGENCY_STOP") == "1"
     if _ai_stop:
         logging.warning("🛑 AI_EMERGENCY_STOP=1: loops de OCR/IA (ingesta, reparos, aprendizaje) DESACTIVADOS")
