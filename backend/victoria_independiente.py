@@ -465,11 +465,17 @@ async def victoria_mail_loop():
 # ══════════ ENDPOINTS ══════════
 @vict.get("/panel")
 async def panel(request: Request):
-    _exigir(request)
-    clientes = await db.victoria_clientes.find({}, {"_id": 0}).sort("creado", -1).to_list(200)
+    u = _exigir(request)
+    es_admin = u.get("rol") in ("admin", "maestro")
+    # 🔒 Daniela/Victoria: SOLO clientes en etapa de escrituración subidos MANUALMENTE
+    # por el Administrador. Nada del flujo automático del Administrador es visible.
+    filtro = {} if es_admin else {"origen": "manual"}
+    clientes = await db.victoria_clientes.find(filtro, {"_id": 0}).sort("creado", -1).to_list(200)
     out = []
     for c in clientes:
         docs = await db.victoria_docs.find({"cliente_id": c["id"]}, {"_id": 0, "tipo": 1}).to_list(50)
+        if not es_admin and "escritura" not in {d["tipo"] for d in docs}:
+            continue
         aud = c.get("auditoria")
         out.append({"id": c["id"], "nombre": c["nombre"], "rut": c.get("rut", ""),
                     "n_docs": len(docs), "despachado": c.get("despachado", False),
@@ -1149,11 +1155,14 @@ async def demo_enviar(payload: dict, request: Request):
     return {"ok": True, "mensaje": f"Video de la demo enviado a {dest}"}
 
 # ══════════ MÓDULO VENTAS: asignación alternada automática ══════════
-EJECUTIVOS_VENTAS = {"yerile": "Yerile Barrera", "deysi": "Deisy Salazar"}
+EJECUTIVOS_VENTAS = {"yerile": "Yerile Barrera", "deysi": "Deisy Salazar", "gerardo": "Gerardo Barrera"}
+EJECUTIVOS_INCOMPLETOS = ("yerile", "deysi")  # distribución aleatoria de fichas incompletas
 
 
 async def asignar_a_ventas_si_corresponde(cid, texto=""):
-    """Regla Ventas: documentación incompleta + entrega inmediata → round-robin Yerile/Deisy."""
+    """Regla Ventas (entrega inmediata): ficha COMPLETA → Gerardo Barrera automático
+    (reasignable manualmente por el Administrador); ficha INCOMPLETA → distribución
+    aleatoria entre Yerile Barrera y Deisy Salazar."""
     c = await db.victoria_clientes.find_one({"id": cid})
     if not c or c.get("ventas") or c.get("despachado"):
         return None
@@ -1162,40 +1171,28 @@ async def asignar_a_ventas_si_corresponde(cid, texto=""):
         return None
     docs = await _docs_validos(cid)
     presentes = {d["tipo"] for d in docs}
-    if all(t in presentes for t in DOCS_REQUERIDOS):
-        return None
-    cfg = await db.config.find_one({"_key": "ventas_rr"}) or {}
-    orden = list(EJECUTIVOS_VENTAS.keys())
-    # BALANCE DE CARGA INTELIGENTE: se asigna a quien tenga menos clientes activos
-    conteos = {}
-    for e in orden:
-        conteos[e] = await db.victoria_clientes.count_documents(
-            {"ventas.ejecutivo": e, "ventas.estado": {"$nin": ["aprobado", "rechazado"]}})
-    minimo = min(conteos.values())
-    candidatos = [e for e in orden if conteos[e] == minimo]
-    if len(candidatos) == 1:
-        sig = candidatos[0]
+    completa = all(t in presentes for t in DOCS_REQUERIDOS)
+    if completa:
+        sig = "gerardo"
+        motivo = ("Ficha completa: asignación automática a Gerardo Barrera "
+                  "(el Administrador puede reasignar manualmente a otro ejecutivo).")
     else:
-        ultimo = cfg.get("ultimo")
-        sig = orden[(orden.index(ultimo) + 1) % len(orden)] if ultimo in orden else candidatos[0]
-        if sig not in candidatos:
-            sig = candidatos[0]
-    await db.config.update_one({"_key": "ventas_rr"}, {"$set": {"ultimo": sig}}, upsert=True)
+        import random
+        sig = random.choice(EJECUTIVOS_INCOMPLETOS)
+        motivo = (f"Ficha incompleta: distribución aleatoria entre Yerile Barrera y Deisy Salazar — "
+                  f"queda a cargo de {EJECUTIVOS_VENTAS[sig]} mientras no haya asignación definitiva.")
     import constitucion as _const
     await _const.consultar_cerebro(db, "asignacion_ventas",
-                                   texto_ia=f"Asignación de {c['nombre']} a {EJECUTIVOS_VENTAS[sig]} por balance de carga inteligente",
+                                   texto_ia=f"Asignación de {c['nombre']} a {EJECUTIVOS_VENTAS[sig]}: {motivo}",
                                    modulo="victoria_independiente.py (asignar_a_ventas)")
     await db.victoria_clientes.update_one({"id": cid}, {"$set": {
         "entrega_inmediata": True,
         "ventas": {"ejecutivo": sig, "ejecutivo_nombre": EJECUTIVOS_VENTAS[sig],
                    "asignado_en": _now(), "estado": "en_gestion", "contactos": [],
                    "ultimo_evento": _now(),
-                   "timeline": [{"fecha": _now(), "por": "sistema",
-                                 "accion": (f"Asignación por balance de carga inteligente: la gestión de "
-                                            f"{c['nombre']} queda a cargo de {EJECUTIVOS_VENTAS[sig]} "
-                                            f"({conteos[sig]} cliente(s) activos al momento de asignar).")}]}}})
+                   "timeline": [{"fecha": _now(), "por": "sistema", "accion": motivo}]}}})
     await _aviso("ventas", f"Nueva gestión asignada — {c['nombre']} queda bajo la responsabilidad de "
-                           f"{EJECUTIVOS_VENTAS[sig]} por balance de carga inteligente. "
+                           f"{EJECUTIVOS_VENTAS[sig]}. {motivo} "
                            f"Se espera el primer contacto dentro de las próximas 24 horas.", cid)
     try:
         await _notificar_aviso_ventas(c, sig)

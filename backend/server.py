@@ -141,13 +141,14 @@ async def ensure_seed():
     except Exception as _e:
         logging.warning(f"seed reglas oro victoria: {_e}")
     # ── MÓDULO VENTAS: ejecutivas con acceso exclusivo a su panel ──
-    for _cod, _nom, _ej, _clave in (
-            ("yerile.barrera@centralmutuos.cl", "Yerile Barrera", "yerile", "Yerile2024"),
-            ("deysi.salazar@centralmutuos.cl", "Deisy Salazar", "deysi", "Deysi2024")):
+    for _cod, _nom, _ej, _clave, _mail in (
+            ("yerile.barrera@centralmutuos.cl", "Yerile Barrera", "yerile", "Yerile2024", "yerile.barrera@centralmutuos.cl"),
+            ("deysi.salazar@centralmutuos.cl", "Deisy Salazar", "deysi", "Deysi2024", "deysi.salazar@centralmutuos.cl"),
+            ("gerardo.barrera", "Gerardo Barrera", "gerardo", "Gerardo2026", "")):
         if not await db.users.find_one({"codigo": _cod}):
             await db.users.insert_one({
-                "codigo": _cod, "email": _cod, "nombre": _nom, "rol": "administracion",
-                "perfil": "", "solo_modulo": "ventas", "ventas_ejecutivo": _ej,
+                "codigo": _cod, "email": _mail, "nombre": _nom, "rol": "administracion",
+                "perfil": "ventas", "solo_modulo": "ventas", "ventas_ejecutivo": _ej,
                 "clave_temporal": True,
                 "clave_hash": bcrypt.hashpw(_clave.encode(), bcrypt.gensalt()).decode(),
                 "activo": True, "created": now_iso()})

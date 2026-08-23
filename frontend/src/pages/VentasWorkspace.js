@@ -6,7 +6,7 @@ import VentasPanel from "../victoria/VentasPanel";
 import VentasFicha from "../victoria/VentasFicha";
 
 const NAV_KEY = "ventas_nav_v1";
-const EJECUTIVOS_VENTAS = { yerile: "Yerile Barrera", deysi: "Deisy Salazar" };
+const EJECUTIVOS_VENTAS = { yerile: "Yerile Barrera", deysi: "Deisy Salazar", gerardo: "Gerardo Barrera" };
 
 export default function VentasWorkspace({ user, onLogout, onUserUpdate }) {
   const [showClave, setShowClave] = useState(false);

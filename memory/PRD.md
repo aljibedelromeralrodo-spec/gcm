@@ -1396,3 +1396,8 @@ actual; todo lo demás permanece intacto.
 ## 2026-08-23 — Panel Estado de Bases de Datos (Publicidad)
 - Nuevo endpoint GET /api/publicidad/estado-bases: por base → registros, correos disp./cargados, WhatsApp disp./cargados, bloqueados 3 meses.
 - Panel visible ANTES de las campañas con tabla por base + botón "Usar esta base" (selecciona el listado en correo y WA) + campo "Cantidad de destinatarios para el envío actual" que sincroniza el límite de ambas campañas. Verificado con screenshot (bases reales: ds19 94 reg · usa tu subsidio 2019 reg).
+
+## 2026-08-23 — Panel Daniela/Victoria restringido + Gerardo Barrera ejecutivo
+- /api/victoria/panel: usuarios no-admin (Daniela/Victoria, rol administracion) solo ven clientes origen="manual" (subidos por el Admin) Y con doc de escritura (etapa escrituración). Cero correlación automática. Admin ve todo. Verificado con caso negativo (0 de 5 automáticos) y positivo (1 manual con escritura).
+- EJECUTIVOS_VENTAS += gerardo ("Gerardo Barrera"). Usuario seed idempotente `gerardo.barrera` (email vacío, clave temporal Gerardo2026). Selector admin de VentasWorkspace incluye a Gerardo.
+- asignar_a_ventas_si_corresponde reescrito: ficha COMPLETA → Gerardo automático (reasignable por admin); ficha INCOMPLETA → random.choice entre Yerile y Deisy (reemplaza el balance/round-robin).
