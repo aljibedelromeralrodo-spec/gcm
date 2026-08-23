@@ -1425,3 +1425,8 @@ actual; todo lo demás permanece intacto.
 - Placa final de 25s con los 3 links de preview etiquetados (Prototipo A/B/C) en tarjetas doradas.
 - Reemplazó /app/frontend/public/demo-proyectos-web.mp4 y /app/backend/demos/demo_web.mp4 (7.7MB, 127s). Verificado HTTP 200 + frame de placa final.
 - Links entregados al usuario: /landing-opcion-{a,b,c}.html sobre el preview URL.
+
+## 2026-06 (fork) — Correo Propuesta Sitio Web enviado
+- Enviado correo HTML (negro #0a0a0a / dorado #d4af37 / blanco, estilo campañas) a gerardo.ext@centralmutuos.cl. Asunto: "Propuesta Sitio Web Institucional — Central Mutuos". Dirigido a Rodrigo y René.
+- Incluye: 3 tarjetas con links de prototipos A/B/C, botón dorado de descarga del video, y el video adjunto (Presentacion_Sitio_Web_Central_Mutuos.mp4, 7.7MB).
+- Resultado SMTP 250 OK · remitente ethangerardobarr@gmail.com (capa anti auto-envío activó cuenta principal al detectar destino = cuenta secundaria) · tamaño total 10.2MB.
