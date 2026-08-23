@@ -1969,3 +1969,6 @@ polling GET /api/central/proactive existe vacío en server.py:1526) — usuario 
   screenshots del HTML standalone (Inicio/Experiencias/Aprenda OK).
 - PENDIENTE ARRASTRADO: video comercial Portal del Cliente NO se generó (/tmp/video_work/build_portal.py quedó
   sin ejecutar a término); Twilio keys siguen faltando.
+- +EMPRENDIMIENTO E INNOVACIÓN (Guía de Innovación PDF): MVP/validar antes de endeudarse, modelo de negocio,
+  financiamiento sano (Sercotec/Corfo/FOSIS), formalización, separar plata negocio/casa. Tema chip "🚀 Emprender"
+  (11 temas). Verificado por curl: respuesta prudente con mini-ensayo de 10 porciones y fondos estatales.
