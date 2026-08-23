@@ -1363,3 +1363,10 @@ actual; todo lo demás permanece intacto.
 - Nuevo selector de tipo de destinatario en Campañas de Correo y WhatsApp: Broker Inmobiliario / Cliente Directo / Cliente Individual (backend: campo tipo_destinatario en publicidad_listados, Form en /listados/importar).
 - Una sola subida de Excel con columnas de correo y WhatsApp distribuye automáticamente: correos → campaña de mail, teléfonos → campaña WhatsApp (el parser ya extraía ambos; ahora el mensaje muestra el desglose y el tipo).
 - Los selects de listados muestran la etiqueta del tipo. Verificado end-to-end con Excel real (3 correos + 3 teléfonos → distribución correcta, UI muestra el listado en ambas campañas).
+
+## 2026-08-23 — Publicidad: carga de base + candado ORO-75 + controles de envío
+- Parseo por FILA de Excel (nombre/correo/WhatsApp en mismo archivo): resumen al cargar (registros, con correo, con WhatsApp, con ambos). Filtros anti-falsos (fechas, RUTs). Normalización +569XXXXXXXX. Base real "base usa tu subsidio 01" cargada: 1028 registros (1010 correos, 1009 teléfonos).
+- ORO-75 (inamovible): ninguna campaña (correo/WhatsApp) se dispara sin PIN maestro validado en backend (403 sin PIN, aplica a todos los perfiles). Sembrada en dashai_eventos (seed idempotente en startup → paridad producción) y REGLAS_MAESTRAS.md.
+- Controles: límite manual de registros por envío, registro publicidad_contactados (valor, canal, fecha, campaña), exclusión automática de contactos con publicidad <3 meses + aviso de cuántos fueron excluidos (al cargar y al enviar).
+- Plantillas activadas: correo "Clientes Directos — carta corporativa" (opción C, asunto precargado, botón → formulario público /api/publicidad/contacto → solicitudes_llamada) y WhatsApp opción B (botón "Plantilla Clientes Directos", links → /api/publicidad/antecedentes que crea prospecto y abre portal calificar, y /api/publicidad/contacto).
+- Todo verificado por curl end-to-end.

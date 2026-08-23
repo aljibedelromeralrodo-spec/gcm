@@ -710,6 +710,11 @@ async def startup():
         asyncio.create_task(_task_blindada(_vi_mod.victoria_mail_loop, "victoria_mail"))
     except Exception as _e:
         logging.warning(f"seed reglas oro concreces: {_e}")
+    try:
+        import publicidad as _pub_seed
+        asyncio.create_task(_pub_seed.seed_regla_oro_75())
+    except Exception as _e:
+        logging.warning(f"seed regla oro 75: {_e}")
     import resumen_diario as _resdia
     asyncio.create_task(_task_blindada(_resdia.resumen_diario_loop, "resumen_diario_8am"))
     import espejo_aprendizaje as _espia

@@ -5,13 +5,45 @@ import uuid
 import asyncio
 import logging
 from pathlib import Path
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from urllib.parse import quote
+
+import os
 
 from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form
 from database import db
 
 pub = APIRouter(prefix="/publicidad")
+
+
+def _exigir_pin_maestro(payload):
+    """🏛 ORO-75: NINGUNA campaña se dispara sin PIN maestro validado — sin excepciones."""
+    pin = str((payload or {}).get("master_pin") or "").strip()
+    real = os.environ.get("MASTER_PIN", "")
+    if not real or pin != real:
+        raise HTTPException(status_code=403, detail=(
+            "🏛 REGLA ORO-75: toda campaña requiere el PIN maestro como confirmación final. "
+            "Sin PIN validado, el envío no se ejecuta (aplica a todos los perfiles, incluido el Administrador)."))
+
+
+ORO_75_PATRON = (
+    "REGLA DE ORO #75 — CANDADO MAESTRO DE CAMPAÑAS: ninguna campaña de publicidad (correo o WhatsApp) "
+    "puede dispararse sin que el Administrador ingrese el PIN maestro (MASTER_PIN) como confirmación final. "
+    "Sin PIN maestro validado por el backend, el botón de envío no ejecuta ninguna acción. Esta restricción "
+    "aplica a TODOS los perfiles sin excepción, incluido el Administrador. Complementos: el administrador "
+    "decide manualmente cuántos registros enviar (límite manual), cada contacto enviado queda registrado con "
+    "fecha (publicidad_contactados), y ningún contacto puede recibir campaña dos veces en menos de 3 meses. "
+    "Norma INAMOVIBLE: modificable únicamente con PIN maestro.")
+
+
+async def seed_regla_oro_75():
+    await db.dashai_eventos.update_one(
+        {"motivo": "regla_oro", "norma_clave": "ORO-75"},
+        {"$set": {"titulo": "ORO-75 — Candado Maestro de Campañas (PIN obligatorio)",
+                  "patron": ORO_75_PATRON, "categoria": "publicidad_control",
+                  "inamovible": True, "nivel_calibracion": 100, "fecha": _now()},
+         "$setOnInsert": {"id": str(uuid.uuid4()), "motivo": "regla_oro", "norma_clave": "ORO-75"}},
+        upsert=True)
 PUBLIC_DIR = Path("/app/frontend/public")
 TEMPLATES = [
     {"archivo": "template-brokers-concreces.html", "nombre": "Brokers — dorado (oficial)"},
@@ -22,6 +54,26 @@ TEMPLATES = [
 ]
 RX_MAIL = re.compile(r"^[\w.\-+]+@[\w\-]+(\.[\w\-]+)+$")
 PAUSA_SEG = 6
+COOLDOWN_DIAS = 90  # Regla anti-fatiga: 3 meses entre campañas al mismo contacto
+
+
+async def _contactados_recientes(valores, canal):
+    """Contactos que ya recibieron publicidad hace menos de 3 meses (a excluir)."""
+    if not valores:
+        return set()
+    desde = (datetime.now(timezone.utc) - timedelta(days=COOLDOWN_DIAS)).isoformat()
+    cur = db.publicidad_contactados.find(
+        {"valor": {"$in": valores}, "canal": canal, "fecha": {"$gt": desde}},
+        {"_id": 0, "valor": 1})
+    return {d["valor"] async for d in cur}
+
+
+async def _registrar_contactado(valor, canal, campana_id, listado):
+    """Registro permanente: a quién se le envió publicidad, cuándo y en qué campaña."""
+    await db.publicidad_contactados.update_one(
+        {"valor": valor, "canal": canal},
+        {"$set": {"fecha": _now(), "campana_id": campana_id, "listado": listado}},
+        upsert=True)
 
 
 def _now():
@@ -66,7 +118,24 @@ def _parsear_contactos(texto, excluir):
 async def listados(request: Request):
     _exigir_admin(request)
     regs = await db.publicidad_listados.find({}, {"_id": 0}).sort("creado", -1).to_list(100)
-    return {"listados": regs, "templates": TEMPLATES}
+    return {"listados": regs, "templates": TEMPLATES,
+            "plantilla_wa_clientes": _plantilla_wa_clientes()}
+
+
+def _plantilla_wa_clientes():
+    """Plantilla WhatsApp oficial para campaña de Clientes Directos (opción B elegida)."""
+    base = _app_url()
+    return ("*CENTRAL MUTUOS CON CRECES*\n"
+            "━━━━━━━━━━━━━━\n\n"
+            "Hola [Nombre], le contactamos desde nuestro equipo comercial.\n\n"
+            "🏠 Financiamiento hipotecario para viviendas *nuevas y usadas con entrega inmediata*, "
+            "con o sin subsidio, incluso si otros le han dicho que no.\n\n"
+            "*Para continuar, puede:*\n\n"
+            f"📋 Enviar sus antecedentes aquí:\n{base}/api/publicidad/antecedentes\n\n"
+            f"📞 Solicitar que un ejecutivo le contacte:\n{base}/api/publicidad/contacto\n\n"
+            "━━━━━━━━━━━━━━\n"
+            "Somos mutuaria inscrita y regulada por la CMF.\n"
+            "Aprobación sujeta a revisión de antecedentes según normativa vigente.")
 
 
 @pub.post("/listados")
@@ -106,6 +175,73 @@ TIPOS_DESTINATARIO = {"broker_inmobiliario": "Broker Inmobiliario",
                       "cliente_individual": "Cliente Individual"}
 
 
+def _parsear_filas_xlsx(raw):
+    """Parseo por FILA del Excel: cada registro puede traer nombre, correo y WhatsApp
+    en columnas del mismo archivo. Devuelve (contactos, resumen_detallado)."""
+    import io
+    import openpyxl
+    wb = openpyxl.load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
+    registros = []
+    rx_tel = re.compile(r"^\+?\d{8,12}$")
+    rx_celda_tel = re.compile(r"^[+\d][\d\s().-]*$")
+    for ws in wb.worksheets:
+        idx_nombre = idx_apellido = None
+        for fila_n, row in enumerate(ws.iter_rows(values_only=True)):
+            celdas = [("" if c is None else str(c).strip()) for c in row]
+            if fila_n == 0:
+                bajas = [c.lower() for c in celdas]
+                for i, h in enumerate(bajas):
+                    if h == "nombre" and idx_nombre is None:
+                        idx_nombre = i
+                    if h == "apellido" and idx_apellido is None:
+                        idx_apellido = i
+            correo, telefono = "", ""
+            for c in celdas:
+                cl = c.lower()
+                if not correo and RX_MAIL.match(cl):
+                    correo = cl
+                if telefono or not c or RX_MAIL.match(cl) or not rx_celda_tel.match(c):
+                    continue
+                if re.search(r"\d{4}-\d{2}-\d{2}|\d{2}:\d{2}", c) or re.match(r"^\d{1,2}\.?\d{3}\.?\d{3}-[\dkK]$", c):
+                    continue
+                tel = re.sub(r"[^\d+]", "", c)
+                if rx_tel.match(tel) and len(re.sub(r"\D", "", tel)) >= 8:
+                    telefono = tel if tel.startswith("+") else (f"+56{tel}" if len(tel) == 9 and tel.startswith("9") else tel)
+            if not correo and not telefono:
+                continue
+            nombre_reg = ""
+            if idx_nombre is not None and idx_nombre < len(celdas):
+                nombre_reg = celdas[idx_nombre]
+                if idx_apellido is not None and idx_apellido < len(celdas) and celdas[idx_apellido]:
+                    nombre_reg = f"{nombre_reg} {celdas[idx_apellido]}".strip()
+            registros.append({"nombre": nombre_reg.title()[:80], "correo": correo, "telefono": telefono})
+    # Dedupe de registros por (correo, telefono) y construcción de contactos
+    contactos, vistos = [], set()
+    con_correo = con_wa = con_ambos = total = 0
+    reg_vistos = set()
+    for r in registros:
+        kr = (r["correo"], r["telefono"])
+        if kr in reg_vistos:
+            continue
+        reg_vistos.add(kr)
+        total += 1
+        if r["correo"]:
+            con_correo += 1
+        if r["telefono"]:
+            con_wa += 1
+        if r["correo"] and r["telefono"]:
+            con_ambos += 1
+        if r["correo"] and r["correo"] not in vistos:
+            vistos.add(r["correo"])
+            contactos.append({"valor": r["correo"], "tipo": "correo", "nombre": r["nombre"]})
+        if r["telefono"] and r["telefono"] not in vistos:
+            vistos.add(r["telefono"])
+            contactos.append({"valor": r["telefono"], "tipo": "telefono", "nombre": r["nombre"]})
+    detalle = {"registros": total, "con_correo": con_correo,
+               "con_whatsapp": con_wa, "con_ambos": con_ambos}
+    return contactos, detalle
+
+
 @pub.post("/listados/importar")
 async def importar_listado(request: Request, archivo: UploadFile = File(...),
                            nombre: str = Form(""), excluir: str = Form("ecomac.cl"),
@@ -118,23 +254,22 @@ async def importar_listado(request: Request, archivo: UploadFile = File(...),
         tipo_destinatario = "broker_inmobiliario"
     raw = await archivo.read()
     fn = (archivo.filename or "").lower()
-    celdas = []
+    exclusiones = [e.strip() for e in (excluir or "").split(",") if e.strip()]
+    detalle = None
     if fn.endswith((".xlsx", ".xlsm")):
-        import io
-        import openpyxl
         try:
-            wb = openpyxl.load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
-            for ws in wb.worksheets:
-                for row in ws.iter_rows(values_only=True):
-                    celdas += [str(c) for c in row if c is not None]
+            contactos, detalle = _parsear_filas_xlsx(raw)
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"No pude leer el Excel: {str(e)[:120]}")
+        _exc = {c["valor"] for c in contactos
+                if any(ex and ex.lower() in c["valor"] for ex in exclusiones)}
+        contactos = [c for c in contactos if c["valor"] not in _exc]
+        resumen = {"agregados": len(contactos), "duplicados_eliminados": 0,
+                   "excluidos": sorted(_exc), "invalidos": [], **detalle}
     elif fn.endswith((".csv", ".txt")):
-        celdas = [raw.decode("utf-8", errors="ignore")]
+        contactos, resumen = _parsear_contactos(raw.decode("utf-8", errors="ignore"), exclusiones)
     else:
         raise HTTPException(status_code=400, detail="Formato no soportado: suba .xlsx, .csv o .txt")
-    exclusiones = [e.strip() for e in (excluir or "").split(",") if e.strip()]
-    contactos, resumen = _parsear_contactos(" ".join(celdas), exclusiones)
     if not contactos:
         raise HTTPException(status_code=400,
                             detail="El archivo no contiene correos ni teléfonos válidos")
@@ -159,10 +294,18 @@ async def importar_listado(request: Request, archivo: UploadFile = File(...),
     reg = await db.publicidad_listados.find_one({"id": lid}, {"_id": 0})
     n_mail = sum(1 for c in reg.get("contactos", []) if c["tipo"] == "correo")
     n_tel = sum(1 for c in reg.get("contactos", []) if c["tipo"] == "telefono")
+    # 🛡 Aviso anti-fatiga: cuántos de la base ya recibieron publicidad hace <3 meses
+    en_pausa = len(await _contactados_recientes(
+        [c["valor"] for c in reg.get("contactos", []) if c["tipo"] == "correo"], "correo"))
+    en_pausa += len(await _contactados_recientes(
+        [c["valor"] for c in reg.get("contactos", []) if c["tipo"] == "telefono"], "whatsapp"))
     return {"ok": True, "listado": reg, "resumen": resumen,
-            "mensaje": (f"«{nombre}» ({TIPOS_DESTINATARIO[tipo_destinatario]}): "
+            "mensaje": ((f"📊 {detalle['registros']} registro(s) cargados: {detalle['con_correo']} con correo · "
+                         f"{detalle['con_whatsapp']} con WhatsApp · {detalle['con_ambos']} con ambos — " if detalle else "")
+                        + f"«{nombre}» ({TIPOS_DESTINATARIO[tipo_destinatario]}): "
                         f"{resumen['agregados']} contacto(s) nuevos — distribución automática: "
-                        f"{n_mail} correo(s) → Campañas de Correo · {n_tel} teléfono(s) → Campañas WhatsApp")}
+                        f"{n_mail} correo(s) → Campañas de Correo · {n_tel} teléfono(s) → Campañas WhatsApp"
+                        + (f" · ⚠ {en_pausa} contacto(s) recibieron publicidad hace menos de 3 meses y serán excluidos automáticamente del envío" if en_pausa else ""))}
 
 
 # ══ CENTRO DE CAPTACIÓN — datos unificados para la vista del administrador ══
@@ -214,7 +357,7 @@ async def quitar_contacto(lid: str, payload: dict, request: Request):
     return {"ok": True}
 
 
-async def _envio_bg(eid, correos, html, asunto, texto=""):
+async def _envio_bg(eid, correos, html, asunto, texto="", listado_nombre=""):
     import email_service as mail
     enviados, fallidos = 0, []
     for i, correo in enumerate(correos):
@@ -223,6 +366,7 @@ async def _envio_bg(eid, correos, html, asunto, texto=""):
                                         body_text=texto or None)
             if r.get("success"):
                 enviados += 1
+                await _registrar_contactado(correo, "correo", eid, listado_nombre)
             else:
                 fallidos.append({"correo": correo, "error": str(r.get("error"))[:120]})
         except Exception as e:
@@ -291,17 +435,37 @@ async def enviar(payload: dict, request: Request):
     correos = [c["valor"] for c in listado.get("contactos", []) if c["tipo"] == "correo"]
     if not correos:
         raise HTTPException(status_code=400, detail="El listado no tiene correos válidos")
+    # 🛡 REGLA ANTI-FATIGA: excluir contactos con publicidad hace menos de 3 meses
+    excluidos = await _contactados_recientes(correos, "correo")
+    correos = [c for c in correos if c not in excluidos]
+    if not correos:
+        raise HTTPException(status_code=400, detail=(
+            f"Los {len(excluidos)} correo(s) del listado ya recibieron publicidad hace menos de "
+            f"3 meses — la regla anti-fatiga los excluye a todos. Reintente cuando cumplan la pausa."))
+    # 🎛 CONTROL MANUAL: el administrador decide cuántos registros enviar
+    try:
+        limite = int(payload.get("limite") or 0)
+    except (TypeError, ValueError):
+        limite = 0
+    if limite > 0:
+        correos = correos[:limite]
     if not payload.get("confirmado"):
-        raise HTTPException(status_code=400, detail=f"Confirma el envío: se despachará a {len(correos)} destinatario(s)")
+        raise HTTPException(status_code=400, detail=(
+            f"Confirma el envío: se despachará a {len(correos)} destinatario(s)"
+            + (f" · {len(excluidos)} excluido(s) por regla de 3 meses" if excluidos else "")))
+    _exigir_pin_maestro(payload)  # 🏛 ORO-75: candado maestro de campañas
     eid = str(uuid.uuid4())
     await db.publicidad_envios.insert_one({
         "id": eid, "canal": "correo", "listado": listado["nombre"], "listado_id": listado["id"],
         "template": template, "asunto": asunto, "total": len(correos), "enviados": 0,
+        "excluidos_3m": len(excluidos), "limite": limite or None,
         "fallidos": [], "progreso": 0, "estado": "enviando", "iniciado": _now(),
         "por": u.get("sub", "")})
-    asyncio.create_task(_envio_bg(eid, correos, html, asunto, texto))
-    return {"ok": True, "envio_id": eid, "total": len(correos),
-            "mensaje": f"Campaña iniciada: {len(correos)} correo(s) en segundo plano con pausa de {PAUSA_SEG}s entre envíos (protección de reputación)."}
+    asyncio.create_task(_envio_bg(eid, correos, html, asunto, texto, listado["nombre"]))
+    return {"ok": True, "envio_id": eid, "total": len(correos), "excluidos_3m": len(excluidos),
+            "mensaje": (f"Campaña iniciada: {len(correos)} correo(s) en segundo plano con pausa de {PAUSA_SEG}s"
+                        + (f" · {len(excluidos)} contacto(s) excluidos por haber recibido publicidad hace menos de 3 meses" if excluidos else "")
+                        + (f" · límite manual: primeros {limite}" if limite > 0 else ""))}
 
 
 @pub.get("/envios")
@@ -314,6 +478,7 @@ async def envios(request: Request):
 @pub.post("/whatsapp-links")
 async def whatsapp_links(payload: dict, request: Request):
     u = _exigir_admin(request)
+    _exigir_pin_maestro(payload)  # 🏛 ORO-75: candado maestro de campañas
     mensaje = (payload.get("mensaje") or "").strip()
     if not mensaje:
         raise HTTPException(status_code=400, detail="Mensaje obligatorio")
@@ -323,12 +488,30 @@ async def whatsapp_links(payload: dict, request: Request):
     tels = [c["valor"] for c in listado.get("contactos", []) if c["tipo"] == "telefono"]
     if not tels:
         raise HTTPException(status_code=400, detail="El listado no tiene teléfonos: agrega números (+569XXXXXXXX) al listado")
+    # 🛡 REGLA ANTI-FATIGA: excluir teléfonos con publicidad hace menos de 3 meses
+    excluidos = await _contactados_recientes(tels, "whatsapp")
+    tels = [t for t in tels if t not in excluidos]
+    if not tels:
+        raise HTTPException(status_code=400, detail=(
+            f"Los {len(excluidos)} teléfono(s) del listado ya recibieron publicidad hace menos de "
+            f"3 meses — la regla anti-fatiga los excluye a todos."))
+    # 🎛 CONTROL MANUAL: el administrador decide cuántos registros incluir
+    try:
+        limite = int(payload.get("limite") or 0)
+    except (TypeError, ValueError):
+        limite = 0
+    if limite > 0:
+        tels = tels[:limite]
     links = [{"telefono": t, "link": f"https://wa.me/{t.lstrip('+')}?text={quote(mensaje)}"} for t in tels]
+    eid = str(uuid.uuid4())
     await db.publicidad_envios.insert_one({
-        "id": str(uuid.uuid4()), "canal": "whatsapp", "listado": listado["nombre"],
+        "id": eid, "canal": "whatsapp", "listado": listado["nombre"],
         "listado_id": listado["id"], "asunto": mensaje[:80], "total": len(tels),
+        "excluidos_3m": len(excluidos), "limite": limite or None,
         "enviados": 0, "fallidos": [], "estado": "manual", "iniciado": _now(), "por": u.get("sub", "")})
-    return {"ok": True, "links": links}
+    for t in tels:
+        await _registrar_contactado(t, "whatsapp", eid, listado["nombre"])
+    return {"ok": True, "links": links, "excluidos_3m": len(excluidos)}
 
 
 # ══ FORMULARIO PÚBLICO "QUIERO SER CONTACTADO" (campañas clientes directos) ══
@@ -402,3 +585,45 @@ async def contacto_submit(payload: dict):
         logging.info(f"📣 Contacto de campaña recibido: {nombre} · {tel}")
     return {"ok": True, "mensaje": ("¡Gracias! Recibimos tu solicitud. Un ejecutivo de Central Mutuos "
                                     "te contactará a la brevedad.")}
+
+
+# ══ PORTAL PÚBLICO "ENVIAR ANTECEDENTES" (campañas WhatsApp clientes directos) ══
+FORM_ANTECEDENTES_HTML = FORM_CONTACTO_HTML.replace(
+    "Quiero ser contactado</h1>", "Enviar mis antecedentes</h1>").replace(
+    "Déjanos tu nombre y teléfono y un ejecutivo de Central Mutuos te contactará para orientarte en tu crédito hipotecario.",
+    "Ingresa tu nombre y teléfono para abrir tu portal privado, donde podrás subir tu cédula y tus últimas liquidaciones de sueldo de forma segura.").replace(
+    "Enviar solicitud</button>", "Abrir mi portal privado</button>").replace(
+    "m.textContent=d.mensaje;document.getElementById('f').style.display='none';",
+    "m.textContent=d.mensaje;document.getElementById('f').style.display='none';"
+    "if(d.portal){setTimeout(function(){window.location=d.portal;},900);}")
+
+
+@pub.get("/antecedentes")
+async def antecedentes_form():
+    from fastapi.responses import HTMLResponse
+    return HTMLResponse(FORM_ANTECEDENTES_HTML)
+
+
+@pub.post("/antecedentes")
+async def antecedentes_submit(payload: dict):
+    nombre = (payload.get("nombre") or "").strip()[:80]
+    tel = re.sub(r"[^\d+]", "", payload.get("telefono") or "")
+    if len(nombre) < 3:
+        raise HTTPException(status_code=400, detail="Ingresa tu nombre completo")
+    if not re.match(r"^\+?\d{8,15}$", tel):
+        raise HTTPException(status_code=400, detail="Ingresa un teléfono válido (+56 9 XXXX XXXX)")
+    # Reutiliza el prospecto si el mismo teléfono ya abrió un portal (evita duplicados)
+    op = await db.prospectos.find_one({"telefono": tel, "origen": "campania_clientes_directos"}, {"_id": 0})
+    if op:
+        oid = op["id"]
+    else:
+        oid = str(uuid.uuid4())
+        await db.prospectos.insert_one({
+            "id": oid, "nombre": nombre, "telefono": tel, "proyecto": "",
+            "status": "campaña whatsapp", "origen": "campania_clientes_directos",
+            "creado_en": _now()})
+        logging.info(f"📣 Prospecto de campaña WhatsApp creado: {nombre} · {tel}")
+    url = f"{_app_url()}/api/calificar/{oid}"
+    await db.prospectos.update_one({"id": oid}, {"$set": {"link_calificar": url}})
+    return {"ok": True, "portal": url,
+            "mensaje": "Portal creado. Redirigiendo a tu espacio privado…"}

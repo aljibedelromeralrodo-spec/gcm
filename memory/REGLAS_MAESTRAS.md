@@ -27,6 +27,19 @@ Las credenciales de la plataforma **Crece** se administran en el gestor central
   con bloqueo **403 en el backend** para cualquier otro rol.
 - El perfil Gerencia Comercial no tiene acceso al gestor (bloqueo por perfil en backend y menú).
 
+## ORO-75 — Candado Maestro de Campañas (PIN obligatorio)
+Ninguna campaña de publicidad (correo o WhatsApp) puede dispararse sin que el Administrador
+ingrese el **PIN maestro** como confirmación final, validado en el backend. Sin PIN validado,
+el botón de envío **no ejecuta ninguna acción**. Aplica a **todos los perfiles sin excepción**,
+incluido el Administrador. Complementos permanentes:
+1. **Control manual de volumen**: el Administrador decide cuántos registros enviar en cada
+   campaña (primeros 50, 100 o el número que elija). El sistema jamás envía toda la base sola.
+2. **Registro de envíos**: cada correo y número de WhatsApp contactado queda registrado con
+   fecha en `publicidad_contactados`.
+3. **Regla anti-fatiga de 3 meses**: un contacto que recibió publicidad hace menos de 3 meses
+   se excluye automáticamente del envío, informando al Administrador cuántos fueron excluidos.
+   Solo tras 3 meses puede volver a recibir campaña.
+
 ---
 *Registradas el 2026-08-22 en dashai_eventos como Reglas de Oro #73 y #74 (inamovibles, nivel de
-calibración 100). Cualquier modificación requiere PIN maestro.*
+calibración 100). ORO-75 registrada el 2026-08-23. Cualquier modificación requiere PIN maestro.*

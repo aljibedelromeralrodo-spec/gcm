@@ -72,6 +72,7 @@ PERFIL_RUTAS_BLOQUEADAS = {
 }
 PUBLIC_PREFIXES = (
     "/api/publicidad/contacto",    # Formulario público "Quiero ser contactado" (campañas)
+    "/api/publicidad/antecedentes",  # Portal público de envío de antecedentes (campañas WhatsApp)
     "/api/calificar",              # Portal de Captura Autónoma (token = oid)
     "/api/firma/",                 # Portal de Firma (token de firma en la URL)
     "/api/oportunidades/track",    # Pixeles/clics de correos comerciales

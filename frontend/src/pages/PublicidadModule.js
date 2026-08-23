@@ -32,9 +32,9 @@ export default function PublicidadModule() {
   const [pend, setPend] = useState(null);
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
-  const [camp, setCamp] = useState({ listado_id: "", template: "", asunto: "" });
+  const [camp, setCamp] = useState({ listado_id: "", template: "", asunto: "", limite: "" });
   const [tipoDest, setTipoDest] = useState("broker_inmobiliario");
-  const [wa, setWa] = useState({ listado_id: "", mensaje: "" });
+  const [wa, setWa] = useState({ listado_id: "", mensaje: "", limite: "" });
   const [waLinks, setWaLinks] = useState([]);
   const [twilio, setTwilio] = useState({ sid: "", token: "", numero: "" });
   const [showTwilio, setShowTwilio] = useState(false);
@@ -82,14 +82,22 @@ export default function PublicidadModule() {
   });
 
   const enviarCampana = (prueba) => accion(async () => {
-    if (!prueba && !window.confirm("¿Confirmas el envío REAL de la campaña al listado seleccionado?")) return { data: { mensaje: "Envío cancelado" } };
-    return axios.post(`${API}/api/publicidad/enviar`, { ...camp, prueba, confirmado: !prueba });
+    let master_pin = "";
+    if (!prueba) {
+      if (!window.confirm(`¿Confirmas el envío REAL de la campaña${camp.limite ? ` (solo los primeros ${camp.limite})` : " a todo el listado"}? Los contactos con publicidad hace menos de 3 meses se excluyen automáticamente.`)) return { data: { mensaje: "Envío cancelado" } };
+      master_pin = window.prompt("🏛 REGLA ORO-75 — Ingresa el PIN maestro para autorizar la campaña:") || "";
+      if (!master_pin.trim()) return { data: { mensaje: "Envío cancelado: sin PIN maestro no se ejecuta ninguna campaña (ORO-75)" } };
+    }
+    return axios.post(`${API}/api/publicidad/enviar`, { ...camp, limite: Number(camp.limite) || 0, prueba, confirmado: !prueba, master_pin });
   });
 
   const generarWa = () => accion(async () => {
-    const r = await axios.post(`${API}/api/publicidad/whatsapp-links`, wa);
+    const master_pin = window.prompt("🏛 REGLA ORO-75 — Ingresa el PIN maestro para autorizar la campaña de WhatsApp:") || "";
+    if (!master_pin.trim()) return { data: { mensaje: "Campaña cancelada: sin PIN maestro no se ejecuta ninguna campaña (ORO-75)" } };
+    const r = await axios.post(`${API}/api/publicidad/whatsapp-links`, { ...wa, limite: Number(wa.limite) || 0, master_pin });
     setWaLinks(r.data.links || []);
-    r.data.mensaje = `${(r.data.links || []).length} enlace(s) de WhatsApp generados`;
+    r.data.mensaje = `${(r.data.links || []).length} enlace(s) de WhatsApp generados`
+      + (r.data.excluidos_3m ? ` · ${r.data.excluidos_3m} excluido(s) por regla de 3 meses` : "");
     return r;
   });
 
@@ -172,9 +180,13 @@ export default function PublicidadModule() {
           💡 Una sola subida basta: si el Excel trae columnas de <b style={{ color: ORO }}>correo</b> y <b style={{ color: "#25d366" }}>WhatsApp</b>,
           el sistema distribuye automáticamente los correos a esta campaña y los teléfonos a Campañas WhatsApp, con el tipo de destinatario elegido.
         </p>
-        <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap", alignItems: "center" }}>
+          <input data-testid="pub-camp-limite" type="number" min="1" style={{ ...inp, width: 190 }}
+            placeholder="Cantidad a enviar (vacío = todos)" value={camp.limite}
+            onChange={e => setCamp({ ...camp, limite: e.target.value })} />
           <button data-testid="pub-enviar-prueba" disabled={busy || !camp.template || !camp.asunto} style={{ ...ghostBtn, color: "#38bdf8", borderColor: "#38bdf8", background: "rgba(56,189,248,0.08)" }} onClick={() => enviarCampana(true)}>📧 Enviar PRUEBA a mí</button>
           <button data-testid="pub-enviar-campana" disabled={busy || !camp.listado_id || !camp.template || !camp.asunto} style={goldBtn} onClick={() => enviarCampana(false)}>🚀 ENVIAR CAMPAÑA</button>
+          <span style={{ color: "#8a8fa3", fontSize: "0.6rem" }}>🛡 Regla anti-fatiga: quien recibió publicidad hace menos de 3 meses queda excluido automáticamente</span>
         </div>
         <div style={{ marginTop: 14 }} data-testid="pub-historial">
           <b style={{ color: "#fff", fontSize: "0.72rem" }}>Estado de campañas enviadas</b>
@@ -210,7 +222,16 @@ export default function PublicidadModule() {
           </div>
         </div>
         <textarea data-testid="pub-wa-mensaje" style={{ ...inp, width: "100%", minHeight: 70, marginTop: 8 }} placeholder="Mensaje editable de la campaña de WhatsApp…" value={wa.mensaje} onChange={e => setWa({ ...wa, mensaje: e.target.value })} />
-        <button data-testid="pub-wa-generar" disabled={busy || !wa.listado_id || !wa.mensaje} style={{ ...goldBtn, marginTop: 8 }} onClick={generarWa}>💬 Generar enlaces de envío</button>
+        <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <button data-testid="pub-wa-plantilla-clientes" disabled={busy || !data.plantilla_wa_clientes}
+            style={{ ...ghostBtn, color: "#25d366", borderColor: "rgba(37,211,102,0.5)", background: "rgba(37,211,102,0.08)" }}
+            onClick={() => setWa({ ...wa, mensaje: data.plantilla_wa_clientes })}>📋 Plantilla Clientes Directos</button>
+          <input data-testid="pub-wa-limite" type="number" min="1" style={{ ...inp, width: 190 }}
+            placeholder="Cantidad a enviar (vacío = todos)" value={wa.limite}
+            onChange={e => setWa({ ...wa, limite: e.target.value })} />
+          <button data-testid="pub-wa-generar" disabled={busy || !wa.listado_id || !wa.mensaje} style={goldBtn} onClick={generarWa}>💬 Generar enlaces de envío</button>
+          <span style={{ color: "#8a8fa3", fontSize: "0.6rem" }}>🛡 Regla anti-fatiga: 3 meses de pausa por contacto</span>
+        </div>
         {waLinks.length > 0 && (
           <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }} data-testid="pub-wa-links">
             {waLinks.map(l => (
