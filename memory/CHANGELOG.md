@@ -2036,3 +2036,17 @@ polling GET /api/central/proactive existe vacío en server.py:1526) — usuario 
   Video Martín Suma UC ya había sido enviado antes (SMTP 250).
 - REPORTE 6 MESES: /tmp/barrido_result.json respaldado en /app/memory/barrido_result.json
   (123 carpetas, 9 correcciones, stats por tipo).
+
+## 2026-06 (fork) — Modo Crisis, Desafíos, Modo Familia + video rehecho
+- NUEVOS MÓDULOS APP (13 tarjetas): 🆘 Modo Crisis (contención + plan emergencia 6 pasos + chat
+  directo + experiencia calma), 🏅 Desafíos de Ahorro (4 desafíos, "Cumplí hoy" 1/día, insignia +
+  confetti + voz al completar, ma_desafios), 👨‍👩‍👧 Modo Familia (meta familiar compartida ma_fam
+  alimentada por el ahorro registrado, reunión 15 min guiada por voz, mesada educativa).
+- VIDEO MARTÍN SUMA UC REHECHO (69.7s + cierre): locución exacta aprobada sobre 14 piezas alternando
+  6 imágenes de familias chilenas (zoompan) y 8 capturas reales grabadas de la app (registro diario,
+  METAS DE AHORRO, chat animado, grid 8 módulos, Conciencia, Modo Crisis, Desafíos, Modo Familia),
+  xfade 0.5s, cierre logo + "Descárgalo...". Publicado en /video-martin-suma-uc.mp4 (sobrescrito).
+- Pipeline: /app/vidwork/grabar_app.py (graba sesión con localStorage precargado) + build2.py
+  (normaliza piezas → xfade chain → concat con seg_fin.mp4). Playwright chromium se reinstaló
+  (se borra al pausar el job).
+- VERIFICADO: 7 fotogramas del video final revisados + módulos nuevos testeados con screenshot.

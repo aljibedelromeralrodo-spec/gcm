@@ -543,6 +543,48 @@ const MODS = [
   <div id="exp-lista"><div class="card"><p>Cargando experiencias…</p></div></div>`,
   init: () => cargarExps() },
 
+{ id:"crisis", icon:"🆘", t:"Modo Crisis", s:"Para cuando la plata aprieta fuerte", col:"#FFE3D9",
+  render: () => `
+  <div class="card" style="border:2px solid var(--coral)"><h3 style="color:var(--coral)">🆘 Está en un momento difícil — no está solo</h3>
+    <p>Respire. Las crisis de plata tienen salida, y vamos a ordenarla juntos, paso a paso. Primero la calma, después el plan.</p>
+    <button class="voz" onclick="hablar('Escúcheme: sé que ahora la situación aprieta y da miedo. Pero usted no está solo, y esto tiene salida. Primero vamos a recuperar la calma, y después armamos el plan, paso a paso. Confíe: de esta también se sale.')">🔊 Martín le contiene</button>
+    <button class="btn azul" style="display:block;width:100%" onclick="abrirMod('experiencias')" data-testid="crisis-calma">🧘 Primero la calma (3 min guiados)</button>
+    <button class="btn coral" style="display:block;width:100%" onclick="crisisChat()" data-testid="crisis-chat">💬 Hablar con Martín AHORA</button></div>
+  <div class="card"><h3>📋 Plan de emergencia (en este orden)</h3><ul>
+    <li><b>1. Priorice lo vital:</b> techo, comida, luz, agua y remedios. Todo lo demás puede esperar o renegociarse.</li>
+    <li><b>2. Hable ANTES de caer en mora:</b> llame a sus acreedores y pida repactación por escrito. Prefieren cobrar de a poco que no cobrar.</li>
+    <li><b>3. NO tome créditos rápidos ni informales:</b> en crisis, la plata cara es un hoyo más profundo.</li>
+    <li><b>4. Active sus redes:</b> revise beneficios en chileatiende.gob.cl con su ClaveÚnica; municipalidad y CESFAM también ayudan.</li>
+    <li><b>5. Genere caja simple:</b> venda lo que no usa, ofrezca pololitos. Todo peso suma para lo vital.</li>
+    <li><b>6. Cuide su ánimo:</b> si la angustia no lo deja funcionar, Salud Responde <b>600 360 7777</b> atiende 24/7. Pedir ayuda es de valientes.</li></ul></div>` },
+
+{ id:"desafios", icon:"🏅", t:"Desafíos de Ahorro", s:"Juegue, cumpla y gane insignias", col:"#E3F9EF",
+  render: () => `
+  <div class="card"><h3>🏅 Desafíos de la semana</h3>
+    <p>El ahorro se entrena jugando. Elija un desafío, marque cada día cumplido y gane su insignia. Martín celebra con usted.</p></div>
+  <div id="des-lista"></div>`,
+  init: () => pintarDesafios() },
+
+{ id:"familia", icon:"👨‍👩‍👧", t:"Modo Familia", s:"La plata se conversa en casa", col:"#DFF4FF",
+  render: () => `
+  <div class="card"><h3>👨‍👩‍👧 Finanzas en familia</h3>
+    <p>La plata deja de pelear cuando se conversa. Martín le ayuda a hacer de las finanzas un proyecto familiar, con los niños incluidos.</p>
+    <button class="voz" onclick="hablar('Las familias que conversan de plata quince minutos al mes evitan la mayoría de los conflictos del hogar. No se trata de mostrar cuentas aburridas: se trata de soñar juntos, ponerle nombre a las metas y que hasta los más chicos aporten con su granito.')">🔊 Martín le cuenta</button></div>
+  <div class="card"><h3>🎯 Meta familiar compartida</h3>
+    <div id="fam-meta"></div></div>
+  <div class="card"><h3>🗓 La reunión familiar de 15 minutos</h3><ul>
+    <li><b>Min 1-3:</b> cada uno cuenta algo bueno del mes con la plata (sin juzgar).</li>
+    <li><b>Min 4-8:</b> revisar juntos el registro del mes: cuánto entró, cuánto salió, qué sorprendió.</li>
+    <li><b>Min 9-12:</b> la meta familiar: ¿cuánto le pusimos este mes? ¿cuánto falta?</li>
+    <li><b>Min 13-15:</b> un acuerdo concreto para el mes que viene (uno solo, chiquito).</li></ul>
+    <button class="voz" onclick="hablar('Junte a su familia quince minutos, con once o té de por medio. Primero, cada uno cuenta algo bueno del mes. Después miran juntos cuánto entró y cuánto salió, sin retos ni culpas. Luego revisan la meta familiar. Y cierran con un solo acuerdo chiquito para el próximo mes. Eso es todo: quince minutos que ordenan la casa.')">🔊 Martín guía la reunión</button></div>
+  <div class="card"><h3>🧒 Los niños también aprenden</h3><ul>
+    <li><b>Mesada educativa:</b> divídala en 3 frascos — gastar, ahorrar, compartir.</li>
+    <li>Deje que se equivoquen con montos chicos: es la mejor escuela.</li>
+    <li>Invítelos a aportar a la meta familiar con sus moneditas: los hace parte del sueño.</li>
+    <li>Hable de plata con naturalidad, nunca con miedo ni peleas delante de ellos.</li></ul></div>`,
+  init: () => pintarFamilia() },
+
 { id:"conciencia", icon:"🧠", t:"Conciencia", s:"Todo lo que Martín recuerda de usted", col:"#E9E4FF", wide:true,
   render: () => `
   <div class="card"><h3>🧠 La Conciencia de Martín</h3>
@@ -766,6 +808,77 @@ async function cargarTemas() {
   } catch (e) {}
 }
 function preguntar2_eliminado() {}
+
+/* ================= Modo Crisis / Desafíos / Familia ================= */
+function crisisChat() {
+  irChat();
+  setTimeout(() => enviar("Estoy pasando una crisis de plata y necesito ayuda urgente para ordenarme. ¿Por dónde parto?"), 400);
+}
+const DESAFIOS = [
+  { id: "moneditas", icon: "🪙", t: "Desafío de las moneditas", d: "Guarde TODAS sus monedas del día en un frasco, sin excepción.", dias: 7 },
+  { id: "sin-delivery", icon: "🍔", t: "7 días sin delivery", d: "Una semana cocinando en casa. Anote cuánto se ahorró cada día.", dias: 7 },
+  { id: "hormiga", icon: "🐜", t: "Semana caza-hormigas", d: "Detecte y anote UN gasto hormiga cada día (y no lo haga).", dias: 7 },
+  { id: "escalera", icon: "📈", t: "Escalera del ahorro", d: "Día 1: guarde $500. Cada día, sume $500 más que el anterior.", dias: 14 },
+];
+function desGet() { try { return JSON.parse(localStorage.getItem("ma_desafios")) || {}; } catch (e) { return {}; } }
+function pintarDesafios() {
+  const st = desGet(), el = document.getElementById("des-lista");
+  if (!el) return;
+  el.innerHTML = DESAFIOS.map(x => {
+    const done = (st[x.id] || []).length, full = done >= x.dias, hoyOk = (st[x.id] || []).includes(hoyKey());
+    return `<div class="card"><h3>${full ? "🏅" : x.icon} ${x.t} ${full ? "— ¡INSIGNIA GANADA!" : ""}</h3>
+      <p>${x.d}</p>
+      <p style="margin-top:8px;font-size:.72rem;font-weight:800;color:${full ? "var(--verde)" : "var(--azul)"}">${done} / ${x.dias} días</p>
+      <div class="barra"><i style="width:${Math.min(100, Math.round(done / x.dias * 100))}%"></i></div>
+      ${full ? `<p style="margin-top:8px;font-weight:800;color:var(--verde)">🏆 Completado. ¡Usted es de otra categoría!</p>`
+        : `<button class="btn mini ${hoyOk ? "" : "azul"}" ${hoyOk ? "disabled style='opacity:.5'" : ""} onclick="cumplirDia('${x.id}')" data-testid="des-${x.id}">${hoyOk ? "✔ Hoy ya cumplió" : "✅ Cumplí hoy"}</button>`}</div>`;
+  }).join("");
+}
+function cumplirDia(id) {
+  const st = desGet();
+  st[id] = st[id] || [];
+  if (st[id].includes(hoyKey())) return;
+  st[id].push(hoyKey());
+  localStorage.setItem("ma_desafios", JSON.stringify(st));
+  const x = DESAFIOS.find(d => d.id === id);
+  if (st[id].length >= x.dias) {
+    confetti();
+    hablar(`¡Insignia ganada! Completó el ${x.t}. Esto es constancia de la buena: su bolsillo y su futuro se lo agradecen. ¿Nos atrevemos con el siguiente desafío?`);
+    conLog("evento", `🏅 Completó el desafío: ${x.t}`, "entusiasmo");
+  } else {
+    hablar(`¡Bien ahí! Día ${st[id].length} de ${x.dias} del desafío cumplido. La constancia le está ganando al gasto.`);
+  }
+  pintarDesafios();
+}
+function famGet() { try { return JSON.parse(localStorage.getItem("ma_fam")) || null; } catch (e) { return null; } }
+function pintarFamilia() {
+  const el = document.getElementById("fam-meta");
+  if (!el) return;
+  const f = famGet();
+  if (!f) {
+    el.innerHTML = `<p style="font-size:.76rem;color:#6B7280">Pónganle nombre a su sueño familiar y un monto. El ahorro que registran cada día alimenta esta meta.</p>
+      <input id="fam-nom" placeholder="Nombre del sueño (ej: Vacaciones en la playa)" data-testid="fam-nombre">
+      <input id="fam-monto" type="number" inputmode="numeric" placeholder="Monto de la meta (ej: 200000)">
+      <button class="btn" onclick="crearMetaFam()" data-testid="fam-crear">🎯 Crear meta familiar</button>`;
+    return;
+  }
+  const reg = regGet();
+  const ta = Object.values(reg).reduce((s, r) => s + (r.a || 0), 0);
+  const pct = Math.min(100, Math.round(ta / f.monto * 100));
+  el.innerHTML = `<p style="font-weight:800;color:var(--azul)">✨ ${f.nom}</p>
+    <p style="font-size:.74rem;margin-top:4px">Ahorrado en familia: <b>${fmt(ta)}</b> de ${fmt(f.monto)} (${pct}%)</p>
+    <div class="barra"><i style="width:${pct}%"></i></div>
+    ${pct >= 100 ? "<p style='margin-top:8px;font-weight:800;color:var(--verde)'>🏆 ¡SUEÑO CUMPLIDO EN FAMILIA!</p>" : ""}
+    <button class="btn mini coral" onclick="localStorage.removeItem('ma_fam');pintarFamilia()">Cambiar meta</button>`;
+}
+function crearMetaFam() {
+  const nom = document.getElementById("fam-nom").value.trim(), monto = +document.getElementById("fam-monto").value || 0;
+  if (!nom || monto < 1000) return alert("Póngale nombre y un monto a su sueño familiar");
+  localStorage.setItem("ma_fam", JSON.stringify({ nom, monto }));
+  conLog("evento", `Creó meta familiar: ${nom} (${fmt(monto)})`, null);
+  pintarFamilia();
+  hablar(`¡Qué lindo sueño! ${nom}. Ahora cada peso que la familia ahorre lo acerca un poquito más. Cuénteselo a los niños: los sueños compartidos se cumplen antes.`);
+}
 
 /* ================= Tip del día ================= */
 fetch(API + "/api/martin-financiero/contenido").then(r => r.json()).then(d => {
