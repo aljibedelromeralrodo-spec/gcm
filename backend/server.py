@@ -448,6 +448,7 @@ NORMATIVAS_FIJAS = [
     ("PALETA OFICIAL", "NORMATIVA FIJA — PALETA OFICIAL: negro profundo y dorado mate en todo el sistema. El nombre corporativo se escribe exactamente 'Central Mutuos'. El protector de pantalla fue reemplazado por el VISUALIZADOR COGNITIVO EN VIVO: panel en el dashboard del administrador (expandible a pantalla completa) que muestra el flujo real del sistema como cerebro vivo — carpetas, correos, ejecutivos y cerebro normativo como nodos; conexiones doradas que pulsan con actividad real; morado en espera, verde aprobado, rojo rechazo/alerta, fondo negro profundo. A los 5 minutos de inactividad o con doble espacio ocupa toda la pantalla; el PIN maestro aparece solo al presionar una tecla."),
     ("GASTOS OPERACIONALES", "NORMATIVA FIJA — GASTOS OPERACIONALES: prohibido mencionar gastos operacionales en cualquier correo dirigido a clientes o ejecutivos (aprobación, rechazo, simulaciones). La simulación al cliente va solo con la primera hoja, sin gastos."),
     ("PREVIEW OBLIGATORIO", "NORMATIVA FIJA — PREVIEW OBLIGATORIO: todo correo de aprobación o rechazo exige vista previa visible (texto + adjuntos) y confirmación explícita del usuario antes del envío. Nunca envío directo sin preview. Opera de forma local, sin consumo de IA."),
+    ("APROBACION SIN GASTOS", "NORMATIVA CONSTITUCIONAL — APROBACIÓN SIN GASTOS (INAMOVIBLE, mandato del Administrador): el correo de aprobación de Mesa al cliente incluye ÚNICAMENTE: (1) el cuerpo de aprobación, (2) la carta de aprobación y (3) la simulación ajustada con el nombre del cliente. NINGÚN adjunto ni información de Gasto Operacional puede incluirse en este correo bajo ninguna circunstancia. Blindaje en tres capas: (a) _tipo_pdf_aprobacion excluye todo archivo cuyo nombre contenga 'gasto' u 'operacional'; (b) antes del envío se eliminan adjuntos contaminados con alerta al Admin; (c) si el cuerpo o asunto menciona Gasto Operacional, el envío se ABORTA con alerta. Los Gastos Operacionales viajan solo por su módulo propio y el flujo interno de barrido (correo interno a la cuenta corporativa), jamás en el correo de aprobación al cliente."),
     ("CUENTA UNICA DE ENVIO", "NORMATIVA CONSTITUCIONAL — CUENTA ÚNICA DE ENVÍO (INAMOVIBLE, mandato del Administrador): TODOS los correos salientes de la aplicación, sin excepción (Gasto Operacional, rechazos, notificaciones, clasificaciones, resúmenes, campañas y cualquier módulo presente o futuro), se envían EXCLUSIVAMENTE desde la cuenta corporativa gerardo.ext@centralmutuos.cl usando las credenciales MAIL2_*. PROHIBIDO usar ethangerardobarr@gmail.com o cualquier otra cuenta como remitente. La regla se aplica a nivel del servicio central de correo (email_service.send_mail), por lo que ningún módulo puede eludirla: si las credenciales MAIL2_* no están configuradas, el envío se BLOQUEA con error explícito en lugar de usar otra cuenta."),
     ("FUENTE VERDAD MESA", "REGLA CONSTITUCIONAL — FUENTE DE VERDAD DE MESA: el correo aprobaciones@centralmutuos.cl es el canal oficial de mesa; de ahí llegan aprobaciones, rechazos, cambios de tasas, plazos y criterios de evaluación. Es el corazón del sistema de aprendizaje y se monitorea de forma permanente y autónoma. Aprobación/rechazo actualiza la carpeta y activa los botones de envío al ejecutivo; cambios de tasa/plazo/criterio generan alerta al administrador, correo de notificación y marcan las carpetas activas como 'Simulación desactualizada'. Cada correo procesado queda registrado con fecha, hora, tipo y parámetros anteriores vs nuevos. Esta regla es PERMANENTE e INAMOVIBLE: ningún proceso del sistema puede modificarla ni ignorarla."),
 ]
@@ -9956,6 +9957,10 @@ APROBACION_DEFAULTS = {
 
 def _tipo_pdf_aprobacion(nombre):
     low = (nombre or "").lower()
+    # NORMATIVA CONSTITUCIONAL — APROBACIÓN SIN GASTOS: ningún archivo de Gasto
+    # Operacional puede clasificarse como adjunto de aprobación, bajo ninguna circunstancia.
+    if re.search(r"gasto|operacional", low):
+        return "otro"
     if re.search(r"carta|aprobaci[oó]n|aprobacion", low):
         return "carta_aprobacion"
     # Simulación procesada por el autocorreo (sufijo _CM; legado 'ajustad') o simulador crediticio
@@ -10464,6 +10469,26 @@ async def _autocorreo_cliente_aprobado(seg, forzar=False):
                    "_adjuntos_nombres": nombres, "links_html": links_html}
         cuerpo = _aprobacion_html(payload)
         subject = tpl.get("subject") or APROBACION_DEFAULTS["subject"]
+        # ⛔ NORMATIVA CONSTITUCIONAL — APROBACIÓN SIN GASTOS (INAMOVIBLE): el correo de
+        # aprobación lleva ÚNICAMENTE cuerpo de aprobación + carta de aprobación +
+        # simulación ajustada. Cualquier adjunto de Gasto Operacional se ELIMINA y
+        # cualquier mención en el cuerpo ABORTA el envío con alerta al Admin.
+        _contaminados = [a["filename"] for a in adjuntos if re.search(r"gasto|operacional", a["filename"], re.I)]
+        if _contaminados:
+            adjuntos = [a for a in adjuntos if a["filename"] not in _contaminados]
+            nombres = [n for n in nombres if n not in _contaminados]
+            await db.alertas.insert_one({"id": str(uuid.uuid4()), "tipo": "aprobacion",
+                "mensaje": f"🛡️ NORMATIVA APROBACIÓN SIN GASTOS: se bloquearon adjuntos de Gasto "
+                           f"Operacional en el correo de aprobación de {nombre_folder}: {', '.join(_contaminados)}",
+                "cliente": nombre_folder, "fecha": now_iso(), "leida": False})
+        if re.search(r"gasto[s]?\s+operacional", f"{subject} {cuerpo}", re.I):
+            if not forzar:
+                await db.aprobacion_log.delete_one({"clave_lock": clave_lock, "estado_lock": "reservado"})
+            await db.alertas.insert_one({"id": str(uuid.uuid4()), "tipo": "aprobacion",
+                "mensaje": f"⛔ NORMATIVA APROBACIÓN SIN GASTOS: envío ABORTADO — el correo de "
+                           f"aprobación de {nombre_folder} contenía información de Gasto Operacional",
+                "cliente": nombre_folder, "fecha": now_iso(), "leida": False})
+            return {"ok": False, "motivo": "violacion_norma_aprobacion_sin_gastos"}
         bcc = os.environ.get("MAIL2_USER", "")
         # REGLA DE SEGURIDAD: siempre la cuenta comercial como remitente de cara al cliente
         res = await asyncio.to_thread(functools.partial(
