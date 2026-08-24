@@ -1441,3 +1441,9 @@ actual; todo lo demás permanece intacto.
 - POST /api/ventas/clientes/{cid}/hilo-frio: solo admin/maestro o perfil "ventas"; exige MASTER_PIN (ORO-75 vía _exigir_pin_maestro); valida inactividad>=7 días y correo en ficha; envía correo institucional (usted, negro/dorado) firmado por el ejecutivo asignado; registra en ventas.contactos + timeline (resetea semáforo).
 - Frontend VentasPanel.js: botón "🧊 Hilo Frío · N días inactivo" (data-testid ventas-hilo-frio-{id}) con confirm + prompt de PIN maestro.
 - TESTEADO E2E: PIN inválido→403 ORO-75, PIN válido→correo enviado (SMTP OK), re-envío inmediato→400 (<7 días), excel con Content-Disposition correcto, UI verificada con screenshot. Datos de prueba eliminados tras el test.
+
+## 2026-06 (fork) — Rechazo de Mesa: Plantilla C APROBADA y flujo activo
+- Admin aprobó la Opción C (minimalista elegante, todo blanco, nombre centrado) vía POST /api/rechazo-notif/aprobar. Guardada en db.config (_key: rechazo_plantilla, aprobada: "c").
+- Al aprobar se enviaron automáticamente los 3 casos pendientes reales (Anita Álvarez, Catalina Aguilera, Jorge Alcayaga) → gerardo.ext@centralmutuos.cl, SMTP 250 OK cada uno.
+- Prueba real Anita Álvarez (DS19, parámetro objetivo → cambiar titular por codeudor) enviada con éxito; el segundo intento idéntico fue bloqueado correctamente por Regla de Oro #68 (anti-duplicados), confirmando el escudo.
+- Desde ahora, todo rechazo detectado por mesa_verdad se notifica automáticamente al ejecutivo con la plantilla C, sin intervención manual.
