@@ -1381,17 +1381,19 @@ def _blindaje_responsivo(html):
     return html, problemas
 
 
-def send_mail(to, subject, body_html, attachments=None, desde="secundaria", cc=None, headers=None, clave_sin_ajuste="", bcc=None, registro_fallo=True, permitir_duplicado=False, body_text=None, from_name=None, hilo_nuevo=False):
+def send_mail(to, subject, body_html, attachments=None, desde="secundaria", cc=None, headers=None, clave_sin_ajuste="", bcc=None, registro_fallo=True, permitir_duplicado=False, body_text=None, from_name=None, hilo_nuevo=False, cuenta_fija=False):
     """Envia un correo con envío controlado (throttling):
     1) pausa mínima de 10s entre correos, 2) 1 reintento automático tras 60s si falla,
     3) todo error SMTP queda en la colección 'log_errores_correo' (fecha + destinatario).
     attachments: [{filename, content_b64}]. desde: 'secundaria' o 'principal'."""
     if not configured():
         return {"success": False, "error": "Correo no configurado"}
-    # REMITENTE PREDETERMINADO: todo correo automático sale desde la cuenta corporativa
-    # (gerardo.ext@centralmutuos.cl); la cuenta principal (gmail) queda solo como respaldo anti auto-envío.
-    if desde == "principal":
-        desde = "secundaria"
+    # ⛔ REGLA ABSOLUTA — CUENTA ÚNICA DE ENVÍO (mandato del Administrador, INAMOVIBLE):
+    # TODOS los correos salientes del sistema, sin excepción y para cualquier módulo
+    # presente o futuro, se envían SOLO desde MAIL2_* (gerardo.ext@centralmutuos.cl).
+    # PROHIBIDO usar la cuenta principal (gmail) o cualquier otra como remitente.
+    # El parámetro `desde` queda ignorado a propósito por esta regla.
+    desde = "secundaria"
     # ANTI AUTO-ENVÍO (1ª capa): destino propio → redirigir al buzón de pruebas corporativo
     to = _anti_autoenvio(to)
     # NORMATIVA CORREOS: direcciones de prueba PROHIBIDAS — jamás enviar a dominios test
@@ -1410,20 +1412,13 @@ def send_mail(to, subject, body_html, attachments=None, desde="secundaria", cc=N
             "to": str(to), "subject": subject, "huella": _huella, "regla": "oro_68_anti_duplicado"})
         return {"success": False, "duplicado": True, "huella": _huella,
                 "error": "Bloqueado por Regla de Oro #68: un correo idéntico ya fue enviado (escudo anti-duplicados)"}
-    acc = None
-    for a in ACCOUNTS:
-        if a["rol"] == desde:
-            acc = a
-            break
+    # REGLA CUENTA ÚNICA: solo la cuenta corporativa MAIL2; sin MAIL2 el envío se BLOQUEA
+    # (jamás se usa otra cuenta como respaldo).
+    acc = next((a for a in ACCOUNTS if a["rol"] == "secundaria"), None)
     if acc is None:
-        acc = ACCOUNTS[0]
-    # ANTI AUTO-ENVÍO (2ª capa): jamás misma cuenta → misma cuenta; se cambia de emisor
-    _destinos = {(d or "").strip().lower() for d in ([to] if isinstance(to, str) else list(to))}
-    if acc["user"].strip().lower() in _destinos:
-        for _a in ACCOUNTS:
-            if _a["user"].strip().lower() not in _destinos:
-                acc = _a
-                break
+        return {"success": False, "smtp_code": None,
+                "error": "REGLA CUENTA ÚNICA DE ENVÍO: credenciales MAIL2_* (gerardo.ext@centralmutuos.cl) "
+                         "no configuradas — envío bloqueado; prohibido usar otra cuenta"}
     msg = MIMEMultipart()
     # Jerarquía de remitentes: corporativa = rostro comercial; Ethan = soporte interno
     _nombre_from = from_name or (FROM_NAME_SOPORTE if acc["user"] == os.environ.get("MAIL_USER", "") else FROM_NAME)

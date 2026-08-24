@@ -448,6 +448,7 @@ NORMATIVAS_FIJAS = [
     ("PALETA OFICIAL", "NORMATIVA FIJA — PALETA OFICIAL: negro profundo y dorado mate en todo el sistema. El nombre corporativo se escribe exactamente 'Central Mutuos'. El protector de pantalla fue reemplazado por el VISUALIZADOR COGNITIVO EN VIVO: panel en el dashboard del administrador (expandible a pantalla completa) que muestra el flujo real del sistema como cerebro vivo — carpetas, correos, ejecutivos y cerebro normativo como nodos; conexiones doradas que pulsan con actividad real; morado en espera, verde aprobado, rojo rechazo/alerta, fondo negro profundo. A los 5 minutos de inactividad o con doble espacio ocupa toda la pantalla; el PIN maestro aparece solo al presionar una tecla."),
     ("GASTOS OPERACIONALES", "NORMATIVA FIJA — GASTOS OPERACIONALES: prohibido mencionar gastos operacionales en cualquier correo dirigido a clientes o ejecutivos (aprobación, rechazo, simulaciones). La simulación al cliente va solo con la primera hoja, sin gastos."),
     ("PREVIEW OBLIGATORIO", "NORMATIVA FIJA — PREVIEW OBLIGATORIO: todo correo de aprobación o rechazo exige vista previa visible (texto + adjuntos) y confirmación explícita del usuario antes del envío. Nunca envío directo sin preview. Opera de forma local, sin consumo de IA."),
+    ("CUENTA UNICA DE ENVIO", "NORMATIVA CONSTITUCIONAL — CUENTA ÚNICA DE ENVÍO (INAMOVIBLE, mandato del Administrador): TODOS los correos salientes de la aplicación, sin excepción (Gasto Operacional, rechazos, notificaciones, clasificaciones, resúmenes, campañas y cualquier módulo presente o futuro), se envían EXCLUSIVAMENTE desde la cuenta corporativa gerardo.ext@centralmutuos.cl usando las credenciales MAIL2_*. PROHIBIDO usar ethangerardobarr@gmail.com o cualquier otra cuenta como remitente. La regla se aplica a nivel del servicio central de correo (email_service.send_mail), por lo que ningún módulo puede eludirla: si las credenciales MAIL2_* no están configuradas, el envío se BLOQUEA con error explícito en lugar de usar otra cuenta."),
     ("FUENTE VERDAD MESA", "REGLA CONSTITUCIONAL — FUENTE DE VERDAD DE MESA: el correo aprobaciones@centralmutuos.cl es el canal oficial de mesa; de ahí llegan aprobaciones, rechazos, cambios de tasas, plazos y criterios de evaluación. Es el corazón del sistema de aprendizaje y se monitorea de forma permanente y autónoma. Aprobación/rechazo actualiza la carpeta y activa los botones de envío al ejecutivo; cambios de tasa/plazo/criterio generan alerta al administrador, correo de notificación y marcan las carpetas activas como 'Simulación desactualizada'. Cada correo procesado queda registrado con fecha, hora, tipo y parámetros anteriores vs nuevos. Esta regla es PERMANENTE e INAMOVIBLE: ningún proceso del sistema puede modificarla ni ignorarla."),
 ]
 
@@ -8423,7 +8424,8 @@ async def gastos_enviar(payload: dict, request: Request):
     if not to or "@" not in to:
         raise HTTPException(status_code=400, detail="Correo del cliente inválido")
     destinos = [to] + extras
-    res = await asyncio.to_thread(mail.send_mail, destinos, subject, cuerpo, [], "secundaria")
+    res = await asyncio.to_thread(
+        lambda: mail.send_mail(destinos, subject, cuerpo, [], "secundaria", cuenta_fija=True))
     if not res.get("success"):
         raise HTTPException(status_code=502, detail=res.get("error", "Error de envío"))
     await db.gastos_op_log.insert_one({

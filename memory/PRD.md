@@ -1452,3 +1452,10 @@ actual; todo lo demás permanece intacto.
 - Problema reportado: los correos de rechazo "no aparecían". Causa raíz (verificada por IMAP): (1) remitente cambiado a cta respaldo gmail por capa anti auto-envío → no estaban en Enviados de gerardo.ext; (2) cabecera In-Reply-To los anidaba dentro de hilos antiguos; (3) nombre visible del remitente era "Respuestas Mesa Clientes" (violaba regla de enmascarar Mesa).
 - Fix: email_service.send_mail acepta from_name= y hilo_nuevo= (opcionales, sin afectar otros flujos). rechazo_notificacion._enviar usa from_name="Central Mutuos" + hilo_nuevo=True; escudo anti-duplicados intacto (forzar solo en /probar).
 - Verificado E2E por IMAP: nuevo correo de prueba Anita Álvarez llegó a INBOX como "Central Mutuos", hilo NUEVO (independiente), 24-ago 09:28 PDT.
+
+## 2026-06 (fork) — REGLA ABSOLUTA: Cuenta Única de Envío (MAIL2)
+- Mandato del Administrador: TODOS los correos salientes (cualquier módulo, presente o futuro) salen SOLO desde gerardo.ext@centralmutuos.cl (credenciales MAIL2_*). PROHIBIDO ethangerardobarr@gmail.com como remitente.
+- Implementación central en email_service.send_mail: parámetro `desde` ignorado (forzado a secundaria); eliminada la 2ª capa anti auto-envío que cambiaba el remitente a gmail; sin MAIL2 configurada el envío se BLOQUEA con error explícito (jamás usa otra cuenta de respaldo).
+- Gasto Operacional: envía con cuenta_fija=True (anclado a MAIL2).
+- Documentada como NORMATIVA CONSTITUCIONAL "CUENTA UNICA DE ENVIO" en NORMATIVAS_FIJAS (server.py) — se auto-siembra en preview y PRODUCCIÓN al arranque (verificado en dashai_eventos).
+- Verificado con SMTP simulado (4 casos): desde="principal"→corporativa, destino=cuenta propia→se mantiene corporativa, gasto operacional→corporativa, sin MAIL2→bloqueo. La cuenta gmail queda solo para RECEPCIÓN/monitoreo (GMAIL_WATCH_ACCOUNT), nunca como remitente.
