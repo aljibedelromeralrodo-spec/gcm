@@ -174,11 +174,14 @@ async def _email_ejecutivo(folder):
     return FALLBACK_EJECUTIVO
 
 
-async def _enviar(pend, plantilla):
+async def _enviar(pend, plantilla, forzar=False):
     import email_service as mail
     html = PLANTILLAS[plantilla](pend["cliente"], pend["motivo"], pend["recomendacion"])
     asunto = f"Resultado de evaluación — {pend['cliente']}"
-    res = await asyncio.to_thread(mail.send_mail, pend["destinatario"], asunto, html)
+    res = await asyncio.to_thread(
+        lambda: mail.send_mail(pend["destinatario"], asunto, html,
+                               from_name="Central Mutuos", hilo_nuevo=True,
+                               permitir_duplicado=forzar))
     ok = bool(res.get("success"))
     await db.rechazos_notificados.insert_one({
         "id": str(uuid.uuid4()), "cliente": pend["cliente"], "folder_id": pend.get("folder_id", ""),
@@ -259,5 +262,18 @@ async def probar(payload: dict):
         raise HTTPException(status_code=403, detail="Clave incorrecta")
     f = await db.folders.find_one({"nombre": {"$regex": "anita\\s+alvarez", "$options": "i"}}) or \
         {"nombre": CASO_PRUEBA["cliente"], "id": "", "source_email": ""}
-    r = await procesar_rechazo(f, CASO_PRUEBA["texto"], "Caso Anita Álvarez — complemento DS19")
-    return {"ok": True, "resultado": r}
+    motivo, reco = motivo_y_recomendacion(CASO_PRUEBA["texto"])
+    pend = {"id": str(uuid.uuid4()), "cliente": f.get("nombre") or CASO_PRUEBA["cliente"],
+            "folder_id": f.get("id", ""), "destinatario": await _email_ejecutivo(f),
+            "motivo": motivo, "recomendacion": reco,
+            "asunto_origen": "Caso Anita Álvarez — complemento DS19",
+            "estado": "pendiente", "creado": _now()}
+    plantilla = await _plantilla_aprobada()
+    if not plantilla:
+        r = await procesar_rechazo(f, CASO_PRUEBA["texto"], pend["asunto_origen"])
+        return {"ok": True, "resultado": r}
+    ok = await _enviar(pend, plantilla, forzar=True)
+    pend["estado"] = "enviado" if ok else "error_envio"
+    await db.rechazos_pendientes.insert_one(pend)
+    return {"ok": True, "resultado": {"enviado": ok, "plantilla": plantilla,
+                                      "destinatario": pend["destinatario"]}}

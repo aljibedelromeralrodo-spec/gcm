@@ -1447,3 +1447,8 @@ actual; todo lo demás permanece intacto.
 - Al aprobar se enviaron automáticamente los 3 casos pendientes reales (Anita Álvarez, Catalina Aguilera, Jorge Alcayaga) → gerardo.ext@centralmutuos.cl, SMTP 250 OK cada uno.
 - Prueba real Anita Álvarez (DS19, parámetro objetivo → cambiar titular por codeudor) enviada con éxito; el segundo intento idéntico fue bloqueado correctamente por Regla de Oro #68 (anti-duplicados), confirmando el escudo.
 - Desde ahora, todo rechazo detectado por mesa_verdad se notifica automáticamente al ejecutivo con la plantilla C, sin intervención manual.
+
+## 2026-06 (fork) — Fix visibilidad correos de Rechazo
+- Problema reportado: los correos de rechazo "no aparecían". Causa raíz (verificada por IMAP): (1) remitente cambiado a cta respaldo gmail por capa anti auto-envío → no estaban en Enviados de gerardo.ext; (2) cabecera In-Reply-To los anidaba dentro de hilos antiguos; (3) nombre visible del remitente era "Respuestas Mesa Clientes" (violaba regla de enmascarar Mesa).
+- Fix: email_service.send_mail acepta from_name= y hilo_nuevo= (opcionales, sin afectar otros flujos). rechazo_notificacion._enviar usa from_name="Central Mutuos" + hilo_nuevo=True; escudo anti-duplicados intacto (forzar solo en /probar).
+- Verificado E2E por IMAP: nuevo correo de prueba Anita Álvarez llegó a INBOX como "Central Mutuos", hilo NUEVO (independiente), 24-ago 09:28 PDT.

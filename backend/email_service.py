@@ -1381,7 +1381,7 @@ def _blindaje_responsivo(html):
     return html, problemas
 
 
-def send_mail(to, subject, body_html, attachments=None, desde="secundaria", cc=None, headers=None, clave_sin_ajuste="", bcc=None, registro_fallo=True, permitir_duplicado=False, body_text=None):
+def send_mail(to, subject, body_html, attachments=None, desde="secundaria", cc=None, headers=None, clave_sin_ajuste="", bcc=None, registro_fallo=True, permitir_duplicado=False, body_text=None, from_name=None, hilo_nuevo=False):
     """Envia un correo con envío controlado (throttling):
     1) pausa mínima de 10s entre correos, 2) 1 reintento automático tras 60s si falla,
     3) todo error SMTP queda en la colección 'log_errores_correo' (fecha + destinatario).
@@ -1426,7 +1426,7 @@ def send_mail(to, subject, body_html, attachments=None, desde="secundaria", cc=N
                 break
     msg = MIMEMultipart()
     # Jerarquía de remitentes: corporativa = rostro comercial; Ethan = soporte interno
-    _nombre_from = FROM_NAME_SOPORTE if acc["user"] == os.environ.get("MAIL_USER", "") else FROM_NAME
+    _nombre_from = from_name or (FROM_NAME_SOPORTE if acc["user"] == os.environ.get("MAIL_USER", "") else FROM_NAME)
     msg["From"] = formataddr((_nombre_from, acc["user"]))
     msg["To"] = to if isinstance(to, str) else ", ".join(to)
     if cc:
@@ -1443,7 +1443,7 @@ def send_mail(to, subject, body_html, attachments=None, desde="secundaria", cc=N
         msg["Message-ID"] = make_msgid(domain=(acc["user"].split("@")[-1] or "centralmutuos.cl"))
     # CABECERAS HUMANAS (anti-bloqueo): In-Reply-To + References apuntando al último
     # correo real enviado a ese destinatario — el mensaje entra como conversación previa.
-    if not msg.get("In-Reply-To"):
+    if not hilo_nuevo and not msg.get("In-Reply-To"):
         _prev_mid = _ultimo_message_id(to)
         if _prev_mid:
             msg["In-Reply-To"] = _prev_mid
