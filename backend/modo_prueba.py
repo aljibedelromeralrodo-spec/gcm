@@ -154,6 +154,77 @@ async def modo_prueba_activar(request: Request, payload: dict = None):
     return await _estado()
 
 
+async def _despachar_retenido(item):
+    from server import _autocorreo_cliente_aprobado, _autocorreo_cliente_rechazado
+    est = (item.get("estado") or "").lower()
+    if est in ("aprobacion", "aprobado"):
+        r = await _autocorreo_cliente_aprobado(item, forzar=True)
+    else:
+        r = await _autocorreo_cliente_rechazado(item, forzar=True)
+    ok = bool((r or {}).get("ok"))
+    await db.notif_cola.update_one({"seg_id": item.get("seg_id")}, {"$set": {
+        "estado_cola": "enviado" if ok else "retenido_modo_prueba",
+        "resultado": {k: str(v)[:200] for k, v in (r or {}).items() if k != "html"},
+        "despachado_en": _now()}})
+    return ok, (r or {})
+
+
+@modop.get("/retenidos")
+async def retenidos_listar(request: Request):
+    _exigir_admin(request)
+    docs = await db.notif_cola.find({"estado_cola": "retenido_modo_prueba"}, {"_id": 0}) \
+        .sort("retenido_en", -1).to_list(200)
+    return {"total": len(docs), "retenidos": docs}
+
+
+@modop.post("/retenidos/aprobar-todos")
+async def retenidos_aprobar_todos(request: Request):
+    _exigir_admin(request)
+    items = await db.notif_cola.find({"estado_cola": "retenido_modo_prueba"}).to_list(200)
+    res = []
+    for it in items:
+        try:
+            ok, r = await _despachar_retenido(it)
+        except Exception as e:
+            ok, r = False, {"motivo": str(e)[:150]}
+        res.append({"seg_id": it.get("seg_id"), "cliente": it.get("cliente"),
+                    "enviado": ok, "motivo": r.get("motivo", "")})
+    return {"ok": True, "procesados": len(res), "enviados": sum(1 for x in res if x["enviado"]), "detalle": res}
+
+
+@modop.post("/retenidos/descartar-todos")
+async def retenidos_descartar_todos(request: Request):
+    _exigir_admin(request)
+    r = await db.notif_cola.update_many(
+        {"estado_cola": "retenido_modo_prueba"},
+        {"$set": {"estado_cola": "descartado", "descartado_en": _now(),
+                  "descartado_por": "admin"}})
+    return {"ok": True, "descartados": r.modified_count}
+
+
+@modop.post("/retenidos/{rid}/aprobar")
+async def retenido_aprobar(rid: str, request: Request):
+    _exigir_admin(request)
+    it = await db.notif_cola.find_one({"seg_id": rid, "estado_cola": "retenido_modo_prueba"})
+    if not it:
+        raise HTTPException(status_code=404, detail="Correo retenido no encontrado")
+    ok, r = await _despachar_retenido(it)
+    if not ok:
+        raise HTTPException(status_code=409, detail=f"No se pudo enviar: {r.get('motivo', 'error')}")
+    return {"ok": True, "enviado": True, "cliente": it.get("cliente")}
+
+
+@modop.post("/retenidos/{rid}/descartar")
+async def retenido_descartar(rid: str, request: Request):
+    _exigir_admin(request)
+    r = await db.notif_cola.update_one(
+        {"seg_id": rid, "estado_cola": "retenido_modo_prueba"},
+        {"$set": {"estado_cola": "descartado", "descartado_en": _now(), "descartado_por": "admin"}})
+    if not r.modified_count:
+        raise HTTPException(status_code=404, detail="Correo retenido no encontrado")
+    return {"ok": True, "descartado": True}
+
+
 @modop.post("/desactivar")
 async def modo_prueba_desactivar(request: Request):
     _exigir_admin(request)

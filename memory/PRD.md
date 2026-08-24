@@ -1459,3 +1459,9 @@ actual; todo lo demás permanece intacto.
 - Gasto Operacional: envía con cuenta_fija=True (anclado a MAIL2).
 - Documentada como NORMATIVA CONSTITUCIONAL "CUENTA UNICA DE ENVIO" en NORMATIVAS_FIJAS (server.py) — se auto-siembra en preview y PRODUCCIÓN al arranque (verificado en dashai_eventos).
 - Verificado con SMTP simulado (4 casos): desde="principal"→corporativa, destino=cuenta propia→se mantiene corporativa, gasto operacional→corporativa, sin MAIL2→bloqueo. La cuenta gmail queda solo para RECEPCIÓN/monitoreo (GMAIL_WATCH_ACCOUNT), nunca como remitente.
+
+## 2026-06 (fork) — Vista Admin: Correos Retenidos por Modo Prueba
+- Backend (modo_prueba.py): GET /api/modo-prueba/retenidos · POST /retenidos/{seg_id}/aprobar (envía ya, forzar=True vía _autocorreo_cliente_aprobado/_rechazado) · POST /retenidos/{seg_id}/descartar (marca estado_cola=descartado, no envía) · POST /retenidos/aprobar-todos · POST /retenidos/descartar-todos. Solo admin. Error de envío → 409 con detalle (502 lo interceptaba el proxy).
+- Frontend: components/RetenidosModoPrueba.js integrado en DashboardModule (panel principal). Muestra destinatario, asunto, fecha/hora, motivo, estado APROBADO/RECHAZO; botones por fila + globales con confirm. data-testids: retenidos-modo-prueba, retenido-fila-{i}, retenido-aprobar-{i}, retenido-descartar-{i}, retenidos-aprobar-todos, retenidos-descartar-todos.
+- Verificado: API con token admin (9 retenidos), aprobar sin correo en ficha falla limpio (sin_correo, nada enviado), UI renderizada en dashboard (screenshot OK).
+- Nota: varios retenidos tienen cliente mal extraído ("Respuestas Mesa Clientes") y sin email — problema upstream de extracción de cliente en mesa_verdad, pendiente si el usuario lo pide.
