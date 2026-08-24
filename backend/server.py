@@ -10553,8 +10553,18 @@ def _rechazo_sanear_motivo(motivo):
     return m if len(m) >= 12 else ""
 
 
-def _rechazo_html(nombre, motivo):
+def _rechazo_html(nombre, motivo, boton_url=""):
     """DISEÑO QUIRÚRGICO: HTML minimalista, negro sobre blanco, sin logos ni colores."""
+    boton = ""
+    if boton_url:
+        boton = (f'<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 16px"><tr>'
+                 f'<td style="border:2px solid #000000;background:#000000">'
+                 f'<a href="{boton_url}" style="display:inline-block;padding:12px 26px;color:#ffffff;'
+                 f'font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:bold;'
+                 f'text-decoration:none;letter-spacing:0.5px">TENGO CODEUDOR — SOLICITO RECONTACTO</a>'
+                 f'</td></tr></table>'
+                 f'<p style="margin:0 0 16px;font-size:13px;color:#333333">Si cuenta con un codeudor que pueda '
+                 f'fortalecer su solicitud, presione el botón anterior y un ejecutivo le contactará a la brevedad.</p>')
     return f"""<!DOCTYPE html><html><body style="margin:0;padding:0;background:#ffffff">
 <div style="max-width:560px;margin:0 auto;padding:32px 24px;font-family:Arial,Helvetica,sans-serif;color:#000000;background:#ffffff;font-size:15px;line-height:1.6">
 <p style="margin:0 0 16px">Estimado/a <b>{html.escape(nombre)}</b>:</p>
@@ -10564,6 +10574,7 @@ def _rechazo_html(nombre, motivo):
 <p style="margin:0"><b>Motivo:</b> {html.escape(motivo)}</p>
 </div>
 <p style="margin:0 0 16px">Este resultado no impide una futura reevaluación si sus antecedentes cambian. Nuestro equipo queda a su disposición para orientarle sobre los pasos a seguir.</p>
+{boton}
 <p style="margin:24px 0 0">Atentamente,<br/>Equipo Central Mutuos</p>
 </div></body></html>"""
 
@@ -10609,8 +10620,17 @@ async def _autocorreo_cliente_rechazado(seg, forzar=False, solo_preview=False):
         nombre = (fd or {}).get("nombre") or cliente
         motivo = _rechazo_sanear_motivo(seg.get("motivo_rechazo") or seg.get("motivo")
                                         or seg.get("detalle_rechazo")) or RECHAZO_MOTIVO_DEFAULT
+        # 🤝 BOTÓN CODEUDOR: si el rechazo es por falta de codeudor / parámetros / renta,
+        # se incluye botón "Tengo codeudor — Solicito recontacto" con token único.
+        _es_caso_codeudor = bool(re.search(r"codeudor|par[aá]metros?\s+objetivo|renta\s+insuficiente",
+                                           f"{motivo} {seg.get('motivo_rechazo') or ''}", re.I))
+        _tok_codeudor, boton_url = "", ""
+        if _es_caso_codeudor:
+            _tok_codeudor = uuid.uuid4().hex
+            _base = (os.environ.get("REACT_APP_BACKEND_URL") or os.environ.get("PUBLIC_BASE_URL") or "").strip().rstrip("/")
+            boton_url = f"{_base}/api/rechazo-codeudor/{_tok_codeudor}"
         subject = "Resultado de la evaluación de su solicitud"
-        cuerpo = _rechazo_html(nombre, motivo)
+        cuerpo = _rechazo_html(nombre, motivo, boton_url)
         # REGLA DE HIERRO — purificación total antes de cualquier envío
         limpio, problema = _rechazo_purificar(subject, cuerpo)
         if not limpio:
@@ -10635,6 +10655,13 @@ async def _autocorreo_cliente_rechazado(seg, forzar=False, solo_preview=False):
                 {"nombre": nombre, "fecha_mesa": (seg.get("fecha") or "")[:10]}):
             return {"ok": False, "motivo": "ya_notificado"}
         bcc = os.environ.get("MAIL2_USER", "")
+        if _tok_codeudor:
+            import rechazo_notificacion as _rn
+            await db.recontactos_codeudor.insert_one({
+                "token": _tok_codeudor, "cliente": nombre, "rut": (fd or {}).get("rut") or seg.get("rut", ""),
+                "folder_id": (fd or {}).get("id", ""), "email_cliente": email_cli,
+                "ejecutivo_email": await _rn._email_ejecutivo(fd or {}),
+                "motivo": motivo, "estado": "pendiente", "creado": now_iso()})
         res = await asyncio.to_thread(functools.partial(
             mail.send_mail, email_cli, subject, cuerpo, [], "secundaria", bcc=bcc))
         if not res.get("success"):
@@ -10646,6 +10673,47 @@ async def _autocorreo_cliente_rechazado(seg, forzar=False, solo_preview=False):
     except Exception as e:
         logging.warning(f"autocorreo rechazo purificado: {e}")
         return {"ok": False, "motivo": "excepcion", "error": str(e)[:200]}
+
+
+@api.get("/rechazo-codeudor/{token}")
+async def rechazo_codeudor_click(token: str):
+    """PÚBLICO (token único): el cliente declara tener codeudor y pide recontacto.
+    Registra la solicitud y notifica al ejecutivo asignado."""
+    _pagina = lambda titulo, texto: HTMLResponse(content=f"""<!DOCTYPE html><html lang='es'><body style='margin:0;background:#ededee;font-family:Georgia,serif'>
+<div style='max-width:520px;margin:60px auto;background:#ffffff;padding:0'>
+<div style='background:#0e0e10;padding:22px 34px'><div style='font-size:19px;letter-spacing:5px;color:#d4af37'>CENTRAL MUTUOS</div>
+<div style='font-size:10px;letter-spacing:4px;color:#f5e7b8;margin-top:4px'>CON CRECES</div></div>
+<div style='height:4px;background:#d4af37'></div>
+<div style='padding:30px 34px 36px;color:#1a1a1a'><h2 style='margin:0 0 12px;font-size:20px'>{titulo}</h2>
+<p style='margin:0;font-size:15px;line-height:1.6'>{texto}</p></div></div></body></html>""")
+    reg = await db.recontactos_codeudor.find_one({"token": token})
+    if not reg:
+        return _pagina("Enlace no válido", "Este enlace no es válido o ha expirado. Si necesita ayuda, responda el correo que recibió de Central Mutuos.")
+    if reg.get("estado") == "recontacto_solicitado":
+        return _pagina("Solicitud ya registrada", f"Ya registramos su solicitud de recontacto, {html.escape(reg.get('cliente',''))}. Un ejecutivo le contactará a la brevedad.")
+    await db.recontactos_codeudor.update_one({"token": token}, {"$set": {
+        "estado": "recontacto_solicitado", "click_en": now_iso()}})
+    await db.alertas.insert_one({"id": str(uuid.uuid4()), "tipo": "recontacto_codeudor", "leida": False,
+        "cliente": reg.get("cliente", ""),
+        "mensaje": f"🤝 {reg.get('cliente','')} declaró tener CODEUDOR disponible y solicita recontacto (rechazo previo)",
+        "fecha": now_iso()})
+    ejecutivo = reg.get("ejecutivo_email") or os.environ.get("MAIL2_USER", "")
+    cuerpo_ej = (f"<p>Estimado/a:</p>"
+                 f"<p>El cliente <b>{html.escape(reg.get('cliente',''))}</b>"
+                 f"{(' (RUT ' + html.escape(reg['rut']) + ')') if reg.get('rut') else ''} informó que "
+                 f"<b>cuenta con un codeudor disponible</b> y solicita ser recontactado para reestructurar su solicitud de crédito.</p>"
+                 f"<p><b>Correo del cliente:</b> {html.escape(reg.get('email_cliente','') or 'no registrado')}<br>"
+                 f"<b>Motivo del resultado anterior:</b> {html.escape(reg.get('motivo',''))}</p>"
+                 f"<p>Favor gestionar el recontacto a la brevedad.</p>"
+                 f"<p>Atentamente,<br><b>Central Mutuos — aviso automático</b></p>")
+    res = await asyncio.to_thread(functools.partial(
+        mail.send_mail, ejecutivo, f"🤝 Cliente con codeudor disponible — {reg.get('cliente','')}",
+        cuerpo_ej, [], "secundaria", from_name="Central Mutuos", hilo_nuevo=True, permitir_duplicado=True))
+    await db.recontactos_codeudor.update_one({"token": token}, {"$set": {
+        "notificado_ejecutivo": bool(res.get("success")), "ejecutivo_notificado_en": now_iso()}})
+    return _pagina("¡Solicitud registrada!",
+                   f"Gracias, {html.escape(reg.get('cliente',''))}. Registramos que usted cuenta con un codeudor "
+                   f"y su ejecutivo ya fue notificado para recontactarle a la brevedad y reestructurar su solicitud.")
 
 
 @api.get("/autocorreo/rechazo/preview")

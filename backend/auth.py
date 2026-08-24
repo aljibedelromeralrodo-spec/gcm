@@ -85,6 +85,7 @@ PUBLIC_PREFIXES = (
     "/api/gmail/push",             # Webhook Pub/Sub de Gmail (valida cuenta monitoreada dentro)
     "/api/gmail/oauth/callback",   # Callback OAuth de Google (canje de código único)
     "/api/rechazo-notif",          # Aprobación de plantilla de notificación de resultado (acciones exigen clave Admin)
+    "/api/rechazo-codeudor/",      # Botón "Tengo codeudor — Solicito recontacto" del correo de rechazo (token único)
 )
 # El portal comercial de inmobiliarias tiene su propia sesión (scope inmobiliaria)
 INMO_PREFIX = "/api/inmobiliaria"
