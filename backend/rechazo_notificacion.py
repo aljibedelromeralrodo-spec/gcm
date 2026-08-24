@@ -51,11 +51,21 @@ RECO_DEFECTO = ("Se recomienda revisar la estructura de la operación junto con 
                 "con los antecedentes fortalecidos.")
 
 
-def motivo_y_recomendacion(texto):
-    for rx, motivo, reco in REGLAS:
+def recomendacion_para(texto):
+    for rx, _m, reco in REGLAS:
         if rx.search(texto or ""):
-            return motivo, reco
-    return MOTIVO_DEFECTO, RECO_DEFECTO
+            return reco
+    return RECO_DEFECTO
+
+
+def motivo_y_recomendacion(texto):
+    # ⛔ NORMATIVA CONSTITUCIONAL — RECHAZO TEXTO EXACTO: el motivo es el texto EXACTO
+    # enviado por el canal oficial, sin agregar, modificar ni inventar contenido.
+    return (texto or "").strip()[:4000], recomendacion_para(texto)
+
+
+# Referencias que jamás pueden salir en un correo (origen/reenvío/direcciones)
+RX_ORIGEN_PROHIBIDO = re.compile(r"\bmesa\b|reenv[ií]|forward|fwd|[\w.+-]+@[\w-]+\.[\w.-]+", re.I)
 
 
 PROHIBIDAS = re.compile(r"\bmesa\b|aprobaci[oó]n|reenv[ií]o|forward|fwd", re.I)
@@ -193,13 +203,26 @@ async def _enviar(pend, plantilla, forzar=False):
 
 async def procesar_rechazo(folder, texto, subject):
     """Llamado por mesa_verdad al detectar un rechazo. Si hay plantilla aprobada envía
-    automáticamente; si no, deja el caso pendiente de aprobación de diseño."""
-    motivo, reco = motivo_y_recomendacion(_limpiar(texto))
+    automáticamente; si no, deja el caso pendiente de aprobación de diseño.
+    NORMATIVA RECHAZO TEXTO EXACTO: el motivo es el texto exacto del canal oficial;
+    si viene vacío o contiene referencias prohibidas, se RETIENE para revisión manual."""
+    motivo, reco = motivo_y_recomendacion(texto)
     pend = {"id": str(uuid.uuid4()), "cliente": (folder or {}).get("nombre") or "CLIENTE",
             "folder_id": (folder or {}).get("id", ""),
             "destinatario": await _email_ejecutivo(folder or {}),
             "motivo": motivo, "recomendacion": reco,
             "asunto_origen": (subject or "")[:150], "estado": "pendiente", "creado": _now()}
+    if not motivo or RX_ORIGEN_PROHIBIDO.search(motivo):
+        pend["estado"] = "retenido_revision_manual"
+        pend["retencion_causa"] = ("texto de origen vacío" if not motivo else
+                                   "el texto exacto contiene referencias al origen o direcciones de correo")
+        await db.rechazos_pendientes.insert_one(pend)
+        await db.alertas.insert_one({"id": str(uuid.uuid4()), "tipo": "rechazo_retenido",
+                                     "leida": False, "cliente": pend["cliente"],
+                                     "mensaje": (f"⛔ Notificación de resultado para {pend['cliente']} RETENIDA "
+                                                 f"(norma texto exacto): {pend['retencion_causa']} — revisión manual requerida"),
+                                     "fecha": _now()})
+        return {"enviado": False, "retenido": True, "causa": pend["retencion_causa"]}
     plantilla = await _plantilla_aprobada()
     if plantilla:
         ok = await _enviar(pend, plantilla)

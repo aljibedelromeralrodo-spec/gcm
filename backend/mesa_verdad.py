@@ -215,7 +215,8 @@ async def _procesar_correo(msg):
             resultado = "aprobado" if tipo == "aprobacion" else "reprobado"
             await db.folders.update_one({"id": f["id"]}, {"$set": {
                 "resultado_mesa": resultado, "resultado_mesa_at": _now(),
-                "resultado_mesa_fuente": MESA_EMAIL, "resultado_mesa_asunto": subject[:200]}})
+                "resultado_mesa_fuente": MESA_EMAIL, "resultado_mesa_asunto": subject[:200],
+                "resultado_mesa_texto": body.strip()[:4000]}})
             registro["folder_id"] = f["id"]
             registro["accion"] = (registro.get("accion") or "") + f"Carpeta {f.get('nombre')} → {resultado.upper()} (botones de envío al ejecutivo activados)"
             if tipo == "rechazo":
@@ -223,7 +224,7 @@ async def _procesar_correo(msg):
                 # sin mencionar el canal de origen). Plantilla fija aprobada por el Admin.
                 try:
                     import rechazo_notificacion as _rn
-                    rn = await _rn.procesar_rechazo(f, texto, subject)
+                    rn = await _rn.procesar_rechazo(f, body, subject)
                     registro["notificacion_rechazo"] = rn
                     registro["accion"] += (f" · Notificación al ejecutivo "
                                            f"{'ENVIADA a ' + str(rn.get('destinatario')) if rn.get('enviado') else 'en espera de diseño aprobado'}")
