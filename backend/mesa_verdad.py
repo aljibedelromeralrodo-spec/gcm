@@ -218,6 +218,17 @@ async def _procesar_correo(msg):
                 "resultado_mesa_fuente": MESA_EMAIL, "resultado_mesa_asunto": subject[:200]}})
             registro["folder_id"] = f["id"]
             registro["accion"] = (registro.get("accion") or "") + f"Carpeta {f.get('nombre')} → {resultado.upper()} (botones de envío al ejecutivo activados)"
+            if tipo == "rechazo":
+                # 📩 NOTIFICACIÓN AUTOMÁTICA DE RECHAZO al ejecutivo (comunicación directa,
+                # sin mencionar el canal de origen). Plantilla fija aprobada por el Admin.
+                try:
+                    import rechazo_notificacion as _rn
+                    rn = await _rn.procesar_rechazo(f, texto, subject)
+                    registro["notificacion_rechazo"] = rn
+                    registro["accion"] += (f" · Notificación al ejecutivo "
+                                           f"{'ENVIADA a ' + str(rn.get('destinatario')) if rn.get('enviado') else 'en espera de diseño aprobado'}")
+                except Exception as e:
+                    logging.warning(f"notificación rechazo: {e}")
             await db.alertas.insert_one({"id": str(uuid.uuid4()), "tipo": "mesa_verdad", "leida": False,
                                          "cliente": f.get("nombre"),
                                          "mensaje": f"⚖️ MESA ({MESA_EMAIL}): {f.get('nombre')} → {resultado.upper()} — botón de envío al ejecutivo ACTIVADO",

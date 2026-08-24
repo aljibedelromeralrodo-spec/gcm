@@ -2057,3 +2057,17 @@ polling GET /api/central/proactive existe vacío en server.py:1526) — usuario 
   4 botones y firma oficial.
 - Usuario aprobó VERSIÓN C (minimalista) → enviada a jibanezj@estudiante.uc.cl desde
   gerardo.ext@centralmutuos.cl (SMTP 250, 12.6MB con video + ZIP adjuntos).
+
+## 2026-06 (fork) — Notificación automática de rechazos (Solicitud de Crédito)
+- Nuevo /app/backend/rechazo_notificacion.py: al detectar rechazo, mesa_verdad._procesar_correo
+  llama procesar_rechazo(folder, texto, subject). Correo DIRECTO de Central Mutuos al ejecutivo:
+  jamás menciona mesa/aprobación/reenvío (regex de limpieza + textos institucionales controlados).
+  Motivo+recomendación por mapeo LOCAL (parámetros objetivos→cambiar titular por codeudor; carga;
+  renta; DICOM; antigüedad; genérico). Destinatario: folder.source_email→ejecutivos_correo→fallback
+  gerardo.ext. Colecciones: rechazos_pendientes, rechazos_notificados; config _key=rechazo_plantilla.
+- 3 plantillas institucionales (blanco/dorado/negro, nombre cliente destacado arriba): A clásica,
+  B ficha ejecutiva, C minimal. Pantalla de aprobación /aprobar-rechazo.html (clave admin 141617575):
+  al aprobar queda FIJA y los pendientes se envían automáticamente.
+- /api/rechazo-notif agregado a PUBLIC_PREFIXES en auth.py (acciones exigen clave).
+- Caso de prueba ANITA ALVAREZ (DS19, parámetro objetivo→codeudor) creado y en cola PENDIENTE
+  esperando la aprobación de diseño del Admin. Verificado: 0 palabras prohibidas en las 3 plantillas.

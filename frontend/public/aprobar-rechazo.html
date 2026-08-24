@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aprobación de diseño — Notificación de Resultado</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:Georgia,serif;background:#0e0e10;color:#f2ecd9;padding:26px 14px}
+.wrap{max-width:1180px;margin:0 auto}
+h1{font-size:1.3rem;letter-spacing:2px;color:#d4af37;font-weight:normal}
+p.sub{font-size:.78rem;color:#9a9a9a;margin:6px 0 8px;line-height:1.6}
+.estado{display:inline-block;background:#1c1c20;border:1px solid #3a3a3a;border-radius:8px;padding:8px 14px;font-size:.75rem;margin:10px 0 18px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:18px}
+.opt{background:#1c1c20;border:1px solid #3a3a3a;border-radius:12px;overflow:hidden}
+.opt h2{font-size:.9rem;padding:12px 16px;color:#d4af37;font-weight:normal;letter-spacing:1px;border-bottom:1px solid #3a3a3a}
+.opt iframe{width:100%;height:520px;border:0;background:#ededee}
+.opt .pie{padding:12px 16px}
+button{background:#d4af37;color:#111;border:0;padding:11px 22px;font-family:Georgia,serif;font-size:.85rem;font-weight:bold;cursor:pointer;width:100%}
+button:hover{background:#e5c65a}
+.msg{margin-top:14px;font-size:.85rem;color:#7CE8B5;min-height:20px}
+</style></head>
+<body><div class="wrap">
+<h1>📩 NOTIFICACIÓN DE RESULTADO — APROBACIÓN DE DISEÑO</h1>
+<p class="sub">Caso de prueba: <b style="color:#f2ecd9">ANITA ÁLVAREZ · complemento DS19</b> — la solicitud no cumple el parámetro objetivo de evaluación; la acción recomendada es cambiar el titular por el codeudor.<br>
+Elija la plantilla que quedará <b style="color:#d4af37">FIJA</b> para todas las notificaciones futuras: el envío al ejecutivo será automático, sin intervención manual.</p>
+<div class="estado" id="estado">Cargando estado…</div>
+<div class="grid" id="grid"></div>
+<p class="msg" id="msg"></p>
+</div>
+<script>
+const API = "";
+let OPC = null;
+async function cargar() {
+  const r = await fetch(API + "/api/rechazo-notif/opciones");
+  OPC = await r.json();
+  document.getElementById("estado").innerHTML = OPC.aprobada
+    ? "✅ Plantilla fija actual: <b style='color:#d4af37'>" + OPC.aprobada.toUpperCase() + "</b> — puede cambiarla eligiendo otra."
+    : "⏳ Aún no hay plantilla aprobada: los rechazos quedan en espera hasta que usted elija una.";
+  const nombres = { a: "OPCIÓN A — Clásica institucional", b: "OPCIÓN B — Ficha ejecutiva", c: "OPCIÓN C — Minimal sobria" };
+  document.getElementById("grid").innerHTML = ["a", "b", "c"].map(k =>
+    `<div class="opt"><h2>${nombres[k]}</h2>
+     <iframe srcdoc="${OPC.opciones[k].replace(/"/g, "&quot;")}"></iframe>
+     <div class="pie"><button onclick="aprobar('${k}')" data-testid="aprobar-${k}">✔ Usar la ${k.toUpperCase()} como plantilla fija</button></div></div>`).join("");
+}
+async function aprobar(p) {
+  const clave = prompt("Clave de administrador:");
+  if (!clave) return;
+  const r = await fetch(API + "/api/rechazo-notif/aprobar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ clave, plantilla: p }) });
+  const d = await r.json();
+  const m = document.getElementById("msg");
+  if (d.ok) {
+    m.textContent = `✅ Plantilla ${p.toUpperCase()} aprobada como fija. Pendientes enviados automáticamente: ${d.pendientes_enviados.length}` +
+      (d.pendientes_enviados.length ? " → " + d.pendientes_enviados.map(x => `${x.cliente} (${x.destinatario}${x.ok ? " ✓" : " ✗"})`).join(", ") : "");
+    cargar();
+  } else { m.style.color = "#ff8a70"; m.textContent = "❌ " + (d.detail || "Error"); }
+}
+cargar();
+</script>
+</body></html>

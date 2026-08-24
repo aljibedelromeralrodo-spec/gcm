@@ -15595,8 +15595,10 @@ import malla_inteligencia as _malla_mod
 import gestion_ejecutivos as _gest_mod
 import registro_emmy as _emmy_mod
 import martin_financiero as _mfin_mod
+import rechazo_notificacion as _rechz_mod
 api.include_router(_emmy_mod.emmy)
 api.include_router(_mfin_mod.mfin)
+api.include_router(_rechz_mod.rechz)
 api.include_router(_gest_mod.gestion)
 api.include_router(_malla_mod.broker)
 api.include_router(_malla_mod.fuentes)

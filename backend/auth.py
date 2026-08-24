@@ -84,6 +84,7 @@ PUBLIC_PREFIXES = (
     "/api/energia",                # Monitor de energía (indicador de saldo del topbar)
     "/api/gmail/push",             # Webhook Pub/Sub de Gmail (valida cuenta monitoreada dentro)
     "/api/gmail/oauth/callback",   # Callback OAuth de Google (canje de código único)
+    "/api/rechazo-notif",          # Aprobación de plantilla de notificación de resultado (acciones exigen clave Admin)
 )
 # El portal comercial de inmobiliarias tiene su propia sesión (scope inmobiliaria)
 INMO_PREFIX = "/api/inmobiliaria"
