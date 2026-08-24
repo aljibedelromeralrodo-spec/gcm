@@ -2050,3 +2050,10 @@ polling GET /api/central/proactive existe vacío en server.py:1526) — usuario 
   (normaliza piezas → xfade chain → concat con seg_fin.mp4). Playwright chromium se reinstaló
   (se borra al pausar el job).
 - VERIFICADO: 7 fotogramas del video final revisados + módulos nuevos testeados con screenshot.
+
+## 2026-06 (fork) — Correo Suma UC enviado
+- 3 versiones de correo HTML liviano creadas (correo-sumauc-a/b/c.html) con logos Martín Suma UC +
+  SUMA UC, texto personal de Gerardo (ortografía corregida: 6 fixes aprobados), bloque técnico con
+  4 botones y firma oficial.
+- Usuario aprobó VERSIÓN C (minimalista) → enviada a jibanezj@estudiante.uc.cl desde
+  gerardo.ext@centralmutuos.cl (SMTP 250, 12.6MB con video + ZIP adjuntos).
