@@ -6288,75 +6288,119 @@ async def _reproceso_ia_run(dias: int, limit_per: int):
         await db.config.update_one({"_key": "reproceso_ia"},
                                    {"$set": {**st, "actualizado": now_iso()}}, upsert=True)
     await _guardar()
-    try:
-        correos = await asyncio.to_thread(mail.barrido_liviano, dias, limit_per)
-    except Exception as e:
-        st.update({"estado": "error"})
-        st["errores"].append(f"barrido IMAP: {str(e)[:200]}")
-        await _guardar()
-        return
+    # Caché del barrido (3h): si hay un barrido reciente en BD, se reutiliza sin releer IMAP
+    correos = []
+    cache_ts = await db.config.find_one({"_key": "reproceso_barrido_ts"}) or {}
+    if (cache_ts.get("generado") or "") > (datetime.now(timezone.utc) - timedelta(hours=3)).isoformat():
+        correos = await db.reproceso_barrido.find({}, {"_id": 0}).to_list(20000)
+    if not correos:
+        try:
+            correos = await asyncio.to_thread(mail.barrido_liviano, dias, limit_per)
+        except Exception as e:
+            st.update({"estado": "error"})
+            st["errores"].append(f"barrido IMAP: {str(e)[:200]}")
+            await _guardar()
+            return
+        if correos:
+            try:
+                await db.reproceso_barrido.delete_many({})
+                await db.reproceso_barrido.insert_many([dict(c) for c in correos])
+                await db.config.update_one({"_key": "reproceso_barrido_ts"},
+                                           {"$set": {"generado": now_iso()}}, upsert=True)
+                correos = await db.reproceso_barrido.find({}, {"_id": 0}).to_list(20000)
+            except Exception as e:
+                logging.warning(f"caché barrido: {str(e)[:100]}")
     st["total"] = len(correos)
-    for c in correos:
-        st["revisados"] += 1
+    await _guardar()
+
+    async def _filtro_barato(c):
+        """Dedupe + atajos sin costo de IA. Devuelve tag: 'ya' | 'atajo:x' | 'cls' | 'err:...'."""
         try:
             if await db.proc_queue.find_one({"subject": c.get("subject"), "date_iso": c.get("date")}, {"_id": 1}):
-                st["ya_en_sistema"] += 1
-                continue
-            # Atajos sin costo IA: veredictos del canal oficial y correos generados por el sistema
+                return "ya"
             r_low = (c.get("from") or "").lower()
             s_low = (c.get("subject") or "").lower().strip()
             if "aprobaciones@centralmutuos" in r_low:
-                st["otras_categorias"]["veredicto_mesa_oficial"] = st["otras_categorias"].get("veredicto_mesa_oficial", 0) + 1
-                continue
+                return "atajo:veredicto_mesa_oficial"
+            if re.search(r"noreply|no-reply|no_reply|notificacion(es)?@|notifications?@|newsletter|mailer-daemon|donotreply|@mail\.|@e\.|@em\.|@news\.|@marketing|@info\.|unsubscribe", r_low):
+                return "atajo:automatico_marketing"
             if any(s_low.startswith(p) for p in ("resumen diario", "✅ aprobación mesa", "🛠", "🚨",
                                                  "prueba clasificación", "🧪", "👁")):
-                st["otras_categorias"]["sistema_interno"] = st["otras_categorias"].get("sistema_interno", 0) + 1
+                return "atajo:sistema_interno"
+            return "cls"
+        except Exception as e:
+            return f"err:{str(e)[:100]}"
+
+    for i in range(0, len(correos), 20):
+        # 🛑 Freno de emergencia del Admin
+        flag = await db.config.find_one({"_key": "reproceso_stop"}) or {}
+        if flag.get("stop"):
+            st["estado"] = "detenido_por_admin"
+            await _guardar()
+            return
+        lote = correos[i:i + 20]
+        tags = await asyncio.gather(*[_filtro_barato(c) for c in lote])
+        a_ia = [c for c, t in zip(lote, tags) if t == "cls"]
+        # 💰 UNA sola llamada a Claude por lote (hasta 20 correos)
+        res_ia = await _clasif_ia.clasificar_lote(
+            [{"subject": c.get("subject"), "sender": c.get("from"),
+              "body": c.get("body") or "", "date_iso": c.get("date") or ""} for c in a_ia]) if a_ia else []
+        mapa_ia = {id(c): r for c, r in zip(a_ia, res_ia)}
+        for c, tag in zip(lote, tags):
+            st["revisados"] += 1
+            if tag == "ya":
+                st["ya_en_sistema"] += 1
                 continue
-            nombres_adj = [a.get("filename") for a in (c.get("attachments") or [])]
-            cls = await _clasif_ia.clasificar_correo(
-                c.get("subject"), c.get("from"), c.get("body") or "", nombres_adj, c.get("date") or "")
+            if tag.startswith("atajo:"):
+                k = tag.split(":", 1)[1]
+                st["otras_categorias"][k] = st["otras_categorias"].get(k, 0) + 1
+                continue
+            if tag.startswith("err:"):
+                st["errores"].append(f"{(c.get('subject') or '')[:40]}: {tag[4:]}")
+                continue
+            cls = mapa_ia.get(id(c)) or {}
             cat = cls.get("categoria") or "sin_clasificar"
             if cat != "solicitud_nueva":
                 st["otras_categorias"][cat] = st["otras_categorias"].get(cat, 0) + 1
                 continue
             st["solicitudes_nuevas"] += 1
             etiqueta = (cls.get("cliente") or (c.get("subject") or "")[:50]).strip()
-            atts = await asyncio.to_thread(mail.fetch_attachments_by_id, c.get("id"))
-            planos = []
-            for a in atts:
-                if not a.get("content_bytes"):
-                    continue
-                for nf, nb in mail.expandir_zip(a.get("filename") or "documento.pdf", a["content_bytes"]):
-                    planos.append({"filename": nf or "documento.pdf", "content_bytes": nb})
-            if not planos:
-                st["no_recuperables"].append(f"{etiqueta}: el correo de origen ya no tiene adjuntos recuperables")
-                continue
-            qid = str(uuid.uuid4())
-            attachments = await _guardar_adjuntos_queue(qid, planos)
-            await db.proc_queue.insert_one({
-                "id": qid, "subject": c.get("subject") or "", "sender": c.get("from") or "",
-                "date_iso": c.get("date") or "", "status": "pendiente",
-                "body_preview": (c.get("body") or "")[:500],
-                "body_full": (c.get("body") or "")[:8000],
-                "attachments": attachments, "attachments_bytes_dir": str(PROC_DIR / qid),
-                "classification": {}, "campos": {}, "drive_folder_id": None,
-                "categoria_ia": cat,
-                "clasificador_ia": {k: cls.get(k) for k in ("categoria", "confianza", "razon", "metodo")},
-                "origen": "reproceso_ia"})
-            item = await db.proc_queue.find_one({"id": qid})
-            await _clasificar_item(item)
             try:
-                await proc_upload_drive(qid)
-                st["carpetas_creadas"].append(etiqueta)
-            except HTTPException as he:
-                if he.status_code == 412:
-                    st["pendientes_docs"].append(f"{etiqueta}: {str(he.detail)[:100]}")
-                else:
-                    st["no_recuperables"].append(f"{etiqueta}: {str(he.detail)[:100]}")
-        except Exception as e:
-            st["errores"].append(f"{(c.get('subject') or '')[:40]}: {str(e)[:100]}")
-        if st["revisados"] % 5 == 0:
-            await _guardar()
+                atts = await asyncio.to_thread(mail.fetch_attachments_by_id, c.get("id"))
+                planos = []
+                for a in atts:
+                    if not a.get("content_bytes"):
+                        continue
+                    for nf, nb in mail.expandir_zip(a.get("filename") or "documento.pdf", a["content_bytes"]):
+                        planos.append({"filename": nf or "documento.pdf", "content_bytes": nb})
+                if not planos:
+                    st["no_recuperables"].append(f"{etiqueta}: el correo de origen ya no tiene adjuntos recuperables")
+                    continue
+                qid = str(uuid.uuid4())
+                attachments = await _guardar_adjuntos_queue(qid, planos)
+                await db.proc_queue.insert_one({
+                    "id": qid, "subject": c.get("subject") or "", "sender": c.get("from") or "",
+                    "date_iso": c.get("date") or "", "status": "pendiente",
+                    "body_preview": (c.get("body") or "")[:500],
+                    "body_full": (c.get("body") or "")[:8000],
+                    "attachments": attachments, "attachments_bytes_dir": str(PROC_DIR / qid),
+                    "classification": {}, "campos": {}, "drive_folder_id": None,
+                    "categoria_ia": cat,
+                    "clasificador_ia": {k: cls.get(k) for k in ("categoria", "confianza", "razon", "metodo")},
+                    "origen": "reproceso_ia"})
+                item = await db.proc_queue.find_one({"id": qid})
+                await _clasificar_item(item)
+                try:
+                    await proc_upload_drive(qid)
+                    st["carpetas_creadas"].append(etiqueta)
+                except HTTPException as he:
+                    if he.status_code == 412:
+                        st["pendientes_docs"].append(f"{etiqueta}: {str(he.detail)[:100]}")
+                    else:
+                        st["no_recuperables"].append(f"{etiqueta}: {str(he.detail)[:100]}")
+            except Exception as e:
+                st["errores"].append(f"{(c.get('subject') or '')[:40]}: {str(e)[:100]}")
+        await _guardar()
     st["estado"] = "terminado"
     st["fin"] = now_iso()
     await _guardar()
@@ -6370,8 +6414,17 @@ async def reproceso_ia_start(request: Request, dias: int = 180, limit_per: int =
     if st.get("estado") == "corriendo" and (st.get("actualizado") or "") > (
             datetime.now(timezone.utc) - timedelta(minutes=30)).isoformat():
         raise HTTPException(status_code=409, detail="Ya hay un reproceso IA en curso")
+    await db.config.update_one({"_key": "reproceso_stop"}, {"$set": {"stop": False}}, upsert=True)
     asyncio.create_task(_reproceso_ia_run(dias, limit_per))
     return {"ok": True, "iniciado": True, "dias": dias, "limit_per": limit_per}
+
+
+@api.post("/procesamiento/reproceso-ia/detener")
+async def reproceso_ia_detener(request: Request):
+    """🛑 Detiene el reproceso masivo (freno revisado en cada lote). Solo Admin."""
+    _exigir_admin_dash(request)
+    await db.config.update_one({"_key": "reproceso_stop"}, {"$set": {"stop": True}}, upsert=True)
+    return {"ok": True, "detenido": True}
 
 
 @api.get("/procesamiento/reproceso-ia/estado")

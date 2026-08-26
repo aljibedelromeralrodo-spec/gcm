@@ -299,42 +299,57 @@ def barrido_liviano(dias=180, limit_per=2000):
             logging.warning(f"barrido liviano {acc['user']}: {str(e)[:120]}")
             continue
         fallos = 0
-        for uid in uids:
+        for i in range(0, len(uids), 50):
+            chunk = uids[i:i + 50]
             try:
-                typ, md = m.uid("fetch", uid,
-                                "(BODY.PEEK[HEADER.FIELDS (SUBJECT FROM DATE)] BODY.PEEK[TEXT]<0.2000>)")
-                partes = [p[1] for p in (md or []) if isinstance(p, tuple)]
-                if not partes:
-                    continue
-                hdr = email.message_from_bytes(partes[0])
-                subject = _dec(hdr.get("Subject"))
-                remit = _dec(hdr.get("From"))
-                try:
-                    fch = parsedate_to_datetime(hdr.get("Date")).isoformat() if hdr.get("Date") else ""
-                except Exception:
-                    fch = hdr.get("Date") or ""
-                snippet = ""
-                if len(partes) > 1 and partes[1]:
-                    snippet = partes[1].decode("utf-8", errors="ignore")
-                    snippet = re.sub(r"<[^>]+>", " ", snippet)
-                    snippet = re.sub(r"[A-Za-z0-9+/=]{60,}", " ", snippet)[:1500]
-                out.append({"id": f"{acc['rol']}|{uid.decode()}", "from": remit, "subject": subject,
-                            "date": fch, "body": snippet, "cuenta": acc["user"]})
-                fallos = 0
+                typ, md = m.uid("fetch", b",".join(chunk).decode(),
+                                "(UID BODY.PEEK[HEADER.FIELDS (SUBJECT FROM DATE)] BODY.PEEK[TEXT]<0.2000>)")
             except Exception:
                 fallos += 1
-                if fallos >= 3:
+                try:
                     try:
-                        try:
-                            m.logout()
-                        except Exception:
-                            pass
-                        m = _connect(acc)
-                        m.select("INBOX", readonly=True)
-                        fallos = 0
-                    except Exception as e:
-                        logging.warning(f"barrido liviano reconexión {acc['user']}: {str(e)[:80]}")
-                        break
+                        m.logout()
+                    except Exception:
+                        pass
+                    m = _connect(acc)
+                    m.select("INBOX", readonly=True)
+                except Exception as e:
+                    logging.warning(f"barrido liviano reconexión {acc['user']}: {str(e)[:80]}")
+                    break
+                if fallos >= 4:
+                    break
+                continue
+            actual, cur = {}, None
+            for part in (md or []):
+                if not isinstance(part, tuple):
+                    continue
+                meta = part[0].decode("latin-1", errors="ignore")
+                mu = re.search(r"UID (\d+)", meta)
+                if mu:
+                    cur = mu.group(1)
+                    actual.setdefault(cur, {})
+                if cur is None:
+                    continue
+                if "HEADER" in meta:
+                    actual[cur]["hdr"] = part[1]
+                elif "TEXT" in meta:
+                    actual[cur]["txt"] = part[1]
+            for u, d in actual.items():
+                try:
+                    hdr = email.message_from_bytes(d.get("hdr") or b"")
+                    subject = _dec(hdr.get("Subject"))
+                    remit = _dec(hdr.get("From"))
+                    try:
+                        fch = parsedate_to_datetime(hdr.get("Date")).isoformat() if hdr.get("Date") else ""
+                    except Exception:
+                        fch = hdr.get("Date") or ""
+                    snippet = (d.get("txt") or b"").decode("utf-8", errors="ignore")
+                    snippet = re.sub(r"<[^>]+>", " ", snippet)
+                    snippet = re.sub(r"[A-Za-z0-9+/=]{60,}", " ", snippet)[:1500]
+                    out.append({"id": f"{acc['rol']}|{u}", "from": remit, "subject": subject,
+                                "date": fch, "body": snippet, "cuenta": acc["user"]})
+                except Exception:
+                    continue
         try:
             m.logout()
         except Exception:

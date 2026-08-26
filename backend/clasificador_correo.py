@@ -87,6 +87,82 @@ async def _contexto_sistema():
     return _KB_CACHE["texto"]
 
 
+_SISTEMA_LOTE_EXTRA = (
+    "\n\nMODO LOTE: Recibirás VARIOS correos numerados (### CORREO N). Responde SOLO un "
+    "array JSON (sin texto adicional) con un objeto por correo, EN EL MISMO ORDEN, cada uno "
+    "con claves: n (número del correo), categoria, confianza, cliente, razon.")
+
+
+async def clasificar_lote(correos, cachear=True):
+    """Clasifica una lista de correos en UNA sola llamada a Claude (ahorro de créditos).
+    correos: [{subject, sender, body, date_iso}] → lista de resultados en el mismo orden."""
+    resultados = [None] * len(correos)
+    pendientes = []
+    for i, c in enumerate(correos):
+        if cachear:
+            prev = await db.clasificaciones_ia.find_one(
+                {"huella": _huella(c.get("subject"), c.get("date_iso"))}, {"_id": 0})
+            if prev:
+                prev["cacheado"] = True
+                resultados[i] = prev
+                continue
+        pendientes.append(i)
+    if not pendientes:
+        return resultados
+    key = os.environ.get("EMERGENT_LLM_KEY", "")
+    if not key or os.environ.get("AI_EMERGENCY_STOP") == "1":
+        for idx in pendientes:
+            resultados[idx] = {"categoria": "", "confianza": 0, "cliente": "",
+                               "razon": "IA no disponible", "metodo": "sin_llm"}
+        return resultados
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        import ai_extract as _aix
+        kb = await _contexto_sistema()
+        sistema = _SISTEMA + _SISTEMA_LOTE_EXTRA + (
+            f"\n\nCONTEXTO REAL DEL SISTEMA (aprendizaje histórico):\n{kb}" if kb else "")
+        chat = LlmChat(api_key=key, session_id=f"clasif-lote-{uuid.uuid4()}",
+                       system_message=sistema).with_model("anthropic", "claude-sonnet-4-6")
+        bloques = []
+        for j, idx in enumerate(pendientes, 1):
+            c = correos[idx]
+            bloques.append(f"### CORREO {j}\nRemitente: {c.get('sender') or ''}\n"
+                           f"Asunto: {c.get('subject') or ''}\n"
+                           f"Cuerpo:\n{(c.get('body') or '')[:800]}")
+        resp = await _aix._enviar(chat, UserMessage(text="\n\n".join(bloques)))
+        raw = resp if isinstance(resp, str) else str(resp)
+        m = re.search(r"\[.*\]", raw, re.S)
+        arr = json.loads(m.group(0)) if m else []
+        for j, idx in enumerate(pendientes):
+            d = arr[j] if j < len(arr) and isinstance(arr[j], dict) else {}
+            cat = (d.get("categoria") or "").strip()
+            if cat not in CATEGORIAS:
+                cat = "no_relacionado"
+            res = {"categoria": cat, "confianza": float(d.get("confianza") or 0.7),
+                   "cliente": (d.get("cliente") or "").strip()[:120],
+                   "razon": (d.get("razon") or "")[:250], "metodo": "claude_lote"}
+            resultados[idx] = res
+            if cachear:
+                c = correos[idx]
+                try:
+                    await db.clasificaciones_ia.insert_one({
+                        "id": str(uuid.uuid4()),
+                        "huella": _huella(c.get("subject"), c.get("date_iso")),
+                        "subject": (c.get("subject") or "")[:200],
+                        "sender": (c.get("sender") or "")[:150],
+                        "fecha_correo": c.get("date_iso") or "",
+                        "clasificado_en": datetime.now(timezone.utc).isoformat(), **res})
+                except Exception as e:
+                    logging.warning(f"clasificaciones_ia lote insert: {e}")
+    except Exception as e:
+        logging.warning(f"clasificador claude lote: {str(e)[:150]}")
+        for idx in pendientes:
+            if resultados[idx] is None:
+                resultados[idx] = {"categoria": "", "confianza": 0, "cliente": "",
+                                   "razon": f"error IA lote: {str(e)[:100]}", "metodo": "error"}
+    return resultados
+
+
 async def _clasificar_claude(subject, sender, body, nombres_adjuntos):
     key = os.environ.get("EMERGENT_LLM_KEY", "")
     if not key or os.environ.get("AI_EMERGENCY_STOP") == "1":
