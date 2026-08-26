@@ -6281,6 +6281,7 @@ async def _reproceso_ia_run(dias: int, limit_per: int):
     correo con Claude, recupera adjuntos del correo de origen y arma carpeta si cumple la regla."""
     st = {"estado": "corriendo", "inicio": now_iso(), "dias": dias, "total": 0,
           "revisados": 0, "ya_en_sistema": 0, "solicitudes_nuevas": 0,
+          "gasto_usd": 0.0, "tope_usd": 18.0,
           "carpetas_creadas": [], "pendientes_docs": [], "no_recuperables": [],
           "otras_categorias": {}, "errores": []}
 
@@ -6338,6 +6339,11 @@ async def _reproceso_ia_run(dias: int, limit_per: int):
             st["estado"] = "detenido_por_admin"
             await _guardar()
             return
+        # 💰 TOPE DURO DE PRESUPUESTO (mandato del Admin): máx USD por corrida
+        if st["gasto_usd"] >= st["tope_usd"]:
+            st["estado"] = "detenido_tope_presupuesto"
+            await _guardar()
+            return
         lote = correos[i:i + 20]
         tags = await asyncio.gather(*[_filtro_barato(c) for c in lote])
         a_ia = [c for c, t in zip(lote, tags) if t == "cls"]
@@ -6345,6 +6351,8 @@ async def _reproceso_ia_run(dias: int, limit_per: int):
         res_ia = await _clasif_ia.clasificar_lote(
             [{"subject": c.get("subject"), "sender": c.get("from"),
               "body": c.get("body") or "", "date_iso": c.get("date") or ""} for c in a_ia]) if a_ia else []
+        if any((r or {}).get("metodo") == "claude_lote" for r in res_ia):
+            st["gasto_usd"] = round(st["gasto_usd"] + 0.039, 3)
         mapa_ia = {id(c): r for c, r in zip(a_ia, res_ia)}
         for c, tag in zip(lote, tags):
             st["revisados"] += 1
@@ -6364,6 +6372,7 @@ async def _reproceso_ia_run(dias: int, limit_per: int):
                 st["otras_categorias"][cat] = st["otras_categorias"].get(cat, 0) + 1
                 continue
             st["solicitudes_nuevas"] += 1
+            st["gasto_usd"] = round(st["gasto_usd"] + 0.05, 3)
             etiqueta = (cls.get("cliente") or (c.get("subject") or "")[:50]).strip()
             try:
                 atts = await asyncio.to_thread(mail.fetch_attachments_by_id, c.get("id"))
