@@ -116,6 +116,7 @@ const ACCESOS_ROL = {
   postventa: { total: ['dashboard', 'postventa', 'micorreo'], lectura: ['contralor'] },
   broker: { total: ['dashboard', 'brokers', 'micorreo'], lectura: [] },
   contralor: { total: ['contralor', 'dashboard'], lectura: MODS_TODOS },
+  lectura: { total: [], lectura: ['dashboard'] },
 };
 const PERMISOS_LEGADO = {
   A: ['dashboard', 'clientes', 'simulador', 'historial', 'calculadora', 'formato', 'setcredito', 'micorreo'],
@@ -558,7 +559,7 @@ function MainApp() {
           <p className="sidebar-user-name">{user.nombre}</p>
           <p className="sidebar-user-role">{({ admin: 'Administrador', maestro: 'Administrador',
             gerencia: 'Gerencia Comercial', administracion: 'Administración', postventa: 'Postventa',
-            contralor: 'Contralor', broker: 'Broker', ejecutivo: uEff.perfil === 'D' ? 'Broker' : 'Administración' }[uEff.rol]) || uEff.rol}
+            contralor: 'Contralor', broker: 'Broker', lectura: 'Solo Lectura', ejecutivo: uEff.perfil === 'D' ? 'Broker' : 'Administración' }[uEff.rol]) || uEff.rol}
             {uEff._sim && <span style={{ display: "block", color: "#d4af37", fontSize: "0.56rem", fontWeight: 900 }}>👁 SIMULACIÓN</span>}</p>
           {user.cargo && (
             <p data-testid="sidebar-user-cargo" style={{ fontSize: "0.58rem", color: "#b8a04a",

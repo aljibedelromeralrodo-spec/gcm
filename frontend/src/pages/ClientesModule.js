@@ -2468,6 +2468,14 @@ export default function ClientesModule({ onNavigate }) {
                 <i className={`fa ${file.nombre.endsWith('.pdf') ? 'fa-file-pdf-o' : file.nombre.match(/\.(jpg|png|jpeg)$/i) ? 'fa-file-image-o' : file.nombre.match(/\.(doc|docx)$/i) ? 'fa-file-word-o' : 'fa-file-o'}`}></i>
                 <div className="clientes-file-info">
                   <span className="clientes-file-name">{file.nombre}</span>
+                  {file.protegido && (
+                    <span data-testid={`file-protegido-${i}`} title="Este documento tiene clave y no puede abrirse sin ella"
+                      style={{ marginLeft: 6, fontSize: 10.5, fontWeight: 800, color: "#b45309",
+                        border: "1px solid #f59e0b", background: "rgba(245,158,11,0.12)",
+                        padding: "1px 7px", whiteSpace: "nowrap" }}>
+                      🔒 Protegido — requiere clave
+                    </span>
+                  )}
                   {file.subfolder && <span className="clientes-file-subfolder">{file.subfolder}/</span>}
                   <span className="clientes-file-size">{formatSize(file.tamano)}</span>
                 </div>

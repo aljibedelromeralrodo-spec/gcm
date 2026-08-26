@@ -118,6 +118,8 @@ PERFIL_PERMITIDOS = {
 # gerencia: módulos de administración en MODO LECTURA (lista negra de escritura)
 # administracion: sin escritura en módulos de gerencia/broker/contralor
 ROL_BLOQUEO_ESCRITURA = {
+    "lectura": {"lista_blanca": True, "permitidos": (),
+                "mensaje": "Rol Solo Lectura: puede visualizar pero no crear, modificar ni eliminar registros"},
     "contralor": {"lista_blanca": True, "permitidos": ("/api/contralor/",),
                   "mensaje": "Rol Contralor: solo lectura y auditoría absoluta — no puede ejercer cambios"},
     "postventa": {"lista_blanca": True, "permitidos": ("/api/postventa", "/api/mi-correo"),

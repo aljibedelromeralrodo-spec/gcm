@@ -1465,3 +1465,17 @@ actual; todo lo demás permanece intacto.
 - Frontend: components/RetenidosModoPrueba.js integrado en DashboardModule (panel principal). Muestra destinatario, asunto, fecha/hora, motivo, estado APROBADO/RECHAZO; botones por fila + globales con confirm. data-testids: retenidos-modo-prueba, retenido-fila-{i}, retenido-aprobar-{i}, retenido-descartar-{i}, retenidos-aprobar-todos, retenidos-descartar-todos.
 - Verificado: API con token admin (9 retenidos), aprobar sin correo en ficha falla limpio (sin_correo, nada enviado), UI renderizada en dashboard (screenshot OK).
 - Nota: varios retenidos tienen cliente mal extraído ("Respuestas Mesa Clientes") y sin email — problema upstream de extracción de cliente en mesa_verdad, pendiente si el usuario lo pide.
+
+## 2026-06 (fork) — Detección de PDFs protegidos con clave + otras entregas de la sesión
+- scan_archivos (folders_service) marca cada archivo con protegido:bool y etiqueta "Protegido — requiere clave" (pypdf is_encrypted + fallback /Encrypt, con caché por mtime).
+- Alerta automática al Admin (db.alertas tipo pdf_protegido, dedupe en pdfs_protegidos_notificados) al abrir carpeta y al ingresar docs nuevos por correo.
+- Frontend ClientesModule: insignia ámbar "🔒 Protegido — requiere clave" en la vista de documentos (data-testid file-protegido-{i}).
+- Verificado E2E con PDF cifrado real: detección, endpoint y alerta OK; datos de prueba eliminados.
+- FIX CRÍTICO previo: procesador de cola paralizado 27h (avalancha de ciclos concurrentes) → _PROC_AUTO_LOCK + wait_for(600s) en ingesta; backlog de 18 correos procesado, carpetas creadas (incl. Jorge Salazar Guajardo).
+- Otras entregas: soporte ZIP en ingesta (expandir_zip en email_service aplicado a fetch_pdf_attachments y fetch_attachments_by_message_ids); vista Admin "Carpetas con documentos faltantes" (GET /api/carpetas/faltantes + CarpetasFaltantes.js en Dashboard); botón codeudor en rechazo cliente (endpoint público /api/rechazo-codeudor/{token}); normativas constitucionales: CUENTA UNICA DE ENVIO, APROBACION SIN GASTOS, RECHAZO TEXTO EXACTO; informe PDF contratos arriendo enviado por correo.
+
+## 2026-06 (fork) — Usuario Solo Lectura "Clave"
+- Usuario: codigo "clave" (login "Clave", tolerante a mayúsculas) / clave "1234" (bcrypt) / rol "lectura". Sembrado idempotente al arranque (server.py) → también se creará en PRODUCCIÓN al redesplegar.
+- Backend (auth.py): rol "lectura" en ROL_BLOQUEO_ESCRITURA con lista blanca vacía → TODO POST/PUT/PATCH/DELETE bloqueado con 403.
+- Frontend (App.js): ACCESOS_ROL.lectura = solo dashboard en modo lectura; etiqueta "SOLO LECTURA"; banner MODO LECTURA.
+- Verificado E2E: login OK, GET 200, POST/DELETE 403, vista admin renderizada con banner (screenshot).

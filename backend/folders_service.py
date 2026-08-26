@@ -169,6 +169,34 @@ def docs_apertura_cats(nombres):
     return cats
 
 
+_PROT_CACHE = {}
+
+
+def pdf_protegido(path):
+    """True si el PDF está cifrado con clave (cache por ruta+mtime+tamaño)."""
+    try:
+        st = path.stat()
+        key = (str(path), int(st.st_mtime), st.st_size)
+        if key in _PROT_CACHE:
+            return _PROT_CACHE[key]
+        prot = False
+        if path.suffix.lower() == ".pdf":
+            try:
+                from pypdf import PdfReader
+                prot = bool(PdfReader(str(path), strict=False).is_encrypted)
+            except Exception:
+                try:
+                    prot = b"/Encrypt" in path.read_bytes()[-8192:]
+                except Exception:
+                    prot = False
+        _PROT_CACHE[key] = prot
+        if len(_PROT_CACHE) > 5000:
+            _PROT_CACHE.clear()
+        return prot
+    except Exception:
+        return False
+
+
 def scan_archivos(nombre):
     base = folder_dir(nombre)
     out = []
@@ -177,8 +205,12 @@ def scan_archivos(nombre):
             if p.is_file():
                 rel = p.relative_to(base).as_posix()
                 sub = rel.rsplit("/", 1)[0] if "/" in rel else ""
-                out.append({"nombre": p.name, "ruta": rel, "subfolder": sub,
-                            "tamano": p.stat().st_size})
+                prot = pdf_protegido(p)
+                item = {"nombre": p.name, "ruta": rel, "subfolder": sub,
+                        "tamano": p.stat().st_size, "protegido": prot}
+                if prot:
+                    item["etiqueta_proteccion"] = "Protegido — requiere clave"
+                out.append(item)
     out.sort(key=lambda a: (a["subfolder"], a["nombre"]))
     return out
 

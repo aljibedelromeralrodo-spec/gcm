@@ -111,6 +111,7 @@ async def ensure_seed():
         ("broker", "Broker Demo", "broker", "Broker2026", "D"),
         ("victoria", "Victoria Vilchez", "administracion", "Victoria2026", ""),
         ("daniela", "Daniela Galindo", "administracion", "Daniela2026", ""),
+        ("clave", "Clave", "lectura", "1234", ""),
     ]:
         if not await db.users.find_one({"codigo": codigo}):
             await db.users.insert_one({
@@ -3292,6 +3293,28 @@ async def create_folder(payload: dict, request: Request):
     return _folder_public(doc)
 
 
+async def _alerta_pdfs_protegidos(nombre_folder, archivos=None):
+    """🔒 Notifica al Admin (una sola vez por archivo) los documentos protegidos con clave."""
+    try:
+        if archivos is None:
+            archivos = fsvc.scan_archivos(nombre_folder)
+        for a in archivos:
+            if not a.get("protegido"):
+                continue
+            key = f"{nombre_folder}|{a['ruta']}"
+            if await db.pdfs_protegidos_notificados.find_one({"key": key}):
+                continue
+            await db.pdfs_protegidos_notificados.insert_one(
+                {"key": key, "folder": nombre_folder, "archivo": a["nombre"], "fecha": now_iso()})
+            await db.alertas.insert_one({"id": str(uuid.uuid4()), "tipo": "pdf_protegido", "leida": False,
+                "cliente": nombre_folder,
+                "mensaje": (f"🔒 Documento PROTEGIDO con clave en la carpeta de {nombre_folder}: "
+                            f"«{a['nombre']}» — requiere clave para abrirse (solicitar la clave al remitente)"),
+                "fecha": now_iso()})
+    except Exception:
+        pass
+
+
 @api.get("/clientes/folders/{fid}")
 async def get_folder(fid: str):
     doc = await db.folders.find_one({"id": fid})
@@ -3300,6 +3323,7 @@ async def get_folder(fid: str):
     res = _folder_public(doc, con_archivos=True)
     res["prob_aprobacion"] = _prob_aprobacion_folder(doc, await _stats_mesa())
     res["criterios"] = _criterios_folder(doc)
+    await _alerta_pdfs_protegidos(doc.get("nombre", ""), res.get("archivos"))
     return res
 
 
@@ -6867,6 +6891,7 @@ async def proc_upload_drive(qid: str, force: bool = False, clave: str = ""):
                                      "datos_financieros": fin_nuevos,
                                      "datos_financieros_fecha": item.get("date_iso", ""),
                                      "created_at": now_iso(), "origen": "procesamiento"})
+        await _alerta_pdfs_protegidos(cliente)
     else:
         vistos_arch = set(folder_doc.get("archivos") or [])
         upd = {"archivos": (folder_doc.get("archivos") or []) + [a for a in uploaded if a not in vistos_arch],
@@ -6919,6 +6944,7 @@ async def proc_upload_drive(qid: str, force: bool = False, clave: str = ""):
                            + ("…" if len(nuevos_arch) > 6 else "")),
                 "remitente": item.get("sender", ""),
                 "archivos": nuevos_arch}}})
+            await _alerta_pdfs_protegidos(cliente)
     # Checklist de faltantes
     req = CHECKLIST.get(tipo_cliente, {})
     conteo = {}
