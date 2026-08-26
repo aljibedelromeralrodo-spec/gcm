@@ -449,6 +449,7 @@ NORMATIVAS_FIJAS = [
     ("PALETA OFICIAL", "NORMATIVA FIJA — PALETA OFICIAL: negro profundo y dorado mate en todo el sistema. El nombre corporativo se escribe exactamente 'Central Mutuos'. El protector de pantalla fue reemplazado por el VISUALIZADOR COGNITIVO EN VIVO: panel en el dashboard del administrador (expandible a pantalla completa) que muestra el flujo real del sistema como cerebro vivo — carpetas, correos, ejecutivos y cerebro normativo como nodos; conexiones doradas que pulsan con actividad real; morado en espera, verde aprobado, rojo rechazo/alerta, fondo negro profundo. A los 5 minutos de inactividad o con doble espacio ocupa toda la pantalla; el PIN maestro aparece solo al presionar una tecla."),
     ("GASTOS OPERACIONALES", "NORMATIVA FIJA — GASTOS OPERACIONALES: prohibido mencionar gastos operacionales en cualquier correo dirigido a clientes o ejecutivos (aprobación, rechazo, simulaciones). La simulación al cliente va solo con la primera hoja, sin gastos."),
     ("PREVIEW OBLIGATORIO", "NORMATIVA FIJA — PREVIEW OBLIGATORIO: todo correo de aprobación o rechazo exige vista previa visible (texto + adjuntos) y confirmación explícita del usuario antes del envío. Nunca envío directo sin preview. Opera de forma local, sin consumo de IA."),
+    ("CONSTITUCION DE MODULOS", "NORMATIVA CONSTITUCIONAL — CONSTITUCIÓN DE MÓDULOS ESTABLES (INAMOVIBLE): el archivo /app/constitucion_modulos.md lista los módulos estables y funcionando de la plataforma. ANTES de modificar cualquier módulo listado, el agente DEBE mostrar el impacto del cambio (qué módulos toca, qué flujos podrían romperse) y esperar la aprobación EXPLÍCITA del Administrador. Además, antes de cada redespliegue deben ejecutarse las pruebas críticas (backend/tests/test_criticos.py vía scripts/pre_deploy_check.sh): si alguna falla, se muestra alerta clara y NO se recomienda subir a producción."),
     ("RECHAZO TEXTO EXACTO", "NORMATIVA CONSTITUCIONAL — RECHAZO TEXTO EXACTO (INAMOVIBLE, mandato del Administrador): el cuerpo del correo de notificación de rechazo contiene ÚNICAMENTE el texto exacto que envió el canal oficial de evaluación como motivo, sin agregar, modificar ni inventar ningún contenido adicional. PROHIBIDO redactar motivos institucionales sintéticos o usar textos por defecto inventados. Blindaje: (a) el texto exacto viaja desde el monitor oficial (mesa_verdad guarda resultado_mesa_texto en la carpeta y lo pasa a los notificadores); (b) si el texto exacto no está disponible, la notificación se RETIENE con alerta al Admin para revisión manual — jamás se envía un motivo inventado; (c) si el texto exacto contiene referencias al origen o direcciones de correo, la notificación también se RETIENE (la purificación no puede modificar el texto, solo retenerlo). La recomendación de acción del correo al ejecutivo va en sección separada y rotulada, nunca mezclada con el texto exacto del motivo."),
     ("APROBACION SIN GASTOS", "NORMATIVA CONSTITUCIONAL — APROBACIÓN SIN GASTOS (INAMOVIBLE, mandato del Administrador): el correo de aprobación de Mesa al cliente incluye ÚNICAMENTE: (1) el cuerpo de aprobación, (2) la carta de aprobación y (3) la simulación ajustada con el nombre del cliente. NINGÚN adjunto ni información de Gasto Operacional puede incluirse en este correo bajo ninguna circunstancia. Blindaje en tres capas: (a) _tipo_pdf_aprobacion excluye todo archivo cuyo nombre contenga 'gasto' u 'operacional'; (b) antes del envío se eliminan adjuntos contaminados con alerta al Admin; (c) si el cuerpo o asunto menciona Gasto Operacional, el envío se ABORTA con alerta. Los Gastos Operacionales viajan solo por su módulo propio y el flujo interno de barrido (correo interno a la cuenta corporativa), jamás en el correo de aprobación al cliente."),
     ("CUENTA UNICA DE ENVIO", "NORMATIVA CONSTITUCIONAL — CUENTA ÚNICA DE ENVÍO (INAMOVIBLE, mandato del Administrador): TODOS los correos salientes de la aplicación, sin excepción (Gasto Operacional, rechazos, notificaciones, clasificaciones, resúmenes, campañas y cualquier módulo presente o futuro), se envían EXCLUSIVAMENTE desde la cuenta corporativa gerardo.ext@centralmutuos.cl usando las credenciales MAIL2_*. PROHIBIDO usar ethangerardobarr@gmail.com o cualquier otra cuenta como remitente. La regla se aplica a nivel del servicio central de correo (email_service.send_mail), por lo que ningún módulo puede eludirla: si las credenciales MAIL2_* no están configuradas, el envío se BLOQUEA con error explícito en lugar de usar otra cuenta."),
@@ -699,6 +700,11 @@ async def startup():
         asyncio.create_task(_task_blindada(_periodic_proc_loop, "ingesta_carpetas"))
         asyncio.create_task(_task_blindada(_estudio_reparos_loop, "reparos_estudio"))
         asyncio.create_task(_task_blindada(_aprendizaje_loop, "aprendizaje_ia"))
+        asyncio.create_task(_auto_recuperar_perdidos_boot())
+    try:
+        bunker.migrar_legado_bg()
+    except Exception as _e:
+        logging.warning(f"migración objstore: {_e}")
     asyncio.create_task(_task_blindada(_periodic_mesa_loop, "mesa"))
     # DESACTIVADO (normativa un-solo-correo): reporte 10AM consolidado en el resumen 8AM
     # asyncio.create_task(_task_blindada(_daily_report_loop, "reporte_diario"))
@@ -6135,6 +6141,41 @@ async def carpetas_faltantes(request: Request, limit: int = 150):
     return {"total": len(out), "carpetas": out[:limit]}
 
 
+@api.get("/almacenamiento/estado")
+async def almacenamiento_estado():
+    """Estado del almacenamiento durable (Emergent Object Store) y su migración."""
+    mig = await db.config.find_one({"_key": "objstore_migracion"}, {"_id": 0}) or {}
+    total = await db.objstore_files.count_documents({"is_deleted": {"$ne": True}})
+    legado = await db["bunker.files"].count_documents({})
+    return {"migracion": mig, "objstore_archivos": total, "gridfs_legado_lectura": legado}
+
+
+@api.post("/procesamiento/recuperar-perdidos")
+async def proc_recuperar_perdidos(limit: int = 300, dias: int = 60):
+    """🛟 REPROCESO MASIVO: correos clasificados que quedaron SIN carpeta.
+    Restaura adjuntos desde el búnker o los re-descarga del correo de origen y arma la carpeta."""
+    from datetime import timedelta as _td
+    desde = (datetime.now(timezone.utc) - _td(days=dias)).isoformat()
+    items = await db.proc_queue.find(
+        {"status": "clasificado", "date_iso": {"$gte": desde},
+         "$or": [{"drive_folder_id": None}, {"drive_folder_id": ""}]}
+    ).sort("date_iso", -1).limit(limit).to_list(limit)
+    res = {"revisados": len(items), "creadas": [], "recuperados_correo": [], "fallidos": []}
+    for it in items:
+        etiqueta = (it.get("classification") or {}).get("cliente") or it.get("subject", "")[:50]
+        try:
+            await proc_upload_drive(it["id"])
+            res["creadas"].append(etiqueta)
+            it2 = await db.proc_queue.find_one({"id": it["id"]}, {"adjuntos_recuperados": 1})
+            if (it2 or {}).get("adjuntos_recuperados"):
+                res["recuperados_correo"].append(f"{etiqueta} ({it2['adjuntos_recuperados']} adjuntos)")
+        except HTTPException as he:
+            res["fallidos"].append(f"{etiqueta}: {he.detail}")
+        except Exception as e:
+            res["fallidos"].append(f"{etiqueta}: {str(e)[:120]}")
+    return res
+
+
 @api.post("/procesamiento/process-pending")
 async def proc_process(limit: int = 5):
     pend = await db.proc_queue.find({"status": "pendiente"}).limit(limit).to_list(limit)
@@ -6426,7 +6467,10 @@ def _regen_carpeta_cliente(cliente, orden_manual=None):
 
 
 _SOLICITUD_RE = re.compile(
-    r"solicitud\s+de\s+(financiamiento|cr[eé]dito)|solicito\s+(evaluaci[oó]n|financiamiento|cr[eé]dito)|evaluaci[oó]n",
+    r"solicitud\s+de\s+(financiamiento|cr[eé]dito)|solicito\s+(evaluaci[oó]n|financiamiento|cr[eé]dito)"
+    r"|evaluaci[oó]n|pre.?evaluaci|pre.?aprobaci|financiamiento|cr[eé]dito\s+hipotecario"
+    r"|hipotecari[oa]|mutuo\b|subsidio|\bds\s?19\b|\bds\s?1\b|venta\s+en\s+verde"
+    r"|entrega\s+(inmediata|futura)|carpeta\s+(de\s+)?(cliente|antecedentes)|antecedentes\s+(de|del|para)",
     re.I)
 _MONTO_RE = re.compile(r"monto|[\d.,]+\s*uf\b|\buf\s*[\d.,]+|\$\s*[\d.,]{4,}", re.I)
 _DOCS_BASICOS = ("cedula", "liquidacion", "cotizacion_afp", "certificado_afp",
@@ -6434,13 +6478,8 @@ _DOCS_BASICOS = ("cedula", "liquidacion", "cotizacion_afp", "certificado_afp",
 
 
 def _regla_solicitud_ok(item):
-    """REGLA: se arma carpeta si el correo trae frase de evaluación/solicitud de
-    financiamiento y al menos 3 documentos básicos (2 si además indica el monto).
-    El tipo del documento se complementa con el nombre del archivo para no
-    descartar liquidaciones/cédulas mal clasificadas como 'otro'."""
-    texto = f"{item.get('subject') or ''} {item.get('body_full') or item.get('body_preview') or ''}"
-    if not _SOLICITUD_RE.search(texto):
-        return False, "el texto no menciona evaluación ni solicitud de financiamiento/crédito"
+    """REGLA ÚNICA (mandato del Administrador): la carpeta se arma cuando el correo trae
+    al menos 3 documentos obligatorios válidos. Sin requisito de frases exactas en el texto."""
     _cat_basica = {"cedula": "cedula", "liquidacion": "liquidacion", "afp": "afp",
                    "cmf": "cmf", "imp_renta": "imp_renta", "boletas": "boletas"}
     tipos = set()
@@ -6454,9 +6493,8 @@ def _regla_solicitud_ok(item):
             tipos.add(_cat_basica[fsvc.cat_de_texto(fn)])
         elif re.search(r"cotizaci[oó]n", fn, re.I):
             tipos.add("cotizacion_inmobiliaria")
-    minimo = 2 if _MONTO_RE.search(texto) else 3
-    if len(tipos) < minimo:
-        return False, f"solo {len(tipos)} documento(s) básico(s) adjunto(s) — mínimo {minimo}"
+    if len(tipos) < 3:
+        return False, f"solo {len(tipos)} documento(s) obligatorio(s) válido(s) adjunto(s) — mínimo 3"
     return True, ""
 
 
@@ -6664,11 +6702,11 @@ async def proc_reevaluar(payload: dict):
                 descartadas.append(f"{nombre_cli or it.get('subject','')}: {he.detail}")
         else:
             if folder:
-                import shutil
-                shutil.rmtree(fsvc.folder_dir(folder.get("nombre", "")), ignore_errors=True)
-                bunker.eliminar_bg(fsvc.folder_dir(folder.get("nombre", "")))
-                await db.folders.delete_one({"id": folder["id"]})
-                borradas.append(f"{folder.get('nombre','')} — {motivo}")
+                # 🛡 SIN BORRADO DESTRUCTIVO: la reevaluación jamás elimina carpetas ni archivos;
+                # solo marca la carpeta para revisión manual del Administrador.
+                await db.folders.update_one({"id": folder["id"]}, {"$set": {
+                    "revision_regla": motivo, "revision_regla_at": now_iso()}})
+                borradas.append(f"{folder.get('nombre','')} — marcada para revisión (NO borrada): {motivo}")
             await db.proc_queue.update_one({"id": it["id"]}, {"$set": {
                 "status": "descartado", "drive_folder_id": None,
                 "descartado_motivo": f"REGLA: {motivo}", "descartado_en": now_iso()}})
@@ -6702,12 +6740,36 @@ async def proc_upload_drive(qid: str, force: bool = False, clave: str = ""):
             vistos.add(fn)
             docs.append(d)
     src = PROC_DIR / qid
+    if not src.exists() or not any(src.glob("*")):
+        # 🏦 DURABILIDAD: los adjuntos del correo pueden haberse perdido con un redespliegue
+        try:
+            await asyncio.to_thread(bunker.restaurar_prefijo, f"proc/{qid}")
+        except Exception:
+            pass
     docs = [d for d in docs if (src / d["filename"]).exists()]
     if not docs:
-        # REGLA: nunca crear carpeta sin adjuntos descargados y clasificados
+        # 🛟 RESCATE: re-descargar los adjuntos desde el correo de ORIGEN (no abortar)
+        refetched = await asyncio.to_thread(mail.refetch_adjuntos,
+                                            item.get("subject", ""), item.get("date_iso", ""))
+        if refetched:
+            src.mkdir(parents=True, exist_ok=True)
+            for a in refetched:
+                fn = _safe_name(a["filename"])
+                (src / fn).write_bytes(a["content_bytes"])
+            nombres_cl = {d.get("filename") for d in cl.get("documentos", [])}
+            docs = [d for d in cl.get("documentos", []) if (src / _safe_name(d.get("filename", ""))).exists()]
+            for a in refetched:
+                fn = _safe_name(a["filename"])
+                if fn not in nombres_cl:
+                    docs.append({"filename": fn, "tipo": ""})
+            await db.proc_queue.update_one({"id": qid}, {"$set": {
+                "adjuntos_recuperados": len(refetched), "adjuntos_recuperados_en": now_iso()}})
+            bunker.sync_en_background()
+    if not docs:
+        # Sin adjuntos en disco, búnker NI en el correo de origen: no se crea carpeta vacía
         raise HTTPException(status_code=409, detail=(
-            "No hay adjuntos descargados/clasificados para este correo. "
-            "Reprocesa el correo primero: no se crea carpeta vacía."))
+            "No hay adjuntos: se intentó restaurar desde el búnker y re-descargar del correo "
+            "de origen sin éxito. No se crea carpeta vacía."))
     # ENRIQUECER: si ya existe carpeta de la misma persona (otro correo), usarla
     existente = await _buscar_carpeta_existente(cliente, cl.get("rut", ""))
     # Deteccion de CODEUDOR: el correo puede traer los papeles del codeudor del titular
@@ -7208,6 +7270,26 @@ async def proc_auto_run_now():
         return {"started": False, "message": "Ya hay un ciclo automático en curso"}
     asyncio.create_task(_run_proc_auto())
     return {"started": True, "message": "Ciclo iniciado en segundo plano. Revisá en 1-2 minutos."}
+
+
+async def _auto_recuperar_perdidos_boot():
+    """🛟 AUTO-SANACIÓN al arrancar (post-redespliegue): si hay correos clasificados sin
+    carpeta, los reprocesa restaurando adjuntos del búnker o re-descargándolos del correo."""
+    await asyncio.sleep(90)
+    try:
+        n = await db.proc_queue.count_documents(
+            {"status": "clasificado", "$or": [{"drive_folder_id": None}, {"drive_folder_id": ""}]})
+        if not n:
+            return
+        logging.warning(f"🛟 AUTO-SANACIÓN: {n} correo(s) clasificados sin carpeta — reprocesando…")
+        r = await proc_recuperar_perdidos(limit=300, dias=90)
+        await db.alertas.insert_one({"id": str(uuid.uuid4()), "tipo": "recuperacion", "leida": False,
+            "cliente": "", "fecha": now_iso(),
+            "mensaje": (f"🛟 Auto-sanación post-arranque: {len(r['creadas'])} carpeta(s) creadas, "
+                        f"{len(r['recuperados_correo'])} con adjuntos re-descargados del correo, "
+                        f"{len(r['fallidos'])} fallida(s) de {r['revisados']} revisadas")})
+    except Exception as e:
+        logging.warning(f"auto-recuperación boot: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -10908,6 +10990,13 @@ def _compromiso_default(fd):
 
 @api.get("/compromiso/{fid}")
 async def compromiso_get(fid: str):
+    # 📜 COMPROMISO INDEPENDIENTE: se genera sin carpeta de cliente (fid "libre-…")
+    if fid.startswith("libre"):
+        doc = await db.compromisos.find_one({"folder_id": fid}, {"_id": 0})
+        if doc:
+            return doc
+        return {"folder_id": fid, "datos": _compromiso_default({"id": fid, "nombre": ""}),
+                "clausulas_html": "", "independiente": True}
     fd = await db.folders.find_one({"id": fid})
     if not fd:
         raise HTTPException(status_code=404, detail="Carpeta no encontrada")

@@ -71,14 +71,43 @@ def _connect(acc):
     return m
 
 
+EXT_VALIDAS = (".pdf", ".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp",
+               ".doc", ".docx", ".xls", ".xlsx")
+
+
+def _expandir_rar(payload):
+    """RAR → archivos internos válidos usando bsdtar (libarchive)."""
+    import tempfile, subprocess, os as _os
+    out = []
+    try:
+        with tempfile.TemporaryDirectory() as td:
+            src = _os.path.join(td, "adj.rar")
+            open(src, "wb").write(payload)
+            subprocess.run(["bsdtar", "-xf", src, "-C", td],
+                           check=True, timeout=90, capture_output=True)
+            for root, _dirs, files in _os.walk(td):
+                for f in files:
+                    if f == "adj.rar" or f.startswith(("._", "~")):
+                        continue
+                    if f.lower().endswith(EXT_VALIDAS):
+                        p = _os.path.join(root, f)
+                        if _os.path.getsize(p) <= 25 * 1024 * 1024:
+                            out.append((f, open(p, "rb").read()))
+    except Exception as e:
+        logging.warning(f"expandir_rar: {e}")
+        return []
+    return out
+
+
 def expandir_zip(fname, payload):
-    """Adjunto ZIP → lista [(nombre, bytes)] con los archivos internos válidos.
-    Adjunto normal → [(fname, payload)]."""
-    if not (fname or "").lower().endswith(".zip"):
+    """Adjunto comprimido (.zip/.rar) → lista [(nombre, bytes)] con los archivos internos
+    válidos. Adjunto normal → [(fname, payload)]."""
+    low = (fname or "").lower()
+    if low.endswith(".rar"):
+        return _expandir_rar(payload)
+    if not low.endswith(".zip"):
         return [(fname, payload)]
     import zipfile as _zf, io as _io, os as _os
-    VALIDAS = (".pdf", ".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp",
-               ".doc", ".docx", ".xls", ".xlsx")
     out = []
     try:
         with _zf.ZipFile(_io.BytesIO(payload)) as z:
@@ -86,7 +115,7 @@ def expandir_zip(fname, payload):
                 if zi.is_dir() or zi.file_size > 25 * 1024 * 1024:
                     continue
                 base = _os.path.basename(zi.filename)
-                if base.startswith(("._", "~")) or not base.lower().endswith(VALIDAS):
+                if base.startswith(("._", "~")) or not base.lower().endswith(EXT_VALIDAS):
                     continue
                 try:
                     out.append((base, z.read(zi)))
@@ -95,6 +124,73 @@ def expandir_zip(fname, payload):
     except Exception:
         return []
     return out
+
+
+def refetch_adjuntos(subject, date_iso="", max_msgs=3):
+    """🛟 RESCATE: re-descarga los adjuntos desde el correo de ORIGEN buscando por asunto
+    en ambas casillas (bandeja completa). Devuelve [{filename, content_bytes}]."""
+    import imaplib as _imap
+    import email as _email
+    tokens = [w for w in re.findall(r"[A-Za-z]{4,}", subject or "")
+              if w.lower() not in ("solicitud", "credito", "evaluacion", "cliente",
+                                   "correo", "gmail", "central", "mutuos", "para", "documentos")]
+    if not tokens:
+        return []
+    termino = max(tokens, key=len)
+    since = ""
+    try:
+        from datetime import datetime as _dt, timedelta as _td
+        since = (_dt.fromisoformat((date_iso or "")[:19]) - _td(days=3)).strftime("%d-%b-%Y")
+    except Exception:
+        pass
+    resultados, vistos = [], set()
+    for acc in ACCOUNTS:
+        try:
+            m = _imap.IMAP4_SSL(IMAP_HOST, timeout=30)
+            m.login(acc["user"], acc["pwd"])
+            sel = None
+            for box in ('"[Gmail]/Todos"', '"[Gmail]/All Mail"', "INBOX"):
+                st, _ = m.select(box, readonly=True)
+                if st == "OK":
+                    sel = box
+                    break
+            if not sel:
+                continue
+            crit = (f'(SINCE "{since}" SUBJECT "{termino}")' if since
+                    else f'(SUBJECT "{termino}")')
+            st, data = m.search(None, crit)
+            ids = data[0].split() if st == "OK" else []
+            for i in ids[-max_msgs:]:
+                try:
+                    st, md = m.fetch(i, "(RFC822)")
+                except Exception:
+                    continue
+                if not md or not isinstance(md[0], tuple):
+                    continue
+                msg = _email.message_from_bytes(md[0][1])
+                for part in msg.walk():
+                    fname = part.get_filename()
+                    if fname:
+                        fname = _dec(fname)
+                    if not fname or not fname.lower().endswith(
+                            EXT_VALIDAS + (".zip", ".rar")):
+                        continue
+                    try:
+                        payload = part.get_payload(decode=True)
+                    except Exception:
+                        continue
+                    if not payload:
+                        continue
+                    for nf, nb in expandir_zip(fname, payload):
+                        if nf and nf not in vistos:
+                            vistos.add(nf)
+                            resultados.append({"filename": nf, "content_bytes": nb})
+            m.logout()
+            if resultados:
+                break
+        except Exception as e:
+            logging.warning(f"refetch_adjuntos {acc.get('user','')}: {e}")
+    return resultados
 
 
 def _dec(value):
@@ -356,7 +452,7 @@ def fetch_pdf_attachments(sender_filter=None, limit=20, incluir_sin_adjuntos=Fal
                     fecha = fecha_raw or ""
                 pdfs = []
                 body_text = ""
-                CAPTURA_EXT = (".pdf", ".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp", ".zip")
+                CAPTURA_EXT = (".pdf", ".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp", ".zip", ".rar")
                 for part in msg.walk():
                     ctype = part.get_content_type()
                     disp = str(part.get("Content-Disposition") or "")
@@ -878,7 +974,7 @@ def fetch_simulacion_attachments(limit_per=40, remitente="aprobaciones@centralmu
 
 def fetch_attachments_by_message_ids(message_ids):
     """Baja los correos exactos (por Message-ID) con sus adjuntos."""
-    CAPTURA_EXT = (".pdf", ".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp", ".zip")
+    CAPTURA_EXT = (".pdf", ".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp", ".zip", ".rar")
     pendientes = {m.strip() for m in (message_ids or []) if m and m.strip()}
     out = []
     for acc in ACCOUNTS:

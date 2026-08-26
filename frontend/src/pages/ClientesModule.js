@@ -182,6 +182,7 @@ export default function ClientesModule({ onNavigate }) {
   const [currentFolder, setCurrentFolder] = useState(null);
   const [techo, setTecho] = useState(null);
   const [showCompromiso, setShowCompromiso] = useState(false);
+  const [compromisoLibre, setCompromisoLibre] = useState(null);
   const [techoBusy, setTechoBusy] = useState(false);
   const [emails, setEmails] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -1704,6 +1705,11 @@ export default function ClientesModule({ onNavigate }) {
                 style={{ borderColor: "#f59e0b", color: "#f59e0b" }}>
                 <i className="fa fa-bolt"></i> Forzar Carpeta
               </button>
+              <button className="docs-btn secondary" data-testid="btn-compromiso-independiente"
+                onClick={() => setCompromisoLibre({ id: `libre-${Date.now()}`, nombre: "Compromiso Independiente" })}
+                style={{ borderColor: "var(--gold, #d4af37)", color: "var(--gold, #d4af37)" }}>
+                <i className="fa fa-file-text-o"></i> Compromiso Compraventa
+              </button>
             </div>
           </div>
 
@@ -2208,6 +2214,9 @@ export default function ClientesModule({ onNavigate }) {
 
           {showCompromiso && currentFolder && (
             <CompromisoEditor folder={currentFolder} onClose={() => setShowCompromiso(false)} />
+          )}
+          {compromisoLibre && (
+            <CompromisoEditor folder={compromisoLibre} onClose={() => setCompromisoLibre(null)} />
           )}
 
 

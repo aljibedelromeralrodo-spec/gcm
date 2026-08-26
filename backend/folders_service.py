@@ -199,6 +199,13 @@ def pdf_protegido(path):
 
 def scan_archivos(nombre):
     base = folder_dir(nombre)
+    if not base.exists() or not any(base.iterdir()):
+        # 🏦 DURABILIDAD: si el disco local perdió la carpeta (redespliegue), se restaura desde GridFS
+        try:
+            import bunker
+            bunker.restaurar_prefijo(f"clientes/{safe_name(nombre)}")
+        except Exception:
+            pass
     out = []
     if base.exists():
         for p in sorted(base.rglob("*")):

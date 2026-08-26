@@ -41,6 +41,8 @@ RX_ANIOS = re.compile(r"\d{1,2}\s*a[ñn]os", re.I)
 RX_UF = re.compile(r"\d[\d.,]*\s*uf", re.I)
 RX_ANULA = re.compile(r"favor\s+cancelar\s+(el\s+)?(email|correo|mail)\s+de\s+aprobaci[oó]n"
                       r"|cancelar\s+la?\s+aprobaci[oó]n|anular\s+la?\s+aprobaci[oó]n"
+                      r"|se\s+anula\s+(la\s+)?aprobaci[oó]n|aprobaci[oó]n\s+(queda\s+)?anulad[oa]"
+                      r"|dejar\s+sin\s+efecto\s+la\s+aprobaci[oó]n"
                       r"|no\s+considerar\s+la\s+aprobaci[oó]n", re.I)
 VENTANA_ANTIANULACION_MIN = 45  # caso Viviana: la Mesa anuló una aprobación 13 min después
 

@@ -1,0 +1,23 @@
+{
+  "summary": "Backend-only regression + fix verification for the 'carpetas' bug. Ran 13 pytest cases covering: (1) POST /api/procesamiento/recuperar-perdidos returns the expected JSON shape, (2) _regla_solicitud_ok flexible filter (3 docs pass without exact phrase, 1 doc rejected), (3) expandir_zip works with .zip and returns [] on corrupted .rar without raising, plus bsdtar binary present, (4) folders_service.scan_archivos restaures YARITZA BRAVO directory from GridFS bunker after moving it aside (dir restored + same doc count), (5) email_service.refetch_adjuntos re-downloaded >5 attachments from IMAP for JORGE MANUEL SALAZAR GUAJARDO, (6) code-level check confirms reevaluation block no longer calls shutil.rmtree/db.folders.delete_one and now sets revision_regla, (7) regression GETs /api/central/dashboard-batch, /api/carpetas/faltantes, /api/clientes/folders return 200 and read-only user 'Clave' is blocked (403) on POST /api/procesamiento/recuperar-perdidos. All 13/13 passed in 95s.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter63_carpetas_fix.py",
+    "/app/test_reports/pytest/iter63.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py sigue siendo un monolito de ~16k líneas — muy difícil de mantener; considerar dividir por dominio (procesamiento, carpetas, auth, dashboards).",
+    "email_service._expandir_rar y expandir_zip abren archivos internos sin validar rutas relativas ('..'): un ZIP malicioso no puede escribir fuera del tempdir (bsdtar/zipfile leen a memoria), pero conviene añadir chequeo defensivo del nombre base (ya se usa os.path.basename en zip; ok).",
+    "refetch_adjuntos abre nueva sesión IMAP por invocación sin usar el cache de _connect — costoso si se llama en bucle desde reevaluación; podría reusar el pool cacheado."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter63_carpetas_fix.py"],
+  "success_rate": {"backend": "100%", "frontend": "n/a (skipped por request)"},
+  "test_credentials": "admin=administrador/141617575 (funcionó); lectura=Clave/1234 (funcionó, POST bloqueado con 403)",
+  "seed_data_creation": "Ninguna. La prueba búnker movió YARITZA BRAVO a _BAK_TEST y restauró el directorio original al final (verificado en teardown del test).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Suite reusable: /app/backend/tests/test_iter63_carpetas_fix.py. El test IMAP refetch_adjuntos toma ~60-90s y requiere credenciales Gmail en backend/.env (MAIL_APP_PASSWORD / MAIL2_APP_PASSWORD). El test del búnker asume que YARITZA BRAVO existe en storage/clientes; si no, se skippea. En este preview revisados=0 en recuperar-perdidos es esperado (no hay 294 correos perdidos de producción).",
+  "rca of the issue": "Fixes verificados en código y en tiempo de ejecución: (a) rescate búnker dirigido en folders_service.scan_archivos (restaurar_prefijo), (b) refetch IMAP en email_service.refetch_adjuntos, (c) filtro flexibilizado en _regla_solicitud_ok (mínimo 3 docs básicos sin exigir frase), (d) reevaluación marca revision_regla en lugar de borrar (no aparece shutil.rmtree/delete_one en el bloque), (e) soporte zip+rar con bsdtar. Endpoint POST /api/procesamiento/recuperar-perdidos responde el contrato esperado."
+}

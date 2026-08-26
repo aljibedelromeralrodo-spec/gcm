@@ -1,25 +1,85 @@
-"""BÚNKER DE ARCHIVOS: espejo GridFS de storage/ para persistencia entre reinicios y réplicas."""
+"""BÚNKER DE ARCHIVOS — Emergent Object Storage como almacenamiento durable principal.
+
+- Fuente de verdad: Emergent Object Store (manifiesto en Mongo `objstore_files`).
+- GridFS queda SOLO como respaldo de lectura durante la migración (no se escribe más).
+- El disco local es únicamente caché de trabajo efímera (OCR/preview); todo lo que se
+  escribe se espeja de inmediato al Object Store y se restaura desde ahí tras un redespliegue.
+"""
 import os
+import re
 import logging
 import threading
 from pathlib import Path
 
+import requests
 from pymongo import MongoClient
 import gridfs
 
 ROOT = Path(__file__).parent / "storage"
 SUBDIRS = ("clientes", "autocorreo", "proc", "sets_de_credito", "archivo_general")
+APP_PREFIX = "central-mutuos"
+
+STORAGE_BASE = (os.environ.get("INTEGRATION_PROXY_URL") or "").strip() or "https://integrations.emergentagent.com"
+STORAGE_URL = STORAGE_BASE.rstrip("/") + "/objstore/api/v1/storage"
 
 _cli = None
 _lock = threading.Lock()
+_mig_lock = threading.Lock()
+_storage_key = None
 
 
-def _fs():
+def _db():
     global _cli
     if _cli is None:
         _cli = MongoClient(os.environ["MONGO_URL"])
-    db = _cli[os.environ["DB_NAME"]]
-    return gridfs.GridFS(db, collection="bunker"), db
+    return _cli[os.environ["DB_NAME"]]
+
+
+def _manifest():
+    return _db()["objstore_files"]
+
+
+def _gridfs_legacy():
+    return gridfs.GridFS(_db(), collection="bunker")
+
+
+def _skey(force=False):
+    global _storage_key
+    if _storage_key and not force:
+        return _storage_key
+    r = requests.post(f"{STORAGE_URL}/init",
+                      json={"emergent_key": os.environ.get("EMERGENT_LLM_KEY")}, timeout=30)
+    r.raise_for_status()
+    _storage_key = r.json()["storage_key"]
+    return _storage_key
+
+
+def _put(rel, data):
+    path = f"{APP_PREFIX}/{rel}"
+    r = requests.put(f"{STORAGE_URL}/objects/{path}",
+                     headers={"X-Storage-Key": _skey(),
+                              "Content-Type": "application/octet-stream"},
+                     data=data, timeout=180)
+    if r.status_code == 404:
+        r = requests.put(f"{STORAGE_URL}/objects/{path}",
+                         headers={"X-Storage-Key": _skey(force=True),
+                                  "Content-Type": "application/octet-stream"},
+                         data=data, timeout=180)
+    r.raise_for_status()
+    return r.json()
+
+
+def _get(rel):
+    path = f"{APP_PREFIX}/{rel}"
+    r = requests.get(f"{STORAGE_URL}/objects/{path}",
+                     headers={"X-Storage-Key": _skey()}, timeout=120)
+    if r.status_code == 404:
+        r = requests.get(f"{STORAGE_URL}/objects/{path}",
+                         headers={"X-Storage-Key": _skey(force=True)}, timeout=120)
+        if r.status_code == 404:
+            return None
+    r.raise_for_status()
+    return r.content
 
 
 def _walk():
@@ -32,108 +92,215 @@ def _walk():
                 yield f"{sub}/{p.relative_to(base).as_posix()}", p
 
 
-def _escribir_con_mtime(g, dest):
+def _escribir(data, dest, mtime=None):
     dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_bytes(g.read())
-    mt = (g.metadata or {}).get("mtime")
-    if mt:
-        os.utime(dest, (mt, mt))
+    dest.write_bytes(data)
+    if mtime:
+        os.utime(dest, (mtime, mtime))
+
+
+def _bajar_entry(rel, mtime=None):
+    """Baja un archivo al disco: primero Object Store; si no está, GridFS legado."""
+    data = None
+    try:
+        data = _get(rel)
+    except Exception as e:
+        logging.warning(f"objstore get {rel}: {e}")
+    if data is None:
+        try:
+            g = _gridfs_legacy().find_one({"filename": rel})
+            if g is not None:
+                data = g.read()
+                mtime = mtime or (g.metadata or {}).get("mtime")
+        except Exception as e:
+            logging.warning(f"gridfs get {rel}: {e}")
+    if data is None:
+        return False
+    _escribir(data, ROOT / rel, mtime)
+    return True
+
+
+def _entradas(prefijo=""):
+    """Entradas conocidas del almacén durable: manifiesto objstore + GridFS legado."""
+    vistos = {}
+    q = {"is_deleted": {"$ne": True}}
+    if prefijo:
+        q["filename"] = {"$regex": "^" + re.escape(prefijo) + "(/|$)"}
+    for d in _manifest().find(q, {"filename": 1, "length": 1, "mtime": 1}):
+        vistos[d["filename"]] = {"length": d.get("length"), "mtime": d.get("mtime")}
+    try:
+        qg = {"filename": {"$regex": "^" + re.escape(prefijo) + "(/|$)"}} if prefijo else {}
+        for d in _db()["bunker.files"].find(qg, {"filename": 1, "length": 1, "metadata": 1}):
+            vistos.setdefault(d["filename"], {"length": d.get("length"),
+                                              "mtime": (d.get("metadata") or {}).get("mtime")})
+    except Exception:
+        pass
+    return vistos
 
 
 def restaurar_si_vacio():
-    """Al arrancar: si el disco está vacío (pod nuevo/reinicio), restaura TODO desde GridFS."""
-    fs, _db = _fs()
+    """Al arrancar: si el disco está vacío (pod nuevo/redespliegue), restaura TODO."""
     clientes = ROOT / "clientes"
     if clientes.exists() and any(clientes.iterdir()):
         return 0
     n = 0
-    for g in fs.find():
-        try:
-            _escribir_con_mtime(g, ROOT / g.filename)
+    for rel, meta in _entradas().items():
+        if _bajar_entry(rel, meta.get("mtime")):
             n += 1
-        except Exception as e:
-            logging.warning(f"bunker restore {g.filename}: {e}")
-    logging.warning(f"🏦 BÚNKER: {n} archivo(s) restaurados desde GridFS al disco")
+    logging.warning(f"🏦 BÚNKER: {n} archivo(s) restaurados del almacén durable al disco")
     return n
 
 
 def restaurar_faltantes():
-    """Cloud Sync: baja del GridFS los archivos que NO están en el disco local
-    (sin exigir disco vacío). Devuelve la cantidad restaurada."""
-    fs, _db = _fs()
+    """Cloud Sync: baja los archivos que NO están en el disco local."""
     n = 0
-    for g in fs.find():
-        try:
-            dest = ROOT / g.filename
-            if dest.exists():
-                continue
-            _escribir_con_mtime(g, dest)
+    for rel, meta in _entradas().items():
+        dest = ROOT / rel
+        if dest.exists():
+            continue
+        if _bajar_entry(rel, meta.get("mtime")):
             n += 1
-        except Exception as e:
-            logging.warning(f"bunker faltante {g.filename}: {e}")
+    return n
+
+
+def restaurar_prefijo(rel_prefijo):
+    """Restauración DIRIGIDA: solo lo que cuelga de un prefijo (ej: 'proc/<qid>')."""
+    rel = str(rel_prefijo).replace("\\", "/").strip("/")
+    if not rel:
+        return 0
+    n = 0
+    for r, meta in _entradas(rel).items():
+        dest = ROOT / r
+        if dest.exists() and dest.stat().st_size == meta.get("length"):
+            continue
+        if _bajar_entry(r, meta.get("mtime")):
+            n += 1
+    if n:
+        logging.info(f"🏦 BÚNKER: {n} archivo(s) restaurados para «{rel}»")
     return n
 
 
 def sync_en_background():
-    """Dispara sync_diff en un hilo daemon: nunca bloquea reloads ni el event loop."""
     threading.Thread(target=sync_diff, daemon=True).start()
 
 
 def sync_diff():
-    """Espejo disco -> GridFS: sube nuevos/cambiados. NUNCA borra entradas del
-    almacenamiento en base de datos basándose en el disco local de un pod:
-    GridFS es la FUENTE DE VERDAD. El borrado es solo explícito vía eliminar()."""
+    """Espejo disco → Object Store: sube nuevos/cambiados y actualiza el manifiesto.
+    NUNCA borra según el disco local: el almacén durable es la fuente de verdad."""
     if not _lock.acquire(blocking=False):
         return {"skipped": True}
     try:
-        fs, db = _fs()
-        files_col = db["bunker.files"]
+        man = _manifest()
         existentes = {d["filename"]: d for d in
-                      files_col.find({}, {"filename": 1, "length": 1, "metadata": 1})}
-        en_disco = set()
-        subidos = 0
+                      man.find({}, {"filename": 1, "length": 1, "mtime": 1})}
+        subidos, errores = 0, 0
         for rel, p in _walk():
-            en_disco.add(rel)
             try:
                 st = p.stat()
                 prev = existentes.get(rel)
                 if (prev and prev.get("length") == st.st_size
-                        and (prev.get("metadata") or {}).get("mtime") == int(st.st_mtime)):
+                        and prev.get("mtime") == int(st.st_mtime)):
                     continue
-                if prev:
-                    fs.delete(prev["_id"])
-                with open(p, "rb") as fh:
-                    fs.put(fh, filename=rel, metadata={"mtime": int(st.st_mtime)})
+                _put(rel, p.read_bytes())
+                man.update_one({"filename": rel},
+                               {"$set": {"length": st.st_size, "mtime": int(st.st_mtime),
+                                         "is_deleted": False}}, upsert=True)
                 subidos += 1
             except Exception as e:
+                errores += 1
                 logging.warning(f"bunker sync {rel}: {e}")
-        return {"subidos": subidos, "eliminados": 0, "total_disco": len(en_disco)}
+        return {"subidos": subidos, "errores": errores}
     finally:
         _lock.release()
 
 
+def migrar_legado():
+    """MIGRACIÓN única: disco + GridFS legado → Object Store (manifiesto en Mongo).
+    Idempotente y reanudable; corre en hilo daemon."""
+    if not _mig_lock.acquire(blocking=False):
+        return {"skipped": True}
+    try:
+        cfg = _db()["config"]
+        man = _manifest()
+        ya = {d["filename"] for d in man.find({}, {"filename": 1})}
+        movidos, errores = 0, 0
+        # 1) disco local (prioridad clientes/)
+        pendientes = sorted(_walk(), key=lambda x: (not x[0].startswith("clientes/"), x[0]))
+        for rel, p in pendientes:
+            if rel in ya:
+                continue
+            try:
+                st = p.stat()
+                _put(rel, p.read_bytes())
+                man.update_one({"filename": rel},
+                               {"$set": {"length": st.st_size, "mtime": int(st.st_mtime),
+                                         "is_deleted": False}}, upsert=True)
+                ya.add(rel)
+                movidos += 1
+                if movidos % 200 == 0:
+                    logging.warning(f"🚚 MIGRACIÓN objstore: {movidos} archivos subidos…")
+                    cfg.update_one({"_key": "objstore_migracion"},
+                                   {"$set": {"movidos": movidos, "estado": "en_curso"}}, upsert=True)
+            except Exception as e:
+                errores += 1
+                logging.warning(f"migración {rel}: {e}")
+        # 2) GridFS legado que no esté ni en disco ni en objstore
+        try:
+            fs = _gridfs_legacy()
+            for d in _db()["bunker.files"].find({}, {"filename": 1, "length": 1, "metadata": 1}):
+                rel = d["filename"]
+                if rel in ya:
+                    continue
+                try:
+                    _put(rel, fs.get(d["_id"]).read())
+                    man.update_one({"filename": rel},
+                                   {"$set": {"length": d.get("length"),
+                                             "mtime": (d.get("metadata") or {}).get("mtime"),
+                                             "is_deleted": False}}, upsert=True)
+                    ya.add(rel)
+                    movidos += 1
+                except Exception as e:
+                    errores += 1
+                    logging.warning(f"migración gridfs {rel}: {e}")
+        except Exception:
+            pass
+        cfg.update_one({"_key": "objstore_migracion"},
+                       {"$set": {"movidos": movidos, "errores": errores,
+                                 "estado": "completada", "total_manifiesto": len(ya)}}, upsert=True)
+        logging.warning(f"🚚 MIGRACIÓN objstore COMPLETADA: {movidos} subidos, {errores} errores, "
+                        f"{len(ya)} archivos en el almacén durable")
+        return {"movidos": movidos, "errores": errores, "total": len(ya)}
+    finally:
+        _mig_lock.release()
+
+
+def migrar_legado_bg():
+    threading.Thread(target=migrar_legado, daemon=True).start()
+
+
 def eliminar(path):
-    """Borrado EXPLÍCITO e intencional: única vía para eliminar archivos del búnker
-    (GridFS = fuente de verdad). Acepta ruta absoluta de archivo o carpeta bajo
-    storage/; las rutas fuera del búnker son no-op. También limpia el disco local."""
-    import re as _re
+    """Borrado EXPLÍCITO: soft-delete en el manifiesto (el Object Store no borra objetos),
+    borrado en GridFS legado y limpieza del disco local."""
     import shutil as _sh
     try:
         p = Path(path)
         rel = p.relative_to(ROOT).as_posix() if p.is_absolute() else str(path).replace("\\", "/").strip("/")
     except ValueError:
         return 0
-    if not rel or rel in SUBDIRS:
+    if not rel:
+        return 0
+    rx = {"$regex": "^" + re.escape(rel) + "(/|$)"}
+    n = _manifest().update_many({"filename": rx}, {"$set": {"is_deleted": True}}).modified_count
+    try:
+        fs = _gridfs_legacy()
+        for d in _db()["bunker.files"].find({"filename": rx}, {"_id": 1}):
+            try:
+                fs.delete(d["_id"])
+                n += 1
+            except Exception:
+                pass
+    except Exception:
         pass
-    fs, db = _fs()
-    files_col = db["bunker.files"]
-    n = 0
-    for d in files_col.find({"filename": {"$regex": "^" + _re.escape(rel) + "(/|$)"}}, {"_id": 1}):
-        try:
-            fs.delete(d["_id"])
-            n += 1
-        except Exception:
-            pass
     try:
         local = ROOT / rel
         if local.is_dir():
@@ -143,11 +310,9 @@ def eliminar(path):
     except Exception:
         pass
     if n:
-        logging.info(f"🏦 BÚNKER: borrado explícito «{rel}» — {n} entrada(s) eliminadas de GridFS")
+        logging.info(f"🏦 BÚNKER: borrado explícito «{rel}» — {n} entrada(s)")
     return n
 
 
 def eliminar_bg(path):
-    """eliminar() en hilo daemon: no bloquea el event loop."""
     threading.Thread(target=eliminar, args=(str(path),), daemon=True).start()
-
