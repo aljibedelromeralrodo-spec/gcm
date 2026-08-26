@@ -6984,17 +6984,28 @@ async def _crear_alerta_carpeta(folder_doc):
     return True
 
 
+_PROC_AUTO_LOCK = asyncio.Lock()
+
+
 async def _run_proc_auto():
     if os.environ.get("AI_EMERGENCY_STOP") == "1":
         return {"skipped": True, "motivo": "AI_EMERGENCY_STOP activo"}
+    # 🔒 CANDADO DE PROCESO ÚNICO: jamás dos ciclos concurrentes (evita avalancha de
+    # ingestas IMAP colgadas que agotan los hilos y paralizan la clasificación).
+    if _PROC_AUTO_LOCK.locked():
+        return {"skipped": True, "motivo": "ciclo ya en curso en este proceso"}
+    await _PROC_AUTO_LOCK.acquire()
     resumen = {"enqueued": 0, "processed": 0, "carpetas": 0, "alertas": 0,
                "descartados": 0, "errors": []}
     await db.config.update_one({"_key": "proc_auto"},
                                {"$set": {"running": True, "last_run_started": now_iso()}}, upsert=True)
     try:
         try:
-            r = await proc_ingest(max_emails=15)
+            # Tope duro: una ingesta lenta no puede secuestrar el ciclo completo
+            r = await asyncio.wait_for(proc_ingest(max_emails=15), timeout=600)
             resumen["enqueued"] = r.get("enqueued", 0)
+        except asyncio.TimeoutError:
+            resumen["errors"].append("ingesta: tope de 10 min excedido — se continúa con la clasificación")
         except Exception as e:
             resumen["errors"].append(f"ingesta: {str(e)[:100]}")
         try:
@@ -7069,6 +7080,7 @@ async def _run_proc_auto():
             except Exception:
                 continue
     finally:
+        _PROC_AUTO_LOCK.release()
         await db.config.update_one({"_key": "proc_auto"}, {"$set": {
             "running": False, "last_run": now_iso(), "last_result": resumen}}, upsert=True)
     return resumen
