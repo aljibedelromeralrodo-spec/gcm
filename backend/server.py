@@ -6071,6 +6071,46 @@ async def _aviso_recepcion_incompleta(item, analisis_ocr):
     logging.info(f"🔔 Aviso recepción incompleta → {destino} · ilegibles={len(ilegibles)} · sin_adjuntos={sin_adjuntos}")
 
 
+RX_DOC_TIPOS = [
+    ("certificado_afp", re.compile(r"(certificado|cert)[^a-z]{0,12}afp|afp[^a-z]{0,12}(certificado|cert)", re.I)),
+    ("cotizacion_afp", re.compile(r"cotizaci", re.I)),
+    ("cedula", re.compile(r"c[eé]dula|cedula|carnet|identidad|\bci[_\- ]", re.I)),
+    ("liquidacion", re.compile(r"liquidaci|sueldo", re.I)),
+    ("certificado_smf", re.compile(r"\bsmf\b|\bcmf\b|deuda", re.I)),
+    ("impuesto_renta", re.compile(r"renta|f22|impuesto", re.I)),
+    ("boleta_honorarios", re.compile(r"honorario|boleta", re.I)),
+]
+
+
+@api.get("/carpetas/faltantes")
+async def carpetas_faltantes(request: Request, limit: int = 150):
+    """VISTA MANUAL para el Admin: carpetas incompletas y qué documentos faltan.
+    Sin envíos automáticos — el Administrador revisa y gestiona desde el dashboard."""
+    out = []
+    cursor = db.folders.find({}, {"_id": 0, "nombre": 1, "rut": 1, "created_at": 1,
+                                  "archivos": 1, "resultado_mesa": 1,
+                                  "perfil_consolidado.tipo_cliente": 1}).sort("created_at", -1).limit(400)
+    async for f in cursor:
+        arch = [str(a).split("/")[-1].lower() for a in (f.get("archivos") or [])]
+        tipo_cliente = ((f.get("perfil_consolidado") or {}).get("tipo_cliente")) or "dependiente"
+        req = CHECKLIST.get(tipo_cliente, CHECKLIST["dependiente"])
+        conteo = {}
+        for a in arch:
+            for t, rx in RX_DOC_TIPOS:
+                if rx.search(a):
+                    conteo[t] = conteo.get(t, 0) + 1
+                    break
+        faltantes = {t: n - conteo.get(t, 0) for t, n in req.items() if conteo.get(t, 0) < n}
+        if not faltantes:
+            continue
+        out.append({"nombre": f.get("nombre", ""), "rut": f.get("rut") or "",
+                    "creada": (f.get("created_at") or "")[:16], "docs": len(arch),
+                    "tipo_cliente": tipo_cliente, "resultado_mesa": f.get("resultado_mesa") or "",
+                    "faltantes": [{"tipo": t, "faltan": n, "etiqueta": DOC_LABELS.get(t, t)}
+                                  for t, n in faltantes.items()]})
+    return {"total": len(out), "carpetas": out[:limit]}
+
+
 @api.post("/procesamiento/process-pending")
 async def proc_process(limit: int = 5):
     pend = await db.proc_queue.find({"status": "pendiente"}).limit(limit).to_list(limit)

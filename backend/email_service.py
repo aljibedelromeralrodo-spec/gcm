@@ -71,6 +71,32 @@ def _connect(acc):
     return m
 
 
+def expandir_zip(fname, payload):
+    """Adjunto ZIP → lista [(nombre, bytes)] con los archivos internos válidos.
+    Adjunto normal → [(fname, payload)]."""
+    if not (fname or "").lower().endswith(".zip"):
+        return [(fname, payload)]
+    import zipfile as _zf, io as _io, os as _os
+    VALIDAS = (".pdf", ".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp",
+               ".doc", ".docx", ".xls", ".xlsx")
+    out = []
+    try:
+        with _zf.ZipFile(_io.BytesIO(payload)) as z:
+            for zi in z.infolist():
+                if zi.is_dir() or zi.file_size > 25 * 1024 * 1024:
+                    continue
+                base = _os.path.basename(zi.filename)
+                if base.startswith(("._", "~")) or not base.lower().endswith(VALIDAS):
+                    continue
+                try:
+                    out.append((base, z.read(zi)))
+                except Exception:
+                    continue
+    except Exception:
+        return []
+    return out
+
+
 def _dec(value):
     if not value:
         return ""
@@ -330,7 +356,7 @@ def fetch_pdf_attachments(sender_filter=None, limit=20, incluir_sin_adjuntos=Fal
                     fecha = fecha_raw or ""
                 pdfs = []
                 body_text = ""
-                CAPTURA_EXT = (".pdf", ".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp")
+                CAPTURA_EXT = (".pdf", ".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp", ".zip")
                 for part in msg.walk():
                     ctype = part.get_content_type()
                     disp = str(part.get("Content-Disposition") or "")
@@ -344,8 +370,9 @@ def fetch_pdf_attachments(sender_filter=None, limit=20, incluir_sin_adjuntos=Fal
                         try:
                             payload = part.get_payload(decode=True)
                             if payload:
-                                pdfs.append({"filename": fname or "documento.pdf",
-                                             "content_bytes": payload})
+                                for _nf, _nb in expandir_zip(fname or "documento.pdf", payload):
+                                    pdfs.append({"filename": _nf or "documento.pdf",
+                                                 "content_bytes": _nb})
                         except Exception:
                             continue
                     elif ctype == "text/plain" and "attachment" not in disp and not body_text:
@@ -851,7 +878,7 @@ def fetch_simulacion_attachments(limit_per=40, remitente="aprobaciones@centralmu
 
 def fetch_attachments_by_message_ids(message_ids):
     """Baja los correos exactos (por Message-ID) con sus adjuntos."""
-    CAPTURA_EXT = (".pdf", ".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp")
+    CAPTURA_EXT = (".pdf", ".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp", ".zip")
     pendientes = {m.strip() for m in (message_ids or []) if m and m.strip()}
     out = []
     for acc in ACCOUNTS:
@@ -873,9 +900,10 @@ def fetch_attachments_by_message_ids(message_ids):
                 if not msgdata or not isinstance(msgdata[0], tuple):
                     continue
                 info = _parse_full_message(email.message_from_bytes(msgdata[0][1]), with_bytes=True)
-                pdfs = [{"filename": a["filename"], "content_bytes": a["content_bytes"]}
+                pdfs = [{"filename": _nf, "content_bytes": _nb}
                         for a in info["attachments"]
-                        if (a["filename"] or "").lower().endswith(CAPTURA_EXT) and a.get("content_bytes")]
+                        if (a["filename"] or "").lower().endswith(CAPTURA_EXT) and a.get("content_bytes")
+                        for _nf, _nb in expandir_zip(a["filename"], a["content_bytes"])]
                 out.append({"from": info["from"], "subject": info["subject"],
                             "date": info["date"], "body": info["body"], "pdfs": pdfs})
                 encontrados.add(mid)

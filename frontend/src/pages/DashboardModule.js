@@ -8,6 +8,7 @@ import LearningStatusPanel from "../components/LearningStatusPanel";
 import GraficosRiesgo from "../components/GraficosRiesgo";
 import CorreosSolicitudHoy from "../components/CorreosSolicitudHoy";
 import RetenidosModoPrueba from "../components/RetenidosModoPrueba";
+import CarpetasFaltantes from "../components/CarpetasFaltantes";
 import VisualizadorCognitivo from "../components/VisualizadorCognitivo";
 import PanelEspejo from "../components/PanelEspejo";
 import AuditoriaFlujos from "../components/AuditoriaFlujos";
@@ -162,6 +163,7 @@ export default function DashboardModule({ valorUF: _valorUF, userName: _userName
       <PanelEspejo />
       <AuditoriaFlujos />
       <RetenidosModoPrueba />
+      <CarpetasFaltantes />
       <CorreosSolicitudHoy />
       {seguridad && (
         <div data-testid="seguridad-datos-card" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
