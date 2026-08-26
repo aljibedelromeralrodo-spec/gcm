@@ -192,11 +192,12 @@ async def _enviar(pend, plantilla, forzar=False):
         lambda: mail.send_mail(pend["destinatario"], asunto, html,
                                from_name="Central Mutuos", hilo_nuevo=True,
                                permitir_duplicado=forzar))
-    ok = bool(res.get("success"))
+    ok = bool(res.get("success") or res.get("preview"))
     await db.rechazos_notificados.insert_one({
         "id": str(uuid.uuid4()), "cliente": pend["cliente"], "folder_id": pend.get("folder_id", ""),
         "destinatario": pend["destinatario"], "plantilla": plantilla, "motivo": pend["motivo"],
-        "recomendacion": pend["recomendacion"], "enviado": ok, "smtp": res.get("smtp_code"),
+        "recomendacion": pend["recomendacion"], "enviado": ok,
+        "en_preview": bool(res.get("preview")), "smtp": res.get("smtp_code"),
         "fecha": _now()})
     return ok
 

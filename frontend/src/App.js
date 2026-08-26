@@ -1,6 +1,7 @@
 import { useState, useEffect, lazy, Suspense } from "react";
 import VistaPreviaRol from "./components/VistaPreviaRol";
 import HeliceADN from "./components/HeliceADN";
+import CorreosPreview from "./components/CorreosPreview";
 import ProtectorPantalla from "./components/ProtectorPantalla";
 import axios from "axios";
 import "./App.css";
@@ -708,6 +709,8 @@ function MainApp() {
             borderRadius: 10, padding: "0.5rem 1rem", marginBottom: 12, color: "#e2e8f0", fontSize: "0.8rem", fontWeight: 700 }}>
             👁 MODO LECTURA — su rol puede visualizar este módulo pero no ejercer cambios.</div>
         )}
+        {/* 👁 PREVIEW OBLIGATORIO (constitucional): visible en TODOS los módulos para el Admin */}
+        {['admin', 'maestro'].includes(uEff.rol) && <CorreosPreview />}
         {activeModule === 'dashboard' && ['admin', 'maestro', 'gerencia'].includes(uEff.rol) && <HeliceADN conTelepantalla={['admin', 'maestro'].includes(uEff.rol)} />}
         {activeModule === 'dashboard' && (
           ['gerencia', 'administracion', 'postventa', 'contralor', 'broker'].includes(uEff.rol)

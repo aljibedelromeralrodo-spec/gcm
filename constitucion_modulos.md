@@ -28,6 +28,9 @@
 | 15 | Contraloría / Módulo Control (solo lectura sin excepción) | `backend/espejo_*.py` | 🟢 |
 | 16 | Ingesta Gmail (push/pubsub y polling IMAP) | `backend/gmail_pubsub.py`, `email_service.py` | 🟢 CRÍTICO |
 | 17 | Constitución / DashAI / Normativas fijas | `server.py` (NORMATIVAS_FIJAS), `constitucion.py` | 🟢 CRÍTICO |
+| 18 | Clasificador Contextual IA de correos (Claude, 6 categorías) | `backend/clasificador_correo.py`, `server.py` (proc_ingest, reproceso-ia) | 🟢 CRÍTICO |
+| 19 | Autorreparación Inteligente (Nivel 1 automático / Nivel 2 diagnóstico+aprobación) | `backend/autorreparacion.py`, `server.py` (_autorreparacion_loop) | 🟢 CRÍTICO |
+| 20 | Preview Obligatorio de correos salientes | `backend/email_service.py` (_encolar_preview), `server.py` (/correos-preview), `frontend/src/components/CorreosPreview.js` | 🟢 CRÍTICO |
 
 ## Normativas constitucionales vigentes (resumen)
 - **CUENTA ÚNICA DE ENVÍO**: todo correo sale solo desde gerardo.ext@centralmutuos.cl (MAIL2_*).
@@ -36,6 +39,9 @@
 - **REGLA 3 DOCUMENTOS (#67)**: carpeta solo con ≥3 documentos obligatorios válidos (sin frases exactas requeridas).
 - **SIN BORRADO DESTRUCTIVO**: la reevaluación marca para revisión; jamás borra carpetas.
 - **CONSTITUCIÓN DE MÓDULOS**: este archivo. Modificaciones a módulos listados requieren aprobación explícita.
+- **PREVIEW OBLIGATORIO**: NINGÚN correo sale del sistema sin confirmación explícita del Administrador (cola correos_preview).
+- **CLASIFICADOR CONTEXTUAL IA**: todo correo entrante se clasifica por contexto con Claude (6 categorías); solo `solicitud_nueva` entra al flujo de carpetas con la Regla de 3 documentos. Palabras clave solo como respaldo.
+- **AUTORREPARACIÓN INTELIGENTE**: Nivel 1 automático (reintentos de envíos ya confirmados, reproceso de atascados, reconexión de servicios, liberación de colas). Nivel 2 solo diagnóstico por correo a gerardo.ext@centralmutuos.cl — sin aprobación explícita del Admin el sistema NO toca código ni redespliega. Vigila: correos salientes, creación de carpetas, clasificación IA, aprobaciones y rechazos de Mesa.
 
 ## Pruebas críticas
 - Suite: `backend/tests/test_criticos.py` (correos salientes, carpetas, Mesa, rechazos, Gasto Operacional, API smoke).

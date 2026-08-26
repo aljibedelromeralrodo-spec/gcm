@@ -1,0 +1,22 @@
+{
+  "summary": "Iter 64 — Testing solicitado: preview interception + clasificador IA (Claude) + autorreparación + reproceso IA + panel global. Backend: 12/12 pytest cases OK (login admin+contralor, GET /api/correos-preview 200 admin y 403 contralor, POST /api/clasificador-ia/probar clasifica 3/3 escenarios correctamente con metodo='claude' — solicitud_nueva, rechazo_mesa, no_relacionado — GET/POST autorreparación con informe {nivel1,nivel2,servicios}, GET reproceso-ia/estado, y verificación por código de que email_service.send_mail encola preview cuando confirmado=False y usa estado 'esperando_confirmacion'). Frontend (viewport 1920x800): login admin ok, panel data-testid='correos-preview-panel' visible en Dashboard con 2 previews reales de autorreparación (conexion correo, mesa aprobacion rechazo) mostrando botones 'Ver correo' (preview-ver-0), 'Confirmar y enviar' y 'Descartar'; 'Ver correo' abre iframe con el cuerpo. Panel se mantiene visible al navegar a 'Carpeta Clientes' (global). Login contralor ok: NO ve el panel — sólo Panel del Contralor (solo lectura). NO se envió ningún correo real ni se lanzó reproceso IA POST; no se modificó backend ni se reinició supervisor.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter64_preview_ia.py",
+    "/app/test_reports/pytest/iter64.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py sigue >16k líneas — recomendación pendiente de dividir por dominio (heredado iter63).",
+    "Endpoint /api/clasificador-ia/probar acepta campos en inglés (subject/sender/body) — documentar contrato o aceptar alias es/en, ya que en el frontend/normativa se usa vocabulario en español (asunto/remitente/cuerpo) — puede causar confusión al integrar; hoy sólo funciona con las claves EN."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter64_preview_ia.py"],
+  "success_rate": {"backend": "100% (12/12)", "frontend": "100%"},
+  "test_credentials": "admin: administrador/141617575 (OK) · contralor: contralor/Contralor2026 (OK)",
+  "seed_data_creation": "Ninguna. No se creó preview sintético (paso opcional); la interceptación quedó verificada por código y las previews reales de autorreparación (2 en cola) no fueron tocadas (ni confirmar ni descartar).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Suite reusable: /app/backend/tests/test_iter64_preview_ia.py — 12 tests, ~30s. Cada llamada a /clasificador-ia/probar consume Emergent LLM Key (~2-8s). El endpoint espera keys en INGLÉS: subject, sender, body, adjuntos, date_iso. El estado del reproceso-ia queda 'corriendo' en preview — no lanzar POST. Panel preview usa data-testid: correos-preview-panel, preview-ver-{i}, preview-confirmar-{i}, preview-descartar-{i}. Al login pueden aparecer overlays: 'Saltar' (tour) y 'Comenzar jornada' (briefing) — evitar clickear botones con texto 'Cerrar' porque hay 'Cerrar Sesión' en sidebar que cierra sesión.",
+  "rca of the issue": "N/A — testing verde en todo el alcance solicitado."
+}

@@ -280,6 +280,69 @@ def _fetch_account(acc, limit):
     return emails
 
 
+def barrido_liviano(dias=180, limit_per=2000):
+    """Barrido LIVIANO para reproceso masivo: solo cabeceras + fragmento de texto (2KB),
+    con reconexión automática — no descarga adjuntos (eso se hace después, solo para
+    las solicitudes). Devuelve [{id 'rol|uid', from, subject, date, body, cuenta}]."""
+    from datetime import datetime, timezone, timedelta
+    if not configured():
+        return []
+    fecha = (datetime.now(timezone.utc) - timedelta(days=max(int(dias or 1), 1))).strftime("%d-%b-%Y")
+    out = []
+    for acc in ACCOUNTS:
+        try:
+            m = _connect(acc)
+            m.select("INBOX", readonly=True)
+            typ, data = m.uid("search", None, "SINCE", fecha)
+            uids = sorted((data[0] or b"").split(), key=lambda x: int(x), reverse=True)[:limit_per]
+        except Exception as e:
+            logging.warning(f"barrido liviano {acc['user']}: {str(e)[:120]}")
+            continue
+        fallos = 0
+        for uid in uids:
+            try:
+                typ, md = m.uid("fetch", uid,
+                                "(BODY.PEEK[HEADER.FIELDS (SUBJECT FROM DATE)] BODY.PEEK[TEXT]<0.2000>)")
+                partes = [p[1] for p in (md or []) if isinstance(p, tuple)]
+                if not partes:
+                    continue
+                hdr = email.message_from_bytes(partes[0])
+                subject = _dec(hdr.get("Subject"))
+                remit = _dec(hdr.get("From"))
+                try:
+                    fch = parsedate_to_datetime(hdr.get("Date")).isoformat() if hdr.get("Date") else ""
+                except Exception:
+                    fch = hdr.get("Date") or ""
+                snippet = ""
+                if len(partes) > 1 and partes[1]:
+                    snippet = partes[1].decode("utf-8", errors="ignore")
+                    snippet = re.sub(r"<[^>]+>", " ", snippet)
+                    snippet = re.sub(r"[A-Za-z0-9+/=]{60,}", " ", snippet)[:1500]
+                out.append({"id": f"{acc['rol']}|{uid.decode()}", "from": remit, "subject": subject,
+                            "date": fch, "body": snippet, "cuenta": acc["user"]})
+                fallos = 0
+            except Exception:
+                fallos += 1
+                if fallos >= 3:
+                    try:
+                        try:
+                            m.logout()
+                        except Exception:
+                            pass
+                        m = _connect(acc)
+                        m.select("INBOX", readonly=True)
+                        fallos = 0
+                    except Exception as e:
+                        logging.warning(f"barrido liviano reconexión {acc['user']}: {str(e)[:80]}")
+                        break
+        try:
+            m.logout()
+        except Exception:
+            pass
+    out.sort(key=lambda e: e.get("date", ""), reverse=True)
+    return out
+
+
 def fetch_recent(limit=15):
     cache_key = f"recent_{limit}"
     cached = _cached(cache_key)
@@ -1291,6 +1354,46 @@ def _envio_duplicado(huella):
         return False
 
 
+def _encolar_preview(to, subject, body_html, attachments, cc, bcc):
+    """⛔ NORMATIVA CONSTITUCIONAL — PREVIEW OBLIGATORIO: todo correo saliente queda en
+    espera de confirmación EXPLÍCITA del Administrador. Sin confirmación, no sale nada."""
+    import uuid as _uuid
+    from datetime import datetime, timezone
+    from bson.binary import Binary
+    h = huella_correo(to, subject, body_html, attachments)
+    col = _db_sync()["correos_preview"]
+    ya = col.find_one({"huella": h, "estado": "esperando_confirmacion"})
+    if ya:
+        return {"success": False, "preview": True, "preview_id": ya["id"],
+                "error": "PREVIEW OBLIGATORIO: este correo ya espera confirmación del Administrador"}
+    pid = str(_uuid.uuid4())
+    adj_meta = []
+    for a in (attachments or []):
+        data = a.get("content_bytes") or b""
+        if not data and a.get("content_b64"):
+            try:
+                import base64 as _b64
+                data = _b64.b64decode(a["content_b64"])
+            except Exception:
+                data = b""
+        try:
+            _db_sync()["correos_preview_adj"].insert_one(
+                {"preview_id": pid, "filename": a.get("filename") or "adjunto",
+                 "data": Binary(data)})
+            adj_meta.append({"filename": a.get("filename") or "adjunto", "tamano": len(data)})
+        except Exception as e:
+            logging.warning(f"preview adj: {e}")
+    col.insert_one({"id": pid, "huella": h,
+                    "to": to if isinstance(to, str) else list(to),
+                    "cc": cc or "", "bcc": bcc or "", "subject": subject or "",
+                    "body_html": body_html or "", "adjuntos": adj_meta,
+                    "estado": "esperando_confirmacion",
+                    "creado": datetime.now(timezone.utc).isoformat()})
+    logging.info(f"👁 PREVIEW: correo «{(subject or '')[:60]}» → {to} en espera de confirmación")
+    return {"success": False, "preview": True, "preview_id": pid,
+            "error": "PREVIEW OBLIGATORIO: correo en espera de confirmación del Administrador"}
+
+
 def _log_smtp(entry):
     """Guarda el resultado SMTP completo de cada envío en la base de datos."""
     _log_db_insert("correos_smtp_log", entry)
@@ -1505,13 +1608,18 @@ def _blindaje_responsivo(html):
     return html, problemas
 
 
-def send_mail(to, subject, body_html, attachments=None, desde="secundaria", cc=None, headers=None, clave_sin_ajuste="", bcc=None, registro_fallo=True, permitir_duplicado=False, body_text=None, from_name=None, hilo_nuevo=False, cuenta_fija=False):
+def send_mail(to, subject, body_html, attachments=None, desde="secundaria", cc=None, headers=None, clave_sin_ajuste="", bcc=None, registro_fallo=True, permitir_duplicado=False, body_text=None, from_name=None, hilo_nuevo=False, cuenta_fija=False, confirmado=False):
     """Envia un correo con envío controlado (throttling):
     1) pausa mínima de 10s entre correos, 2) 1 reintento automático tras 60s si falla,
     3) todo error SMTP queda en la colección 'log_errores_correo' (fecha + destinatario).
     attachments: [{filename, content_b64}]. desde: 'secundaria' o 'principal'."""
     if not configured():
         return {"success": False, "error": "Correo no configurado"}
+    # ⛔ NORMATIVA CONSTITUCIONAL — PREVIEW OBLIGATORIO (INAMOVIBLE): NINGÚN correo sale
+    # sin confirmación explícita del Administrador. Solo el endpoint de confirmación
+    # (que muestra destinatario, asunto, cuerpo completo y adjuntos) pasa confirmado=True.
+    if not confirmado:
+        return _encolar_preview(to, subject, body_html, attachments, cc, bcc)
     # ⛔ REGLA ABSOLUTA — CUENTA ÚNICA DE ENVÍO (mandato del Administrador, INAMOVIBLE):
     # TODOS los correos salientes del sistema, sin excepción y para cualquier módulo
     # presente o futuro, se envían SOLO desde MAIL2_* (gerardo.ext@centralmutuos.cl).

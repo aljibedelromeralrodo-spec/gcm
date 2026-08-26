@@ -144,7 +144,9 @@ async def _reenviar_aprobacion_gerardo(msg, f_caso, subject):
             f"<div style='white-space:pre-wrap'>{cuerpo_original}</div>")
     res = await asyncio.to_thread(mail.send_mail, destino, f"✅ APROBACIÓN MESA — {subject[:140]}",
                                   html, adjuntos, "principal")
-    return {"ok": bool(res.get("success")), "adjuntos": len(adjuntos), "error": res.get("error")}
+    # PREVIEW OBLIGATORIO: retenido en preview = entregado al Admin (no es fallo)
+    return {"ok": bool(res.get("success") or res.get("preview")), "adjuntos": len(adjuntos),
+            "en_preview": bool(res.get("preview")), "error": res.get("error")}
 
 
 def _huella_msg(msg, subject, body):

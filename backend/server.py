@@ -28,6 +28,7 @@ import bcrypt
 import functools
 import email_service as mail
 import folders_service as fsvc
+import clasificador_correo as _clasif_ia
 from database import client, db
 import sales_engine
 import mesa_brain
@@ -452,7 +453,10 @@ NORMATIVAS_FIJAS = [
     ("CONSTITUCION DE MODULOS", "NORMATIVA CONSTITUCIONAL — CONSTITUCIÓN DE MÓDULOS ESTABLES (INAMOVIBLE): el archivo /app/constitucion_modulos.md lista los módulos estables y funcionando de la plataforma. ANTES de modificar cualquier módulo listado, el agente DEBE mostrar el impacto del cambio (qué módulos toca, qué flujos podrían romperse) y esperar la aprobación EXPLÍCITA del Administrador. Además, antes de cada redespliegue deben ejecutarse las pruebas críticas (backend/tests/test_criticos.py vía scripts/pre_deploy_check.sh): si alguna falla, se muestra alerta clara y NO se recomienda subir a producción."),
     ("RECHAZO TEXTO EXACTO", "NORMATIVA CONSTITUCIONAL — RECHAZO TEXTO EXACTO (INAMOVIBLE, mandato del Administrador): el cuerpo del correo de notificación de rechazo contiene ÚNICAMENTE el texto exacto que envió el canal oficial de evaluación como motivo, sin agregar, modificar ni inventar ningún contenido adicional. PROHIBIDO redactar motivos institucionales sintéticos o usar textos por defecto inventados. Blindaje: (a) el texto exacto viaja desde el monitor oficial (mesa_verdad guarda resultado_mesa_texto en la carpeta y lo pasa a los notificadores); (b) si el texto exacto no está disponible, la notificación se RETIENE con alerta al Admin para revisión manual — jamás se envía un motivo inventado; (c) si el texto exacto contiene referencias al origen o direcciones de correo, la notificación también se RETIENE (la purificación no puede modificar el texto, solo retenerlo). La recomendación de acción del correo al ejecutivo va en sección separada y rotulada, nunca mezclada con el texto exacto del motivo."),
     ("APROBACION SIN GASTOS", "NORMATIVA CONSTITUCIONAL — APROBACIÓN SIN GASTOS (INAMOVIBLE, mandato del Administrador): el correo de aprobación de Mesa al cliente incluye ÚNICAMENTE: (1) el cuerpo de aprobación, (2) la carta de aprobación y (3) la simulación ajustada con el nombre del cliente. NINGÚN adjunto ni información de Gasto Operacional puede incluirse en este correo bajo ninguna circunstancia. Blindaje en tres capas: (a) _tipo_pdf_aprobacion excluye todo archivo cuyo nombre contenga 'gasto' u 'operacional'; (b) antes del envío se eliminan adjuntos contaminados con alerta al Admin; (c) si el cuerpo o asunto menciona Gasto Operacional, el envío se ABORTA con alerta. Los Gastos Operacionales viajan solo por su módulo propio y el flujo interno de barrido (correo interno a la cuenta corporativa), jamás en el correo de aprobación al cliente."),
+    ("PREVIEW OBLIGATORIO DE CORREOS", "NORMATIVA CONSTITUCIONAL — PREVIEW OBLIGATORIO (INAMOVIBLE, mandato del Administrador): TODA acción que implique envío de correo (aprobación, rechazo, descarte, notificación a cliente, respuesta de Mesa, campañas, informes y cualquier módulo presente o futuro) pasa por un paso previo de PREVIEW obligatorio que muestra destinatario, asunto, cuerpo completo y adjuntos. El Administrador debe CONFIRMAR explícitamente antes de que el correo salga; sin confirmación, NO se envía nada. Aplicado a nivel del servicio central de correo (email_service.send_mail intercepta todo envío no confirmado y lo deja en la cola correos_preview), por lo que ningún módulo puede eludirlo. La confirmación se hace desde el panel 'Correos esperando confirmación' del Dashboard."),
     ("CUENTA UNICA DE ENVIO", "NORMATIVA CONSTITUCIONAL — CUENTA ÚNICA DE ENVÍO (INAMOVIBLE, mandato del Administrador): TODOS los correos salientes de la aplicación, sin excepción (Gasto Operacional, rechazos, notificaciones, clasificaciones, resúmenes, campañas y cualquier módulo presente o futuro), se envían EXCLUSIVAMENTE desde la cuenta corporativa gerardo.ext@centralmutuos.cl usando las credenciales MAIL2_*. PROHIBIDO usar ethangerardobarr@gmail.com o cualquier otra cuenta como remitente. La regla se aplica a nivel del servicio central de correo (email_service.send_mail), por lo que ningún módulo puede eludirla: si las credenciales MAIL2_* no están configuradas, el envío se BLOQUEA con error explícito en lugar de usar otra cuenta."),
+    ("AUTORREPARACION INTELIGENTE", "NORMATIVA CONSTITUCIONAL — AUTORREPARACIÓN INTELIGENTE EN DOS NIVELES (INAMOVIBLE, mandato del Administrador): el sistema vigila permanentemente los correos salientes, la creación de carpetas, la clasificación IA y los módulos de aprobación y rechazo de Mesa. NIVEL 1 (automático, sin aprobación): reintentar envíos de correo que YA fueron confirmados por el Administrador y fallaron en SMTP, reprocesar correos atascados en la cola, reconectar servicios de correo caídos y liberar colas bloqueadas (flags colgados). NIVEL 2 (alerta + aprobación obligatoria): si detecta un problema que requiere cambio de código o redespliegue, envía un diagnóstico detallado a gerardo.ext@centralmutuos.cl describiendo qué falló, qué propone corregir y qué módulos afecta; SIN la aprobación explícita del Administrador el sistema NO toca código, NO modifica módulos y NO redespliega, sin excepción. El correo de diagnóstico respeta el Preview Obligatorio y la Cuenta Única de Envío. Implementado en backend/autorreparacion.py (ciclo cada 10 minutos)."),
+    ("CLASIFICADOR CONTEXTUAL IA", "NORMATIVA CONSTITUCIONAL — CLASIFICADOR CONTEXTUAL DE CORREOS (mandato del Administrador): todo correo entrante se clasifica por CONTEXTO con IA (Claude vía Llave Universal) en una de seis categorías: solicitud_nueva, consulta_administrativa, aprobacion_mesa, rechazo_mesa, peticion_documentos_mesa, no_relacionado. SOLO la categoría solicitud_nueva entra al flujo de creación de carpetas y se le aplica la Regla de los 3 documentos obligatorios. Las reglas de palabras clave quedan únicamente como respaldo cuando la IA no está disponible. Toda clasificación queda registrada en la colección clasificaciones_ia para auditoría y aprendizaje. Implementado en backend/clasificador_correo.py."),
     ("FUENTE VERDAD MESA", "REGLA CONSTITUCIONAL — FUENTE DE VERDAD DE MESA: el correo aprobaciones@centralmutuos.cl es el canal oficial de mesa; de ahí llegan aprobaciones, rechazos, cambios de tasas, plazos y criterios de evaluación. Es el corazón del sistema de aprendizaje y se monitorea de forma permanente y autónoma. Aprobación/rechazo actualiza la carpeta y activa los botones de envío al ejecutivo; cambios de tasa/plazo/criterio generan alerta al administrador, correo de notificación y marcan las carpetas activas como 'Simulación desactualizada'. Cada correo procesado queda registrado con fecha, hora, tipo y parámetros anteriores vs nuevos. Esta regla es PERMANENTE e INAMOVIBLE: ningún proceso del sistema puede modificarla ni ignorarla."),
 ]
 
@@ -661,6 +665,7 @@ async def startup():
         await db.correos_pendientes.create_index([("estado", 1), ("fecha", -1)])
         await db.seguimiento.create_index([("asunto", 1), ("fecha", 1)])
         await db.proc_queue.create_index("status")
+        await db.clasificaciones_ia.create_index("huella")
         await db["bunker.files"].create_index("filename")
         await db.ocr_rut_cache.create_index("path")
         await db.set_credito.create_index("nombre")
@@ -706,6 +711,8 @@ async def startup():
     except Exception as _e:
         logging.warning(f"migración objstore: {_e}")
     asyncio.create_task(_task_blindada(_periodic_mesa_loop, "mesa"))
+    # 🛠 AUTORREPARACIÓN INTELIGENTE (normativa constitucional): vigilancia permanente
+    asyncio.create_task(_task_blindada(_autorreparacion_loop, "autorreparacion"))
     # DESACTIVADO (normativa un-solo-correo): reporte 10AM consolidado en el resumen 8AM
     # asyncio.create_task(_task_blindada(_daily_report_loop, "reporte_diario"))
     try:
@@ -5306,8 +5313,9 @@ def _procesar_mesa(destino, cutoff_iso, ejecutivos=None, ya_enviados=None):
             continue
         res = mail.send_mail(destino, r["subject"], encabezado + cuerpo_html,
                              r["adjuntos"], desde="secundaria")
-        estado = "sent" if res.get("success") else "failed"
-        if res.get("success"):
+        # PREVIEW OBLIGATORIO: la retención en preview NO es un fallo — queda esperando al Admin
+        estado = "sent" if res.get("success") else ("en_preview" if res.get("preview") else "failed")
+        if res.get("success") or res.get("preview"):
             enviados += 1
         else:
             _mesa_guard_liberar(r["subject"], r["cliente"])
@@ -5822,13 +5830,13 @@ async def proc_del_rule(rid: str):
 
 
 def _ingest_sync(max_emails, reglas=None):
+    # 🧠 CLASIFICADOR IA: se traen TODOS los correos; la decisión de qué es una
+    # solicitud la toma Claude por contexto (proc_ingest). Las palabras clave quedan
+    # solo como respaldo si la IA no está disponible.
     correos = mail.fetch_pdf_attachments(sender_filter=None, limit=max_emails)
-    items = []
     for c in correos:
-        if not _es_gestion(c["from"], c["subject"], bool(c["pdfs"]), reglas):
-            continue
-        items.append(c)
-    return items
+        c["es_gestion_kw"] = _es_gestion(c["from"], c["subject"], bool(c["pdfs"]), reglas)
+    return correos
 
 
 @api.post("/procesamiento/ingest-from-inbox")
@@ -5851,6 +5859,16 @@ async def proc_ingest(max_emails: int = 20, dias: int = 0):
         exists = await db.proc_queue.find_one({"subject": c["subject"], "date_iso": c["date"]})
         if exists:
             continue
+        # 🧠 CLASIFICACIÓN CONTEXTUAL (Claude): solo 'solicitud_nueva' entra a la cola
+        # de carpetas. Los veredictos de mesa los maneja Mesa de la Verdad aparte.
+        cls_ia = await _clasif_ia.clasificar_correo(
+            c["subject"], c["from"], c.get("body") or "",
+            [p["filename"] for p in c["pdfs"]], c.get("date") or "")
+        categoria = cls_ia.get("categoria") or ""
+        if categoria and categoria != "solicitud_nueva":
+            continue  # queda registrado en db.clasificaciones_ia con su categoría
+        if not categoria and not c.get("es_gestion_kw"):
+            continue  # IA caída → respaldo con el filtro clásico de palabras clave
         qid = str(uuid.uuid4())
         folder = PROC_DIR / qid
         folder.mkdir(parents=True, exist_ok=True)
@@ -5880,6 +5898,8 @@ async def proc_ingest(max_emails: int = 20, dias: int = 0):
             "body_full": (c.get("body") or "")[:8000],
             "attachments": attachments, "attachments_bytes_dir": str(folder),
             "classification": {}, "campos": {}, "drive_folder_id": None,
+            "categoria_ia": categoria or "solicitud_nueva_kw",
+            "clasificador_ia": {k: cls_ia.get(k) for k in ("categoria", "confianza", "razon", "metodo")},
         })
         enqueued += 1
     return {"fetched": len(correos), "enqueued": enqueued}
@@ -6141,6 +6161,56 @@ async def carpetas_faltantes(request: Request, limit: int = 150):
     return {"total": len(out), "carpetas": out[:limit]}
 
 
+@api.get("/correos-preview")
+async def correos_preview_lista(request: Request):
+    _exigir_admin_dash(request)
+    docs = await db.correos_preview.find({"estado": "esperando_confirmacion"},
+                                         {"_id": 0, "huella": 0}).sort("creado", -1).to_list(100)
+    return {"total": len(docs), "correos": docs}
+
+
+@api.post("/correos-preview/{pid}/confirmar")
+async def correos_preview_confirmar(pid: str, request: Request):
+    _exigir_admin_dash(request)
+    doc = await db.correos_preview.find_one({"id": pid, "estado": "esperando_confirmacion"})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Preview no encontrado o ya resuelto")
+    import base64 as _b64
+    adjs = []
+    async for a in db.correos_preview_adj.find({"preview_id": pid}):
+        adjs.append({"filename": a.get("filename"),
+                     "content_b64": _b64.b64encode(bytes(a.get("data") or b"")).decode()})
+    res = await asyncio.to_thread(functools.partial(
+        mail.send_mail, doc["to"], doc["subject"], doc["body_html"], adjs, "secundaria",
+        cc=doc.get("cc") or None, bcc=doc.get("bcc") or None,
+        confirmado=True, permitir_duplicado=True, hilo_nuevo=True, from_name="Central Mutuos"))
+    ok = bool(res.get("success"))
+    await db.correos_preview.update_one({"id": pid}, {"$set": {
+        "estado": "enviado" if ok else "error_envio",
+        "resuelto_en": now_iso(), "resuelto_por": "admin",
+        "smtp": res.get("smtp_code"), "error": res.get("error", "")}})
+    if not ok:
+        raise HTTPException(status_code=409, detail=f"Confirmado pero el envío falló: {res.get('error','')[:150]}")
+    return {"ok": True, "enviado": True, "to": doc["to"], "subject": doc["subject"]}
+
+
+@api.post("/correos-preview/{pid}/descartar")
+async def correos_preview_descartar(pid: str, request: Request):
+    _exigir_admin_dash(request)
+    r = await db.correos_preview.update_one(
+        {"id": pid, "estado": "esperando_confirmacion"},
+        {"$set": {"estado": "descartado", "resuelto_en": now_iso(), "resuelto_por": "admin"}})
+    if not r.modified_count:
+        raise HTTPException(status_code=404, detail="Preview no encontrado o ya resuelto")
+    return {"ok": True, "descartado": True}
+
+
+def _exigir_admin_dash(request):
+    u = getattr(request.state, "user", None) or {}
+    if (u.get("rol") or "") not in ("admin", "maestro"):
+        raise HTTPException(status_code=403, detail="Solo el Administrador puede gestionar los previews de correo")
+
+
 @api.get("/almacenamiento/estado")
 async def almacenamiento_estado():
     """Estado del almacenamiento durable (Emergent Object Store) y su migración."""
@@ -6174,6 +6244,157 @@ async def proc_recuperar_perdidos(limit: int = 300, dias: int = 60):
         except Exception as e:
             res["fallidos"].append(f"{etiqueta}: {str(e)[:120]}")
     return res
+
+
+@api.post("/clasificador-ia/probar")
+async def clasificador_ia_probar(payload: dict, request: Request):
+    """🧠 Prueba directa del clasificador contextual (Claude). Solo Admin."""
+    _exigir_admin_dash(request)
+    return await _clasif_ia.clasificar_correo(
+        payload.get("subject") or "", payload.get("sender") or "",
+        payload.get("body") or "", payload.get("adjuntos") or [],
+        payload.get("date_iso") or "", cachear=False)
+
+
+async def _guardar_adjuntos_queue(qid, adjuntos):
+    """Convierte y guarda adjuntos (bytes) en PROC_DIR/qid como hace la ingesta normal."""
+    folder = PROC_DIR / qid
+    folder.mkdir(parents=True, exist_ok=True)
+    attachments = []
+    for a in adjuntos:
+        raw, nombre = a["content_bytes"], a["filename"]
+        try:
+            raw, nombre, _conv = await asyncio.to_thread(pdfs.convertir_a_pdf, raw, nombre)
+        except Exception:
+            continue
+        for raw_p, nombre_p in await asyncio.to_thread(pdfs.expandir_adjunto, raw, nombre):
+            fn = _safe_name(nombre_p)
+            if fn in attachments:
+                fn = _safe_name(re.sub(r"\.pdf$", "", nombre_p, flags=re.I) + f"_{len(attachments)+1}.pdf")
+            (folder / fn).write_bytes(raw_p)
+            attachments.append(fn)
+    return attachments
+
+
+async def _reproceso_ia_run(dias: int, limit_per: int):
+    """🛟 REPROCESO MASIVO CON IA: barre la bandeja completa (SINCE dias), reclasifica cada
+    correo con Claude, recupera adjuntos del correo de origen y arma carpeta si cumple la regla."""
+    st = {"estado": "corriendo", "inicio": now_iso(), "dias": dias, "total": 0,
+          "revisados": 0, "ya_en_sistema": 0, "solicitudes_nuevas": 0,
+          "carpetas_creadas": [], "pendientes_docs": [], "no_recuperables": [],
+          "otras_categorias": {}, "errores": []}
+
+    async def _guardar():
+        await db.config.update_one({"_key": "reproceso_ia"},
+                                   {"$set": {**st, "actualizado": now_iso()}}, upsert=True)
+    await _guardar()
+    try:
+        correos = await asyncio.to_thread(mail.barrido_liviano, dias, limit_per)
+    except Exception as e:
+        st.update({"estado": "error"})
+        st["errores"].append(f"barrido IMAP: {str(e)[:200]}")
+        await _guardar()
+        return
+    st["total"] = len(correos)
+    for c in correos:
+        st["revisados"] += 1
+        try:
+            if await db.proc_queue.find_one({"subject": c.get("subject"), "date_iso": c.get("date")}, {"_id": 1}):
+                st["ya_en_sistema"] += 1
+                continue
+            # Atajos sin costo IA: veredictos del canal oficial y correos generados por el sistema
+            r_low = (c.get("from") or "").lower()
+            s_low = (c.get("subject") or "").lower().strip()
+            if "aprobaciones@centralmutuos" in r_low:
+                st["otras_categorias"]["veredicto_mesa_oficial"] = st["otras_categorias"].get("veredicto_mesa_oficial", 0) + 1
+                continue
+            if any(s_low.startswith(p) for p in ("resumen diario", "✅ aprobación mesa", "🛠", "🚨",
+                                                 "prueba clasificación", "🧪", "👁")):
+                st["otras_categorias"]["sistema_interno"] = st["otras_categorias"].get("sistema_interno", 0) + 1
+                continue
+            nombres_adj = [a.get("filename") for a in (c.get("attachments") or [])]
+            cls = await _clasif_ia.clasificar_correo(
+                c.get("subject"), c.get("from"), c.get("body") or "", nombres_adj, c.get("date") or "")
+            cat = cls.get("categoria") or "sin_clasificar"
+            if cat != "solicitud_nueva":
+                st["otras_categorias"][cat] = st["otras_categorias"].get(cat, 0) + 1
+                continue
+            st["solicitudes_nuevas"] += 1
+            etiqueta = (cls.get("cliente") or (c.get("subject") or "")[:50]).strip()
+            atts = await asyncio.to_thread(mail.fetch_attachments_by_id, c.get("id"))
+            planos = []
+            for a in atts:
+                if not a.get("content_bytes"):
+                    continue
+                for nf, nb in mail.expandir_zip(a.get("filename") or "documento.pdf", a["content_bytes"]):
+                    planos.append({"filename": nf or "documento.pdf", "content_bytes": nb})
+            if not planos:
+                st["no_recuperables"].append(f"{etiqueta}: el correo de origen ya no tiene adjuntos recuperables")
+                continue
+            qid = str(uuid.uuid4())
+            attachments = await _guardar_adjuntos_queue(qid, planos)
+            await db.proc_queue.insert_one({
+                "id": qid, "subject": c.get("subject") or "", "sender": c.get("from") or "",
+                "date_iso": c.get("date") or "", "status": "pendiente",
+                "body_preview": (c.get("body") or "")[:500],
+                "body_full": (c.get("body") or "")[:8000],
+                "attachments": attachments, "attachments_bytes_dir": str(PROC_DIR / qid),
+                "classification": {}, "campos": {}, "drive_folder_id": None,
+                "categoria_ia": cat,
+                "clasificador_ia": {k: cls.get(k) for k in ("categoria", "confianza", "razon", "metodo")},
+                "origen": "reproceso_ia"})
+            item = await db.proc_queue.find_one({"id": qid})
+            await _clasificar_item(item)
+            try:
+                await proc_upload_drive(qid)
+                st["carpetas_creadas"].append(etiqueta)
+            except HTTPException as he:
+                if he.status_code == 412:
+                    st["pendientes_docs"].append(f"{etiqueta}: {str(he.detail)[:100]}")
+                else:
+                    st["no_recuperables"].append(f"{etiqueta}: {str(he.detail)[:100]}")
+        except Exception as e:
+            st["errores"].append(f"{(c.get('subject') or '')[:40]}: {str(e)[:100]}")
+        if st["revisados"] % 5 == 0:
+            await _guardar()
+    st["estado"] = "terminado"
+    st["fin"] = now_iso()
+    await _guardar()
+
+
+@api.post("/procesamiento/reproceso-ia")
+async def reproceso_ia_start(request: Request, dias: int = 180, limit_per: int = 400):
+    """Lanza el reproceso masivo con clasificador IA en segundo plano. Solo Admin."""
+    _exigir_admin_dash(request)
+    st = await db.config.find_one({"_key": "reproceso_ia"}) or {}
+    if st.get("estado") == "corriendo" and (st.get("actualizado") or "") > (
+            datetime.now(timezone.utc) - timedelta(minutes=30)).isoformat():
+        raise HTTPException(status_code=409, detail="Ya hay un reproceso IA en curso")
+    asyncio.create_task(_reproceso_ia_run(dias, limit_per))
+    return {"ok": True, "iniciado": True, "dias": dias, "limit_per": limit_per}
+
+
+@api.get("/procesamiento/reproceso-ia/estado")
+async def reproceso_ia_estado():
+    return await db.config.find_one({"_key": "reproceso_ia"}, {"_id": 0}) or {"estado": "nunca_ejecutado"}
+
+
+@api.get("/autorreparacion/estado")
+async def autorreparacion_estado(request: Request):
+    """🛠 Último informe del ciclo de autorreparación + diagnósticos Nivel 2."""
+    _exigir_admin_dash(request)
+    st = await db.config.find_one({"_key": "autorreparacion_estado"}, {"_id": 0}) or {}
+    diags = await db.autorreparacion_diagnosticos.find({}, {"_id": 0}).sort("creado", -1).limit(20).to_list(20)
+    return {"ultimo_informe": st.get("ultimo_informe"), "actualizado": st.get("actualizado"),
+            "diagnosticos": diags}
+
+
+@api.post("/autorreparacion/ejecutar")
+async def autorreparacion_ejecutar(request: Request):
+    """🛠 Ejecuta un ciclo de autorreparación AHORA. Solo Admin."""
+    _exigir_admin_dash(request)
+    import autorreparacion as _ar
+    return await _ar.ciclo(clasificar_item=_clasificar_item)
 
 
 @api.post("/procesamiento/process-pending")
@@ -7046,7 +7267,7 @@ async def _enviar_faltantes_auto(cliente):
       <p style="margin-top:14px">Quedamos atentos. Muchas gracias.</p>
       <p style="margin-top:16px;color:#555">Saludos cordiales,</p>""", "Documentos Faltantes — Solicitud de Crédito")
     res = await asyncio.to_thread(mail.send_mail, doc["source_email"], subject, cuerpo, [], "secundaria")
-    if res.get("success"):
+    if res.get("success") or res.get("preview"):
         await db.folders.update_one({"id": doc["id"]}, {"$set": {
             "faltantes_auto_lista": lista_key, "faltantes_pedidos_at": now_iso()},
             "$unset": {"faltantes_recordatorio_at": "", "faltantes_recordatorio_count": ""}})
@@ -7212,6 +7433,18 @@ async def _run_proc_auto():
         await db.config.update_one({"_key": "proc_auto"}, {"$set": {
             "running": False, "last_run": now_iso(), "last_result": resumen}}, upsert=True)
     return resumen
+
+
+async def _autorreparacion_loop():
+    """🛠 Ciclo de autorreparación cada 10 minutos (normativa constitucional)."""
+    import autorreparacion as _ar
+    await asyncio.sleep(120)
+    while True:
+        try:
+            await _ar.ciclo(clasificar_item=_clasificar_item)
+        except Exception as e:
+            logging.warning(f"autorreparación: {str(e)[:150]}")
+        await asyncio.sleep(600)
 
 
 async def _periodic_proc_loop():
@@ -10880,7 +11113,7 @@ async def rechazo_codeudor_click(token: str):
         mail.send_mail, ejecutivo, f"🤝 Cliente con codeudor disponible — {reg.get('cliente','')}",
         cuerpo_ej, [], "secundaria", from_name="Central Mutuos", hilo_nuevo=True, permitir_duplicado=True))
     await db.recontactos_codeudor.update_one({"token": token}, {"$set": {
-        "notificado_ejecutivo": bool(res.get("success")), "ejecutivo_notificado_en": now_iso()}})
+        "notificado_ejecutivo": bool(res.get("success") or res.get("preview")), "ejecutivo_notificado_en": now_iso()}})
     return _pagina("¡Solicitud registrada!",
                    f"Gracias, {html.escape(reg.get('cliente',''))}. Registramos que usted cuenta con un codeudor "
                    f"y su ejecutivo ya fue notificado para recontactarle a la brevedad y reestructurar su solicitud.")
