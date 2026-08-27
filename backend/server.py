@@ -6286,13 +6286,16 @@ async def _reproceso_ia_run(dias: int, limit_per: int):
           "otras_categorias": {}, "errores": []}
 
     async def _guardar():
-        await db.config.update_one({"_key": "reproceso_ia"},
-                                   {"$set": {**st, "actualizado": now_iso()}}, upsert=True)
+        try:
+            await db.config.update_one({"_key": "reproceso_ia"},
+                                       {"$set": {**st, "actualizado": now_iso()}}, upsert=True)
+        except Exception as e:
+            logging.warning(f"reproceso guardar: {str(e)[:100]}")
     await _guardar()
     # Caché del barrido (3h): si hay un barrido reciente en BD, se reutiliza sin releer IMAP
     correos = []
     cache_ts = await db.config.find_one({"_key": "reproceso_barrido_ts"}) or {}
-    if (cache_ts.get("generado") or "") > (datetime.now(timezone.utc) - timedelta(hours=3)).isoformat():
+    if (cache_ts.get("generado") or "") > (datetime.now(timezone.utc) - timedelta(hours=12)).isoformat():
         correos = await db.reproceso_barrido.find({}, {"_id": 0}).to_list(20000)
     if not correos:
         try:
@@ -6332,9 +6335,13 @@ async def _reproceso_ia_run(dias: int, limit_per: int):
         except Exception as e:
             return f"err:{str(e)[:100]}"
 
+    timeouts_seguidos = 0
     for i in range(0, len(correos), 20):
         # 🛑 Freno de emergencia del Admin
-        flag = await db.config.find_one({"_key": "reproceso_stop"}) or {}
+        try:
+            flag = await db.config.find_one({"_key": "reproceso_stop"}) or {}
+        except Exception:
+            flag = {}
         if flag.get("stop"):
             st["estado"] = "detenido_por_admin"
             await _guardar()
@@ -6374,8 +6381,13 @@ async def _reproceso_ia_run(dias: int, limit_per: int):
             st["solicitudes_nuevas"] += 1
             st["gasto_usd"] = round(st["gasto_usd"] + 0.05, 3)
             etiqueta = (cls.get("cliente") or (c.get("subject") or "")[:50]).strip()
-            try:
-                atts = await asyncio.to_thread(mail.fetch_attachments_by_id, c.get("id"))
+
+            async def _procesar_solicitud(c=c, cls=cls, cat=cat, etiqueta=etiqueta):
+                try:
+                    atts = await asyncio.wait_for(
+                        asyncio.to_thread(mail.fetch_attachments_by_id, c.get("id")), timeout=150)
+                except Exception:
+                    atts = []
                 planos = []
                 for a in atts:
                     if not a.get("content_bytes"):
@@ -6383,8 +6395,18 @@ async def _reproceso_ia_run(dias: int, limit_per: int):
                     for nf, nb in mail.expandir_zip(a.get("filename") or "documento.pdf", a["content_bytes"]):
                         planos.append({"filename": nf or "documento.pdf", "content_bytes": nb})
                 if not planos:
+                    # 🛟 RESCATE: si la casilla de origen falla (p.ej. OVERQUOTA), buscar la
+                    # copia del mismo correo por asunto en la otra casilla
+                    try:
+                        planos = [a for a in await asyncio.wait_for(
+                            asyncio.to_thread(mail.refetch_adjuntos, c.get("subject") or "",
+                                              c.get("date") or ""), timeout=180)
+                            if a.get("content_bytes")]
+                    except Exception:
+                        planos = []
+                if not planos:
                     st["no_recuperables"].append(f"{etiqueta}: el correo de origen ya no tiene adjuntos recuperables")
-                    continue
+                    return
                 qid = str(uuid.uuid4())
                 attachments = await _guardar_adjuntos_queue(qid, planos)
                 await db.proc_queue.insert_one({
@@ -6407,6 +6429,18 @@ async def _reproceso_ia_run(dias: int, limit_per: int):
                         st["pendientes_docs"].append(f"{etiqueta}: {str(he.detail)[:100]}")
                     else:
                         st["no_recuperables"].append(f"{etiqueta}: {str(he.detail)[:100]}")
+
+            # ⏱ BLINDAJE ANTI-CUELGUE: máx 7 min por solicitud; 3 timeouts seguidos = detener
+            try:
+                await asyncio.wait_for(_procesar_solicitud(), timeout=420)
+                timeouts_seguidos = 0
+            except asyncio.TimeoutError:
+                timeouts_seguidos += 1
+                st["errores"].append(f"{etiqueta}: excedió 7 min — omitido para no bloquear el reproceso")
+                if timeouts_seguidos >= 3:
+                    st["estado"] = "detenido_por_bloqueos"
+                    await _guardar()
+                    return
             except Exception as e:
                 st["errores"].append(f"{(c.get('subject') or '')[:40]}: {str(e)[:100]}")
         await _guardar()

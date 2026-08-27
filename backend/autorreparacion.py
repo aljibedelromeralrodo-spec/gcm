@@ -115,6 +115,37 @@ async def ciclo(clasificar_item=None):
     except Exception as e:
         inf["errores"].append(f"colas: {str(e)[:120]}")
 
+    # ── NIVEL 1.5 · Higiene de disco: si /app supera 85%, purgar copias redundantes
+    try:
+        import shutil as _sh
+        from pathlib import Path as _P
+        uso = _sh.disk_usage("/app")
+        pct = uso.used * 100 // uso.total
+        inf["servicios"]["disco /app"] = f"{pct}% usado"
+        if pct >= 85:
+            base = _P("/app/backend/storage/proc")
+            borrados = 0
+            if base.exists():
+                for d in base.iterdir():
+                    if not d.is_dir():
+                        continue
+                    item = await db.proc_queue.find_one({"attachments_bytes_dir": str(d)}, {"drive_folder_id": 1})
+                    if item is None or item.get("drive_folder_id"):
+                        _sh.rmtree(d, ignore_errors=True)
+                        borrados += 1
+            if borrados:
+                inf["nivel1"].append(f"🧹 disco al {pct}%: purgadas {borrados} copias de trabajo redundantes (los archivos viven en carpetas + búnker)")
+            uso2 = _sh.disk_usage("/app")
+            if uso2.used * 100 // uso2.total >= 92:
+                await _diagnostico_nivel2(
+                    "disco_lleno",
+                    f"El volumen /app está al {uso2.used * 100 // uso2.total}% incluso tras la purga automática. "
+                    "Un disco lleno tumba MongoDB y los envíos de correo (ya ocurrió el 26-08).",
+                    "Ampliar el volumen del pod o depurar storage/clientes y el historial git. Requiere intervención manual.",
+                    ["MongoDB", "correos salientes", "creación de carpetas", "todo el sistema"], inf)
+    except Exception as e:
+        inf["errores"].append(f"higiene disco: {str(e)[:120]}")
+
     # ── NIVEL 2 · Detección de problemas que requieren intervención del Admin
     try:
         fallos = await db.log_errores_correo.count_documents({"fecha": {"$gte": _hace(horas=24)}})

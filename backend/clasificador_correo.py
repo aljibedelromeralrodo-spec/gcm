@@ -100,8 +100,11 @@ async def clasificar_lote(correos, cachear=True):
     pendientes = []
     for i, c in enumerate(correos):
         if cachear:
-            prev = await db.clasificaciones_ia.find_one(
-                {"huella": _huella(c.get("subject"), c.get("date_iso"))}, {"_id": 0})
+            try:
+                prev = await db.clasificaciones_ia.find_one(
+                    {"huella": _huella(c.get("subject"), c.get("date_iso"))}, {"_id": 0})
+            except Exception:
+                prev = None
             if prev:
                 prev["cacheado"] = True
                 resultados[i] = prev
