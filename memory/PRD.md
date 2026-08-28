@@ -1490,3 +1490,8 @@ actual; todo lo demás permanece intacto.
 - Excel del usuario "Resumen MHE Sin/Con Subsidio" convertido a PDF profesional (generar_politicas_credito.py → Politicas_Credito_MHE.pdf): 5 secciones (Propiedad, Financiamiento, Perfil, Comportamiento financiero, Codeudores), cuadro comparativo con/sin subsidio, tipografía corregida.
 - Revisión de privacidad: SIN datos personales (no RUT/nombres/contactos); se eliminó la mención "POLITICAS CONCRECES" (nombre de institución) del documento final.
 - Link descarga segura entregado (token en db.descargas_seguras).
+
+## 2026-08-28 (fork) — Políticas Concreces MHE agregadas a la Bóveda
+- Nuevo bloque `concreces_mhe` (con_subsidio + sin_subsidio) en db.config criterios (v8) y en DEFAULT_CRITERIOS (criterios_data.py, para deploys frescos). Todos los criterios de la planilla del usuario: valores UF propiedad/crédito, LTV 80%, pie 20%, plazos, div/renta 40%/35%, carga 55%/50%, rentas mínimas, edades, antigüedad, excluyentes de morosidad, codeudores y complemento de renta.
+- Registro en criterios_auditoria. Verificado vía GET /api/admin/criterios con token admin.
+- Nota: el auditor #71 sigue usando btg_pactual como bloque activo; concreces_mhe queda disponible en la Bóveda (pendiente si el usuario quiere que el Contralor valide contra MHE).
