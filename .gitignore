@@ -103,3 +103,6 @@ frontend/node_modules/.cache/default-development/12.pack
 backend/storage/
 backend/proc_files/
 frontend/node_modules/.cache/default-development/0.pack_
+
+# Environment secrets
+.env
