@@ -6,7 +6,6 @@ import ConversorUF from "../components/ConversorUF";
 import { EmailAutocomplete } from "../components/EmailAutocomplete";
 import { marcarRegreso } from "../utils/navegacion";
 import { PanelAprendizaje } from "../components/CampoAprendizaje";
-import { marcarRegreso } from "../utils/navegacion";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
