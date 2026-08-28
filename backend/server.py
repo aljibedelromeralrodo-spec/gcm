@@ -11312,7 +11312,8 @@ def _compromiso_default(fd):
                      "estado_civil": "", "domicilio": ""},
         "propiedad": {"direccion": "", "comuna": "", "rol_avaluo": "", "fojas": "", "numero": "",
                       "anio": "", "cbr": ""},
-        "precio": {"valor_total_uf": 0, "pie_uf": 0, "pie_recibido": False, "garantia": ""},
+        "precio": {"valor_total_uf": 0, "pie_uf": 0, "subsidio_uf": 0, "ahorro_uf": 0,
+                   "pie_recibido": False, "garantia": ""},
         "resguardos": {"plazo_escritura_dias": 60, "clausula_penal_uf": 0, "gastos": "ambos"},
     }
 
@@ -11377,11 +11378,13 @@ async def compromiso_put(fid: str, payload: dict):
         precio = (upd["datos"].get("precio") or {})
         valor = float(precio.get("valor_total_uf") or 0)
         pie = float(precio.get("pie_uf") or 0)
+        subsidio = float(precio.get("subsidio_uf") or 0)
+        ahorro = float(precio.get("ahorro_uf") or 0)
         if (fd or {}).get("tipo_operacion", "").lower() == "usada" and valor > 0:
             from credit_engine import LTV_MAX_63
             credito_max = round(valor * LTV_MAX_63, 10)
-            if valor - pie > credito_max:
-                pie_min = round(valor - credito_max, 2)
+            if valor - pie - subsidio - ahorro > credito_max:
+                pie_min = round(valor - credito_max - subsidio - ahorro, 2)
                 precio["pie_uf"] = pie_min
                 precio["ajuste_pie_795"] = True
                 upd["nota_795"] = (f"Regla #63: pie ajustado automáticamente a {pie_min} UF "
@@ -11398,6 +11401,23 @@ async def compromiso_pdf(fid: str, payload: dict):
     html = (payload or {}).get("html") or ""
     if len(html) < 50:
         raise HTTPException(status_code=400, detail="Documento vacío")
+    # 🔒 REGLA DE MONTOS COMPLETOS (mandato del Admin): el compromiso debe incluir TODOS los
+    # montos — valor propiedad, crédito, pie, subsidio y ahorro. Si falta alguno, NO sale el documento.
+    comp_m = await db.compromisos.find_one({"folder_id": fid}) or {}
+    precio_m = ((comp_m.get("datos") or {}).get("precio") or {})
+    val_m = float(precio_m.get("valor_total_uf") or 0)
+    pie_m = float(precio_m.get("pie_uf") or 0)
+    sub_m = float(precio_m.get("subsidio_uf") or 0)
+    aho_m = float(precio_m.get("ahorro_uf") or 0)
+    cred_m = round(val_m - pie_m - sub_m - aho_m, 2)
+    faltan = [nombre for nombre, v in (
+        ("Monto valor de la propiedad", val_m), ("Monto del pie", pie_m),
+        ("Monto de subsidio", sub_m), ("Monto de ahorro", aho_m),
+        ("Monto del crédito (Valor − Pie − Subsidio − Ahorro)", cred_m)) if v <= 0]
+    if faltan:
+        raise HTTPException(status_code=422, detail=(
+            "⛔ El documento NO se genera: faltan montos obligatorios en el compromiso → "
+            + ", ".join(faltan) + ". Complete y guarde todos los montos antes de exportar."))
     # BLOQUEO DE PRECISIÓN 100% (Regla #63): usadas sobre 79.50% NO generan PDF
     try:
         fd_63 = await db.folders.find_one({"id": fid}, {"tipo_operacion": 1})
@@ -11405,12 +11425,13 @@ async def compromiso_pdf(fid: str, payload: dict):
         precio_63 = ((comp_63.get("datos") or {}).get("precio") or {})
         valor_63 = float(precio_63.get("valor_total_uf") or 0)
         pie_63 = float(precio_63.get("pie_uf") or 0)
+        credito_63 = valor_63 - pie_63 - float(precio_63.get("subsidio_uf") or 0) - float(precio_63.get("ahorro_uf") or 0)
         if (fd_63 or {}).get("tipo_operacion", "").lower() == "usada" and valor_63 > 0:
             from credit_engine import LTV_MAX_63
-            if round((valor_63 - pie_63) / valor_63, 10) > LTV_MAX_63:
+            if round(credito_63 / valor_63, 10) > LTV_MAX_63:
                 raise HTTPException(status_code=422, detail=(
                     f"⛔ Regla de Oro #63: el contrato no cumple el LTV máximo de 79.5000000000% para "
-                    f"Vivienda Usada (crédito {round(valor_63 - pie_63, 2)} UF sobre {valor_63} UF). "
+                    f"Vivienda Usada (crédito {round(credito_63, 2)} UF sobre {valor_63} UF). "
                     f"Ajuste el Pie antes de generar el PDF."))
     except HTTPException:
         raise
@@ -16269,6 +16290,7 @@ api.include_router(_mut_mod.mut)
 import publicidad as _pub_mod
 api.include_router(_pub_mod.pub)
 import auditoria_flujos as _audf_mod
+api.include_router(_audf_mod.audf)
 api.include_router(_audf_mod.audf)
 
 # ⚖️ FUENTE DE VERDAD DE MESA — endpoints de estado/log del monitor

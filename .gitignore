@@ -98,3 +98,8 @@ frontend/node_modules/.cache/default-development/15.pack
 frontend/node_modules/.cache/default-development/7.pack
 frontend/node_modules/.cache/default-development/5.pack
 frontend/node_modules/.cache/default-development/12.pack
+
+# Archivos de clientes y trabajo (NUNCA a git — causa de disco lleno 27-08-2026)
+backend/storage/
+backend/proc_files/
+frontend/node_modules/.cache/default-development/0.pack_

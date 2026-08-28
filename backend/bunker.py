@@ -16,7 +16,9 @@ from pymongo import MongoClient
 import gridfs
 
 ROOT = Path(__file__).parent / "storage"
-SUBDIRS = ("clientes", "autocorreo", "proc", "sets_de_credito", "archivo_general")
+SUBDIRS = ("clientes", "autocorreo", "sets_de_credito", "archivo_general")
+# ⚠ 'proc' EXCLUIDO (27-08): las copias de trabajo de la cola NO van al búnker —
+# llenaban el disco en cada arranque al restaurarse; los documentos finales viven en 'clientes'.
 APP_PREFIX = "central-mutuos"
 
 STORAGE_BASE = (os.environ.get("INTEGRATION_PROXY_URL") or "").strip() or "https://integrations.emergentagent.com"
@@ -145,6 +147,8 @@ def restaurar_si_vacio():
         return 0
     n = 0
     for rel, meta in _entradas().items():
+        if rel.startswith("proc/"):
+            continue
         if _bajar_entry(rel, meta.get("mtime")):
             n += 1
     logging.warning(f"🏦 BÚNKER: {n} archivo(s) restaurados del almacén durable al disco")
@@ -155,6 +159,8 @@ def restaurar_faltantes():
     """Cloud Sync: baja los archivos que NO están en el disco local."""
     n = 0
     for rel, meta in _entradas().items():
+        if rel.startswith("proc/"):
+            continue
         dest = ROOT / rel
         if dest.exists():
             continue
