@@ -1485,3 +1485,8 @@ actual; todo lo demás permanece intacto.
 - Carta Oferta: eliminada por completo la sección "V. GASTOS OPERACIONALES" (pedido explícito del usuario).
 - Links descarga segura entregados al usuario (tokens en db.descargas_seguras, /api/descarga-segura/{token}).
 - Lint bloqueante corregido: import DEFAULT_UF en espejo_postventa; base indefinida y bloque constitucion duplicado + import FileResponse duplicado en server.py; import marcarRegreso en AprobacionClienteModule y SetCreditoModule; upload de proyecciones broker ahora persiste vía bunker.guardar_bytes (Object Store + espejo local, "brokers" agregado a SUBDIRS).
+
+## 2026-08-28 (fork) — Políticas de Crédito MHE embellecidas
+- Excel del usuario "Resumen MHE Sin/Con Subsidio" convertido a PDF profesional (generar_politicas_credito.py → Politicas_Credito_MHE.pdf): 5 secciones (Propiedad, Financiamiento, Perfil, Comportamiento financiero, Codeudores), cuadro comparativo con/sin subsidio, tipografía corregida.
+- Revisión de privacidad: SIN datos personales (no RUT/nombres/contactos); se eliminó la mención "POLITICAS CONCRECES" (nombre de institución) del documento final.
+- Link descarga segura entregado (token en db.descargas_seguras).
