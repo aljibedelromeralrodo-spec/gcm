@@ -16,7 +16,7 @@ from pymongo import MongoClient
 import gridfs
 
 ROOT = Path(__file__).parent / "storage"
-SUBDIRS = ("clientes", "autocorreo", "sets_de_credito", "archivo_general")
+SUBDIRS = ("clientes", "autocorreo", "sets_de_credito", "archivo_general", "brokers")
 # ⚠ 'proc' EXCLUIDO (27-08): las copias de trabajo de la cola NO van al búnker —
 # llenaban el disco en cada arranque al restaurarse; los documentos finales viven en 'clientes'.
 APP_PREFIX = "central-mutuos"
@@ -184,6 +184,34 @@ def restaurar_prefijo(rel_prefijo):
     if n:
         logging.info(f"🏦 BÚNKER: {n} archivo(s) restaurados para «{rel}»")
     return n
+
+
+def subir_archivo(p):
+    """Persiste UN archivo del disco en el Object Store durable (manifiesto incluido)."""
+    p = Path(p)
+    rel = p.relative_to(ROOT).as_posix()
+    st = p.stat()
+    _put(rel, p.read_bytes())
+    _manifest().update_one({"filename": rel},
+                           {"$set": {"length": st.st_size, "mtime": int(st.st_mtime),
+                                     "is_deleted": False}}, upsert=True)
+    return rel
+
+
+def subir_archivo_bg(p):
+    threading.Thread(target=lambda: subir_archivo(p), daemon=True).start()
+
+
+def guardar_bytes(rel, data):
+    """Guarda bytes directo en el Object Store durable y deja espejo local de trabajo."""
+    _put(rel, data)
+    dest = ROOT / rel
+    _escribir(data, dest)
+    st = dest.stat()
+    _manifest().update_one({"filename": rel},
+                           {"$set": {"length": st.st_size, "mtime": int(st.st_mtime),
+                                     "is_deleted": False}}, upsert=True)
+    return dest
 
 
 def sync_en_background():

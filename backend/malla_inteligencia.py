@@ -381,10 +381,11 @@ async def broker_proyeccion(request: Request, mes: str = Form(...), archivo: Upl
     if not re.match(r"^\d{4}-\d{2}$", mes or ""):
         raise HTTPException(status_code=400, detail="Mes inválido (formato AAAA-MM)")
     nombre_arch = re.sub(r"[^\w.\- ]", "_", archivo.filename or "proyeccion.pdf")
-    base = fsvc.CLIENTES_DIR.parent / "brokers" / re.sub(r"[^\w-]", "_", codigo)
-    base.mkdir(parents=True, exist_ok=True)
-    destino = base / f"PROYECCION_{mes}_{nombre_arch}"
-    destino.write_bytes(await archivo.read())
+    cod_seguro = re.sub(r"[^\w-]", "_", codigo)
+    rel = f"brokers/{cod_seguro}/PROYECCION_{mes}_{nombre_arch}"
+    import bunker as _bk
+    # PERSISTENCIA DURABLE: el PDF va al Object Store (espejo local solo como caché de trabajo)
+    destino = await asyncio.to_thread(_bk.guardar_bytes, rel, await archivo.read())
     reg = {"id": str(uuid.uuid4()), "broker_codigo": codigo, "broker_nombre": c.get("nombre") or codigo,
            "mes": mes, "archivo": destino.name, "ruta": str(destino), "subido_en": _now()}
     await db.broker_proyecciones.insert_one(dict(reg))

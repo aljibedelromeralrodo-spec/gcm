@@ -1289,7 +1289,7 @@ from datetime import date
 
 import folders_service as fsvc
 import ocr_service
-from criterios_data import DEFAULT_CRITERIOS
+from criterios_data import DEFAULT_CRITERIOS, DEFAULT_UF
 
 MIN_CREDITO_SIN_SUBSIDIO_UF = 2000  # Regla de Oro #71 — SOLO viviendas SIN subsidio (con subsidio NO hay mínimo)
 

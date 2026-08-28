@@ -3,6 +3,8 @@ import axios from "axios";
 import ImportarCorreo from "../components/ImportarCorreo";
 import { estiloConfianza, PanelAprendizaje, useAprendizaje } from "../components/CampoAprendizaje";
 import { secureGet } from "../utils/secureStore";
+import { marcarRegreso } from "../utils/navegacion";
+import { marcarRegreso } from "../utils/navegacion";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 const tkParam = () => `&t=${encodeURIComponent(secureGet("token", false) || "")}`;

@@ -31,33 +31,33 @@ th { background-color: #f2f2f2; text-align: left; font-weight: 700; }
 
 COMPROMISO = """
 <h1>COMPROMISO DE COMPRAVENTA</h1>
-<p class="sub">Documento preparatorio de escritura p&uacute;blica &middot; Valor UF de referencia: $40.869 al 27 de agosto de 2026</p>
+<p class="sub">Documento preparatorio de escritura p&uacute;blica &middot; Valor UF de referencia: $40.868,50 al 27 de agosto de 2026</p>
 <div class="hr"></div>
 <p>En <b>Quilicura</b>, a 27 de agosto de 2026, comparecen: por una parte, don <b>JORGE ALEJANDRO GALLEGOS ASCENCIO</b>, chileno, empleado, c&eacute;dula nacional de identidad N&deg; <b>10.800.689-7</b>, con domicilio en Pasaje Cuba N&deg; 700, comuna de Quilicura, en adelante &ldquo;el Vendedor&rdquo;; y por la otra, do&ntilde;a <b>CATALINA ANDREA CASTILLO PAUVIE</b>, chilena, educadora de p&aacute;rvulos, soltera, c&eacute;dula nacional de identidad N&deg; <b>20.064.076-4</b>, con domicilio en Los L&iacute;quenes N&deg; 5513, en adelante &ldquo;el Comprador&rdquo;; quienes acuerdan el siguiente compromiso de compraventa:</p>
 <h2>PRIMERO &mdash; Objeto.</h2>
 <p>El Vendedor se obliga a vender, ceder y transferir al Comprador, quien se obliga a comprar, aceptar y adquirir para s&iacute;, el inmueble consistente en casa habitaci&oacute;n ubicada en <b>Pasaje Cuba N&deg; 700, Conjunto Jard&iacute;n del Norte</b>, comuna de <b>Quilicura</b>, Rol de Aval&uacute;o N&deg; <b>01200-00018</b>. El dominio se encuentra inscrito a fojas <b>45.231</b>, n&uacute;mero <b>43.651</b>, del a&ntilde;o <b>2001</b>, en el Registro de Propiedad del Conservador de Bienes Ra&iacute;ces de <b>Santiago</b>.</p>
 <h2>SEGUNDO &mdash; Precio y forma de pago.</h2>
-<p>El precio de la venta es la suma de <b>UF 1.925,00</b> (mil novecientas veinticinco Unidades de Fomento), equivalente a <b>$78.672.825</b> al valor UF de referencia. De este monto, el Comprador ha pagado por concepto de pie la suma de <b>UF 39,79</b>, equivalente a <b>$1.626.177</b>, en efectivo, seg&uacute;n se declara en la cl&aacute;usula S&Eacute;PTIMA del presente instrumento.</p>
-<p>El saldo de precio, ascendente a <b>UF 1.885,21</b>, equivalente a <b>$77.046.648</b> al valor UF de referencia, se enterar&aacute; al momento de la firma de la escritura definitiva de compraventa conforme a la siguiente estructura de financiamiento:</p>
+<p>El precio de la venta es la suma de <b>UF 1.925,00</b> (mil novecientas veinticinco Unidades de Fomento), equivalente a <b>$78.671.863</b> al valor UF de referencia. De este monto, el Comprador ha pagado por concepto de pie la suma de <b>UF 39,79</b>, equivalente a <b>$1.626.158</b>, en efectivo, seg&uacute;n se declara en la cl&aacute;usula S&Eacute;PTIMA del presente instrumento.</p>
+<p>El saldo de precio, ascendente a <b>UF 1.885,21</b>, equivalente a <b>$77.045.705</b> al valor UF de referencia, se enterar&aacute; al momento de la firma de la escritura definitiva de compraventa conforme a la siguiente estructura de financiamiento:</p>
 <table>
 <tr><th>Componente</th><th class="num">Monto (UF)</th><th class="num">Equivalencia ($)</th></tr>
-<tr><td>Cr&eacute;dito hipotecario, otorgado por la instituci&oacute;n financiera que apruebe la operaci&oacute;n</td><td class="num">1.540,00</td><td class="num">62.938.260</td></tr>
-<tr><td>Subsidio habitacional D.S. N&deg; 1</td><td class="num">250,00</td><td class="num">10.217.250</td></tr>
-<tr><td>Ahorro del Comprador</td><td class="num">95,21</td><td class="num">3.891.138</td></tr>
-<tr><td>Pie pagado en este acto (cl&aacute;usula S&Eacute;PTIMA)</td><td class="num">39,79</td><td class="num">1.626.177</td></tr>
-<tr class="total"><td>PRECIO TOTAL DE LA COMPRAVENTA</td><td class="num">1.925,00</td><td class="num">78.672.825</td></tr>
+<tr><td>Cr&eacute;dito hipotecario, otorgado por la instituci&oacute;n financiera que apruebe la operaci&oacute;n</td><td class="num">1.540,00</td><td class="num">62.937.490</td></tr>
+<tr><td>Subsidio habitacional D.S. N&deg; 1</td><td class="num">250,00</td><td class="num">10.217.125</td></tr>
+<tr><td>Ahorro del Comprador</td><td class="num">95,21</td><td class="num">3.891.090</td></tr>
+<tr><td>Pie pagado en este acto (cl&aacute;usula S&Eacute;PTIMA)</td><td class="num">39,79</td><td class="num">1.626.158</td></tr>
+<tr class="total"><td>PRECIO TOTAL DE LA COMPRAVENTA</td><td class="num">1.925,00</td><td class="num">78.671.863</td></tr>
 </table>
 <p><b>Garant&iacute;a del saldo:</b> el pago del saldo de precio quedar&aacute; garantizado mediante instrucciones notariales irrevocables o vale vista bancario, a elecci&oacute;n de las partes, entregadas en la notar&iacute;a al momento de la firma de la escritura definitiva.</p>
 <h2>TERCERO &mdash; Condici&oacute;n suspensiva.</h2>
 <p>La celebraci&oacute;n de la compraventa definitiva queda expresamente supeditada a la aprobaci&oacute;n del cr&eacute;dito hipotecario del Comprador. Las partes se obligan a suscribir la escritura p&uacute;blica de compraventa dentro del plazo de <b>60 d&iacute;as corridos</b> contados desde la comunicaci&oacute;n formal de dicha aprobaci&oacute;n. Si el cr&eacute;dito no fuere aprobado dentro del plazo se&ntilde;alado, este instrumento quedar&aacute; sin efecto de pleno derecho, restituy&eacute;ndose a las partes lo que hubieren entregado, sin ulterior responsabilidad.</p>
 <h2>CUARTO &mdash; Cl&aacute;usula penal.</h2>
-<p>Si cualquiera de las partes se negare injustificadamente a suscribir la escritura definitiva o se arrepintiere de la presente convenci&oacute;n, deber&aacute; pagar a la otra, a t&iacute;tulo de avaluaci&oacute;n anticipada de perjuicios, una multa de <b>UF 10,00</b> (diez Unidades de Fomento), equivalente a <b>$408.690</b> al valor UF de referencia, sin perjuicio del derecho de la parte diligente de exigir adem&aacute;s el cumplimiento forzado del contrato.</p>
+<p>Si cualquiera de las partes se negare injustificadamente a suscribir la escritura definitiva o se arrepintiere de la presente convenci&oacute;n, deber&aacute; pagar a la otra, a t&iacute;tulo de avaluaci&oacute;n anticipada de perjuicios, una multa de <b>UF 10,00</b> (diez Unidades de Fomento), equivalente a <b>$408.685</b> al valor UF de referencia, sin perjuicio del derecho de la parte diligente de exigir adem&aacute;s el cumplimiento forzado del contrato.</p>
 <h2>QUINTO &mdash; Gastos.</h2>
 <p>Los gastos notariales, impuestos y derechos que irrogue la celebraci&oacute;n de la compraventa definitiva ser&aacute;n solventados por ambas partes en proporciones iguales. Los gastos de inscripci&oacute;n en el Conservador de Bienes Ra&iacute;ces ser&aacute;n de cargo del Comprador.</p>
 <h2>SEXTO &mdash; Domicilio y ejemplares.</h2>
 <p>Para todos los efectos legales derivados del presente instrumento, las partes fijan su domicilio en la comuna de <b>Quilicura</b> y se someten a la competencia de sus Tribunales Ordinarios de Justicia. El presente compromiso se firma en dos ejemplares del mismo tenor, quedando uno en poder de cada parte.</p>
 <h2>S&Eacute;PTIMO &mdash; Declaraci&oacute;n de pago y finiquito del pie.</h2>
-<p>El Vendedor declara haber recibido del Comprador, de manera &iacute;ntegra, total y oportuna, la suma de <b>UF 39,79</b>, equivalente a <b>$1.626.177</b> al valor UF de referencia ($40.869 al 27/08/2026), pagada en efectivo, por concepto de pie del precio de la compraventa. En consecuencia, el Vendedor otorga al Comprador el m&aacute;s amplio, completo y total finiquito respecto de dicha suma, declar&aacute;ndola &iacute;ntegramente pagada y renunciando expresamente a toda acci&oacute;n, cobro o reclamaci&oacute;n posterior derivada de su pago.</p>
+<p>El Vendedor declara haber recibido del Comprador, de manera &iacute;ntegra, total y oportuna, la suma de <b>UF 39,79</b>, equivalente a <b>$1.626.158</b> al valor UF de referencia ($40.868,50 al 27/08/2026), pagada en efectivo, por concepto de pie del precio de la compraventa. En consecuencia, el Vendedor otorga al Comprador el m&aacute;s amplio, completo y total finiquito respecto de dicha suma, declar&aacute;ndola &iacute;ntegramente pagada y renunciando expresamente a toda acci&oacute;n, cobro o reclamaci&oacute;n posterior derivada de su pago.</p>
 <br/><br/>
 <table style="margin-top:40px"><tr>
 <td class="firma" style="border:none;width:50%">____________________________________<br/><b>JORGE ALEJANDRO GALLEGOS ASCENCIO</b><br/>RUT 10.800.689-7<br/>VENDEDOR</td>
@@ -67,7 +67,7 @@ COMPROMISO = """
 
 CARTA = """
 <h1>CARTA DE OFERTA DE COMPRA</h1>
-<p class="sub">Santiago de Chile &middot; 27 de agosto de 2026</p>
+<p class="sub">Santiago de Chile &middot; 27 de agosto de 2026 &middot; Valor UF de referencia: $40.868,50</p>
 <div class="hr"></div>
 <h2>I. ANTECEDENTES DEL CLIENTE</h2>
 <table>
@@ -97,8 +97,6 @@ CARTA = """
 <tr><td>Cr&eacute;dito hipotecario</td><td class="num">1.540,00</td></tr>
 <tr class="total"><td>TOTAL FINANCIAMIENTO (Subsidio + Ahorro + Pie + Cr&eacute;dito)</td><td class="num">1.925,00</td></tr>
 </table>
-<h2>V. GASTOS OPERACIONALES</h2>
-<p>Los gastos operacionales de la operaci&oacute;n (tasaci&oacute;n, estudio de t&iacute;tulos, borrador de escritura, gastos notariales, impuestos y Conservador de Bienes Ra&iacute;ces) se encuentran <b>incluidos</b> en la estructura de la operaci&oacute;n.</p>
 <p style="margin-top:18px">La presente carta de oferta resume las condiciones comerciales de la operaci&oacute;n de compraventa y financiamiento de la propiedad individualizada, y constituye un documento informativo preparatorio, sujeto a la aprobaci&oacute;n final del cr&eacute;dito hipotecario por parte de la instituci&oacute;n financiera.</p>
 <br/><br/>
 <table style="margin-top:46px"><tr>

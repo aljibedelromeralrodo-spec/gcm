@@ -1479,3 +1479,9 @@ actual; todo lo demás permanece intacto.
 - Backend (auth.py): rol "lectura" en ROL_BLOQUEO_ESCRITURA con lista blanca vacía → TODO POST/PUT/PATCH/DELETE bloqueado con 403.
 - Frontend (App.js): ACCESOS_ROL.lectura = solo dashboard en modo lectura; etiqueta "SOLO LECTURA"; banner MODO LECTURA.
 - Verificado E2E: login OK, GET 200, POST/DELETE 403, vista admin renderizada con banner (screenshot).
+
+## 2026-08-28 (fork) — Corrección UF y Carta Oferta sin Gastos Operacionales
+- UF corregida en docs Castillo: valor oficial SII $40.868,50 (27/08/2026, hora Chile) mostrado con decimales (antes se redondeaba a $40.869). Montos recalculados: precio $78.671.863, pie $1.626.158, saldo $77.045.705, multa $408.685; tabla cuadra exacta.
+- Carta Oferta: eliminada por completo la sección "V. GASTOS OPERACIONALES" (pedido explícito del usuario).
+- Links descarga segura entregados al usuario (tokens en db.descargas_seguras, /api/descarga-segura/{token}).
+- Lint bloqueante corregido: import DEFAULT_UF en espejo_postventa; base indefinida y bloque constitucion duplicado + import FileResponse duplicado en server.py; import marcarRegreso en AprobacionClienteModule y SetCreditoModule; upload de proyecciones broker ahora persiste vía bunker.guardar_bytes (Object Store + espejo local, "brokers" agregado a SUBDIRS).

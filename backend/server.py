@@ -4432,6 +4432,7 @@ async def folder_send_email(fid: str, payload: dict):
                 "Para reenviarla debes ingresar la clave de administrador."))
     attach_names = []
     attach_paths = []
+    base = fsvc.folder_dir(nombre)
     cod_nom = (doc.get("codeudor_nombre") or "").strip()
     cod_rut = (doc.get("codeudor_rut") or "").strip()
     if cod_nom:
@@ -4990,7 +4991,6 @@ async def wa_reject(aid: str, payload: dict = None):
 # Autocorreo: flujo de mesa (recibir simulacion -> dejar pag 1 -> archivar/enviar)
 # ---------------------------------------------------------------------------
 import pdf_service as pdfs
-from fastapi.responses import FileResponse
 
 STORAGE_DIR = ROOT_DIR / "storage" / "autocorreo"
 STORAGE_DIR.mkdir(parents=True, exist_ok=True)
@@ -16324,31 +16324,6 @@ import base_historica as _hist_mod
 import adn_clientes as _adn_mod
 api.include_router(_monit_mod.correos_r)
 api.include_router(_perfil.perfil_r)
-api.include_router(_hist_mod.historia)
-api.include_router(_adn_mod.adn)
-
-
-@api.get("/constitucion")
-async def constitucion_leer():
-    """CONSTITUCIÓN MAESTRA — 15 Reglas de Oro (fuente de verdad de DashAI)."""
-    import constitucion as _const
-    return await _const.seed_constitucion(db)
-
-
-@api.post("/constitucion/aprendizaje-secundario")
-async def constitucion_aprendizaje(payload: dict):
-    """MÓDULO DE APRENDIZAJE EXTERNO: registra el 2º buzón IMAP en modo SOLO LECTURA
-    (slot para el nuevo correo). No envía ni modifica nada de ese buzón."""
-    correo = (payload or {}).get("correo", "").strip()
-    await db.config.update_one({"_key": "constitucion_maestra"}, {"$set": {
-        "aprendizaje.fuente_secundaria_solo_lectura": correo,
-        "aprendizaje.modo": "solo_lectura",
-        "aprendizaje.actualizado": now_iso()}}, upsert=True)
-    return {"ok": True, "fuente_secundaria": correo, "modo": "solo_lectura"}
-
-
-
-app.include_router(api)
 api.include_router(_hist_mod.historia)
 api.include_router(_adn_mod.adn)
 
