@@ -390,3 +390,8 @@
 ## 2026-08-29 (fork) — Informe Ecomac DETALLADO cliente por cliente
 - Nuevo scripts_lacruz/pdf_informe_ecomac_detallado.py: PDF de 47 páginas con los 1.109 clientes enviados desde Sep 2024 listados uno por uno (fecha, nombre, RUT, ejecutiva, horas 1ª respuesta, estado en color, fecha escritura). 407 en verde (aprobados/escriturando). Últimos 3 meses: 161 enviados, 75 en verde. Sección IV: los 121 escriturados con etapas y fechas. Enriquecido con veredictos de Mesa del sistema (mesa_verdad_log: 30 aprobaciones, 22 rechazos + aprobacion_log).
 - Preview anterior (versión solo estadística, 05f69bf0) descartado; versión detallada encolada en Preview Obligatorio (preview_id 2795d415).
+
+## 2026-08-29 (fork) — Informe Ecomac FINAL exclusivo Ecomac (aprobado por usuario)
+- pdf_informe_ecomac_final.py: filtro EXCLUSIVO Ecomac en escrituraciones (remitente/destino @ecomac.cl, proyecto Ecomac en asunto, o cliente proveniente de solicitud Ecomac por RUT/nombre) + blacklist de nombres genéricos ("casa usada"). Escrituraciones 121→92 (se excluyeron 29 de Maestra/usadas/otras). KPIs finales: 1.109 enviados | 319 verdes | 92 escrituraciones | 12 firmas. 3 meses: 161 enviados / 16 con escritura / 2 firma-títulos (Christel Casanova, Rodrigo Valencia). INMEDIATA: 189/109/13/2.
+- Cuadros aprobados por el usuario: tabla INMEDIATA, cuadro venta en verde 3 meses, muestra random 15 tiempos de respuesta (semilla 29), promedios por ejecutiva.
+- PDF 51 páginas con anexos A (3 meses cliente x cliente) y B (histórico completo). Encolado preview e13b2054; versiones anteriores descartadas.
