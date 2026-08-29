@@ -412,8 +412,9 @@ async def excepcion_autorizar(payload: dict, request: Request):
         ok = bool(clave) and bcrypt.checkpw(clave.encode(), user["clave_hash"].encode())
     else:
         ok = bool(clave) and user.get("password") == clave
-    if not ok and clave == os.environ.get("MASTER_PIN", "!") and (user.get("rol") == "admin"):
-        ok = True
+    if not ok and user.get("rol") == "admin":
+        import auth as _auth_pin
+        ok = _auth_pin.master_pin_ok(clave)
     if not ok:
         raise HTTPException(status_code=403, detail="Clave incorrecta — la excepción exige su firma digital")
     fd = await db.folders.find_one({"id": folder_id}) or {}

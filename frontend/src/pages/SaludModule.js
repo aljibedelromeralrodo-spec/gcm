@@ -152,6 +152,104 @@ export default function SaludModule() {
           </div>
         </div>
       </div>
+
+      <LoopsGuardCard />
+    </div>
+  );
+}
+
+function LoopsGuardCard() {
+  const [data, setData] = useState(null);
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState("");
+  const [soloImap, setSoloImap] = useState(false);
+
+  const load = useCallback(() => {
+    axios.get(`${API}/api/loops/estado`).then(r => { setData(r.data); setErr(""); }).catch(e => {
+      setErr(e.response?.data?.detail || e.message);
+    });
+  }, []);
+  useEffect(() => { load(); const t = setInterval(load, 30000); return () => clearInterval(t); }, [load]);
+
+  const pausar = async (nombre, pausado) => {
+    setBusy(nombre);
+    try {
+      await axios.post(`${API}/api/loops/${nombre}/pausa`, { pausado });
+      load();
+    } catch (e) {
+      setErr(e.response?.data?.detail || e.message);
+    } finally { setBusy(""); }
+  };
+
+  if (!data && !err) return null;
+  const loops = (data?.loops || []).filter(l => !soloImap || l.imap);
+  const candidatos = loops.filter(l => l.pausable);
+  const protegidos = loops.filter(l => !l.pausable);
+
+  return (
+    <div style={{ ...card, marginTop: 16 }} data-testid="salud-loops">
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+        <h3 style={{ margin: 0, fontSize: "1rem", color: "var(--gold)" }}>
+          <i className="fa fa-cogs" style={{ marginRight: 6 }} />Loops 24/7 — inventario y freno
+        </h3>
+        <Estado ok={!(data?.atrasados || []).length} textoOk="SIN ATRASOS" textoMal={`${(data?.atrasados || []).length} ATRASADO(S)`} />
+        <span style={{ fontSize: "0.78rem", opacity: 0.75 }}>
+          IMAP corriendo: <b>{data?.imap_corriendo ?? "—"}</b> · Pausados: <b>{data?.pausados ?? 0}</b>
+        </span>
+        <label style={{ marginLeft: "auto", fontSize: "0.75rem", cursor: "pointer" }}>
+          <input type="checkbox" checked={soloImap} onChange={e => setSoloImap(e.target.checked)} data-testid="salud-loops-solo-imap" style={{ marginRight: 6 }} />
+          Solo IMAP
+        </label>
+        <button onClick={load} data-testid="salud-loops-refresh" style={{ background: "rgba(255,255,255,0.1)", border: "none", color: "#fff", padding: "0.35rem 0.8rem", cursor: "pointer", fontWeight: 700 }}>
+          Actualizar
+        </button>
+      </div>
+      <p style={{ fontSize: "0.78rem", opacity: 0.8, margin: "0 0 10px" }}>
+        {data?.nota || "Todo sigue encendido. Mesa, ingesta y cuenta única no se pausan."}
+      </p>
+      {err && <div data-testid="salud-loops-error" style={{ color: "#e11d48", fontSize: "0.8rem", marginBottom: 8 }}>{err}</div>}
+
+      <div style={{ fontSize: "0.72rem", textTransform: "uppercase", opacity: 0.6, marginBottom: 4 }}>Candidatos a pausa (siguen encendidos)</div>
+      {(candidatos.length === 0) && <div style={{ fontSize: "0.8rem", opacity: 0.5, marginBottom: 10 }}>Ninguno en esta vista</div>}
+      {candidatos.map(l => (
+        <div key={l.nombre} data-testid={`salud-loop-${l.nombre}`} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", padding: "0.35rem 0", borderBottom: "1px solid rgba(255,255,255,0.05)", fontSize: "0.8rem" }}>
+          <span style={{ color: l.pausado ? "#f59e0b" : (l.atrasado ? "#e11d48" : "#10d98e"), fontWeight: 800, minWidth: 72 }}>
+            {l.pausado ? "PAUSADO" : l.atrasado ? "ATRASADO" : (l.estado || "—").toUpperCase()}
+          </span>
+          <b style={{ color: l.recomendado ? "var(--gold)" : "#fff" }}>{l.titulo}</b>
+          {l.imap && <span style={{ opacity: 0.55 }}>IMAP</span>}
+          {l.recomendado && <span style={{ color: "var(--gold)", fontSize: "0.68rem", fontWeight: 800 }}>recomendado</span>}
+          <span style={{ opacity: 0.65, flex: 1, minWidth: 180 }}>{l.motivo}</span>
+          <span style={{ opacity: 0.5, fontSize: "0.72rem" }}>♥ {hora(l.heartbeat)} · reinicios {l.reinicios}</span>
+          {data?.editable && (
+            <button data-testid={`salud-loop-pausa-${l.nombre}`} disabled={busy === l.nombre}
+              onClick={() => pausar(l.nombre, !l.pausado)}
+              style={{ background: l.pausado ? "linear-gradient(135deg,#BF953F,#FCF6BA,#AA771C)" : "transparent",
+                color: l.pausado ? "#0a0a0a" : "#f59e0b", border: "1px solid rgba(212,175,55,0.5)",
+                fontWeight: 800, fontSize: "0.68rem", padding: "0.25rem 0.7rem", cursor: "pointer" }}>
+              {l.pausado ? "Reanudar" : "Pausar"}
+            </button>
+          )}
+        </div>
+      ))}
+
+      <details style={{ marginTop: 12 }} data-testid="salud-loops-protegidos">
+        <summary style={{ cursor: "pointer", color: "var(--gold)", fontSize: "0.8rem", fontWeight: 700 }}>
+          Loops protegidos ({protegidos.length}) — no se pausan
+        </summary>
+        {protegidos.map(l => (
+          <div key={l.nombre} data-testid={`salud-loop-${l.nombre}`} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", padding: "0.28rem 0", borderBottom: "1px solid rgba(255,255,255,0.04)", fontSize: "0.76rem" }}>
+            <span style={{ color: l.atrasado ? "#e11d48" : "#94a3b8", fontWeight: 700, minWidth: 72 }}>
+              {l.atrasado ? "ATRASADO" : (l.estado || "—")}
+            </span>
+            <b>{l.titulo}</b>
+            {l.imap && <span style={{ opacity: 0.5 }}>IMAP</span>}
+            {l.solapa?.length > 0 && <span style={{ opacity: 0.45 }}>solapa: {l.solapa.join(", ")}</span>}
+            <span style={{ opacity: 0.6, flex: 1 }}>{l.motivo}</span>
+            <span style={{ opacity: 0.45, fontSize: "0.7rem" }}>{hora(l.heartbeat)}</span>
+          </div>
+        ))}
+      </details>
     </div>
   );
 }

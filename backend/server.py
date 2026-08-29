@@ -88,18 +88,37 @@ _cargo_admin_cache = {"v": CARGO_ADMIN_DEFAULT}
 
 
 async def ensure_seed():
-    # Garantizar SIEMPRE los usuarios administradores
-    for u in [
-        {"codigo": "administrador", "nombre": "Administrador", "password": os.environ.get("ADMIN_PASSWORD_1", ""), "rol": "admin"},
-        {"codigo": "admin", "nombre": "Administrador", "password": os.environ.get("ADMIN_PASSWORD_2", ""), "rol": "admin"},
+    # Garantizar SIEMPRE los usuarios administradores (bcrypt; NUNCA password en claro).
+    for codigo, env_key, nombre in [
+        ("administrador", "ADMIN_PASSWORD_1", "Administrador"),
+        ("admin", "ADMIN_PASSWORD_2", "Administrador"),
     ]:
-        if not u["password"]:
-            u = {k: v for k, v in u.items() if k != "password"}
-        await db.users.update_one(
-            {"codigo": u["codigo"]},
-            {"$set": u, "$setOnInsert": {"created": now_iso()}},
-            upsert=True,
-        )
+        existing = await db.users.find_one({"codigo": codigo}) or {}
+        fields = {"nombre": existing.get("nombre") or nombre, "rol": "admin"}
+        if existing.get("clave_hash"):
+            await db.users.update_one(
+                {"codigo": codigo},
+                {"$set": fields, "$unset": {"password": ""},
+                 "$setOnInsert": {"created": now_iso()}},
+                upsert=True,
+            )
+            continue
+        plano = existing.get("password") or os.environ.get(env_key, "") or ""
+        if plano:
+            h = bcrypt.hashpw(plano.encode(), bcrypt.gensalt()).decode()
+            await db.users.update_one(
+                {"codigo": codigo},
+                {"$set": {**fields, "clave_hash": h}, "$unset": {"password": ""},
+                 "$setOnInsert": {"created": now_iso()}},
+                upsert=True,
+            )
+        else:
+            await db.users.update_one(
+                {"codigo": codigo},
+                {"$set": fields,
+                 "$setOnInsert": {"created": now_iso(), "requiere_crear_clave": True}},
+                upsert=True,
+            )
     # RESTABLECIMIENTO DE AUTORIDAD: mando único de Gerardo Barrera. René Osa fue eliminado
     # en su momento; el borrado destructivo se retiró del arranque (bloqueaba el deploy).
     await db.users.update_many({"rol": "maestro"}, {"$set": {"rol": "admin"}})
@@ -405,8 +424,10 @@ async def _task_blindada(coro_fn, nombre):
     """Supervisor: si un loop de fondo muere por error, se registra y se reinicia solo.
     Si el loop retorna limpio (cliente Mongo cerrado en hot-reload), el supervisor termina.
     🔐 LEADER GUARD: con múltiples réplicas, cada loop espera a que esta instancia
-    sea la líder (mutex atómico en Mongo) antes de ejecutarse."""
+    sea la líder (mutex atómico en Mongo) antes de ejecutarse.
+    📊 LOOPS GUARD: métricas + pausa cooperativa (solo loops catalogados como pausables)."""
     import leader_guard as _lg
+    import loops_guard as _lgd
     t = asyncio.current_task()
     if t is not None:
         _BG_TASKS.add(t)
@@ -414,8 +435,9 @@ async def _task_blindada(coro_fn, nombre):
     while True:
         try:
             await _lg.esperar_liderazgo(nombre)
-            await coro_fn()
-            break  # retorno limpio = proceso en cierre: no revivir zombies
+            termino = await _lgd.correr_o_esperar(coro_fn, nombre)
+            if termino:
+                break  # retorno limpio = proceso en cierre: no revivir zombies
         except asyncio.CancelledError:
             break
         except Exception as e:
@@ -424,6 +446,10 @@ async def _task_blindada(coro_fn, nombre):
             try:
                 await db.system_log.insert_one({"id": str(uuid.uuid4()), "loop": nombre,
                                                 "error": str(e)[:300], "fecha": now_iso()})
+            except Exception:
+                pass
+            try:
+                await _lgd.marcar_error(nombre, e)
             except Exception:
                 pass
         await asyncio.sleep(30)
@@ -898,8 +924,18 @@ async def auth_login(payload: dict):
         # Primer ingreso del Administrador Maestro: debe crear su propia clave
         return {"requiere_crear_clave": True, "codigo": user["codigo"],
                 "nombre": user.get("nombre", codigo)}
-    elif user.get("password") != password or not password:
+    elif not password or user.get("password") != password:
         raise HTTPException(status_code=401, detail="Credenciales invalidas")
+    else:
+        # Login válido con legado en claro → promover a bcrypt y borrar el plano.
+        try:
+            h = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+            await db.users.update_one(
+                {"codigo": user["codigo"]},
+                {"$set": {"clave_hash": h}, "$unset": {"password": ""}},
+            )
+        except Exception:
+            logging.warning("migración bcrypt: no se pudo hashear (login igual válido)")
     await db.users.update_one({"codigo": user["codigo"]}, {"$set": {"ultimo_acceso": now_iso()}})
     # REGLA PERMANENTE: auditoría semanal de eficiencia (lunes, primer ingreso del Admin)
     try:
@@ -1070,34 +1106,91 @@ PARIDAD_STAMP = "2026-08-22-paridad-v3"  # subir al cambiar seeds/reglas crític
 
 
 # ═══ 🔑 GESTOR DE CREDENCIALES CRECE (Regla de Oro #74) ═══
-# Ejecutivos: SOLO lectura · Crear/editar/eliminar: EXCLUSIVO Administrador
+# Ejecutivos: SOLO lectura (usuario+clave, para operar en Crece).
+# Crear/editar/eliminar: EXCLUSIVO Administrador. Gerencia: bloqueada en auth.
+# En reposo se cifra con CRED_CIPHER_KEY; la API sigue devolviendo `clave` en claro
+# a quien ORO-74 autoriza (el frontend no cambia).
+def _crece_pack_clave(plano):
+    enc = _auth.cifrar_secreto(plano)
+    if enc:
+        return {"clave_enc": enc, "clave_cifrada": True}
+    return {"clave": plano, "clave_cifrada": False}
+
+
+def _crece_unpack_clave(doc):
+    if doc.get("clave_cifrada") and doc.get("clave_enc"):
+        plano = _auth.descifrar_secreto(doc["clave_enc"])
+        return plano if plano is not None else (doc.get("clave") or "")
+    return doc.get("clave") or ""
+
+
 @api.get("/crece/credenciales")
 async def crece_listar(request: Request):
     docs = await db.credenciales_crece.find({}, {"_id": 0}).sort("etiqueta", 1).to_list(200)
-    rol = (getattr(request.state, "user", {}) or {}).get("rol", "")
-    return {"credenciales": docs, "editable": rol in ("admin", "maestro")}
+    claims = getattr(request.state, "user", {}) or {}
+    rol = claims.get("rol", "")
+    out = []
+    for d in docs:
+        d = dict(d)
+        plano = _crece_unpack_clave(d)
+        # Migración perezosa: si había plano y ahora hay cipher, se cifra al vuelo.
+        if plano and not d.get("clave_cifrada"):
+            packed = _crece_pack_clave(plano)
+            if packed.get("clave_cifrada"):
+                await db.credenciales_crece.update_one(
+                    {"id": d.get("id")},
+                    {"$set": {"clave_enc": packed["clave_enc"], "clave_cifrada": True},
+                     "$unset": {"clave": ""}},
+                )
+        vis = {k: v for k, v in d.items() if k not in ("clave_enc", "clave_cifrada")}
+        vis["clave"] = plano
+        out.append(vis)
+    try:
+        await db.crece_acceso_log.insert_one({
+            "fecha": now_iso(), "usuario": claims.get("sub") or "",
+            "rol": rol, "accion": "listar", "n": len(out)})
+    except Exception:
+        pass
+    return {"credenciales": out, "editable": rol in ("admin", "maestro")}
 
 
 @api.post("/crece/credenciales")
 async def crece_guardar(payload: dict, request: Request):
     _exigir_roles(request, ("admin", "maestro"))
     cid = (payload.get("id") or "").strip()
+    claims = getattr(request.state, "user", {}) or {}
     doc = {"etiqueta": (payload.get("etiqueta") or "").strip(),
            "usuario": (payload.get("usuario") or "").strip(),
-           "clave": (payload.get("clave") or "").strip(),
            "url": (payload.get("url") or "https://crece.cl").strip(),
            "notas": (payload.get("notas") or "").strip(),
            "actualizado": now_iso(),
-           "por": (getattr(request.state, "user", {}) or {}).get("sub") or "admin"}
+           "por": claims.get("sub") or "admin"}
     if not doc["etiqueta"] or not doc["usuario"]:
         raise HTTPException(status_code=400, detail="Etiqueta y usuario son obligatorios")
+    plano = (payload.get("clave") or "").strip()
     if cid:
-        r = await db.credenciales_crece.update_one({"id": cid}, {"$set": doc})
+        prev = await db.credenciales_crece.find_one({"id": cid}) or {}
+        if not plano:
+            plano = _crece_unpack_clave(prev)
+        packed = _crece_pack_clave(plano)
+        update = {"$set": {**doc, **packed}}
+        if packed.get("clave_cifrada"):
+            update["$unset"] = {"clave": ""}
+        else:
+            update["$unset"] = {"clave_enc": ""}
+        r = await db.credenciales_crece.update_one({"id": cid}, update)
         if not r.matched_count:
             raise HTTPException(status_code=404, detail="Credencial no encontrada")
     else:
         cid = str(uuid.uuid4())
-        await db.credenciales_crece.insert_one({"id": cid, **doc})
+        packed = _crece_pack_clave(plano)
+        await db.credenciales_crece.insert_one({"id": cid, **doc, **packed})
+    try:
+        await db.crece_acceso_log.insert_one({
+            "fecha": now_iso(), "usuario": claims.get("sub") or "",
+            "rol": claims.get("rol") or "", "accion": "guardar", "id": cid})
+    except Exception:
+        pass
     return {"ok": True, "id": cid}
 
 
@@ -16326,6 +16419,8 @@ api.include_router(_monit_mod.correos_r)
 api.include_router(_perfil.perfil_r)
 api.include_router(_hist_mod.historia)
 api.include_router(_adn_mod.adn)
+import loops_guard as _loops_mod
+api.include_router(_loops_mod.loops_r)
 
 
 @api.get("/constitucion")

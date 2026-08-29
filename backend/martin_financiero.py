@@ -4,9 +4,11 @@ Habla SIEMPRE de usted, cercano, simple, sin tecnicismos. Módulo autónomo y
 exportable como app móvil futura (API propia + estado por sesión en MongoDB)."""
 import os
 import uuid
+import bcrypt
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException
 from database import db
+import auth as _auth
 
 mfin = APIRouter(prefix="/martin-financiero")
 
@@ -460,11 +462,27 @@ async def tts_martin(payload: dict):
         raise HTTPException(status_code=503, detail=f"Voz no disponible: {str(e)[:100]}")
 
 
-ADMIN_CLAVE = "141617575"
-
-
-def _es_admin(payload):
-    return ((payload or {}).get("clave") or "") == ADMIN_CLAVE
+async def _es_admin(payload):
+    """Clave de administrador: entorno (ADMIN_PASSWORD_*/MASTER_PIN) o hash bcrypt en DB.
+    Sin constante quemada: el portal público de Martín no depende de un PIN en el código."""
+    clave = ((payload or {}).get("clave") or "").strip()
+    if not clave:
+        return False
+    if _auth.admin_clave_ok(clave) or _auth.master_pin_ok(clave):
+        return True
+    try:
+        async for user in db.users.find({"rol": {"$in": ["admin", "maestro"]}}):
+            if user.get("clave_hash"):
+                try:
+                    if bcrypt.checkpw(clave.encode(), user["clave_hash"].encode()):
+                        return True
+                except Exception:
+                    continue
+            elif user.get("password") and _auth.secret_eq(clave, user.get("password")):
+                return True
+    except Exception:
+        return False
+    return False
 
 
 async def _cerebro_extra():
@@ -495,7 +513,7 @@ async def cerebro_sync():
 
 @mfin.post("/cerebro/marca")
 async def cerebro_marca(payload: dict):
-    if not _es_admin(payload):
+    if not await _es_admin(payload):
         raise HTTPException(status_code=403, detail="Clave incorrecta")
     await db.config.update_one({"_key": "martin_marca"},
                                {"$set": {"nombre": (payload.get("nombre") or "")[:80], "fecha": _now()}}, upsert=True)
@@ -512,7 +530,7 @@ async def cerebro_aprendizaje(payload: dict):
 
 @mfin.post("/cerebro/estado")
 async def cerebro_estado(payload: dict):
-    if not _es_admin(payload):
+    if not await _es_admin(payload):
         raise HTTPException(status_code=403, detail="Clave incorrecta")
     total = await db.martin_cerebro_aprendizajes.count_documents({})
     por_tema, por_emo = {}, {}
@@ -530,7 +548,7 @@ async def cerebro_estado(payload: dict):
 
 @mfin.post("/cerebro/modulo")
 async def cerebro_modulo(payload: dict):
-    if not _es_admin(payload):
+    if not await _es_admin(payload):
         raise HTTPException(status_code=403, detail="Clave incorrecta")
     mid = (payload.get("id") or "").strip() or f"mod-{uuid.uuid4().hex[:6]}"
     doc = {"id": mid, "icono": (payload.get("icono") or "🛰")[:4], "titulo": (payload.get("titulo") or "")[:60],
@@ -544,7 +562,7 @@ async def cerebro_modulo(payload: dict):
 
 @mfin.post("/cerebro/modulo/eliminar")
 async def cerebro_modulo_del(payload: dict):
-    if not _es_admin(payload):
+    if not await _es_admin(payload):
         raise HTTPException(status_code=403, detail="Clave incorrecta")
     await db.martin_cerebro_modulos.update_one({"id": payload.get("id")}, {"$set": {"activo": False}})
     return {"ok": True}
@@ -552,7 +570,7 @@ async def cerebro_modulo_del(payload: dict):
 
 @mfin.post("/cerebro/aviso")
 async def cerebro_aviso(payload: dict):
-    if not _es_admin(payload):
+    if not await _es_admin(payload):
         raise HTTPException(status_code=403, detail="Clave incorrecta")
     if payload.get("eliminar"):
         await db.martin_cerebro_avisos.update_one({"id": payload["eliminar"]}, {"$set": {"activo": False}})
@@ -567,7 +585,7 @@ async def cerebro_aviso(payload: dict):
 
 @mfin.post("/cerebro/personalidad")
 async def cerebro_personalidad(payload: dict):
-    if not _es_admin(payload):
+    if not await _es_admin(payload):
         raise HTTPException(status_code=403, detail="Clave incorrecta")
     await db.config.update_one({"_key": "martin_personalidad_extra"},
                                {"$set": {"texto": (payload.get("texto") or "")[:1500], "fecha": _now()}}, upsert=True)
@@ -576,7 +594,7 @@ async def cerebro_personalidad(payload: dict):
 
 @mfin.post("/cerebro/procesar")
 async def cerebro_procesar(payload: dict):
-    if not _es_admin(payload):
+    if not await _es_admin(payload):
         raise HTTPException(status_code=403, detail="Clave incorrecta")
     datos = await db.martin_cerebro_aprendizajes.find({}, {"_id": 0}).sort("fecha", -1).limit(300).to_list(300)
     if not datos:

@@ -16,10 +16,32 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException
 from database import db
+import auth as _auth
+import bcrypt
 
 rechz = APIRouter(prefix="/rechazo-notif")
-ADMIN_CLAVE = "141617575"
 FALLBACK_EJECUTIVO = "gerardo.ext@centralmutuos.cl"
+
+
+async def _clave_admin_ok(payload):
+    clave = ((payload or {}).get("clave") or "").strip()
+    if not clave:
+        return False
+    if _auth.admin_clave_ok(clave) or _auth.master_pin_ok(clave):
+        return True
+    try:
+        async for user in db.users.find({"rol": {"$in": ["admin", "maestro"]}}):
+            if user.get("clave_hash"):
+                try:
+                    if bcrypt.checkpw(clave.encode(), user["clave_hash"].encode()):
+                        return True
+                except Exception:
+                    continue
+            elif user.get("password") and _auth.secret_eq(clave, user.get("password")):
+                return True
+    except Exception:
+        return False
+    return False
 
 
 def _now():
@@ -256,7 +278,7 @@ async def opciones(nombre: str = "", motivo_txt: str = ""):
 
 @rechz.post("/aprobar")
 async def aprobar(payload: dict):
-    if (payload or {}).get("clave") != ADMIN_CLAVE:
+    if not await _clave_admin_ok(payload):
         raise HTTPException(status_code=403, detail="Clave incorrecta")
     p = (payload.get("plantilla") or "").lower()
     if p not in PLANTILLAS:
@@ -282,7 +304,7 @@ async def estado():
 @rechz.post("/probar")
 async def probar(payload: dict):
     """Caso real de prueba: Anita Álvarez, complemento DS19, no cumple parámetro objetivo."""
-    if (payload or {}).get("clave") != ADMIN_CLAVE:
+    if not await _clave_admin_ok(payload):
         raise HTTPException(status_code=403, detail="Clave incorrecta")
     f = await db.folders.find_one({"nombre": {"$regex": "anita\\s+alvarez", "$options": "i"}}) or \
         {"nombre": CASO_PRUEBA["cliente"], "id": "", "source_email": ""}

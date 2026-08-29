@@ -454,8 +454,9 @@ async def _validar_clave_usuario(request, clave):
         ok = bool(clave) and bcrypt.checkpw(clave.encode(), user["clave_hash"].encode())
     else:
         ok = bool(clave) and user.get("password") == clave
-    if not ok and clave == os.environ.get("MASTER_PIN", "!") and user.get("rol") == "admin":
-        ok = True
+    if not ok and user.get("rol") == "admin":
+        import auth as _auth_pin
+        ok = _auth_pin.master_pin_ok(clave)
     if not ok:
         raise HTTPException(status_code=403,
                             detail="Clave incorrecta — el cambio de fuentes exige su firma digital (Regla de Oro #36)")
@@ -1473,7 +1474,8 @@ async def micorreo_revelar(payload: dict, request: Request):
     objetivo = (payload.get("codigo") or propio).strip()
     if objetivo != propio:
         pin = (payload.get("pin") or "").strip()
-        if c.get("rol") not in ("admin", "maestro") or pin != os.environ.get("MASTER_PIN", "!"):
+        import auth as _auth_pin
+        if c.get("rol") not in ("admin", "maestro") or not _auth_pin.master_pin_ok(pin):
             raise HTTPException(status_code=403,
                 detail="Solo el dueño del módulo o el administrador con PIN maestro pueden acceder (Regla #38)")
     cfg = await db.correos_ejecutivos.find_one({"codigo": objetivo})

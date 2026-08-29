@@ -6,6 +6,7 @@
   propio embebido en la URL (oid / token de firma).
 """
 import os
+import hmac
 import jwt
 import logging
 from datetime import datetime, timezone, timedelta
@@ -21,6 +22,101 @@ TOKEN_HORAS = 12
 def get_secret(name, default=""):
     """Punto ÚNICO de acceso a secretos: solo variables de entorno del sistema."""
     return os.environ.get(name, default)
+
+
+def secret_eq(a, b):
+    """Comparación en tiempo constante. Vacío o distinta longitud → False (nunca default '!')."""
+    a = "" if a is None else str(a)
+    b = "" if b is None else str(b)
+    if not a or not b or len(a) != len(b):
+        return False
+    return hmac.compare_digest(a, b)
+
+
+def master_pin():
+    return (get_secret("MASTER_PIN") or "").strip()
+
+
+def master_pin_ok(clave):
+    """True solo si MASTER_PIN está configurado y coincide. Sin PIN en entorno → siempre False."""
+    return secret_eq((clave or "").strip(), master_pin())
+
+
+def admin_clave_ok(clave):
+    """Clave de payload de portales públicos: ADMIN_PASSWORD_1/2 o MASTER_PIN (solo entorno)."""
+    got = (clave or "").strip()
+    if not got:
+        return False
+    for name in ("ADMIN_PASSWORD_1", "ADMIN_PASSWORD_2", "MASTER_PIN"):
+        if secret_eq(got, (get_secret(name) or "").strip()):
+            return True
+    return False
+
+
+def cifrar_secreto(texto):
+    """Fernet con CRED_CIPHER_KEY. Si falta la clave, None (el caller conserva el plano)."""
+    key = (get_secret("CRED_CIPHER_KEY") or "").strip()
+    if not texto or not key:
+        return None
+    try:
+        from cryptography.fernet import Fernet
+        return Fernet(key.encode()).encrypt(texto.encode()).decode()
+    except Exception:
+        logging.warning("cifrar_secreto: CRED_CIPHER_KEY inválida — se conserva plano")
+        return None
+
+
+def descifrar_secreto(token):
+    key = (get_secret("CRED_CIPHER_KEY") or "").strip()
+    if not token or not key:
+        return None
+    try:
+        from cryptography.fernet import Fernet
+        return Fernet(key.encode()).decrypt(token.encode()).decode()
+    except Exception:
+        return None
+
+
+def _oidc_google_ok(token, audience=""):
+    """Valida un ID token de Google (Pub/Sub push OIDC). Sin red si el token es basura corta."""
+    if not token or len(token) < 20:
+        return False
+    try:
+        from google.oauth2 import id_token as _gid
+        from google.auth.transport.requests import Request as _GReq
+        if audience:
+            claims = _gid.verify_oauth2_token(token, _GReq(), audience=audience)
+        else:
+            claims = _gid.verify_oauth2_token(token, _GReq())
+        iss = (claims or {}).get("iss") or ""
+        return iss in ("accounts.google.com", "https://accounts.google.com")
+    except Exception:
+        return False
+
+
+def gmail_push_permitido(authorization_header="", query_token="", oidc_check=None):
+    """Política de /api/gmail/push (POST).
+
+    - Sin GMAIL_PUSH_TOKEN ni GMAIL_PUSH_REQUIRE_AUTH: se acepta (compatibilidad 24/7).
+    - GMAIL_PUSH_TOKEN: query `token` o header debe coincidir, o un OIDC Google válido.
+    - GMAIL_PUSH_REQUIRE_AUTH: exige OIDC Google o el token compartido.
+    Un Bearer inválido NO tumba la ingesta salvo que la verificación sea obligatoria.
+    """
+    shared = (get_secret("GMAIL_PUSH_TOKEN") or "").strip()
+    require = (get_secret("GMAIL_PUSH_REQUIRE_AUTH") or "").strip().lower() in ("1", "true", "yes")
+    audience = (get_secret("GMAIL_PUSH_AUDIENCE") or "").strip()
+    auth = authorization_header or ""
+    bearer = auth[7:].strip() if auth[:7].lower() == "bearer " else ""
+    qs = (query_token or "").strip()
+    check = oidc_check or (lambda t: _oidc_google_ok(t, audience))
+
+    if shared and secret_eq(qs, shared):
+        return True
+    if bearer and check(bearer):
+        return True
+    if shared or require:
+        return False
+    return True
 
 
 def _jwt_secret():

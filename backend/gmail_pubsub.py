@@ -17,6 +17,7 @@ from email.utils import parsedate_to_datetime
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from database import db
+import auth as _auth
 
 os.environ.setdefault("OAUTHLIB_RELAX_TOKEN_SCOPE", "1")  # tolera reorden/variación de scopes de Google
 
@@ -327,6 +328,9 @@ async def gmail_push_probe():
 
 @gmailr.post("/push")
 async def gmail_push(request: Request):
+    qs_token = request.query_params.get("token") or request.headers.get("X-Gmail-Push-Token") or ""
+    if not _auth.gmail_push_permitido(request.headers.get("Authorization") or "", qs_token):
+        raise HTTPException(status_code=401, detail="push no autorizado")
     try:
         body = await request.json()
     except Exception:
@@ -358,7 +362,8 @@ async def gmail_estado(request: Request):
             "webhook": f"{APP_URL}/api/gmail/push", "redirect_uri": REDIRECT_URI,
             "configuracion_gcp": [
                 f"1) En el topic {TOPIC or '(falta GMAIL_PUBSUB_TOPIC)'} agregue como publicador a gmail-api-push@system.gserviceaccount.com",
-                f"2) Cree una suscripción PUSH apuntando a {APP_URL}/api/gmail/push",
+                f"2) Cree una suscripción PUSH apuntando a {APP_URL}/api/gmail/push"
+                + ("?token=<GMAIL_PUSH_TOKEN>" if os.environ.get("GMAIL_PUSH_TOKEN") else " (opcional: GMAIL_PUSH_TOKEN o OIDC)"),
                 f"3) En el cliente OAuth agregue la Redirect URI {REDIRECT_URI}",
                 "4) Autorice con GET /api/gmail/oauth/iniciar (cuenta monitoreada)"]}
 
