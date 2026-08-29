@@ -1,0 +1,12 @@
+MES: Julio - 2026 | LIQUIDO: [] | anticipo: ['100.000', '100.000']
+   ctx: LIQUIDACIÓN DE REMUNERACIONES Julio - 2026 Empleador: Elaboradora de Alimentos 
+MES: Junio - 2026 | LIQUIDO: [] | anticipo: ['100.000', '100.000']
+   ctx: LIQUIDACIÓN DE REMUNERACIONES Junio - 2026 Empleador: Elaboradora de Alimentos 
+MES: Mayo - 2026 | LIQUIDO: [] | anticipo: ['100.000', '100.000']
+   ctx: LIQUIDACIÓN DE REMUNERACIONES Mayo - 2026 Empleador: Elaboradora de Alimentos G
+MES: Abril - 2026 | LIQUIDO: [] | anticipo: ['60.000', '60.000']
+   ctx: LIQUIDACIÓN DE REMUNERACIONES Abril - 2026 Empleador: Elaboradora de Alimentos 
+MES: Marzo - 2026 | LIQUIDO: [] | anticipo: ['50.000', '50.000']
+   ctx: LIQUIDACIÓN DE REMUNERACIONES Marzo - 2026 Empleador: Elaboradora de Alimentos 
+MES: Febrero - 2026 | LIQUIDO: [] | anticipo: ['100.000', '100.000']
+   ctx: LIQUIDACIÓN DE REMUNERACIONES Febrero - 2026 Empleador. Elaboradora de Alimento

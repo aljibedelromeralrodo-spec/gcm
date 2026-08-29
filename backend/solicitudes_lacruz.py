@@ -36,7 +36,9 @@ Devuelves SOLO un JSON válido, sin comentarios, con esta estructura exacta:
  "liquidos_titular": {"YYYY-MM": 0}, "liquidos_codeudor": {"YYYY-MM": 0},
  "deuda_cmf_titular_clp": 0, "deuda_cmf_codeudor_clp": 0, "observaciones": ""}
 Reglas: un mismo archivo PDF puede contener VARIOS documentos (lista una entrada por documento interno).
-"liquidos_*" = ALCANCE LÍQUIDO / LÍQUIDO A PAGAR / LÍQUIDO A RECIBIR mensual en pesos.
+"liquidos_*" = ALCANCE LÍQUIDO / LÍQUIDO A PAGAR / TOTAL A PAGAR / LÍQUIDO A RECIBIR mensual en pesos, SUMANDO los
+ANTICIPOS DE SUELDO descontados ese mes (el anticipo ya fue pagado al trabajador: es renta líquida real).
+Ejemplo: líquido a pagar 434.617 con anticipo 120.000 descontado => liquido del mes = 554617.
 Si un PDF casi no tiene texto es un escaneo: legible=false (típico en cédulas). Montos en números, sin puntos."""
 
 
@@ -74,9 +76,22 @@ def _fetch_correos(sender):
 def _texto_pdf(raw):
     from pdfminer.high_level import extract_text
     try:
-        return extract_text(io.BytesIO(raw)) or ""
+        t = extract_text(io.BytesIO(raw)) or ""
     except Exception:
-        return ""
+        t = ""
+    paginas = max(1, t.count("\f"))
+    if len(t.strip()) >= 150 and len(t.strip()) / paginas >= 300:
+        return t
+    # PDF escaneado (o mixto con páginas escaneadas) → OCR completo
+    try:
+        from pdf2image import convert_from_bytes
+        import pytesseract
+        pages = convert_from_bytes(raw, dpi=200)[:12]
+        ocr = "\n".join(pytesseract.image_to_string(p, lang="spa") for p in pages)
+        return f"[TEXTO OBTENIDO POR OCR DE DOCUMENTO ESCANEADO]\n{ocr}" if ocr.strip() else t
+    except Exception as e:
+        logging.warning(f"lacruz ocr: {e}")
+        return t
 
 
 async def _extraer_ia(cuerpos, textos):
