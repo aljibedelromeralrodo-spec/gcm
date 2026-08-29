@@ -16229,6 +16229,8 @@ api.include_router(_malla_mod.flujos)
 api.include_router(_malla_mod.micorreo)
 api.include_router(_malla_mod.buzon)
 api.include_router(_malla_mod.supercarpeta)
+import solicitudes_lacruz as _lacruz_mod
+api.include_router(_lacruz_mod.lacruz)
 
 # 🛰 GRID-DASHAI — Sincronización forzada e integral (Regla #41, SIN interruptor)
 import grid_dashai as _grid_mod

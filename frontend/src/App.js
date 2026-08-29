@@ -55,6 +55,7 @@ const PostventaModule = lazy(() => import("./pages/PostventaModule"));
 const RoleDashboard = lazy(() => import("./pages/RoleDashboards"));
 const VictoriaWorkspace = lazy(() => import("./pages/VictoriaWorkspace"));
 const VentasWorkspace = lazy(() => import("./pages/VentasWorkspace"));
+const SolicitudesLaCruz = lazy(() => import("./pages/SolicitudesLaCruz"));
 const MutuosWorkspace = lazy(() => import("./pages/MutuosWorkspace"));
 const CreceModule = lazy(() => import("./pages/CreceModule"));
 const DemoVictoria = lazy(() => import("./victoria/DemoVictoria"));
@@ -94,6 +95,7 @@ const MODULE_TITLES = {
   aprendizaje: 'Aprendizaje IA — Flujo Comercial',
   oportunidades: 'Centro de Ventas VIP — José Martín',
   ventas_ws: 'Módulo Ventas — Ejecutivas',
+  lacruz: 'Solicitudes La Cruz Inmobiliaria',
   mod_daniela: 'Módulo Daniela Galindo',
   mod_victoria: 'Módulo Victoria Vilches',
   crece: 'Credenciales Plataforma Crece',
@@ -127,7 +129,7 @@ const PERMISOS_LEGADO = {
 
 // ═══ 6 SUPERMÓDULOS DEL MENÚ (acordeón, fondo negro mate + dorado) ═══
 const SUPERMODULOS = [
-  { key: 'sm_ventas', icon: 'fa-diamond', label: 'Ventas', mods: ['ventas_ws', 'oportunidades', 'cierres', 'aprobacion', 'seguimiento'] },
+  { key: 'sm_ventas', icon: 'fa-diamond', label: 'Ventas', mods: ['ventas_ws', 'oportunidades', 'cierres', 'aprobacion', 'seguimiento', 'lacruz'] },
   { key: 'sm_simulacion', icon: 'fa-calculator', label: 'Simulación y Análisis', mods: ['simulador', 'calculadora', 'historial', 'formato', 'setcredito'] },
   { key: 'sm_captacion', icon: 'fa-bullhorn', label: 'Captación y Publicidad', mods: ['publicidad', 'brokers', 'aprendizaje', 'martinfin'] },
   { key: 'sm_operacion', icon: 'fa-folder-open', label: 'Operación y Clientes', mods: ['clientes', 'supercarpeta', 'tasacion', 'estudio', 'escritura', 'gastos', 'procesamiento', 'rescate', 'autocorreo', 'micorreo', 'crece'] },
@@ -454,6 +456,7 @@ function MainApp() {
     { key: 'cierres', icon: 'fa-handshake-o', label: 'Cierres' },
     { key: 'oportunidades', icon: 'fa-diamond', label: 'Centro de Ventas VIP' },
     { key: 'ventas_ws', icon: 'fa-briefcase', label: 'Módulo Ventas' },
+    { key: 'lacruz', icon: 'fa-building-o', label: 'Solicitudes La Cruz' },
     { key: 'mod_daniela', icon: 'fa-user-circle-o', label: 'Módulo Daniela Galindo' },
     { key: 'mod_victoria', icon: 'fa-user-circle', label: 'Módulo Victoria Vilches' },
     { key: 'crece', icon: 'fa-key', label: 'Credenciales Crece' },
@@ -733,6 +736,7 @@ function MainApp() {
         {activeModule === 'administracion' && <AdministracionModule user={uEff} />}
         {activeModule === 'brokers' && <BrokersModule user={uEff} />}
         {activeModule === 'micorreo' && <MiCorreoModule user={uEff} />}
+        {activeModule === 'lacruz' && <SolicitudesLaCruz />}
         {activeModule === 'supercarpeta' && <SupercarpetaModule />}
         {activeModule === 'basehistorica' && <BaseHistoricaModule />}
         {activeModule === 'criterios' && <CriteriosModule />}
