@@ -96,21 +96,23 @@ informado y respetado &mdash; desde la primera evaluaci&oacute;n hasta la entreg
 pdf_fel = make_pdf(HTML_FEL, "/app/backend/scripts_lacruz/Felicitaciones_Clientes_Ecomac.pdf")
 
 # ═══ PDF 2: TODOS LOS CLIENTES ENVIADOS ═══
-TH = ("<tr><th>Fecha</th><th>Cliente</th><th>RUT</th><th>Ejecutiva/o</th>"
-      "<th>1&ordf; resp.</th><th>Estado</th><th>Escritura</th></tr>")
+TH = ("<tr><th style='width:9%'>Fecha</th><th style='width:41%'>Cliente (RUT)</th>"
+      "<th style='width:16%'>Ejecutiva/o</th><th style='width:9%'>1&ordf; resp.</th>"
+      "<th style='width:15%'>Estado</th><th style='width:10%'>Escritura</th></tr>")
 hf2 = lambda h: (f"{h:.0f} h" if h is not None and h < 48 else f"{h/24:.0f} d" if h is not None else "—")
 
 
 def fila(c):
-    return (f"<tr class='{c['css']}'><td>{c['fecha']}</td><td>{c['nombre'][:38]}</td><td>{c['rut']}</td>"
-            f"<td>{c['ejec'][:22]}</td><td class='n'>{hf2(c['horas'])}</td>"
+    nom = c["nombre"][:36] + (f" ({c['rut']})" if c["rut"] else "")
+    return (f"<tr class='{c['css']}'><td>{c['fecha']}</td><td>{nom}</td>"
+            f"<td>{c['ejec'][:20]}</td><td class='n'>{hf2(c['horas'])}</td>"
             f"<td>{c['estado']}</td><td>{c['fecha_esc']}</td></tr>")
 
 
 bloques_hist = ""
 for mes in sorted({c["mes"] for c in casos}):
     cs = [c for c in casos if c["mes"] == mes]
-    bloques_hist += (f"<tr class='mes'><td colspan='7'>{mes_es(mes)} &mdash; {len(cs)} enviados &middot; "
+    bloques_hist += (f"<tr class='mes'><td colspan='6'>{mes_es(mes)} &mdash; {len(cs)} enviados &middot; "
                      f"{sum(1 for c in cs if c['css'].startswith('verde'))} en verde</td></tr>"
                      + "".join(fila(c) for c in cs))
 LEY = ("<p class='cap'>Leyenda: <span style='background:#c8e6c9'>&nbsp;FIRMADA/T&Iacute;TULOS&nbsp;</span> "

@@ -407,3 +407,8 @@
 - correo_alianza_ecomac.py: correo FORMAL a las dos encargadas Ecomac con cuadro resumen ejecutivo al inicio (UF 180.000+/$7.500MM, 11,3h, 1.109 evaluados, 319 en verde, 92 escrituraciones), rapidez primero, adjuntos Felicitaciones_Clientes_Ecomac.pdf y Clientes_Enviados_Ecomac.pdf. Encolado preview 286c1447.
 - pdf_alianza_ecomac.py ahora solo genera el PDF (KPI banner con escriturado total incluido, sección valor escrituración UF 180.000+).
 - 4 links de descarga segura generados (Alianza, Detallado 51p, Felicitaciones, Clientes Enviados).
+
+## 2026-08-29 (fork) — QA PDFs Ecomac: imágenes y columnas corregidas
+- Felicitaciones: layout 2-por-fila causaba imágenes sobrepuestas (xhtml2pdf) → 1 imagen por bloque centrada (11 págs).
+- Clientes Enviados + Informe largo: columna RUT se montaba sobre Ejecutiva → RUT fusionado en columna Cliente + anchos por style en th + colspan 6. Verificado con pdf2image.
+- pdf_informe_ecomac_final.py ya no encola correo salvo ENVIAR_INFORME=1. Fila "Satisfacción de clientes" (no compraron y quieren volver) agregada al cuadro resumen del correo. Preview vigente: 5ff4b6d2.

@@ -285,14 +285,16 @@ for cli, e in sorted(esc.items(), key=lambda kv: min(kv[1]["etapas"].values())):
                   f"<td>{ETIQ[top]}</td><td>{e['etapas'][top].strftime('%d/%m/%y')}</td></tr>")
 
 # anexo cliente por cliente
-TH = ("<tr><th>Fecha</th><th>Cliente</th><th>RUT</th><th>Ejecutiva/o</th>"
-      "<th>1&ordf; resp.</th><th>Estado</th><th>Escritura</th></tr>")
+TH = ("<tr><th style='width:9%'>Fecha</th><th style='width:41%'>Cliente (RUT)</th>"
+      "<th style='width:16%'>Ejecutiva/o</th><th style='width:9%'>1&ordf; resp.</th>"
+      "<th style='width:15%'>Estado</th><th style='width:10%'>Escritura</th></tr>")
 hf2 = lambda h: (f"{h:.0f} h" if h is not None and h < 48 else f"{h/24:.0f} d" if h is not None else "—")
 
 
 def fila(c):
-    return (f"<tr class='{c['css']}'><td>{c['fecha']}</td><td>{c['nombre'][:38]}</td><td>{c['rut']}</td>"
-            f"<td>{c['ejec'][:22]}</td><td class='n'>{hf2(c['horas'])}</td>"
+    nom = c["nombre"][:36] + (f" ({c['rut']})" if c["rut"] else "")
+    return (f"<tr class='{c['css']}'><td>{c['fecha']}</td><td>{nom}</td>"
+            f"<td>{c['ejec'][:20]}</td><td class='n'>{hf2(c['horas'])}</td>"
             f"<td>{c['estado']}</td><td>{c['fecha_esc']}</td></tr>")
 
 
@@ -300,7 +302,7 @@ filas_3m_full = "".join(fila(c) for c in m3)
 bloques_hist = ""
 for mes in sorted({c["mes"] for c in casos}):
     cs = [c for c in casos if c["mes"] == mes]
-    bloques_hist += (f"<tr class='mes'><td colspan='7'>{mes_es(mes)} &mdash; {len(cs)} enviados &middot; "
+    bloques_hist += (f"<tr class='mes'><td colspan='6'>{mes_es(mes)} &mdash; {len(cs)} enviados &middot; "
                      f"{sum(1 for c in cs if c['css'].startswith('verde'))} en verde</td></tr>"
                      + "".join(fila(c) for c in cs))
 
@@ -425,21 +427,19 @@ print("KPIs:", len(casos), "casos |", verdes_tot, "verdes |", len(esc), "esc |",
 print("3M:", len(m3), "enviados |", len(esc_3m), "con escritura | destacados firma:", sum(1 for *_, t in destacados if t >= 3))
 print("INMEDIATA:", len(inm), "|", len(inm_matches), "esc |", inm_firm, "firmados")
 
-db.correos_preview.update_many({"subject": {"$regex": "Informe Histórico Ecomac"}, "estado": "esperando_confirmacion"},
-                               {"$set": {"estado": "descartado", "motivo": "reemplazado por versión FINAL exclusiva Ecomac"}})
-import email_service as es
-cuerpo = f"""<p>Estimado Gerardo,</p>
-<p>Adjunto el <b>Informe Hist&oacute;rico Ecomac FINAL &mdash; exclusivo Ecomac</b> (11.031 correos, Sep 2024 &rarr; Ago 2026):</p>
-<ul>
-<li><b>{len(casos)} clientes enviados</b> desde el inicio, cliente por cliente, con {verdes_tot} en verde y {len(esc)} escrituraciones Ecomac.</li>
-<li>Cuadro <b>solo ENTREGA INMEDIATA</b> y cuadro <b>&uacute;ltimos 3 meses</b> ({len(m3)} enviados / {len(esc_3m)} con escritura) con la lectura de la apuesta a la <b>venta en verde</b>.</li>
-<li>Revisi&oacute;n random de tiempos de respuesta por ejecutiva (100% respondida en &lt;25 h) y conversi&oacute;n hist&oacute;rica por ejecutiva.</li>
-<li>Anexos A y B: detalle completo cliente por cliente de los &uacute;ltimos 3 meses y de todo el hist&oacute;rico.</li>
-</ul>
+import os as _os
+if _os.environ.get("ENVIAR_INFORME") == "1":
+    db.correos_preview.update_many({"subject": {"$regex": "Informe Histórico Ecomac"}, "estado": "esperando_confirmacion"},
+                                   {"$set": {"estado": "descartado", "motivo": "reemplazado por versión FINAL exclusiva Ecomac"}})
+    import email_service as es
+    cuerpo = f"""<p>Estimado Gerardo,</p>
+<p>Adjunto el <b>Informe Hist&oacute;rico Ecomac FINAL &mdash; exclusivo Ecomac</b> (11.031 correos, Sep 2024 &rarr; Ago 2026).</p>
 <p>Saludos,<br/>DashAI &mdash; Central Mutuos</p>"""
-r = es.send_mail("gerardo.ext@centralmutuos.cl",
-                 "Informe Histórico Ecomac FINAL — exclusivo Ecomac, cliente por cliente (Sep 2024 → Ago 2026)",
-                 cuerpo,
-                 attachments=[{"filename": "Informe_Historico_Ecomac_FINAL.pdf",
-                               "content_b64": base64.b64encode(pdf).decode()}])
-print("ENCOLADO:", r)
+    r = es.send_mail("gerardo.ext@centralmutuos.cl",
+                     "Informe Histórico Ecomac FINAL — exclusivo Ecomac, cliente por cliente (Sep 2024 → Ago 2026)",
+                     cuerpo,
+                     attachments=[{"filename": "Informe_Historico_Ecomac_FINAL.pdf",
+                                   "content_b64": base64.b64encode(pdf).decode()}])
+    print("ENCOLADO:", r)
+else:
+    print("PDF regenerado sin encolar correo (ENVIAR_INFORME!=1)")
