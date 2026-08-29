@@ -1508,3 +1508,8 @@ actual; todo lo demás permanece intacto.
 - Correo con análisis completo en el cuerpo + PDF de arriendos adjunto ENVIADO a gerardo.ext@centralmutuos.cl (vía Preview Obligatorio, confirmado por admin).
 - DISCO: liberado de 97%→85% (1,6G libres). Eliminado: node_modules/.cache (234M), Carpeta_*.pdf regenerables (989M), __pycache__, adjuntos temporales. ⚠️ git gc FALLÓ por espacio (tmp_pack llenó el disco al 100%, se limpió; Mongo se recuperó). NO intentar git gc con <2,5G libres. Pendiente OK usuario: /app/vidwork (61M) y /app/boveda_victoria (90M).
 - Minero gerardo.ext@centralmutuos.cl sigue esperando OVERQUOTA de Google (scripts_lacruz/mineria_gerardo.py activo, reintenta cada 30 min).
+
+## 2026-08-29 (fork) — Limpieza Profunda round 2 (post-cuelgue)
+- Durante un cuelgue de hot-reload, un proceso con código viejo re-descargó 112 carpetas + 80 Carpeta_*.pdf (~700MB). Purga repetida en orden seguro (local→manifiesto→gridfs→re-archivar): 114 carpetas re-archivadas, 398MB de PDFs purgados.
+- Estado final: DISCO 76% (2,5 GB libres, antes 97%/343MB), 160 prefijos archivados en config.bunker_archivados, 85 carpetas locales activas, cloud-sync estable (1 restauración legítima), app 200 OK.
+- Lección: NUNCA editar bunker.py con procesos de restauración en curso; reiniciar backend limpio antes de purgar.

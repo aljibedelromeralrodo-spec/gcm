@@ -140,14 +140,64 @@ def _entradas(prefijo=""):
     return vistos
 
 
+def _archivados():
+    """Prefijos archivados: existen solo en el almacén durable, sin copia local."""
+    try:
+        doc = _db()["config"].find_one({"_key": "bunker_archivados"}) or {}
+        return set(doc.get("prefijos") or [])
+    except Exception:
+        return set()
+
+
+def _desarchivar(rel):
+    try:
+        _db()["config"].update_one({"_key": "bunker_archivados"}, {"$pull": {"prefijos": rel}})
+    except Exception:
+        pass
+
+
+def archivar_prefijo(rel_prefijo):
+    """LIMPIEZA PROFUNDA: verifica que TODO el prefijo esté respaldado en el Object Store
+    (sube lo que falte), borra la copia local y lo excluye del cloud-sync.
+    Se restaura solo al abrir la carpeta (restaurar_prefijo)."""
+    import shutil
+    rel = str(rel_prefijo).replace("\\", "/").strip("/")
+    base = ROOT / rel
+    if not base.exists():
+        return {"ok": False, "motivo": "no existe local"}
+    conocidos = _entradas(rel)
+    subidos = 0
+    for p in base.rglob("*"):
+        if not p.is_file():
+            continue
+        r = f"{rel}/{p.relative_to(base).as_posix()}"
+        meta = conocidos.get(r)
+        if not meta or meta.get("length") != p.stat().st_size:
+            subir_archivo(p)
+            subidos += 1
+    # re-verificación
+    conocidos = _entradas(rel)
+    for p in base.rglob("*"):
+        if p.is_file():
+            r = f"{rel}/{p.relative_to(base).as_posix()}"
+            if r not in conocidos:
+                return {"ok": False, "motivo": f"sin respaldo: {r}"}
+    liberado = sum(p.stat().st_size for p in base.rglob("*") if p.is_file())
+    shutil.rmtree(base)
+    _db()["config"].update_one({"_key": "bunker_archivados"},
+                               {"$addToSet": {"prefijos": rel}}, upsert=True)
+    return {"ok": True, "subidos": subidos, "liberado": liberado}
+
+
 def restaurar_si_vacio():
     """Al arrancar: si el disco está vacío (pod nuevo/redespliegue), restaura TODO."""
     clientes = ROOT / "clientes"
     if clientes.exists() and any(clientes.iterdir()):
         return 0
     n = 0
+    arch = _archivados()
     for rel, meta in _entradas().items():
-        if rel.startswith("proc/"):
+        if rel.startswith("proc/") or any(rel.startswith(a + "/") or rel == a for a in arch):
             continue
         if _bajar_entry(rel, meta.get("mtime")):
             n += 1
@@ -158,8 +208,9 @@ def restaurar_si_vacio():
 def restaurar_faltantes():
     """Cloud Sync: baja los archivos que NO están en el disco local."""
     n = 0
+    arch = _archivados()
     for rel, meta in _entradas().items():
-        if rel.startswith("proc/"):
+        if rel.startswith("proc/") or any(rel.startswith(a + "/") or rel == a for a in arch):
             continue
         dest = ROOT / rel
         if dest.exists():
@@ -174,6 +225,7 @@ def restaurar_prefijo(rel_prefijo):
     rel = str(rel_prefijo).replace("\\", "/").strip("/")
     if not rel:
         return 0
+    _desarchivar(rel)
     n = 0
     for r, meta in _entradas(rel).items():
         dest = ROOT / r
