@@ -138,64 +138,79 @@ clientes y proyectos Ecomac. Central Mutuos.</p>
 pdf_cli = make_pdf(HTML_CLI, "/app/backend/scripts_lacruz/Clientes_Enviados_Ecomac.pdf")
 
 RESUMEN_TABLA = f"""
-<table border="1" cellpadding="6" cellspacing="0" width="100%"
- style="border-collapse:collapse;border:1px solid #b9c0cc;font-size:13px;margin:10px 0">
-<tr style="background:#14213d;color:#ffffff"><th colspan="2" style="padding:7px;text-align:center">
-ALIANZA CENTRAL MUTUOS &ndash; ECOMAC &middot; RESUMEN EJECUTIVO (SEP 2024 &rarr; AGO 2026)</th></tr>
-<tr><td><b>Total escriturado del canal</b></td>
-<td style="text-align:right"><b>UF 170.000+ &nbsp;(&asymp; $7.100 millones de pesos)</b></td></tr>
-<tr style="background:#f6f8f6"><td><b>Tiempo de respuesta</b></td>
-<td style="text-align:right"><b>Mediana 11,3 horas</b> &middot; 75% de tasa de respuesta y subiendo</td></tr>
-<tr><td><b>Clientes evaluados</b></td>
-<td style="text-align:right"><b>{len(casos)}</b> derivados por sus ejecutivas</td></tr>
-<tr style="background:#f6f8f6"><td><b>Apoyo a la venta en verde</b></td>
-<td style="text-align:right"><b>191 cartas de aprobaci&oacute;n emitidas solo en el &uacute;ltimo trimestre</b> (211 con preaprobaciones)</td></tr>
-<tr><td><b>Aprobaciones &rarr; escrituraci&oacute;n</b></td>
-<td style="text-align:right">191 aprobadas vs 16 escrituradas en el trimestre &rarr; <b>el resto es venta en verde asegurada</b></td></tr>
-<tr style="background:#f6f8f6"><td><b>Satisfacci&oacute;n de clientes</b></td>
-<td style="text-align:right"><b>Felicitaciones reales adjuntas</b> &mdash; incluso de quienes no compraron, quedaron contentos y quieren volver</td></tr>
-<tr style="background:#f0e9d2"><td><b>Compromiso</b></td>
-<td style="text-align:right"><b>Apoyo total, en evaluaci&oacute;n y en escrituraci&oacute;n</b> &mdash; solo gesti&oacute;n propia, sin sumar De Manet</td></tr>
+<table border="1" cellpadding="5" cellspacing="0" width="100%"
+ style="border-collapse:collapse;border:1px solid #b9c0cc;font-size:13px;margin:12px 0;max-width:640px">
+<tr style="background:#14213d;color:#ffffff"><th colspan="2" style="padding:8px;text-align:center;font-size:13px">
+ALIANZA CENTRAL MUTUOS &ndash; ECOMAC<br/>RESUMEN EJECUTIVO &middot; SEP 2024 &rarr; AGO 2026</th></tr>
+<tr><td style="padding:6px"><b>Total escriturado</b></td>
+<td style="padding:6px;text-align:right"><b>UF 170.000+<br/>(&asymp; $7.100 millones)</b></td></tr>
+<tr style="background:#f6f8f6"><td style="padding:6px"><b>Tiempo de respuesta</b></td>
+<td style="padding:6px;text-align:right"><b>Mediana 11,3 h</b> &middot; 75% de respuesta y subiendo</td></tr>
+<tr><td style="padding:6px"><b>Clientes evaluados</b></td>
+<td style="padding:6px;text-align:right"><b>{len(casos)}</b> &uacute;nicos, derivados por sus ejecutivas</td></tr>
+<tr style="background:#f6f8f6"><td style="padding:6px"><b>Apoyo venta en verde</b></td>
+<td style="padding:6px;text-align:right"><b>191 cartas de aprobaci&oacute;n</b> solo en el &uacute;ltimo trimestre</td></tr>
+<tr><td style="padding:6px"><b>Aprobaciones vs escrituraci&oacute;n</b></td>
+<td style="padding:6px;text-align:right">191 aprobadas vs 16 escrituradas &rarr; <b>venta en verde asegurada</b></td></tr>
+<tr style="background:#f6f8f6"><td style="padding:6px"><b>Satisfacci&oacute;n de clientes</b></td>
+<td style="padding:6px;text-align:right"><b>Felicitaciones reales adjuntas</b> &mdash; incluso de quienes no compraron y quieren volver</td></tr>
+<tr style="background:#f0e9d2"><td style="padding:6px"><b>Compromiso</b></td>
+<td style="padding:6px;text-align:right"><b>Apoyo total</b> &mdash; solo gesti&oacute;n propia, sin De Manet</td></tr>
 </table>
 """
 
-# ═══ CUERPO DEL CORREO (formal, rapidez y valor total primero) ═══
+H3 = "margin:18px 0 6px;color:#14213d;font-size:15px;border-bottom:2px solid #c9a227;padding-bottom:3px;max-width:640px"
+
+# ═══ CUERPO DEL CORREO (responsive móvil + PC) ═══
 CUERPO = f"""
-<p>Estimadas,</p>
-<p>Junto con saludarlas cordialmente, comparto en una sola mirada lo que esta alianza ha construido:</p>
+<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6;color:#1a1a1a;max-width:640px">
+<p>Estimadas y estimados:</p>
+<p>Junto con saludarles cordialmente, comparto una mirada de lo que hemos construido en esta alianza en este
+&uacute;ltimo tiempo:</p>
 {RESUMEN_TABLA}
-<p>Me permito, adem&aacute;s, desarrollar brevemente estos resultados, con una convicci&oacute;n que los antecedentes respaldan
+<p>Me permito desarrollar brevemente estos resultados, con una convicci&oacute;n que los antecedentes respaldan
 plenamente: <b>esta es una alianza exitosa, y los n&uacute;meros hablan por s&iacute; solos.</b></p>
-<p><b>Somos r&aacute;pidos, porque sabemos que cada hora cuenta.</b> Hoy respondemos las evaluaciones de sus ejecutivas con una
-<b>mediana de 11,3 horas</b> &mdash;la mitad en menos de 12 horas y un tercio en menos de una hora&mdash;, con una tasa de
-respuesta que alcanza el <b>75% y contin&uacute;a mejorando mes a mes</b>. En un mercado donde cada reserva se defiende con
-velocidad, una evaluaci&oacute;n oportuna es una venta que no se cae: esa es nuestra promesa comercial hacia Ecomac.</p>
-<p><b>El valor de lo construido juntos es concreto:</b> la escrituraci&oacute;n acompa&ntilde;ada durante estos dos a&ntilde;os
-representa una cartera de cr&eacute;ditos superior a <b>UF 170.000, del orden de $7.100 millones de pesos</b> en operaciones
-del canal Ecomac &mdash;considerando &uacute;nicamente la gesti&oacute;n de esta oficina, sin sumar la gesti&oacute;n de De Manet.</p>
-<p><b>Apostamos por la venta en verde de ECOMAC.</b> Durante el &uacute;ltimo trimestre emitimos <b>191 cartas de
-aprobaci&oacute;n</b> (69 en junio, 63 en julio y 59 en agosto; 211 sumando preaprobaciones), y solo <b>16 operaciones
-escrituraron en el mismo per&iacute;odo</b> &mdash; una diferencia que no es debilidad, sino la demostraci&oacute;n de nuestro
-<b>f&eacute;rreo inter&eacute;s en apoyar la venta en verde de ECOMAC</b>: aprobamos hoy para blindar cada reserva, sabiendo
-que esas operaciones escriturar&aacute;n cuando los proyectos se entreguen. Es tambi&eacute;n nuestra manera de responder a la
-buena relaci&oacute;n que <b>ECOMAC</b> ha mantenido para con nosotros: compromiso por compromiso. Y cuando llega el
-per&iacute;odo de escrituraci&oacute;n, ah&iacute; estamos: hemos acompa&ntilde;ado <b>{len(esc)} procesos de
-escrituraci&oacute;n de clientes Ecomac</b> &mdash;borradores, correcciones, firmas y t&iacute;tulos&mdash; gestionando
-notar&iacute;a, banco alzante y abogados hasta el final. <b>Cuando escrituramos, escrituramos bien.</b></p>
-<p><b>Una relaci&oacute;n que trasciende los n&uacute;meros.</b> El apoyo de Ecomac ha sido relevante en m&uacute;ltiples hitos
-de nuestro crecimiento: reuniones de coordinaci&oacute;n permanentes, ferias inmobiliarias compartidas y una comunicaci&oacute;n
-diaria que funciona con la naturalidad de dos equipos que se conocen y se respetan. Ese compromiso ha sido constante en ambas
-direcciones, y tambi&eacute;n lo perciben los clientes: adjunto encontrar&aacute;n un documento con <b>felicitaciones reales de
-compradores Ecomac</b> &mdash;incluso de quienes no concretaron su compra&mdash; que reflejan el cuidado con que se atiende su
-marca en cada contacto.</p>
-<p>Como en toda relaci&oacute;n comercial de alto volumen pueden existir divergencias puntuales; es natural entre equipos
-exigentes. Sin embargo, los antecedentes son elocuentes: <b>la colaboraci&oacute;n ha sido efectiva, creciente y rentable para
-ambas partes.</b></p>
-<p>Se adjuntan dos documentos de respaldo:</p>
-<ol>
+
+<h3 style="{H3}">&#9889; Somos r&aacute;pidos, porque cada hora cuenta</h3>
+<p>Hoy respondemos las evaluaciones de sus ejecutivas con una <b>mediana de 11,3 horas</b> &mdash;la mitad en menos de
+12 horas y un tercio en menos de una hora&mdash;, con una tasa de respuesta que alcanza el <b>75% y contin&uacute;a
+mejorando mes a mes</b>. En un mercado donde cada reserva se defiende con velocidad, una evaluaci&oacute;n oportuna es
+una venta que no se cae: esa es nuestra promesa comercial hacia Ecomac.</p>
+
+<h3 style="{H3}">&#128176; El valor de lo construido es concreto</h3>
+<p>La escrituraci&oacute;n acompa&ntilde;ada durante estos dos a&ntilde;os representa una cartera de cr&eacute;ditos
+superior a <b>UF 170.000, del orden de $7.100 millones de pesos</b> en operaciones del canal Ecomac &mdash;considerando
+&uacute;nicamente la gesti&oacute;n de esta oficina, sin sumar la gesti&oacute;n de De Manet.</p>
+
+<h3 style="{H3}">&#128994; Apostamos por la venta en verde de ECOMAC</h3>
+<p>Durante el &uacute;ltimo trimestre emitimos <b>191 cartas de aprobaci&oacute;n</b> (69 en junio, 63 en julio y 59 en
+agosto; 211 sumando preaprobaciones), y solo <b>16 operaciones escrituraron en el mismo per&iacute;odo</b> &mdash; una
+diferencia que no es debilidad, sino la demostraci&oacute;n de nuestro <b>f&eacute;rreo inter&eacute;s en apoyar la venta
+en verde de ECOMAC</b>: aprobamos hoy para blindar cada reserva, sabiendo que esas operaciones escriturar&aacute;n cuando
+los proyectos se entreguen. Es tambi&eacute;n nuestra manera de responder a la buena relaci&oacute;n que <b>ECOMAC</b>
+ha mantenido para con nosotros: compromiso por compromiso.</p>
+<p>Y cuando llega el per&iacute;odo de escrituraci&oacute;n, ah&iacute; estamos: hemos acompa&ntilde;ado
+<b>{len(esc)} procesos de escrituraci&oacute;n de clientes Ecomac</b> &mdash;borradores, correcciones, firmas y
+t&iacute;tulos&mdash; gestionando notar&iacute;a, banco alzante y abogados hasta el final.
+<b>Cuando escrituramos, escrituramos bien.</b></p>
+
+<h3 style="{H3}">&#129309; Una relaci&oacute;n que trasciende los n&uacute;meros</h3>
+<p>El apoyo de Ecomac ha sido relevante en m&uacute;ltiples hitos de nuestro crecimiento: reuniones de
+coordinaci&oacute;n permanentes, ferias inmobiliarias compartidas y una comunicaci&oacute;n diaria que funciona con la
+naturalidad de dos equipos que se conocen y se respetan. Ese compromiso ha sido constante en ambas direcciones, y
+tambi&eacute;n lo perciben los clientes: adjunto encontrar&aacute;n <b>felicitaciones reales de compradores Ecomac</b>
+&mdash;incluso de quienes no concretaron su compra y aun as&iacute; agradecen e indican que quieren volver&mdash;
+que reflejan el cuidado con que se atiende su marca en cada contacto.</p>
+<p>Como en toda relaci&oacute;n comercial de alto volumen pueden existir divergencias puntuales; es natural entre
+equipos exigentes. Sin embargo, los antecedentes son elocuentes: <b>la colaboraci&oacute;n ha sido efectiva, creciente
+y rentable para ambas partes.</b></p>
+
+<h3 style="{H3}">&#128206; Documentos adjuntos</h3>
+<ol style="padding-left:20px">
+<li><b>Alianza_CentralMutuos_Ecomac.pdf</b> &mdash; informe ejecutivo de la alianza.</li>
 <li><b>Felicitaciones_Clientes_Ecomac.pdf</b> &mdash; testimonios y conversaciones reales de clientes.</li>
-<li><b>Clientes_Enviados_Ecomac.pdf</b> &mdash; registro completo, cliente por cliente, de los {len(casos)} clientes que
-ustedes nos han confiado desde septiembre de 2024, con fecha, ejecutiva, tiempo de primera respuesta y estado.</li>
+<li><b>Informe_Historico_Ecomac.pdf</b> &mdash; an&aacute;lisis hist&oacute;rico completo, mes a mes.</li>
+<li><b>Clientes_Enviados_Ecomac.pdf</b> &mdash; registro completo, cliente por cliente ({len(casos)} clientes &uacute;nicos).</li>
 </ol>
 <p>Quedo a su entera disposici&oacute;n para revisar estos antecedentes en la instancia que estimen conveniente.
 <b>Mantengamos esta alianza que funciona.</b></p>
@@ -204,7 +219,9 @@ ustedes nos han confiado desde septiembre de 2024, con fecha, ejecutiva, tiempo 
 Central Mutuos Ltda.<br/>
 Av. La Dehesa 1822, Of. 511, Torre Sur &middot; Lo Barnechea<br/>
 www.centralmutuos.cl</p>
+</div>
 """
+
 
 import email_service as es
 from pymongo import MongoClient
@@ -212,11 +229,15 @@ import os
 db = MongoClient(os.environ["MONGO_URL"])[os.environ["DB_NAME"]]
 db.correos_preview.update_many({"subject": {"$regex": "Alianza"}, "estado": "esperando_confirmacion"},
                                {"$set": {"estado": "descartado", "motivo": "reemplazado por correo formal con 2 PDFs"}})
+pdf_ali = open("/app/backend/scripts_lacruz/Alianza_CentralMutuos_Ecomac.pdf", "rb").read()
+pdf_hist = open("/app/backend/scripts_lacruz/Informe_Historico_Ecomac_FINAL.pdf", "rb").read()
 r = es.send_mail("gerardo.ext@centralmutuos.cl",
                  "Central Mutuos – Ecomac: resultados de una alianza que funciona",
                  CUERPO,
                  attachments=[
+                     {"filename": "Alianza_CentralMutuos_Ecomac.pdf", "content_b64": base64.b64encode(pdf_ali).decode()},
                      {"filename": "Felicitaciones_Clientes_Ecomac.pdf", "content_b64": base64.b64encode(pdf_fel).decode()},
+                     {"filename": "Informe_Historico_Ecomac.pdf", "content_b64": base64.b64encode(pdf_hist).decode()},
                      {"filename": "Clientes_Enviados_Ecomac.pdf", "content_b64": base64.b64encode(pdf_cli).decode()},
                  ])
 print("ENCOLADO:", r)
