@@ -395,3 +395,8 @@
 - pdf_informe_ecomac_final.py: filtro EXCLUSIVO Ecomac en escrituraciones (remitente/destino @ecomac.cl, proyecto Ecomac en asunto, o cliente proveniente de solicitud Ecomac por RUT/nombre) + blacklist de nombres genéricos ("casa usada"). Escrituraciones 121→92 (se excluyeron 29 de Maestra/usadas/otras). KPIs finales: 1.109 enviados | 319 verdes | 92 escrituraciones | 12 firmas. 3 meses: 161 enviados / 16 con escritura / 2 firma-títulos (Christel Casanova, Rodrigo Valencia). INMEDIATA: 189/109/13/2.
 - Cuadros aprobados por el usuario: tabla INMEDIATA, cuadro venta en verde 3 meses, muestra random 15 tiempos de respuesta (semilla 29), promedios por ejecutiva.
 - PDF 51 páginas con anexos A (3 meses cliente x cliente) y B (histórico completo). Encolado preview e13b2054; versiones anteriores descartadas.
+
+## 2026-08-29 (fork) — Informe "Alianza Central Mutuos–Ecomac" (persuasivo, para Ecomac)
+- pdf_alianza_ecomac.py: PDF 10 páginas dirigido a Ecomac para retener el acuerdo comercial. Narrativa aprobada por usuario: rapidez (mediana 11,3h, cuadro random 15 casos 100%<25h, promedios por ejecutiva), apuesta a venta en verde (161 enviados/16 escrituras 3m), 92 escrituraciones acompañadas, hitos/ferias/reuniones, 11 testimonios de clientes con citas + popurrí de 11 pantallazos WhatsApp (testimonios/w01-11.jpg; w04 Karina RECORTADA para eliminar comentario privado sensible sobre "10 millones a la prima"), cierre "mantengamos esta alianza". Nota: cifras solo gestión propia, sin De Manet.
+- Encolado preview ecdf5a95. El informe interno detallado (Informe_Historico_Ecomac_FINAL.pdf, 51 págs) queda guardado en disco por si se quiere reenviar.
+- Disco al 83% tras imágenes/PDFs — vigilar.
