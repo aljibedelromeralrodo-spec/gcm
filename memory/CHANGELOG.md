@@ -386,3 +386,7 @@
 - Ejecutivas: Gabriela Muñoz 70 sol/30 esc/5 firmas · Rita Arancibia 46/27/6 · Yerko Villanueva 35/14/1 · Amalia Galleguillos 26/12/1 · Scarlett Aguilar 6/2/0.
 - PDF Informe_Historico_Ecomac.pdf (mes a mes desde inicio real, cuadro 3 meses FUTURA vs escrituradas, tiempos de respuesta, ejecutivas) ENCOLADO en Preview Obligatorio → gerardo.ext (preview_id 05f69bf0). Verificado visible en Dashboard.
 - Pendiente refinamiento: cuerpos_gerardo.py reintenta cada 30 min descargar primeros 1.5KB de cuerpos (Google volvió a OVERQUOTA tras la minería); al llegar gerardo_bodies.json se pueden precisar aprobaciones exactas por cuerpo.
+
+## 2026-08-29 (fork) — Informe Ecomac DETALLADO cliente por cliente
+- Nuevo scripts_lacruz/pdf_informe_ecomac_detallado.py: PDF de 47 páginas con los 1.109 clientes enviados desde Sep 2024 listados uno por uno (fecha, nombre, RUT, ejecutiva, horas 1ª respuesta, estado en color, fecha escritura). 407 en verde (aprobados/escriturando). Últimos 3 meses: 161 enviados, 75 en verde. Sección IV: los 121 escriturados con etapas y fechas. Enriquecido con veredictos de Mesa del sistema (mesa_verdad_log: 30 aprobaciones, 22 rechazos + aprobacion_log).
+- Preview anterior (versión solo estadística, 05f69bf0) descartado; versión detallada encolada en Preview Obligatorio (preview_id 2795d415).
