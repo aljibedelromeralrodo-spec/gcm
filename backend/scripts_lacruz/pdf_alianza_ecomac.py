@@ -24,13 +24,9 @@ IMGS = [("w05.jpg", "Claudia Arias — Los Maitenes, nuestra primera cliente del
         ("w09.jpg", "Jorge Jiménez — incluso al desistir, se despide agradecido")]
 
 pop_rows = ""
-for i in range(0, len(IMGS), 2):
-    par = IMGS[i:i + 2]
-    tds = "".join(f"<td class='pop'><img src='{TDIR}/{f}' style='width:6.4cm'/><br/><span class='cap'>{cap}</span></td>"
-                  for f, cap in par)
-    if len(par) == 1:
-        tds += "<td class='pop'></td>"
-    pop_rows += f"<tr>{tds}</tr>"
+for f, cap in IMGS:
+    pop_rows += (f"<tr><td class='pop'><img src='{TDIR}/{f}' style='width:5.4cm'/><br/>"
+                 f"<span class='cap'>{cap}</span></td></tr>")
 
 dest_html = "".join(f"<li><b>{n}</b> &mdash; {et} ({fe})</li>" for n, et, fe, top in destacados if top >= 3)
 

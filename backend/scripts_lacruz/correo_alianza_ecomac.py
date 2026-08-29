@@ -52,20 +52,18 @@ IMGS = [("w05.jpg", "Claudia Arias — Los Maitenes"), ("w11.jpg", "Edgardo Guzm
         ("w03.jpg", "Sandra — DS19"), ("w04.jpg", "Karina"), ("w07.jpg", "Jonathan M."),
         ("w09.jpg", "Jorge Jiménez — se despide agradecido")]
 pop_rows = ""
-for i in range(0, len(IMGS), 2):
-    par = IMGS[i:i + 2]
-    tds = "".join(f"<td class='pop'><img src='{TDIR}/{f}' style='width:6.4cm'/><br/><span class='cap'>{cap}</span></td>"
-                  for f, cap in par)
-    if len(par) == 1:
-        tds += "<td class='pop'></td>"
-    pop_rows += f"<tr>{tds}</tr>"
+for f, cap in IMGS:
+    pop_rows += (f"<tr><td class='pop'><img src='{TDIR}/{f}' style='width:5.4cm'/><br/>"
+                 f"<span class='cap'>{cap}</span></td></tr>")
 
 HTML_FEL = f"""
 <h1>FELICITACIONES DE CLIENTES ECOMAC</h1>
 <p class="sub">Testimonios reales de compradores acompa&ntilde;ados por Central Mutuos &middot; Septiembre 2024 &rarr; Agosto 2026</p>
 <p>Aqu&iacute; van algunas conversaciones al azar de clientes que han comprado &mdash;y algunos que incluso no han comprado&mdash;
 que han quedado <b>completamente satisfechos y agradecidos por la gesti&oacute;n realizada por nuestros ejecutivos</b>, lo que refleja
-un compromiso importante con Ecomac, con su marca y con el cliente para conseguir la vivienda propia.</p>
+un compromiso importante con Ecomac, con su marca y con el cliente para conseguir la vivienda propia. Destaca que varias de estas
+calificaciones provienen de clientes que <b>no concretaron su compra y aun as&iacute; agradecen la gesti&oacute;n e indican que
+quieren volver</b>: la mejor prueba de que la marca Ecomac queda bien cuidada en cada contacto.</p>
 <div class="cita">&laquo;Holaaa, qu&eacute; gusto saber de ti. Gracias por tus buenos deseos. Agradezco tambi&eacute;n toda tu gesti&oacute;n&raquo;
 <br/><span class="quien">&mdash; Claudia Arias, Los Maitenes &middot; primera cliente del canal, a&uacute;n en contacto un a&ntilde;o despu&eacute;s</span></div>
 <div class="cita">&laquo;El gusto es m&iacute;o, ha sido un proceso extenuante, pero agradezco en el alma su apoyo. Es una decisi&oacute;n
@@ -152,6 +150,8 @@ ALIANZA CENTRAL MUTUOS &ndash; ECOMAC &middot; RESUMEN EJECUTIVO (SEP 2024 &rarr
 <td style="text-align:right"><b>{verdes_tot} clientes aprobados o camino a escritura</b></td></tr>
 <tr><td><b>Aprobaciones &rarr; escrituraci&oacute;n</b></td>
 <td style="text-align:right">{verdes_tot} en verde &rarr; <b>{len(esc)} escrituraciones acompa&ntilde;adas</b> &rarr; firma y t&iacute;tulos al d&iacute;a</td></tr>
+<tr style="background:#f6f8f6"><td><b>Satisfacci&oacute;n de clientes</b></td>
+<td style="text-align:right"><b>Felicitaciones reales adjuntas</b> &mdash; incluso de quienes no compraron, quedaron contentos y quieren volver</td></tr>
 <tr style="background:#f0e9d2"><td><b>Compromiso</b></td>
 <td style="text-align:right"><b>Apoyo total, en evaluaci&oacute;n y en escrituraci&oacute;n</b> &mdash; solo gesti&oacute;n propia, sin sumar De Manet</td></tr>
 </table>
