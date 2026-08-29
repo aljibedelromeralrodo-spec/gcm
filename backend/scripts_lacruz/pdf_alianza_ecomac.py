@@ -57,7 +57,7 @@ HTML = f"""
 <p class="sub">Informe de gesti&oacute;n conjunta &middot; Septiembre 2024 &rarr; Agosto 2026 &middot; Preparado para Ecomac</p>
 
 <table class="kpi"><tr>
-<td>UF 180.000+<br/>escriturado total<br/>(&asymp; $7.500 MM)</td>
+<td>UF 170.000+<br/>escriturado total<br/>(&asymp; $7.100 MM)</td>
 <td>11,3 h<br/>mediana de<br/>respuesta</td>
 <td>{len(casos)}<br/>clientes<br/>evaluados</td>
 <td>{verdes_tot}<br/>apoyo venta<br/>en verde</td>
@@ -65,8 +65,8 @@ HTML = f"""
 </tr></table>
 
 <h2>1. EL VALOR DE TRABAJAR JUNTOS</h2>
-<p>Desde septiembre de 2024, Central Mutuos ha recibido y gestionado <b>1.109 clientes derivados por el equipo comercial
-de Ecomac</b> (676 RUTs &uacute;nicos), consolidando uno de los canales inmobiliarios m&aacute;s activos y fluidos de nuestra
+<p>Desde septiembre de 2024, Central Mutuos ha recibido y gestionado <b>{len(casos)} clientes &uacute;nicos derivados por el equipo comercial
+de Ecomac</b> (un cliente = un RUT, sin duplicados), consolidando uno de los canales inmobiliarios m&aacute;s activos y fluidos de nuestra
 operaci&oacute;n. Estos n&uacute;meros consideran <b>exclusivamente la gesti&oacute;n directa de esta oficina, sin incluir la
 gesti&oacute;n de De Manet</b>: la colaboraci&oacute;n total entre ambas casas es a&uacute;n mayor.</p>
 <p>Los resultados hablan por s&iacute; solos, y detr&aacute;s de cada n&uacute;mero hay una reserva defendida, una promesa
@@ -105,8 +105,8 @@ para que escriture ma&ntilde;ana. Cada cliente aprobado en verde es una unidad v
 con {firmas_tot} operaciones llevadas hasta firma y t&iacute;tulos aprobados. <b>Cuando escrituramos, escrituramos bien</b>:
 gestionando notar&iacute;a, banco alzante y abogados hasta el final.</p>
 <div class="destacado"><b>El valor de la escrituraci&oacute;n conjunta:</b> los procesos de escrituraci&oacute;n acompa&ntilde;ados
-en estos dos a&ntilde;os representan una cartera de cr&eacute;ditos superior a <b>UF 180.000</b> &mdash;del orden de
-<b>$7.500 millones de pesos</b>&mdash; en operaciones cursadas del canal Ecomac. Una cifra que refleja el peso real de esta
+en estos dos a&ntilde;os representan una cartera de cr&eacute;ditos superior a <b>UF 170.000</b> &mdash;del orden de
+<b>$7.100 millones de pesos</b>&mdash; en operaciones cursadas del canal Ecomac. Una cifra que refleja el peso real de esta
 alianza en la venta de sus proyectos.</div>
 <p><b>Destacados recientes (llegaron a firma/t&iacute;tulos):</b></p>
 <ul>{dest_html}</ul>
@@ -164,7 +164,7 @@ un compromiso importante con Ecomac, con su marca y con el cliente para consegui
 con volumen y exigencia. Pero los n&uacute;meros son elocuentes: <b>la colaboraci&oacute;n ha sido efectiva, creciente y rentable para
 ambas partes</b> &mdash; y esto considerando &uacute;nicamente la gesti&oacute;n de esta oficina, <b>sin sumar la gesti&oacute;n de
 De Manet</b>.</p>
-<p><b>1.109 clientes evaluados, respuesta en horas y no en d&iacute;as, cientos de aprobaciones en verde defendiendo sus reservas y
+<p><b>{len(casos)} clientes &uacute;nicos evaluados, respuesta en horas y no en d&iacute;as, cientos de aprobaciones en verde defendiendo sus reservas y
 {len(esc)} escrituraciones acompa&ntilde;adas hasta el final.</b> Esa es la alianza que hemos construido, y ese es el est&aacute;ndar
 con el que queremos seguir apoyando la venta de cada proyecto Ecomac.</p>
 <div class="destacado" style="text-align:center"><b>Central Mutuos reafirma hoy su compromiso total con Ecomac.<br/>

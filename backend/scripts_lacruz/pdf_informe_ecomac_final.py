@@ -63,7 +63,37 @@ GENERICOS = {"casa", "usada", "usado", "depto", "departamento", "estudio", "titu
              "borrador", "compraventa", "cliente", "urgente", "solicitud"}
 esc = {c: e for c, e in esc.items()
        if esc_flag[c] and (c.startswith("rut:") or len(set(c.split()) - GENERICOS) >= 2)}
-print("escrituraciones SOLO ECOMAC:", len(esc))
+
+# ── DEDUPE: un cliente = un registro (fusión por RUT y por nombre) ──
+rut_toks = {}
+for t in threads.values():
+    tk_ = name_tokens(t["first"]["subject"])
+    if len(tk_) >= 2:
+        for r_ in t["ruts"]:
+            rut_toks.setdefault(r_, tk_)
+
+merged, name_keys = {}, []
+for c, e in esc.items():
+    if c.startswith("rut:"):
+        merged[c] = e
+for c, e in esc.items():
+    if c.startswith("rut:"):
+        continue
+    ct = set(c.split())
+    destino = next((rk for rk in merged if rk.startswith("rut:")
+                    and len(rut_toks.get(rk[4:], set()) & ct) >= 2), None)
+    if destino is None:
+        destino = next((nk for nk in name_keys if len(set(nk.split()) & ct) >= 2), None)
+    if destino is None:
+        merged[c] = e
+        name_keys.append(c)
+        continue
+    tgt = merged[destino]["etapas"]
+    for lvl, dt in e["etapas"].items():
+        if lvl not in tgt or dt < tgt[lvl]:
+            tgt[lvl] = dt
+esc = merged
+print("escrituraciones ÚNICAS (1 cliente = 1 registro):", len(esc))
 
 esc_names = {c: set(c.split()) for c in esc if not c.startswith("rut:")}
 esc_ruts = {c[4:] for c in esc if c.startswith("rut:")}
@@ -161,6 +191,24 @@ for tk, t in sorted(threads.items(), key=lambda kv: kv[1]["first"]["dt"]):
                   "ejec": NOMBRES.get(f["sender"], f["sender"].split("@")[0]),
                   "horas": horas, "estado": estado, "css": css, "fecha_esc": fecha_esc,
                   "inmediata": any("inmediata" in norm(r["subject"]) for r in inbox if r["tk"] == tk)})
+
+# ── DEDUPE ENVIADOS: un cliente = un envío ──
+RANK = {"verde2": 5, "verde1": 4, "verde0": 3, "rojo": 2, "": 1, "gris": 0}
+unicos = {}
+for c in casos:
+    toks = name_tokens(c["nombre"])
+    key = "rut:" + c["rut"] if c["rut"] else ("nom:" + " ".join(sorted(toks)) if len(toks) >= 2 else "tk:" + c["tk"])
+    u = unicos.get(key)
+    if not u:
+        unicos[key] = c
+        continue
+    if RANK[c["css"]] > RANK[u["css"]]:
+        u["css"], u["estado"], u["fecha_esc"] = c["css"], c["estado"], c["fecha_esc"]
+    if c["horas"] is not None and (u["horas"] is None or c["horas"] < u["horas"]):
+        u["horas"] = c["horas"]
+    u["inmediata"] = u["inmediata"] or c["inmediata"]
+casos = sorted(unicos.values(), key=lambda c: c["mes"])
+print("clientes ÚNICOS enviados (1 cliente = 1 envío):", len(casos))
 
 verdes_tot = sum(1 for c in casos if c["css"].startswith("verde"))
 firmas_tot = sum(1 for _, e in esc.items() if max(e["etapas"]) >= 3)

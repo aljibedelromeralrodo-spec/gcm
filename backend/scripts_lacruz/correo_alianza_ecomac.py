@@ -143,15 +143,15 @@ RESUMEN_TABLA = f"""
 <tr style="background:#14213d;color:#ffffff"><th colspan="2" style="padding:7px;text-align:center">
 ALIANZA CENTRAL MUTUOS &ndash; ECOMAC &middot; RESUMEN EJECUTIVO (SEP 2024 &rarr; AGO 2026)</th></tr>
 <tr><td><b>Total escriturado del canal</b></td>
-<td style="text-align:right"><b>UF 180.000+ &nbsp;(&asymp; $7.500 millones de pesos)</b></td></tr>
+<td style="text-align:right"><b>UF 170.000+ &nbsp;(&asymp; $7.100 millones de pesos)</b></td></tr>
 <tr style="background:#f6f8f6"><td><b>Tiempo de respuesta</b></td>
 <td style="text-align:right"><b>Mediana 11,3 horas</b> &middot; 75% de tasa de respuesta y subiendo</td></tr>
 <tr><td><b>Clientes evaluados</b></td>
 <td style="text-align:right"><b>{len(casos)}</b> derivados por sus ejecutivas</td></tr>
 <tr style="background:#f6f8f6"><td><b>Apoyo a la venta en verde</b></td>
-<td style="text-align:right"><b>{verdes_tot} clientes aprobados o camino a escritura</b></td></tr>
+<td style="text-align:right"><b>191 cartas de aprobaci&oacute;n emitidas solo en el &uacute;ltimo trimestre</b> (211 con preaprobaciones)</td></tr>
 <tr><td><b>Aprobaciones &rarr; escrituraci&oacute;n</b></td>
-<td style="text-align:right">{verdes_tot} en verde &rarr; <b>{len(esc)} escrituraciones acompa&ntilde;adas</b> &rarr; firma y t&iacute;tulos al d&iacute;a</td></tr>
+<td style="text-align:right">191 aprobadas vs 16 escrituradas en el trimestre &rarr; <b>el resto es venta en verde asegurada</b></td></tr>
 <tr style="background:#f6f8f6"><td><b>Satisfacci&oacute;n de clientes</b></td>
 <td style="text-align:right"><b>Felicitaciones reales adjuntas</b> &mdash; incluso de quienes no compraron, quedaron contentos y quieren volver</td></tr>
 <tr style="background:#f0e9d2"><td><b>Compromiso</b></td>
@@ -171,13 +171,17 @@ plenamente: <b>esta es una alianza exitosa, y los n&uacute;meros hablan por s&ia
 respuesta que alcanza el <b>75% y contin&uacute;a mejorando mes a mes</b>. En un mercado donde cada reserva se defiende con
 velocidad, una evaluaci&oacute;n oportuna es una venta que no se cae: esa es nuestra promesa comercial hacia Ecomac.</p>
 <p><b>El valor de lo construido juntos es concreto:</b> la escrituraci&oacute;n acompa&ntilde;ada durante estos dos a&ntilde;os
-representa una cartera de cr&eacute;ditos superior a <b>UF 180.000, del orden de $7.500 millones de pesos</b> en operaciones
+representa una cartera de cr&eacute;ditos superior a <b>UF 170.000, del orden de $7.100 millones de pesos</b> en operaciones
 del canal Ecomac &mdash;considerando &uacute;nicamente la gesti&oacute;n de esta oficina, sin sumar la gesti&oacute;n de De Manet.</p>
-<p><b>Apostamos por su venta en verde.</b> En el &uacute;ltimo trimestre evaluamos {len(m3)} clientes derivados por sus
-ejecutivas; nuestra evaluaci&oacute;n temprana blinda cada reserva hoy para que escriture ma&ntilde;ana, cuando los proyectos se
-entreguen. Y cuando llega el per&iacute;odo de escrituraci&oacute;n, ah&iacute; estamos: hemos acompa&ntilde;ado
-<b>{len(esc)} procesos de escrituraci&oacute;n de clientes Ecomac</b> &mdash;borradores, correcciones, firmas y t&iacute;tulos&mdash;
-gestionando notar&iacute;a, banco alzante y abogados hasta el final. <b>Cuando escrituramos, escrituramos bien.</b></p>
+<p><b>Apostamos por la venta en verde de ECOMAC.</b> Durante el &uacute;ltimo trimestre emitimos <b>191 cartas de
+aprobaci&oacute;n</b> (69 en junio, 63 en julio y 59 en agosto; 211 sumando preaprobaciones), y solo <b>16 operaciones
+escrituraron en el mismo per&iacute;odo</b> &mdash; una diferencia que no es debilidad, sino la demostraci&oacute;n de nuestro
+<b>f&eacute;rreo inter&eacute;s en apoyar la venta en verde de ECOMAC</b>: aprobamos hoy para blindar cada reserva, sabiendo
+que esas operaciones escriturar&aacute;n cuando los proyectos se entreguen. Es tambi&eacute;n nuestra manera de responder a la
+buena relaci&oacute;n que <b>ECOMAC</b> ha mantenido para con nosotros: compromiso por compromiso. Y cuando llega el
+per&iacute;odo de escrituraci&oacute;n, ah&iacute; estamos: hemos acompa&ntilde;ado <b>{len(esc)} procesos de
+escrituraci&oacute;n de clientes Ecomac</b> &mdash;borradores, correcciones, firmas y t&iacute;tulos&mdash; gestionando
+notar&iacute;a, banco alzante y abogados hasta el final. <b>Cuando escrituramos, escrituramos bien.</b></p>
 <p><b>Una relaci&oacute;n que trasciende los n&uacute;meros.</b> El apoyo de Ecomac ha sido relevante en m&uacute;ltiples hitos
 de nuestro crecimiento: reuniones de coordinaci&oacute;n permanentes, ferias inmobiliarias compartidas y una comunicaci&oacute;n
 diaria que funciona con la naturalidad de dos equipos que se conocen y se respetan. Ese compromiso ha sido constante en ambas

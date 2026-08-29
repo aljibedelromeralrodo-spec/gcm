@@ -15,6 +15,13 @@
    "fuente": "valor 3929 − pie/sub/ahorro 550"
   },
   {
+   "cliente": "Senderos Peñuelas (18179815-7)",
+   "etapa": "EN ESCRITURA",
+   "fecha": "27/11/25",
+   "credito_uf": 2700,
+   "fuente": "valor 2800 − pie/sub/ahorro 100"
+  },
+  {
    "cliente": "Johan Gomez Molina",
    "etapa": "EN ESCRITURA",
    "fecha": "14/07/25",
@@ -25,13 +32,6 @@
    "cliente": "Fernando Villaroel Quiroz",
    "etapa": "EN ESCRITURA",
    "fecha": "21/07/25",
-   "credito_uf": 2700,
-   "fuente": "valor 2800 − pie/sub/ahorro 100"
-  },
-  {
-   "cliente": "Senderos Peñuelas (18179815-7)",
-   "etapa": "EN ESCRITURA",
-   "fecha": "27/11/25",
    "credito_uf": 2700,
    "fuente": "valor 2800 − pie/sub/ahorro 100"
   },
@@ -55,76 +55,6 @@
    "fecha": "16/09/25",
    "credito_uf": 2400,
    "fuente": "crédito explícito"
-  },
-  {
-   "cliente": "Javier Andres Vivanco Zamora",
-   "etapa": "EN ESCRITURA",
-   "fecha": "28/05/25",
-   "credito_uf": 2250,
-   "fuente": "valor 2800 − pie/sub/ahorro 550"
-  },
-  {
-   "cliente": "Carlos Paredes",
-   "etapa": "EN ESCRITURA",
-   "fecha": "07/07/25",
-   "credito_uf": 2250,
-   "fuente": "valor 2800 − pie/sub/ahorro 550"
-  },
-  {
-   "cliente": "Karina Silva",
-   "etapa": "EN ESCRITURA",
-   "fecha": "10/07/25",
-   "credito_uf": 2250,
-   "fuente": "valor 2800 − pie/sub/ahorro 550"
-  },
-  {
-   "cliente": "Ramon Hinojosa",
-   "etapa": "EN ESCRITURA",
-   "fecha": "10/07/25",
-   "credito_uf": 2250,
-   "fuente": "valor 2800 − pie/sub/ahorro 550"
-  },
-  {
-   "cliente": "Marcelo Andres Lopez Tapia",
-   "etapa": "EN ESCRITURA",
-   "fecha": "11/07/25",
-   "credito_uf": 2250,
-   "fuente": "valor 2800 − pie/sub/ahorro 550"
-  },
-  {
-   "cliente": "Sergio Rojo Arqueros",
-   "etapa": "EN ESCRITURA",
-   "fecha": "14/07/25",
-   "credito_uf": 2250,
-   "fuente": "valor 2800 − pie/sub/ahorro 550"
-  },
-  {
-   "cliente": "Ramon Hinojosa Cond Maitenes",
-   "etapa": "EN ESCRITURA",
-   "fecha": "19/07/25",
-   "credito_uf": 2250,
-   "fuente": "valor 2800 − pie/sub/ahorro 550"
-  },
-  {
-   "cliente": "Jorge Luis Rincon Luengo",
-   "etapa": "FIRMA/TÍTULOS",
-   "fecha": "22/10/25",
-   "credito_uf": 2250,
-   "fuente": "valor 2800 − pie/sub/ahorro 550"
-  },
-  {
-   "cliente": "Cristian Enrique Solis Herrera",
-   "etapa": "EN ESCRITURA",
-   "fecha": "11/09/25",
-   "credito_uf": 2250,
-   "fuente": "valor 2800 − pie/sub/ahorro 550"
-  },
-  {
-   "cliente": "Francisca Constanza Momberg Rios",
-   "etapa": "EN ESCRITURA",
-   "fecha": "25/11/25",
-   "credito_uf": 2250,
-   "fuente": "valor 2800 − pie/sub/ahorro 550"
   },
   {
    "cliente": "Senderos Peñuelas (19930811-4)",
@@ -171,7 +101,7 @@
   {
    "cliente": "Complementa Esposa Yennifer Hiriarte Yañez (18002109-4)",
    "etapa": "EN ESCRITURA",
-   "fecha": "26/02/26",
+   "fecha": "28/08/25",
    "credito_uf": 2250,
    "fuente": "valor 2800 − pie/sub/ahorro 550"
   },
@@ -183,11 +113,88 @@
    "fuente": "valor 2800 − pie/sub/ahorro 550"
   },
   {
+   "cliente": "Javier Andres Vivanco Zamora",
+   "etapa": "EN ESCRITURA",
+   "fecha": "28/05/25",
+   "credito_uf": 2250,
+   "fuente": "valor 2800 − pie/sub/ahorro 550"
+  },
+  {
+   "cliente": "Carlos Paredes",
+   "etapa": "EN ESCRITURA",
+   "fecha": "07/07/25",
+   "credito_uf": 2250,
+   "fuente": "valor 2800 − pie/sub/ahorro 550"
+  },
+  {
+   "cliente": "Karina Silva",
+   "etapa": "EN ESCRITURA",
+   "fecha": "10/07/25",
+   "credito_uf": 2250,
+   "fuente": "valor 2800 − pie/sub/ahorro 550"
+  },
+  {
+   "cliente": "Ramon Hinojosa",
+   "etapa": "EN ESCRITURA",
+   "fecha": "10/07/25",
+   "credito_uf": 2250,
+   "fuente": "valor 2800 − pie/sub/ahorro 550"
+  },
+  {
+   "cliente": "Marcelo Andres Lopez Tapia",
+   "etapa": "EN ESCRITURA",
+   "fecha": "11/07/25",
+   "credito_uf": 2250,
+   "fuente": "valor 2800 − pie/sub/ahorro 550"
+  },
+  {
+   "cliente": "Sergio Rojo Arqueros",
+   "etapa": "EN ESCRITURA",
+   "fecha": "14/07/25",
+   "credito_uf": 2250,
+   "fuente": "valor 2800 − pie/sub/ahorro 550"
+  },
+  {
+   "cliente": "Jorge Luis Rincon Luengo",
+   "etapa": "FIRMA/TÍTULOS",
+   "fecha": "22/10/25",
+   "credito_uf": 2250,
+   "fuente": "valor 2800 − pie/sub/ahorro 550"
+  },
+  {
+   "cliente": "Cristian Enrique Solis Herrera",
+   "etapa": "EN ESCRITURA",
+   "fecha": "11/09/25",
+   "credito_uf": 2250,
+   "fuente": "valor 2800 − pie/sub/ahorro 550"
+  },
+  {
    "cliente": "Castillo Soto Adela",
    "etapa": "EN ESCRITURA",
    "fecha": "29/12/25",
    "credito_uf": 2167,
    "fuente": "estimado 80% del valor 2709"
+  },
+  {
+   "cliente": "13167025-7",
+   "etapa": "FIRMA/TÍTULOS",
+   "fecha": "05/08/25",
+   "credito_uf": 2150,
+   "fuente": "crédito explícito"
+  },
+  {
+   "cliente": "Senderos Peñuelas (19723815-1)",
+   "etapa": "FIRMA/TÍTULOS",
+   "fecha": "26/11/25",
+   "credito_uf": 2150,
+   "fuente": "crédito explícito"
+  },
+  {
+   "cliente": "Ximena Patricia Retamales Vega (16015464-0)",
+   "etapa": "EN ESCRITURA",
+   "fecha": "25/03/26",
+   "credito_uf": 2150,
+   "fuente": "crédito explícito"
   },
   {
    "cliente": "Oscar Valderrama Diaz",
@@ -204,20 +211,6 @@
    "fuente": "crédito explícito"
   },
   {
-   "cliente": "Cristian Barra Avendano",
-   "etapa": "EN ESCRITURA",
-   "fecha": "26/06/25",
-   "credito_uf": 2150,
-   "fuente": "crédito explícito"
-  },
-  {
-   "cliente": "Ramon Hinojosa Diaz Condominio Maitenes",
-   "etapa": "EN ESCRITURA",
-   "fecha": "11/07/25",
-   "credito_uf": 2150,
-   "fuente": "crédito explícito"
-  },
-  {
    "cliente": "Javier Contreras",
    "etapa": "EN ESCRITURA",
    "fecha": "14/07/25",
@@ -228,13 +221,6 @@
    "cliente": "Dolly Sharlotte Pinto Cortes",
    "etapa": "EN ESCRITURA",
    "fecha": "28/07/25",
-   "credito_uf": 2150,
-   "fuente": "crédito explícito"
-  },
-  {
-   "cliente": "Cristian Barra Avendaño (13167025-7)",
-   "etapa": "FIRMA/TÍTULOS",
-   "fecha": "05/08/25",
    "credito_uf": 2150,
    "fuente": "crédito explícito"
   },
@@ -267,30 +253,9 @@
    "fuente": "crédito explícito"
   },
   {
-   "cliente": "Jonathan Alexis Munoz Gonzalez",
-   "etapa": "EN ESCRITURA",
-   "fecha": "27/10/25",
-   "credito_uf": 2150,
-   "fuente": "crédito explícito"
-  },
-  {
    "cliente": "Diego Nicolas Araya Morales",
    "etapa": "EN ESCRITURA",
    "fecha": "24/11/25",
-   "credito_uf": 2150,
-   "fuente": "crédito explícito"
-  },
-  {
-   "cliente": "Senderos Peñuelas (19723815-1)",
-   "etapa": "FIRMA/TÍTULOS",
-   "fecha": "26/11/25",
-   "credito_uf": 2150,
-   "fuente": "crédito explícito"
-  },
-  {
-   "cliente": "Ximena Patricia Retamales Vega (16015464-0)",
-   "etapa": "EN ESCRITURA",
-   "fecha": "25/03/26",
    "credito_uf": 2150,
    "fuente": "crédito explícito"
   },
@@ -302,7 +267,7 @@
    "fuente": "crédito explícito"
   },
   {
-   "cliente": "Dinamarca Pineda Rodrigo Fabian (20168876-0)",
+   "cliente": "20168876-0",
    "etapa": "EN ESCRITURA",
    "fecha": "08/06/26",
    "credito_uf": 1978,
@@ -323,20 +288,6 @@
    "fuente": "crédito explícito"
   },
   {
-   "cliente": "Jose Luis Abreu",
-   "etapa": "EN ESCRITURA",
-   "fecha": "28/08/25",
-   "credito_uf": 1970,
-   "fuente": "crédito explícito"
-  },
-  {
-   "cliente": "Victor Esteban Casanga Leiva",
-   "etapa": "EN ESCRITURA",
-   "fecha": "27/11/25",
-   "credito_uf": 1900,
-   "fuente": "valor 2600 − pie/sub/ahorro 700"
-  },
-  {
    "cliente": "Victor Esteban Casanga Leiva Sol (17626856-5)",
    "etapa": "FIRMA/TÍTULOS",
    "fecha": "09/04/26",
@@ -344,7 +295,7 @@
    "fuente": "valor 2600 − pie/sub/ahorro 700"
   },
   {
-   "cliente": "Casanova Caceres Christel Denisse (16729305-0)",
+   "cliente": "16729305-0",
    "etapa": "FIRMA/TÍTULOS",
    "fecha": "04/08/26",
    "credito_uf": 1870,
@@ -372,20 +323,6 @@
    "fuente": "estimado 80% del valor 1900"
   },
   {
-   "cliente": "Claudia Isabel Arias Gonzalez",
-   "etapa": "BORRADOR",
-   "fecha": "31/12/24",
-   "credito_uf": 1125,
-   "fuente": "crédito explícito"
-  },
-  {
-   "cliente": "Maria Fernanda Rojas Castaneda",
-   "etapa": "EN ESCRITURA",
-   "fecha": "27/11/25",
-   "credito_uf": 1125,
-   "fuente": "crédito explícito"
-  },
-  {
    "cliente": "Sommerville Mondaca Catalina Monserrat (19347335-0)",
    "etapa": "EN ESCRITURA",
    "fecha": "24/12/25",
@@ -407,10 +344,17 @@
    "fuente": "crédito explícito"
   },
   {
-   "cliente": "Carolina Andrea Rojas Quinzacara",
+   "cliente": "Claudia Isabel Arias Gonzalez",
+   "etapa": "BORRADOR",
+   "fecha": "31/12/24",
+   "credito_uf": 1125,
+   "fuente": "crédito explícito"
+  },
+  {
+   "cliente": "Maria Fernanda Rojas Castaneda",
    "etapa": "EN ESCRITURA",
-   "fecha": "04/09/25",
-   "credito_uf": 550,
+   "fecha": "27/11/25",
+   "credito_uf": 1125,
    "fuente": "crédito explícito"
   },
   {
@@ -426,83 +370,20 @@
    "fecha": "04/03/26",
    "credito_uf": 550,
    "fuente": "crédito explícito"
+  },
+  {
+   "cliente": "Carolina Andrea Rojas Quinzacara",
+   "etapa": "EN ESCRITURA",
+   "fecha": "04/09/25",
+   "credito_uf": 550,
+   "fuente": "crédito explícito"
   }
  ],
  "sin_monto": [
   {
-   "cliente": "Edgardo Guzaman",
-   "etapa": "EN ESCRITURA",
-   "fecha": "04/06/25",
-   "credito_uf": null,
-   "fuente": ""
-  },
-  {
-   "cliente": "Sara Astorga",
-   "etapa": "EN ESCRITURA",
-   "fecha": "06/06/25",
-   "credito_uf": null,
-   "fuente": ""
-  },
-  {
-   "cliente": "Luis Morales",
-   "etapa": "EN ESCRITURA",
-   "fecha": "12/06/25",
-   "credito_uf": null,
-   "fuente": ""
-  },
-  {
-   "cliente": "Maria Jose Segovia Guerrero",
-   "etapa": "EN ESCRITURA",
-   "fecha": "09/07/25",
-   "credito_uf": null,
-   "fuente": ""
-  },
-  {
-   "cliente": "Cindy Vega Isla",
-   "etapa": "EN ESCRITURA",
-   "fecha": "25/07/25",
-   "credito_uf": null,
-   "fuente": ""
-  },
-  {
-   "cliente": "Williams Enrique Jose Dominguez Barrada",
-   "etapa": "EN ESCRITURA",
-   "fecha": "25/07/25",
-   "credito_uf": null,
-   "fuente": ""
-  },
-  {
-   "cliente": "Viviana Veronica Arancibia Miranda",
-   "etapa": "EN ESCRITURA",
-   "fecha": "10/09/25",
-   "credito_uf": null,
-   "fuente": ""
-  },
-  {
-   "cliente": "Yohanna Sofia Rodriguez Magallanes",
-   "etapa": "EN ESCRITURA",
-   "fecha": "24/10/25",
-   "credito_uf": null,
-   "fuente": ""
-  },
-  {
-   "cliente": "Carol Andrea Cuello Santander",
-   "etapa": "EN ESCRITURA",
-   "fecha": "28/11/25",
-   "credito_uf": null,
-   "fuente": ""
-  },
-  {
    "cliente": "Firma Carta Pie Mariano Marambio (10677396-3)",
    "etapa": "FIRMA/TÍTULOS",
    "fecha": "02/12/25",
-   "credito_uf": null,
-   "fuente": ""
-  },
-  {
-   "cliente": "Tania Belen Carmen Carvajal Jorquera",
-   "etapa": "EN ESCRITURA",
-   "fecha": "30/01/26",
    "credito_uf": null,
    "fuente": ""
   },
@@ -605,7 +486,7 @@
    "fuente": ""
   },
   {
-   "cliente": "Johnson Vargas Peña (24558787-2)",
+   "cliente": "24558787-2",
    "etapa": "EN ESCRITURA",
    "fecha": "21/07/26",
    "credito_uf": null,
@@ -645,12 +526,82 @@
    "fecha": "26/08/26",
    "credito_uf": null,
    "fuente": ""
+  },
+  {
+   "cliente": "Edgardo Guzaman",
+   "etapa": "EN ESCRITURA",
+   "fecha": "04/06/25",
+   "credito_uf": null,
+   "fuente": ""
+  },
+  {
+   "cliente": "Sara Astorga",
+   "etapa": "EN ESCRITURA",
+   "fecha": "06/06/25",
+   "credito_uf": null,
+   "fuente": ""
+  },
+  {
+   "cliente": "Luis Morales",
+   "etapa": "EN ESCRITURA",
+   "fecha": "12/06/25",
+   "credito_uf": null,
+   "fuente": ""
+  },
+  {
+   "cliente": "Maria Jose Segovia Guerrero",
+   "etapa": "EN ESCRITURA",
+   "fecha": "09/07/25",
+   "credito_uf": null,
+   "fuente": ""
+  },
+  {
+   "cliente": "Cindy Vega Isla",
+   "etapa": "EN ESCRITURA",
+   "fecha": "25/07/25",
+   "credito_uf": null,
+   "fuente": ""
+  },
+  {
+   "cliente": "Williams Enrique Jose Dominguez Barrada",
+   "etapa": "EN ESCRITURA",
+   "fecha": "25/07/25",
+   "credito_uf": null,
+   "fuente": ""
+  },
+  {
+   "cliente": "Viviana Veronica Arancibia Miranda",
+   "etapa": "EN ESCRITURA",
+   "fecha": "10/09/25",
+   "credito_uf": null,
+   "fuente": ""
+  },
+  {
+   "cliente": "Yohanna Sofia Rodriguez Magallanes",
+   "etapa": "EN ESCRITURA",
+   "fecha": "24/10/25",
+   "credito_uf": null,
+   "fuente": ""
+  },
+  {
+   "cliente": "Carol Andrea Cuello Santander",
+   "etapa": "EN ESCRITURA",
+   "fecha": "28/11/25",
+   "credito_uf": null,
+   "fuente": ""
+  },
+  {
+   "cliente": "Tania Belen Carmen Carvajal Jorquera",
+   "etapa": "EN ESCRITURA",
+   "fecha": "30/01/26",
+   "credito_uf": null,
+   "fuente": ""
   }
  ],
- "suma_uf_detectada": 125263,
- "promedio_uf": 2053.4918032786886,
- "estimado_total_uf": 188921.24590163934,
+ "suma_uf_detectada": 110443,
+ "promedio_uf": 2045.2407407407406,
+ "estimado_total_uf": 173845.46296296298,
  "uf_pesos": 40868.5,
- "suma_pesos": 5119310915.5,
- "estimado_pesos": 7720927938.131147
+ "suma_pesos": 4513639745.5,
+ "estimado_pesos": 7104803303.101852
 }

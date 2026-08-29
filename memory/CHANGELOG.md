@@ -412,3 +412,9 @@
 - Felicitaciones: layout 2-por-fila causaba imágenes sobrepuestas (xhtml2pdf) → 1 imagen por bloque centrada (11 págs).
 - Clientes Enviados + Informe largo: columna RUT se montaba sobre Ejecutiva → RUT fusionado en columna Cliente + anchos por style en th + colspan 6. Verificado con pdf2image.
 - pdf_informe_ecomac_final.py ya no encola correo salvo ENVIAR_INFORME=1. Fila "Satisfacción de clientes" (no compraron y quieren volver) agregada al cuadro resumen del correo. Preview vigente: 5ff4b6d2.
+
+## 2026-08-30 (fork) — Deduplicación total (1 cliente = 1 RUT) + aprobaciones reales
+- Verificación con BODYSTRUCTURE (adjuntos): 191 cartas de aprobación únicas del trimestre (69 jun, 63 jul, 59 ago) + 20 preaprob = 211. El "17" anterior solo veía texto (cuerpos truncados a 1.5KB).
+- Dedupe en pdf_informe_ecomac_final.py: escrituraciones 92→85 únicas (fusión RUT+nombre), enviados 1.109 hilos→925 clientes únicos, 228 en verde, 12 firmas. Trimestre: 138 enviados / 16 escrituras. Montos dedup: UF 110.443 confirmados, proyección UF ~173.800 ≈ $7.100MM → cifra en informes: "UF 170.000+ (≈ $7.100 millones)".
+- Correo Alianza actualizado con datos reales dedup (191 cartas trimestre, 16 escrituradas) y párrafo "férreo interés venta en verde ECOMAC". Preview vigente: 4f474164. Links v4 generados.
+- Scripts nuevos: verifica_aprobaciones.py (BODYSTRUCTURE trimestre), aprob_trimestre.json.
