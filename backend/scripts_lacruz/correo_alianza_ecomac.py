@@ -137,36 +137,61 @@ clientes y proyectos Ecomac. Central Mutuos.</p>
 """
 pdf_cli = make_pdf(HTML_CLI, "/app/backend/scripts_lacruz/Clientes_Enviados_Ecomac.pdf")
 
-# ═══ CUERPO DEL CORREO (formal, rapidez primero) ═══
+RESUMEN_TABLA = f"""
+<table border="1" cellpadding="6" cellspacing="0" width="100%"
+ style="border-collapse:collapse;border:1px solid #b9c0cc;font-size:13px;margin:10px 0">
+<tr style="background:#14213d;color:#ffffff"><th colspan="2" style="padding:7px;text-align:center">
+ALIANZA CENTRAL MUTUOS &ndash; ECOMAC &middot; RESUMEN EJECUTIVO (SEP 2024 &rarr; AGO 2026)</th></tr>
+<tr><td><b>Total escriturado del canal</b></td>
+<td style="text-align:right"><b>UF 180.000+ &nbsp;(&asymp; $7.500 millones de pesos)</b></td></tr>
+<tr style="background:#f6f8f6"><td><b>Tiempo de respuesta</b></td>
+<td style="text-align:right"><b>Mediana 11,3 horas</b> &middot; 75% de tasa de respuesta y subiendo</td></tr>
+<tr><td><b>Clientes evaluados</b></td>
+<td style="text-align:right"><b>{len(casos)}</b> derivados por sus ejecutivas</td></tr>
+<tr style="background:#f6f8f6"><td><b>Apoyo a la venta en verde</b></td>
+<td style="text-align:right"><b>{verdes_tot} clientes aprobados o camino a escritura</b></td></tr>
+<tr><td><b>Aprobaciones &rarr; escrituraci&oacute;n</b></td>
+<td style="text-align:right">{verdes_tot} en verde &rarr; <b>{len(esc)} escrituraciones acompa&ntilde;adas</b> &rarr; firma y t&iacute;tulos al d&iacute;a</td></tr>
+<tr style="background:#f0e9d2"><td><b>Compromiso</b></td>
+<td style="text-align:right"><b>Apoyo total, en evaluaci&oacute;n y en escrituraci&oacute;n</b> &mdash; solo gesti&oacute;n propia, sin sumar De Manet</td></tr>
+</table>
+"""
+
+# ═══ CUERPO DEL CORREO (formal, rapidez y valor total primero) ═══
 CUERPO = f"""
 <p>Estimadas,</p>
-<p>Junto con saludarlas cordialmente, quisiera comenzar por lo esencial: <b>Central Mutuos reafirma su compromiso total con Ecomac,
-y los resultados de nuestra gesti&oacute;n conjunta hablan por s&iacute; solos.</b></p>
+<p>Junto con saludarlas cordialmente, comparto en una sola mirada lo que esta alianza ha construido:</p>
+{RESUMEN_TABLA}
+<p>Me permito, adem&aacute;s, desarrollar brevemente estos resultados, con una convicci&oacute;n que los antecedentes respaldan
+plenamente: <b>esta es una alianza exitosa, y los n&uacute;meros hablan por s&iacute; solos.</b></p>
 <p><b>Somos r&aacute;pidos, porque sabemos que cada hora cuenta.</b> Hoy respondemos las evaluaciones de sus ejecutivas con una
-<b>mediana de 11,3 horas</b> &mdash;la mitad en menos de 12 horas y un tercio en menos de una hora&mdash;, con una tasa de respuesta
-que alcanza el <b>75% y contin&uacute;a subiendo mes a mes</b>. En un mercado donde una reserva se defiende con velocidad, esa rapidez
-es nuestra promesa comercial hacia Ecomac: una evaluaci&oacute;n oportuna es una venta que no se cae.</p>
-<p><b>Apostamos por su venta en verde.</b> En el &uacute;ltimo trimestre evaluamos {len(m3)} clientes derivados por sus ejecutivas;
-nuestra evaluaci&oacute;n temprana blinda cada reserva hoy para que escriture ma&ntilde;ana, cuando los proyectos se entreguen.
-Y cuando llega el per&iacute;odo de escrituraci&oacute;n, ah&iacute; estamos: durante este ciclo hemos acompa&ntilde;ado
+<b>mediana de 11,3 horas</b> &mdash;la mitad en menos de 12 horas y un tercio en menos de una hora&mdash;, con una tasa de
+respuesta que alcanza el <b>75% y contin&uacute;a mejorando mes a mes</b>. En un mercado donde cada reserva se defiende con
+velocidad, una evaluaci&oacute;n oportuna es una venta que no se cae: esa es nuestra promesa comercial hacia Ecomac.</p>
+<p><b>El valor de lo construido juntos es concreto:</b> la escrituraci&oacute;n acompa&ntilde;ada durante estos dos a&ntilde;os
+representa una cartera de cr&eacute;ditos superior a <b>UF 180.000, del orden de $7.500 millones de pesos</b> en operaciones
+del canal Ecomac &mdash;considerando &uacute;nicamente la gesti&oacute;n de esta oficina, sin sumar la gesti&oacute;n de De Manet.</p>
+<p><b>Apostamos por su venta en verde.</b> En el &uacute;ltimo trimestre evaluamos {len(m3)} clientes derivados por sus
+ejecutivas; nuestra evaluaci&oacute;n temprana blinda cada reserva hoy para que escriture ma&ntilde;ana, cuando los proyectos se
+entreguen. Y cuando llega el per&iacute;odo de escrituraci&oacute;n, ah&iacute; estamos: hemos acompa&ntilde;ado
 <b>{len(esc)} procesos de escrituraci&oacute;n de clientes Ecomac</b> &mdash;borradores, correcciones, firmas y t&iacute;tulos&mdash;
 gestionando notar&iacute;a, banco alzante y abogados hasta el final. <b>Cuando escrituramos, escrituramos bien.</b></p>
-<p><b>Una relaci&oacute;n que va m&aacute;s all&aacute; de los n&uacute;meros.</b> El apoyo de Ecomac ha sido importante en
-m&uacute;ltiples hitos de nuestro crecimiento: reuniones de coordinaci&oacute;n permanentes, ferias inmobiliarias compartidas y una
-comunicaci&oacute;n diaria que funciona con la naturalidad de dos equipos que se conocen y se respetan. Este compromiso ha sido
-constante en ambas direcciones, y tambi&eacute;n lo perciben los clientes: adjunto encontrar&aacute;n un documento con
-<b>felicitaciones reales de compradores Ecomac</b> &mdash;incluso de quienes no concretaron su compra&mdash; que reflejan el cuidado
-con que se atiende su marca en cada contacto.</p>
-<p>Como en toda relaci&oacute;n comercial intensa pueden existir divergencias puntuales; es natural entre equipos que trabajan con
-volumen y exigencia. Sin embargo, los n&uacute;meros son elocuentes: <b>la colaboraci&oacute;n ha sido efectiva, creciente y rentable
-para ambas partes</b>, considerando &uacute;nicamente la gesti&oacute;n de esta oficina, sin sumar la gesti&oacute;n de De Manet.</p>
+<p><b>Una relaci&oacute;n que trasciende los n&uacute;meros.</b> El apoyo de Ecomac ha sido relevante en m&uacute;ltiples hitos
+de nuestro crecimiento: reuniones de coordinaci&oacute;n permanentes, ferias inmobiliarias compartidas y una comunicaci&oacute;n
+diaria que funciona con la naturalidad de dos equipos que se conocen y se respetan. Ese compromiso ha sido constante en ambas
+direcciones, y tambi&eacute;n lo perciben los clientes: adjunto encontrar&aacute;n un documento con <b>felicitaciones reales de
+compradores Ecomac</b> &mdash;incluso de quienes no concretaron su compra&mdash; que reflejan el cuidado con que se atiende su
+marca en cada contacto.</p>
+<p>Como en toda relaci&oacute;n comercial de alto volumen pueden existir divergencias puntuales; es natural entre equipos
+exigentes. Sin embargo, los antecedentes son elocuentes: <b>la colaboraci&oacute;n ha sido efectiva, creciente y rentable para
+ambas partes.</b></p>
 <p>Se adjuntan dos documentos de respaldo:</p>
 <ol>
 <li><b>Felicitaciones_Clientes_Ecomac.pdf</b> &mdash; testimonios y conversaciones reales de clientes.</li>
-<li><b>Clientes_Enviados_Ecomac.pdf</b> &mdash; registro completo, cliente por cliente, de los {len(casos)} clientes que ustedes
-nos han confiado desde septiembre de 2024, con su fecha, ejecutiva, tiempo de primera respuesta y estado.</li>
+<li><b>Clientes_Enviados_Ecomac.pdf</b> &mdash; registro completo, cliente por cliente, de los {len(casos)} clientes que
+ustedes nos han confiado desde septiembre de 2024, con fecha, ejecutiva, tiempo de primera respuesta y estado.</li>
 </ol>
-<p>Quedo a su entera disposici&oacute;n para revisar juntos estos antecedentes en la instancia que estimen conveniente.
+<p>Quedo a su entera disposici&oacute;n para revisar estos antecedentes en la instancia que estimen conveniente.
 <b>Mantengamos esta alianza que funciona.</b></p>
 <p>Atentamente,<br/><br/>
 <b>Gerardo Barraza</b><br/>

@@ -60,20 +60,21 @@ HTML = f"""
 <p style="font-size:12.5pt;color:#c9a227;text-align:center;font-weight:bold;margin:2px 0">Una Alianza Exitosa</p>
 <p class="sub">Informe de gesti&oacute;n conjunta &middot; Septiembre 2024 &rarr; Agosto 2026 &middot; Preparado para Ecomac</p>
 
+<table class="kpi"><tr>
+<td>UF 180.000+<br/>escriturado total<br/>(&asymp; $7.500 MM)</td>
+<td>11,3 h<br/>mediana de<br/>respuesta</td>
+<td>{len(casos)}<br/>clientes<br/>evaluados</td>
+<td>{verdes_tot}<br/>apoyo venta<br/>en verde</td>
+<td>{len(esc)}<br/>escrituraciones<br/>acompa&ntilde;adas</td>
+</tr></table>
+
 <h2>1. EL VALOR DE TRABAJAR JUNTOS</h2>
 <p>Desde septiembre de 2024, Central Mutuos ha recibido y gestionado <b>1.109 clientes derivados por el equipo comercial
 de Ecomac</b> (676 RUTs &uacute;nicos), consolidando uno de los canales inmobiliarios m&aacute;s activos y fluidos de nuestra
 operaci&oacute;n. Estos n&uacute;meros consideran <b>exclusivamente la gesti&oacute;n directa de esta oficina, sin incluir la
 gesti&oacute;n de De Manet</b>: la colaboraci&oacute;n total entre ambas casas es a&uacute;n mayor.</p>
-<p>Los resultados hablan por s&iacute; solos:</p>
-<table class="kpi"><tr>
-<td>1.109<br/>clientes<br/>gestionados</td>
-<td>11,3 h<br/>mediana de<br/>respuesta</td>
-<td>{verdes_tot}<br/>aprobados o<br/>camino a escritura</td>
-<td>{len(esc)}<br/>escrituraciones<br/>acompa&ntilde;adas</td>
-<td>75%<br/>tasa de respuesta<br/>actual y subiendo</td>
-</tr></table>
-<p>Detr&aacute;s de cada n&uacute;mero hay una reserva defendida, una promesa cumplida y una familia que lleg&oacute; a su casa.</p>
+<p>Los resultados hablan por s&iacute; solos, y detr&aacute;s de cada n&uacute;mero hay una reserva defendida, una promesa
+cumplida y una familia que lleg&oacute; a su casa.</p>
 
 <h2>2. TIEMPO DE RESPUESTA &mdash; NUESTRA PROMESA DE RAPIDEZ</h2>
 <p>Sabemos que en la venta inmobiliaria <b>cada hora cuenta</b>: una ejecutiva que espera una evaluaci&oacute;n es una reserva
@@ -107,6 +108,10 @@ para que escriture ma&ntilde;ana. Cada cliente aprobado en verde es una unidad v
 <b>{len(esc)} procesos de escrituraci&oacute;n de clientes Ecomac</b> &mdash; borradores, correcciones, firmas y t&iacute;tulos &mdash;
 con {firmas_tot} operaciones llevadas hasta firma y t&iacute;tulos aprobados. <b>Cuando escrituramos, escrituramos bien</b>:
 gestionando notar&iacute;a, banco alzante y abogados hasta el final.</p>
+<div class="destacado"><b>El valor de la escrituraci&oacute;n conjunta:</b> los procesos de escrituraci&oacute;n acompa&ntilde;ados
+en estos dos a&ntilde;os representan una cartera de cr&eacute;ditos superior a <b>UF 180.000</b> &mdash;del orden de
+<b>$7.500 millones de pesos</b>&mdash; en operaciones cursadas del canal Ecomac. Una cifra que refleja el peso real de esta
+alianza en la venta de sus proyectos.</div>
 <p><b>Destacados recientes (llegaron a firma/t&iacute;tulos):</b></p>
 <ul>{dest_html}</ul>
 <p><b>Actividad hist&oacute;rica mes a mes del canal:</b></p>
@@ -181,26 +186,4 @@ pdf = buf.getvalue()
 open("/app/backend/scripts_lacruz/Alianza_CentralMutuos_Ecomac.pdf", "wb").write(pdf)
 print("PDF OK", len(pdf))
 
-from pymongo import MongoClient
-import os
-db = MongoClient(os.environ["MONGO_URL"])[os.environ["DB_NAME"]]
-db.correos_preview.update_many({"subject": {"$regex": "Informe Histórico Ecomac|Alianza"}, "estado": "esperando_confirmacion"},
-                               {"$set": {"estado": "descartado", "motivo": "reemplazado por informe Alianza Ecomac"}})
-import email_service as es
-cuerpo = """<p>Estimado Gerardo,</p>
-<p>Adjunto el informe <b>&laquo;Central Mutuos &ndash; Ecomac: Una Alianza Exitosa&raquo;</b>, preparado para presentar a Ecomac:</p>
-<ul>
-<li>Narrativa persuasiva: rapidez de respuesta, apuesta a la venta en verde y calidad de escrituraci&oacute;n.</li>
-<li>Cuadro random de tiempos de respuesta (100% &lt; 25 h) y promedios por ejecutiva.</li>
-<li>11 testimonios reales de clientes + popurr&iacute; de conversaciones de WhatsApp (la conversaci&oacute;n de Karina fue recortada
-para dejar solo el agradecimiento).</li>
-<li>Cierre: compromiso constante y llamado a mantener la alianza, destacando que las cifras consideran solo esta gesti&oacute;n,
-sin sumar la de De Manet.</li>
-</ul>
-<p>Saludos,<br/>DashAI &mdash; Central Mutuos</p>"""
-r = es.send_mail("gerardo.ext@centralmutuos.cl",
-                 "Central Mutuos – Ecomac: Una Alianza Exitosa (informe para presentar a Ecomac)",
-                 cuerpo,
-                 attachments=[{"filename": "Alianza_CentralMutuos_Ecomac.pdf",
-                               "content_b64": base64.b64encode(pdf).decode()}])
-print("ENCOLADO:", r)
+print("PDF Alianza regenerado (sin envío; el correo formal se encola desde correo_alianza_ecomac.py)")

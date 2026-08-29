@@ -400,3 +400,10 @@
 - pdf_alianza_ecomac.py: PDF 10 páginas dirigido a Ecomac para retener el acuerdo comercial. Narrativa aprobada por usuario: rapidez (mediana 11,3h, cuadro random 15 casos 100%<25h, promedios por ejecutiva), apuesta a venta en verde (161 enviados/16 escrituras 3m), 92 escrituraciones acompañadas, hitos/ferias/reuniones, 11 testimonios de clientes con citas + popurrí de 11 pantallazos WhatsApp (testimonios/w01-11.jpg; w04 Karina RECORTADA para eliminar comentario privado sensible sobre "10 millones a la prima"), cierre "mantengamos esta alianza". Nota: cifras solo gestión propia, sin De Manet.
 - Encolado preview ecdf5a95. El informe interno detallado (Informe_Historico_Ecomac_FINAL.pdf, 51 págs) queda guardado en disco por si se quiere reenviar.
 - Disco al 83% tras imágenes/PDFs — vigilar.
+
+## 2026-08-29 (fork) — Correo formal Alianza Ecomac + montos escriturados + links descarga
+- Google liberó la casilla: cuerpos_gerardo.py descargó 4.376 cuerpos (gerardo_bodies.json).
+- montos_escriturados.py: crédito por escriturado desde cuerpos (61/92 con monto, suma UF 125.263; proyección total ≈UF 180.000 ≈ $7.500MM aprobada por usuario). Duplicados y 550UF sospechosos informados en pantalla.
+- correo_alianza_ecomac.py: correo FORMAL a las dos encargadas Ecomac con cuadro resumen ejecutivo al inicio (UF 180.000+/$7.500MM, 11,3h, 1.109 evaluados, 319 en verde, 92 escrituraciones), rapidez primero, adjuntos Felicitaciones_Clientes_Ecomac.pdf y Clientes_Enviados_Ecomac.pdf. Encolado preview 286c1447.
+- pdf_alianza_ecomac.py ahora solo genera el PDF (KPI banner con escriturado total incluido, sección valor escrituración UF 180.000+).
+- 4 links de descarga segura generados (Alianza, Detallado 51p, Felicitaciones, Clientes Enviados).
