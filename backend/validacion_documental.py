@@ -129,7 +129,7 @@ def periodo_de_texto(texto, ahora=None):
 
 
 def tipo_laboral_de_tipos(tipos):
-    """Ingesta: mixto si hay renta dependiente E independiente en el mismo correo."""
+    """Ingesta: mixto si hay ambas rentas. Sin evidencia laboral → desconocido (no asume sueldo)."""
     s = {(t or "").lower() for t in (tipos or [])}
     dep = bool(s & {"liquidacion", "cotizacion_afp", "certificado_afp", "afp"})
     ind = bool(s & {"boleta_honorarios", "impuesto_renta", "boletas", "imp_renta", "f29"})
@@ -137,7 +137,9 @@ def tipo_laboral_de_tipos(tipos):
         return "mixto"
     if ind:
         return "independiente"
-    return "dependiente"
+    if dep:
+        return "dependiente"
+    return "desconocido"
 
 
 _PERIODO_MEM = {}
@@ -376,7 +378,6 @@ def validar_documentos(tipo, archivos, exento_afp=False, ahora=None, base_dir=No
                        permitir_ocr=False):
     """Evalúa completitud + vigencia + formato. Nunca pide docs del perfil contrario."""
     ahora = ahora or datetime.now(timezone.utc)
-    tipo = (tipo or "dependiente").lower().strip() or "dependiente"
     ocr_budget = [OCR_BUDGET_FOLDER] if permitir_ocr else None
     por_cat = {}
     cats = set()
@@ -390,6 +391,12 @@ def validar_documentos(tipo, archivos, exento_afp=False, ahora=None, base_dir=No
         fmt = _formato_archivo(a)
         if fmt:
             alertas.append(fmt)
+
+    tipo_in = (tipo or "").lower().strip()
+    if tipo_in in ("", "desconocido", "por_revisar"):
+        tipo = tipo_laboral_de_tipos(cats)
+    else:
+        tipo = tipo_in
 
     req = cats_requeridas(tipo, exento_afp=exento_afp)
     criterios = []
@@ -440,15 +447,18 @@ def validar_documentos(tipo, archivos, exento_afp=False, ahora=None, base_dir=No
 
     nombres = " ".join((a.get("nombre") or "") for a in (archivos or []))
     if tipo in ("independiente", "mixto"):
-        tiene_f29 = bool(RX_F29.search(nombres))
+        tiene_f29 = bool(RX_F29.search(nombres)) or "f29" in cats
         tiene_carpeta = bool(RX_F22.search(nombres) and "carpeta" in nombres.lower())
         if not tiene_f29 and not tiene_carpeta:
             alertas.append(_alerta(
-                "recomendado",
+                "faltante",
                 "Falta formulario F29 (pago provisional mensual)",
                 cat="f29"))
-        if tipo == "independiente" and not RX_DAI.search(nombres) and "boletas" not in cats:
-            pass  # ya cubierto por cat boletas
+            criterios.append({"nombre": LABELS["f29"], "ok": False, "cat": "f29"})
+            cats_faltantes.append("f29")
+        else:
+            criterios.append({"nombre": LABELS["f29"] + (" (en carpeta tributaria)" if tiene_carpeta and not tiene_f29 else ""),
+                              "ok": True, "cat": "f29"})
     if tipo in ("dependiente", "mixto") and "contrato" not in cats and not RX_CONTRATO.search(nombres):
         alertas.append(_alerta(
             "recomendado",
@@ -547,6 +557,10 @@ def textos_faltantes(val):
 
 def textos_recomendados(val):
     return [a["mensaje"] for a in (val or {}).get("alertas") or [] if a.get("nivel") == "recomendado"]
+
+
+def textos_formato(val):
+    return [a["mensaje"] for a in (val or {}).get("alertas") or [] if a.get("nivel") == "formato"]
 
 
 def snapshot_publico(val):

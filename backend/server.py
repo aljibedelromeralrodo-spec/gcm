@@ -2683,6 +2683,7 @@ def _folder_public(doc, con_archivos=False, archivos=None, permitir_ocr=False):
     d["validacion_documental"] = vdoc.snapshot_publico(val)
     d["alertas_documentales"] = vdoc.textos_faltantes(val)
     d["alertas_recomendadas"] = vdoc.textos_recomendados(val)
+    d["alertas_formato"] = vdoc.textos_formato(val)
     df = d.get("datos_financieros") or {}
     d["is_ready_to_send"] = bool(archivos) and val["completo"] and bool(df.get("valor_propiedad"))
     if con_archivos:

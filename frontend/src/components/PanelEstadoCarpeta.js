@@ -22,6 +22,7 @@ export default function PanelEstadoCarpeta({ folder }) {
     ? est.documentos_faltantes
     : (folder.alertas_documentales || []);
   const recomendados = folder.alertas_recomendadas || [];
+  const formatos = folder.alertas_formato || [];
 
   const solicitarDocs = async () => {
     if (!window.confirm(`¿Enviar correo automático a ${est.destinatario_solicitud || "el remitente"} solicitando los ${faltantes.length} documento(s) faltante(s)?`)) return;
@@ -115,6 +116,15 @@ export default function PanelEstadoCarpeta({ folder }) {
           {recomendados.map((d, i) => (
             <span key={i} data-testid={`doc-recomendado-${i}`} style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 8px",
               background: "rgba(212,175,55,0.1)", border: "1px solid rgba(212,175,55,0.4)", color: "#e7cf7a" }}>{d}</span>
+          ))}
+        </div>
+      )}
+      {formatos.length > 0 && (
+        <div data-testid="docs-formato" style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 11, fontWeight: 800, color: "#fb923c", letterSpacing: 1 }}>FORMATO:</span>
+          {formatos.map((d, i) => (
+            <span key={i} data-testid={`doc-formato-${i}`} style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 8px",
+              background: "rgba(234,88,12,0.1)", border: "1px solid rgba(234,88,12,0.4)", color: "#fb923c" }}>{d}</span>
           ))}
         </div>
       )}

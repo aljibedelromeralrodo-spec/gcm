@@ -154,6 +154,35 @@ class TestAlertasMes:
         assert v.tipo_laboral_de_tipos(["cedula", "liquidacion", "boleta_honorarios"]) == "mixto"
         assert v.tipo_laboral_de_tipos(["impuesto_renta", "boleta_honorarios"]) == "independiente"
         assert v.tipo_laboral_de_tipos(["cedula", "liquidacion", "certificado_afp"]) == "dependiente"
+        assert v.tipo_laboral_de_tipos(["cedula"]) == "desconocido"
+
+    def test_f29_faltante_sin_carpeta_tributaria(self):
+        archivos = [
+            _a("cedula.pdf", "01_cedula"),
+            _a("formulario_F22.pdf", "02_impuesto_renta"),
+            _a("dai_boletas_2025.pdf", "03_boletas"),
+            _a("informe_cmf.pdf", "04_cmf"),
+        ]
+        val = v.validar_documentos("independiente", archivos, ahora=AHORA)
+        assert any("f29" in m.lower() for m in _msgs(val))
+        assert val["completo"] is False
+
+    def test_carpeta_tributaria_cubre_f29(self):
+        archivos = [
+            _a("cedula.pdf", "01_cedula"),
+            _a("carpeta tributaria f22.pdf", "02_impuesto_renta"),
+            _a("dai_boletas_2025.pdf", "03_boletas"),
+            _a("informe_cmf.pdf", "04_cmf"),
+        ]
+        val = v.validar_documentos("independiente", archivos, ahora=AHORA)
+        assert not any(a["cat"] == "f29" and a["nivel"] == "faltante" for a in val["alertas"])
+        assert val["completo"] is True
+
+    def test_desconocido_no_asume_dependiente(self):
+        val = v.validar_documentos("", [_a("cedula.pdf", "01_cedula")], ahora=AHORA)
+        blob = " ".join(_msgs(val)).lower()
+        assert "liquidaci" not in blob
+        assert val["tipo"] == "desconocido"
 
     def test_falta_liquidacion_de_abril(self):
         archivos = [
