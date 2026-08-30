@@ -793,6 +793,18 @@ export default function ClientesModales() {
                       </label>
                     </div>
                   )}
+                  {emailModal.preview.viabilidad?.discrepancia?.nivel === "alerta" && (
+                    <div data-testid="email-discrepancia-warning" style={{ marginBottom: 8, padding: "8px 12px", borderRadius: 0, background: "rgba(234,88,12,0.12)", border: "1px solid rgba(234,88,12,0.5)", color: "#fb923c", fontSize: 12 }}>
+                      <b>⚠ Discrepancia Mutuaria vs Concreces</b>
+                      <div style={{ marginTop: 4, fontWeight: 600 }}>{emailModal.preview.viabilidad.discrepancia.mensaje}</div>
+                      <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, cursor: "pointer", color: "#fdba74", fontWeight: 600 }}>
+                        <input type="checkbox" checked={!!emailModal.force_discrepancia}
+                          onChange={(e) => setEmailModal({ ...emailModal, force_discrepancia: e.target.checked })}
+                          data-testid="email-force-discrepancia" style={{ accentColor: "#ea580c" }} />
+                        Asumo el sesgo interno vs Espejo Concreces y envío igual
+                      </label>
+                    </div>
+                  )}
                   {emailModal.editBody != null ? (
                     <div>
                       <textarea value={emailModal.editBody} data-testid="email-body-editor"

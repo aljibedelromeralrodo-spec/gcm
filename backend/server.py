@@ -1978,10 +1978,12 @@ async def central_chat(payload: dict, request: Request):
         # Contexto: carpetas con sus estados
         folders = await db.folders.find({}).sort("created_at", -1).limit(60).to_list(60)
         stats = await _stats_mesa()
+        modelo_esp = await db.config.find_one({"_key": "espejo_mesa_modelo"}) or {}
+        uf_m = stats.get("valor_uf")
         lineas = []
         for f in folders:
             pub = _folder_public(f)
-            prob = _prob_aprobacion_folder(f, stats)
+            prob = _prob_aprobacion_folder(f, stats, modelo=modelo_esp, uf_valor=uf_m)
             estados = []
             if f.get("tasacion_solicitada_at"):
                 estados.append("tasación solicitada" + (f" (fecha: {f.get('tasacion_fecha')})" if f.get("tasacion_fecha") else ""))
@@ -1998,8 +2000,12 @@ async def central_chat(payload: dict, request: Request):
             faltan = pub.get("alertas_documentales") or [
                 c for c in fsvc.required_cats(tipo_cli, exento_afp=bool((f.get("credit_request") or {}).get("exento_afp")))
                 if c not in cats]
+            _esp = (prob.get("concreces") or {})
+            _esp_txt = (f", Concreces {_esp.get('porcentaje')}%" if _esp.get("disponible") and _esp.get("porcentaje") is not None else "")
+            _disc = (prob.get("discrepancia") or {})
+            _disc_txt = f" ⚠ {_disc.get('nivel')}" if _disc.get("hay") else ""
             lineas.append(f"- {f.get('nombre')} (RUT {f.get('rut') or '?'}): {pub.get('total_archivos', 0)} docs [{', '.join(cats)}], "
-                          f"aprobación {prob['porcentaje']}%, {'lista para mesa' if pub.get('is_ready_to_send') else 'incompleta'}"
+                          f"Mutuaria {prob['porcentaje']}%{_esp_txt}{_disc_txt}, {'lista para mesa' if pub.get('is_ready_to_send') else 'incompleta'}"
                           + (f", FALTAN: {', '.join(faltan)}" if faltan else "")
                           + (f", codeudor {f.get('codeudor_nombre')}" if f.get("codeudor_nombre") else "")
                           + (f". Estados: {'; '.join(estados)}" if estados else ""))
@@ -3456,11 +3462,7 @@ async def get_folder(fid: str):
     if not doc:
         raise HTTPException(status_code=404, detail="Carpeta no encontrada")
     res = _folder_public(doc, con_archivos=True, permitir_ocr=True)
-    uf_val = await get_valor_uf()
-    modelo_esp = await db.config.find_one({"_key": "espejo_mesa_modelo"}) or {}
-    res["prob_aprobacion"] = _prob_aprobacion_folder(
-        doc, await _stats_mesa(), modelo=modelo_esp, uf_valor=uf_val,
-        archivos=res.get("archivos"))
+    res["prob_aprobacion"] = await _viabilidad_folder(doc, archivos=res.get("archivos"))
     res["criterios"] = _criterios_folder(doc, archivos=res.get("archivos"), permitir_ocr=False)
     await _alerta_pdfs_protegidos(doc.get("nombre", ""), res.get("archivos"))
     await _alerta_docs_faltantes(doc, res.get("validacion_documental"))
@@ -4555,6 +4557,15 @@ async def folder_send_email(fid: str, payload: dict):
         raise HTTPException(status_code=412, detail="Documentación incompleta — faltan: "
                             + ", ".join(missing_labels)
                             + ". Para enviar igual, asumí el envío manual incompleto.")
+    try:
+        _via = await _viabilidad_folder(doc, archivos=_arch_mesa)
+    except Exception:
+        _via = {}
+    _disc = (_via or {}).get("discrepancia") or {}
+    if payload.get("confirm") and _disc.get("nivel") == "alerta" and not payload.get("force_discrepancia"):
+        raise HTTPException(status_code=412, detail=(
+            "DISCREPANCIA DE RIESGO — " + (_disc.get("mensaje") or "")
+            + " Para enviar igual, confirmá que asumís el sesgo Mutuaria vs Concreces."))
     # REGLA: a Mesa solo se envía UNA vez en forma directa. Para reenviar se exige la clave.
     # HUELLA: si ya existe un Message-ID de envío exitoso, el re-envío queda prohibido sin clave.
     if payload.get("confirm") and (doc.get("mesa_enviado_at") or doc.get("mesa_message_id")):
@@ -4629,7 +4640,8 @@ async def folder_send_email(fid: str, payload: dict):
     if not payload.get("confirm"):
         return {"to": to, "subject": subject, "body": cuerpo, "body_html": cuerpo,
                 "missing_docs": missing_labels, "docs_completos": not missing_labels,
-                "attachments": attach_names, "sender": sender}
+                "attachments": attach_names, "sender": sender,
+                "viabilidad": _via}
     adjuntos = [{"filename": p.name, "content_b64": _b64(p.read_bytes())} for p in attach_paths]
     # CERROJO ATÓMICO: find_one_and_update marca EN_PROCESO_DE_ENVIO — si otro proceso
     # intenta enviar al mismo tiempo, el segundo intento se bloquea de inmediato.
@@ -5885,6 +5897,16 @@ def _prob_aprobacion_folder(doc, stats, modelo=None, uf_valor=None, techo_uf=Non
     import viabilidad_engine as ve
     return ve.evaluar_folder(doc, stats, modelo_espejo=modelo, uf_valor=uf_valor,
                              techo_uf=techo_uf, archivos=archivos)
+
+
+async def _viabilidad_folder(doc, stats=None, archivos=None, techo_uf=None):
+    """Carga UF + modelo Espejo y evalúa el par Mutuaria/Concreces."""
+    if stats is None:
+        stats = await _stats_mesa()
+    uf = stats.get("valor_uf") or await get_valor_uf()
+    modelo = await db.config.find_one({"_key": "espejo_mesa_modelo"}) or {}
+    return _prob_aprobacion_folder(doc, stats, modelo=modelo, uf_valor=uf,
+                                   techo_uf=techo_uf, archivos=archivos)
 
 
 @api.get("/procesamiento/queue")
@@ -12346,8 +12368,17 @@ def _informe_vip_pdf(doc, prob):
     c.drawString(58, y - 14, f"{pct}%")
     c.setFillColor(GRIS)
     c.setFont("Helvetica", 9)
-    c.drawString(140, y - 8, "probabilidad de aprobación en mesa")
-    y -= 44
+    c.drawString(140, y - 8, "Mutuaria / criterio interno")
+    y -= 36
+    conc = (prob.get("concreces") or {})
+    if conc.get("disponible") and conc.get("porcentaje") is not None:
+        _fila("Concreces (tope mesa)", f"{conc.get('porcentaje')}%")
+        if conc.get("monto_espejo_uf"):
+            _fila("Tope Espejo Concreces", f"{conc.get('monto_espejo_uf')} UF")
+    disc = prob.get("discrepancia") or {}
+    if disc.get("mensaje"):
+        _fila("Discrepancia", disc.get("mensaje")[:70])
+    y -= 8
     for fct in (prob.get("factores") or [])[:8]:
         c.setFillColor(GRIS)
         c.setFont("Helvetica", 8)
@@ -12392,7 +12423,7 @@ def _informe_vip_pdf(doc, prob):
 @api.get("/informes/vip/{fid}/pdf")
 async def informe_vip_pdf(fid: str):
     doc = await _get_folder_doc(fid)
-    prob = _prob_aprobacion_folder(doc, await _stats_mesa())
+    prob = await _viabilidad_folder(doc)
     pdf = await asyncio.to_thread(_informe_vip_pdf, doc, prob)
     fn = f"Informe_VIP_{fsvc.safe_name(doc.get('nombre','cliente'))}.pdf"
     return _RawResponse(content=pdf, media_type="application/pdf",
@@ -12406,7 +12437,7 @@ async def informe_vip_enviar(fid: str, payload: dict):
     to = (payload.get("to") or doc.get("email") or "").strip()
     if not to:
         raise HTTPException(status_code=400, detail="La carpeta no tiene correo del cliente: indícalo")
-    prob = _prob_aprobacion_folder(doc, await _stats_mesa())
+    prob = await _viabilidad_folder(doc)
     pdf = await asyncio.to_thread(_informe_vip_pdf, doc, prob)
     nombre = doc.get("nombre", "Cliente").title()
     cuerpo = (f"<div style='font-family:Georgia,serif;color:#0f172a;max-width:520px'>"
@@ -12439,9 +12470,13 @@ async def _informes_vip_loop():
                         {"historial.fecha": {"$gte": hace7}}]}).limit(12).to_list(12)
                     adjuntos = []
                     stats_m = await _stats_mesa()
+                    modelo_esp = await db.config.find_one({"_key": "espejo_mesa_modelo"}) or {}
+                    uf_v = stats_m.get("valor_uf")
                     for d in activos:
                         try:
-                            pdf = await asyncio.to_thread(_informe_vip_pdf, d, _prob_aprobacion_folder(d, stats_m))
+                            pdf = await asyncio.to_thread(
+                                _informe_vip_pdf, d,
+                                _prob_aprobacion_folder(d, stats_m, modelo=modelo_esp, uf_valor=uf_v))
                             adjuntos.append({"filename": f"Informe_VIP_{fsvc.safe_name(d.get('nombre','x'))}.pdf",
                                              "content_b64": _b64(pdf)})
                         except Exception:

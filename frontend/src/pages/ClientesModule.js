@@ -1278,6 +1278,7 @@ export default function ClientesModule({ onNavigate }) {
     if (em.ejecutivo) p.ejecutivo_interno = em.ejecutivo;
     if (em.ejecutivo_externo) p.ejecutivo_externo = em.ejecutivo_externo;
     if (em.force_incompleto) p.force_incompleto = true;
+    if (em.force_discrepancia) p.force_discrepancia = true;
     return p;
   };
 
@@ -1307,6 +1308,11 @@ export default function ClientesModule({ onNavigate }) {
     const md = em.preview?.missing_docs || [];
     if (md.length > 0 && !em.force_incompleto) {
       alert(`🚫 ENVÍO BLOQUEADO — Documentación incompleta\n\nFaltan: ${md.join(", ")}\n\nPara enviar igual, marcá "Asumo el envío manual con documentación incompleta" en el preview.`);
+      return;
+    }
+    const disc = em.preview?.viabilidad?.discrepancia;
+    if (disc?.nivel === "alerta" && !em.force_discrepancia) {
+      alert(`🚫 ENVÍO BLOQUEADO — Discrepancia de riesgo Mutuaria vs Concreces\n\n${disc.mensaje || ""}\n\nPara enviar igual, marcá "Asumo el sesgo interno vs Espejo Concreces" en el preview.`);
       return;
     }
     // HARD GUARD: SIN subsidio → crédito no puede superar el 80% del valor propiedad

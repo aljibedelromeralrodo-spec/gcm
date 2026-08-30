@@ -382,7 +382,7 @@ export default function ClientesLista() {
                             title={f.prob_aprobacion.discrepancia?.mensaje || "Espejo Concreces"}
                             style={{ fontSize: 9, fontWeight: 800, marginTop: 2, whiteSpace: "nowrap",
                               color: enviadoManual ? "#fff" : (f.prob_aprobacion.discrepancia?.hay ? "#ea580c" : "#94a3b8") }}>
-                            Espejo {f.prob_aprobacion.concreces.porcentaje}%
+                            Concreces {f.prob_aprobacion.concreces.porcentaje}%
                           </span>
                         )}
                       </div>
