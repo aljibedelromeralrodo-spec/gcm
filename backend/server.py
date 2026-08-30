@@ -2669,7 +2669,7 @@ async def search(q: str = "", limit: int = 15):
 # ---------------------------------------------------------------------------
 # Clientes / Carpetas (archivos físicos en disco + metadata en Mongo)
 # ---------------------------------------------------------------------------
-def _folder_public(doc, con_archivos=False, archivos=None):
+def _folder_public(doc, con_archivos=False, archivos=None, permitir_ocr=False):
     import validacion_documental as vdoc
     d = clean(dict(doc))
     if archivos is None:
@@ -2679,12 +2679,10 @@ def _folder_public(doc, con_archivos=False, archivos=None):
     cr["doc_categories"] = cats
     d["credit_request"] = cr
     d["total_archivos"] = len(archivos)
-    val = vdoc.validar_documentos(
-        cr.get("client_type") or "dependiente", archivos,
-        exento_afp=bool(cr.get("exento_afp")),
-        base_dir=str(fsvc.folder_dir(d.get("nombre", ""))))
+    val = vdoc.validar_folder(d, archivos, permitir_ocr=permitir_ocr)
     d["validacion_documental"] = vdoc.snapshot_publico(val)
     d["alertas_documentales"] = vdoc.textos_faltantes(val)
+    d["alertas_recomendadas"] = vdoc.textos_recomendados(val)
     df = d.get("datos_financieros") or {}
     d["is_ready_to_send"] = bool(archivos) and val["completo"] and bool(df.get("valor_propiedad"))
     if con_archivos:
@@ -2725,24 +2723,16 @@ async def _mesa_respuesta_folder(d, segs=None, archivos=None):
     return None
 
 
-def _criterios_folder(d, archivos=None):
+def _criterios_folder(d, archivos=None, permitir_ocr=False):
     import validacion_documental as vdoc
     if archivos is None:
         archivos = fsvc.scan_archivos(d.get("nombre", ""))
-    cats_all = {fsvc.cat_de_archivo(a["nombre"], a["subfolder"]) for a in archivos}
     cr = d.get("credit_request") or {}
     df = d.get("datos_financieros") or {}
-    val = vdoc.validar_documentos(
-        cr.get("client_type") or "dependiente", archivos,
-        exento_afp=bool(cr.get("exento_afp")),
-        base_dir=str(fsvc.folder_dir(d.get("nombre", ""))))
+    val = vdoc.validar_folder(d, archivos, permitir_ocr=permitir_ocr)
     criterios = [{"nombre": c["nombre"], "ok": c["ok"]} for c in val["criterios"]]
     if cr.get("exento_afp"):
         criterios.append({"nombre": f"Exento de AFP ({cr.get('exento_afp_institucion') or 'institución uniformada'})", "ok": True})
-    if (d.get("codeudor_nombre") or "").strip() or "codeudor" in cats_all:
-        ctip = (cr.get("codeudor_tipo") or "").strip()
-        criterios.append({"nombre": f"Documentos del codeudor{f' ({ctip})' if ctip else ''}",
-                          "ok": "codeudor" in cats_all})
     criterios.append({"nombre": "Datos financieros completos",
                       "ok": bool(df.get("valor_propiedad") and df.get("monto_credito"))})
     criterios.append({"nombre": "Enviada a mesa", "ok": bool(d.get("emails_sent_count"))})
@@ -3461,9 +3451,9 @@ async def get_folder(fid: str):
     doc = await db.folders.find_one({"id": fid})
     if not doc:
         raise HTTPException(status_code=404, detail="Carpeta no encontrada")
-    res = _folder_public(doc, con_archivos=True)
+    res = _folder_public(doc, con_archivos=True, permitir_ocr=True)
     res["prob_aprobacion"] = _prob_aprobacion_folder(doc, await _stats_mesa())
-    res["criterios"] = _criterios_folder(doc)
+    res["criterios"] = _criterios_folder(doc, archivos=res.get("archivos"), permitir_ocr=False)
     await _alerta_pdfs_protegidos(doc.get("nombre", ""), res.get("archivos"))
     await _alerta_docs_faltantes(doc, res.get("validacion_documental"))
     return res
@@ -4537,10 +4527,7 @@ async def folder_send_email(fid: str, payload: dict):
     cr = doc.get("credit_request") or {}
     import validacion_documental as vdoc
     _arch_mesa = fsvc.scan_archivos(nombre)
-    _val_mesa = vdoc.validar_documentos(
-        cr.get("client_type") or "dependiente", _arch_mesa,
-        exento_afp=bool(cr.get("exento_afp")),
-        base_dir=str(fsvc.folder_dir(nombre)))
+    _val_mesa = vdoc.validar_folder(doc, _arch_mesa, permitir_ocr=False)
     missing_labels = vdoc.textos_faltantes(_val_mesa)
     _df = doc.get("datos_financieros") or {}
     fecha_entrega = (_df.get("fecha_entrega") or "").strip()

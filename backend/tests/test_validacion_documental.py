@@ -194,6 +194,41 @@ class TestFormato:
         assert any(a["nivel"] == "formato" for a in val["alertas"])
 
 
+class TestCodeudor:
+    def test_remap_codeudor_por_nombre(self):
+        arch = [_a("CODEUDOR_liquidacion_abril_2026.pdf", "05_codeudor")]
+        rem = v.remap_codeudor(arch)
+        assert len(rem) == 1
+        assert rem[0]["subfolder"] == "02_liquidaciones"
+
+    def test_codeudor_dependiente_pide_cedula(self):
+        titular = [
+            _a("cedula.pdf", "01_cedula"),
+            _a("liq_febrero_2026.pdf", "02_liquidaciones"),
+            _a("liq_marzo_2026.pdf", "02_liquidaciones"),
+            _a("liq_abril_2026.pdf", "02_liquidaciones"),
+            _a("liq_mayo_2026.pdf", "02_liquidaciones"),
+            _a("liq_junio_2026.pdf", "02_liquidaciones"),
+            _a("liq_julio_2026.pdf", "02_liquidaciones"),
+            _a("afp.pdf", "03_afp"),
+            _a("cmf.pdf", "04_cmf"),
+            _a("CODEUDOR_liq_abril.pdf", "05_codeudor"),
+        ]
+        doc = {"nombre": "X", "codeudor_nombre": "Aval",
+               "credit_request": {"client_type": "dependiente", "codeudor_tipo": "dependiente"}}
+        val = v.validar_documentos("dependiente", titular, ahora=AHORA)
+        val = v.anexar_codeudor(doc, titular, val, ahora=AHORA)
+        blob = " ".join(_msgs(val)).lower()
+        assert "codeudor" in blob
+        assert "cédula" in blob or "cedula" in blob
+
+    def test_sin_codeudor_no_alerta(self):
+        archivos = [_a("cedula.pdf", "01_cedula"), _a("cmf.pdf", "04_cmf")]
+        val = v.validar_documentos("desconocido", archivos, ahora=AHORA)
+        val = v.anexar_codeudor({"credit_request": {}}, archivos, val, ahora=AHORA)
+        assert not any(a.get("codeudor") for a in val["alertas"])
+
+
 class TestKeywords:
     def test_dai_es_boletas(self):
         assert fsvc.cat_de_texto("DAI_resumen_anual.pdf") == "boletas"

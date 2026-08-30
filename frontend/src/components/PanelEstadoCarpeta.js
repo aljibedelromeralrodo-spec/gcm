@@ -21,6 +21,7 @@ export default function PanelEstadoCarpeta({ folder }) {
   const faltantes = (est.documentos_faltantes && est.documentos_faltantes.length)
     ? est.documentos_faltantes
     : (folder.alertas_documentales || []);
+  const recomendados = folder.alertas_recomendadas || [];
 
   const solicitarDocs = async () => {
     if (!window.confirm(`¿Enviar correo automático a ${est.destinatario_solicitud || "el remitente"} solicitando los ${faltantes.length} documento(s) faltante(s)?`)) return;
@@ -106,6 +107,15 @@ export default function PanelEstadoCarpeta({ folder }) {
               opacity: (enviando || !est.destinatario_solicitud) ? 0.5 : 1 }}>
             <i className={`fa ${enviando ? "fa-spinner fa-spin" : "fa-paper-plane"}`}></i> Solicitar Documentos
           </button>
+        </div>
+      )}
+      {recomendados.length > 0 && (
+        <div data-testid="docs-recomendados" style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 11, fontWeight: 800, color: "#e7cf7a", letterSpacing: 1 }}>RECOMENDADOS:</span>
+          {recomendados.map((d, i) => (
+            <span key={i} data-testid={`doc-recomendado-${i}`} style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 8px",
+              background: "rgba(212,175,55,0.1)", border: "1px solid rgba(212,175,55,0.4)", color: "#e7cf7a" }}>{d}</span>
+          ))}
         </div>
       )}
       {msg && <div data-testid="panel-estado-msg" style={{ marginTop: 6, fontSize: 12, fontWeight: 700,

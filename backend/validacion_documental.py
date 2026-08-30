@@ -141,48 +141,82 @@ def tipo_laboral_de_tipos(tipos):
 
 
 _PERIODO_MEM = {}
+OCR_BUDGET_FOLDER = 3
+_MAX_PDF_OCR = 12_000_000  # bytes; evita tasaciones enormes
 
 
-def periodo_desde_pdf(path, ahora=None):
-    """Texto embebido (sin OCR visión) + caché path/mtime/tamaño. None si no hay fecha."""
+def _guardar_periodo_cache(db, path, st, per, ocr_done):
+    key = (str(path), int(st.st_mtime), st.st_size)
+    _PERIODO_MEM[key] = (per, bool(ocr_done))
+    if len(_PERIODO_MEM) > 4000:
+        _PERIODO_MEM.clear()
+        _PERIODO_MEM[key] = (per, bool(ocr_done))
+    if db is None:
+        return
+    try:
+        db.ocr_periodo_cache.replace_one(
+            {"path": str(path)},
+            {"path": str(path), "size": st.st_size, "mtime": int(st.st_mtime),
+             "anio": per[0] if per else None, "mes": per[1] if per else None,
+             "ocr": bool(ocr_done)},
+            upsert=True)
+    except Exception:
+        pass
+
+
+def periodo_desde_pdf(path, ahora=None, permitir_ocr=False, ocr_budget=None):
+    """Nombre no: texto embebido, y si la ficha lo pide, OCR (máx. presupuesto). Caché path/mtime."""
     p = Path(path)
     try:
         st = p.stat()
     except OSError:
         return None
     key = (str(p), int(st.st_mtime), st.st_size)
-    if key in _PERIODO_MEM:
-        return _PERIODO_MEM[key]
-    per = None
+    mem = _PERIODO_MEM.get(key)
+    if mem is not None:
+        per, ocr_done = mem
+        if per or not permitir_ocr or ocr_done:
+            return per
     db = None
+    hit = None
     try:
         from bunker import _fs
         _f, db = _fs()
-        hit = db.ocr_periodo_cache.find_one({"path": str(p), "size": st.st_size, "mtime": int(st.st_mtime)})
-        if hit is not None:
-            if hit.get("anio") and hit.get("mes"):
-                per = (int(hit["anio"]), int(hit["mes"]))
-            _PERIODO_MEM[key] = per
-            return per
+        hit = db.ocr_periodo_cache.find_one(
+            {"path": str(p), "size": st.st_size, "mtime": int(st.st_mtime)})
     except Exception:
         db = None
+    if hit is not None:
+        per = (int(hit["anio"]), int(hit["mes"])) if hit.get("anio") and hit.get("mes") else None
+        ocr_done = bool(hit.get("ocr"))
+        if per or not permitir_ocr or ocr_done:
+            _PERIODO_MEM[key] = (per, ocr_done)
+            return per
+    per = None
     try:
         import ocr_service
         texto = ocr_service.texto_embebido(p.read_bytes(), max_pages=2)
         per = periodo_de_texto(texto, ahora=ahora)
     except Exception:
         per = None
-    _PERIODO_MEM[key] = per
-    if len(_PERIODO_MEM) > 4000:
-        _PERIODO_MEM.clear()
-    if db is not None:
+    if per:
+        _guardar_periodo_cache(db, p, st, per, False)
+        return per
+    if permitir_ocr and (ocr_budget is None or ocr_budget[0] > 0):
+        if ocr_budget is not None:
+            ocr_budget[0] -= 1
         try:
-            doc = {"path": str(p), "size": st.st_size, "mtime": int(st.st_mtime),
-                   "anio": per[0] if per else None, "mes": per[1] if per else None}
-            db.ocr_periodo_cache.replace_one({"path": str(p)}, doc, upsert=True)
+            raw = p.read_bytes()
+            if len(raw) <= _MAX_PDF_OCR:
+                import ocr_service
+                texto, _m = ocr_service.extraer_texto(raw, p.name, force_ocr=False)
+                per = periodo_de_texto(texto, ahora=ahora)
         except Exception:
-            pass
-    return per
+            per = None
+        _guardar_periodo_cache(db, p, st, per, True)
+        return per
+    _guardar_periodo_cache(db, p, st, None, False)
+    return None
 
 
 def meses_ventana(n, ahora=None, cerrados=True):
@@ -221,8 +255,8 @@ def _texto_faltante_mes(label_singular, ym, ventana):
     return f"Falta {label_singular} del mes de {_nombre_mes(ym, con_anio=len(anios) > 1)}"
 
 
-def _periodo_archivo(a, ahora, base_dir=None):
-    """Nombre → campo `periodo` → texto embebido del PDF (caché). No inventa mes."""
+def _periodo_archivo(a, ahora, base_dir=None, permitir_ocr=False, ocr_budget=None):
+    """Nombre → campo `periodo` → texto embebido / OCR (caché). No inventa mes."""
     if a.get("periodo"):
         try:
             y, m = a["periodo"][0], a["periodo"][1]
@@ -235,13 +269,16 @@ def _periodo_archivo(a, ahora, base_dir=None):
     ruta = a.get("ruta") or ""
     if base_dir and ruta and str(ruta).lower().endswith(".pdf"):
         try:
-            return periodo_desde_pdf(Path(base_dir) / ruta, ahora=ahora)
+            return periodo_desde_pdf(
+                Path(base_dir) / ruta, ahora=ahora,
+                permitir_ocr=permitir_ocr, ocr_budget=ocr_budget)
         except Exception:
             return None
     return None
 
 
-def _vigencia_mensual(archivos, n, label_plural, label_singular, ahora, base_dir=None):
+def _vigencia_mensual(archivos, n, label_plural, label_singular, ahora, base_dir=None,
+                      permitir_ocr=False, ocr_budget=None):
     """Devuelve (ok, alertas). Mes específico solo si TODOS los archivos tienen fecha.
 
     Si hay PDFs sin mes en el nombre/texto, no se inventan «falta abril»: se cae a conteo.
@@ -255,7 +292,8 @@ def _vigencia_mensual(archivos, n, label_plural, label_singular, ahora, base_dir
     ventana = meses_ventana(n, ahora=ahora, cerrados=True)
     parsed, n_sin_fecha = set(), 0
     for a in archivos:
-        p = _periodo_archivo(a, ahora, base_dir=base_dir)
+        p = _periodo_archivo(a, ahora, base_dir=base_dir,
+                             permitir_ocr=permitir_ocr, ocr_budget=ocr_budget)
         if p:
             parsed.add(p)
             a["periodo"] = p
@@ -334,10 +372,12 @@ def _formato_archivo(a):
     return None
 
 
-def validar_documentos(tipo, archivos, exento_afp=False, ahora=None, base_dir=None):
+def validar_documentos(tipo, archivos, exento_afp=False, ahora=None, base_dir=None,
+                       permitir_ocr=False):
     """Evalúa completitud + vigencia + formato. Nunca pide docs del perfil contrario."""
     ahora = ahora or datetime.now(timezone.utc)
     tipo = (tipo or "dependiente").lower().strip() or "dependiente"
+    ocr_budget = [OCR_BUDGET_FOLDER] if permitir_ocr else None
     por_cat = {}
     cats = set()
     alertas = []
@@ -361,7 +401,8 @@ def validar_documentos(tipo, archivos, exento_afp=False, ahora=None, base_dir=No
         if cat == "liquidacion":
             ok, al = _vigencia_mensual(
                 presentes, LIQ_MESES, "liquidaciones de sueldo",
-                "liquidación de sueldo", ahora, base_dir=base_dir)
+                "liquidación de sueldo", ahora, base_dir=base_dir,
+                permitir_ocr=permitir_ocr, ocr_budget=ocr_budget)
             alertas.extend(al)
             criterios.append({"nombre": label, "ok": ok, "cat": cat})
             if not ok:
@@ -369,7 +410,8 @@ def validar_documentos(tipo, archivos, exento_afp=False, ahora=None, base_dir=No
         elif cat == "afp":
             # Un certificado AFP de 12/24 meses cubre el período; solo se exige
             # mes a mes si hay una serie de archivos con mes en el nombre/PDF.
-            parsed = [_periodo_archivo(a, ahora, base_dir) for a in presentes]
+            parsed = [_periodo_archivo(a, ahora, base_dir, permitir_ocr, ocr_budget)
+                      for a in presentes]
             parsed = [p for p in parsed if p]
             if presentes and len(parsed) < 2:
                 ok = True
@@ -377,7 +419,8 @@ def validar_documentos(tipo, archivos, exento_afp=False, ahora=None, base_dir=No
             else:
                 ok, al = _vigencia_mensual(
                     presentes, AFP_MESES, "cotizaciones previsionales AFP",
-                    "cotización previsional", ahora, base_dir=base_dir)
+                    "cotización previsional", ahora, base_dir=base_dir,
+                    permitir_ocr=permitir_ocr, ocr_budget=ocr_budget)
                 alertas.extend(al)
                 criterios.append({"nombre": label, "ok": ok, "cat": cat})
                 if not ok:
@@ -424,17 +467,76 @@ def validar_documentos(tipo, archivos, exento_afp=False, ahora=None, base_dir=No
     }
 
 
-def validar_folder(doc, archivos=None):
+def remap_codeudor(archivos):
+    """Archivos 05_codeudor / CODEUDOR_* como si fueran del titular (misma taxonomía)."""
+    out = []
+    for a in archivos or []:
+        cat = fsvc.cat_de_archivo(a.get("nombre") or "", a.get("subfolder") or "")
+        if cat != "codeudor":
+            continue
+        nom = re.sub(r"(?i)^codeudor_", "", a.get("nombre") or "")
+        inner = fsvc.cat_de_texto(nom)
+        for part in (a.get("subfolder") or "").replace("\\", "/").split("/"):
+            if part in fsvc.SUBFOLDER_A_CAT and not part.startswith("05_"):
+                inner = fsvc.SUBFOLDER_A_CAT[part]
+                break
+        b = dict(a)
+        b["nombre"] = nom
+        b["subfolder"] = fsvc.CAT_A_SUBFOLDER.get(inner, "")
+        out.append(b)
+    return out
+
+
+def anexar_codeudor(doc, archivos, val, ahora=None, base_dir=None, permitir_ocr=False):
+    """Añade faltantes del codeudor con las mismas reglas de su perfil laboral."""
+    cr = (doc or {}).get("credit_request") or {}
+    hay_nombre = bool((doc.get("codeudor_nombre") or "").strip())
+    remapped = remap_codeudor(archivos)
+    if not hay_nombre and not remapped:
+        return val
+    if not remapped:
+        val["alertas"].append(_alerta("faltante", "Faltan documentos del codeudor", cat="codeudor"))
+        val["criterios"].append({"nombre": "Documentos del codeudor", "ok": False, "cat": "codeudor"})
+        val["completo"] = False
+        return val
+    inner_tipos = [fsvc.cat_de_archivo(a.get("nombre") or "", a.get("subfolder") or "")
+                   for a in remapped]
+    ctip = (cr.get("codeudor_tipo") or tipo_laboral_de_tipos(inner_tipos) or "dependiente")
+    val_c = validar_documentos(
+        ctip, remapped,
+        exento_afp=bool(cr.get("codeudor_exento_afp")),
+        ahora=ahora, base_dir=base_dir, permitir_ocr=permitir_ocr)
+    for a in val_c.get("alertas") or []:
+        aa = dict(a)
+        aa["mensaje"] = "Codeudor: " + (a.get("mensaje") or "")
+        aa["codeudor"] = True
+        val["alertas"].append(aa)
+    for c in val_c.get("criterios") or []:
+        val["criterios"].append({
+            "nombre": f"Codeudor — {c.get('nombre')}", "ok": c.get("ok"), "cat": c.get("cat")})
+    if not val_c.get("completo"):
+        val["completo"] = False
+    val["codeudor_tipo"] = ctip
+    return val
+
+
+def validar_folder(doc, archivos=None, permitir_ocr=False):
     cr = (doc or {}).get("credit_request") or {}
     nombre = (doc or {}).get("nombre") or ""
     if archivos is None:
         archivos = fsvc.scan_archivos(nombre)
-    return validar_documentos(
+    ahora = datetime.now(timezone.utc)
+    base = str(fsvc.folder_dir(nombre))
+    val = validar_documentos(
         cr.get("client_type") or "dependiente",
         archivos,
         exento_afp=bool(cr.get("exento_afp")),
-        base_dir=str(fsvc.folder_dir(nombre)),
+        ahora=ahora,
+        base_dir=base,
+        permitir_ocr=permitir_ocr,
     )
+    return anexar_codeudor(doc, archivos, val, ahora=ahora, base_dir=base,
+                           permitir_ocr=permitir_ocr)
 
 
 def textos_faltantes(val):
@@ -443,10 +545,15 @@ def textos_faltantes(val):
             if a.get("nivel") in ("faltante", "vigencia")]
 
 
+def textos_recomendados(val):
+    return [a["mensaje"] for a in (val or {}).get("alertas") or [] if a.get("nivel") == "recomendado"]
+
+
 def snapshot_publico(val):
     return {
         "tipo": val.get("tipo"),
         "cats_faltantes": val.get("cats_faltantes") or [],
         "alertas": val.get("alertas") or [],
         "completo": bool(val.get("completo")),
+        "codeudor_tipo": val.get("codeudor_tipo") or "",
     }
