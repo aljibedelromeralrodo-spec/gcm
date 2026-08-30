@@ -74,6 +74,38 @@ async def bodega_listar():
     return {"registros": regs, "total": len(regs), "mapeo_concreces": CONCRECES_MAPEO}
 
 
+@bodega.get("/autofill/{fid}")
+async def bodega_autofill(fid: str):
+    """Mismo payload que ADN: comercial y riesgo auto-rellenan sin doble digitación ni envío."""
+    fd = await db.folders.find_one({"id": fid})
+    if not fd:
+        raise HTTPException(status_code=404, detail="Carpeta no existe")
+    import expediente_identidad as _expid
+    rut = fd.get("rut") or ""
+    exp = None
+    if rut:
+        filtro = _expid.filtro_busqueda(rut)
+        doc = await db.adn_clientes_360.find_one(filtro, {"_id": 0}) if filtro else None
+        if doc:
+            exp = dict(doc.get("expediente_360") or {})
+            if doc.get("financiero"):
+                exp["financiero"] = doc["financiero"]
+    if not exp:
+        comp = await db.compromisos.find_one({"folder_id": fid}) or {}
+        exp = _expid.construir_expediente(fd, {"compromiso": comp})
+    payload = _expid.payload_concreces(exp)
+    ident = exp.get("claves") or _expid.identidad_de_folder(fd)
+    return {
+        "ok": True,
+        "folder_id": fid,
+        "claves": ident,
+        "validacion_cruzada": exp.get("validacion_cruzada") or _expid.validar_identidad(ident),
+        "payload": payload,
+        "mapeo": CONCRECES_MAPEO,
+        "envio": "manual",
+    }
+
+
 @bodega.post("/contrastar/{fid}")
 async def bodega_contrastar(fid: str):
     """MOTOR DE CONTRASTE RUT/ROL: el RUT es el eje. Si un dato no coincide, se EXPULSA."""

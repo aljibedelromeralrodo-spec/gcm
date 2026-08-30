@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException, Request
 from database import db
 from victoria_independiente import (_exigir, _now, _docs_validos, _formularios_auto,
                                     _norm_rut, _norm_rol, _norm_dir, _aviso)
+import expediente_identidad as _expid
 
 mut = APIRouter(prefix="/mutuos")
 
@@ -81,6 +82,24 @@ async def _validaciones_op(op, cliente):
     return out
 
 
+async def _expediente_por_rut(rut):
+    """Lee el expediente único (ADN o carpeta) sin escribir ni enviar."""
+    if not (rut or "").strip():
+        return {}
+    filtro = _expid.filtro_busqueda(rut)
+    doc = await db.adn_clientes_360.find_one(filtro, {"_id": 0}) if filtro else None
+    if doc:
+        exp = dict(doc.get("expediente_360") or {})
+        if doc.get("financiero"):
+            exp["financiero"] = doc["financiero"]
+        return exp
+    ff = _expid.filtro_folder_por_clave(rut)
+    if not ff:
+        return {}
+    fd = await db.folders.find_one(ff)
+    return _expid.construir_expediente(fd) if fd else {}
+
+
 async def _detalle_op(op):
     cliente = await db.victoria_clientes.find_one({"id": op["cliente_id"]}, {"_id": 0})
     validaciones = await _validaciones_op(op, cliente) if cliente else []
@@ -130,22 +149,36 @@ async def crear_operacion(payload: dict, request: Request):
         raise HTTPException(status_code=404, detail="Cliente no encontrado en la bóveda")
     docs = await _docs_validos(cid)
     auto = _formularios_auto(c, docs)
+    exp = await _expediente_por_rut(c.get("rut") or auto.get("rut_titular"))
+    auto = _expid.fusionar_vacios(auto, _expid.campos_mutuos(exp))
     numero = await db.victoria_operaciones.count_documents({}) + 1
+    etapas = {
+        "1": {"datos": {"rut_titular": auto.get("rut_titular", ""), "nombre_cliente": auto.get("nombre_cliente", ""),
+                        "rut_codeudor": auto.get("rut_codeudor", ""), "nombre_codeudor": auto.get("nombre_codeudor", ""),
+                        "estado_civil": "", "email": auto.get("email") or c.get("email", ""),
+                        "telefono": auto.get("telefono") or c.get("telefono", "")}},
+        "2": {"datos": {"direccion_propiedad": auto.get("direccion_propiedad", ""),
+                        "comuna": auto.get("comuna", ""), "region": "", "situacion_habitacional": ""}},
+        "3": {"datos": {"rol_avaluo": auto.get("rol_avaluo", ""), "avaluo_fiscal": "",
+                        "valor_tasacion": auto.get("valor_tasacion", ""),
+                        "m2_construidos": "", "ano_construccion": ""}},
+        "4": {"datos": {"precio_vivienda": auto.get("precio_vivienda") or "",
+                        "credito_uf": auto.get("credito_uf") or "",
+                        "plazo_anos": auto.get("plazo_anos") or "", "tasa": "",
+                        "subsidio": auto.get("subsidio") or "", "pie": ""}},
+        "5": {"datos": {"fecha_estudio_titulo": auto.get("fecha_estudio_titulo") or "",
+                        "fecha_escrituracion": auto.get("fecha_escrituracion") or "",
+                        "notaria": auto.get("notaria") or "", "fecha_ingreso_cbr": ""}},
+        "6": {"datos": {}},
+    }
+    etapas = _expid.aplicar_campos_mutuos(etapas, exp)
     op = {"id": str(uuid.uuid4()), "numero": numero, "cliente_id": cid,
           "creado": _now(), "creado_por": u.get("sub", ""), "estado": "en_proceso", "etapa_actual": 1,
-          "etapas": {
-              "1": {"datos": {"rut_titular": auto.get("rut_titular", ""), "nombre_cliente": auto.get("nombre_cliente", ""),
-                              "rut_codeudor": auto.get("rut_codeudor", ""), "nombre_codeudor": "",
-                              "estado_civil": "", "email": c.get("email", ""), "telefono": c.get("telefono", "")}},
-              "2": {"datos": {"direccion_propiedad": auto.get("direccion_propiedad", ""), "comuna": "", "region": "",
-                              "situacion_habitacional": ""}},
-              "3": {"datos": {"rol_avaluo": auto.get("rol_avaluo", ""), "avaluo_fiscal": "", "valor_tasacion": "",
-                              "m2_construidos": "", "ano_construccion": ""}},
-              "4": {"datos": {"precio_vivienda": "", "credito_uf": "", "plazo_anos": "", "tasa": "", "subsidio": "", "pie": ""}},
-              "5": {"datos": {"fecha_estudio_titulo": "", "fecha_escrituracion": "", "notaria": "", "fecha_ingreso_cbr": ""}},
-              "6": {"datos": {}}}}
+          "origen_autofill": "expediente_unico" if exp else "boveda_daniela",
+          "etapas": etapas}
     await db.victoria_operaciones.insert_one({**op})
     return {"ok": True, "operacion_id": op["id"], "numero": numero,
+            "origen_autofill": op.get("origen_autofill"),
             "mensaje": f"Operación #{numero} creada para {c['nombre']}: campos autocompletados desde la bóveda"}
 
 
@@ -156,6 +189,29 @@ async def detalle_operacion(oid: str, request: Request):
     if not op:
         raise HTTPException(status_code=404, detail="Operación no encontrada")
     return await _detalle_op(op)
+
+
+@mut.post("/operaciones/{oid}/completar-expediente")
+async def completar_desde_expediente(oid: str, request: Request):
+    """Rellena huecos desde la supercarpeta. No pisa lo ya digitado ni envía a Concreces."""
+    _exigir(request)
+    op = await db.victoria_operaciones.find_one({"id": oid}, {"_id": 0})
+    if not op:
+        raise HTTPException(status_code=404, detail="Operación no encontrada")
+    if op.get("estado") == "enviada_riesgo":
+        raise HTTPException(status_code=403, detail="La operación ya fue enviada a revisión de riesgo: no se puede modificar")
+    c = await db.victoria_clientes.find_one({"id": op["cliente_id"]}, {"_id": 0}) or {}
+    rut = ((op.get("etapas") or {}).get("1") or {}).get("datos", {}).get("rut_titular") or c.get("rut")
+    exp = await _expediente_por_rut(rut)
+    if not exp:
+        raise HTTPException(status_code=404, detail="No hay expediente único para este RUT")
+    etapas = _expid.aplicar_campos_mutuos(op.get("etapas") or {}, exp)
+    await db.victoria_operaciones.update_one({"id": oid}, {"$set": {
+        "etapas": etapas, "origen_autofill": "expediente_unico"}})
+    op = await db.victoria_operaciones.find_one({"id": oid}, {"_id": 0})
+    return {"ok": True, "origen_autofill": "expediente_unico",
+            "mensaje": "Huecos completados desde el expediente único (sin envío)",
+            "detalle": await _detalle_op(op)}
 
 
 @mut.put("/operaciones/{oid}/etapa/{n}")

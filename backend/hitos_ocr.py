@@ -171,6 +171,60 @@ def leer_pdf(path, permitir_ocr=False):
         return "", "error"
 
 
+def hito_de_rel(rel, nombre=""):
+    """Clasifica un archivo de carpeta como hito de tasación/estudio/escritura."""
+    blob = f"{rel or ''} {nombre or ''}".lower().replace("\\", "/")
+    if "tasac" in blob or "/tasacion" in blob or blob.startswith("tasacion"):
+        return "tasacion"
+    if "07_estudio_titulo" in blob or "estudio_titulo" in blob or "estudio_" in blob.split("/")[-1]:
+        return "estudio_titulo"
+    fn = blob.split("/")[-1]
+    if fn.startswith("escritura") or "notaria" in blob or "repertorio" in blob:
+        return "escritura"
+    return ""
+
+
+def patch_sin_pisar(fd, hito, campos, ahora=""):
+    """$set para la carpeta. Nunca pisa renta, monto de crédito ni OCR ya lleno."""
+    campos = campos or {}
+    df = fd.get("datos_financieros") or {}
+    out = {}
+    h = (hito or "").lower()
+    if h == "tasacion":
+        if ahora and not fd.get("tasacion_informe_recibido_at"):
+            out["tasacion_informe_recibido_at"] = ahora
+        if campos.get("valor_uf") and not df.get("valor_tasacion_uf"):
+            out["datos_financieros.valor_tasacion_uf"] = campos["valor_uf"]
+        if campos.get("rol_avaluo") and not (df.get("rol_avaluo") or df.get("rol_propiedad")):
+            out["datos_financieros.rol_avaluo"] = campos["rol_avaluo"]
+        existente = fd.get("tasacion_ocr") if isinstance(fd.get("tasacion_ocr"), dict) else {}
+        merged = dict(existente)
+        for k, v in campos.items():
+            if v not in (None, "") and not merged.get(k):
+                merged[k] = v
+        if merged and merged != existente:
+            out["tasacion_ocr"] = merged
+    elif h == "estudio_titulo":
+        if ahora and not fd.get("estudio_recibido_at"):
+            out["estudio_recibido_at"] = ahora
+        existente = fd.get("estudio_ocr") if isinstance(fd.get("estudio_ocr"), dict) else {}
+        merged = dict(existente)
+        for k, v in campos.items():
+            if v not in (None, "") and not merged.get(k):
+                merged[k] = v
+        if merged and merged != existente:
+            out["estudio_ocr"] = merged
+    elif h == "escritura":
+        existente = fd.get("escritura_ocr") if isinstance(fd.get("escritura_ocr"), dict) else {}
+        merged = dict(existente)
+        for k, v in campos.items():
+            if v not in (None, "") and not merged.get(k):
+                merged[k] = v
+        if merged and merged != existente:
+            out["escritura_ocr"] = merged
+    return out
+
+
 def analizar_adjuntos(hito, paths, permitir_ocr=False, max_ocr=2):
     """Fusiona campos de varios PDFs del mismo correo-hito."""
     hito = (hito or "").lower()

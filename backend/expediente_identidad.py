@@ -588,3 +588,78 @@ def payload_concreces(exp, financiero=None):
         "nota": ("Datos consolidados de la supercarpeta para auto-rellenar Concreces. "
                  "No se envían solos: comercial y riesgo usan el mismo origen."),
     }
+
+
+def fusionar_vacios(base, extra):
+    """Completa huecos. Nunca pisa un valor ya ingresado y no inventa vacíos."""
+    out = dict(base or {})
+    for k, v in (extra or {}).items():
+        if v in (None, "", [], {}):
+            continue
+        if out.get(k) in (None, "", [], {}):
+            out[k] = v
+    return out
+
+
+def campos_mutuos(exp):
+    """Campos de las etapas Victoria/Mutuos desde el expediente único (solo lo hallado)."""
+    exp = exp or {}
+    claves = exp.get("claves") or {}
+    tit = exp.get("titular") or {}
+    cod = exp.get("codeudor") or {}
+    prop = exp.get("propiedad") or {}
+    tas = exp.get("tasacion") or {}
+    fin = exp.get("financiero") or {}
+    serie = exp.get("serie_credito") or {}
+    est = exp.get("estudio_titulos") or {}
+    return {
+        "rut_titular": claves.get("rut_titular") or tit.get("rut") or "",
+        "nombre_cliente": tit.get("nombre") or "",
+        "rut_codeudor": claves.get("rut_codeudor") or (cod.get("rut") if cod.get("presente") else "") or "",
+        "nombre_codeudor": cod.get("nombre") or "",
+        "email": tit.get("email") or "",
+        "telefono": tit.get("telefono") or "",
+        "direccion_propiedad": prop.get("direccion") or "",
+        "comuna": prop.get("comuna") or tas.get("comuna") or "",
+        "rol_avaluo": claves.get("rol_avaluo") or prop.get("rol") or tas.get("rol_avaluo") or "",
+        "valor_tasacion": tas.get("valor_uf") if tas.get("valor_uf") not in (None, "") else "",
+        "precio_vivienda": _primera(fin.get("valor_propiedad_uf"), tas.get("valor_uf")),
+        "credito_uf": fin.get("monto_credito_uf"),
+        "plazo_anos": fin.get("plazo_anos"),
+        "subsidio": "con subsidio" if fin.get("con_subsidio") else "",
+        "notaria": serie.get("notaria") or "",
+        "fecha_estudio_titulo": str(est.get("solicitado_at") or est.get("recibido_at") or "")[:10],
+        "fecha_escrituracion": str(serie.get("escritura_at") or "")[:10],
+    }
+
+
+_CAMPOS_ETAPA = {
+    1: ("rut_titular", "nombre_cliente", "rut_codeudor", "nombre_codeudor", "email", "telefono"),
+    2: ("direccion_propiedad", "comuna"),
+    3: ("rol_avaluo", "valor_tasacion"),
+    4: ("precio_vivienda", "credito_uf", "plazo_anos", "subsidio"),
+    5: ("notaria", "fecha_estudio_titulo", "fecha_escrituracion"),
+}
+
+
+def aplicar_campos_mutuos(etapas, exp):
+    """Rellena etapas vacías. No toca autorizadas ni valores ya digitados."""
+    extra = campos_mutuos(exp)
+    out = {}
+    src = etapas or {}
+    for n, campos in _CAMPOS_ETAPA.items():
+        key = str(n)
+        bloque = dict(src.get(key) or {})
+        datos = dict(bloque.get("datos") or {})
+        for c in campos:
+            v = extra.get(c)
+            if v in (None, "", [], {}):
+                continue
+            if datos.get(c) in (None, "", [], {}):
+                datos[c] = v
+        bloque["datos"] = datos
+        out[key] = bloque
+    for k, v in src.items():
+        if k not in out:
+            out[k] = v
+    return out

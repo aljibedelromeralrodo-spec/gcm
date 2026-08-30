@@ -67,3 +67,24 @@ class TestDispatch:
         assert h.extraer_campos("estudio_titulo", ESTUDIO).get("fojas")
         assert h.extraer_campos("escritura", ESCRITURA).get("repertorio")
         assert h.extraer_campos("faltantes", TASACION) == {}
+
+
+class TestBackfill:
+    def test_hito_de_archivo_protocolo(self):
+        assert h.hito_de_rel("99_otros/TASACION_informe.pdf") == "tasacion"
+        assert h.hito_de_rel("07_estudio_titulo/ESTUDIO_dominio.pdf") == "estudio_titulo"
+        assert h.hito_de_rel("99_otros/escritura_borrador.pdf") == "escritura"
+        assert h.hito_de_rel("02_liquidaciones/liq_abril.pdf") == ""
+
+    def test_patch_no_pisa_renta_ni_ocr_lleno(self):
+        fd = {
+            "datos_financieros": {"renta_liquida": 1800, "monto_credito": 2000, "rol_avaluo": "111-1"},
+            "tasacion_ocr": {"rol_avaluo": "111-1"},
+        }
+        patch = h.patch_sin_pisar(fd, "tasacion", {"rol_avaluo": "999-9", "valor_uf": 2500}, "2026-08-01")
+        assert "renta_liquida" not in patch
+        assert "monto_credito" not in str(patch)
+        assert "datos_financieros.rol_avaluo" not in patch
+        assert patch.get("tasacion_ocr", {}).get("rol_avaluo") == "111-1"
+        assert patch.get("tasacion_ocr", {}).get("valor_uf") == 2500
+        assert patch.get("datos_financieros.valor_tasacion_uf") == 2500

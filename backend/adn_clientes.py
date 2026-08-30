@@ -374,6 +374,78 @@ async def adn_autofill(request: Request, rut: str):
     }
 
 
+async def _backfill_hitos_folder(fd, permitir_ocr=False):
+    """Lee PDFs ya archivados (tasación/estudio/escritura) y llena huecos. No pisa renta/monto."""
+    import folders_service as fsvc
+    import hitos_ocr
+    nombre = fd.get("nombre") or ""
+    if not nombre:
+        return {"folder_id": fd.get("id"), "cambios": 0, "motivo": "sin_nombre"}
+    archivos = await asyncio.to_thread(fsvc.scan_archivos, nombre)
+    por_hito = {"tasacion": [], "estudio_titulo": [], "escritura": []}
+    for a in archivos:
+        if not str(a.get("nombre") or "").lower().endswith(".pdf"):
+            continue
+        h = hitos_ocr.hito_de_rel(a.get("ruta") or "", a.get("nombre") or "")
+        if h in por_hito:
+            try:
+                por_hito[h].append(fsvc.resolver_ruta(nombre, a["ruta"]))
+            except (ValueError, OSError):
+                pass
+    ahora = _now()
+    set_all, detalle = {}, []
+    fd_work = dict(fd)
+    fd_work["datos_financieros"] = dict(fd.get("datos_financieros") or {})
+    for hito, paths in por_hito.items():
+        if not paths:
+            continue
+        datos = await asyncio.to_thread(hitos_ocr.analizar_adjuntos, hito, paths[:4], permitir_ocr)
+        campos = (datos or {}).get("campos") or {}
+        if not campos:
+            continue
+        patch = hitos_ocr.patch_sin_pisar(fd_work, hito, campos, ahora)
+        if not patch:
+            continue
+        set_all.update(patch)
+        for k, v in patch.items():
+            if k.startswith("datos_financieros."):
+                fd_work["datos_financieros"][k.split(".", 1)[1]] = v
+            else:
+                fd_work[k] = v
+        detalle.append({"hito": hito, "campos": sorted(campos.keys())})
+    if set_all:
+        set_all["updated_at"] = ahora
+        await db.folders.update_one({"id": fd["id"]}, {"$set": set_all})
+    return {"folder_id": fd.get("id"), "cliente": nombre, "cambios": len(set_all), "hitos": detalle}
+
+
+@adn.post("/backfill-hitos")
+async def adn_backfill_hitos(request: Request, payload: dict = None):
+    """Admin: extrae rol/UF/fojas de PDFs ya en la carpeta. Sin OCR salvo pedido. Sin envío."""
+    user = getattr(request.state, "user", {}) or {}
+    if (user.get("rol") or "") not in ("admin", "maestro"):
+        raise HTTPException(status_code=403, detail="Solo el administrador puede relleer hitos archivados")
+    payload = payload or {}
+    fid = str(payload.get("folder_id") or "").strip()
+    permitir_ocr = bool(payload.get("permitir_ocr"))
+    limite = max(1, min(int(payload.get("limite") or 25), 80))
+    if fid:
+        fd = await db.folders.find_one({"id": fid})
+        if not fd:
+            raise HTTPException(status_code=404, detail="Carpeta no existe")
+        r = await _backfill_hitos_folder(fd, permitir_ocr=permitir_ocr)
+        return {"ok": True, "procesados": 1, "con_cambios": 1 if r["cambios"] else 0, "detalle": [r]}
+    detalle, con = [], 0
+    carpetas = await db.folders.find({}).sort("nombre", 1).to_list(limite)
+    for fd in carpetas:
+        r = await _backfill_hitos_folder(fd, permitir_ocr=False)
+        detalle.append(r)
+        if r.get("cambios"):
+            con += 1
+    return {"ok": True, "procesados": len(detalle), "con_cambios": con, "detalle": detalle,
+            "nota": "Solo texto embebido. OCR explícito: POST con folder_id y permitir_ocr."}
+
+
 @adn.post("/succionar/{rut}")
 async def adn_succionar(request: Request, rut: str):
     """MODO BODEGA SOBERANA: si falta un dato, se succiona del PDF histórico y queda para siempre."""
