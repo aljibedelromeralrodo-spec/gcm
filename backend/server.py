@@ -1995,8 +1995,9 @@ async def central_chat(payload: dict, request: Request):
                 estados.append(f"enviada a mesa x{f['emails_sent_count']}")
             cats = (pub.get("credit_request") or {}).get("doc_categories") or []
             tipo_cli = (f.get("credit_request") or {}).get("client_type") or "dependiente"
-            reqs = ["cedula", "imp_renta", "boletas"] if tipo_cli == "independiente" else ["cedula", "liquidacion", "afp", "cmf"]
-            faltan = [c for c in reqs if c not in cats]
+            faltan = pub.get("alertas_documentales") or [
+                c for c in fsvc.required_cats(tipo_cli, exento_afp=bool((f.get("credit_request") or {}).get("exento_afp")))
+                if c not in cats]
             lineas.append(f"- {f.get('nombre')} (RUT {f.get('rut') or '?'}): {pub.get('total_archivos', 0)} docs [{', '.join(cats)}], "
                           f"aprobación {prob['porcentaje']}%, {'lista para mesa' if pub.get('is_ready_to_send') else 'incompleta'}"
                           + (f", FALTAN: {', '.join(faltan)}" if faltan else "")
@@ -2154,7 +2155,7 @@ async def _resumen_semanal_html():
         ct = (d.get("credit_request") or {}).get("client_type") or "dependiente"
         try:
             cats = {fsvc.cat_de_archivo(a["nombre"], a["subfolder"]) for a in fsvc.scan_archivos(nombre_f)} - {"combinado", "codeudor", "estudio_titulo"}
-            faltan = [fsvc.MISSING_LABELS.get(c, c) for c in fsvc.required_cats(ct) if c not in cats]
+            faltan = [fsvc.MISSING_LABELS.get(c, c) for c in fsvc.required_cats(ct, exento_afp=bool((d.get("credit_request") or {}).get("exento_afp"))) if c not in cats]
         except Exception:
             faltan = []
         if not ((d.get("datos_financieros") or {}).get("fecha_entrega") or "").strip():
@@ -2669,6 +2670,7 @@ async def search(q: str = "", limit: int = 15):
 # Clientes / Carpetas (archivos físicos en disco + metadata en Mongo)
 # ---------------------------------------------------------------------------
 def _folder_public(doc, con_archivos=False, archivos=None):
+    import validacion_documental as vdoc
     d = clean(dict(doc))
     if archivos is None:
         archivos = fsvc.scan_archivos(d.get("nombre", ""))
@@ -2677,10 +2679,14 @@ def _folder_public(doc, con_archivos=False, archivos=None):
     cr["doc_categories"] = cats
     d["credit_request"] = cr
     d["total_archivos"] = len(archivos)
-    ct = cr.get("client_type") or "dependiente"
-    missing = [r for r in fsvc.required_cats(ct) if r not in cats]
+    val = vdoc.validar_documentos(
+        cr.get("client_type") or "dependiente", archivos,
+        exento_afp=bool(cr.get("exento_afp")),
+        base_dir=str(fsvc.folder_dir(d.get("nombre", ""))))
+    d["validacion_documental"] = vdoc.snapshot_publico(val)
+    d["alertas_documentales"] = vdoc.textos_faltantes(val)
     df = d.get("datos_financieros") or {}
-    d["is_ready_to_send"] = bool(archivos) and not missing and bool(df.get("valor_propiedad"))
+    d["is_ready_to_send"] = bool(archivos) and val["completo"] and bool(df.get("valor_propiedad"))
     if con_archivos:
         d["archivos"] = archivos
     else:
@@ -2720,16 +2726,17 @@ async def _mesa_respuesta_folder(d, segs=None, archivos=None):
 
 
 def _criterios_folder(d, archivos=None):
-    import clasificador_documental as clasif
+    import validacion_documental as vdoc
     if archivos is None:
         archivos = fsvc.scan_archivos(d.get("nombre", ""))
     cats_all = {fsvc.cat_de_archivo(a["nombre"], a["subfolder"]) for a in archivos}
-    cats = cats_all - {"combinado", "codeudor", "estudio_titulo"}
     cr = d.get("credit_request") or {}
-    tipo_cliente = (cr.get("client_type") or "dependiente").lower()
     df = d.get("datos_financieros") or {}
-    docs_req = clasif.reglas_documentales(tipo_cliente, exento_afp=bool(cr.get("exento_afp")))
-    criterios = [{"nombre": lbl, "ok": cat in cats} for lbl, cat in docs_req]
+    val = vdoc.validar_documentos(
+        cr.get("client_type") or "dependiente", archivos,
+        exento_afp=bool(cr.get("exento_afp")),
+        base_dir=str(fsvc.folder_dir(d.get("nombre", ""))))
+    criterios = [{"nombre": c["nombre"], "ok": c["ok"]} for c in val["criterios"]]
     if cr.get("exento_afp"):
         criterios.append({"nombre": f"Exento de AFP ({cr.get('exento_afp_institucion') or 'institución uniformada'})", "ok": True})
     if (d.get("codeudor_nombre") or "").strip() or "codeudor" in cats_all:
@@ -3427,6 +3434,28 @@ async def _alerta_pdfs_protegidos(nombre_folder, archivos=None):
         pass
 
 
+async def _alerta_docs_faltantes(doc, val):
+    """Notificación automática (in-app) por cada faltante específico, sin reenviar duplicados."""
+    try:
+        fid = doc.get("id") or ""
+        nombre = doc.get("nombre") or ""
+        for a in (val or {}).get("alertas") or []:
+            if a.get("nivel") != "faltante":
+                continue
+            msg = a.get("mensaje") or ""
+            if not msg:
+                continue
+            key = f"docfalt:{fid}:{msg}"
+            if await db.alertas.find_one({"key": key}):
+                continue
+            await db.alertas.insert_one({
+                "id": str(uuid.uuid4()), "tipo": "documento_faltante", "leida": False,
+                "cliente": nombre, "mensaje": f"📄 {nombre}: {msg}",
+                "key": key, "fecha": now_iso()})
+    except Exception:
+        pass
+
+
 @api.get("/clientes/folders/{fid}")
 async def get_folder(fid: str):
     doc = await db.folders.find_one({"id": fid})
@@ -3436,6 +3465,7 @@ async def get_folder(fid: str):
     res["prob_aprobacion"] = _prob_aprobacion_folder(doc, await _stats_mesa())
     res["criterios"] = _criterios_folder(doc)
     await _alerta_pdfs_protegidos(doc.get("nombre", ""), res.get("archivos"))
+    await _alerta_docs_faltantes(doc, res.get("validacion_documental"))
     return res
 
 
@@ -3447,6 +3477,9 @@ async def folder_pedir_faltantes(fid: str, payload: dict):
         raise HTTPException(status_code=404, detail="Carpeta no encontrada")
     destinatario = (payload.get("destinatario") or doc.get("source_email") or "").strip()
     faltantes = [f for f in (payload.get("faltantes") or []) if str(f).strip()]
+    if not faltantes:
+        import validacion_documental as vdoc
+        faltantes = vdoc.textos_faltantes(vdoc.validar_folder(doc))
     if not faltantes:
         faltantes = [c["nombre"] for c in _criterios_folder(doc)
                      if not c["ok"] and c["nombre"] not in ("Enviada a mesa", "Datos financieros completos")]
@@ -4502,9 +4535,13 @@ async def folder_send_email(fid: str, payload: dict):
         logging.warning(f"🛡️ Auditoría #71 (informativa, ORO-35): {len(_audit71['violaciones'])} "
                         f"hallazgo(s) en {nombre} — envío NO bloqueado, alerta al administrador")
     cr = doc.get("credit_request") or {}
-    _cats = {fsvc.cat_de_archivo(a["nombre"], a["subfolder"]) for a in fsvc.scan_archivos(nombre)} - {"combinado", "codeudor", "estudio_titulo"}
-    _ct = cr.get("client_type") or "dependiente"
-    missing_labels = [fsvc.MISSING_LABELS.get(c, c) for c in fsvc.required_cats(_ct) if c not in _cats]
+    import validacion_documental as vdoc
+    _arch_mesa = fsvc.scan_archivos(nombre)
+    _val_mesa = vdoc.validar_documentos(
+        cr.get("client_type") or "dependiente", _arch_mesa,
+        exento_afp=bool(cr.get("exento_afp")),
+        base_dir=str(fsvc.folder_dir(nombre)))
+    missing_labels = vdoc.textos_faltantes(_val_mesa)
     _df = doc.get("datos_financieros") or {}
     fecha_entrega = (_df.get("fecha_entrega") or "").strip()
     if not fecha_entrega:
@@ -4635,9 +4672,11 @@ async def folder_send_missing_docs(fid: str, payload: dict = None):
     doc = await _get_folder_doc(fid)
     payload = payload or {}
     pub = _folder_public(doc)
-    cats = pub["credit_request"].get("doc_categories", [])
-    ct = pub["credit_request"].get("client_type") or "dependiente"
-    missing = [fsvc.MISSING_LABELS.get(c, c) for c in fsvc.required_cats(ct) if c not in cats]
+    missing = pub.get("alertas_documentales") or []
+    if not missing:
+        cats = pub["credit_request"].get("doc_categories", [])
+        ct = pub["credit_request"].get("client_type") or "dependiente"
+        missing = [fsvc.MISSING_LABELS.get(c, c) for c in fsvc.required_cats(ct, exento_afp=bool(pub["credit_request"].get("exento_afp"))) if c not in cats]
     src = doc.get("source_email", "") or ""
     m_addr = re.search(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+", src)
     default_to = m_addr.group(0) if m_addr else ""
@@ -5642,12 +5681,26 @@ GESTION_DOMINIOS = ["ecomac", "maestra", "boetsch", "yerile426"]
 # Orden preestablecido del PDF agrupado
 ORDEN_DEPENDIENTE = ["cedula", "liquidacion", "cotizacion_afp", "certificado_afp", "certificado_smf"]
 ORDEN_INDEPENDIENTE = ["cedula", "impuesto_renta", "boleta_honorarios", "certificado_smf"]
+ORDEN_MIXTO = ["cedula", "liquidacion", "cotizacion_afp", "certificado_afp",
+               "impuesto_renta", "boleta_honorarios", "certificado_smf"]
 CHECKLIST = {
     "dependiente": {"cedula": 1, "liquidacion": 6, "cotizacion_afp": 12,
                     "certificado_afp": 1, "certificado_smf": 1},
     "independiente": {"cedula": 1, "certificado_smf": 1, "impuesto_renta": 1,
                       "boleta_honorarios": 1},
+    "mixto": {"cedula": 1, "liquidacion": 6, "cotizacion_afp": 12,
+              "certificado_afp": 1, "certificado_smf": 1, "impuesto_renta": 1,
+              "boleta_honorarios": 1},
 }
+
+
+def _orden_por_tipo(tipo_cliente):
+    t = (tipo_cliente or "dependiente").lower()
+    if t == "independiente":
+        return ORDEN_INDEPENDIENTE
+    if t == "mixto":
+        return ORDEN_MIXTO
+    return ORDEN_DEPENDIENTE
 
 DOC_LABELS = {
     "cedula": "Cedula de identidad",
@@ -5798,8 +5851,12 @@ def _prob_aprobacion(item, stats):
                        "cmf": "certificado_smf", "imp_renta": "impuesto_renta",
                        "boletas": "boleta_honorarios"}.get(cat, "otro"))
     tipo_cliente = cl.get("tipo_cliente") or "dependiente"
-    requeridos = (["cedula", "liquidacion"] if tipo_cliente == "dependiente"
-                  else ["cedula", "impuesto_renta", "boleta_honorarios"])
+    if tipo_cliente == "independiente":
+        requeridos = ["cedula", "impuesto_renta", "boleta_honorarios"]
+    elif tipo_cliente == "mixto":
+        requeridos = ["cedula", "liquidacion", "impuesto_renta", "boleta_honorarios"]
+    else:
+        requeridos = ["cedula", "liquidacion"]
     faltan = [t for t in requeridos if t not in tipos]
     if faltan:
         prob -= 8 * len(faltan)
@@ -5845,8 +5902,8 @@ def _prob_aprobacion_folder(doc, stats):
     cats = {fsvc.cat_de_archivo(a["nombre"], a["subfolder"]) for a in archivos} - {"combinado", "codeudor", "estudio_titulo"}
     cr = doc.get("credit_request") or {}
     tipo_cliente = cr.get("client_type") or "dependiente"
-    requeridos = (["cedula", "imp_renta", "boletas"] if tipo_cliente == "independiente"
-                  else ["cedula", "liquidacion"])
+    requeridos = [c for c in fsvc.required_cats(tipo_cliente, exento_afp=bool(cr.get("exento_afp")))
+                  if c != "cmf"]
     faltan = [c for c in requeridos if c not in cats]
     if faltan:
         prob -= 8 * len(faltan)
@@ -5885,7 +5942,7 @@ def _prob_aprobacion_folder(doc, stats):
         prob -= 3
         factores.append("-3%: sin datos financieros completos")
     # REGLA REALISTA: sin los documentos mínimos de mesa, el % es 0
-    faltan_mesa = [c for c in fsvc.required_cats(tipo_cliente) if c not in cats]
+    faltan_mesa = [c for c in fsvc.required_cats(tipo_cliente, exento_afp=bool(cr.get("exento_afp"))) if c not in cats]
     if not cats or faltan_mesa:
         etiquetas = [fsvc.MISSING_LABELS.get(c, c) for c in faltan_mesa] or ["sin documentos"]
         factores.append(f"⛔ 0%: no cumple criterios de envío a mesa (faltan: {', '.join(etiquetas)})")
@@ -6085,7 +6142,8 @@ async def _clasificar_item(item):
     # Correo del cliente detectado en los documentos (si aparecio)
     campos.setdefault("email_cliente", "")
     tipos = [d["tipo"] for d in docs_detectados]
-    tipo_cliente = "independiente" if ("boleta_honorarios" in tipos or "impuesto_renta" in tipos) else "dependiente"
+    import validacion_documental as vdoc
+    tipo_cliente = vdoc.tipo_laboral_de_tipos(tipos)
     status = "clasificado" if cliente else "revisar"
     classification = {"cliente": cliente, "rut": rut, "tipo_cliente": tipo_cliente,
                       "email_cliente": campos.get("email_cliente", ""),
@@ -7270,7 +7328,7 @@ async def proc_upload_drive(qid: str, force: bool = False, clave: str = ""):
         if desde_asunto not in ("", "Desconocido") and len(desde_asunto.split()) >= 2:
             cliente = desde_asunto
     tipo_cliente = cl.get("tipo_cliente", "dependiente")
-    orden = ORDEN_DEPENDIENTE if tipo_cliente == "dependiente" else ORDEN_INDEPENDIENTE
+    orden = _orden_por_tipo(tipo_cliente)
     docs = []
     vistos = set()
     for d in cl.get("documentos", []):
@@ -13937,7 +13995,7 @@ async def proc_enviar_autocorreo(qid: str, payload: dict = None):
 @api.get("/procesamiento/checklist")
 async def proc_checklist():
     return {"checklist": CHECKLIST, "orden_dependiente": ORDEN_DEPENDIENTE,
-            "orden_independiente": ORDEN_INDEPENDIENTE}
+            "orden_independiente": ORDEN_INDEPENDIENTE, "orden_mixto": ORDEN_MIXTO}
 
 
 @api.post("/portal/consulta")

@@ -354,9 +354,12 @@ async def panel_estado_folder(fid: str, request: Request):
                                 "escrituracion_confirmada_at", "created_at")]
     ult = max((_dtp(h) for h in hitos if _dtp(h)), default=None)
     dias_par = _dias_habiles_entre(ult, datetime.now(timezone.utc)) if ult else 0
-    # DOCUMENTOS FALTANTES
-    faltantes = [c["nombre"] for c in _criterios_folder(f)
-                 if not c["ok"] and c["nombre"] not in ("Enviada a mesa", "Datos financieros completos")]
+    # DOCUMENTOS FALTANTES (alertas específicas por perfil y mes)
+    import validacion_documental as vdoc
+    faltantes = vdoc.textos_faltantes(vdoc.validar_folder(f))
+    if not faltantes:
+        faltantes = [c["nombre"] for c in _criterios_folder(f)
+                     if not c["ok"] and c["nombre"] not in ("Enviada a mesa", "Datos financieros completos")]
     return {"resultado": resultado, "fecha_resultado": fecha_res,
             "enviado_sistema": env_sis, "detalle_sistema": det_sis,
             "enviado_correo": env_cor, "detalle_correo": det_cor,

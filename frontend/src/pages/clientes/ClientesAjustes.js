@@ -63,7 +63,7 @@ export default function ClientesAjustes() {
           <div style={{ padding: "1rem", background: "rgba(212,175,55,0.08)", border: "1px solid #d4af37", borderRadius: 0, marginBottom: "1rem", fontSize: "0.88rem", lineHeight: 1.6 }}>
             <b>Reglas activas:</b><br/>
             Un correo se clasifica como <b>solicitud de crédito</b> si menciona «solicitud de crédito/financiamiento» O trae ≥3 documentos típicos (cédula, liquidaciones, AFP, CMF, impuesto renta, boletas honorarios).<br/>
-            <b>Tipo cliente</b>: dependiente (liquidación+AFP) · independiente (impuesto renta+boletas).<br/>
+            <b>Tipo cliente</b>: dependiente (liquidación+AFP+contrato) · independiente (carpeta tributaria/F22 + boletas/DAI + F29) · mixto (ambos conjuntos, sin mezclar alertas).<br/>
             <b>Subsidio</b>: si no dice nada → sin subsidio, LTV 80% del valor propiedad.<br/>
             <b>Codeudor</b>: detectado por keyword "codeudor/aval" en asunto o cuerpo → subcarpeta con su nombre.<br/>
             <b>Estructura</b>: cada carpeta cliente tiene subcarpetas ordenadas (01_cedula, 02_liquidaciones o 02_impuesto_renta, 03_afp o 03_boletas..., 04_cmf, 99_otros).
@@ -128,7 +128,8 @@ export default function ClientesAjustes() {
                           <b style={{ display: "block", marginBottom: 4 }}>Tipo de cliente</b>
                           <select value={editDraft.client_type} onChange={(e) => setEditDraft({ ...editDraft, client_type: e.target.value })} data-testid={`edit-client-type-${f.id}`} style={{ width: "100%", padding: "0.35rem", borderRadius: 0, border: "1px solid #d4d4d8" }}>
                             <option value="dependiente">Dependiente (liquidación + AFP)</option>
-                            <option value="independiente">Independiente (impuesto renta + boletas)</option>
+                            <option value="independiente">Independiente (carpeta tributaria / F22 + boletas)</option>
+                            <option value="mixto">Mixto (dependiente + independiente)</option>
                             <option value="desconocido">Desconocido / Por revisar</option>
                           </select>
                         </label>

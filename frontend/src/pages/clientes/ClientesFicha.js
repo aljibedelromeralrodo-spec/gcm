@@ -116,6 +116,7 @@ export default function ClientesFicha() {
                 <i className="fa fa-file-text-o"></i> Ver/Editar Compromiso de Compraventa
               </button>
               <button className="docs-btn secondary" onClick={() => openMissingDocsModal(currentFolder)} data-testid="btn-missing-docs-detail"
+                title={(currentFolder.alertas_documentales || []).join("\n") || "Solicitar documentos faltantes"}
                 style={{ background: "rgba(225,29,72,0.15)", border: "1px solid rgba(225,29,72,0.5)", color: "#fb7185" }}>
                 <i className="fa fa-exclamation-triangle"></i> Documento Faltante
               </button>

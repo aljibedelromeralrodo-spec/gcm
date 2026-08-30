@@ -664,7 +664,7 @@ function DetailModal({ item, onClose, onReprocess, onSave, onUploadDrive, onExtr
           <div style={{ background:"#fffbeb", border:"1px solid #fcd34d", borderRadius:8, padding:10, marginBottom:12 }} data-testid="docs-orden-section">
             <div style={{ fontWeight:700, fontSize:13, marginBottom:4 }}>📑 Orden de los documentos (carpeta → mesa)</div>
             <div style={{ fontSize:11, color:"#92400e", marginBottom:8 }}>
-              Protocolo: dependiente = cédula → liquidaciones → AFP → CMF · honorarios = cédula → imp. renta → boletas → CMF. Usa las flechas para ajustar el orden a mano (se regenera la Carpeta).
+              Protocolo: dependiente = cédula → liquidaciones → AFP → CMF · independiente = cédula → F22/carpeta tributaria → boletas/DAI → CMF · mixto = ambos conjuntos. Usa las flechas para ajustar el orden a mano (se regenera la Carpeta).
             </div>
             {docs.map((d, i) => (
               <div key={d.filename + i} style={{ display:"flex", alignItems:"center", gap:8, padding:"3px 0", fontSize:12, borderTop: i ? "1px solid #fde68a" : "none" }} data-testid={`doc-orden-row-${i}`}>
@@ -705,6 +705,7 @@ function DetailModal({ item, onClose, onReprocess, onSave, onUploadDrive, onExtr
             <select value={c.tipo_cliente} onChange={e => setC({...c, tipo_cliente:e.target.value})} style={inp}>
               <option value="dependiente">Dependiente</option>
               <option value="independiente">Independiente</option>
+              <option value="mixto">Mixto</option>
             </select>
           </label>
           <label>Correo cliente <input value={c.email_cliente}

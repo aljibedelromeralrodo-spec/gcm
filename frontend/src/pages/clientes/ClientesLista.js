@@ -167,18 +167,20 @@ export default function ClientesLista() {
               </div>
             )}
             {filtered.map(f => {
-              // Detect missing docs (basic heuristic: dependents need cedula+liquidacion+afp+cmf)
+              // Faltantes: backend (perfil + vigencia por mes). Fallback local si el payload es viejo.
               const ct = f.credit_request?.client_type || "";
               const cats = f.credit_request?.doc_categories || [];
-              // Regla: dependientes con liquidaciones NO necesitan boletas
               const required = ct === "independiente"
                 ? ["cedula", "imp_renta", "boletas", "cmf"]
-                : ["cedula", "liquidacion", "afp", "cmf"];
-              const missing = required.filter(r => !cats.includes(r));
-              // Si es dependiente y tiene liquidaciones, no marques boletas como faltante
-              if (ct !== "independiente" && cats.includes("liquidacion")) {
-                const idx = missing.indexOf("boletas"); if (idx >= 0) missing.splice(idx, 1);
-              }
+                : ct === "mixto"
+                ? ["cedula", "liquidacion", "afp", "imp_renta", "boletas", "cmf"]
+                : (ct === "desconocido" ? ["cedula", "cmf"] : ["cedula", "liquidacion", "afp", "cmf"]);
+              const missingCats = (f.validacion_documental?.cats_faltantes?.length)
+                ? f.validacion_documental.cats_faltantes
+                : required.filter(r => !cats.includes(r));
+              const missing = (f.alertas_documentales && f.alertas_documentales.length)
+                ? f.alertas_documentales
+                : missingCats.map(m => CAT_LABELS[m] || m);
               const hasFin = f.datos_financieros && f.datos_financieros.valor_propiedad;
               const enviadoManual = f.envio_manual === true;
               const cardStyle = enviadoManual
@@ -322,9 +324,9 @@ export default function ClientesLista() {
                     {missing.length > 0 && (
                       <div data-testid={`missing-docs-${f.id}`} style={{ display: "flex", gap: 4, marginTop: 5, flexWrap: "wrap", alignItems: "center" }}>
                         <span style={{ fontSize: 10, fontWeight: 800, color: enviadoManual ? "#fff" : "#be123c" }}>⚠️ FALTA:</span>
-                        {missing.map(m => (
-                          <span key={m} style={{ fontSize: 10, fontWeight: 700, background: enviadoManual ? "rgba(255,255,255,0.25)" : "rgba(190,18,60,0.15)", color: enviadoManual ? "#fff" : "#be123c", padding: "2px 7px", borderRadius: 0, border: enviadoManual ? "1px solid rgba(255,255,255,0.4)" : "1px solid rgba(190,18,60,0.35)" }}>
-                            {CAT_LABELS[m] || m}
+                        {missing.map((m, i) => (
+                          <span key={`${m}-${i}`} style={{ fontSize: 10, fontWeight: 700, background: enviadoManual ? "rgba(255,255,255,0.25)" : "rgba(190,18,60,0.15)", color: enviadoManual ? "#fff" : "#be123c", padding: "2px 7px", borderRadius: 0, border: enviadoManual ? "1px solid rgba(255,255,255,0.4)" : "1px solid rgba(190,18,60,0.35)" }}>
+                            {m}
                           </span>
                         ))}
                       </div>

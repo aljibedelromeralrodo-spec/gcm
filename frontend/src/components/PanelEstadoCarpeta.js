@@ -18,13 +18,16 @@ export default function PanelEstadoCarpeta({ folder }) {
   useEffect(() => { setDetalle(null); setMsg(""); cargar(); }, [cargar]);
 
   if (!est) return null;
+  const faltantes = (est.documentos_faltantes && est.documentos_faltantes.length)
+    ? est.documentos_faltantes
+    : (folder.alertas_documentales || []);
 
   const solicitarDocs = async () => {
-    if (!window.confirm(`¿Enviar correo automático a ${est.destinatario_solicitud || "el remitente"} solicitando los ${est.documentos_faltantes.length} documento(s) faltante(s)?`)) return;
+    if (!window.confirm(`¿Enviar correo automático a ${est.destinatario_solicitud || "el remitente"} solicitando los ${faltantes.length} documento(s) faltante(s)?`)) return;
     setEnviando(true); setMsg("");
     try {
       const r = await axios.post(`${API}/api/clientes/folders/${folder.id}/pedir-faltantes`,
-        { confirm: true, destinatario: est.destinatario_solicitud, faltantes: est.documentos_faltantes, mensaje: "" });
+        { confirm: true, destinatario: est.destinatario_solicitud, faltantes, mensaje: "" });
       setMsg(`✅ Solicitud enviada a ${r.data.to || est.destinatario_solicitud}`);
     } catch (e) { setMsg(`🚨 ${e.response?.data?.detail || "Error al enviar la solicitud"}`); }
     setEnviando(false);
@@ -89,10 +92,10 @@ export default function PanelEstadoCarpeta({ folder }) {
           )}
         </div>
       )}
-      {est.documentos_faltantes.length > 0 && (
+      {faltantes.length > 0 && (
         <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <span style={{ fontSize: 11, fontWeight: 800, color: "#fb7185", letterSpacing: 1 }}>DOCUMENTOS FALTANTES:</span>
-          {est.documentos_faltantes.map((d, i) => (
+          {faltantes.map((d, i) => (
             <span key={i} data-testid={`doc-faltante-${i}`} style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 8px",
               background: "rgba(225,29,72,0.1)", border: "1px solid rgba(225,29,72,0.4)", color: "#fda4af" }}>{d}</span>
           ))}

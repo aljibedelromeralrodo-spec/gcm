@@ -71,8 +71,12 @@ def _motivos_retencion(f, contraste_map, ahora):
     df = f.get("datos_financieros") or {}
     ct = cr.get("client_type") or "dependiente"
     try:
-        cats = {fsvc.cat_de_archivo(a["nombre"], a["subfolder"]) for a in fsvc.scan_archivos(f.get("nombre", ""))}
-        faltan = [fsvc.MISSING_LABELS.get(c, c) for c in fsvc.required_cats(ct) if c not in cats]
+        import validacion_documental as vdoc
+        val = vdoc.validar_folder(f)
+        faltan = vdoc.textos_faltantes(val)
+        if not faltan:
+            cats = {fsvc.cat_de_archivo(a["nombre"], a["subfolder"]) for a in fsvc.scan_archivos(f.get("nombre", ""))}
+            faltan = [fsvc.MISSING_LABELS.get(c, c) for c in fsvc.required_cats(ct, exento_afp=bool(cr.get("exento_afp"))) if c not in cats]
     except Exception:
         faltan = []
     if faltan:

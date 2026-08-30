@@ -44,7 +44,8 @@ SUBFOLDER_POR_TIPO = {
 
 CAT_A_SUBFOLDER = {
     "cedula": "01_cedula", "liquidacion": "02_liquidaciones",
-    "imp_renta": "02_impuesto_renta", "afp": "03_afp",
+    "imp_renta": "02_impuesto_renta", "f29": "02_impuesto_renta",
+    "afp": "03_afp",
     "boletas": "03_boletas", "cmf": "04_cmf", "extras": "99_otros",
     "estudio_titulo": "07_estudio_titulo",
     "licencia": "06_licencias", "pago_licencia": "06_licencias",
@@ -68,17 +69,19 @@ CAT_KEYWORDS = [
     ("liquidacion", r"liquidaci[oó]?n|sueldo|remuneraci|haberes|\bliq[\d_ ]|^liq"),
     ("afp", r"afp|cotizaci|previred|afiliaci|habitat|provida|planvital|cuprum|capital"),
     ("cmf", r"\bcmf\b|\bsmf\b|\bsbif\b|informe[_ ]de[_ ]deuda|informe_deudas|certificado[_ ]de[_ ]deuda|deuda consolidada"),
-    ("imp_renta", r"impuesto|renta|formulario 22|f22|declaraci[oó]n"),
-    ("boletas", r"boleta|honorario"),
+    ("boletas", r"boleta|honorario|(?:^|[\s_\-])dai(?:[\s_\-.]|$)|declaraci[oó]n anual de ingresos"),
+    ("f29", r"formulario[\s_\-]?29|(?:^|[\s_\-])f29(?:[\s_\-.]|$)"),
+    ("imp_renta", r"impuesto|renta|formulario[\s_\-]?22|f22|carpeta[\s_]?tributaria|declaraci[oó]n"),
 ]
 
 MISSING_LABELS = {
     "cedula": "Cédula de identidad",
     "liquidacion": "Liquidaciones de sueldo (últimas 6)",
-    "afp": "Cotizaciones AFP (últimas 12)",
+    "afp": "Cotizaciones previsionales AFP (últimas 12)",
     "cmf": "Informe de deudas CMF",
-    "imp_renta": "Última declaración de impuesto a la renta",
-    "boletas": "Resumen de boletas de honorarios",
+    "imp_renta": "Carpeta tributaria / Formulario F22",
+    "boletas": "Boletas de honorarios / DAI",
+    "f29": "Formulario F29",
     "licencia": "Licencias médicas",
     "pago_licencia": "Pagos de licencia (CCAF/Isapre/subsidio)",
     "contrato": "Contrato de trabajo",
@@ -119,15 +122,20 @@ def folder_dir(nombre):
     return CLIENTES_DIR / safe_name(nombre)
 
 
-def required_cats(client_type):
-    if client_type == "independiente":
-        return ["cedula", "imp_renta", "boletas", "cmf"]
-    return ["cedula", "liquidacion", "afp", "cmf"]
+def required_cats(client_type, exento_afp=False):
+    """Requisitos estrictos por perfil. Mixto = ambos conjuntos. Desconocido = solo comunes."""
+    import validacion_documental as vdoc
+    return vdoc.cats_requeridas(client_type, exento_afp=exento_afp)
 
 
 def es_combinado(nombre_archivo):
     low = (nombre_archivo or "").lower()
-    return low.startswith("combinado") or low.startswith("carpeta_")
+    if low.startswith("combinado"):
+        return True
+    # Protocolo: «Carpeta_Nombre.pdf». No confundir con carpeta tributaria del SII.
+    if low.startswith("carpeta_") and "tributar" not in low:
+        return True
+    return False
 
 
 def cat_de_archivo(nombre, subfolder=""):
@@ -213,8 +221,10 @@ def scan_archivos(nombre):
                 rel = p.relative_to(base).as_posix()
                 sub = rel.rsplit("/", 1)[0] if "/" in rel else ""
                 prot = pdf_protegido(p)
+                st = p.stat()
                 item = {"nombre": p.name, "ruta": rel, "subfolder": sub,
-                        "tamano": p.stat().st_size, "protegido": prot}
+                        "tamano": st.st_size, "protegido": prot,
+                        "mtime": int(st.st_mtime)}
                 if prot:
                     item["etiqueta_proteccion"] = "Protegido — requiere clave"
                 out.append(item)

@@ -283,7 +283,9 @@ export default function ClientesModule({ onNavigate }) {
   };
 
   const openPedirFaltantes = (f) => {
-    const faltan = (f.criterios || []).filter(c => !c.ok && !["Enviada a mesa", "Datos financieros completos"].includes(c.nombre)).map(c => c.nombre);
+    const faltan = (f.alertas_documentales && f.alertas_documentales.length)
+      ? f.alertas_documentales
+      : (f.criterios || []).filter(c => !c.ok && !["Enviada a mesa", "Datos financieros completos"].includes(c.nombre)).map(c => c.nombre);
     setPedirModal({ folder: f, destinatario: f.source_email || "", faltantes: faltan.join("\n"), mensaje: "", preview: null, loading: false, msg: "" });
   };
 
@@ -1190,7 +1192,9 @@ export default function ClientesModule({ onNavigate }) {
     const cr = folder.credit_request || {};
     const clientType = cr.client_type || "dependiente";
     const protoOrder = clientType === "independiente"
-      ? "Cédula → Impuesto Renta → Boletas Año Anterior → Boletas Año Actual → CMF → Extras"
+      ? "Cédula → Impuesto Renta / F22 → Boletas / DAI → CMF → Extras"
+      : clientType === "mixto"
+      ? "Cédula → Liquidaciones → AFP → Impuesto Renta / F22 → Boletas / DAI → CMF → Extras"
       : "Cédula → Liquidaciones → AFP → CMF → Extras";
     if (!window.confirm(
       `Combinar TODOS los PDFs del cliente siguiendo el protocolo (${clientType}):\n\n${protoOrder}\n\n` +

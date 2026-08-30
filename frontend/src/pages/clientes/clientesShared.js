@@ -10,4 +10,4 @@ export const rutValido = (rut) => {
   const dvC = res === 11 ? "0" : res === 10 ? "k" : String(res);
   return dv === dvC;
 };
-export const CAT_LABELS = { cedula: "Cédula", liquidacion: "Liquidaciones", afp: "AFP", cmf: "CMF", imp_renta: "Imp. Renta", boletas: "Boletas" };
+export const CAT_LABELS = { cedula: "Cédula", liquidacion: "Liquidaciones", afp: "AFP", cmf: "CMF", imp_renta: "F22 / Carpeta tributaria", boletas: "Boletas / DAI", f29: "F29", contrato: "Contrato" };

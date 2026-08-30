@@ -24,21 +24,8 @@ def _now():
 
 def reglas_documentales(tipo, exento_afp=False):
     """Documentos requeridos (label, categoría) según tipo de cliente. Nunca mezcla prohibidos."""
-    tipo = (tipo or "dependiente").lower()
-    docs = [("Cédula de identidad", "cedula")]
-    if tipo == "independiente":
-        docs += [("Boletas de honorarios", "boletas"), ("Impuesto a la renta", "imp_renta")]
-    elif tipo == "mixto":
-        docs += [("Liquidaciones de sueldo", "liquidacion"), ("Boletas de honorarios", "boletas"),
-                 ("Impuesto a la renta", "imp_renta")]
-        if not exento_afp:
-            docs.append(("Cotizaciones AFP", "afp"))
-    else:  # dependiente
-        docs += [("Liquidaciones de sueldo", "liquidacion")]
-        if not exento_afp:
-            docs.append(("Cotizaciones AFP", "afp"))
-    docs.append(("Informe CMF", "cmf"))
-    return docs
+    import validacion_documental as vdoc
+    return [(vdoc.LABELS.get(c, c), c) for c in vdoc.cats_requeridas(tipo, exento_afp=exento_afp)]
 
 
 def analizar_archivos_sync(nombre_folder):
