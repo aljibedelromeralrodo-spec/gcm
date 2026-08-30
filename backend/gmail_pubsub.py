@@ -222,8 +222,12 @@ async def _encolar(c):
     """Mismo flujo actual de ingesta: reglas de gestión → proc_queue (dedup) → archivos PDF."""
     from server import _reglas_auto_state, _es_gestion, _safe_name, PROC_DIR
     import pdf_service as pdfs_svc
+    import clasificador_correo as _clasif_ia
     reglas = await _reglas_auto_state()
-    if not _es_gestion(c["from"], c["subject"], bool(c["pdfs"]), reglas):
+    adj_nombres = [p["filename"] for p in (c.get("pdfs") or [])]
+    hito_rapido = _clasif_ia.detectar_hito(
+        "", c.get("subject"), c.get("from"), c.get("body"), adj_nombres)
+    if not _es_gestion(c["from"], c["subject"], bool(c["pdfs"]), reglas) and hito_rapido not in _clasif_ia.HITOS_CAPTURAR:
         return False
     if await db.proc_queue.find_one({"$or": [{"gmail_msg_id": c["gmail_id"]},
                                              {"subject": c["subject"], "date_iso": c["date"]}]}):
@@ -246,13 +250,17 @@ async def _encolar(c):
                 fn = _safe_name(_re.sub(r"\.pdf$", "", nombre_p, flags=_re.I) + f"_{len(attachments)+1}.pdf")
             (folder / fn).write_bytes(raw_p)
             attachments.append(fn)
+    es_solicitud = _es_gestion(c["from"], c["subject"], bool(c["pdfs"]), reglas)
+    status_q = "pendiente" if es_solicitud else "hito"
     await db.proc_queue.insert_one({
         "id": qid, "subject": c["subject"], "sender": c["from"],
-        "date_iso": c["date"], "status": "pendiente",
+        "date_iso": c["date"], "status": status_q,
         "body_preview": (c.get("body") or "")[:500], "body_full": (c.get("body") or "")[:8000],
         "attachments": attachments, "attachments_bytes_dir": str(folder),
         "classification": {}, "campos": {}, "drive_folder_id": None,
-        "fuente": "gmail_push", "gmail_msg_id": c["gmail_id"]})
+        "fuente": "gmail_push", "gmail_msg_id": c["gmail_id"],
+        "hito": "solicitud_credito" if es_solicitud else hito_rapido,
+        "es_solicitud": bool(es_solicitud)})
     return True
 
 

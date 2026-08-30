@@ -7,10 +7,70 @@ import uuid
 import hashlib
 import logging
 from datetime import datetime, timezone
-from database import db
+def _db():
+    from database import db
+    return db
 
 CATEGORIAS = ("solicitud_nueva", "consulta_administrativa", "aprobacion_mesa",
               "rechazo_mesa", "peticion_documentos_mesa", "no_relacionado")
+
+# Hitos del flujo (campo extra; NO reemplaza las 6 categorías constitucionales).
+# Solo estos se capturan en cola además de solicitud_nueva.
+HITOS = (
+    "solicitud_credito", "aprobacion_mesa", "rechazo_mesa", "tasacion",
+    "estudio_titulo", "escritura", "faltantes", "administrativo", "otro",
+)
+HITOS_CAPTURAR = frozenset((
+    "solicitud_credito", "aprobacion_mesa", "rechazo_mesa", "tasacion",
+    "estudio_titulo", "escritura", "faltantes",
+))
+HITO_LABELS = {
+    "solicitud_credito": "Solicitud de crédito",
+    "aprobacion_mesa": "Aprobación Mesa",
+    "rechazo_mesa": "Rechazo Mesa",
+    "tasacion": "Tasación",
+    "estudio_titulo": "Estudio de títulos",
+    "escritura": "Escritura",
+    "faltantes": "Petición de documentos",
+    "administrativo": "Administrativo",
+    "otro": "Otro",
+}
+
+_RX_TASACION = re.compile(
+    r"tasaci[oó]n|value\s*property|valueproperty|volvetproperty|avalu[oó]\s+comercial", re.I)
+_RX_ESTUDIO = re.compile(
+    r"estudio\s+de\s+t[ií]tulos?|estudio\s+titulo|mardones|majluf|mardluf|"
+    r"inscripci[oó]n\s+de\s+dominio|cbr\b|conservador", re.I)
+_RX_ESCRITURA = re.compile(
+    r"escritur|notar[ií]a|repertorio|firma\s+de\s+escritura|confecci[oó]n\s+de\s+borrador", re.I)
+
+
+def detectar_hito(categoria="", subject="", sender="", body="", adjuntos=None):
+    """Hito operativo a partir de la categoría constitucional + texto (sin LLM)."""
+    cat = (categoria or "").strip()
+    if cat == "solicitud_nueva":
+        return "solicitud_credito"
+    if cat == "aprobacion_mesa":
+        return "aprobacion_mesa"
+    if cat == "rechazo_mesa":
+        return "rechazo_mesa"
+    if cat == "peticion_documentos_mesa":
+        return "faltantes"
+    txt = " ".join([
+        subject or "", sender or "", body or "",
+        " ".join(str(a) for a in (adjuntos or [])[:20]),
+    ])
+    if _RX_TASACION.search(txt):
+        return "tasacion"
+    if _RX_ESTUDIO.search(txt):
+        return "estudio_titulo"
+    if _RX_ESCRITURA.search(txt):
+        return "escritura"
+    if cat == "consulta_administrativa":
+        return "administrativo"
+    if cat == "no_relacionado":
+        return "otro"
+    return "otro"
 
 _SISTEMA = (
     "Eres el clasificador de correos de Central Mutuos, corredora chilena de créditos "
@@ -55,17 +115,22 @@ async def clasificar_correo(subject, sender, body, nombres_adjuntos=None, date_i
     categoria='' significa que la IA no estuvo disponible (usar fallback de palabras clave)."""
     h = _huella(subject, date_iso)
     if cachear:
-        prev = await db.clasificaciones_ia.find_one({"huella": h}, {"_id": 0})
+        prev = await _db().clasificaciones_ia.find_one({"huella": h}, {"_id": 0})
         if prev:
             prev["cacheado"] = True
+            if not prev.get("hito"):
+                prev["hito"] = detectar_hito(
+                    prev.get("categoria"), subject, sender, body, nombres_adjuntos)
             return prev
     res = await _clasificar_claude(subject, sender, body, nombres_adjuntos or [])
+    res["hito"] = detectar_hito(
+        res.get("categoria"), subject, sender, body, nombres_adjuntos)
     if res.get("metodo") == "claude" and cachear:
         reg = {"id": str(uuid.uuid4()), "huella": h, "subject": (subject or "")[:200],
                "sender": (sender or "")[:150], "fecha_correo": date_iso or "",
                "clasificado_en": datetime.now(timezone.utc).isoformat(), **res}
         try:
-            await db.clasificaciones_ia.insert_one(dict(reg))
+            await _db().clasificaciones_ia.insert_one(dict(reg))
         except Exception as e:
             logging.warning(f"clasificaciones_ia insert: {e}")
     return res
@@ -80,7 +145,7 @@ async def _contexto_sistema():
     if time.time() - _KB_CACHE["ts"] < 600:
         return _KB_CACHE["texto"]
     try:
-        doc = await db.config.find_one({"_key": "base_conocimiento"}, {"resumen_clasificador": 1})
+        doc = await _db().config.find_one({"_key": "base_conocimiento"}, {"resumen_clasificador": 1})
         _KB_CACHE.update({"texto": (doc or {}).get("resumen_clasificador") or "", "ts": time.time()})
     except Exception:
         _KB_CACHE["ts"] = time.time()
@@ -101,12 +166,16 @@ async def clasificar_lote(correos, cachear=True):
     for i, c in enumerate(correos):
         if cachear:
             try:
-                prev = await db.clasificaciones_ia.find_one(
+                prev = await _db().clasificaciones_ia.find_one(
                     {"huella": _huella(c.get("subject"), c.get("date_iso"))}, {"_id": 0})
             except Exception:
                 prev = None
             if prev:
                 prev["cacheado"] = True
+                if not prev.get("hito"):
+                    prev["hito"] = detectar_hito(
+                        prev.get("categoria"), c.get("subject"), c.get("sender"),
+                        c.get("body"), None)
                 resultados[i] = prev
                 continue
         pendientes.append(i)
@@ -141,14 +210,17 @@ async def clasificar_lote(correos, cachear=True):
             cat = (d.get("categoria") or "").strip()
             if cat not in CATEGORIAS:
                 cat = "no_relacionado"
+            c0 = correos[idx]
             res = {"categoria": cat, "confianza": float(d.get("confianza") or 0.7),
                    "cliente": (d.get("cliente") or "").strip()[:120],
                    "razon": (d.get("razon") or "")[:250], "metodo": "claude_lote"}
+            res["hito"] = detectar_hito(cat, c0.get("subject"), c0.get("sender"),
+                                        c0.get("body"), None)
             resultados[idx] = res
             if cachear:
                 c = correos[idx]
                 try:
-                    await db.clasificaciones_ia.insert_one({
+                    await _db().clasificaciones_ia.insert_one({
                         "id": str(uuid.uuid4()),
                         "huella": _huella(c.get("subject"), c.get("date_iso")),
                         "subject": (c.get("subject") or "")[:200],

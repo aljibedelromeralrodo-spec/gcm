@@ -5733,6 +5733,15 @@ async def reglas_auto_patch(payload: dict):
 def _proc_public(d):
     d = clean(dict(d))
     d.pop("attachments_bytes_dir", None)
+    cls = d.get("clasificador_ia") or {}
+    if not d.get("hito"):
+        d["hito"] = _clasif_ia.detectar_hito(
+            cls.get("categoria") or d.get("categoria_ia") or "",
+            d.get("subject"), d.get("sender"),
+            d.get("body_preview") or d.get("body_full"),
+            d.get("attachments"))
+    d["hito_label"] = _clasif_ia.HITO_LABELS.get(d["hito"], d["hito"])
+    d["n_adjuntos"] = len(d.get("attachments") or [])
     return d
 
 
@@ -5748,7 +5757,7 @@ async def drive_start():
 
 @api.get("/procesamiento/stats")
 async def proc_stats():
-    estados = ["pendiente", "procesando", "clasificado", "revisar", "error", "descartado"]
+    estados = ["pendiente", "procesando", "clasificado", "revisar", "error", "descartado", "hito"]
     out = {"total": await db.proc_queue.count_documents({})}
     for e in estados:
         out[e] = await db.proc_queue.count_documents({"status": e})
@@ -5952,16 +5961,25 @@ async def proc_ingest(max_emails: int = 20, dias: int = 0):
         exists = await db.proc_queue.find_one({"subject": c["subject"], "date_iso": c["date"]})
         if exists:
             continue
-        # 🧠 CLASIFICACIÓN CONTEXTUAL (Claude): solo 'solicitud_nueva' entra a la cola
-        # de carpetas. Los veredictos de mesa los maneja Mesa de la Verdad aparte.
+        # 🧠 CLASIFICACIÓN CONTEXTUAL (Claude): solo 'solicitud_nueva' arma carpetas.
+        # Los hitos (tasación, estudio, escritura, mesa) se capturan en cola sin carpeta.
         cls_ia = await _clasif_ia.clasificar_correo(
             c["subject"], c["from"], c.get("body") or "",
             [p["filename"] for p in c["pdfs"]], c.get("date") or "")
         categoria = cls_ia.get("categoria") or ""
-        if categoria and categoria != "solicitud_nueva":
-            continue  # queda registrado en db.clasificaciones_ia con su categoría
-        if not categoria and not c.get("es_gestion_kw"):
-            continue  # IA caída → respaldo con el filtro clásico de palabras clave
+        hito = cls_ia.get("hito") or _clasif_ia.detectar_hito(
+            categoria, c["subject"], c["from"], c.get("body") or "",
+            [p["filename"] for p in c["pdfs"]])
+        es_solicitud = (categoria == "solicitud_nueva") or (
+            not categoria and c.get("es_gestion_kw"))
+        # Constitución: solo solicitud_nueva entra a carpetas. Los hitos se capturan
+        # (adjuntos + cola) sin armar carpeta.
+        if es_solicitud:
+            status_q = "pendiente"
+        elif hito in _clasif_ia.HITOS_CAPTURAR:
+            status_q = "hito"
+        else:
+            continue
         qid = str(uuid.uuid4())
         folder = PROC_DIR / qid
         folder.mkdir(parents=True, exist_ok=True)
@@ -5986,13 +6004,15 @@ async def proc_ingest(max_emails: int = 20, dias: int = 0):
                 attachments.append(fn)
         await db.proc_queue.insert_one({
             "id": qid, "subject": c["subject"], "sender": c["from"],
-            "date_iso": c["date"], "status": "pendiente",
+            "date_iso": c["date"], "status": status_q,
             "body_preview": (c.get("body") or "")[:500],
             "body_full": (c.get("body") or "")[:8000],
             "attachments": attachments, "attachments_bytes_dir": str(folder),
             "classification": {}, "campos": {}, "drive_folder_id": None,
-            "categoria_ia": categoria or "solicitud_nueva_kw",
-            "clasificador_ia": {k: cls_ia.get(k) for k in ("categoria", "confianza", "razon", "metodo")},
+            "categoria_ia": categoria or ("solicitud_nueva_kw" if es_solicitud else ""),
+            "clasificador_ia": {k: cls_ia.get(k) for k in ("categoria", "confianza", "razon", "metodo", "hito")},
+            "hito": hito,
+            "es_solicitud": bool(es_solicitud),
         })
         enqueued += 1
     return {"fetched": len(correos), "enqueued": enqueued}
@@ -6672,6 +6692,38 @@ async def proc_attach_manual(qid: str, files: list[UploadFile] = File(...)):
         await db.proc_queue.update_one(
             {"id": qid}, {"$push": {"attachments": {"$each": added}}})
     return {"added": added, "convertidos": convertidos, "errors": errors}
+
+
+@api.get("/procesamiento/queue/{qid}/archivo/{filename:path}")
+async def proc_archivo(qid: str, filename: str, inline: bool = True):
+    """Preview o descarga de un adjunto ya capturado en la cola de ingesta."""
+    item = await db.proc_queue.find_one({"id": qid})
+    if not item:
+        raise HTTPException(status_code=404, detail="No encontrado")
+    fn = Path(filename).name
+    permitidos = item.get("attachments") or []
+    if fn not in permitidos:
+        raise HTTPException(status_code=404, detail="Adjunto no registrado en este correo")
+    base = Path(item.get("attachments_bytes_dir") or (PROC_DIR / qid))
+    try:
+        target = (base / fn).resolve()
+        if target.parent != base.resolve():
+            raise HTTPException(status_code=400, detail="Ruta inválida")
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=400, detail="Ruta inválida")
+    if not target.is_file():
+        alt = PROC_DIR / qid / fn
+        if alt.is_file():
+            target = alt
+        else:
+            raise HTTPException(status_code=404, detail="Archivo no encontrado en el búnker de captura")
+    import mimetypes
+    mt = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
+    disp = "inline" if inline else "attachment"
+    return FileResponse(str(target), media_type=mt,
+                        headers={"Content-Disposition": f'{disp}; filename="{target.name}"'})
 
 
 @api.get("/procesamiento/queue/{qid}/extract-text")

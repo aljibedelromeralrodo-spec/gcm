@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import axios from "axios";
+import { secureGet } from "../utils/secureStore";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -10,6 +11,17 @@ const STATUS_META = {
   revisar:     { label: "Revisar",     color: "#f97316", emoji: "🟠" },
   error:       { label: "Error",       color: "#e11d48", emoji: "🔴" },
   descartado:  { label: "Descartado",  color: "#6b7280", emoji: "⚫" },
+  hito:        { label: "Hito",        color: "#0ea5e9", emoji: "🟣" },
+};
+
+const HITO_COLOR = {
+  solicitud_credito: "#d4af37",
+  aprobacion_mesa: "#10d98e",
+  rechazo_mesa: "#e11d48",
+  tasacion: "#fb923c",
+  estudio_titulo: "#14b8a6",
+  escritura: "#a78bfa",
+  faltantes: "#f59e0b",
 };
 
 const TIPOS_DOC = ["liquidacion","cotizacion","cedula","dicom","carta_aprobacion","simulacion","solicitud","otro"];
@@ -291,9 +303,9 @@ export default function EmailProcessingModule() {
     <div style={{ padding: 24 }} data-testid="email-processing-module">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 26, color: "#1a1f2e" }}>📥 Procesamiento de Correo</h2>
+          <h2 style={{ margin: 0, fontSize: 26, color: "#1a1f2e" }} data-testid="ingesta-titulo">📥 Ingesta y Captura de Correos</h2>
           <p style={{ margin: "4px 0 0", color: "#64748b", fontSize: 13 }}>
-            Monitoreo, clasificación IA y corrección manual de correos entrantes
+            Monitoreo 24/7, detección de solicitudes e hitos (Mesa, tasación, estudio, escritura), adjuntos en búnker y preview sin descargar
           </p>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -387,8 +399,8 @@ export default function EmailProcessingModule() {
       )}
 
       {/* KPI cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 12, marginBottom: 20 }}>
-        {["total","pendiente","clasificado","revisar","error","descartado"].map(k => {
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 12, marginBottom: 20 }}>
+        {["total","pendiente","clasificado","hito","revisar","error","descartado"].map(k => {
           const meta = STATUS_META[k] || { label: "Total", emoji: "📊", color: "#1a1f2e" };
           return (
             <div key={k} data-testid={`kpi-${k}`}
@@ -433,10 +445,11 @@ export default function EmailProcessingModule() {
           <thead>
             <tr style={{ background: "rgba(14,14,16,0.9)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", color: "#fff" }}>
               <th style={th}>Estado</th>
+              <th style={th}>Hito</th>
               <th style={th}>Fecha</th>
               <th style={th}>Asunto</th>
               <th style={th}>Cliente detectado</th>
-              <th style={th}>Tipo doc</th>
+              <th style={th}>Adjuntos</th>
               <th style={th}>Confianza</th>
               <th style={th}>% Aprobación</th>
               <th style={th}>Acciones</th>
@@ -451,10 +464,17 @@ export default function EmailProcessingModule() {
                     style={{ borderBottom: "1px solid #f1f5f9", cursor: "pointer" }}
                     onClick={() => openDetail(r.id)}>
                   <td style={td}><span style={{ color: meta.color, fontWeight: 700 }}>{meta.emoji} {meta.label}</span></td>
+                  <td style={td}>
+                    <span data-testid={`hito-${r.id}`} style={{ fontWeight: 800, fontSize: 11, padding: "2px 8px",
+                      background: "rgba(14,165,233,0.12)", color: HITO_COLOR[r.hito] || "#0369a1",
+                      border: `1px solid ${HITO_COLOR[r.hito] || "#7dd3fc"}` }}>
+                      {r.hito_label || r.hito || "—"}
+                    </span>
+                  </td>
                   <td style={td}>{(r.date_iso || "").slice(0,10)}</td>
                   <td style={td} title={r.subject}>{(r.subject || "").slice(0,60)}</td>
                   <td style={td}>{cl.cliente || "—"}</td>
-                  <td style={td}>{cl.tipo_documento || "—"}</td>
+                  <td style={td} data-testid={`n-adjuntos-${r.id}`}>{r.n_adjuntos ?? (r.attachments || []).length}</td>
                   <td style={td}>{cl.confianza != null ? `${Math.round(cl.confianza*100)}%` : "—"}</td>
                   <td style={td} data-testid={`prob-aprobacion-${r.id}`} title={(r.prob_aprobacion?.factores || []).join("\n")}>
                     {r.prob_aprobacion ? (
@@ -472,7 +492,7 @@ export default function EmailProcessingModule() {
               );
             })}
             {rows.length === 0 && (
-              <tr><td colSpan={8} style={{ ...td, textAlign:"center", color:"#94a3b8", padding: 30 }}>
+              <tr><td colSpan={9} style={{ ...td, textAlign:"center", color:"#94a3b8", padding: 30 }}>
                 Sin resultados. Hacé clic en <b>Ingestar Inbox</b> para traer correos.
               </td></tr>
             )}
@@ -497,6 +517,16 @@ function DetailModal({ item, onClose, onReprocess, onSave, onUploadDrive, onExtr
   const fileRef = useRef(null);
   const [docs, setDocs] = useState(cl.documentos || []);
   const [ordenando, setOrdenando] = useState(false);
+  const [preview, setPreview] = useState(null);
+  const esHito = item.status === "hito" || (item.hito && item.hito !== "solicitud_credito" && !item.es_solicitud);
+  const adjuntos = item.attachments || [];
+  const abrirPreview = (fn) => {
+    const token = encodeURIComponent(secureGet("token", false) || "");
+    const url = `${API}/api/procesamiento/queue/${item.id}/archivo/${encodeURIComponent(fn)}?inline=true&t=${token}`;
+    const ext = (fn || "").toLowerCase().split(".").pop();
+    const mime = ext === "pdf" ? "pdf" : ["png","jpg","jpeg","gif","webp"].includes(ext) ? "image" : "other";
+    setPreview({ url, name: fn, mime });
+  };
   const moverDoc = async (i, dir) => {
     const j = i + dir;
     if (j < 0 || j >= docs.length) return;
@@ -543,6 +573,11 @@ function DetailModal({ item, onClose, onReprocess, onSave, onUploadDrive, onExtr
         <h3 style={{ marginTop:0 }}>{item.subject}</h3>
         <div style={{ color:"#64748b", fontSize:12, marginBottom:12 }}>
           {item.sender} · {(item.date_iso || "").slice(0,16).replace("T"," ")} · Status: <b>{item.status}</b>
+          {item.hito_label && (
+            <span data-testid="detail-hito" style={{ marginLeft: 8, fontWeight: 800, color: HITO_COLOR[item.hito] || "#0369a1" }}>
+              · {item.hito_label}
+            </span>
+          )}
         </div>
         {item.status === "descartado" && item.descartado_motivo && (
           <div data-testid="descartado-motivo" style={{ background:"#fef2f2", border:"1px solid #fecaca", color:"#9f1239", padding:"10px 14px", borderRadius:8, marginBottom:12, fontSize:13 }}>
@@ -555,9 +590,48 @@ function DetailModal({ item, onClose, onReprocess, onSave, onUploadDrive, onExtr
                       maxHeight:180, overflow:"auto", whiteSpace:"pre-wrap", fontSize:13 }}>
           {item.body_preview || "(sin cuerpo)"}
         </div>
-        <div style={{ marginBottom:8, fontSize:12, color:"#64748b" }}>
-          Adjuntos: {(item.attachments || []).join(", ") || "(sin adjuntos)"}
+        <div style={{ marginBottom:12 }} data-testid="ingesta-adjuntos">
+          <div style={{ fontSize:12, color:"#64748b", marginBottom:6 }}>
+            Adjuntos capturados en búnker: <b>{adjuntos.length}</b>
+          </div>
+          {adjuntos.length === 0 && <div style={{ fontSize:12, color:"#94a3b8" }}>(sin adjuntos)</div>}
+          {adjuntos.map((fn, i) => (
+            <div key={fn + i} data-testid={`ingesta-adj-${i}`} style={{ display:"flex", alignItems:"center", gap:8, padding:"4px 0", borderTop: i ? "1px solid #e2e8f0" : "none", fontSize:13 }}>
+              <i className={`fa ${/\.pdf$/i.test(fn) ? "fa-file-pdf-o" : "fa-file-o"}`} style={{ color:"#b91c1c" }} />
+              <span style={{ flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{fn}</span>
+              <button type="button" data-testid={`ingesta-preview-${i}`} onClick={() => abrirPreview(fn)}
+                      style={btnStyle("#0f52ba", true)} title="Previsualizar sin descargar">
+                <i className="fa fa-eye" /> Ver
+              </button>
+            </div>
+          ))}
         </div>
+        {preview && (
+          <div data-testid="ingesta-preview-overlay" onClick={() => setPreview(null)}
+               style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.82)", zIndex:200,
+                        display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:16 }}>
+            <div onClick={e => e.stopPropagation()} style={{ width:"min(960px, 96vw)", height:"min(86vh, 900px)",
+              background:"#111", display:"flex", flexDirection:"column" }}>
+              <div style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 12px", color:"#f8fafc",
+                borderBottom:"1px solid #333" }}>
+                <b style={{ flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{preview.name}</b>
+                <button type="button" data-testid="ingesta-preview-cerrar" onClick={() => setPreview(null)}
+                        style={btnStyle("#64748b", true)}>Cerrar</button>
+              </div>
+              {preview.mime === "pdf" && (
+                <iframe title={preview.name} src={preview.url} style={{ flex:1, width:"100%", border:"none", background:"#fff" }} />
+              )}
+              {preview.mime === "image" && (
+                <div style={{ flex:1, overflow:"auto", textAlign:"center", padding:12 }}>
+                  <img alt={preview.name} src={preview.url} style={{ maxWidth:"100%", maxHeight:"100%" }} />
+                </div>
+              )}
+              {preview.mime === "other" && (
+                <div style={{ color:"#94a3b8", padding:24 }}>Vista previa no disponible para este formato.</div>
+              )}
+            </div>
+          </div>
+        )}
         {item.prob_aprobacion && (
           <div style={{ background:"#eff6ff", border:"1px solid #d4af37", borderRadius:8, padding:10, marginBottom:12 }} data-testid="prob-aprobacion-detalle">
             <div style={{ fontWeight:700, fontSize:13, marginBottom:4 }}>
@@ -673,15 +747,15 @@ function DetailModal({ item, onClose, onReprocess, onSave, onUploadDrive, onExtr
             </button>
             <button data-testid="btn-extract-text" onClick={() => onExtractText(item.id)} disabled={busy}
                     style={btnStyle("#b8942e")}>🔍 Leer con OCR</button>
-            {item.status === "clasificado" && (
+            {!esHito && item.status === "clasificado" && (
               <button data-testid="btn-upload-drive" onClick={() => onUploadDrive(item.id)} disabled={busy}
                       style={btnStyle("#10d98e")}>📂 Guardar en Carpeta Cliente</button>
             )}
-            {item.status === "descartado" && (
+            {!esHito && item.status === "descartado" && (
               <button data-testid="btn-armar-manual" onClick={() => onUploadDrive(item.id)} disabled={busy}
                       style={btnStyle("#f59e0b")}>📂 Armar carpeta manualmente</button>
             )}
-            {item.status === "clasificado" && (
+            {!esHito && item.status === "clasificado" && (
               <button data-testid="btn-enviar-autocorreo" onClick={() => onEnviarAutocorreo(item.id)} disabled={busy}
                       style={btnStyle("#6c5ce7")}>✉️ Enviar autocorreo (→ mí → mesa)</button>
             )}
