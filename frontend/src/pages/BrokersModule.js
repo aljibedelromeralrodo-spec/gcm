@@ -63,6 +63,8 @@ export default function BrokersModule({ user }) {
   const [proys, setProys] = useState([]);
   const [situacion, setSituacion] = useState([]);
   const [actividad, setActividad] = useState([]);
+  const [consultas, setConsultas] = useState([]);
+  const [resp, setResp] = useState({});
   const [form, setForm] = useState({ nombre: "", rut: "" });
   const [files, setFiles] = useState([]);
   const [mes, setMes] = useState("");
@@ -76,6 +78,7 @@ export default function BrokersModule({ user }) {
     axios.get(`${API}/api/broker/proyecciones`).then(r => setProys(r.data.proyecciones || [])).catch(() => {});
     axios.get(`${API}/api/broker/estado-situacion`).then(r => setSituacion(r.data.situacion || [])).catch(() => {});
     axios.get(`${API}/api/broker/actividad`).then(r => setActividad(r.data.actividad || [])).catch(() => {});
+    axios.get(`${API}/api/trazabilidad/pendientes`).then(r => setConsultas(r.data.pendientes || [])).catch(() => {});
   }, []);
   useEffect(() => { cargar(); }, [cargar]);
 
@@ -266,7 +269,7 @@ export default function BrokersModule({ user }) {
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.7rem", color: "#e2e8f0" }}>
             <thead><tr style={{ color: "#94a3b8", fontSize: "0.6rem", textTransform: "uppercase" }}>
-              {["Cliente", "RUT", "Tipo", "Docs", "Tasación", "Estudio Títulos", "Escrituración", "Último hito"].map(h =>
+              {["Cliente", "RUT", "Tipo", "Docs", "Tasación", "Estudio Títulos", "Serie firmada", "Escrituración", "Último hito"].map(h =>
                 <th key={h} style={{ textAlign: "left", padding: "0.4rem 0.6rem", borderBottom: "1px solid rgba(148,163,184,0.15)" }}>{h}</th>)}
             </tr></thead>
             <tbody>
@@ -279,7 +282,8 @@ export default function BrokersModule({ user }) {
                   <td style={{ padding: "0.4rem 0.6rem", color: s.tasacion === "Recibida" ? "#22c55e" : "#94a3b8" }}>{s.tasacion}</td>
                   <td style={{ padding: "0.4rem 0.6rem", color: s.reparos ? "#ef4444" : (s.estudio === "Recibido" ? "#22c55e" : "#94a3b8") }}>
                     {s.estudio}{s.reparos ? ` (${s.reparos})` : ""}</td>
-                  <td style={{ padding: "0.4rem 0.6rem" }}>{s.escrituracion ? "✅ En Escrituración" : "—"}</td>
+                  <td style={{ padding: "0.4rem 0.6rem", color: s.serie === "Firmada" ? "#22c55e" : "#94a3b8" }}>{s.serie || "Pendiente"}</td>
+                  <td style={{ padding: "0.4rem 0.6rem" }}>{s.escrituracion ? "✅ En Escrituración" : (s.proyectado_mes ? "📊 Proyectado" : "—")}</td>
                   <td style={{ padding: "0.4rem 0.6rem", color: "#94a3b8" }}>{s.hitos_recientes?.[0]?.hito || "—"}</td>
                 </tr>
               ))}
@@ -316,6 +320,37 @@ export default function BrokersModule({ user }) {
               ))}
             </div>
             <NubeCarpeta fid={c.id} />
+          </div>
+        ))}
+      </div>
+
+      <div style={card} data-testid="broker-consultas-gerencia">
+        <div style={{ color: "#d4af37", fontWeight: 800, fontSize: "0.82rem", marginBottom: 8 }}>💬 Consultas de Gerencia — responder acá (sin correo)</div>
+        {consultas.length === 0 && <p style={{ color: "var(--text-muted)", fontSize: "0.7rem" }}>Sin consultas abiertas.</p>}
+        {consultas.map(h => (
+          <div key={h.id} data-testid={`consulta-pendiente-${h.id}`} style={{ borderBottom: "1px solid rgba(255,255,255,0.06)", padding: "0.55rem 0" }}>
+            <div style={{ color: "#f8fafc", fontSize: "0.74rem", fontWeight: 700 }}>{h.cliente}</div>
+            <div style={{ color: "#fbbf24", fontSize: "0.68rem" }}>{h.pregunta}</div>
+            {(h.mensajes || []).slice(-3).map(m => (
+              <div key={m.id || m.fecha} style={{ color: "#94a3b8", fontSize: "0.62rem", marginTop: 2 }}>{m.autor}: {m.texto}</div>
+            ))}
+            <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+              <input data-testid={`consulta-resp-${h.id}`} style={{ ...inp, flex: 1 }} placeholder="Responder a Gerencia…"
+                value={resp[h.id] || ""} onChange={e => setResp({ ...resp, [h.id]: e.target.value })} />
+              <button data-testid={`consulta-enviar-${h.id}`} style={goldBtn} disabled={busy}
+                onClick={async () => {
+                  if (!(resp[h.id] || "").trim()) return;
+                  setBusy(true);
+                  try {
+                    await axios.post(`${API}/api/trazabilidad/responder/${h.folder_id}`,
+                      { hilo_id: h.id, mensaje: resp[h.id] });
+                    setResp({ ...resp, [h.id]: "" });
+                    setMsg("✅ Respuesta registrada en el hilo de la operación");
+                    cargar();
+                  } catch (e) { setMsg(`⛔ ${e.response?.data?.detail || "Error"}`); }
+                  setBusy(false);
+                }}>Responder</button>
+            </div>
           </div>
         ))}
       </div>

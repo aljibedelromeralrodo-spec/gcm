@@ -246,7 +246,9 @@ async def _hitos(fd, cache=None):
                                      else "Pendiente"),
         "escritura_firmada": bool(fd.get("escritura_confirmada_at")),
         "documentacion": "ok" if fd.get("datos_financieros_ocr_fecha") else ("proceso" if n_arch else "bloqueo"),
-        "firma_set": "ok" if fd.get("set_firmado") else ("proceso" if fd.get("set_enviado") else "pendiente"),
+        "firma_set": ("ok" if fd.get("set_firmado") or fd.get("set_credito_firmado")
+                      or str(fd.get("set_credito_estado") or "").lower() in ("firmado", "ok", "emitido")
+                      else ("proceso" if fd.get("set_enviado") or fd.get("set_credito_at") else "pendiente")),
         "ingreso_concreces": conc.get("estado", "pendiente"),
         "notaria": "alerta" if alerta_notaria else (conc.get("notaria", "pendiente")),
         "alerta_notaria": alerta_notaria,
@@ -256,11 +258,17 @@ async def _hitos(fd, cache=None):
         "tipo_operacion": (fd.get("tipo_operacion") or "").upper(),
         # Regla #43: estado real por correos — sin respaldo = Pendiente de Información
         "tasacion_estado": ("ok" if fd.get("tasacion_informe_recibido_at")
+                            or (isinstance(fd.get("tasacion_ocr"), dict)
+                                and (fd["tasacion_ocr"].get("valor_uf") or fd["tasacion_ocr"].get("rol_avaluo")))
                             else ("proceso" if fd.get("tasacion_solicitada_at") else "pendiente_informacion")),
         "estudio_estado": ("alerta" if (fd.get("reparos_alertas") or [])
                            else ("ok" if fd.get("estudio_recibido_at")
                                  else ("proceso" if fd.get("estudio_titulo_solicitado_at") else "pendiente_informacion"))),
         "reparos_pendientes": len(fd.get("reparos_alertas") or []),
+        "serie_estado": ("ok" if fd.get("set_firmado") or fd.get("set_credito_firmado")
+                         or str(fd.get("set_credito_estado") or "").lower() in ("firmado", "ok", "emitido")
+                         else ("proceso" if fd.get("set_enviado") or fd.get("set_credito_at") else "pendiente")),
+        "proyeccion_mes": (fd.get("proyeccion_mes") or fd.get("mes_proyeccion") or "")[:7],
         # RADAR DE ESCRITURACIÓN: Documentación 2.0 + Log de Firmas + Fecha de Firma
         "doc20": _mi.doc20_folder(fd),
         "firmas": _firmas_info[0], "hito_firmas": _firmas_info[1],
@@ -280,7 +288,12 @@ async def gerencia_cartera():
         "concreces": {d.get("folder_id"): d async for d in db.concreces_estado.find({})},
         "seguimiento": await db.seguimiento.find(
             {}, {"cliente": 1, "estado": 1, "asunto": 1, "fecha": 1}).sort("fecha", -1).to_list(3000),
+        "consultas": {},
     }
+    async for c in db.comunicaciones_operacion.find({"estado": "abierta"}, {"folder_id": 1}):
+        fid_c = c.get("folder_id")
+        if fid_c:
+            cache["consultas"][fid_c] = cache["consultas"].get(fid_c, 0) + 1
     async for fd in db.folders.find({}).sort("nombre", 1):
         if flota:
             # REGLA DE HIERRO (Flota Agosto): solo existe la flota autorizada en las vistas
@@ -309,6 +322,7 @@ async def gerencia_cartera():
             except Exception:
                 h["inactivo_96h"] = True
             h["reclamos"] = fd.get("reclamos_gerencia") or {}
+            h["consultas_abiertas"] = cache["consultas"].get(fd.get("id"), 0)
             h["actualizado"] = str(ult)[:10]
             h["creado"] = str(fd.get("created_at") or "")[:10]
             h["dicom"] = bool((fd.get("datos_financieros") or {}).get("morosidad_dicom"))

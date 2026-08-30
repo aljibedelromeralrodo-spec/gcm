@@ -706,6 +706,8 @@ async def startup():
         await db.adn_clientes_360.create_index("rol_norm")
         await db.folders.create_index("codeudor_rut")
         await db.folders.create_index("datos_financieros.rol_avaluo")
+        await db.comunicaciones_operacion.create_index("folder_id")
+        await db.comunicaciones_operacion.create_index([("estado", 1), ("actualizado", -1)])
     except Exception as e:
         logging.warning(f"indices: {e}")
     # PASO 2 — BÚNKER DE ARCHIVOS (disco de producción efímero): antes de servir
@@ -16602,6 +16604,8 @@ api.include_router(_cex_mod.export_r)
 # 👑 GERENCIA COMERCIAL — brokers internos, ranking, trackers de pasos
 import gerencia_comercial as _gcom_mod
 api.include_router(_gcom_mod.gcom)
+import trazabilidad_gerencial as _traza_mod
+api.include_router(_traza_mod.traza)
 
 # 📋 AUDITORÍA DE CRÉDITOS → MESA — recibidos vs enviados (sistema + correo directo)
 import auditoria_mesa as _audim_mod

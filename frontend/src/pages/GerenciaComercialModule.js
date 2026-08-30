@@ -49,6 +49,11 @@ const RECLAMOS_UI = [
   ["firmas", "📩 Reclamar Firmas", f => f.hito_firmas !== "ok", "mb-azul"],
   ["movimiento", "📩 Reclamar Movimiento", f => !!f.inactivo_96h, "mb-naranja"],
 ];
+const CONSULTAS_UI = [
+  ["tasacion", "¿Por qué no está la tasación?", f => f.tasacion_estado !== "ok"],
+  ["estudio", "¿En qué estado está el estudio?", f => f.estudio_estado !== "ok"],
+  ["serie", "¿En qué estado está la serie firmada?", f => (f.serie_estado || f.firma_set) !== "ok"],
+];
 
 const FILTRO0 = { broker: "", inmo: "", proy: "", viv: "", sub: "", serviu: "", periodo: "", estado: "" };
 
@@ -67,6 +72,8 @@ const enEstado = (f, estado) => {
   if (estado === "reparos") return (f.reparos_pendientes || 0) > 0;
   if (estado === "sin_actividad") return !!f.inactivo_96h;
   if (estado === "dicom") return !!f.dicom;
+  if (estado === "proyectado") return !!(f.proyeccion_mes);
+  if (estado === "cuello") return (f.consultas_abiertas || 0) > 0 || f.tasacion_estado !== "ok" || f.estudio_estado === "alerta";
   return true;
 };
 
@@ -74,6 +81,8 @@ export default function GerenciaComercialModule() {
   const [data, setData] = useState(null);
   const [busyRec, setBusyRec] = useState("");
   const [reparosModal, setReparosModal] = useState(null);
+  const [hiloModal, setHiloModal] = useState(null);
+  const [hiloBusy, setHiloBusy] = useState(false);
   const [busyPdf, setBusyPdf] = useState(false);
 
   const verReparos = async (f) => {
@@ -129,6 +138,28 @@ export default function GerenciaComercialModule() {
     setBusyPdf(false);
   };
 
+  const consultarHito = async (f, hito) => {
+    setHiloBusy(true);
+    try {
+      await axios.post(`${API}/api/trazabilidad/consulta/${f.folder_id}`, { hito });
+      const r = await axios.get(`${API}/api/trazabilidad/comunicaciones/${f.folder_id}`);
+      setHiloModal({ cliente: f.cliente, fid: f.folder_id, hilos: r.data.hilos || [] });
+      recargar();
+    } catch (e) {
+      window.alert(e.response?.data?.detail || "No se pudo registrar la consulta");
+    }
+    setHiloBusy(false);
+  };
+
+  const abrirHilo = async (f) => {
+    try {
+      const r = await axios.get(`${API}/api/trazabilidad/comunicaciones/${f.folder_id}`);
+      setHiloModal({ cliente: f.cliente, fid: f.folder_id, hilos: r.data.hilos || [] });
+    } catch (e) {
+      window.alert(e.response?.data?.detail || "No se pudo cargar el hilo");
+    }
+  };
+
   const fecharFirma = async (fid, fecha) => {
     try { await axios.post(`${API}/api/flujos/fecha-firma/${fid}`, { fecha }); recargar(); }
     catch (e) { console.error(e); }
@@ -160,7 +191,8 @@ export default function GerenciaComercialModule() {
     let fs = data?.cartera || [];
     const mes = data?.mes || "";
     if (filtro.periodo) fs = fs.filter(f => dentroPeriodo(f, filtro.periodo, mes));
-    if (filtro.estado) fs = fs.filter(f => enEstado(f, filtro.estado));
+    if (filtro.estado === "proyectado") fs = fs.filter(f => (f.proyeccion_mes || "") === mes);
+    else if (filtro.estado) fs = fs.filter(f => enEstado(f, filtro.estado));
     if (filtro.broker) fs = fs.filter(f => (f.broker_origen || "") === filtro.broker);
     if (filtro.inmo) fs = fs.filter(f => (f.inmobiliaria || f.origen || "") === filtro.inmo);
     if (filtro.proy) fs = fs.filter(f => (f.proyecto || "") === filtro.proy);
@@ -274,6 +306,8 @@ export default function GerenciaComercialModule() {
             <option value="reparos">Con reparos</option>
             <option value="sin_actividad">Sin actividad 96h</option>
             <option value="dicom">Con DICOM (mora)</option>
+            <option value="proyectado">Proyectados a escriturar</option>
+            <option value="cuello">Cuello de botella (hito pendiente)</option>
           </select>
         </label>
         <label style={lblF}>Broker / Ejecutivo<br />
@@ -378,6 +412,18 @@ export default function GerenciaComercialModule() {
                 <span style={{ fontSize: 11, color: "#7a7a7a", marginLeft: "auto" }}>{f.notaria_nombre || "Notaría por asignar"}</span>
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 8 }}>
+                {CONSULTAS_UI.filter(([, , cond]) => cond(f)).map(([hito, label]) => (
+                  <button key={hito} data-testid={`consulta-${hito}-${f.folder_id}`}
+                    className="maserati-btn mb-azul" disabled={hiloBusy}
+                    style={{ minHeight: 28, padding: "0.25rem 0.5rem", fontSize: "0.58rem", borderRadius: 8 }}
+                    title="Queda en el hilo de la operación. No envía correo."
+                    onClick={() => consultarHito(f, hito)}>{label}</button>
+                ))}
+                {(f.consultas_abiertas || 0) > 0 && (
+                  <button className="maserati-btn" data-testid={`hilo-${f.folder_id}`}
+                    style={{ minHeight: 28, padding: "0.25rem 0.5rem", fontSize: "0.58rem", borderRadius: 8 }}
+                    onClick={() => abrirHilo(f)}>Hilo ({f.consultas_abiertas})</button>
+                )}
                 {RECLAMOS_UI.filter(([, , cond]) => cond(f)).map(([tipo, label, , color]) => {
                   const hecho = f.reclamos?.[tipo];
                   return (
@@ -499,6 +545,18 @@ export default function GerenciaComercialModule() {
                 </td>
                 <td style={{ ...tdG, padding: "10px 10px" }}>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 4, maxWidth: 360, alignItems: "center" }}>
+                    {CONSULTAS_UI.filter(([, , cond]) => cond(f)).map(([hito, label]) => (
+                      <button key={hito} data-testid={`consulta-${hito}-${f.folder_id}`}
+                        className="maserati-btn mb-azul" disabled={hiloBusy}
+                        style={{ minHeight: 28, padding: "0.25rem 0.5rem", fontSize: "0.58rem", borderRadius: 8 }}
+                        title="Queda en el hilo de la operación. No envía correo."
+                        onClick={() => consultarHito(f, hito)}>{label}</button>
+                    ))}
+                    {(f.consultas_abiertas || 0) > 0 && (
+                      <button className="maserati-btn" data-testid={`hilo-${f.folder_id}`}
+                        style={{ minHeight: 28, padding: "0.25rem 0.5rem", fontSize: "0.58rem", borderRadius: 8 }}
+                        onClick={() => abrirHilo(f)}>Hilo ({f.consultas_abiertas})</button>
+                    )}
                     {RECLAMOS_UI.filter(([, , cond]) => cond(f)).map(([tipo, label, , color]) => {
                       const hecho = f.reclamos?.[tipo];
                       return (
@@ -551,6 +609,31 @@ export default function GerenciaComercialModule() {
               </div>
             ))}
             <button data-testid="gerencia-reparos-cerrar" onClick={() => setReparosModal(null)} className="maserati-btn" style={{ marginTop: 14 }}>Cerrar</button>
+          </div>
+        </div>
+      )}
+      {hiloModal && (
+        <div data-testid="gerencia-hilo-modal" onClick={() => setHiloModal(null)}
+          style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.85)",
+            display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
+          <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 560, maxHeight: "80vh", overflowY: "auto",
+            background: "#0a0a0a", border: `1px solid ${BORDE}`, borderRadius: 12, padding: "1.4rem 1.6rem" }}>
+            <h4 style={{ margin: 0, color: ORO, fontSize: "0.9rem" }}>Hilo de la operación — {hiloModal.cliente}</h4>
+            <p style={{ color: "#8a8a8a", fontSize: "0.62rem", margin: "6px 0 10px" }}>Comunicación interna. No sale correo.</p>
+            {(hiloModal.hilos || []).length === 0 && <p style={{ color: "#8a8a8a", fontSize: "0.7rem" }}>Sin consultas aún.</p>}
+            {(hiloModal.hilos || []).map(h => (
+              <div key={h.id} style={{ marginTop: 10, padding: "0.7rem 0.9rem", background: "rgba(201,162,39,0.07)",
+                borderLeft: `3px solid ${ORO}`, borderRadius: 8 }}>
+                <div style={{ color: ORO, fontSize: "0.68rem", fontWeight: 800 }}>{h.pregunta} · {h.estado}</div>
+                {(h.mensajes || []).map(m => (
+                  <div key={m.id} style={{ color: "#f5f0e1", fontSize: "0.7rem", marginTop: 6 }}>
+                    <b>{m.autor}</b> ({m.tipo}): {m.texto}
+                    <div style={{ color: "#8a8a8a", fontSize: "0.58rem" }}>{String(m.fecha || "").slice(0, 16).replace("T", " ")}</div>
+                  </div>
+                ))}
+              </div>
+            ))}
+            <button data-testid="gerencia-hilo-cerrar" onClick={() => setHiloModal(null)} className="maserati-btn" style={{ marginTop: 14 }}>Cerrar</button>
           </div>
         </div>
       )}

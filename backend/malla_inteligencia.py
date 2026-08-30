@@ -415,11 +415,16 @@ async def broker_estado_situacion(request: Request):
             "tipo_operacion": (fd.get("tipo_operacion") or "").upper() or "—",
             "documentos": len(fd.get("archivos") or []),
             "tasacion": ("Recibida" if fd.get("tasacion_informe_recibido_at")
+                         or (isinstance(fd.get("tasacion_ocr"), dict) and fd["tasacion_ocr"].get("rol_avaluo"))
                          else ("Solicitada" if fd.get("tasacion_solicitada_at") else "Pendiente de Información")),
             "estudio": ("Con Reparos" if (fd.get("reparos_alertas") or [])
                         else ("Recibido" if fd.get("estudio_recibido_at") else "Pendiente de Información")),
             "reparos": len(fd.get("reparos_alertas") or []),
+            "serie": ("Firmada" if fd.get("set_firmado") or fd.get("set_credito_firmado")
+                      or str(fd.get("set_credito_estado") or "").lower() in ("firmado", "ok", "emitido")
+                      else ("Enviada" if fd.get("set_enviado") or fd.get("set_credito_at") else "Pendiente")),
             "escrituracion": bool(fd.get("is_escrituracion")),
+            "proyectado_mes": (fd.get("proyeccion_mes") or fd.get("mes_proyeccion") or "")[:7],
             "hitos_recientes": hitos_r})
     return {"situacion": out, "total": len(out)}
 
