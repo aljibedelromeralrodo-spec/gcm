@@ -626,9 +626,44 @@ def _dias_desde(iso):
         return 0
 
 
+async def _asegurar_casos_escritura():
+    """Si la escritura ya está firmada y no hay caso, Postventa lo abre (sin enviar correo)."""
+    n = 0
+    async for fd in db.folders.find({
+            "$or": [{"escritura_confirmada_at": {"$exists": True, "$nin": ["", None]}},
+                    {"escritura_firmada": True}]}).limit(40):
+        if not (fd.get("escritura_confirmada_at") or fd.get("escritura_firmada")):
+            continue
+        ya = await db.postventa_casos.find_one({
+            "$or": [{"folder_id": fd.get("id")},
+                    {"cliente": {"$regex": f"^{re.escape((fd.get('nombre') or '').strip())}$", "$options": "i"}}]})
+        if ya:
+            if not ya.get("folder_id") and fd.get("id"):
+                await db.postventa_casos.update_one({"id": ya["id"]}, {"$set": {"folder_id": fd["id"]}})
+            continue
+        nombre = (fd.get("nombre") or "").strip()
+        if not nombre:
+            continue
+        firma_at = str(fd.get("escritura_confirmada_at") or _now())
+        await db.postventa_casos.insert_one({
+            "id": str(uuid.uuid4()), "folder_id": fd.get("id"), "cliente": nombre,
+            "email": (fd.get("email") or "").strip(),
+            "etapa_actual": "escritura", "inicio_etapa": _now(),
+            "etapas": {"firma": {"completada": True, "fecha": firma_at, "dias_reales": 0,
+                                 "en_plazo": True, "por": "sistema"}},
+            "comunicaciones": [], "responsable": RESPONSABLE_PV, "creado": _now(),
+            "origen": "escritura_firmada"})
+        n += 1
+    return n
+
+
 @postventa.get("/panel")
 async def postventa_panel(request: Request):
     """Vista de control: etapa de cada cliente, plazos, alertas y cumplimiento del responsable."""
+    try:
+        await _asegurar_casos_escritura()
+    except Exception as e:
+        logging.warning(f"postventa sync escritura: {e}")
     plazos = await _plazos_pv()
     aprendido = await _aprendizaje_pv()
     casos, alertas = [], 0
@@ -653,7 +688,8 @@ async def postventa_panel(request: Request):
                       "responsable": RESPONSABLE_PV, "etapa_actual": etapa,
                       "etapa_label": dict(ETAPAS_PV).get(etapa, "✅ Completado"),
                       "dias_en_etapa": dias, "atrasada": atrasada, "etapas": detalle,
-                      "comunicaciones": (c.get("comunicaciones") or [])[-4:], "creado": c.get("creado")})
+                      "comunicaciones": (c.get("comunicaciones") or [])[-4:], "creado": c.get("creado"),
+                      "origen": c.get("origen") or "", "folder_id": c.get("folder_id") or ""})
     return {"casos": casos, "total": len(casos), "alertas_atraso": alertas,
             "plazos": plazos, "plazos_aprendidos": aprendido,
             "escrituras_completadas": await db.postventa_aprendizaje.count_documents({}),

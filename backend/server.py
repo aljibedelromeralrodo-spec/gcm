@@ -707,6 +707,7 @@ async def startup():
         await db.folders.create_index("codeudor_rut")
         await db.folders.create_index("datos_financieros.rol_avaluo")
         await db.comunicaciones_operacion.create_index("folder_id")
+        await db.postventa_casos.create_index("folder_id")
         await db.comunicaciones_operacion.create_index([("estado", 1), ("actualizado", -1)])
     except Exception as e:
         logging.warning(f"indices: {e}")

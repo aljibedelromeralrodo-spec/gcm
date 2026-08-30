@@ -58,7 +58,8 @@ export default function PostventaModule({ user }) {
         borderLeft: "5px solid #f0abfc", borderRadius: 14, padding: "1.2rem 1.5rem" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <h2 style={{ color: "#f0abfc", fontSize: "1.15rem", margin: 0 }}><i className="fa fa-heart" /> Postventa — Seguimiento de Escritura</h2>
-          <span style={{ marginLeft: "auto", color: "#cbd5e1", fontSize: "0.75rem" }}>Responsable: <b>{data.responsable}</b></span>
+          <span style={{ marginLeft: "auto", color: "#cbd5e1", fontSize: "0.75rem" }}>Responsable: <b>{data.responsable}</b>
+            {" · "}los casos con escritura firmada se abren solos (sin correo)</span>
         </div>
         <div style={{ display: "flex", gap: 16, marginTop: 10, flexWrap: "wrap", fontSize: "0.8rem" }}>
           <span style={{ color: "#e2e8f0" }}>📁 {data.total} caso{data.total !== 1 ? "s" : ""}</span>

@@ -149,8 +149,9 @@ def _archivos_broker(nombre):
 @broker.get("/carpetas")
 async def broker_carpetas(request: Request):
     c = _claims(request)
-    codigo = c.get("sub") or ""
-    q = {"broker_codigo": {"$exists": True}} if c.get("rol") in ("admin", "maestro") else {"broker_codigo": codigo}
+    from hitos_pipeline import filtro_carpetas_broker
+    q = ({"broker_codigo": {"$exists": True}} if c.get("rol") in ("admin", "maestro")
+         else filtro_carpetas_broker(c))
     docs = await db.folders.find(q).sort("created_at", -1).to_list(300)
     carpetas = []
     for d in docs:
@@ -204,7 +205,8 @@ async def broker_upload(fid: str, request: Request, subcarpeta: str = Form(""),
     fd = await db.folders.find_one({"id": fid})
     if not fd:
         raise HTTPException(status_code=404, detail="Carpeta no existe")
-    if c.get("rol") not in ("admin", "maestro") and fd.get("broker_codigo") != (c.get("sub") or ""):
+    from hitos_pipeline import folder_es_de_broker
+    if c.get("rol") not in ("admin", "maestro") and not folder_es_de_broker(fd, c):
         raise HTTPException(status_code=403, detail="Solo puede subir archivos a sus propias carpetas")
     if categoria:
         subcarpeta = CATEGORIAS_CARGA.get(categoria) or ""
@@ -321,6 +323,9 @@ async def _aplicar_proyeccion(broker_codigo, broker_nombre, mes, clientes_p):
                 "subsidio_proyeccion": c.get("subsidio") or "", "proyeccion_uf": c.get("monto_uf"),
                 "broker_origen": broker_nombre, "proyeccion_broker": broker_codigo,
                 "proyeccion_mes": mes, "updated_at": ahora}
+        if not (fd or {}).get("broker_codigo"):
+            setd["broker_codigo"] = broker_codigo
+            setd["broker_nombre"] = broker_nombre
         setd = {k: v for k, v in setd.items() if v not in (None, "")}
         if fd:
             await db.folders.update_one({"id": fd["id"]},
