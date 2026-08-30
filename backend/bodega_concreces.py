@@ -403,18 +403,25 @@ async def gerencia_reclamo(fid: str, payload: dict, request: Request):
     body = _reclamo_html(titulo, fd.get("nombre", ""), fd.get("rut", ""), cuerpo)
     exigir("responsividad_absoluta", html=body)
     exigir("purificacion_correos", subject=subject, html=body)
-    res = await asyncio.to_thread(_mail.send_mail, destinatario, subject, body, cc or None)
-    if not (res or {}).get("success"):
-        raise HTTPException(status_code=502, detail=(res or {}).get("error", "Error de envío"))
+    res = await asyncio.to_thread(_mail.send_mail, destinatario, subject, body, cc or None) or {}
+    if not res.get("success") and not res.get("preview"):
+        raise HTTPException(status_code=502, detail=res.get("error", "Error de envío"))
     claims = getattr(request.state, "user", None) or {}
     marca = {"fecha": _now(), "por": claims.get("nombre", claims.get("sub", "")),
-             "destinatario": destinatario, "cc": cc}
+             "destinatario": destinatario, "cc": cc, "preview": bool(res.get("preview"))}
     await db.folders.update_one({"id": fid}, {"$set": {f"reclamos_gerencia.{tipo}": marca}})
     # LOG DE GESTIÓN GERENCIAL (Regla #52): cada clic queda auditado
     await db.gestion_gerencial_log.insert_one({
         "id": str(uuid.uuid4()), "usuario": claims.get("nombre", claims.get("sub", "")),
         "accion": f"reclamo_{tipo}", "cliente": fd.get("nombre", ""), "rut": fd.get("rut", ""),
-        "destinatario": destinatario, "cc": cc, "fecha": _now()})
+        "destinatario": destinatario, "cc": cc, "fecha": _now(),
+        "preview": bool(res.get("preview")), "preview_id": res.get("preview_id") or ""})
+    if res.get("preview"):
+        return {"ok": True, "preview": True, "preview_id": res.get("preview_id"),
+                "tipo": tipo, "destinatario": destinatario, "cc": cc,
+                "solicitado_el": marca["fecha"],
+                "mensaje": "El reclamo quedó en Correos esperando confirmación. No se envió todavía.",
+                "regla": "#49 — el clic de Gerencia arma el correo; el Administrador confirma el envío"}
     return {"ok": True, "tipo": tipo, "destinatario": destinatario, "cc": cc,
             "solicitado_el": marca["fecha"],
             "regla": "#49 — Ningún reclamo sale sin la intervención de Gerencia"}

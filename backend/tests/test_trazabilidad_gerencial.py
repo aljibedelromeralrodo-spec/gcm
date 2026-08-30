@@ -32,3 +32,12 @@ class TestEstadosHitos:
 
     def test_preguntas_no_inventan_envio(self):
         assert set(t.PREGUNTAS) == {"tasacion", "estudio", "serie"}
+
+    def test_filtro_broker_incluye_origen(self):
+        f = t.filtro_carpetas_broker({"sub": "mutuaria", "nombre": "Mutuaria y Leasing"})
+        campos = {list(x.keys())[0] for x in f["$or"]}
+        assert "broker_codigo" in campos
+        assert "proyeccion_broker" in campos
+        assert "broker_origen" in campos
+        vacio = t.filtro_carpetas_broker({})
+        assert vacio.get("id") == "__ninguna__"

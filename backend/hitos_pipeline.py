@@ -1,4 +1,5 @@
 """Estados automáticos del pipeline de escrituración (sin I/O)."""
+import re
 
 PREGUNTAS = {
     "tasacion": "¿Por qué no está la tasación?",
@@ -46,6 +47,19 @@ def estados_hitos(fd):
         "serie": _est(serie_ok, serie_proc),
         "escritura": _est(esc_ok, esc_proc),
     }
+
+
+def filtro_carpetas_broker(user):
+    """Carpetas de un broker: código, proyección y nombre de origen."""
+    sub = str((user or {}).get("sub") or "").strip()
+    nombre = str((user or {}).get("nombre") or "").strip()
+    or_ = []
+    if sub:
+        or_.extend([{"broker_codigo": sub}, {"proyeccion_broker": sub}])
+    if nombre:
+        rx = {"$regex": re.escape(nombre[:25]), "$options": "i"}
+        or_.extend([{"broker_origen": rx}, {"broker_nombre": rx}])
+    return {"$or": or_} if or_ else {"id": "__ninguna__"}
 
 
 def cuello_botella(fd, estados=None):

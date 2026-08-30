@@ -9,7 +9,7 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Request
-from hitos_pipeline import PREGUNTAS, estados_hitos, cuello_botella
+from hitos_pipeline import PREGUNTAS, estados_hitos, cuello_botella, filtro_carpetas_broker
 
 traza = APIRouter(prefix="/trazabilidad")
 
@@ -151,6 +151,17 @@ async def traza_responder(fid: str, payload: dict, request: Request):
         upd["$set"]["respondida_por"] = autor
         upd["$set"]["respondida_en"] = ahora
     await _db().comunicaciones_operacion.update_one({"id": hilo["id"]}, upd)
+    if _es_broker(user):
+        try:
+            await _db().alertas.insert_one({
+                "id": str(uuid.uuid4()), "tipo": "respuesta_broker",
+                "destino": "Gerencia Comercial", "folder_id": fid,
+                "cliente": fd.get("nombre") or hilo.get("cliente") or "",
+                "mensaje": (f"Broker {autor} respondió «{hilo.get('pregunta') or hilo.get('hito')}» "
+                            f"de {fd.get('nombre') or ''}: {texto[:180]}"),
+                "fecha": ahora, "leida": False})
+        except Exception:
+            pass
     return {"ok": True, "hilo_id": hilo["id"], "estado": "respondida" if cerrar else "abierta",
             "envio": "plataforma"}
 
@@ -161,12 +172,21 @@ async def traza_pendientes(request: Request):
     q = {"estado": "abierta"}
     if not _es_gerencia(user):
         fids = []
-        sub = user.get("sub") or ""
-        async for fd in _db().folders.find(
-                {"$or": [{"broker_codigo": sub}, {"proyeccion_broker": sub}]}, {"id": 1}):
+        async for fd in _db().folders.find(filtro_carpetas_broker(user), {"id": 1}):
             fids.append(fd["id"])
         if not fids:
             return {"pendientes": [], "total": 0}
         q["folder_id"] = {"$in": fids}
     docs = await _db().comunicaciones_operacion.find(q, {"_id": 0}).sort("actualizado", -1).to_list(80)
     return {"pendientes": docs, "total": len(docs), "preguntas": PREGUNTAS}
+
+
+@traza.get("/respuestas")
+async def traza_respuestas(request: Request):
+    """Últimas respuestas de brokers, para la bandeja de Gerencia."""
+    user = _claims(request)
+    if not _es_gerencia(user):
+        raise HTTPException(status_code=403, detail="Solo Gerencia Comercial ve esta bandeja")
+    docs = await _db().comunicaciones_operacion.find(
+        {"estado": "respondida"}, {"_id": 0}).sort("respondida_en", -1).to_list(20)
+    return {"respuestas": docs, "total": len(docs)}

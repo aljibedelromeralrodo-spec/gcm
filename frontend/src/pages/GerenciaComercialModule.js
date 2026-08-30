@@ -83,6 +83,8 @@ export default function GerenciaComercialModule() {
   const [reparosModal, setReparosModal] = useState(null);
   const [hiloModal, setHiloModal] = useState(null);
   const [hiloBusy, setHiloBusy] = useState(false);
+  const [hiloResp, setHiloResp] = useState("");
+  const [respuestas, setRespuestas] = useState([]);
   const [busyPdf, setBusyPdf] = useState(false);
 
   const verReparos = async (f) => {
@@ -108,8 +110,13 @@ export default function GerenciaComercialModule() {
 
   const recargar = useCallback(() => {
     axios.get(`${API}/api/gerencia/cartera`).then(r => setData(r.data)).catch(() => setData({ cartera: [] }));
+    axios.get(`${API}/api/trazabilidad/respuestas`).then(r => setRespuestas(r.data.respuestas || [])).catch(() => {});
   }, []);
   useEffect(() => { recargar(); }, [recargar]);
+  useEffect(() => {
+    const t = setInterval(recargar, 60000);
+    return () => clearInterval(t);
+  }, [recargar]);
 
   const exportar = async () => {
     const r = await axios.get(`${API}/api/gerencia/export-xlsx`, { responseType: "blob" });
@@ -172,7 +179,10 @@ export default function GerenciaComercialModule() {
     }
     setBusyRec(`${fid}-${tipo}`);
     try {
-      await axios.post(`${API}/api/gerencia/reclamo/${fid}`, { tipo, destinatario });
+      const r = await axios.post(`${API}/api/gerencia/reclamo/${fid}`, { tipo, destinatario });
+      if (r.data?.preview) {
+        window.alert(r.data.mensaje || "El reclamo quedó en Correos esperando confirmación. No se envió todavía.");
+      }
       recargar();
     } catch (e) {
       const det = e.response?.data?.detail || "Error de envío";
@@ -362,6 +372,11 @@ export default function GerenciaComercialModule() {
       {(data?.alertas_notaria || 0) > 0 && (
         <div data-testid="gerencia-alerta-notaria" style={{ ...panel, borderColor: "#ef4444", color: "#fca5a5", padding: "0.6rem 1rem", marginBottom: 12, fontSize: "0.78rem", fontWeight: 700 }}>
           🚨 {data.alertas_notaria} aviso(s) de notaría sobre firmas faltantes detectados por DashAI
+        </div>
+      )}
+      {respuestas.length > 0 && (
+        <div data-testid="gerencia-respuestas-broker" style={{ ...panel, borderColor: ORO, color: "#e8c96a", padding: "0.6rem 1rem", marginBottom: 12, fontSize: "0.72rem" }}>
+          💬 Respuestas de brokers: {respuestas.slice(0, 4).map(h => `${h.cliente || ""} · ${(h.pregunta || h.hito || "").slice(0, 40)}`).join(" · ")}
         </div>
       )}
       {(data?.excepciones_recientes || []).length > 0 && (
@@ -633,6 +648,26 @@ export default function GerenciaComercialModule() {
                 ))}
               </div>
             ))}
+            <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+              <input data-testid="gerencia-hilo-respuesta" value={hiloResp} onChange={e => setHiloResp(e.target.value)}
+                placeholder="Seguir el hilo (sin correo)…"
+                style={{ flex: 1, background: "#080808", border: `1px solid ${BORDE}`, color: "#e8e3d3",
+                  borderRadius: 8, padding: "0.4rem 0.6rem", fontSize: "0.72rem" }} />
+              <button data-testid="gerencia-hilo-enviar" className="maserati-btn" disabled={hiloBusy || !hiloResp.trim()}
+                onClick={async () => {
+                  const abierto = (hiloModal.hilos || []).find(h => h.estado === "abierta") || (hiloModal.hilos || [])[0];
+                  if (!abierto) return;
+                  setHiloBusy(true);
+                  try {
+                    await axios.post(`${API}/api/trazabilidad/responder/${hiloModal.fid}`,
+                      { hilo_id: abierto.id, mensaje: hiloResp, cerrar: false });
+                    setHiloResp("");
+                    const r = await axios.get(`${API}/api/trazabilidad/comunicaciones/${hiloModal.fid}`);
+                    setHiloModal({ ...hiloModal, hilos: r.data.hilos || [] });
+                  } catch (e) { window.alert(e.response?.data?.detail || "No se pudo responder"); }
+                  setHiloBusy(false);
+                }}>Enviar</button>
+            </div>
             <button data-testid="gerencia-hilo-cerrar" onClick={() => setHiloModal(null)} className="maserati-btn" style={{ marginTop: 14 }}>Cerrar</button>
           </div>
         </div>
