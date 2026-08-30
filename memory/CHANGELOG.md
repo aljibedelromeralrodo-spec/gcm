@@ -418,3 +418,9 @@
 - Dedupe en pdf_informe_ecomac_final.py: escrituraciones 92→85 únicas (fusión RUT+nombre), enviados 1.109 hilos→925 clientes únicos, 228 en verde, 12 firmas. Trimestre: 138 enviados / 16 escrituras. Montos dedup: UF 110.443 confirmados, proyección UF ~173.800 ≈ $7.100MM → cifra en informes: "UF 170.000+ (≈ $7.100 millones)".
 - Correo Alianza actualizado con datos reales dedup (191 cartas trimestre, 16 escrituradas) y párrafo "férreo interés venta en verde ECOMAC". Preview vigente: 4f474164. Links v4 generados.
 - Scripts nuevos: verifica_aprobaciones.py (BODYSTRUCTURE trimestre), aprob_trimestre.json.
+
+## 2026-08-30 (fork) — Corrección cifra aprobaciones + correo de precisión ENVIADO
+- ERROR GRAVE detectado por usuario: el "191 cartas" mezclaba todos los canales de la Mesa. Verificación por vínculo a ejecutivas @ecomac.cl: solo 75 son Ecomac (30 jun/23 jul/22 ago). Desglose: Ximena 27, Carla 22, Gina 8, W.Guerrero 6, Gabriela 3, otras 9. Rita 1, Yerko/Scarlett 0 en el trimestre.
+- correo_alianza_ecomac.py corregido a 75 + tabla por ejecutiva (versión rectificada encolada ee1f8e1f).
+- correo_precision_ecomac.py: seguimiento "Precisión de cifras — detalle exclusivo Ecomac por ejecutiva" (encuadre elegante, no error) ENVIADO (SMTP ok) a gerardo.ext para reenvío a encargadas.
+- LECCIÓN: la casilla gerardo.ext recibe aprobaciones de TODAS las inmobiliarias vía Mesa; para métricas Ecomac SIEMPRE vincular cliente → correo origen @ecomac.cl.
