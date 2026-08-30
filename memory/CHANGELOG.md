@@ -424,3 +424,7 @@
 - correo_alianza_ecomac.py corregido a 75 + tabla por ejecutiva (versión rectificada encolada ee1f8e1f).
 - correo_precision_ecomac.py: seguimiento "Precisión de cifras — detalle exclusivo Ecomac por ejecutiva" (encuadre elegante, no error) ENVIADO (SMTP ok) a gerardo.ext para reenvío a encargadas.
 - LECCIÓN: la casilla gerardo.ext recibe aprobaciones de TODAS las inmobiliarias vía Mesa; para métricas Ecomac SIEMPRE vincular cliente → correo origen @ecomac.cl.
+
+## 2026-08-30 (fork) — Fix Visualizador Cognitivo: nunca mostraba verdes
+- Causa: solo pintaba verde con folders.resultado_mesa (14/195 carpetas) o simulaciones por RUT (1 match). Las aprobaciones reales están en mesa_verdad_log (30) y aprobacion_log (11).
+- Fix en backend/visualizador.py: veredictos de Mesa por RUT (aprobacion_log→sim_map) y por nombre (_toks con stopwords, overlap>=2 contra subject de mesa_verdad_log). Verificado vía API: top-36 ahora 5 verdes + 6 rojos (antes 1 y 1). Telepantalla hereda el fix (reusa visualizador_estado).

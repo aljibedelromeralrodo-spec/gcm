@@ -22,6 +22,15 @@ def _rut8(r):
     return re.sub(r"[^0-9kK]", "", r or "").lower()[:8]
 
 
+_STOP_TOKS = {"ds19", "inmediata", "futura", "proxima", "próxima", "subsidio", "resolucion", "resolución",
+              "serviu", "cliente", "con", "sin", "urgente", "fwd", "entrega", "evaluacion", "evaluación",
+              "complemento", "aprobado", "deisy", "administracion", "administración"}
+
+
+def _toks(s):
+    return {w for w in re.findall(r"[a-záéíóúñ]+", (s or "").lower()) if len(w) > 2 and w not in _STOP_TOKS}
+
+
 def _dtp(ts):
     try:
         d = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
@@ -52,12 +61,36 @@ async def visualizador_estado(request: Request):
         if v is not None:
             sim_map[rn] = "aprobado" if v else "reprobado"
 
+    # veredictos reales de Mesa (cartas de aprobación / rechazos) por RUT y nombre
+    verdictos = []
+    async for m in db.mesa_verdad_log.find({"tipo": {"$in": ["aprobacion", "rechazo"]}},
+                                           {"_id": 0, "tipo": 1, "subject": 1}).sort("fecha_correo", -1).limit(400):
+        t = _toks(m.get("subject"))
+        if len(t) >= 2:
+            verdictos.append(("aprobado" if m["tipo"] == "aprobacion" else "reprobado", t))
+    async for a in db.aprobacion_log.find({}, {"_id": 0, "nombre": 1, "rut": 1}):
+        rn = _rut8(a.get("rut"))
+        if rn:
+            sim_map.setdefault(rn, "aprobado")
+        t = _toks(a.get("nombre"))
+        if len(t) >= 2:
+            verdictos.append(("aprobado", t))
+
+    def _veredicto_nombre(nombre):
+        t = _toks(nombre)
+        if len(t) < 2:
+            return None
+        for res, vt in verdictos:
+            if len(vt & t) >= 2:
+                return res
+        return None
+
     carpetas = []
     q = {"descartada": {"$ne": True}, "archivada": {"$ne": True}}
     async for f in db.folders.find(q, {"_id": 0, "id": 1, "nombre": 1, "rut": 1, "resultado_mesa": 1,
                                        **{h: 1 for h in HITOS}}).sort("updated_at", -1).limit(36):
         resultado = f.get("resultado_mesa") if f.get("resultado_mesa") in ("aprobado", "reprobado") \
-            else sim_map.get(_rut8(f.get("rut")))
+            else (sim_map.get(_rut8(f.get("rut"))) or _veredicto_nombre(f.get("nombre")))
         ult = max((_dtp(f.get(h)) for h in HITOS if _dtp(f.get(h))), default=None)
         dias = (ahora - ult).days if ult else 0
         carpetas.append({"id": f.get("id"), "nombre": (f.get("nombre") or "")[:22],
