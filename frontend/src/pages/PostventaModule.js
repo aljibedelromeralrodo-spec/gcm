@@ -127,6 +127,24 @@ export default function PostventaModule({ user }) {
               </span>
             ))}
           </div>
+          {c.radar?.hitos && (
+            <div data-testid={`pv-radar-${c.id}`} style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+              {[["notaria", "Notaría"], ["cbr", "CBR"], ["pagare", "Pagaré"]].map(([k, lb]) => {
+                const st = c.radar.hitos[k] || "pendiente";
+                const col = st === "ok" ? "#4ade80" : st === "alerta" ? "#f87171" : st === "proceso" ? "#38bdf8" : "#64748b";
+                return (
+                  <span key={k} style={{ fontSize: "0.68rem", fontWeight: 800, borderRadius: 999, padding: "2px 9px",
+                    border: `1px solid ${col}55`, color: col }}>
+                    {st === "ok" ? "✅" : st === "alerta" ? "🚨" : st === "proceso" ? "⏳" : "○"} {lb}
+                  </span>
+                );
+              })}
+            </div>
+          )}
+          {(c.radar?.alertas || []).map((a, i) => (
+            <div key={i} data-testid={`pv-radar-alerta-${c.id}-${i}`}
+              style={{ marginTop: 6, color: "#f87171", fontSize: "0.7rem", fontWeight: 700 }}>{a}</div>
+          ))}
           {(c.comunicaciones || []).length > 0 && (
             <div style={{ marginTop: 8, borderLeft: "3px solid #c084fc", paddingLeft: 10 }}>
               {c.comunicaciones.map((m, i) => (

@@ -43,6 +43,22 @@ class TestEstadosHitos:
         assert t.folder_es_de_broker(fd, {"sub": "mutuaria", "nombre": "Mutuaria y Leasing"})
         assert not t.folder_es_de_broker(fd, {"sub": "otro", "nombre": "X"})
 
+    def test_radar_notaria_cbr_sin_inventar(self):
+        fd = {"escritura_confirmada_at": "2026-07-01T10:00:00+00:00",
+              "alerta_notaria_ciudad": False}
+        r = t.estados_radar(fd)
+        assert r["notaria"] == "ok"
+        assert r["cbr"] == "proceso"
+        assert r["pagare"] == "proceso"
+        fd2 = {"ingreso_cbr_at": "2026-08-01", "escritura_confirmada_at": "2026-07-01T10:00:00+00:00",
+               "pagare_entregado_at": "2026-08-10"}
+        r2 = t.estados_radar(fd2)
+        assert r2["cbr"] == "ok"
+        assert r2["pagare"] == "ok"
+        a = t.alertas_radar({"fecha_firma": "2020-01-01T00:00:00+00:00"}, {"escritura": 15})
+        assert a["alertas"]
+        assert a["hitos"]["notaria"] in ("pendiente", "proceso")
+
     def test_filtro_broker_incluye_origen(self):
         f = t.filtro_carpetas_broker({"sub": "mutuaria", "nombre": "Mutuaria y Leasing"})
         campos = {list(x.keys())[0] for x in f["$or"]}

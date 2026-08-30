@@ -666,11 +666,22 @@ async def postventa_panel(request: Request):
         logging.warning(f"postventa sync escritura: {e}")
     plazos = await _plazos_pv()
     aprendido = await _aprendizaje_pv()
+    from hitos_pipeline import alertas_radar
+    docs = await db.postventa_casos.find({}).sort("creado", -1).to_list(200)
+    fids = [c.get("folder_id") for c in docs if c.get("folder_id")]
+    fd_map = {}
+    if fids:
+        async for fd in db.folders.find({"id": {"$in": fids}}):
+            fd_map[fd["id"]] = fd
     casos, alertas = [], 0
-    async for c in db.postventa_casos.find({}).sort("creado", -1):
+    for c in docs:
         etapa = c.get("etapa_actual") or ""
         dias = _dias_desde(c.get("inicio_etapa") or c.get("creado") or "")
         atrasada = bool(etapa and etapa != "completado" and dias > plazos.get(etapa, 99))
+        fd = fd_map.get(c.get("folder_id") or "")
+        radar = alertas_radar(fd or {}, plazos, c.get("inicio_etapa") or c.get("creado") or "") if fd else {}
+        if radar.get("alertas") and not atrasada:
+            atrasada = True
         if atrasada:
             alertas += 1
         detalle = []
@@ -689,7 +700,8 @@ async def postventa_panel(request: Request):
                       "etapa_label": dict(ETAPAS_PV).get(etapa, "✅ Completado"),
                       "dias_en_etapa": dias, "atrasada": atrasada, "etapas": detalle,
                       "comunicaciones": (c.get("comunicaciones") or [])[-4:], "creado": c.get("creado"),
-                      "origen": c.get("origen") or "", "folder_id": c.get("folder_id") or ""})
+                      "origen": c.get("origen") or "", "folder_id": c.get("folder_id") or "",
+                      "radar": radar or {}})
     return {"casos": casos, "total": len(casos), "alertas_atraso": alertas,
             "plazos": plazos, "plazos_aprendidos": aprendido,
             "escrituras_completadas": await db.postventa_aprendizaje.count_documents({}),
