@@ -44,3 +44,7 @@ class TestDetectarHito:
         assert c.CATEGORIAS == (
             "solicitud_nueva", "consulta_administrativa", "aprobacion_mesa",
             "rechazo_mesa", "peticion_documentos_mesa", "no_relacionado")
+
+    def test_hito_labels_completos(self):
+        for h in c.HITOS_CAPTURAR:
+            assert h in c.HITO_LABELS and c.HITO_LABELS[h]

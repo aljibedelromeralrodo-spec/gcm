@@ -60,7 +60,13 @@ async def _security_headers(request, call_next):
     resp = await call_next(request)
     resp.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
     resp.headers.setdefault("X-Content-Type-Options", "nosniff")
-    resp.headers.setdefault("X-Frame-Options", "DENY")
+    path = request.url.path or ""
+    inline = (request.query_params.get("inline") or "").lower() in ("1", "true", "yes")
+    # Preview en iframe (misma origen): DENY deja el visor en blanco.
+    if inline or "/archivo/" in path or path.startswith("/api/storage/"):
+        resp.headers["X-Frame-Options"] = "SAMEORIGIN"
+    else:
+        resp.headers.setdefault("X-Frame-Options", "DENY")
     resp.headers.setdefault("X-XSS-Protection", "1; mode=block")
     resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
     resp.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
@@ -3516,8 +3522,10 @@ async def folder_download(fid: str, file_path: str, inline: bool = False):
     import mimetypes
     mt = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
     disp = "inline" if inline else "attachment"
-    return FileResponse(str(target), media_type=mt,
-                        headers={"Content-Disposition": f'{disp}; filename="{target.name}"'})
+    headers = {"Content-Disposition": f'{disp}; filename="{target.name}"'}
+    if inline:
+        headers["X-Frame-Options"] = "SAMEORIGIN"
+    return FileResponse(str(target), media_type=mt, headers=headers)
 
 
 _PAT_EMPAQUETADO = re.compile(
@@ -6722,8 +6730,77 @@ async def proc_archivo(qid: str, filename: str, inline: bool = True):
     import mimetypes
     mt = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
     disp = "inline" if inline else "attachment"
-    return FileResponse(str(target), media_type=mt,
-                        headers={"Content-Disposition": f'{disp}; filename="{target.name}"'})
+    headers = {"Content-Disposition": f'{disp}; filename="{target.name}"'}
+    if inline:
+        headers["X-Frame-Options"] = "SAMEORIGIN"
+    return FileResponse(str(target), media_type=mt, headers=headers)
+
+
+@api.post("/procesamiento/queue/{qid}/vincular-carpeta")
+async def proc_vincular_carpeta(qid: str, payload: dict, request: Request):
+    """Copia adjuntos de un hito capturado a una carpeta de cliente existente.
+    No crea carpeta nueva (Regla 67 intacta)."""
+    item = await db.proc_queue.find_one({"id": qid})
+    if not item:
+        raise HTTPException(status_code=404, detail="Correo no encontrado en la cola")
+    payload = payload or {}
+    fid = (payload.get("folder_id") or "").strip()
+    nombre = (payload.get("nombre") or "").strip() or (
+        (item.get("classification") or {}).get("cliente") or "")
+    rut = (payload.get("rut") or "").strip() or (
+        (item.get("classification") or {}).get("rut") or "")
+    doc = await db.folders.find_one({"id": fid}) if fid else None
+    if not doc:
+        doc = await _buscar_carpeta_existente(nombre, rut)
+    if not doc:
+        raise HTTPException(
+            status_code=404,
+            detail="No hay carpeta de cliente que coincida. Indique nombre o RUT de una carpeta existente.")
+    hito = item.get("hito") or ""
+    sub = {
+        "estudio_titulo": "07_estudio_titulo",
+        "tasacion": "99_otros",
+        "escritura": "99_otros",
+        "aprobacion_mesa": "99_otros",
+        "rechazo_mesa": "99_otros",
+        "faltantes": "99_otros",
+        "solicitud_credito": "",
+    }.get(hito, "99_otros")
+    src_base = Path(item.get("attachments_bytes_dir") or (PROC_DIR / qid))
+    copiados = []
+    for fn in item.get("attachments") or []:
+        src = src_base / fn
+        if not src.is_file():
+            src = PROC_DIR / qid / Path(fn).name
+        if not src.is_file():
+            continue
+        rel = await asyncio.to_thread(
+            fsvc.guardar_archivo, doc.get("nombre", ""), src.name, src.read_bytes(), sub)
+        copiados.append(rel)
+    if not copiados:
+        raise HTTPException(status_code=400, detail="Este correo no tiene adjuntos recuperables en el búnker")
+    try:
+        import media_storage as _ms
+        _cl = getattr(request.state, "user", {}) or {}
+        for rel in copiados:
+            raw_path = fsvc.resolver_ruta(doc.get("nombre", ""), rel)
+            if raw_path.is_file():
+                asyncio.create_task(_ms.registrar_documento(
+                    raw_path.read_bytes(), Path(rel).name, doc, origen="ingesta_hito",
+                    subido_por=_cl.get("sub") or "", rol=_cl.get("rol") or "", rel=rel))
+    except Exception as _e:
+        logging.warning(f"storage dual vincular: {_e}")
+    await db.proc_queue.update_one({"id": qid}, {"$set": {
+        "vinculado_folder_id": doc["id"], "vinculado_en": now_iso(),
+        "vinculado_archivos": copiados, "vinculado_carpeta": doc.get("nombre")}})
+    await db.folders.update_one({"id": doc["id"]}, {"$push": {
+        "historial": {"fecha": now_iso(),
+                      "accion": (f"Ingesta: {len(copiados)} adjunto(s) del hito "
+                                 f"«{_clasif_ia.HITO_LABELS.get(hito, hito)}» "
+                                 f"desde «{(item.get('subject') or '')[:80]}»")}}})
+    asyncio.create_task(_regen_combinado_bg(doc))
+    return {"ok": True, "folder_id": doc["id"], "carpeta": doc.get("nombre"),
+            "copiados": copiados, "hito": hito}
 
 
 @api.get("/procesamiento/queue/{qid}/extract-text")

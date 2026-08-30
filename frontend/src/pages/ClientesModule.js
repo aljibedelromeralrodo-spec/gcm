@@ -10,6 +10,7 @@ import ClientesFicha from "./clientes/ClientesFicha";
 import ClientesEmails from "./clientes/ClientesEmails";
 import ClientesAjustes from "./clientes/ClientesAjustes";
 import ClientesModales from "./clientes/ClientesModales";
+import ClientesPreview from "./clientes/ClientesPreview";
 
 export default function ClientesModule({ onNavigate }) {
   const [view, setView] = useState("list"); // list, detail, emails, ajustes
@@ -1736,6 +1737,7 @@ export default function ClientesModule({ onNavigate }) {
         data-testid="hidden-file-input"
       />
       <ClientesModales />
+      <ClientesPreview />
     </div>
     </ClientesCtx.Provider>
   );

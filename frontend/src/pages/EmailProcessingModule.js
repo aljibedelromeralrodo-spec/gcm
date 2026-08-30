@@ -518,8 +518,25 @@ function DetailModal({ item, onClose, onReprocess, onSave, onUploadDrive, onExtr
   const [docs, setDocs] = useState(cl.documentos || []);
   const [ordenando, setOrdenando] = useState(false);
   const [preview, setPreview] = useState(null);
+  const [vincMsg, setVincMsg] = useState("");
   const esHito = item.status === "hito" || (item.hito && item.hito !== "solicitud_credito" && !item.es_solicitud);
   const adjuntos = item.attachments || [];
+  const vincularCarpeta = async () => {
+    const sugerido = (cl.cliente || "").trim();
+    const nombre = window.prompt(
+      "Vincular adjuntos a una carpeta EXISTENTE (no crea carpeta nueva).\nNombre del cliente o RUT:",
+      sugerido);
+    if (!nombre || !nombre.trim()) return;
+    setVincMsg("");
+    try {
+      const r = await axios.post(`${API}/api/procesamiento/queue/${item.id}/vincular-carpeta`, {
+        nombre: nombre.trim(), rut: (cl.rut || "").trim(),
+      });
+      setVincMsg(`✅ ${r.data.copiados.length} archivo(s) en «${r.data.carpeta}»`);
+    } catch (e) {
+      setVincMsg("❌ " + (e.response?.data?.detail || e.message));
+    }
+  };
   const abrirPreview = (fn) => {
     const token = encodeURIComponent(secureGet("token", false) || "");
     const url = `${API}/api/procesamiento/queue/${item.id}/archivo/${encodeURIComponent(fn)}?inline=true&t=${token}`;
@@ -759,7 +776,13 @@ function DetailModal({ item, onClose, onReprocess, onSave, onUploadDrive, onExtr
               <button data-testid="btn-enviar-autocorreo" onClick={() => onEnviarAutocorreo(item.id)} disabled={busy}
                       style={btnStyle("#6c5ce7")}>✉️ Enviar autocorreo (→ mí → mesa)</button>
             )}
+            {esHito && (
+              <button data-testid="btn-vincular-carpeta" onClick={vincularCarpeta} disabled={busy}
+                      style={btnStyle("#0ea5e9")}>🔗 Vincular a carpeta existente</button>
+            )}
           </div>
+          {vincMsg && <div data-testid="vincular-msg" style={{ width:"100%", fontSize:12.5, fontWeight:700,
+            color: vincMsg.startsWith("✅") ? "#166534" : "#9f1239" }}>{vincMsg}</div>}
           <div style={{ display:"flex", gap: 8 }}>
             <button onClick={onClose} style={btnStyle("#64748b")}>Cerrar</button>
             <button data-testid="btn-save-correction" onClick={guardar} disabled={busy}
