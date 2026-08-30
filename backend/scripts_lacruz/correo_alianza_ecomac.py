@@ -165,8 +165,10 @@ H3 = "margin:18px 0 6px;color:#14213d;font-size:15px;border-bottom:2px solid #c9
 CUERPO = f"""
 <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6;color:#1a1a1a;max-width:640px">
 <p>Estimadas y estimados:</p>
-<p>Junto con saludarles cordialmente, comparto una mirada de lo que hemos construido en esta alianza en este
-&uacute;ltimo tiempo:</p>
+<p>Junto con saludarles cordialmente, les hago llegar el <b>informe consolidado y definitivo de nuestra alianza</b>,
+que re&uacute;ne y actualiza en un solo documento toda la informaci&oacute;n enviada anteriormente &mdash;con cifras
+auditadas y referidas exclusivamente a Ecomac&mdash;, de modo que este correo <b>reemplaza a los anteriores</b> y es
+el &uacute;nico que necesitan revisar. Comparto primero una mirada resumida de lo que hemos construido:</p>
 {RESUMEN_TABLA}
 <p>Me permito desarrollar brevemente estos resultados, con una convicci&oacute;n que los antecedentes respaldan
 plenamente: <b>esta es una alianza exitosa, y los n&uacute;meros hablan por s&iacute; solos.</b></p>
@@ -245,7 +247,7 @@ db.correos_preview.update_many({"subject": {"$regex": "Alianza"}, "estado": "esp
 pdf_ali = open("/app/backend/scripts_lacruz/Alianza_CentralMutuos_Ecomac.pdf", "rb").read()
 pdf_hist = open("/app/backend/scripts_lacruz/Informe_Historico_Ecomac_FINAL.pdf", "rb").read()
 r = es.send_mail("gerardo.ext@centralmutuos.cl",
-                 "Central Mutuos – Ecomac: informe actualizado con cifras auditadas (solo Ecomac)",
+                 "Central Mutuos – Ecomac: INFORME CONSOLIDADO de la alianza (versión definitiva, reemplaza envíos anteriores)",
                  CUERPO,
                  attachments=[
                      {"filename": "Alianza_CentralMutuos_Ecomac.pdf", "content_b64": base64.b64encode(pdf_ali).decode()},
