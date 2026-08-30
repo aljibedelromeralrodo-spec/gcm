@@ -189,25 +189,36 @@ def archivar_prefijo(rel_prefijo):
     return {"ok": True, "subidos": subidos, "liberado": liberado}
 
 
+MAX_FALLOS_SEGUIDOS = 15
+
+
 def restaurar_si_vacio():
-    """Al arrancar: si el disco está vacío (pod nuevo/redespliegue), restaura TODO."""
+    """Al arrancar: si el disco está vacío (pod nuevo/redespliegue), restaura TODO.
+    Cortacircuito: si el almacén durable falla repetidamente, se pospone (Regla #13 on-demand)."""
     clientes = ROOT / "clientes"
     if clientes.exists() and any(clientes.iterdir()):
         return 0
-    n = 0
+    n, fallos = 0, 0
     arch = _archivados()
     for rel, meta in _entradas().items():
         if rel.startswith("proc/") or any(rel.startswith(a + "/") or rel == a for a in arch):
             continue
         if _bajar_entry(rel, meta.get("mtime")):
             n += 1
+            fallos = 0
+        else:
+            fallos += 1
+            if fallos >= MAX_FALLOS_SEGUIDOS:
+                logging.warning(f"🏦 BÚNKER: almacén durable no disponible ({fallos} fallos seguidos) — "
+                                "restauración masiva pospuesta, se sirve on-demand (Regla #13)")
+                break
     logging.warning(f"🏦 BÚNKER: {n} archivo(s) restaurados del almacén durable al disco")
     return n
 
 
 def restaurar_faltantes():
     """Cloud Sync: baja los archivos que NO están en el disco local."""
-    n = 0
+    n, fallos = 0, 0
     arch = _archivados()
     for rel, meta in _entradas().items():
         if rel.startswith("proc/") or any(rel.startswith(a + "/") or rel == a for a in arch):
@@ -217,6 +228,13 @@ def restaurar_faltantes():
             continue
         if _bajar_entry(rel, meta.get("mtime")):
             n += 1
+            fallos = 0
+        else:
+            fallos += 1
+            if fallos >= MAX_FALLOS_SEGUIDOS:
+                logging.warning(f"🏦 BÚNKER faltantes: almacén durable no disponible ({fallos} fallos seguidos) — "
+                                "sync pospuesto al próximo ciclo")
+                break
     return n
 
 

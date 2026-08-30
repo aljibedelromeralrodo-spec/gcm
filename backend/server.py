@@ -671,15 +671,17 @@ async def startup():
         await db.set_credito.create_index("nombre")
     except Exception as e:
         logging.warning(f"indices: {e}")
-    # PASO 2 — BÚNKER DE ARCHIVOS (disco de producción efímero): antes de servir
-    # peticiones se restaura TODO desde GridFS si el pod es nuevo, y luego se bajan
-    # los archivos faltantes uno a uno (cobertura ante discos parciales).
-    try:
-        n_full = await asyncio.to_thread(bunker.restaurar_si_vacio)
-        n_falt = await asyncio.to_thread(bunker.restaurar_faltantes)
-        logging.info(f"🏦 BÚNKER arranque: {n_full} restaurados (pod nuevo) + {n_falt} faltantes bajados de GridFS")
-    except Exception as e:
-        logging.warning(f"BÚNKER restore falló: {e}")
+    # PASO 2 — BÚNKER DE ARCHIVOS: la restauración corre EN SEGUNDO PLANO para que
+    # el arranque NUNCA dependa del Object Store (el puerto 8001 abre de inmediato;
+    # la Regla #13 restaura on-demand cualquier archivo que aún no haya bajado).
+    async def _bunker_restore_bg():
+        try:
+            n_full = await asyncio.to_thread(bunker.restaurar_si_vacio)
+            n_falt = await asyncio.to_thread(bunker.restaurar_faltantes)
+            logging.info(f"🏦 BÚNKER arranque (bg): {n_full} restaurados (pod nuevo) + {n_falt} faltantes bajados")
+        except Exception as e:
+            logging.warning(f"BÚNKER restore bg falló: {e}")
+    asyncio.create_task(_bunker_restore_bg())
     # Liberar candado obsoleto: ningún procesamiento sobrevive a un reinicio
     # BLINDAJE 24/7: 'Correo a Mesa' SIEMPRE arranca activado por defecto, sin clics.
     # La pausa administrativa (anti-duplicados) vive en la DB de cada entorno (pausa_admin),
