@@ -81,6 +81,10 @@ export default function BrokersModule({ user }) {
     axios.get(`${API}/api/trazabilidad/pendientes`).then(r => setConsultas(r.data.pendientes || [])).catch(() => {});
   }, []);
   useEffect(() => { cargar(); }, [cargar]);
+  useEffect(() => {
+    const t = setInterval(cargar, 30000);
+    return () => clearInterval(t);
+  }, [cargar]);
 
   const cargaMasiva = async () => {
     if (!carga.fid || !carga.files.length) { setMsg("⛔ Elija la carpeta y los archivos a cargar"); return; }

@@ -49,6 +49,27 @@ def estados_hitos(fd):
     }
 
 
+def estado_tras_mensaje(estado_actual, autor_es_broker, cerrar_explicit=False):
+    """Broker cierra; Gerencia reabre el hilo para que el broker lo vuelva a ver."""
+    if autor_es_broker or cerrar_explicit:
+        return "respondida"
+    return "abierta"
+
+
+def folder_es_de_broker(fd, user):
+    sub = str((user or {}).get("sub") or "").strip()
+    nombre = str((user or {}).get("nombre") or "").strip()
+    if not sub and not nombre:
+        return False
+    cod = str((fd or {}).get("broker_codigo") or (fd or {}).get("proyeccion_broker") or "")
+    orig = str((fd or {}).get("broker_origen") or (fd or {}).get("broker_nombre") or "")
+    if sub and (sub == cod or (len(sub) >= 4 and sub.lower() in orig.lower())):
+        return True
+    if nombre and len(nombre) >= 4 and nombre.lower() in orig.lower():
+        return True
+    return False
+
+
 def filtro_carpetas_broker(user):
     """Carpetas de un broker: código, proyección y nombre de origen."""
     sub = str((user or {}).get("sub") or "").strip()

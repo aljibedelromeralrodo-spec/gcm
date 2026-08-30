@@ -406,7 +406,8 @@ async def broker_estado_situacion(request: Request):
     """ESTADO_DE_SITUACION: el broker solo ve la situación de SUS clientes asociados."""
     c = _claims(request)
     # AISLAMIENTO TOTAL: cada broker (y el admin en modo broker) ve SOLO sus propios clientes
-    q = {"broker_codigo": c.get("sub") or ""}
+    from hitos_pipeline import filtro_carpetas_broker
+    q = filtro_carpetas_broker(c)
     out = []
     async for fd in db.folders.find(q).sort("nombre", 1):
         hitos_r = await db.hitos_externos.find({"folder_id": fd["id"]}, {"_id": 0, "hito": 1, "fecha": 1, "fuente": 1}).sort("creado", -1).to_list(3)

@@ -9,7 +9,10 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Request
-from hitos_pipeline import PREGUNTAS, estados_hitos, cuello_botella, filtro_carpetas_broker
+from hitos_pipeline import (
+    PREGUNTAS, estados_hitos, cuello_botella, filtro_carpetas_broker,
+    estado_tras_mensaje, folder_es_de_broker,
+)
 
 traza = APIRouter(prefix="/trazabilidad")
 
@@ -38,17 +41,7 @@ def _es_broker(user):
 
 
 def _dueño_broker(fd, user):
-    sub = str((user or {}).get("sub") or "")
-    nombre = str((user or {}).get("nombre") or "")
-    if not sub and not nombre:
-        return False
-    cod = str(fd.get("broker_codigo") or fd.get("proyeccion_broker") or "")
-    orig = str(fd.get("broker_origen") or fd.get("broker_nombre") or "")
-    if sub and (sub == cod or sub.lower() in orig.lower()):
-        return True
-    if nombre and nombre.lower() in orig.lower():
-        return True
-    return False
+    return folder_es_de_broker(fd, user)
 
 
 async def _folder_visible(fid, user):
@@ -104,12 +97,15 @@ async def traza_consultar(fid: str, payload: dict, request: Request):
     autor = user.get("nombre") or user.get("sub") or "gerencia"
     existente = await _db().comunicaciones_operacion.find_one(
         {"folder_id": fid, "hito": hito, "estado": "abierta"})
+    if not existente:
+        existente = await _db().comunicaciones_operacion.find_one(
+            {"folder_id": fid, "hito": hito}, sort=[("actualizado", -1)])
     msg = {"id": str(uuid.uuid4()), "tipo": "consulta", "autor": autor,
            "rol": user.get("rol") or "", "texto": texto, "fecha": ahora}
     if existente:
         await _db().comunicaciones_operacion.update_one(
             {"id": existente["id"]},
-            {"$push": {"mensajes": msg}, "$set": {"actualizado": ahora}})
+            {"$push": {"mensajes": msg}, "$set": {"actualizado": ahora, "estado": "abierta"}})
         hid = existente["id"]
     else:
         hid = str(uuid.uuid4())
@@ -134,20 +130,23 @@ async def traza_responder(fid: str, payload: dict, request: Request):
     texto = str((payload or {}).get("mensaje") or "").strip()[:1200]
     if not texto:
         raise HTTPException(status_code=400, detail="Escriba la respuesta")
-    q = {"folder_id": fid, "estado": "abierta"}
+    q = {"folder_id": fid}
     if hid:
         q["id"] = hid
-    hilo = await _db().comunicaciones_operacion.find_one(q)
+    else:
+        q["estado"] = "abierta"
+    hilo = await _db().comunicaciones_operacion.find_one(q, sort=[("actualizado", -1)])
     if not hilo:
-        raise HTTPException(status_code=404, detail="No hay consulta abierta en esta operación")
+        raise HTTPException(status_code=404, detail="No hay hilo en esta operación")
     ahora = _now()
     autor = user.get("nombre") or user.get("sub") or ""
     msg = {"id": str(uuid.uuid4()), "tipo": "respuesta", "autor": autor,
            "rol": user.get("rol") or "", "texto": texto, "fecha": ahora}
-    cerrar = bool((payload or {}).get("cerrar")) or _es_broker(user)
-    upd = {"$push": {"mensajes": msg}, "$set": {"actualizado": ahora}}
-    if cerrar:
-        upd["$set"]["estado"] = "respondida"
+    nuevo_estado = estado_tras_mensaje(
+        hilo.get("estado"), _es_broker(user), bool((payload or {}).get("cerrar")))
+    upd = {"$push": {"mensajes": msg},
+           "$set": {"actualizado": ahora, "estado": nuevo_estado}}
+    if nuevo_estado == "respondida":
         upd["$set"]["respondida_por"] = autor
         upd["$set"]["respondida_en"] = ahora
     await _db().comunicaciones_operacion.update_one({"id": hilo["id"]}, upd)
@@ -162,7 +161,7 @@ async def traza_responder(fid: str, payload: dict, request: Request):
                 "fecha": ahora, "leida": False})
         except Exception:
             pass
-    return {"ok": True, "hilo_id": hilo["id"], "estado": "respondida" if cerrar else "abierta",
+    return {"ok": True, "hilo_id": hilo["id"], "estado": nuevo_estado,
             "envio": "plataforma"}
 
 

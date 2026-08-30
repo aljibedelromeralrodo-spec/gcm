@@ -289,10 +289,14 @@ async def gerencia_cartera():
         "seguimiento": await db.seguimiento.find(
             {}, {"cliente": 1, "estado": 1, "asunto": 1, "fecha": 1}).sort("fecha", -1).to_list(3000),
         "consultas": {},
+        "hilos": {},
     }
-    async for c in db.comunicaciones_operacion.find({"estado": "abierta"}, {"folder_id": 1}):
+    async for c in db.comunicaciones_operacion.find({}, {"folder_id": 1, "estado": 1}):
         fid_c = c.get("folder_id")
-        if fid_c:
+        if not fid_c:
+            continue
+        cache["hilos"][fid_c] = cache["hilos"].get(fid_c, 0) + 1
+        if c.get("estado") == "abierta":
             cache["consultas"][fid_c] = cache["consultas"].get(fid_c, 0) + 1
     async for fd in db.folders.find({}).sort("nombre", 1):
         if flota:
@@ -323,6 +327,7 @@ async def gerencia_cartera():
                 h["inactivo_96h"] = True
             h["reclamos"] = fd.get("reclamos_gerencia") or {}
             h["consultas_abiertas"] = cache["consultas"].get(fd.get("id"), 0)
+            h["hilos"] = cache["hilos"].get(fd.get("id"), 0)
             h["actualizado"] = str(ult)[:10]
             h["creado"] = str(fd.get("created_at") or "")[:10]
             h["dicom"] = bool((fd.get("datos_financieros") or {}).get("morosidad_dicom"))

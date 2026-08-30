@@ -33,6 +33,16 @@ class TestEstadosHitos:
     def test_preguntas_no_inventan_envio(self):
         assert set(t.PREGUNTAS) == {"tasacion", "estudio", "serie"}
 
+    def test_estado_tras_mensaje_reabre(self):
+        assert t.estado_tras_mensaje("abierta", True) == "respondida"
+        assert t.estado_tras_mensaje("respondida", False) == "abierta"
+        assert t.estado_tras_mensaje("abierta", False, cerrar_explicit=True) == "respondida"
+
+    def test_folder_es_de_broker(self):
+        fd = {"broker_codigo": "mutuaria", "broker_origen": "Mutuaria y Leasing"}
+        assert t.folder_es_de_broker(fd, {"sub": "mutuaria", "nombre": "Mutuaria y Leasing"})
+        assert not t.folder_es_de_broker(fd, {"sub": "otro", "nombre": "X"})
+
     def test_filtro_broker_incluye_origen(self):
         f = t.filtro_carpetas_broker({"sub": "mutuaria", "nombre": "Mutuaria y Leasing"})
         campos = {list(x.keys())[0] for x in f["$or"]}

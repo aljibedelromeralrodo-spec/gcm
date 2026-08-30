@@ -376,7 +376,13 @@ export default function GerenciaComercialModule() {
       )}
       {respuestas.length > 0 && (
         <div data-testid="gerencia-respuestas-broker" style={{ ...panel, borderColor: ORO, color: "#e8c96a", padding: "0.6rem 1rem", marginBottom: 12, fontSize: "0.72rem" }}>
-          💬 Respuestas de brokers: {respuestas.slice(0, 4).map(h => `${h.cliente || ""} · ${(h.pregunta || h.hito || "").slice(0, 40)}`).join(" · ")}
+          💬 Respuestas de brokers: {respuestas.slice(0, 4).map(h => (
+            <button key={h.id} data-testid={`respuesta-${h.id}`}
+              onClick={() => abrirHilo({ folder_id: h.folder_id, cliente: h.cliente })}
+              style={{ background: "none", border: "none", color: ORO, cursor: "pointer", fontWeight: 700, marginRight: 10, padding: 0 }}>
+              {h.cliente || "—"} · {(h.pregunta || h.hito || "").slice(0, 40)}
+            </button>
+          ))}
         </div>
       )}
       {(data?.excepciones_recientes || []).length > 0 && (
@@ -434,10 +440,10 @@ export default function GerenciaComercialModule() {
                     title="Queda en el hilo de la operación. No envía correo."
                     onClick={() => consultarHito(f, hito)}>{label}</button>
                 ))}
-                {(f.consultas_abiertas || 0) > 0 && (
+                {((f.consultas_abiertas || 0) > 0 || (f.hilos || 0) > 0) && (
                   <button className="maserati-btn" data-testid={`hilo-${f.folder_id}`}
                     style={{ minHeight: 28, padding: "0.25rem 0.5rem", fontSize: "0.58rem", borderRadius: 8 }}
-                    onClick={() => abrirHilo(f)}>Hilo ({f.consultas_abiertas})</button>
+                    onClick={() => abrirHilo(f)}>Hilo{f.consultas_abiertas ? ` (${f.consultas_abiertas})` : ""}</button>
                 )}
                 {RECLAMOS_UI.filter(([, , cond]) => cond(f)).map(([tipo, label, , color]) => {
                   const hecho = f.reclamos?.[tipo];
@@ -446,7 +452,9 @@ export default function GerenciaComercialModule() {
                       disabled={busyRec === `${f.folder_id}-${tipo}`}
                       style={{ minHeight: 28, padding: "0.25rem 0.5rem", fontSize: "0.58rem", borderRadius: 8 }}
                       onClick={() => reclamar(f.folder_id, tipo, hecho?.fecha)}>
-                      {busyRec === `${f.folder_id}-${tipo}` ? "Enviando…" : hecho ? `✓ ${label.replace("📩 ", "")}` : label}
+                      {busyRec === `${f.folder_id}-${tipo}` ? "En cola…"
+                        : hecho?.preview ? `👁 ${label.replace("📩 ", "")} (preview)`
+                        : hecho ? `✓ ${label.replace("📩 ", "")}` : label}
                     </button>
                   );
                 })}
@@ -582,7 +590,8 @@ export default function GerenciaComercialModule() {
                             style={{ minHeight: 28, padding: "0.25rem 0.5rem", fontSize: "0.58rem", borderRadius: 8 }}
                             title={hecho ? `Última gestión: ${hecho.por} → ${hecho.destinatario} · ${(hecho.fecha || "").slice(0, 16).replace("T", " ")} UTC (Regla #57)` : "El envío depende 100% de Gerencia (Regla #49)"}
                             onClick={() => reclamar(f.folder_id, tipo, hecho?.fecha)}>
-                            {busyRec === `${f.folder_id}-${tipo}` ? "Enviando…"
+                            {busyRec === `${f.folder_id}-${tipo}` ? "En cola…"
+                              : hecho?.preview ? `👁 ${label.replace("📩 ", "")} (preview)`
                               : hecho ? `✓ ${label.replace("📩 ", "")}` : label}
                           </button>
                         </div>
