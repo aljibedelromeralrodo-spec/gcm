@@ -136,6 +136,19 @@ export default function ClientesFicha() {
           </div>
 
           <PanelEstadoCarpeta folder={currentFolder} />
+          {currentFolder.prob_aprobacion?.discrepancia && (
+            <div data-testid="discrepancia-viabilidad" style={{
+              margin: "0 0 0.9rem", padding: "0.55rem 0.9rem", fontSize: 12, fontWeight: 700,
+              border: `1px solid ${currentFolder.prob_aprobacion.discrepancia.hay ? "rgba(234,88,12,0.45)" : "rgba(16,217,142,0.35)"}`,
+              background: currentFolder.prob_aprobacion.discrepancia.hay ? "rgba(234,88,12,0.08)" : "rgba(16,217,142,0.06)",
+              color: currentFolder.prob_aprobacion.discrepancia.hay ? "#fb923c" : "#10d98e" }}>
+              🪞 Mutuaria {currentFolder.prob_aprobacion.mutuaria?.porcentaje ?? currentFolder.prob_aprobacion.porcentaje}%
+              {currentFolder.prob_aprobacion.concreces?.disponible
+                ? ` · Concreces ${currentFolder.prob_aprobacion.concreces.porcentaje}%`
+                : " · Concreces en calibración"}
+              {" — "}{currentFolder.prob_aprobacion.discrepancia.mensaje}
+            </div>
+          )}
           <PrediccionEspejo folderId={currentFolder.id} />
 
           {showCompromiso && currentFolder && (

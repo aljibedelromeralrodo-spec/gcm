@@ -377,6 +377,14 @@ export default function ClientesLista() {
                             ▲ Techo {Math.round(f.techo_uf).toLocaleString("es-CL")} UF
                           </span>
                         )}
+                        {f.prob_aprobacion?.concreces?.disponible && f.prob_aprobacion.concreces.porcentaje != null && (
+                          <span data-testid={`espejo-concreces-${f.id}`}
+                            title={f.prob_aprobacion.discrepancia?.mensaje || "Espejo Concreces"}
+                            style={{ fontSize: 9, fontWeight: 800, marginTop: 2, whiteSpace: "nowrap",
+                              color: enviadoManual ? "#fff" : (f.prob_aprobacion.discrepancia?.hay ? "#ea580c" : "#94a3b8") }}>
+                            Espejo {f.prob_aprobacion.concreces.porcentaje}%
+                          </span>
+                        )}
                       </div>
                       <div data-testid={`mesa-criterios-${f.id}`}
                         style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minWidth: 92, padding: "6px 10px", borderRadius: 0,

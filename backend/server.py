@@ -2814,11 +2814,11 @@ async def list_folders(q: str = ""):
     criterios_cfg = await db.config.find_one({"_key": "criterios"}) or {}
     tasas_cfg = await db.config.find_one({"_key": "tasas"}) or {}
     uf_val = await get_valor_uf()
+    modelo_esp = await db.config.find_one({"_key": "espejo_mesa_modelo"}) or {}
     out = []
     for d in docs:
         archivos = fsvc.scan_archivos(d.get("nombre", ""))
         f = _folder_public(d, archivos=archivos)
-        f["prob_aprobacion"] = _prob_aprobacion_folder(d, stats)
         f["criterios"] = _criterios_folder(d, archivos=archivos)
         f["mesa_respuesta"] = await _mesa_respuesta_folder(d, segs, archivos=archivos)
         # TECHO HIPOTECARIO en tarjeta: máximo crédito UF (mejor escenario, cálculo puro)
@@ -2832,6 +2832,9 @@ async def list_folders(q: str = ""):
                     f["techo_banco"] = mejor.get("banco", "")
             except Exception:
                 pass
+        f["prob_aprobacion"] = _prob_aprobacion_folder(
+            d, stats, modelo=modelo_esp, uf_valor=uf_val,
+            techo_uf=f.get("techo_uf"), archivos=archivos)
         out.append(f)
     return {"folders": out}
 
@@ -3453,7 +3456,11 @@ async def get_folder(fid: str):
     if not doc:
         raise HTTPException(status_code=404, detail="Carpeta no encontrada")
     res = _folder_public(doc, con_archivos=True, permitir_ocr=True)
-    res["prob_aprobacion"] = _prob_aprobacion_folder(doc, await _stats_mesa())
+    uf_val = await get_valor_uf()
+    modelo_esp = await db.config.find_one({"_key": "espejo_mesa_modelo"}) or {}
+    res["prob_aprobacion"] = _prob_aprobacion_folder(
+        doc, await _stats_mesa(), modelo=modelo_esp, uf_valor=uf_val,
+        archivos=res.get("archivos"))
     res["criterios"] = _criterios_folder(doc, archivos=res.get("archivos"), permitir_ocr=False)
     await _alerta_pdfs_protegidos(doc.get("nombre", ""), res.get("archivos"))
     await _alerta_docs_faltantes(doc, res.get("validacion_documental"))
@@ -5873,70 +5880,11 @@ def _prob_aprobacion(item, stats):
     return {"porcentaje": prob, "factores": factores}
 
 
-def _prob_aprobacion_folder(doc, stats):
-    """% de posibilidades de aprobación de una CARPETA de cliente, calibrado con mesa."""
-    # ⚔️ REGLAS DE HIERRO (Políticas Maestras): cualquier quiebre → viabilidad 0% inmediata.
-    # La IA NO puede ponderar ni ignorar estas 5 reglas generales (orden del dueño).
-    quiebres_hierro = mesa_brain.quiebres_hierro_folder(doc)
-    if quiebres_hierro:
-        factores_h = ["⛔ 0%: NO VIABLE - POLÍTICA GENERAL (Regla de Hierro quebrada)"]
-        factores_h += [f"⛔ {q['detalle']}" for q in quiebres_hierro]
-        return {"porcentaje": 0, "factores": factores_h,
-                "alerta_critica": "NO VIABLE - POLÍTICA GENERAL: " +
-                                  "; ".join(q["regla"] for q in quiebres_hierro)}
-    prob = stats["base"] * 100.0
-    factores = [f"Base mesa: {round(stats['base']*100)}% ({stats['aprobadas']} aprobadas / {stats['rechazadas']} rechazadas)"]
-    archivos = fsvc.scan_archivos(doc.get("nombre", ""))
-    cats = {fsvc.cat_de_archivo(a["nombre"], a["subfolder"]) for a in archivos} - {"combinado", "codeudor", "estudio_titulo"}
-    cr = doc.get("credit_request") or {}
-    tipo_cliente = cr.get("client_type") or "dependiente"
-    requeridos = [c for c in fsvc.required_cats(tipo_cliente, exento_afp=bool(cr.get("exento_afp")))
-                  if c != "cmf"]
-    faltan = [c for c in requeridos if c not in cats]
-    if faltan:
-        prob -= 8 * len(faltan)
-        factores.append(f"-{8*len(faltan)}%: faltan documentos clave ({', '.join(faltan)})")
-    if "cmf" not in cats:
-        prob -= 5
-        factores.append("-5%: falta informe CMF")
-    df = doc.get("datos_financieros") or {}
-    try:
-        monto = float(df.get("monto_credito") or 0)
-    except (TypeError, ValueError):
-        monto = 0
-    if monto:
-        if monto <= 2000:
-            prob += 4
-            factores.append("+4%: monto acotado (≤2.000 UF)")
-        elif monto > 4000:
-            prob -= 8
-            factores.append("-8%: monto alto (>4.000 UF)")
-    con_sub = df.get("con_subsidio")
-    if con_sub is None:
-        con_sub = (cr.get("subsidy") or {}).get("tipo") == "con_subsidio"
-    if con_sub:
-        prob += 5
-        factores.append("+5%: con subsidio")
-    # REGLA DURA: mínimo 2.000 UF sin subsidio
-    alerta_critica = ""
-    if monto and monto < 2000 and not con_sub:
-        alerta_critica = "ALERTA: No cumple criterio mínimo de 2.000 UF. Avisar a jefatura"
-        prob = min(prob, 10)
-        factores.append(f"🔴 {alerta_critica}")
-    if tipo_cliente == "independiente":
-        prob -= 5
-        factores.append("-5%: independiente (boletas)")
-    if not df.get("valor_propiedad"):
-        prob -= 3
-        factores.append("-3%: sin datos financieros completos")
-    # REGLA REALISTA: sin los documentos mínimos de mesa, el % es 0
-    faltan_mesa = [c for c in fsvc.required_cats(tipo_cliente, exento_afp=bool(cr.get("exento_afp"))) if c not in cats]
-    if not cats or faltan_mesa:
-        etiquetas = [fsvc.MISSING_LABELS.get(c, c) for c in faltan_mesa] or ["sin documentos"]
-        factores.append(f"⛔ 0%: no cumple criterios de envío a mesa (faltan: {', '.join(etiquetas)})")
-        return {"porcentaje": 0, "factores": factores, "alerta_critica": alerta_critica}
-    prob = max(5, min(98, round(prob)))
-    return {"porcentaje": prob, "factores": factores, "alerta_critica": alerta_critica}
+def _prob_aprobacion_folder(doc, stats, modelo=None, uf_valor=None, techo_uf=None, archivos=None):
+    """Viabilidad Mutuaria + Espejo Concreces. `porcentaje` sigue siendo el interno (tarjeta)."""
+    import viabilidad_engine as ve
+    return ve.evaluar_folder(doc, stats, modelo_espejo=modelo, uf_valor=uf_valor,
+                             techo_uf=techo_uf, archivos=archivos)
 
 
 @api.get("/procesamiento/queue")
