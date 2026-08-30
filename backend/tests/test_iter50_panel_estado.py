@@ -2,6 +2,7 @@
 import os
 import pytest
 import requests
+from _tok import tok as _login_tok
 
 BASE = os.environ["REACT_APP_BACKEND_URL"].rstrip("/")
 FID_EDUAR = "c65e1cce-2407-42a8-8ee4-c16b874a2b24"
@@ -11,14 +12,14 @@ FID_EDUAR = "c65e1cce-2407-42a8-8ee4-c16b874a2b24"
 def admin_token():
     r = requests.post(f"{BASE}/api/auth/login", json={"rut": "administrador", "password": "141617575"}, timeout=20)
     assert r.status_code == 200, r.text
-    return r.json()["token"]
+    return _login_tok(r)
 
 
 @pytest.fixture(scope="module")
 def broker_token():
     r = requests.post(f"{BASE}/api/auth/login", json={"rut": "broker", "password": "Broker2026"}, timeout=20)
     assert r.status_code == 200, r.text
-    return r.json()["token"]
+    return _login_tok(r)
 
 
 @pytest.fixture(scope="module")

@@ -164,11 +164,28 @@ def _cookie_flags(request=None):
 
 
 def fijar_cookie(response, token, request=None):
-    """Set-Cookie HttpOnly. El JWT puede seguir en el JSON para tests/Bearer legado."""
+    """Set-Cookie HttpOnly. El JWT no va en el JSON (el JS no debe verlo)."""
     if not token or response is None:
         return response
     response.set_cookie(COOKIE_NAME, token, **_cookie_flags(request))
     return response
+
+
+def token_desde_http(resp):
+    """Para tests: cookie HttpOnly primero; JSON `token` solo si algún cliente legado lo manda."""
+    try:
+        c = getattr(resp, "cookies", None)
+        if c is not None:
+            v = c.get(COOKIE_NAME)
+            if v:
+                return v
+    except Exception:
+        pass
+    try:
+        data = resp.json() if callable(getattr(resp, "json", None)) else {}
+        return (data or {}).get("token") or (data or {}).get("access_token") or ""
+    except Exception:
+        return ""
 
 
 def borrar_cookie(response):

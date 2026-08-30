@@ -7,6 +7,7 @@ import requests
 from pathlib import Path
 from reportlab.pdfgen import canvas
 from pymongo import MongoClient
+from _tok import tok as _login_tok
 
 BASE = os.environ.get("REACT_APP_BACKEND_URL", "https://espejo-hibrido.preview.emergentagent.com").rstrip("/")
 # Login via CF hits 60s timeout because bcrypt is slow in this preview env.
@@ -21,7 +22,7 @@ DB_NAME = os.environ.get("DB_NAME", "test_database")
 def token():
     r = requests.post(f"{API}/auth/login", json={"rut": "administrador", "password": "141617575"}, timeout=120)
     assert r.status_code == 200, r.text
-    return r.json()["token"]
+    return _login_tok(r)
 
 
 @pytest.fixture(scope="module")

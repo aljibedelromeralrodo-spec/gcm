@@ -5,6 +5,7 @@ import uuid
 import requests
 import pytest
 from pymongo import MongoClient
+from _tok import tok as _login_tok
 
 BASE = os.environ.get("REACT_APP_BACKEND_URL", "https://espejo-hibrido.preview.emergentagent.com").rstrip("/")
 MONGO_URL = os.environ.get("MONGO_URL", "mongodb://localhost:27017")
@@ -15,7 +16,7 @@ DB_NAME = os.environ.get("DB_NAME", "test_database")
 def token():
     r = requests.post(f"{BASE}/api/auth/login", json={"rut": "administrador", "password": "141617575"}, timeout=20)
     assert r.status_code == 200, r.text
-    return r.json()["token"]
+    return _login_tok(r)
 
 
 @pytest.fixture(scope="module")

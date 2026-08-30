@@ -11,6 +11,7 @@ import asyncio
 import pytest
 import requests
 from dotenv import load_dotenv
+from _tok import tok as _login_tok
 
 # Cargar backend/.env antes de importar módulos que leen os.environ
 BACKEND_DIR = "/app/backend"
@@ -105,9 +106,8 @@ def token():
     r = requests.post(f"{BASE_URL}/api/auth/login",
                       json={"rut": "administrador", "password": "141617575"}, timeout=30)
     assert r.status_code == 200, f"login: {r.status_code} {r.text[:200]}"
-    data = r.json()
-    tok = data.get("token") or data.get("access_token")
-    assert tok, f"sin token: {data}"
+    tok = _login_tok(r)
+    assert tok, f"sin token: {r.text[:200]}"
     return tok
 
 

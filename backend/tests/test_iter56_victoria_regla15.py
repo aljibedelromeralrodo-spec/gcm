@@ -10,6 +10,7 @@ import requests
 from datetime import datetime, timezone
 from reportlab.pdfgen import canvas
 from pymongo import MongoClient
+from _tok import tok as _login_tok
 
 BASE = "http://localhost:8001/api"
 PUB_BASE = os.environ.get("REACT_APP_BACKEND_URL", "https://espejo-hibrido.preview.emergentagent.com").rstrip("/") + "/api"
@@ -39,7 +40,7 @@ def _mongo():
 def token():
     r = requests.post(f"{BASE}/auth/login", json={"rut": VICTORIA_EMAIL, "password": VICTORIA_PASS}, timeout=60)
     assert r.status_code == 200, r.text
-    return r.json()["token"]
+    return _login_tok(r)
 
 
 @pytest.fixture(scope="module")
@@ -51,7 +52,7 @@ def H(token):
 def admin_token():
     r = requests.post(f"{BASE}/auth/login", json={"rut": ADMIN_USER, "password": ADMIN_PASS}, timeout=60)
     assert r.status_code == 200, r.text
-    return r.json()["token"]
+    return _login_tok(r)
 
 
 @pytest.fixture(scope="module")

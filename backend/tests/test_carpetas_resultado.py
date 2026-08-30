@@ -2,6 +2,7 @@
 import os
 import pytest
 import requests
+from _tok import tok as _login_tok
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
 
@@ -27,7 +28,7 @@ _load_env()
 def _login(creds):
     r = requests.post(f"{BASE_URL}/api/auth/login", json=creds, timeout=20)
     assert r.status_code == 200, f"login failed: {r.status_code} {r.text}"
-    return r.json()["token"]
+    return _login_tok(r)
 
 
 @pytest.fixture(scope="module")

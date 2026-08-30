@@ -15,6 +15,7 @@ import pytest
 import requests
 from pathlib import Path
 from dotenv import load_dotenv
+from _tok import tok as _login_tok
 
 # Carga /app/backend/.env para que email_service tenga MONGO_URL/DB_NAME/MAIL2_*
 BACKEND_DIR = Path("/app/backend")
@@ -118,7 +119,7 @@ def admin_token():
     r = requests.post(f"{BASE_URL}/api/auth/login",
                       json={"rut": "administrador", "password": "141617575"}, timeout=15)
     assert r.status_code == 200, f"Login admin falló: {r.status_code} {r.text[:200]}"
-    tok = r.json().get("token")
+    tok = _login_tok(r)
     assert tok, "Token vacío"
     return tok
 
@@ -149,7 +150,7 @@ class TestRegresionCreateUser:
                            json={"rut": codigo, "password": clave}, timeout=15)
         assert r2.status_code == 200, f"login tempqa falló: {r2.status_code} {r2.text[:200]}"
         d2 = r2.json()
-        assert d2.get("token"), "Login no devolvió token"
+        assert _login_tok(r2), "Login no devolvió cookie de sesión"
         assert d2.get("first_login") is True, f"first_login debe ser true, obtuvo {d2.get('first_login')}"
 
         # DELETE

@@ -18,6 +18,7 @@ import requests
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from dotenv import load_dotenv
+from _tok import tok as _login_tok
 
 # Cargar .env del backend antes de importar módulos
 BACKEND_DIR = "/app/backend"
@@ -54,7 +55,7 @@ def admin_token():
             r = requests.post(f"{API}/auth/login",
                               json={"rut": ADMIN_CODIGO, "password": ADMIN_PASS}, timeout=90)
             if r.status_code == 200:
-                tok = r.json().get("token")
+                tok = _login_tok(r)
                 assert tok
                 return tok
             last_err = f"{r.status_code} {r.text[:200]}"

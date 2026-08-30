@@ -3,6 +3,7 @@ NO modificar backend, NO reiniciar. NO enviar correos reales."""
 import os
 import pytest
 import requests
+from _tok import tok as _login_tok
 
 def _load_backend_url():
     v = os.environ.get("REACT_APP_BACKEND_URL")
@@ -25,7 +26,7 @@ def admin_token():
     r = requests.post(f"{BASE}/api/auth/login",
                       json={"rut": "administrador", "password": "141617575"}, timeout=30)
     assert r.status_code == 200, r.text
-    tok = r.json().get("token")
+    tok = _login_tok(r)
     assert tok
     return tok
 
@@ -41,7 +42,7 @@ def contralor_headers():
                       json={"rut": "contralor", "password": "Contralor2026"}, timeout=30)
     if r.status_code != 200:
         pytest.skip(f"contralor login falló: {r.status_code} {r.text[:200]}")
-    return {"Authorization": f"Bearer {r.json()['token']}"}
+    return {"Authorization": f"Bearer {_login_tok(r)}"}
 
 
 # ---------- Login básicos ----------

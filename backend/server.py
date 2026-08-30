@@ -867,8 +867,9 @@ def _token_usuario(user):
 
 def _login_json(user, request=None):
     data = _token_usuario(user)
+    token = data.pop("token", None)
     resp = JSONResponse(content=data)
-    _auth.fijar_cookie(resp, data.get("token") or "", request)
+    _auth.fijar_cookie(resp, token or "", request)
     return resp
 
 
@@ -1076,10 +1077,11 @@ async def primer_ingreso_imap(payload: dict, request: Request):
         "first_login": False}, "$unset": {"primer_paso_clave": ""}})
     fresh = await db.users.find_one({"codigo": user["codigo"]})
     data = _token_usuario(fresh)
+    token = data.pop("token", None)
     data["ok"] = True
     data["paso"] = 2
     resp = JSONResponse(content=data)
-    _auth.fijar_cookie(resp, data.get("token") or "", request)
+    _auth.fijar_cookie(resp, token or "", request)
     return resp
 
 

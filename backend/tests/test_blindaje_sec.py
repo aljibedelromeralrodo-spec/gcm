@@ -46,6 +46,13 @@ class TestCookieHttpOnly:
     def test_logout_es_ruta_publica(self):
         assert "/api/auth/logout" in auth.PUBLIC_EXACT
 
+    def test_json_login_sin_token_en_cuerpo(self):
+        from starlette.responses import JSONResponse
+        r = JSONResponse({"codigo": "x"})
+        auth.fijar_cookie(r, "abc.jwt")
+        # El cuerpo no debe ser la fuente: la cookie sí
+        assert "abc.jwt" in (r.headers.get("set-cookie") or "")
+
 
 class TestSecretos:
     def test_secret_eq_vacio_es_false(self):

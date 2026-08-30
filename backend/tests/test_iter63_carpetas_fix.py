@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 import requests
 from dotenv import load_dotenv
+from _tok import tok as _login_tok
 
 BACKEND_DIR = Path("/app/backend")
 load_dotenv(BACKEND_DIR / ".env")
@@ -29,7 +30,7 @@ def admin_token():
         timeout=30,
     )
     assert r.status_code == 200, r.text
-    tok = r.json().get("token")
+    tok = _login_tok(r)
     assert tok
     return tok
 
@@ -48,7 +49,7 @@ def lectura_token():
     )
     if r.status_code != 200:
         pytest.skip(f"login lectura no disponible: {r.status_code} {r.text[:120]}")
-    return r.json().get("token")
+    return _login_tok(r)
 
 
 # ─── 1. endpoint recuperar-perdidos ───────────────────────────────────

@@ -15,6 +15,7 @@ from dotenv import load_dotenv
 load_dotenv("/app/backend/.env")
 
 import email_service as mail  # noqa: E402
+from _tok import tok as _login_tok
 
 
 @pytest.fixture
@@ -128,7 +129,7 @@ def test_api_smoke():
     except requests.ConnectionError:
         pytest.skip("backend no está corriendo en 8001")
     assert r.status_code == 200
-    tok = {"Authorization": f"Bearer {r.json()['token']}"}
+    tok = {"Authorization": f"Bearer {_login_tok(r)}"}
     for ep in ("/api/central/dashboard-batch", "/api/carpetas/faltantes",
                "/api/almacenamiento/estado", "/api/modo-prueba/retenidos"):
         assert requests.get(f"http://localhost:8001{ep}", headers=tok, timeout=30).status_code == 200

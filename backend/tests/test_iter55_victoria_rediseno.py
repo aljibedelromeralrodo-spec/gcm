@@ -6,6 +6,7 @@ import os
 import pytest
 import requests
 from reportlab.pdfgen import canvas
+from _tok import tok as _login_tok
 
 BASE = "http://localhost:8001/api"
 VICTORIA_EMAIL = "victoria.vilches@centralmutuos.cl"
@@ -30,7 +31,7 @@ def token():
     d = r.json()
     assert d.get("solo_modulo") == "victoria"
     assert d.get("clave_temporal") is True
-    return d["token"]
+    return _login_tok(r)
 
 
 @pytest.fixture(scope="module")

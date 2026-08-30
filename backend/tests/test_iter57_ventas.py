@@ -4,6 +4,7 @@ import io
 import pytest
 import requests
 from dotenv import load_dotenv
+from _tok import tok as _login_tok
 load_dotenv("/app/backend/.env")
 
 BASE = "http://localhost:8001"  # localhost para evitar edge timeouts
@@ -21,10 +22,10 @@ def _login(rut, password, base=BASE):
 
 @pytest.fixture(scope="module")
 def tokens():
-    admin = _login("administrador", "141617575").json()["token"]
-    yer = _login("yerile.barrera@centralmutuos.cl", "Yerile2024").json()["token"]
-    dey = _login("deysi.salazar@centralmutuos.cl", "Deysi2024").json()["token"]
-    dan = _login("daniela.galindo@centralmutuos.cl", "Daniela2024").json()["token"]
+    admin = _login_tok(_login("administrador", "141617575"))
+    yer = _login_tok(_login("yerile.barrera@centralmutuos.cl", "Yerile2024"))
+    dey = _login_tok(_login("deysi.salazar@centralmutuos.cl", "Deysi2024"))
+    dan = _login_tok(_login("daniela.galindo@centralmutuos.cl", "Daniela2024"))
     return {"admin": admin, "yerile": yer, "deysi": dey, "daniela": dan}
 
 
