@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Request
 from database import db
 from base_historica import validar_rut_chileno
+import expediente_identidad as _expid
 
 adn = APIRouter(prefix="/adn")
 _now = lambda: datetime.now(timezone.utc).isoformat()
@@ -25,9 +26,14 @@ def _norm_rut(rut):
 def _registro_desde_folder(fd):
     df = fd.get("datos_financieros") or {}
     p = fd.get("perfil_consolidado") or {}
+    ident = _expid.identidad_de_folder(fd)
     return {
         "rut": fd.get("rut") or "",
         "rut_norm": _norm_rut(fd.get("rut")),
+        "codeudor_rut": ident.get("rut_codeudor") or fd.get("codeudor_rut") or "",
+        "codeudor_rut_norm": ident.get("rut_codeudor_norm") or "",
+        "rol_avaluo": ident.get("rol_avaluo") or "",
+        "rol_norm": ident.get("rol_norm") or "",
         "identidad": {"nombre": fd.get("nombre") or "", "nombre_completo": fd.get("nombre_completo") or "",
                       "email": p.get("email") or "", "telefono": p.get("telefono") or "",
                       "ciudad": p.get("ciudad") or ""},
@@ -36,7 +42,8 @@ def _registro_desde_folder(fd):
                        "con_subsidio": bool(df.get("con_subsidio"))},
         "propiedad": {"inmobiliaria": fd.get("inmobiliaria") or "", "proyecto": fd.get("proyecto") or "",
                       "direccion": p.get("direccion") or "", "comuna": p.get("comuna") or "",
-                      "rol": p.get("rol_propiedad") or "", "tipo_operacion": fd.get("tipo_operacion") or ""},
+                      "rol": ident.get("rol_avaluo") or p.get("rol_propiedad") or "",
+                      "tipo_operacion": fd.get("tipo_operacion") or ""},
         "titulos": {"estudio_recibido_at": fd.get("estudio_recibido_at") or "",
                     "estudio_terminado_at": fd.get("estudio_titulo_terminado_at") or ""},
         "tasacion": {"fecha": fd.get("tasacion_fecha") or "",
@@ -62,67 +69,58 @@ def _registro_desde_historico(c):
     }
 
 
-async def _expediente_360(fd):
-    """EXPEDIENTE_360 — réplica total: titular, codeudor (amarrado por RUT), propiedad
-    con fojas/número/año, hitos legales y links verificables a la Bóveda Local."""
+async def _extras_expediente(fd):
+    """Simulación, compromiso, gastos y serie de crédito asociados a la carpeta."""
     rut_f = _norm_rut(fd.get("rut"))
-    sim = {}
-    if rut_f:
-        sim = await db.simulaciones.find_one(
+    fid = fd.get("id")
+    nombre = fd.get("nombre") or ""
+    rx_nom = {"$regex": re.escape(nombre[:20]), "$options": "i"} if len(nombre) >= 3 else None
+
+    async def _sim():
+        if not rut_f:
+            return {}
+        return await db.simulaciones.find_one(
             {"rut": {"$regex": rut_f[:8], "$options": "i"}}, sort=[("timestamp", -1)]) or {}
-    comp = await db.compromisos.find_one({"folder_id": fd.get("id")}) or {}
-    cdat = comp.get("datos") or {}
-    cprop = cdat.get("propiedad") or {}
-    cvend = cdat.get("vendedor") or {}
-    df = fd.get("datos_financieros") or {}
-    p = fd.get("perfil_consolidado") or {}
-    nombre_carpeta = fd.get("nombre") or ""
-    documentos = [{"archivo": a, "link_boveda": f"{nombre_carpeta}/{a}", "fuente": "boveda_local"}
-                  for a in (fd.get("archivos") or []) if isinstance(a, str)][:150]
-    rep_raw = fd.get("estudio_reparos")
-    rep_estado = rep_raw.get("estado", "") if isinstance(rep_raw, dict) else (rep_raw or "")
-    rep_textos = " | ".join((r.get("texto") or "")[:250] for r in (fd.get("reparos_alertas") or [])[:5])
-    return {
-        "titular": {"nombre": fd.get("nombre_completo") or fd.get("nombre") or "",
-                    "rut": fd.get("rut") or "",
-                    "renta_liquida": sim.get("renta_liquida") or df.get("renta_liquida"),
-                    "deudas_cmf": sim.get("carga_fin_individual"),
-                    "afp": p.get("afp") or "",
-                    "telefono": sim.get("telefono") or p.get("telefono") or "",
-                    "email": sim.get("correo") or p.get("email") or ""},
-        "codeudor": {"presente": bool(sim.get("tiene_codeudor")),
-                     "rut": p.get("rut_codeudor") or "", "nombre": p.get("nombre_codeudor") or "",
-                     "renta": sim.get("div_renta_codeudor"), "deudas_cmf": sim.get("carga_fin_codeudor"),
-                     "afp": p.get("afp_codeudor") or "", "contacto": p.get("contacto_codeudor") or ""},
-        "propiedad": {"direccion": cprop.get("direccion") or p.get("direccion") or "",
-                      "comuna": cprop.get("comuna") or p.get("comuna") or "",
-                      "rol": cprop.get("rol_avaluo") or p.get("rol_propiedad") or "",
-                      "fojas": cprop.get("fojas") or "", "numero": cprop.get("numero") or "",
-                      "anio": cprop.get("anio") or "", "cbr": cprop.get("cbr") or "",
-                      "inmobiliaria": fd.get("inmobiliaria") or "", "proyecto": fd.get("proyecto") or "",
-                      "tasacion": {"fecha": fd.get("tasacion_fecha") or "",
-                                   "informe_recibido_at": fd.get("tasacion_informe_recibido_at") or "",
-                                   "asunto_informe": fd.get("tasacion_informe_asunto") or ""},
-                      "contacto_vendedor": {"nombre": cvend.get("nombre") or "", "rut": cvend.get("rut") or ""}},
-        "hitos_legales": {"estudio_titulos_recibido": fd.get("estudio_recibido_at") or "",
-                          "estudio_titulos_terminado": fd.get("estudio_titulo_terminado_at") or "",
-                          "estudio_reparos": rep_textos or rep_estado,
-                          "tasacion_estado": ("Informe Recibido" if fd.get("tasacion_informe_recibido_at")
-                                              else "Visita" if fd.get("tasacion_fecha")
-                                              else "Solicitada" if (fd.get("reclamos_gerencia") or {}).get("tasacion")
-                                              else "Pendiente"),
-                          "firma_cesion": ("Confirmada" if fd.get("firma_cesion_confirmada_at")
-                                           or fd.get("escritura_confirmada_at")
-                                           or fd.get("escritura_notaria_detectada_at") else "Pendiente"),
-                          "reparos": rep_textos or rep_estado,
-                          "borrador_escritura": fd.get("escritura_confirmada_at") or "",
-                          "fecha_firma": fd.get("fecha_firma") or fd.get("fecha_firma_detectada") or "",
-                          "set_credito": {"estado": fd.get("set_credito_estado") or "",
-                                          "evidencia": fd.get("set_credito_evidencia") or "",
-                                          "fecha": str(fd.get("set_credito_at") or "")[:19]},
-                          "anexos_notaria": fd.get("anexos_notaria") or ""},
-        "documentos": documentos,
-    }
+
+    async def _comp():
+        if not fid:
+            return {}
+        return await db.compromisos.find_one({"folder_id": fid}) or {}
+
+    async def _por_rut_o_nombre(col, sort_campo):
+        clauses = []
+        if rut_f:
+            clauses.append({"rut": {"$regex": rut_f[:8], "$options": "i"}})
+        if rx_nom:
+            clauses.append({"nombre": rx_nom})
+        if not clauses:
+            return None
+        return await col.find_one({"$or": clauses}, sort=[(sort_campo, -1)])
+
+    sim, comp, gastos, setc = await asyncio.gather(
+        _sim(), _comp(),
+        _por_rut_o_nombre(db.gastos_op_log, "enviado_en"),
+        _por_rut_o_nombre(db.set_credito, "created_at"),
+    )
+    hilo = []
+    if fid:
+        try:
+            async for h in db.hitos_externos.find(
+                    {"folder_id": fid, "hito": {"$regex": "estudio", "$options": "i"}},
+                    {"_id": 0, "hito": 1, "asunto": 1, "fecha": 1, "fuente": 1, "creado": 1}
+            ).sort("creado", -1).limit(20):
+                hilo.append(h)
+        except Exception:
+            hilo = []
+    return {"simulacion": sim or {}, "compromiso": comp or {},
+            "gastos": gastos, "set_credito": setc, "hilo_estudio": hilo}
+
+
+async def _expediente_360(fd):
+    """EXPEDIENTE_360 — réplica total: titular, codeudor (amarrado por RUT), rol de avalúo,
+    perfil financiero, gastos, tasación, estudio de títulos, pólizas y serie de crédito."""
+    extras = await _extras_expediente(fd)
+    return _expid.construir_expediente(fd, extras)
 
 
 async def _upsert_adn(reg):
@@ -144,6 +142,10 @@ async def _upsert_adn(reg):
             merged["expediente_360"] = reg["expediente_360"]
             if existente.get("fuentes_succion"):
                 merged["fuentes_succion"] = existente["fuentes_succion"]
+        for k in ("codeudor_rut", "codeudor_rut_norm", "rol_avaluo", "rol_norm"):
+            v = reg.get(k)
+            if v not in (None, ""):
+                merged[k] = v
         merged["actualizado"] = _now()
         merged.pop("_id", None)
         await db.adn_clientes_360.update_one({"rut_norm": reg["rut_norm"]}, {"$set": merged})
@@ -159,7 +161,16 @@ async def volcar_adn():
     ok, rechazados = 0, 0
     async for fd in db.folders.find({}):
         reg = _registro_desde_folder(fd)
-        reg["expediente_360"] = await _expediente_360(fd)
+        exp = await _expediente_360(fd)
+        reg["expediente_360"] = exp
+        claves = exp.get("claves") or {}
+        if claves.get("rut_codeudor_norm"):
+            reg["codeudor_rut"] = claves.get("rut_codeudor") or reg.get("codeudor_rut") or ""
+            reg["codeudor_rut_norm"] = claves["rut_codeudor_norm"]
+        if claves.get("rol_norm"):
+            reg["rol_avaluo"] = claves.get("rol_avaluo") or ""
+            reg["rol_norm"] = claves["rol_norm"]
+            (reg.setdefault("propiedad", {}))["rol"] = claves.get("rol_avaluo") or ""
         if await _upsert_adn(reg):
             ok += 1
         elif fd.get("rut"):
@@ -221,10 +232,9 @@ async def adn_buscar(request: Request, q: str = "", limite: int = 50):
     user = getattr(request.state, "user", {}) or {}
     filtro = _mask_query(user)
     if q.strip():
-        rx = {"$regex": re.escape(q.strip()), "$options": "i"}
-        texto = {"$or": [{"rut": rx}, {"identidad.nombre": rx}, {"identidad.email": rx},
-                         {"propiedad.inmobiliaria": rx}, {"propiedad.proyecto": rx}]}
-        filtro = {"$and": [filtro, texto]} if filtro else texto
+        texto = _expid.filtro_busqueda(q)
+        if texto:
+            filtro = {"$and": [filtro, texto]} if filtro else texto
     docs = await db.adn_clientes_360.find(filtro, {"_id": 0}).sort("identidad.nombre", 1).to_list(min(limite, 200))
     return {"registros": docs, "total": len(docs),
             "acceso": "global" if not _mask_query(user) else "cartera_propia"}
@@ -244,15 +254,65 @@ async def adn_por_rut(request: Request, rut: str):
     return doc
 
 
+async def _adn_por_clave(q):
+    """Única supercarpeta: RUT titular, RUT codeudor o rol de avalúo."""
+    raw = str(q or "").strip()
+    if not raw:
+        return None
+    filtro = _expid.filtro_busqueda(raw)
+    if filtro:
+        doc = await db.adn_clientes_360.find_one(filtro, {"_id": 0})
+        if doc:
+            return doc
+    ff = _expid.filtro_folder_por_clave(raw)
+    if not ff:
+        return None
+    fd = await db.folders.find_one(ff)
+    if not fd:
+        return None
+    exp = await _expediente_360(fd)
+    reg = _registro_desde_folder(fd)
+    reg["expediente_360"] = exp
+    reg["fuente_resolucion"] = "carpeta_activa"
+    return reg
+
+
+def _puede_360(user):
+    return (user.get("rol") or "") in ("admin", "maestro") or (user.get("perfil") or "") == "B"
+
+
+@adn.get("/por-clave")
+async def adn_por_clave(request: Request, q: str = ""):
+    """Resuelve la carpeta única por RUT titular, RUT codeudor o Rol de Avalúo."""
+    if not str(q or "").strip():
+        raise HTTPException(status_code=400, detail="Indique RUT o rol de avalúo")
+    doc = await _adn_por_clave(q)
+    if not doc:
+        raise HTTPException(status_code=404, detail="No hay supercarpeta con esa clave")
+    user = getattr(request.state, "user", {}) or {}
+    if not _puede_360(user):
+        mask = _mask_query(user)
+        if mask:
+            propio = await db.adn_clientes_360.find_one(
+                {"$and": [{"rut_norm": doc.get("rut_norm")}, mask]}, {"_id": 1})
+            if not propio:
+                raise HTTPException(status_code=403,
+                                    detail="Regla #66: esta clave no pertenece a su cartera de gestión")
+    clave = _expid.clasificar_clave(q)
+    cruzada = ((doc.get("expediente_360") or {}).get("validacion_cruzada")
+               or _expid.validar_identidad((doc.get("expediente_360") or {}).get("claves") or {}))
+    return {**doc, "clave_usada": clave, "validacion_cruzada": cruzada,
+            "acceso": "360_completo" if _puede_360(user) else "cartera_propia"}
+
+
 @adn.get("/expediente/{rut}")
 async def adn_expediente(request: Request, rut: str):
-    """EXPEDIENTE_360 con MANDO ÚNICO DE ACCESO y búsqueda bidireccional titular↔codeudor."""
+    """EXPEDIENTE_360 con MANDO ÚNICO DE ACCESO y búsqueda bidireccional titular↔codeudor↔rol."""
     rutn = _norm_rut(rut)
-    if not rutn:
-        raise HTTPException(status_code=400, detail="RUT inválido")
-    doc = await db.adn_clientes_360.find_one(
-        {"$or": [{"rut_norm": rutn},
-                 {"expediente_360.codeudor.rut": {"$regex": rutn[:8], "$options": "i"}}]}, {"_id": 0})
+    roln = _expid.norm_rol(rut)
+    if not rutn and not roln:
+        raise HTTPException(status_code=400, detail="RUT o rol de avalúo inválido")
+    doc = await _adn_por_clave(rut)
     if not doc:
         raise HTTPException(status_code=404, detail="Expediente no existe en la Bóveda ADN")
     user = getattr(request.state, "user", {}) or {}
@@ -273,8 +333,45 @@ async def adn_expediente(request: Request, rut: str):
     exp = doc.get("expediente_360") or {}
     return {"rut": doc.get("rut"), "identidad": doc.get("identidad"),
             "propiedad": {k: v for k, v in (exp.get("propiedad") or {}).items()
-                          if k in ("direccion", "comuna", "inmobiliaria", "proyecto")},
-            "hitos_legales": exp.get("hitos_legales"), "acceso": "piezas_modulo (Regla #66)"}
+                          if k in ("direccion", "comuna", "inmobiliaria", "proyecto", "rol")},
+            "hitos_legales": exp.get("hitos_legales"),
+            "claves": exp.get("claves") or {},
+            "validacion_cruzada": exp.get("validacion_cruzada") or {},
+            "acceso": "piezas_modulo (Regla #66)"}
+
+
+@adn.get("/expediente/{rut}/autofill")
+async def adn_autofill(request: Request, rut: str):
+    """Payload para auto-rellenar Concreces desde el expediente único (sin envío)."""
+    user = getattr(request.state, "user", {}) or {}
+    doc = await _adn_por_clave(rut)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Expediente no existe en la Bóveda ADN")
+    if not _puede_360(user):
+        mask = _mask_query(user)
+        if mask:
+            propio = await db.adn_clientes_360.find_one(
+                {"$and": [{"rut_norm": doc.get("rut_norm")}, mask]}, {"_id": 1})
+            if not propio:
+                raise HTTPException(status_code=403,
+                                    detail="Regla #66: este RUT no pertenece a su cartera de gestión")
+    exp = dict(doc.get("expediente_360") or {})
+    fid = (doc.get("origen") or {}).get("folder_id")
+    if fid:
+        fd = await db.folders.find_one({"id": fid})
+        if fd:
+            exp = await _expediente_360(fd)
+    payload = _expid.payload_concreces(exp, financiero=doc.get("financiero"))
+    cruzada = exp.get("validacion_cruzada") or _expid.validar_identidad(exp.get("claves") or {})
+    return {
+        "ok": True,
+        "rut": doc.get("rut"),
+        "folder_id": fid or "",
+        "claves": exp.get("claves") or {},
+        "validacion_cruzada": cruzada,
+        "payload": payload,
+        "mapeo": _expid.MAPEO_CONCRECES,
+    }
 
 
 @adn.post("/succionar/{rut}")

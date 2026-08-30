@@ -38,11 +38,22 @@ async def _registro_bodega(fd):
     contraste = await db.bodega_contraste.find_one({"folder_id": fd.get("id")}, {"_id": 0}) or {}
     excep = await db.excepciones_log.find_one({"folder_id": fd.get("id"), "hito": "envio_bodega"})
     respaldo_ocr = bool(fd.get("datos_financieros_ocr_fecha")) and bool(df)
+    try:
+        import expediente_identidad as _expid
+        ident = _expid.identidad_de_folder(fd, {"compromiso": comp})
+        rol_prop = ident.get("rol_avaluo") or prop.get("rol") or df.get("rol_propiedad") or ""
+        rut_cod = ident.get("rut_codeudor") or fd.get("codeudor_rut") or ""
+    except Exception:
+        ident = {}
+        rol_prop = prop.get("rol") or df.get("rol_propiedad") or df.get("rol_avaluo") or ""
+        rut_cod = fd.get("codeudor_rut") or ""
+        tas = fd.get("tasacion_ocr") if isinstance(fd.get("tasacion_ocr"), dict) else {}
+        rol_prop = rol_prop or tas.get("rol_avaluo") or ""
     return {
         "folder_id": fd.get("id"), "cliente": fd.get("nombre"),
-        "rut_titular": fd.get("rut") or "", "rut_codeudor": fd.get("codeudor_rut") or "",
+        "rut_titular": fd.get("rut") or "", "rut_codeudor": rut_cod,
         "renta_promedio": df.get("renta_liquida"), "renta_codeudor": df.get("renta_codeudor"),
-        "rol_propiedad": prop.get("rol") or df.get("rol_propiedad") or "",
+        "rol_propiedad": rol_prop,
         "direccion": prop.get("direccion") or "", "comuna": prop.get("comuna") or "",
         "monto_credito_uf": df.get("monto_credito"), "subsidio": bool(df.get("con_subsidio")),
         "inmobiliaria": fd.get("inmobiliaria") or prop.get("inmobiliaria") or "",
@@ -78,7 +89,23 @@ async def bodega_contrastar(fid: str):
         problemas.append("Datos financieros sin respaldo OCR")
     comp = await db.compromisos.find_one({"folder_id": fid}) or {}
     prop = (comp.get("datos") or {}).get("propiedad") or {}
-    if not (prop.get("rol") or df.get("rol_propiedad")):
+    tas = fd.get("tasacion_ocr") if isinstance(fd.get("tasacion_ocr"), dict) else {}
+    try:
+        import expediente_identidad as _expid
+        ident = _expid.identidad_de_folder(fd, {"compromiso": comp})
+        cruzada = _expid.validar_identidad(ident)
+        rol_ok = bool(ident.get("rol_norm"))
+        for a in cruzada.get("alertas") or []:
+            if "coincide con el del titular" in a:
+                problemas.append(f"EXPULSADO: {a}")
+            elif "desalineado" in a:
+                problemas.append(a)
+        if ident.get("rut_titular_norm") and rut and ident["rut_titular_norm"] != rut:
+            problemas.append(
+                f"EXPULSADO: RUT consolidado ({ident.get('rut_titular_norm')}) no coincide con el titular ({rut})")
+    except Exception:
+        ident, cruzada, rol_ok = {}, {}, bool(prop.get("rol") or df.get("rol_propiedad") or tas.get("rol_avaluo"))
+    if not rol_ok:
         problemas.append("Rol de Propiedad no registrado (pendiente validación SII)")
     rut_comp = _rut_limpio(((comp.get("datos") or {}).get("comprador") or {}).get("rut"))
     if rut and rut_comp and rut != rut_comp:

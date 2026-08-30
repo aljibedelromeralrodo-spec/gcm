@@ -701,6 +701,11 @@ async def startup():
         await db["bunker.files"].create_index("filename")
         await db.ocr_rut_cache.create_index("path")
         await db.set_credito.create_index("nombre")
+        await db.adn_clientes_360.create_index("rut_norm")
+        await db.adn_clientes_360.create_index("codeudor_rut_norm")
+        await db.adn_clientes_360.create_index("rol_norm")
+        await db.folders.create_index("codeudor_rut")
+        await db.folders.create_index("datos_financieros.rol_avaluo")
     except Exception as e:
         logging.warning(f"indices: {e}")
     # PASO 2 — BÚNKER DE ARCHIVOS (disco de producción efímero): antes de servir
