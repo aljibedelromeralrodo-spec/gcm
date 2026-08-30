@@ -149,9 +149,9 @@ ALIANZA CENTRAL MUTUOS &ndash; ECOMAC<br/>RESUMEN EJECUTIVO &middot; SEP 2024 &r
 <tr><td style="padding:6px"><b>Clientes evaluados</b></td>
 <td style="padding:6px;text-align:right"><b>{len(casos)}</b> &uacute;nicos, derivados por sus ejecutivas</td></tr>
 <tr style="background:#f6f8f6"><td style="padding:6px"><b>Apoyo venta en verde</b></td>
-<td style="padding:6px;text-align:right"><b>191 cartas de aprobaci&oacute;n</b> solo en el &uacute;ltimo trimestre</td></tr>
+<td style="padding:6px;text-align:right"><b>75 cartas de aprobaci&oacute;n Ecomac</b> solo en el &uacute;ltimo trimestre</td></tr>
 <tr><td style="padding:6px"><b>Aprobaciones vs escrituraci&oacute;n</b></td>
-<td style="padding:6px;text-align:right">191 aprobadas vs 16 escrituradas &rarr; <b>venta en verde asegurada</b></td></tr>
+<td style="padding:6px;text-align:right">75 aprobadas vs 16 escrituradas &rarr; <b>venta en verde asegurada</b></td></tr>
 <tr style="background:#f6f8f6"><td style="padding:6px"><b>Satisfacci&oacute;n de clientes</b></td>
 <td style="padding:6px;text-align:right"><b>Felicitaciones reales adjuntas</b> &mdash; incluso de quienes no compraron y quieren volver</td></tr>
 <tr style="background:#f0e9d2"><td style="padding:6px"><b>Compromiso</b></td>
@@ -183,12 +183,25 @@ superior a <b>UF 170.000, del orden de $7.100 millones de pesos</b> en operacion
 &uacute;nicamente la gesti&oacute;n de esta oficina, sin sumar la gesti&oacute;n de De Manet.</p>
 
 <h3 style="{H3}">&#128994; Apostamos por la venta en verde de ECOMAC</h3>
-<p>Durante el &uacute;ltimo trimestre emitimos <b>191 cartas de aprobaci&oacute;n</b> (69 en junio, 63 en julio y 59 en
-agosto; 211 sumando preaprobaciones), y solo <b>16 operaciones escrituraron en el mismo per&iacute;odo</b> &mdash; una
+<p>Durante el &uacute;ltimo trimestre emitimos <b>75 cartas de aprobaci&oacute;n para clientes Ecomac</b> (30 en junio,
+23 en julio y 22 en agosto), cada una vinculada al correo de la ejecutiva que deriv&oacute; al cliente, y solo
+<b>16 operaciones escrituraron en el mismo per&iacute;odo</b> &mdash; una
 diferencia que no es debilidad, sino la demostraci&oacute;n de nuestro <b>f&eacute;rreo inter&eacute;s en apoyar la venta
 en verde de ECOMAC</b>: aprobamos hoy para blindar cada reserva, sabiendo que esas operaciones escriturar&aacute;n cuando
 los proyectos se entreguen. Es tambi&eacute;n nuestra manera de responder a la buena relaci&oacute;n que <b>ECOMAC</b>
 ha mantenido para con nosotros: compromiso por compromiso.</p>
+<table border="1" cellpadding="4" cellspacing="0" width="100%"
+ style="border-collapse:collapse;border:1px solid #b9c0cc;font-size:12px;margin:8px 0;max-width:640px">
+<tr style="background:#14213d;color:#fff"><th style="padding:5px;text-align:left">Ejecutiva Ecomac</th>
+<th style="padding:5px">Jun</th><th style="padding:5px">Jul</th><th style="padding:5px">Ago</th><th style="padding:5px">Total</th></tr>
+<tr><td style="padding:4px">Ximena G&oacute;mez</td><td align="center">8</td><td align="center">8</td><td align="center">11</td><td align="center"><b>27</b></td></tr>
+<tr style="background:#f6f8f6"><td style="padding:4px">Carla Paz</td><td align="center">9</td><td align="center">11</td><td align="center">2</td><td align="center"><b>22</b></td></tr>
+<tr><td style="padding:4px">Gina G&oacute;mez</td><td align="center">2</td><td align="center">2</td><td align="center">4</td><td align="center"><b>8</b></td></tr>
+<tr style="background:#f6f8f6"><td style="padding:4px">W. Guerrero</td><td align="center">4</td><td align="center">1</td><td align="center">1</td><td align="center"><b>6</b></td></tr>
+<tr><td style="padding:4px">Gabriela Mu&ntilde;oz</td><td align="center">2</td><td align="center">&mdash;</td><td align="center">1</td><td align="center"><b>3</b></td></tr>
+<tr style="background:#f6f8f6"><td style="padding:4px">Otras ejecutivas (Sara G., Marisela, Amalia, Rita, Luc&iacute;a y m&aacute;s)</td><td align="center">5</td><td align="center">1</td><td align="center">3</td><td align="center"><b>9</b></td></tr>
+<tr style="background:#f0e9d2"><td style="padding:4px"><b>TOTAL ECOMAC</b></td><td align="center"><b>30</b></td><td align="center"><b>23</b></td><td align="center"><b>22</b></td><td align="center"><b>75</b></td></tr>
+</table>
 <p>Y cuando llega el per&iacute;odo de escrituraci&oacute;n, ah&iacute; estamos: hemos acompa&ntilde;ado
 <b>{len(esc)} procesos de escrituraci&oacute;n de clientes Ecomac</b> &mdash;borradores, correcciones, firmas y
 t&iacute;tulos&mdash; gestionando notar&iacute;a, banco alzante y abogados hasta el final.
@@ -232,7 +245,7 @@ db.correos_preview.update_many({"subject": {"$regex": "Alianza"}, "estado": "esp
 pdf_ali = open("/app/backend/scripts_lacruz/Alianza_CentralMutuos_Ecomac.pdf", "rb").read()
 pdf_hist = open("/app/backend/scripts_lacruz/Informe_Historico_Ecomac_FINAL.pdf", "rb").read()
 r = es.send_mail("gerardo.ext@centralmutuos.cl",
-                 "Central Mutuos – Ecomac: resultados de una alianza que funciona",
+                 "Central Mutuos – Ecomac: informe actualizado con cifras auditadas (solo Ecomac)",
                  CUERPO,
                  attachments=[
                      {"filename": "Alianza_CentralMutuos_Ecomac.pdf", "content_b64": base64.b64encode(pdf_ali).decode()},
