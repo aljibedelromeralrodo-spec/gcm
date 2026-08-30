@@ -428,3 +428,8 @@
 ## 2026-08-30 (fork) — Fix Visualizador Cognitivo: nunca mostraba verdes
 - Causa: solo pintaba verde con folders.resultado_mesa (14/195 carpetas) o simulaciones por RUT (1 match). Las aprobaciones reales están en mesa_verdad_log (30) y aprobacion_log (11).
 - Fix en backend/visualizador.py: veredictos de Mesa por RUT (aprobacion_log→sim_map) y por nombre (_toks con stopwords, overlap>=2 contra subject de mesa_verdad_log). Verificado vía API: top-36 ahora 5 verdes + 6 rojos (antes 1 y 1). Telepantalla hereda el fix (reusa visualizador_estado).
+
+## 2026-06 (fork) — Listado completo de reglas del sistema (solo chat)
+- El usuario pidió el listado de TODAS las reglas instauradas, con explicación breve, SOLO en el chat (sin crear pantalla nueva).
+- Se extrajo el inventario real desde código + BD viva: 51 Reglas de Oro (constitucion.py / db.config constitucion_maestra), ORO-71..75 (espejo_postventa, manual_concreces, publicidad), 10 Reglas ConCreces, 8 Reglas Victoria, 25 Normativas Fijas (server.py NORMATIVAS_FIJAS + dashai_normativas_fijas), 6 Reglas de Eficiencia, 10 proc_rules aprendidas. Total ~105.
+- Sin cambios de código. Fuentes: constitucion.py, server.py L436-460, espejo_postventa.py L1958+, manual_concreces.py L26+, mutuos_victoria.py L230+, publicidad.py L39+.
