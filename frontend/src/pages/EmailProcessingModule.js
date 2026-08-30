@@ -519,8 +519,20 @@ function DetailModal({ item, onClose, onReprocess, onSave, onUploadDrive, onExtr
   const [ordenando, setOrdenando] = useState(false);
   const [preview, setPreview] = useState(null);
   const [vincMsg, setVincMsg] = useState("");
+  const [hitoDatos, setHitoDatos] = useState(item.hito_datos || null);
+  const [hitoLeyendo, setHitoLeyendo] = useState(false);
   const esHito = item.status === "hito" || (item.hito && item.hito !== "solicitud_credito" && !item.es_solicitud);
   const adjuntos = item.attachments || [];
+  useEffect(() => {
+    if (!esHito) return;
+    const ya = item.hito_datos?.campos && Object.keys(item.hito_datos.campos).length;
+    if (ya) { setHitoDatos(item.hito_datos); return; }
+    setHitoLeyendo(true);
+    axios.get(`${API}/api/procesamiento/queue/${item.id}/hito-datos`, { params: { ocr: 1 } })
+      .then(r => setHitoDatos(r.data))
+      .catch(() => {})
+      .finally(() => setHitoLeyendo(false));
+  }, [item.id, esHito, item.hito_datos]);
   const vincularCarpeta = async () => {
     const sugerido = (cl.cliente || "").trim();
     const nombre = window.prompt(
@@ -623,6 +635,23 @@ function DetailModal({ item, onClose, onReprocess, onSave, onUploadDrive, onExtr
             </div>
           ))}
         </div>
+        {esHito && (
+          <div data-testid="hito-ocr-panel" style={{ background:"#ecfeff", border:"1px solid #67e8f9", borderRadius:8, padding:10, marginBottom:12, fontSize:13 }}>
+            <div style={{ fontWeight:800, marginBottom:6 }}>
+              📄 Lectura del PDF — {item.hito_label || item.hito}
+              {hitoLeyendo ? " · leyendo…" : ""}
+            </div>
+            {(!hitoDatos || !Object.keys(hitoDatos.campos || {}).length) && !hitoLeyendo && (
+              <div style={{ color:"#0e7490" }}>No se extrajeron campos (PDF sin texto o escaneado ilegible).</div>
+            )}
+            {hitoDatos?.campos && Object.entries(hitoDatos.campos).map(([k, v]) => (
+              <div key={k} data-testid={`hito-campo-${k}`} style={{ display:"flex", gap:8, padding:"2px 0" }}>
+                <span style={{ width:140, color:"#155e75", fontWeight:700 }}>{k.replace(/_/g, " ")}</span>
+                <span>{String(v)}</span>
+              </div>
+            ))}
+          </div>
+        )}
         {preview && (
           <div data-testid="ingesta-preview-overlay" onClick={() => setPreview(null)}
                style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.82)", zIndex:200,

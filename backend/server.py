@@ -5813,6 +5813,64 @@ def _proc_public(d):
     return d
 
 
+def _hito_campos_a_folder(hito, campos):
+    """Pasa lo leído del PDF a la carpeta, sin pisar monto/renta."""
+    campos = campos or {}
+    h = (hito or "").lower()
+    out = {}
+    if h == "tasacion":
+        out["tasacion_informe_recibido_at"] = now_iso()
+        if campos.get("valor_uf"):
+            out["datos_financieros.valor_tasacion_uf"] = campos["valor_uf"]
+        if campos.get("rol_avaluo"):
+            out["datos_financieros.rol_avaluo"] = campos["rol_avaluo"]
+        if campos:
+            out["tasacion_ocr"] = campos
+    elif h == "estudio_titulo":
+        out["estudio_recibido_at"] = now_iso()
+        if campos:
+            out["estudio_ocr"] = campos
+    elif h == "escritura":
+        if campos:
+            out["escritura_ocr"] = campos
+    return out
+
+
+async def _hito_leer_bg(qid, hito, permitir_ocr=False):
+    try:
+        item = await db.proc_queue.find_one({"id": qid})
+        if not item:
+            return
+        import hitos_ocr
+        base = Path(item.get("attachments_bytes_dir") or (PROC_DIR / qid))
+        paths = []
+        for fn in item.get("attachments") or []:
+            p = base / fn
+            if not p.is_file():
+                p = PROC_DIR / qid / Path(fn).name
+            if p.is_file():
+                paths.append(p)
+        datos = await asyncio.to_thread(hitos_ocr.analizar_adjuntos, hito, paths, permitir_ocr)
+        await db.proc_queue.update_one({"id": qid}, {"$set": {"hito_datos": datos}})
+    except Exception as e:
+        logging.warning(f"hito OCR {qid}: {e}")
+
+
+@api.get("/procesamiento/queue/{qid}/hito-datos")
+async def proc_hito_datos(qid: str, ocr: int = 0):
+    """Lee PDFs del hito (embebido; ocr=1 permite Tesseract si el PDF es escaneado)."""
+    item = await db.proc_queue.find_one({"id": qid})
+    if not item:
+        raise HTTPException(status_code=404, detail="No encontrado")
+    hito = item.get("hito") or ""
+    cached = item.get("hito_datos") or {}
+    if cached.get("campos") and not ocr:
+        return cached
+    await _hito_leer_bg(qid, hito, permitir_ocr=bool(ocr))
+    item2 = await db.proc_queue.find_one({"id": qid}, {"hito_datos": 1})
+    return (item2 or {}).get("hito_datos") or cached or {"hito": hito, "campos": {}, "archivos": []}
+
+
 @api.get("/oauth/drive/status")
 async def drive_status():
     return {"configured": True, "connected": True, "storage": "local"}
@@ -6037,6 +6095,8 @@ async def proc_ingest(max_emails: int = 20, dias: int = 0):
             "hito": hito,
             "es_solicitud": bool(es_solicitud),
         })
+        if status_q == "hito" and attachments:
+            asyncio.create_task(_hito_leer_bg(qid, hito))
         enqueued += 1
     return {"fetched": len(correos), "enqueued": enqueued}
 
@@ -6809,11 +6869,15 @@ async def proc_vincular_carpeta(qid: str, payload: dict, request: Request):
     await db.proc_queue.update_one({"id": qid}, {"$set": {
         "vinculado_folder_id": doc["id"], "vinculado_en": now_iso(),
         "vinculado_archivos": copiados, "vinculado_carpeta": doc.get("nombre")}})
-    await db.folders.update_one({"id": doc["id"]}, {"$push": {
+    folder_upd = {"$push": {
         "historial": {"fecha": now_iso(),
                       "accion": (f"Ingesta: {len(copiados)} adjunto(s) del hito "
                                  f"«{_clasif_ia.HITO_LABELS.get(hito, hito)}» "
-                                 f"desde «{(item.get('subject') or '')[:80]}»")}}})
+                                 f"desde «{(item.get('subject') or '')[:80]}»")}}}
+    hito_set = _hito_campos_a_folder(hito, (item.get("hito_datos") or {}).get("campos") or {})
+    if hito_set:
+        folder_upd["$set"] = hito_set
+    await db.folders.update_one({"id": doc["id"]}, folder_upd)
     asyncio.create_task(_regen_combinado_bg(doc))
     return {"ok": True, "folder_id": doc["id"], "carpeta": doc.get("nombre"),
             "copiados": copiados, "hito": hito}
