@@ -7,6 +7,7 @@ import axios from "axios";
 import "./App.css";
 import { API_URL, formatCurrency } from "./utils/formatters";
 import { secureGet, secureSet, secureRemove } from "./utils/secureStore";
+import { leerModuloUrl, escribirModuloUrl } from "./utils/navegacion";
 import LoginPage from "./pages/LoginPage";
 import CentralPredic from "./pages/CentralPredic";
 import PortalCliente from "./pages/PortalCliente";
@@ -149,6 +150,11 @@ const PERFIL_MODS = {
   },
 };
 
+const MODS_VALIDOS = new Set([
+  ...Object.keys(MODULE_TITLES),
+  ...SUPERMODULOS.flatMap(g => g.mods),
+]);
+
 function accesoModulo(user, key) {
   // 📔 EMMY: exclusivo del Administrador, sin excepciones
   if (key === 'emmy' && !['admin', 'maestro'].includes(user.rol)) return 'bloqueado';
@@ -186,7 +192,8 @@ function App() {
 
 function MainApp() {
   const [user, setUser] = useState(null);
-  const [activeModule, setActiveModule] = useState("dashboard");
+  const [activeModule, setActiveModule] = useState(() => leerModuloUrl(MODS_VALIDOS) || "dashboard");
+  const [apiError, setApiError] = useState("");
   // 👁 VISTA PREVIA POR ROL — exclusiva del Admin (sesión de fondo intacta)
   const [previewRol, setPreviewRol] = useState(() => {
     try { return JSON.parse(sessionStorage.getItem("preview_rol") || "null"); } catch { return null; }
@@ -236,7 +243,7 @@ function MainApp() {
     if (saved) {
       setUser(saved);
       // Hidratar el cargo oficial desde el backend (sesiones anteriores sin el campo)
-      axios.get(`${API_URL}/api/auth/mi-perfil`).then(r => {
+      axios.get(`${API_URL}/api/auth/mi-perfil`, { silent: true }).then(r => {
         if (r.data?.cargo && r.data.cargo !== saved.cargo) {
           const nu = { ...saved, cargo: r.data.cargo };
           setUser(nu);
@@ -289,25 +296,40 @@ function MainApp() {
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
+  useEffect(() => { escribirModuloUrl(activeModule); }, [activeModule]);
+
+  useEffect(() => {
+    let t;
+    const fn = (e) => {
+      const msg = (e.detail && e.detail.msg) || "No se pudo completar la operación.";
+      setApiError(msg);
+      clearTimeout(t);
+      t = setTimeout(() => setApiError(""), 8000);
+    };
+    window.addEventListener("cm-api-error", fn);
+    return () => { window.removeEventListener("cm-api-error", fn); clearTimeout(t); };
+  }, []);
+
   useEffect(() => {
     if (!user) return;
-    const cargarUF = () => axios.get(`${API_URL}/api/valor-uf`)
+    const silent = { silent: true };
+    const cargarUF = () => axios.get(`${API_URL}/api/valor-uf`, silent)
       .then(r => { if (r.data?.valor_uf > 0) { setValorUF(r.data.valor_uf); setUfMeta(r.data); } })
-      .catch((e) => console.error(e));
+      .catch(() => {});
     cargarUF();
     const tUF = setInterval(cargarUF, 300000); // re-sincroniza la UF cada 5 min
-    const cargarEnergia = () => axios.get(`${API_URL}/api/energia`).then(r => setEnergia(r.data)).catch(() => {});
+    const cargarEnergia = () => axios.get(`${API_URL}/api/energia`, silent).then(r => setEnergia(r.data)).catch(() => {});
     cargarEnergia();
     const tEne = setInterval(cargarEnergia, 120000);
-    axios.get(`${API_URL}/api/whatsapp/status`).then(r => setWhatsappStatus(r.data)).catch((e) => console.error(e));
-    axios.get(`${API_URL}/api/central/email-summary`).then(r => setEmailNotif(r.data?.total || 0)).catch((e) => console.error(e));
+    axios.get(`${API_URL}/api/whatsapp/status`, silent).then(r => setWhatsappStatus(r.data)).catch(() => {});
+    axios.get(`${API_URL}/api/central/email-summary`, silent).then(r => setEmailNotif(r.data?.total || 0)).catch(() => {});
     const fetchAlerts = () => {
-      axios.get(`${API_URL}/api/admin/alertas`)
+      axios.get(`${API_URL}/api/admin/alertas`, silent)
         .then(r => setCarpetaAlerts((r.data?.alertas || []).filter(a => !a.leida).length))
-        .catch((e) => console.error(e));
-      axios.get(`${API_URL}/api/cierres/avisos`)
+        .catch(() => {});
+      axios.get(`${API_URL}/api/cierres/avisos`, silent)
         .then(r => setCierresAvisos(r.data?.total || 0))
-        .catch((e) => console.error(e));
+        .catch(() => {});
     };
     fetchAlerts();
     const t = setInterval(fetchAlerts, 60000);
@@ -658,6 +680,17 @@ function MainApp() {
             <button data-testid="energia-banner-recargar" onClick={() => setShowCargarSaldo(true)}
               style={{ marginLeft: "auto", background: "#fff", color: "#111", border: "none", borderRadius: 6,
                 padding: "0.3rem 0.9rem", fontWeight: 800, cursor: "pointer", fontSize: "0.72rem" }}>Actualizar saldo</button>
+          </div>
+        )}
+        {apiError && (
+          <div data-testid="api-error-banner" style={{ background: "#7f1d1d", color: "#fff",
+            padding: "0.55rem 1.2rem", fontSize: "0.8rem", fontWeight: 700, display: "flex",
+            alignItems: "center", gap: 12, borderBottom: "1px solid rgba(255,255,255,0.15)" }}>
+            <i className="fa fa-exclamation-circle"></i>
+            <span style={{ flex: 1 }}>{apiError}</span>
+            <button data-testid="api-error-cerrar" onClick={() => setApiError("")}
+              style={{ background: "transparent", color: "#fff", border: "1px solid rgba(255,255,255,0.4)",
+                borderRadius: 6, padding: "0.25rem 0.7rem", cursor: "pointer", fontWeight: 800, fontSize: "0.72rem" }}>Cerrar</button>
           </div>
         )}
         {showCargarSaldo && (

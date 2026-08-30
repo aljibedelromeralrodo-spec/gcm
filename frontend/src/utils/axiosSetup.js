@@ -15,17 +15,39 @@ axios.interceptors.request.use((config) => {
   return config;
 });
 
+function _detalleError(err) {
+  const d = err?.response?.data?.detail;
+  if (typeof d === "string" && d.trim()) return d.slice(0, 180);
+  if (Array.isArray(d) && d.length) return (d.map(x => x.msg || x).join("; ")).slice(0, 180);
+  if (!err?.response && (err?.message === "Network Error" || err?.code === "ERR_NETWORK")) {
+    return "Sin conexión con el servidor.";
+  }
+  return "";
+}
+
 let _redirigiendo = false;
+let _ultimoAviso = { t: 0, msg: "" };
 axios.interceptors.response.use(
   (r) => r,
   (err) => {
-    if (err && err.response && err.response.status === 401 && !_redirigiendo) {
+    const status = err?.response?.status;
+    if (status === 401 && !_redirigiendo) {
       _redirigiendo = true;
       secureRemove("token");
       secureRemove("user");
       secureRemove("predic_auth");
       document.cookie = "cm_token=; path=/; Max-Age=0";
       window.location.reload();
+      return Promise.reject(err);
+    }
+    // Sondeos del topbar marcan silent:true para no inundar. El resto avisa una vez cada 12 s.
+    if (!err?.config?.silent && status !== 401) {
+      const msg = _detalleError(err) || (status >= 500 ? "El servidor no respondió correctamente." : "");
+      const ahora = Date.now();
+      if (msg && (msg !== _ultimoAviso.msg || ahora - _ultimoAviso.t > 12000)) {
+        _ultimoAviso = { t: ahora, msg };
+        try { window.dispatchEvent(new CustomEvent("cm-api-error", { detail: { status, msg } })); } catch { /* */ }
+      }
     }
     return Promise.reject(err);
   }
