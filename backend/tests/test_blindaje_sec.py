@@ -25,6 +25,28 @@ def _limpiar_env_blindaje(monkeypatch):
     yield
 
 
+class TestCookieHttpOnly:
+    def test_fijar_cookie_es_httponly(self):
+        from starlette.responses import JSONResponse
+        r = JSONResponse({"ok": True})
+        auth.fijar_cookie(r, "jwt.de.prueba")
+        sc = (r.headers.get("set-cookie") or "").lower()
+        assert "cm_token=" in sc
+        assert "httponly" in sc
+        assert "samesite=lax" in sc
+
+    def test_borrar_cookie(self):
+        from starlette.responses import JSONResponse
+        r = JSONResponse({"ok": True})
+        auth.borrar_cookie(r)
+        sc = (r.headers.get("set-cookie") or "").lower()
+        assert "cm_token=" in sc
+        assert "max-age=0" in sc or "max-age=0" in sc.replace(" ", "")
+
+    def test_logout_es_ruta_publica(self):
+        assert "/api/auth/logout" in auth.PUBLIC_EXACT
+
+
 class TestSecretos:
     def test_secret_eq_vacio_es_false(self):
         assert auth.secret_eq("", "") is False

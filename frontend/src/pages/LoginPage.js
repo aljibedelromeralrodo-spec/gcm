@@ -1,7 +1,7 @@
 import { useState } from "react";
 import axios from "axios";
 import { API_URL } from "../utils/formatters";
-import { secureSet } from "../utils/secureStore";
+import { secureSet, secureRemove } from "../utils/secureStore";
 import PrimerIngreso from "./PrimerIngreso";
 
 export default function LoginPage({ onLogin }) {
@@ -14,9 +14,11 @@ export default function LoginPage({ onLogin }) {
   const [loading, setLoading] = useState(false);
 
   const entrar = (data) => {
-    secureSet("token", data.token);
-    secureSet("user", data);
-    onLogin(data);
+    const perfil = { ...(data || {}) };
+    delete perfil.token;
+    secureRemove("token");
+    secureSet("user", perfil);
+    onLogin(perfil);
   };
 
   const handleSubmit = async (e) => {
@@ -29,8 +31,8 @@ export default function LoginPage({ onLogin }) {
         setCrearClave({ codigo: res.data.codigo, nombre: res.data.nombre });
         setPassword(""); setClave2("");
       } else if (res.data.first_login) {
-        // PRIMER INGRESO OBLIGATORIO: no se permite acceso hasta completar la configuración
-        secureSet("token", res.data.token);
+        // PRIMER INGRESO OBLIGATORIO: JWT queda en cookie HttpOnly
+        secureRemove("token");
         setPrimerIngreso(res.data);
       } else {
         entrar(res.data);

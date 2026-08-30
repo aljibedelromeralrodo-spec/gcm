@@ -865,6 +865,13 @@ def _token_usuario(user):
     }
 
 
+def _login_json(user, request=None):
+    data = _token_usuario(user)
+    resp = JSONResponse(content=data)
+    _auth.fijar_cookie(resp, data.get("token") or "", request)
+    return resp
+
+
 @api.post("/admin/verificar-password")
 async def admin_verificar_password(payload: dict, request: Request):
     """👁 VISTA PREVIA POR ROL: exclusiva del Admin, exige su propia contraseña."""
@@ -912,7 +919,7 @@ async def adn_helice_estado(request: Request):
 
 
 @api.post("/auth/login")
-async def auth_login(payload: dict):
+async def auth_login(payload: dict, request: Request):
     codigo = (payload.get("rut") or payload.get("codigo") or "").strip()
     password = (payload.get("password") or "").strip()
     # Busqueda tolerante a mayusculas/minusculas y espacios en el codigo
@@ -929,7 +936,7 @@ async def auth_login(payload: dict):
     elif user.get("requiere_crear_clave"):
         # Primer ingreso del Administrador Maestro: debe crear su propia clave
         return {"requiere_crear_clave": True, "codigo": user["codigo"],
-                "nombre": user.get("nombre", codigo)}
+                "nombre": user.get("nombre", codigo)}  # aún no hay JWT
     elif not password or user.get("password") != password:
         raise HTTPException(status_code=401, detail="Credenciales invalidas")
     else:
@@ -949,11 +956,18 @@ async def auth_login(payload: dict):
         asyncio.create_task(_aud.disparar_si_corresponde(user.get("rol") or ""))
     except Exception as _e:
         logging.warning(f"trigger auditoría eficiencia: {_e}")
-    return _token_usuario(user)
+    return _login_json(user, request)
+
+
+@api.post("/auth/logout")
+async def auth_logout():
+    resp = JSONResponse({"ok": True})
+    _auth.borrar_cookie(resp)
+    return resp
 
 
 @api.post("/auth/crear-clave")
-async def auth_crear_clave(payload: dict):
+async def auth_crear_clave(payload: dict, request: Request):
     """Primer ingreso del Administrador Maestro: crea su propia clave (bcrypt)."""
     codigo = (payload.get("codigo") or "").strip()
     clave = (payload.get("clave") or "").strip()
@@ -971,7 +985,7 @@ async def auth_crear_clave(payload: dict):
         "mensaje": f"🔐 {user.get('nombre', codigo)} creó su clave maestra — Mando Supremo activo.",
         "fecha": now_iso(), "leida": False})
     user["clave_hash"] = h
-    return _token_usuario(user)
+    return _login_json(user, request)
 
 
 # ── PERFIL DEL USUARIO Y CARGO OFICIAL DEL ADMINISTRADOR ──
@@ -1061,7 +1075,12 @@ async def primer_ingreso_imap(payload: dict, request: Request):
                         "clave_enc": _cred_cifrar(clave), "guardado": now_iso()},
         "first_login": False}, "$unset": {"primer_paso_clave": ""}})
     fresh = await db.users.find_one({"codigo": user["codigo"]})
-    return {"ok": True, "paso": 2, **_token_usuario(fresh)}
+    data = _token_usuario(fresh)
+    data["ok"] = True
+    data["paso"] = 2
+    resp = JSONResponse(content=data)
+    _auth.fijar_cookie(resp, data.get("token") or "", request)
+    return resp
 
 
 @api.post("/auth/cambiar-clave")

@@ -16,6 +16,7 @@ from starlette.responses import JSONResponse
 
 JWT_ALGORITHM = "HS256"
 TOKEN_HORAS = 12
+COOKIE_NAME = "cm_token"
 
 
 # ── SANEAMIENTO DE SECRETOS (SEC-003) ─────────────────────────────────────
@@ -142,11 +143,46 @@ def decode_token(token):
     return jwt.decode(token, _jwt_secret(), algorithms=[JWT_ALGORITHM])
 
 
+def _cookie_flags(request=None):
+    """HttpOnly. SameSite=Lax por defecto; JWT_COOKIE_SAMESITE=none si el front está en otro dominio."""
+    ss = (get_secret("JWT_COOKIE_SAMESITE") or "lax").strip().lower()
+    if ss not in ("lax", "strict", "none"):
+        ss = "lax"
+    env_sec = (get_secret("JWT_COOKIE_SECURE") or "").strip().lower()
+    https = False
+    if request is not None:
+        https = (getattr(request.url, "scheme", "") == "https"
+                 or (request.headers.get("x-forwarded-proto") or "").lower() == "https")
+    if env_sec in ("0", "false", "no"):
+        secure = False
+    elif env_sec in ("1", "true", "yes") or ss == "none":
+        secure = True
+    else:
+        secure = bool(https)
+    return {"httponly": True, "samesite": ss, "secure": secure, "path": "/",
+            "max_age": TOKEN_HORAS * 3600}
+
+
+def fijar_cookie(response, token, request=None):
+    """Set-Cookie HttpOnly. El JWT puede seguir en el JSON para tests/Bearer legado."""
+    if not token or response is None:
+        return response
+    response.set_cookie(COOKIE_NAME, token, **_cookie_flags(request))
+    return response
+
+
+def borrar_cookie(response):
+    if response is None:
+        return response
+    response.delete_cookie(COOKIE_NAME, path="/")
+    return response
+
+
 # ── CONTROL DE ACCESO GLOBAL (SEC-001 / SEC-002) ──────────────────────────
 # Rutas públicas: NO exigen token de administrador. Los portales usan su token
 # propio (oid del prospecto / token de firma) validado dentro del endpoint.
 PUBLIC_EXACT = {
-    "/api/", "/api", "/api/auth/login", "/api/auth/crear-clave",
+    "/api/", "/api", "/api/auth/login", "/api/auth/crear-clave", "/api/auth/logout",
     "/api/inmobiliaria/auth/login", "/api/valor-uf", "/api/paridad",
 }
 

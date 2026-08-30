@@ -240,17 +240,20 @@ function MainApp() {
 
   useEffect(() => {
     const saved = secureGet("user");
-    if (saved) {
-      setUser(saved);
-      // Hidratar el cargo oficial desde el backend (sesiones anteriores sin el campo)
-      axios.get(`${API_URL}/api/auth/mi-perfil`, { silent: true }).then(r => {
-        if (r.data?.cargo && r.data.cargo !== saved.cargo) {
-          const nu = { ...saved, cargo: r.data.cargo };
-          setUser(nu);
-          secureSet("user", nu);
-        }
-      }).catch(() => {});
-    }
+    if (saved) setUser(saved);
+    axios.get(`${API_URL}/api/auth/mi-perfil`, { silent: true, skipAuthRedirect: true }).then(r => {
+      if (!r.data?.codigo && !r.data?.nombre) return;
+      const nu = { ...(saved || {}), ...r.data };
+      delete nu.token;
+      setUser(nu);
+      secureSet("user", nu);
+      secureRemove("token");
+    }).catch(() => {
+      if (saved && !secureGet("token", false)) {
+        secureRemove("user");
+        setUser(null);
+      }
+    });
     if (!localStorage.getItem("tour_done")) setShowTour(true);
   }, []);
 
@@ -365,6 +368,7 @@ function MainApp() {
   };
 
   const logout = () => {
+    axios.post(`${API_URL}/api/auth/logout`, {}, { silent: true }).catch(() => {});
     secureRemove("token");
     secureRemove("user");
     setUser(null);
