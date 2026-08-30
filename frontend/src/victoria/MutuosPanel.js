@@ -51,7 +51,7 @@ export default function MutuosPanel({ onAbrirOperacion }) {
       <div style={{ ...S.card, padding: "1.6rem 2rem", marginTop: 22 }}>
         <h2 style={{ ...S.h2, marginBottom: 6 }}>Crear operación desde la bóveda</h2>
         <p style={{ ...S.body, fontSize: "0.9rem", color: "#a1a1aa", margin: "0 0 12px" }}>
-          Puente de datos con el módulo de Daniela Galindo: nombre, RUT, codeudor, rol y dirección llegan autocompletados desde los documentos de la bóveda.</p>
+          Puente con Daniela Galindo y la supercarpeta: nombre, RUT, codeudor, rol, tasación y crédito llegan autocompletados. Lo no hallado queda vacío.</p>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
           <select data-testid="mutuos-select-cliente" value={cid} onChange={e => setCid(e.target.value)}
             style={{ ...S.input, flex: "1 1 320px" }}>

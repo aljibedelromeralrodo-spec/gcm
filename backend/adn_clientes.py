@@ -158,8 +158,17 @@ async def _upsert_adn(reg):
 
 async def volcar_adn():
     """ALIMENTACIÓN RETROACTIVA: carpetas activas + minado histórico → ADN_CLIENTES_360."""
-    ok, rechazados = 0, 0
+    import hitos_ocr
+    ok, rechazados, backfills = 0, 0, 0
     async for fd in db.folders.find({}):
+        if backfills < 15 and hitos_ocr.folder_necesita_backfill(fd):
+            try:
+                r = await _backfill_hitos_folder(fd, permitir_ocr=False)
+                if r.get("cambios"):
+                    backfills += 1
+                    fd = await db.folders.find_one({"id": fd.get("id")}) or fd
+            except Exception as e:
+                logging.warning(f"adn backfill {fd.get('nombre')}: {e}")
         reg = _registro_desde_folder(fd)
         exp = await _expediente_360(fd)
         reg["expediente_360"] = exp
@@ -182,8 +191,9 @@ async def volcar_adn():
             else:
                 rechazados += 1
     await db.config.update_one({"_key": "adn_volcado"}, {"$set": {
-        "ultima": _now(), "procesados": ok, "rechazados_rut": rechazados}}, upsert=True)
-    return {"procesados": ok, "rechazados_rut": rechazados}
+        "ultima": _now(), "procesados": ok, "rechazados_rut": rechazados,
+        "hitos_releidos": backfills}}, upsert=True)
+    return {"procesados": ok, "rechazados_rut": rechazados, "hitos_releidos": backfills}
 
 
 def _mask_query(user):
@@ -416,6 +426,22 @@ async def _backfill_hitos_folder(fd, permitir_ocr=False):
     if set_all:
         set_all["updated_at"] = ahora
         await db.folders.update_one({"id": fd["id"]}, {"$set": set_all})
+        fd2 = await db.folders.find_one({"id": fd["id"]}) or fd_work
+        if fd2.get("rut"):
+            try:
+                reg = _registro_desde_folder(fd2)
+                exp = await _expediente_360(fd2)
+                reg["expediente_360"] = exp
+                claves = exp.get("claves") or {}
+                if claves.get("rol_norm"):
+                    reg["rol_avaluo"] = claves.get("rol_avaluo") or ""
+                    reg["rol_norm"] = claves["rol_norm"]
+                if claves.get("rut_codeudor_norm"):
+                    reg["codeudor_rut"] = claves.get("rut_codeudor") or ""
+                    reg["codeudor_rut_norm"] = claves["rut_codeudor_norm"]
+                await _upsert_adn(reg)
+            except Exception as e:
+                logging.warning(f"adn refresh post-backfill: {e}")
     return {"folder_id": fd.get("id"), "cliente": nombre, "cambios": len(set_all), "hitos": detalle}
 
 

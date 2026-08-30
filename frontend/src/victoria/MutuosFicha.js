@@ -45,6 +45,15 @@ export default function MutuosFicha({ oid, etapa, onSetEtapa, onVolver }) {
     } catch (e) { toast.error(e.response?.data?.detail || "Autorización rechazada"); }
   };
 
+  const copiarCarga = async () => {
+    const sec = det?.carga_concreces?.secciones;
+    if (!sec) { toast.error("Aún no hay expediente consolidado para copiar"); return; }
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(sec, null, 2));
+      toast.success("Datos copiados para pegar en Concreces. No se envió nada.");
+    } catch (_e) { toast.error("No se pudo copiar al portapapeles"); }
+  };
+
   const enviarRiesgo = async () => {
     try {
       const r = await axios.post(`${API_URL}/api/mutuos/operaciones/${oid}/enviar-riesgo`, { confirmado: true });
@@ -78,7 +87,7 @@ export default function MutuosFicha({ oid, etapa, onSetEtapa, onVolver }) {
           <div style={S.label}>Operación #{op.numero} · Guía de Usuario Mutuos</div>
           <h1 style={{ ...S.h1, marginTop: 6 }} data-testid="mutuos-ficha-cliente">{det.cliente?.nombre}</h1>
           <div style={{ color: "#a1a1aa", fontSize: "0.98rem", marginTop: 6 }}>
-            RUT {det.cliente?.rut || "—"} · creada {String(op.creado || "").slice(0, 10)} · datos autocompletados desde la bóveda</div>
+            RUT {det.cliente?.rut || "—"} · creada {String(op.creado || "").slice(0, 10)} · autocompletado desde bóveda y expediente único</div>
         </div>
         <span data-testid="mutuos-estado" style={{ ...S.pill(enviada ? "rgba(34,197,94,0.15)" : "rgba(212,175,55,0.18)",
           enviada ? "#4ade80" : "#FCF6BA"), fontSize: "0.95rem", padding: "0.5rem 1.2rem" }}>
@@ -174,8 +183,12 @@ export default function MutuosFicha({ oid, etapa, onSetEtapa, onVolver }) {
               <span style={S.body}>Validaciones irrenunciables sin conflictos</span>
             </div>
             {enviada ? (
-              <div data-testid="mutuos-enviada" style={{ marginTop: 18, color: "#4ade80", fontWeight: 800, fontSize: "1.2rem" }}>
-                ✓ Operación #{op.numero} enviada a revisión de riesgo el {String(op.enviada_en || "").slice(0, 16).replace("T", " ")} UTC</div>
+              <>
+                <div data-testid="mutuos-enviada" style={{ marginTop: 18, color: "#4ade80", fontWeight: 800, fontSize: "1.2rem" }}>
+                  ✓ Operación #{op.numero} enviada a revisión de riesgo el {String(op.enviada_en || "").slice(0, 16).replace("T", " ")} UTC</div>
+                <button data-testid="mutuos-copiar-carga" onClick={copiarCarga} style={{ ...S.btnLine, marginTop: 16, width: "100%" }}>
+                  Copiar datos del expediente para pegar en Concreces (sin envío)</button>
+              </>
             ) : (
               <>
                 <label style={{ display: "flex", gap: 12, alignItems: "flex-start", marginTop: 18, cursor: "pointer" }}>
@@ -184,8 +197,10 @@ export default function MutuosFicha({ oid, etapa, onSetEtapa, onVolver }) {
                   <span style={{ ...S.body }}>Declaro que revisé todas las etapas, las validaciones están aprobadas
                     y autorizo el envío de esta operación a revisión de riesgo en ConCreces.</span>
                 </label>
+                <button data-testid="mutuos-copiar-carga" onClick={copiarCarga} style={{ ...S.btnLine, marginTop: 16, width: "100%" }}>
+                  Copiar datos del expediente para pegar en Concreces (sin envío)</button>
                 <button data-testid="mutuos-enviar-riesgo" onClick={enviarRiesgo} disabled={!confirmo || !det.lista_para_riesgo}
-                  style={{ ...S.btnGold, marginTop: 16, width: "100%", padding: "1.1rem", fontSize: "1.05rem",
+                  style={{ ...S.btnGold, marginTop: 12, width: "100%", padding: "1.1rem", fontSize: "1.05rem",
                     opacity: (!confirmo || !det.lista_para_riesgo) ? 0.35 : 1 }}>
                   Confirmar envío de la operación #{op.numero} a revisión de riesgo en ConCreces</button>
               </>

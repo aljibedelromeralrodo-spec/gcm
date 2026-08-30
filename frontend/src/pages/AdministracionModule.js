@@ -333,6 +333,17 @@ export default function AdministracionModule({ user }) {
     setBusy("");
   };
 
+  const copiarCarga = async (fid) => {
+    setBusy(`copy-${fid}`);
+    try {
+      const r = await axios.get(`${API}/api/bodega/autofill/${fid}`);
+      const texto = JSON.stringify(r.data.payload?.secciones || r.data.payload || {}, null, 2);
+      await navigator.clipboard.writeText(texto);
+      alert("Datos de carga copiados para pegar en Concreces. No se envió nada.");
+    } catch (e) { alert(e.response?.data?.detail || "No se pudo copiar la carga"); }
+    setBusy("");
+  };
+
   const panelActual = PANELES.find(p => p[0] === panel) || PANELES[0];
 
   return (
@@ -428,6 +439,12 @@ export default function AdministracionModule({ user }) {
                   <button className="docs-btn secondary" data-testid={`btn-contrastar-${r.folder_id}`}
                     disabled={busy === r.folder_id} onClick={() => contrastar(r.folder_id)} style={{ fontSize: "0.68rem" }}>
                     {busy === r.folder_id ? "…" : "Contrastar RUT/Rol"}
+                  </button>
+                  <button className="docs-btn secondary" data-testid={`btn-copiar-carga-${r.folder_id}`}
+                    disabled={busy === `copy-${r.folder_id}`} onClick={() => copiarCarga(r.folder_id)}
+                    style={{ fontSize: "0.68rem", marginLeft: 6 }}
+                    title="Copia el expediente único para pegarlo en Concreces. No envía.">
+                    {busy === `copy-${r.folder_id}` ? "…" : "Copiar carga"}
                   </button>
                 </td>
               </tr>

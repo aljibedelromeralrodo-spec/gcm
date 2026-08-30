@@ -171,6 +171,28 @@ def leer_pdf(path, permitir_ocr=False):
         return "", "error"
 
 
+def folder_necesita_backfill(fd):
+    """True si hay PDF de hito en `archivos` y aún no está leído (sin tocar disco)."""
+    tiene = {"tasacion": False, "estudio_titulo": False, "escritura": False}
+    for a in fd.get("archivos") or []:
+        if not isinstance(a, str) or not a.lower().endswith(".pdf"):
+            continue
+        h = hito_de_rel(a, a)
+        if h in tiene:
+            tiene[h] = True
+    df = fd.get("datos_financieros") or {}
+    tas = fd.get("tasacion_ocr") if isinstance(fd.get("tasacion_ocr"), dict) else {}
+    est = fd.get("estudio_ocr") if isinstance(fd.get("estudio_ocr"), dict) else {}
+    esc = fd.get("escritura_ocr") if isinstance(fd.get("escritura_ocr"), dict) else {}
+    if tiene["tasacion"] and not (tas.get("rol_avaluo") or df.get("rol_avaluo") or df.get("rol_propiedad")):
+        return True
+    if tiene["estudio_titulo"] and not (est.get("fojas") or est.get("cbr")):
+        return True
+    if tiene["escritura"] and not (esc.get("repertorio") or esc.get("notaria")):
+        return True
+    return False
+
+
 def hito_de_rel(rel, nombre=""):
     """Clasifica un archivo de carpeta como hito de tasación/estudio/escritura."""
     blob = f"{rel or ''} {nombre or ''}".lower().replace("\\", "/")

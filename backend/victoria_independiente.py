@@ -513,8 +513,27 @@ async def detalle(cid: str, request: Request):
     docs_ok = [d for d in docs if (d.get("revision") or {}).get("decision") != "rechazado"]
     aud = c.get("auditoria")
     concreces = await db.concreces_estado.find_one({"victoria_cliente_id": cid}, {"_id": 0, "snapshot": 0})
+    auto = _formularios_auto(c, docs_ok)
+    rut = c.get("rut") or auto.get("rut_titular")
+    if rut:
+        try:
+            import expediente_identidad as _ei
+            filtro = _ei.filtro_busqueda(rut)
+            doc = await db.adn_clientes_360.find_one(filtro, {"_id": 0}) if filtro else None
+            extra = {}
+            if doc:
+                exp = dict(doc.get("expediente_360") or {})
+                extra = _ei.campos_victoria(exp)
+            else:
+                ff = _ei.filtro_folder_por_clave(rut)
+                fd = await db.folders.find_one(ff) if ff else None
+                if fd:
+                    extra = _ei.campos_victoria(_ei.construir_expediente(fd))
+            auto = _ei.fusionar_vacios(auto, extra)
+        except Exception:
+            pass
     return {"cliente": c, "docs": docs, "auditoria": aud,
-            "formularios_auto": _formularios_auto(c, docs_ok),
+            "formularios_auto": auto,
             "siguiente": _paso_siguiente(c, docs_ok, aud), "tipos": ETIQUETAS,
             "concreces": concreces,
             "requeridos": {t: ETIQUETAS[t] for t in DOCS_REQUERIDOS}}

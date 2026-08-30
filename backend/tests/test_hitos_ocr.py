@@ -70,6 +70,13 @@ class TestDispatch:
 
 
 class TestBackfill:
+    def test_necesita_backfill_si_hay_pdf_sin_ocr(self):
+        fd = {"archivos": ["99_otros/TASACION_informe.pdf"], "datos_financieros": {}, "tasacion_ocr": {}}
+        assert h.folder_necesita_backfill(fd) is True
+        fd["tasacion_ocr"] = {"rol_avaluo": "12345-67"}
+        assert h.folder_necesita_backfill(fd) is False
+        assert h.folder_necesita_backfill({"archivos": ["02_liquidaciones/liq.pdf"]}) is False
+
     def test_hito_de_archivo_protocolo(self):
         assert h.hito_de_rel("99_otros/TASACION_informe.pdf") == "tasacion"
         assert h.hito_de_rel("07_estudio_titulo/ESTUDIO_dominio.pdf") == "estudio_titulo"

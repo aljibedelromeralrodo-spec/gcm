@@ -590,14 +590,28 @@ def payload_concreces(exp, financiero=None):
     }
 
 
+def _dato_form(v):
+    """Valor listo para input: no inventa; números como texto."""
+    if v in (None, "", [], {}):
+        return ""
+    if isinstance(v, bool):
+        return "con subsidio" if v else ""
+    if isinstance(v, float) and v == int(v):
+        return str(int(v))
+    if isinstance(v, (int, float)):
+        return str(v)
+    return str(v).strip()
+
+
 def fusionar_vacios(base, extra):
     """Completa huecos. Nunca pisa un valor ya ingresado y no inventa vacíos."""
     out = dict(base or {})
     for k, v in (extra or {}).items():
-        if v in (None, "", [], {}):
+        dv = _dato_form(v) if not isinstance(v, str) else v
+        if dv in (None, "", [], {}):
             continue
         if out.get(k) in (None, "", [], {}):
-            out[k] = v
+            out[k] = dv
     return out
 
 
@@ -613,24 +627,35 @@ def campos_mutuos(exp):
     serie = exp.get("serie_credito") or {}
     est = exp.get("estudio_titulos") or {}
     return {
-        "rut_titular": claves.get("rut_titular") or tit.get("rut") or "",
-        "nombre_cliente": tit.get("nombre") or "",
-        "rut_codeudor": claves.get("rut_codeudor") or (cod.get("rut") if cod.get("presente") else "") or "",
-        "nombre_codeudor": cod.get("nombre") or "",
-        "email": tit.get("email") or "",
-        "telefono": tit.get("telefono") or "",
-        "direccion_propiedad": prop.get("direccion") or "",
-        "comuna": prop.get("comuna") or tas.get("comuna") or "",
-        "rol_avaluo": claves.get("rol_avaluo") or prop.get("rol") or tas.get("rol_avaluo") or "",
-        "valor_tasacion": tas.get("valor_uf") if tas.get("valor_uf") not in (None, "") else "",
-        "precio_vivienda": _primera(fin.get("valor_propiedad_uf"), tas.get("valor_uf")),
-        "credito_uf": fin.get("monto_credito_uf"),
-        "plazo_anos": fin.get("plazo_anos"),
+        "rut_titular": _dato_form(claves.get("rut_titular") or tit.get("rut")),
+        "nombre_cliente": _dato_form(tit.get("nombre")),
+        "rut_codeudor": _dato_form(claves.get("rut_codeudor") or (cod.get("rut") if cod.get("presente") else "")),
+        "nombre_codeudor": _dato_form(cod.get("nombre")),
+        "email": _dato_form(tit.get("email")),
+        "telefono": _dato_form(tit.get("telefono")),
+        "direccion_propiedad": _dato_form(prop.get("direccion")),
+        "comuna": _dato_form(prop.get("comuna") or tas.get("comuna")),
+        "rol_avaluo": _dato_form(claves.get("rol_avaluo") or prop.get("rol") or tas.get("rol_avaluo")),
+        "valor_tasacion": _dato_form(tas.get("valor_uf")),
+        "precio_vivienda": _dato_form(_primera(fin.get("valor_propiedad_uf"), tas.get("valor_uf"))),
+        "credito_uf": _dato_form(fin.get("monto_credito_uf")),
+        "plazo_anos": _dato_form(fin.get("plazo_anos")),
         "subsidio": "con subsidio" if fin.get("con_subsidio") else "",
-        "notaria": serie.get("notaria") or "",
+        "notaria": _dato_form(serie.get("notaria")),
         "fecha_estudio_titulo": str(est.get("solicitado_at") or est.get("recibido_at") or "")[:10],
         "fecha_escrituracion": str(serie.get("escritura_at") or "")[:10],
     }
+
+
+CAMPOS_VICTORIA = (
+    "nombre_cliente", "rut_titular", "rut_codeudor", "rol_avaluo", "direccion_propiedad",
+)
+
+
+def campos_victoria(exp):
+    """Solo identidad (Regla Oro 7): no mezcla montos en la ficha de Daniela."""
+    m = campos_mutuos(exp)
+    return {k: m.get(k) or "" for k in CAMPOS_VICTORIA}
 
 
 _CAMPOS_ETAPA = {

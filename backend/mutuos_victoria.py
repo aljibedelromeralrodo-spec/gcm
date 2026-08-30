@@ -100,8 +100,27 @@ async def _expediente_por_rut(rut):
     return _expid.construir_expediente(fd) if fd else {}
 
 
+async def _completar_huecos_op(op, cliente):
+    """Persiste solo huecos desde el expediente. No toca operaciones ya enviadas a riesgo."""
+    rut = (((op.get("etapas") or {}).get("1") or {}).get("datos") or {}).get("rut_titular") or (cliente or {}).get("rut")
+    exp = await _expediente_por_rut(rut)
+    if (op or {}).get("estado") == "enviada_riesgo":
+        return op, exp or {}
+    if not exp:
+        return op, {}
+    nuevas = _expid.aplicar_campos_mutuos(op.get("etapas") or {}, exp)
+    if nuevas != (op.get("etapas") or {}):
+        await db.victoria_operaciones.update_one({"id": op["id"]}, {"$set": {
+            "etapas": nuevas, "origen_autofill": "expediente_unico"}})
+        op = dict(op)
+        op["etapas"] = nuevas
+        op["origen_autofill"] = "expediente_unico"
+    return op, exp
+
+
 async def _detalle_op(op):
     cliente = await db.victoria_clientes.find_one({"id": op["cliente_id"]}, {"_id": 0})
+    op, exp = await _completar_huecos_op(op, cliente)
     validaciones = await _validaciones_op(op, cliente) if cliente else []
     pendientes = {}
     for n, req in OBLIGATORIOS.items():
@@ -112,9 +131,13 @@ async def _detalle_op(op):
     bloqueos = [v for v in validaciones if v["ok"] is False]
     lista = not pendientes and not bloqueos and all(
         (op.get("etapas", {}).get(str(n)) or {}).get("autorizada") for n in range(1, 6))
+    carga = _expid.payload_concreces(exp) if exp else None
     return {"operacion": op, "cliente": cliente, "etapas_guia": ETAPAS_GUIA,
             "validaciones": validaciones, "pendientes": pendientes,
-            "lista_para_riesgo": lista}
+            "lista_para_riesgo": lista,
+            "origen_autofill": op.get("origen_autofill") or "",
+            "carga_concreces": carga,
+            "validacion_cruzada": (exp or {}).get("validacion_cruzada") or {}}
 
 
 @mut.get("/panel")

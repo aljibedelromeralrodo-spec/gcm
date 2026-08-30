@@ -170,12 +170,20 @@ class TestPayload:
         p = e.payload_concreces(exp)
         assert "rut_codeudor" not in p["faltantes"]["Ingreso_Mesa"]
 
+    def test_victoria_solo_identidad(self):
+        exp = e.construir_expediente(_fd())
+        v = e.campos_victoria(exp)
+        assert set(v) == set(e.CAMPOS_VICTORIA)
+        assert "credito_uf" not in v
+        assert e.norm_rut(v["rut_titular"]) == e.norm_rut(RUT_T)
+        assert v["rol_avaluo"] == ROL
+
     def test_fusionar_no_pisa_ni_inventa(self):
         out = e.fusionar_vacios({"rol_avaluo": "111-1", "comuna": ""},
                                 {"rol_avaluo": "999-9", "comuna": "Las Condes", "credito_uf": 2000})
         assert out["rol_avaluo"] == "111-1"
         assert out["comuna"] == "Las Condes"
-        assert out["credito_uf"] == 2000
+        assert out["credito_uf"] == "2000"
 
     def test_mutuos_usa_expediente_en_huecos(self):
         exp = e.construir_expediente(_fd())
@@ -185,9 +193,9 @@ class TestPayload:
         out = e.aplicar_campos_mutuos(etapas, exp)
         assert out["1"]["datos"]["nombre_cliente"] == "Ya digitado"
         assert out["3"]["datos"]["rol_avaluo"] == ROL
-        assert out["3"]["datos"]["valor_tasacion"] == 2500
+        assert out["3"]["datos"]["valor_tasacion"] == "2500"
         assert out["4"]["datos"]["credito_uf"] == 999
-        assert out["4"]["datos"]["plazo_anos"] == 20
+        assert out["4"]["datos"]["plazo_anos"] == "20"
         assert out["2"]["datos"]["comuna"] == "Las Condes"
 
     def test_filtro_busca_las_tres_claves(self):
