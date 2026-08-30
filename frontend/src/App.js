@@ -17,6 +17,7 @@ import BriefingMananero from "./components/BriefingMananero";
 
 const DashboardModule = lazy(() => import("./pages/DashboardModule"));
 const SimuladorModule = lazy(() => import("./pages/SimuladorModule"));
+const ConcrecesPerfectoModule = lazy(() => import("./pages/ConcrecesPerfectoModule"));
 const HistorialModule = lazy(() => import("./pages/HistorialModule"));
 const CalculadoraModule = lazy(() => import("./pages/CalculadoraModule"));
 const FormatoModule = lazy(() => import("./pages/FormatoModule"));
@@ -77,6 +78,7 @@ const MODULE_TITLES = {
   auditoria: '📋 Auditoría Forense',
   despacho: '🚀 Despacho Veloz',
   simulador: 'Simulador de Capacidad Crediticia',
+  concreces: 'Concreces Motor V7 — POLÍTICA MADRE REAL',
   historial: 'Historial de Simulaciones',
   calculadora: 'Calculadora de Dividendo',
   formato: 'Formato',
@@ -107,7 +109,7 @@ const MODULE_TITLES = {
 
 // ═══ SISTEMA DE ROLES: acceso por módulo ('total' | 'lectura' | 'bloqueado') ═══
 const MODS_ADMINISTRATIVOS = ['administracion', 'usuarios', 'criterios', 'whatsapp', 'autocorreo',
-  'procesamiento', 'basehistorica', 'gastos', 'setcredito', 'formato', 'clientes', 'simulador',
+  'procesamiento', 'basehistorica', 'gastos', 'setcredito', 'formato', 'clientes', 'simulador', 'concreces',
   'historial', 'calculadora', 'seguimiento', 'aprobacion', 'tasacion', 'estudio', 'escritura',
   'cierres', 'salud', 'rescate', 'aprendizaje', 'oportunidades', 'dashai', 'auditoria', 'despacho'];
 const MODS_TODOS = ['dashboard', ...MODS_ADMINISTRATIVOS, 'gerencia',
@@ -121,7 +123,7 @@ const ACCESOS_ROL = {
   lectura: { total: [], lectura: ['dashboard'] },
 };
 const PERMISOS_LEGADO = {
-  A: ['dashboard', 'clientes', 'simulador', 'historial', 'calculadora', 'formato', 'setcredito', 'micorreo'],
+  A: ['dashboard', 'clientes', 'simulador', 'concreces', 'historial', 'calculadora', 'formato', 'setcredito', 'micorreo'],
   B: ['dashboard', 'contraloria', 'criterios', 'seguimiento', 'gerencia', 'supercarpeta', 'administracion', 'salud', 'micorreo'],
   D: ['brokers', 'micorreo'],
 };
@@ -129,7 +131,7 @@ const PERMISOS_LEGADO = {
 // ═══ 6 SUPERMÓDULOS DEL MENÚ (acordeón, fondo negro mate + dorado) ═══
 const SUPERMODULOS = [
   { key: 'sm_ventas', icon: 'fa-diamond', label: 'Ventas', mods: ['ventas_ws', 'oportunidades', 'cierres', 'aprobacion', 'seguimiento'] },
-  { key: 'sm_simulacion', icon: 'fa-calculator', label: 'Simulación y Análisis', mods: ['simulador', 'calculadora', 'historial', 'formato', 'setcredito'] },
+  { key: 'sm_simulacion', icon: 'fa-calculator', label: 'Simulación y Análisis', mods: ['simulador', 'concreces', 'calculadora', 'historial', 'formato', 'setcredito'] },
   { key: 'sm_captacion', icon: 'fa-bullhorn', label: 'Captación y Publicidad', mods: ['publicidad', 'brokers', 'aprendizaje', 'martinfin'] },
   { key: 'sm_operacion', icon: 'fa-folder-open', label: 'Operación y Clientes', mods: ['clientes', 'supercarpeta', 'tasacion', 'estudio', 'escritura', 'gastos', 'procesamiento', 'rescate', 'autocorreo', 'micorreo', 'crece'] },
   { key: 'sm_control', icon: 'fa-shield', label: 'Control y Postventa', mods: ['postventa', 'contralor', 'contraloria', 'auditoria', 'gerencia', 'mod_daniela', 'mod_victoria'] },
@@ -140,7 +142,7 @@ const SUPERMODULOS = [
 const PERFIL_MODS = {
   ventas: {  // Yerile Barrera · Deisy Salazar
     total: ['ventas_ws', 'oportunidades', 'cierres', 'aprobacion', 'seguimiento',
-            'simulador', 'calculadora', 'historial', 'formato', 'setcredito',
+            'simulador', 'concreces', 'calculadora', 'historial', 'formato', 'setcredito',
             'publicidad', 'brokers', 'aprendizaje', 'supercarpeta', 'clientes'],
     lectura: ['postventa', 'contralor', 'contraloria', 'crece'],
   },
@@ -199,7 +201,7 @@ function MainApp() {
     try { return JSON.parse(sessionStorage.getItem("preview_rol") || "null"); } catch { return null; }
   });
   const [showPreviewModal, setShowPreviewModal] = useState(false);
-  const [valorUF, setValorUF] = useState(39842);
+  const [valorUF, setValorUF] = useState(40871.14);
   const [ufMeta, setUfMeta] = useState(null);
   const [loadedSimulation, setLoadedSimulation] = useState(null);
   const [whatsappStatus, setWhatsappStatus] = useState(null);
@@ -460,6 +462,7 @@ function MainApp() {
     { key: 'dashboard', icon: 'fa-th-large', label: 'Dashboard' },
     { key: 'clientes', icon: 'fa-folder-open', label: 'Carpeta Clientes' },
     { key: 'simulador', icon: 'fa-calculator', label: 'Simulador Inmobiliario' },
+    { key: 'concreces', icon: 'fa-university', label: 'Concreces Motor V7' },
     { key: 'historial', icon: 'fa-history', label: 'Historial' },
     { key: 'calculadora', icon: 'fa-percent', label: 'Calculadora' },
     { key: 'seguimiento', icon: 'fa-road', label: 'Seguimiento' },
@@ -616,13 +619,20 @@ function MainApp() {
           </button>
           <div>
             <h1 className="topbar-title">{MODULE_TITLES[activeModule] || 'Dashboard'}</h1>
-            <p className="topbar-uf" data-testid="topbar-uf">UF: {formatCurrency(valorUF)}
-              {ufMeta?.fuente === "sii.cl" && (
+            <div className="topbar-uf" data-testid="topbar-uf">UF: {formatCurrency(valorUF)}
+              <button type="button" data-testid="topbar-actualizar-uf" title="Traer UF del día (SII / mindicador). Sin señal usa el respaldo."
+                onClick={() => axios.get(`${API_URL}/api/valor-uf`, { params: { refresh: true } })
+                  .then(r => { if (r.data?.valor_uf > 0) { setValorUF(r.data.valor_uf); setUfMeta(r.data); } })
+                  .catch(() => {})}
+                style={{ marginLeft: 8, background: "rgba(212,175,55,0.12)", border: "1px solid rgba(212,175,55,0.4)",
+                  color: "#d4af37", borderRadius: 8, padding: "2px 8px", fontSize: "0.58rem", fontWeight: 800,
+                  cursor: "pointer", letterSpacing: "0.04em" }}>Actualizar UF</button>
+              {ufMeta?.fuente && (
                 <span style={{ display: "block", fontSize: "0.58rem", opacity: 0.65, letterSpacing: "0.04em" }}>
-                  Fuente: SII.cl · Actualizado: {(ufMeta.actualizado || "").slice(11, 16) || "—"}
+                  Fuente: {ufMeta.fuente}{ufMeta.en_vivo ? " · en vivo" : ""} · {(ufMeta.dia_uf || ufMeta.actualizado || "").slice(0, 16) || "—"}
                 </span>
               )}
-            </p>
+            </div>
           </div>
           <div className="topbar-right">
             <button className="topbar-notif-btn" data-testid="btn-fullscreen" title={fullscreen ? "Salir de pantalla completa (Esc)" : "Pantalla completa"}
@@ -760,6 +770,10 @@ function MainApp() {
                 <DashboardModule valorUF={valorUF} userName={user?.nombre} onNavigate={setActiveModule} />
               </>)}
         {activeModule === 'simulador' && <SimuladorModule valorUF={valorUF} loadedSimulation={loadedSimulation} />}
+        {activeModule === 'concreces' && (
+          <ConcrecesPerfectoModule valorUF={valorUF} ufMeta={ufMeta}
+            onUfChange={(v, m) => { if (v > 0) setValorUF(v); if (m) setUfMeta(m); }} />
+        )}
         {activeModule === 'historial' && <HistorialModule valorUF={valorUF} onLoadSimulation={handleLoadSimulation} />}
         {activeModule === 'calculadora' && <CalculadoraModule valorUF={valorUF} />}
         {activeModule === 'formato' && <FormatoModule />}

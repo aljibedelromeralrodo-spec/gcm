@@ -172,4 +172,4 @@ DEFAULT_SEGUROS = {
     "seguro_incendio": 23702,
 }
 
-DEFAULT_UF = 39842
+DEFAULT_UF = 40871.14  # respaldo UF viva 29-08-2026 (vendedor sin señal)

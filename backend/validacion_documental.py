@@ -62,6 +62,7 @@ LABELS = {
     "imp_renta": "Carpeta tributaria / Formulario F22",
     "f29": "Formulario F29",
     "contrato": "Contrato de trabajo",
+    "renta_vitalicia": "Renta vitalicia / pensión",
 }
 
 
@@ -72,6 +73,8 @@ def cats_requeridas(tipo, exento_afp=False):
         return ["cedula", "cmf"]
     if tipo == "independiente":
         return ["cedula", "imp_renta", "boletas", "cmf"]
+    if tipo == "jubilado":
+        return ["cedula", "renta_vitalicia", "cmf"]
     if tipo == "mixto":
         docs = ["cedula", "liquidacion", "boletas", "imp_renta", "cmf"]
         if not exento_afp:

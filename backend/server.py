@@ -24,6 +24,8 @@ from criterios_data import (
     DEFAULT_CRITERIOS, DEFAULT_TASAS, DEFAULT_SEGUROS, DEFAULT_UF, now_iso,
 )
 import credit_engine as ce
+import concreces_perfecto as _cp_mhe
+import vigia_concreces as _vigia
 import bcrypt
 import functools
 import email_service as mail
@@ -1444,7 +1446,10 @@ def _diff_criterios(prev, nuevo, path=""):
 
 @api.get("/admin/criterios")
 async def get_criterios():
-    return await get_config("criterios", DEFAULT_CRITERIOS)
+    doc = await get_config("criterios", DEFAULT_CRITERIOS)
+    if "concreces_mhe" not in doc:
+        doc["concreces_mhe"] = DEFAULT_CRITERIOS.get("concreces_mhe")
+    return doc
 
 
 @api.get("/admin/criterios/auditoria")
@@ -1526,6 +1531,206 @@ async def simular_credito(payload: dict):
     }
     await db.simulaciones.insert_one(dict(record))
     return clean(record)
+
+
+@api.post("/concreces-perfecto")
+async def concreces_perfecto(payload: dict):
+    """27 reglas MHE con UF viva. No envía a mesa. `refresh_uf=true` pega al SII/mindicador."""
+    payload = dict(payload or {})
+    refresh = bool(payload.pop("refresh_uf", False))
+    uf_in = float(payload.get("valor_uf") or 0)
+    uf_meta = {"fuente": "sesión", "dia_uf": "", "en_vivo": False, "respaldo": False}
+
+    async def _uf_respaldo():
+        cached = float(await get_valor_uf() or 0)
+        cfg = await db.config.find_one({"_key": "uf"}) or {}
+        if cached > 0:
+            return cached, {"fuente": cfg.get("uf_source") or "último valor conocido",
+                            "dia_uf": cfg.get("uf_day") or "", "en_vivo": False, "respaldo": True}
+        return float(_cp_mhe.UF_RESPALDO), {
+            "fuente": "respaldo 29-08-2026", "dia_uf": _cp_mhe.UF_RESPALDO_FECHA,
+            "en_vivo": False, "respaldo": True}
+
+    if refresh:
+        try:
+            v, fuente, dia = await asyncio.wait_for(_actualizar_uf(), timeout=8)
+            uf = float(v or 0)
+            if uf <= 0:
+                raise ValueError("UF vacía")
+            uf_meta = {"fuente": fuente, "dia_uf": dia, "en_vivo": True, "respaldo": False}
+        except Exception:
+            uf, uf_meta = await _uf_respaldo()
+    elif uf_in > 0:
+        uf = uf_in
+        cfg = await db.config.find_one({"_key": "uf"}) or {}
+        uf_meta = {"fuente": cfg.get("uf_source") or "sesión",
+                   "dia_uf": cfg.get("uf_day") or "", "en_vivo": False, "respaldo": False}
+    else:
+        uf = float(await get_valor_uf() or 0)
+        if uf <= 0:
+            uf, uf_meta = await _uf_respaldo()
+        else:
+            cfg = await db.config.find_one({"_key": "uf"}) or {}
+            uf_meta = {"fuente": cfg.get("uf_source") or "caché",
+                       "dia_uf": cfg.get("uf_day") or "", "en_vivo": False, "respaldo": False}
+    crit = await get_config("criterios", DEFAULT_CRITERIOS)
+    mhe = (crit or {}).get("concreces_mhe") or DEFAULT_CRITERIOS.get("concreces_mhe")
+    overlay = await db.config.find_one({"_key": "concreces_v5_overlay"}) or {}
+    overlay.pop("_id", None)
+    overlay.pop("_key", None)
+    cartas = await db.vigia_cartas.find({}, {"_id": 0}).sort("fecha", 1).to_list(400)
+    real = _vigia.aprender(cartas, uf=uf)
+    factores = (real.get("factores") or {})
+    result = _cp_mhe.evaluar(payload, uf=uf, mhe=mhe, real=real,
+                             overlay=overlay or None, factores=factores)
+    result["uf"] = uf_meta
+    result["alertas_vigia"] = _vigia.comparar(real)
+    result["politica_base"] = _cp_mhe.POLITICA_BASE
+    result["politica_real_full"] = real
+    # Aprende factor de seguros si el operador los trajo reales.
+    desg_in = float(payload.get("seguro_desgravamen") or 0)
+    inc_in = float(payload.get("seguro_incendio") or 0)
+    if desg_in > 0 or inc_in > 0:
+        await db.vigia_cartas.insert_one({
+            "id": str(uuid.uuid4()), "fecha": now_iso(), "resultado": "simulacion",
+            "monto_uf": float(payload.get("monto_credito_uf") or payload.get("monto") or 0),
+            "valor_uf": float(payload.get("valor_propiedad_uf") or payload.get("valor") or 0),
+            "seguro_desgravamen": desg_in or None,
+            "seguro_incendio": inc_in or None,
+            "con_subsidio": bool(payload.get("con_subsidio", True)),
+            "nombre": "evaluacion_operador",
+        })
+    return result
+
+
+async def _vigia_pack(uf=None):
+    cartas = await db.vigia_cartas.find({}, {"_id": 0}).sort("fecha", 1).to_list(400)
+    real = _vigia.aprender(cartas, uf=uf or _cp_mhe.UF_RESPALDO)
+    alertas = _vigia.comparar(real)
+    return real, alertas, _vigia.evolucion(cartas), cartas
+
+
+@api.get("/concreces-perfecto/politica")
+async def concreces_politica():
+    overlay = await db.config.find_one({"_key": "concreces_v5_overlay"}) or {}
+    overlay.pop("_id", None)
+    overlay.pop("_key", None)
+    real, alertas, evo, cartas = await _vigia_pack()
+    return {
+        "base": _cp_mhe.POLITICA_BASE,
+        "overlay": overlay,
+        "real": real,
+        "alertas": alertas,
+        "evolucion": evo,
+        "n_cartas": len(cartas),
+        "uf_respaldo": _cp_mhe.UF_RESPALDO,
+    }
+
+
+@api.patch("/concreces-perfecto/politica")
+async def concreces_politica_guardar(payload: dict):
+    """Overlay editable (no pisa la constante POLITICA_BASE)."""
+    overlay = payload.get("overlay") or payload
+    if not isinstance(overlay, dict):
+        raise HTTPException(status_code=400, detail="overlay inválido")
+    overlay["_key"] = "concreces_v5_overlay"
+    overlay["updated_at"] = now_iso()
+    await db.config.replace_one({"_key": "concreces_v5_overlay"}, overlay, upsert=True)
+    overlay.pop("_id", None)
+    return {"ok": True, "overlay": overlay, "base": _cp_mhe.POLITICA_BASE}
+
+
+@api.post("/concreces-perfecto/vigia")
+async def concreces_vigia_upload(files: List[UploadFile] = File(...)):
+    """Cartas de aprobación/rechazo/simulación → parser + reentrena el vigía."""
+    import ocr_service
+    ingestadas = []
+    for f in files or []:
+        raw = await f.read()
+        if not raw:
+            continue
+        texto, metodo = ocr_service.extraer_texto(raw, filename=f.filename or "")
+        parsed = _vigia.parse_carta(texto, f.filename or "")
+        doc = {
+            "id": str(uuid.uuid4()), "fecha": now_iso(),
+            "nombre": f.filename or "", "metodo": metodo,
+            **parsed,
+        }
+        await db.vigia_cartas.insert_one(dict(doc))
+        ingestadas.append({k: doc.get(k) for k in
+                           ("id", "nombre", "resultado", "monto_uf", "div_renta",
+                            "carga", "tasa", "dividendo_total", "con_subsidio")})
+    real, alertas, evo, cartas = await _vigia_pack()
+    return {"ok": True, "ingestadas": ingestadas, "real": real,
+            "alertas": alertas, "evolucion": evo, "n_cartas": len(cartas)}
+
+
+@api.post("/concreces-perfecto/liquidaciones")
+async def concreces_liq_upload(files: List[UploadFile] = File(...)):
+    """Hasta 6 PDFs de liquidación → líquido a pagar (texto embebido u OCR)."""
+    import ocr_service
+    out = []
+    for f in (files or [])[:6]:
+        raw = await f.read()
+        texto, metodo = ocr_service.extraer_texto(raw, filename=f.filename or "")
+        parsed = _vigia.parse_liquidacion(texto)
+        out.append({"nombre": f.filename or "", "metodo": metodo, **parsed})
+    return {"liquidaciones": out}
+
+
+@api.post("/concreces-perfecto/combinado")
+async def concreces_combinado(
+        files: List[UploadFile] = File(...),
+        nombre: str = Form("Cliente V7"),
+        rut_titular: str = Form(""),
+        client_type: str = Form("dependiente"),
+        codeudor_nombre: str = Form(""),
+        codeudor_rut: str = Form(""),
+):
+    """FASE3: arma COMBINADO_PROTOCOLO_{nombre}.pdf (prefijos 01-06 + Regla Ivana)."""
+    rut_n = re.sub(r"[^0-9kK]", "", rut_titular or "").lower()
+    if len(rut_n) < 7:
+        raise HTTPException(status_code=412, detail="REGLA IVANA: sin RUT titular — combinación bloqueada.")
+    etiqueta = f"{nombre} {rut_titular}".strip()
+    base = fsvc.folder_dir(etiqueta)
+    base.mkdir(parents=True, exist_ok=True)
+    await db.folders.update_one({"nombre": etiqueta}, {"$set": {
+        "nombre": etiqueta, "rut": rut_titular,
+        "codeudor_nombre": codeudor_nombre, "codeudor_rut": codeudor_rut,
+        "credit_request.client_type": client_type,
+    }}, upsert=True)
+    escritos = []
+    for f in files or []:
+        raw = await f.read()
+        if not raw:
+            continue
+        fn = fsvc.nombre_con_prefijo(f.filename or "doc.pdf", fsvc.cat_de_texto(f.filename or ""))
+        cat = fsvc.cat_de_archivo(fn)
+        sub = fsvc.CAT_A_SUBFOLDER.get(cat, "99_otros")
+        dest = base / sub
+        dest.mkdir(parents=True, exist_ok=True)
+        path = dest / fn
+        path.write_bytes(raw)
+        escritos.append(f"{sub}/{fn}")
+    if codeudor_nombre:
+        await asyncio.to_thread(fsvc.reclasificar_codeudor, etiqueta, codeudor_nombre, codeudor_rut)
+    res = await asyncio.to_thread(
+        fsvc.merge_protocol, etiqueta, client_type or "dependiente", True, None, rut_titular)
+    res_cod = {"merged_file": "", "files_used": []}
+    if codeudor_nombre:
+        res_cod = await asyncio.to_thread(
+            fsvc.merge_protocolo_codeudor, etiqueta, codeudor_nombre, codeudor_rut)
+    if not res.get("merged_file") and res.get("errors"):
+        raise HTTPException(status_code=412, detail="; ".join(res["errors"][:3]))
+    return {
+        "ok": True, "folder": etiqueta, "escritos": escritos,
+        "combinado": res.get("merged_file"), "files_used": res.get("files_used"),
+        "excluidos_rut": res.get("excluidos_rut") or [],
+        "errors": res.get("errors") or [],
+        "combinado_codeudor": res_cod.get("merged_file"),
+        "destino_mesa": "aprobaciones@centralmutuos.cl",
+        "remitente": "gerardo.ext@centralmutuos.cl",
+    }
 
 
 @api.get("/simulaciones")
@@ -4526,9 +4731,8 @@ async def folder_send_email(fid: str, payload: dict):
     payload = payload or {}
     to = (payload.get("to_addr") or "").strip()
     # DESTINO ÚNICO: las carpetas a Mesa van EXCLUSIVAMENTE a la casilla oficial
-    _destino_mesa = (os.environ.get("MESA_EMAIL") or "").strip()
-    if _destino_mesa:
-        to = _destino_mesa
+    _destino_mesa = (os.environ.get("MESA_EMAIL") or "").strip() or "aprobaciones@centralmutuos.cl"
+    to = _destino_mesa
     if not to or "@" not in to:
         raise HTTPException(status_code=400, detail="Destinatario inválido")
     nombre = doc.get("nombre", "")

@@ -6,6 +6,7 @@ import { secureGet } from "../utils/secureStore";
 const ORO = "var(--gold, #D4AF37)";
 const LABELS = {
   btg_pactual: "BTG Pactual", ameris: "Ameris (Packard)", parametros_generales: "Parámetros Generales",
+  concreces_mhe: "Concreces MHE",
   con_subsidio: "Con Subsidio", sin_subsidio: "Sin Subsidio", castigos_renta: "Castigos de Renta",
 };
 const OCULTOS = ["version", "updated_at", "manual_override", "prioridad", "_key", "_id", "reglas_supervisadas"];
@@ -144,7 +145,7 @@ export default function CriteriosModule() {
           background: msg.startsWith("✅") ? "rgba(30,26,12,0.9)" : "rgba(40,6,14,0.9)" }}>{msg}</div>
       )}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: "1rem" }}>
-        {["btg_pactual", "ameris", "parametros_generales"].map(sec => criteria[sec] && (
+        {["btg_pactual", "ameris", "concreces_mhe", "parametros_generales"].map(sec => criteria[sec] && (
           <div key={sec} style={{ background: "linear-gradient(160deg, rgba(18,18,20,0.97), rgba(6,6,8,0.99))",
             border: "1px solid rgba(212,175,55,0.3)", padding: "1rem 1.2rem" }}>
             <div style={{ fontWeight: 800, color: ORO, letterSpacing: "0.08em", marginBottom: "0.5rem" }}>

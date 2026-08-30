@@ -47,9 +47,11 @@ CAT_A_SUBFOLDER = {
     "imp_renta": "02_impuesto_renta", "f29": "02_impuesto_renta",
     "afp": "03_afp",
     "boletas": "03_boletas", "cmf": "04_cmf", "extras": "99_otros",
+    "renta_vitalicia": "02_renta_vitalicia",
     "estudio_titulo": "07_estudio_titulo",
     "licencia": "06_licencias", "pago_licencia": "06_licencias",
     "contrato": "05_contratos", "rsh": "08_rsh",
+    "renta_vitalicia": "02_renta_vitalicia",
 }
 SUBFOLDER_A_CAT = {
     "01_cedula": "cedula", "02_liquidaciones": "liquidacion",
@@ -57,6 +59,7 @@ SUBFOLDER_A_CAT = {
     "03_boletas": "boletas", "04_cmf": "cmf", "99_otros": "extras",
     "05_codeudor": "codeudor", "07_estudio_titulo": "estudio_titulo",
     "06_licencias": "licencia", "05_contratos": "contrato", "08_rsh": "rsh",
+    "02_renta_vitalicia": "renta_vitalicia",
 }
 
 CAT_KEYWORDS = [
@@ -64,6 +67,7 @@ CAT_KEYWORDS = [
     ("pago_licencia", r"pago\s+de\s+licencia|subsidio\s+de\s+incapacidad|\bccaf\b|caja\s+los\s+andes|caja\s+los\s+h[eé]roes|subsidio\s+maternal"),
     ("licencia", r"licencia\s+m[eé]dica|reposo\s+(laboral|m[eé]dico)|pre.?natal|post.?natal"),
     ("contrato", r"contrato\s+de\s+trabajo|anexo\s+de\s+contrato|antig[üu]edad\s+laboral"),
+    ("renta_vitalicia", r"renta\s+vitalicia|pensi[oó]n\s+(de\s+)?vejez|liquidaci[oó]n\s+de\s+pensi[oó]n"),
     ("rsh", r"registro\s+social\s+de\s+hogares|\brsh\b|calificaci[oó]n\s+socioecon[oó]mica"),
     ("cedula", r"c[eé]?dula|carnet|identidad|registro civil"),
     ("liquidacion", r"liquidaci[oó]?n|sueldo|remuneraci|haberes|\bliq[\d_ ]|^liq"),
@@ -79,6 +83,7 @@ MISSING_LABELS = {
     "liquidacion": "Liquidaciones de sueldo (últimas 6)",
     "afp": "Cotizaciones previsionales AFP (últimas 12)",
     "cmf": "Informe de deudas CMF",
+    "renta_vitalicia": "Renta vitalicia / pensión",
     "imp_renta": "Carpeta tributaria / Formulario F22",
     "boletas": "Boletas de honorarios / DAI",
     "f29": "Formulario F29",
@@ -320,10 +325,10 @@ def _rut_titular_de(nombre):
         return ""
 
 
-def merge_protocol(nombre, client_type="dependiente", include_extras=True, order=None):
+def merge_protocol(nombre, client_type="dependiente", include_extras=True, order=None, rut_titular=""):
     base = folder_dir(nombre)
     # REGLA IVANA: sin RUT titular NO hay combinación de PDF
-    rut_t = _rut_titular_de(nombre)
+    rut_t = _norm_rut_fs(rut_titular) or _rut_titular_de(nombre)
     if len(rut_t) < 7:
         return {"merged_file": "", "files_used": [],
                 "errors": ["REGLA IVANA: la carpeta no tiene RUT titular — combinación bloqueada. Configure el RUT primero."],
