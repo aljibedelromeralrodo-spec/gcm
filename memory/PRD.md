@@ -1188,3 +1188,10 @@ actual; todo lo demás permanece intacto.
 - Fix flakiness E2E: abrirModulo con timeouts propios por click + waitFor de 8s para chunks lazy (3/3 corridas estables).
 - 5 componentes fuera: BrokersPanel, UFAmountInput, ClientesFilters, ClientesRowActions, ClientesCardContent.
 - Próximo: Corte 10 podría ser la tarjeta completa (ClientesCard) o el bloque de mora CMF.
+
+## 2026-08-31 — AUTOR programado cada 1h (nocturno)
+- Loop programador en startup de server.py: cada 60s revisa autor_estado._id=programa {activo, intervalo_min, proxima} y lanza el orquestador con sys.executable (fix: "python3" del sistema no tenía dotenv/requests).
+- Comandos de Martín: "programa autor cada 1h" (o Xh/X min), "detén el programa del autor", "autor dónde va" (ahora muestra programa activo, próxima corrida e histórico total/fallidos).
+- B5 reescrito con urllib stdlib (portable a cualquier python3).
+- Validado E2E: corrida lanzada 100% por el programador → 8/8 OK (05:10-05:13 UTC). Programa ACTIVO cada 60 min.
+- Mañana: si hay 8-10 corridas 8/8, atacar cortes con lógica (ReparosAbogado, Mora CMF, No Calificó).

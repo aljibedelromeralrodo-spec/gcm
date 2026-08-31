@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
+import sys
 import os
 import io
 import re
@@ -632,6 +633,27 @@ async def _reconfirmar_identidad(request, payload):
 @app.on_event("startup")
 async def startup():
     await ensure_seed()
+
+    # ⏰ AUTOR programado: corre el orquestador cada N minutos si está activo
+    async def _autor_programa_loop():
+        while True:
+            try:
+                prog = await db.autor_estado.find_one({"_id": "programa"})
+                if prog and prog.get("activo"):
+                    ahora = datetime.now(timezone.utc)
+                    if not prog.get("proxima") or ahora.isoformat() >= prog["proxima"]:
+                        est = await db.autor_estado.find_one({"_id": "progreso"}) or {}
+                        if not est.get("corriendo"):
+                            import subprocess as _sp
+                            _sp.Popen([sys.executable, "/app/backend/autor_orquestador.py"], cwd="/app/backend")
+                            logging.info("⏰ AUTOR programado: corrida lanzada")
+                        await db.autor_estado.update_one({"_id": "programa"}, {"$set": {
+                            "proxima": (ahora + timedelta(minutes=prog.get("intervalo_min", 60))).isoformat(),
+                            "ultima_lanzada": ahora.isoformat()}})
+            except Exception as e:
+                logging.warning(f"autor programa loop: {e}")
+            await asyncio.sleep(60)
+    asyncio.create_task(_autor_programa_loop())
     # PASO 1 (obligatorio, antes de cualquier servicio): normativas fijas presentes
     try:
         await _seed_normativas_fijas()
@@ -1912,9 +1934,27 @@ async def central_chat(payload: dict, request: Request):
     resp = "No puedo responder ahora, intenta de nuevo."
     # Comandos del AUTOR orquestador (sin pasar por el LLM)
     _ml = msg.lower()
+    if "autor" in _ml and ("programa" in _ml or "programar" in _ml):
+        if any(p in _ml for p in ("detén", "deten", "apaga", "desactiva", "cancela")):
+            await db.autor_estado.update_one({"_id": "programa"}, {"$set": {"activo": False}}, upsert=True)
+            resp = "Programa del AUTOR desactivado. Puedes relanzarlo con 'programa autor cada 1h'."
+        else:
+            m_h = re.search(r"cada\s+(\d+)\s*(h|hora)", _ml)
+            m_min = re.search(r"cada\s+(\d+)\s*(min|minuto)", _ml)
+            intervalo = int(m_h.group(1)) * 60 if m_h else (int(m_min.group(1)) if m_min else 60)
+            await db.autor_estado.update_one({"_id": "programa"}, {"$set": {
+                "activo": True, "intervalo_min": intervalo,
+                "proxima": now_iso()}}, upsert=True)
+            resp = (f"Listo, AUTOR programado cada {intervalo // 60 if intervalo % 60 == 0 else intervalo} "
+                    f"{'hora(s)' if intervalo % 60 == 0 else 'minuto(s)'}. La primera corrida parte en menos de 1 minuto "
+                    "y cada resultado queda en el historial. Pregúntame 'autor dónde va' cuando quieras. "
+                    "Para apagarlo: 'detén el programa del autor'.")
+        await db.conversaciones.insert_one({"id": str(uuid.uuid4()), "session_id": session,
+            "user_name": payload.get("user_name", ""), "user_msg": msg, "response": resp, "timestamp": now_iso()})
+        return {"response": resp, "session_id": session, "enabled": True}
     if "autor" in _ml and ("automátic" in _ml or "automatic" in _ml or "ejecuta" in _ml):
         import subprocess as _sp
-        _sp.Popen(["python3", "/app/backend/autor_orquestador.py"], cwd="/app/backend")
+        _sp.Popen([sys.executable, "/app/backend/autor_orquestador.py"], cwd="/app/backend")
         resp = ("Lanzado en automático. Va solo: termina un bloque, espera y sigue con el siguiente "
                 "hasta el 6. Pregúntame 'autor dónde va' para ver el avance.")
         await db.conversaciones.insert_one({"id": str(uuid.uuid4()), "session_id": session,
@@ -1922,12 +1962,17 @@ async def central_chat(payload: dict, request: Request):
         return {"response": resp, "session_id": session, "enabled": True}
     if "autor" in _ml and ("donde va" in _ml or "dónde va" in _ml or "avance" in _ml):
         est = await db.autor_estado.find_one({"_id": "progreso"}) or {}
+        prog = await db.autor_estado.find_one({"_id": "programa"}) or {}
         logs = await db.autor_orquestador_log.find({}, {"_id": 0}).sort("fecha", -1).to_list(6)
         detalle = "; ".join(f"B{registro['bloque_id']} {registro['nombre'].split(' - ')[0]}: {'OK' if registro['ok'] else 'FALLÓ'}" for registro in reversed(logs))
-        resp = (f"El AUTOR va en el bloque {est.get('bloque_actual', 1)} de 6"
+        n_total = await db.autor_orquestador_log.count_documents({})
+        n_fail = await db.autor_orquestador_log.count_documents({"ok": False})
+        resp = (f"El AUTOR va en el bloque {est.get('bloque_actual', 1)}"
                 + (", corriendo ahora" if est.get("corriendo") else ", detenido")
                 + (f". Último: {est.get('ultimo_nombre')} {'OK' if est.get('ultimo_ok') else 'FALLÓ'}" if est.get("ultimo_nombre") else "")
-                + (f". Historial: {detalle}" if detalle else ""))
+                + (f". Programa activo cada {prog.get('intervalo_min', 60)} min, próxima corrida {str(prog.get('proxima', ''))[:16].replace('T', ' ')}" if prog.get("activo") else ". Sin programa activo")
+                + f". Histórico: {n_total} bloques corridos, {n_fail} fallidos"
+                + (f". Últimos: {detalle}" if detalle else ""))
         await db.conversaciones.insert_one({"id": str(uuid.uuid4()), "session_id": session,
             "user_name": payload.get("user_name", ""), "user_msg": msg, "response": resp, "timestamp": now_iso()})
         return {"response": resp, "session_id": session, "enabled": True}

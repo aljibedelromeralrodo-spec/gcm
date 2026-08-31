@@ -26,9 +26,10 @@ BLOQUES = [
      "comando": "curl -s -o /dev/null -w '%{http_code}' http://localhost:3000 | grep -q 200",
      "timeout": 60, "espera": 10},
     {"id": 5, "nombre": "GUARDIAN - revision-vivo API",
-     "comando": ("python3 -c \"import os,requests; from dotenv import load_dotenv; load_dotenv('/app/backend/.env'); "
-                 "t=requests.post('http://localhost:8001/api/auth/login',json={'rut':'administrador','password':'141617575'}).json()['token']; "
-                 "r=requests.get('http://localhost:8001/api/martin/revision-vivo',headers={'Authorization':'Bearer '+t}).json(); "
+     "comando": ("python3 -c \"import json,urllib.request as u; "
+                 "req=u.Request('http://localhost:8001/api/auth/login',data=json.dumps({'rut':'administrador','password':'141617575'}).encode(),headers={'Content-Type':'application/json'}); "
+                 "t=json.load(u.urlopen(req))['token']; "
+                 "r=json.load(u.urlopen(u.Request('http://localhost:8001/api/martin/revision-vivo',headers={'Authorization':'Bearer '+t}))); "
                  "print(r); assert r['vivo'] and r['martin_taller'] and r['logica_humana']\""),
      "timeout": 90, "espera": 5},
     {"id": 6, "nombre": "CORTE ROWACTIONS - anti-polling",
