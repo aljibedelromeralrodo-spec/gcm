@@ -52,6 +52,7 @@ def decode_token(token):
 PUBLIC_EXACT = {
     "/api/", "/api", "/api/auth/login", "/api/auth/crear-clave",
     "/api/inmobiliaria/auth/login", "/api/valor-uf", "/api/paridad",
+    "/api/health",
 }
 
 # ═══ Bloqueos backend por PERFIL (los módulos no asignados tampoco son accesibles por API) ═══

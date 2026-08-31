@@ -6,6 +6,7 @@ import uuid
 import base64
 import zipfile
 import time
+import threading
 from collections import deque
 from pathlib import Path
 from pypdf import PdfReader, PdfWriter
@@ -197,15 +198,37 @@ def pdf_protegido(path):
         return False
 
 
+_restore_pendientes = set()
+_restore_lock = threading.Lock()
+
+
+def _restaurar_en_fondo(prefijo):
+    """Encola la restauración del búnker en un hilo daemon (NUNCA en el event loop).
+    Dedupe por prefijo: una sola restauración simultánea por carpeta."""
+    with _restore_lock:
+        if prefijo in _restore_pendientes:
+            return
+        _restore_pendientes.add(prefijo)
+
+    def _run():
+        try:
+            import bunker
+            bunker.restaurar_prefijo(prefijo)
+        except Exception:
+            pass
+        finally:
+            with _restore_lock:
+                _restore_pendientes.discard(prefijo)
+    threading.Thread(target=_run, daemon=True).start()
+
+
 def scan_archivos(nombre):
     base = folder_dir(nombre)
     if not base.exists() or not any(base.iterdir()):
-        # 🏦 DURABILIDAD: si el disco local perdió la carpeta (redespliegue), se restaura desde GridFS
-        try:
-            import bunker
-            bunker.restaurar_prefijo(f"clientes/{safe_name(nombre)}")
-        except Exception:
-            pass
+        # 🏦 DURABILIDAD: si el disco perdió la carpeta (redespliegue), se restaura EN FONDO.
+        # ANTI-502: jamás se descarga del objstore dentro del request — el event loop
+        # queda libre y el health check responde (RCA 741d1c2b: bucle de liveness).
+        _restaurar_en_fondo(f"clientes/{safe_name(nombre)}")
     out = []
     if base.exists():
         for p in sorted(base.rglob("*")):

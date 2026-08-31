@@ -67,6 +67,12 @@ def _cb_check():
         raise RuntimeError("objstore en pausa (cortacircuito 5 min)")
 
 
+def _cb_activo():
+    """True si el cortacircuito está en pausa: los bucles masivos deben abortar sin iterar."""
+    import time as _t
+    return _t.time() < _cb["hasta"]
+
+
 def _cb_fallo():
     import time as _t
     _cb["fails"] += 1
@@ -238,6 +244,9 @@ def restaurar_si_vacio():
     n, fallos = 0, 0
     arch = _archivados()
     for rel, meta in _entradas().items():
+        if _cb_activo():
+            logging.warning("🏦 BÚNKER: cortacircuito activo — restauración masiva abortada, se sirve on-demand")
+            break
         if rel.startswith("proc/") or any(rel.startswith(a + "/") or rel == a for a in arch):
             continue
         if _bajar_entry(rel, meta.get("mtime")):
@@ -259,6 +268,9 @@ def restaurar_faltantes():
     n, fallos = 0, 0
     arch = _archivados()
     for rel, meta in _entradas().items():
+        if _cb_activo():
+            logging.warning("🏦 BÚNKER faltantes: cortacircuito activo — sync abortado hasta el próximo ciclo")
+            break
         if rel.startswith("proc/") or any(rel.startswith(a + "/") or rel == a for a in arch):
             continue
         dest = ROOT / rel
@@ -280,11 +292,13 @@ def restaurar_faltantes():
 def restaurar_prefijo(rel_prefijo):
     """Restauración DIRIGIDA: solo lo que cuelga de un prefijo (ej: 'proc/<qid>')."""
     rel = str(rel_prefijo).replace("\\", "/").strip("/")
-    if not rel:
+    if not rel or _cb_activo():
         return 0
     _desarchivar(rel)
     n = 0
     for r, meta in _entradas(rel).items():
+        if _cb_activo():
+            break
         dest = ROOT / r
         if dest.exists() and dest.stat().st_size == meta.get("length"):
             continue

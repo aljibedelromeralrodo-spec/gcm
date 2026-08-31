@@ -1228,3 +1228,21 @@ actual; todo lo demás permanece intacto.
 ## 2026-08-31 — Corte 12 aprobado y aplicado: NotificarNoCalifico.js
 - Aprobado por el usuario, aplicado supervisado: 21 líneas movidas, lint OK, 3/3 tests E2E verdes. ClientesModule: 3.792 líneas (-188). 9 componentes fuera. Cola del autopiloto VACÍA.
 - Deploy a producción en curso (fixes correos 502 + combinado + memoria viva + AUTOR).
+
+## 2026-08-31 — FIX bucle de liveness en producción (RCA 741d1c2b)
+- Causa: scan_archivos (28 endpoints) hacía restauración objstore SÍNCRONA en el event loop al encontrar disco vacío post-deploy → /health muerto → kubelet mata pod → bucle.
+- Fix 1: scan_archivos ahora encola la restauración en hilo daemon con dedupe por prefijo (_restaurar_en_fondo) — el request devuelve lo local al instante.
+- Fix 2: bunker con _cb_activo(): los bucles masivos (restaurar_si_vacio/faltantes/prefijo) abortan si el cortacircuito está activo (antes iteraban cientos de GETs en pausa).
+- Fix 3: /health raíz y /api/health triviales (sin DB/objstore), /api/health exento de auth. /health responde en ~4ms.
+- AUTOR post-fix: 9/9 verde. REQUIERE NUEVO DEPLOY.
+
+## 2026-08-31 — Fixes del FORZADO de carpetas (probado E2E con Antonio Pérez)
+- Forzado SIEMPRE crea la carpeta aunque no halle archivos (advertencia en vez de bloqueo 422 por Regla #67 — la regla sigue rigiendo el flujo automático).
+- Detección de posible PDF conjunto (pocos archivos → advertencia "revisar y completar").
+- Match de carpeta existente exige TODAS las palabras (antes "Antonio Pérez" caía en "Juan ANTONIO Moya") + regex insensible a tildes (_rx_sin_tildes).
+- Reutiliza la búsqueda IMAP del pre-chequeo (evita doble espera de ~2 min).
+- E2E: "Antonio Pérez" → encontró 2 correos, procesó 4 archivos a carpeta JUAN PEREZ (nombre real) + creó ANTONIO PÉREZ vacía con advertencia. Usuario debe decidir si borra la duplicada vacía.
+
+## 2026-08-31 — WhatsApp Twilio (parcial)
+- whatsapp_connector.py creado: estado_sync, enviar_whatsapp_sync (3 reintentos+backoff, log whatsapp_log), vigia_conexion (5 min, duerme sin credenciales). GET /api/phone-status (admin). Línea WhatsApp en "autor dónde va".
+- TWILIO_PHONE_NUMBER=whatsapp:+56229148935 guardado. FALTAN TWILIO_ACCOUNT_SID y TWILIO_AUTH_TOKEN (usuario "Erhan" ya logueado en console.twilio.com, guiado a Account Info).

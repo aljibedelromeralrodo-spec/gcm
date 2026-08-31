@@ -1826,6 +1826,17 @@ async def central_proactive():
     return {"alertas": []}
 
 
+@app.get("/health")
+async def health_probe():
+    """Liveness trivial: responde SIEMPRE sin tocar DB ni objstore (probe de K8s)."""
+    return {"ok": True}
+
+
+@api.get("/health")
+async def health_probe_api():
+    return {"ok": True}
+
+
 @api.get("/central/health")
 async def central_health():
     return {"status": "ok"}
