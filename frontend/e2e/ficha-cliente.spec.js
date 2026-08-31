@@ -1,11 +1,17 @@
 import { test, expect } from '@playwright/test';
-import { login, abrirModulo, dismissModals } from './helpers';
+import { login, dismissModals } from './helpers';
+
+// Usuario QA con solo_modulo=victoria: entra directo al VictoriaWorkspace (donde vive VictoriaFicha)
+const QA_USER = process.env.TEST_VICTORIA_USER || 'qa.victoria';
+const QA_PASS = process.env.TEST_VICTORIA_PASS || 'QaVictoria2026';
 
 test('login -> abrir ficha Victoria sin que el polling de 45s borre la edición', async ({ page }) => {
-  await login(page);
-
-  // Módulo Victoria Vilches (supermódulo Control y Postventa)
-  await abrirModulo(page, 'sm_control', 'mod_victoria');
+  await page.goto('/');
+  await page.getByTestId('login-rut').fill(QA_USER);
+  await page.getByTestId('login-password').fill(QA_PASS);
+  await page.getByTestId('login-submit').click();
+  await expect(page.getByTestId('victoria-workspace')).toBeVisible({ timeout: 20000 });
+  await dismissModals(page);
   await expect(page.getByTestId('victoria-dashboard')).toBeVisible({ timeout: 20000 });
 
   // Abre la primera ficha de cliente

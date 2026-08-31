@@ -8,7 +8,7 @@ test('login admin -> dashboard + modulo clientes renderiza (split BrokersPanel/U
   await expect(page.getByTestId('sidebar')).toBeVisible();
 
   // Va a Carpeta Clientes (supermódulo Operación y Clientes)
-  await abrirModulo(page, 'sm_operacion', 'clientes');
+  await abrirModulo(page, 'sm_operacion', 'clientes', 'clientes-module');
 
   // Verifica que el módulo (que ahora importa desde ./clientes) sigue renderizando
   await expect(page.getByTestId('clientes-module')).toBeVisible({ timeout: 15000 });

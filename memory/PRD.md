@@ -1160,3 +1160,11 @@ actual; todo lo demás permanece intacto.
 ## 2026-08-31 — Opción b: Memoria Viva conectada a Martín (DashAI)
 - Nuevo `_martin_memoria_viva()` en server.py: lee las 3 últimas reparaciones `quedo_con_oro` de sistema_reparaciones_log y las inyecta en el system prompt de `/api/central/chat`.
 - Probado E2E: pregunta "muéstrame las 3 líneas de oro" → Martín respondió con las reparaciones reales (autorización chica + 2 archivo_malo_luego_bueno). Ciclo Vivo + Taller + Lógica humana visible COMPLETO.
+
+## 2026-08-31 — AUTOR Orquestador automático (adaptado)
+- Nuevo /app/backend/autor_orquestador.py: 6 bloques secuenciales con espera, estado en autor_estado (retoma solo), logs en autor_orquestador_log (NO en sistema_reparaciones_log para no contaminar la memoria viva de Martín).
+- Comandos de chat en /api/central/chat: "ejecuta autor automático" (lanza Popen) y "autor dónde va" (estado + historial).
+- Primera corrida COMPLETA 6/6 OK: tests E2E Playwright (2/2 verdes), lint split, compile backend, frontend vivo, revision-vivo API, cierre.
+- Fixes de entorno E2E: instalado chromium_headless_shell-1234 en /pw-browsers (el rev 1208 causaba clicks fantasma por mismatch de protocolo); abrirModulo con reintentos verificados.
+- Usuario QA creado: qa.victoria / QaVictoria2026 (solo_modulo=victoria) para testear VictoriaFicha — registrado en test_credentials.md.
+- Test anti-polling VERDE: la edición "TEST EDICION NO BORRAR" sobrevive el ciclo de 45s. ClientesModule listo para el próximo corte con blindaje.

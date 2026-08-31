@@ -1910,6 +1910,27 @@ async def central_chat(payload: dict, request: Request):
     session = payload.get("session_id") or str(uuid.uuid4())
     key = os.environ.get("EMERGENT_LLM_KEY", "")
     resp = "No puedo responder ahora, intenta de nuevo."
+    # Comandos del AUTOR orquestador (sin pasar por el LLM)
+    _ml = msg.lower()
+    if "autor" in _ml and ("automátic" in _ml or "automatic" in _ml or "ejecuta" in _ml):
+        import subprocess as _sp
+        _sp.Popen(["python3", "/app/backend/autor_orquestador.py"], cwd="/app/backend")
+        resp = ("Lanzado en automático. Va solo: termina un bloque, espera y sigue con el siguiente "
+                "hasta el 6. Pregúntame 'autor dónde va' para ver el avance.")
+        await db.conversaciones.insert_one({"id": str(uuid.uuid4()), "session_id": session,
+            "user_name": payload.get("user_name", ""), "user_msg": msg, "response": resp, "timestamp": now_iso()})
+        return {"response": resp, "session_id": session, "enabled": True}
+    if "autor" in _ml and ("donde va" in _ml or "dónde va" in _ml or "avance" in _ml):
+        est = await db.autor_estado.find_one({"_id": "progreso"}) or {}
+        logs = await db.autor_orquestador_log.find({}, {"_id": 0}).sort("fecha", -1).to_list(6)
+        detalle = "; ".join(f"B{registro['bloque_id']} {registro['nombre'].split(' - ')[0]}: {'OK' if registro['ok'] else 'FALLÓ'}" for registro in reversed(logs))
+        resp = (f"El AUTOR va en el bloque {est.get('bloque_actual', 1)} de 6"
+                + (", corriendo ahora" if est.get("corriendo") else ", detenido")
+                + (f". Último: {est.get('ultimo_nombre')} {'OK' if est.get('ultimo_ok') else 'FALLÓ'}" if est.get("ultimo_nombre") else "")
+                + (f". Historial: {detalle}" if detalle else ""))
+        await db.conversaciones.insert_one({"id": str(uuid.uuid4()), "session_id": session,
+            "user_name": payload.get("user_name", ""), "user_msg": msg, "response": resp, "timestamp": now_iso()})
+        return {"response": resp, "session_id": session, "enabled": True}
     # 0) Acción pendiente → exige confirmación verbal antes de tocar el correo
     pend = await db.martin_pendientes.find_one({"session_id": session, "estado": "pendiente"})
     if pend:

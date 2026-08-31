@@ -30,14 +30,21 @@ export async function dismissModals(page) {
   }
 }
 
-// Abre un módulo del sidebar expandiendo su supermódulo si hace falta
-export async function abrirModulo(page, smKey, modKey) {
-  const nav = page.getByTestId(`nav-${modKey}`);
-  if (!(await nav.isVisible().catch(() => false))) {
-    await page.getByTestId(`sm-toggle-${smKey}`).click({ force: true });
-    await page.waitForTimeout(500);
+// Abre un módulo del sidebar expandiendo su supermódulo si hace falta (con reintentos verificados)
+export async function abrirModulo(page, smKey, modKey, targetTestId) {
+  for (let intento = 0; intento < 4; intento++) {
+    await dismissModals(page);
+    const nav = page.getByTestId(`nav-${modKey}`);
+    if (!(await nav.isVisible().catch(() => false))) {
+      await page.getByTestId(`sm-toggle-${smKey}`).click({ force: true });
+      await page.waitForTimeout(600);
+    }
+    await nav.click({ force: true });
+    await page.waitForTimeout(1500);
+    await dismissModals(page);
+    if (!targetTestId) return;
+    if (await page.getByTestId(targetTestId).isVisible().catch(() => false)) return;
+    await page.waitForTimeout(2000);
+    if (await page.getByTestId(targetTestId).isVisible().catch(() => false)) return;
   }
-  await nav.click({ force: true });
-  await page.waitForTimeout(1500);
-  await dismissModals(page);
 }
