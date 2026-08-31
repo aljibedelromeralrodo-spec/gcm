@@ -1275,3 +1275,9 @@ actual; todo lo demás permanece intacto.
 - IDENTIDAD VISUAL CORREOS (_marco_correo en server.py): header negro CENTRAL MUTUOS dorado + banda por tipo (verde aprobación / rojo rechazo) + footer. Aplicado a: reenvío constitucional de mesa (mesa_verdad.py, cuerpo íntegro adentro), autocorreo aprobación/rechazo a Gerardo (server ~5661) y _rechazo_html del cliente.
 - FICHA CLIENTE: badge codeudor ahora clickable (scroll+resalta subcarpeta 05_codeudor con previews) y los adjuntos del preview de envío a mesa son botones con visor (email-adj-preview-N). Verificado con Playwright (Héctor Donoso / Priscila Herrera).
 - Testing: iteration_68.json 100% backend (8/8) y 100% frontend. Deploy aprobado por el usuario.
+
+## 2026-08-31 — Filtros + descarte masivo en «Correos esperando SU confirmación»
+- Backend: POST /api/correos-preview/descartar-masivo {ids:[...]} (solo admin/maestro): marca descartado en bloque y borra sus adjuntos de correos_preview_adj. Lista GET /correos-preview ahora hasta 500. Probado curl: lista vacía→400, sin token→401, ids inexistentes→descartados:0.
+- Frontend (CorreosPreview.js): barra de filtro por texto (asunto/destinatario/CC/adjunto), filtro por fecha (input date sobre `creado`), contador «Mostrando X de Y», botón Limpiar. Checkbox por correo + «Seleccionar todos (filtrados)» — se puede desmarcar individualmente. Botón rojo «Descartar N seleccionado(s)» con window.confirm. Filas seleccionadas se resaltan en rojo. data-testids: preview-filtro-texto/fecha/limpiar, preview-sel-todos, preview-sel-{i}, preview-descartar-masivo.
+- Verificado Playwright E2E: login admin → saltar tour + briefing mañanero → filtrar (0/93 con "test") → seleccionar todos (93) → desmarcar uno (92). NO se descartaron correos reales.
+- Nota QA: para automatizar hay que cerrar el tour («Saltar», exact=True) y el Briefing Mañanero (botón dentro de [data-testid="briefing-mananero"]); NO clickear texto «Cerrar» (matchea «Cerrar Sesión»).

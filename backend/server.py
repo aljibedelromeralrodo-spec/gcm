@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Form, Request, Query
+from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Form, Request, Query, Body
 from typing import List
 from fastapi.responses import StreamingResponse, JSONResponse, HTMLResponse, FileResponse, RedirectResponse, Response
 from dotenv import load_dotenv
@@ -6519,7 +6519,7 @@ async def carpetas_faltantes(request: Request, limit: int = 150):
 async def correos_preview_lista(request: Request):
     _exigir_admin_dash(request)
     docs = await db.correos_preview.find({"estado": "esperando_confirmacion"},
-                                         {"_id": 0, "huella": 0}).sort("creado", -1).to_list(100)
+                                         {"_id": 0, "huella": 0}).sort("creado", -1).to_list(500)
     return {"total": len(docs), "correos": docs}
 
 
@@ -6582,6 +6582,20 @@ async def correos_preview_quitar_adjunto(pid: str, idx: int, request: Request):
             for j, a in enumerate(adjs) if j != idx]
     await db.correos_preview.update_one({"id": pid}, {"$set": {"adjuntos": meta}})
     return {"ok": True, "quitado": quitado.get("filename"), "adjuntos": meta}
+
+
+@api.post("/correos-preview/descartar-masivo")
+async def correos_preview_descartar_masivo(request: Request, payload: dict = Body(...)):
+    """Descarta en bloque varios correos en espera SIN enviarlos."""
+    _exigir_admin_dash(request)
+    ids = [str(i) for i in (payload.get("ids") or []) if i]
+    if not ids:
+        raise HTTPException(status_code=400, detail="Debe indicar al menos un correo a descartar")
+    r = await db.correos_preview.update_many(
+        {"id": {"$in": ids}, "estado": "esperando_confirmacion"},
+        {"$set": {"estado": "descartado", "resuelto_en": now_iso(), "resuelto_por": "admin"}})
+    await db.correos_preview_adj.delete_many({"preview_id": {"$in": ids}})
+    return {"ok": True, "descartados": r.modified_count, "solicitados": len(ids)}
 
 
 @api.post("/correos-preview/{pid}/descartar")
