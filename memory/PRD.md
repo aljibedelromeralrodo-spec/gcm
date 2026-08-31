@@ -1136,3 +1136,10 @@ actual; todo lo demás permanece intacto.
 
 
 > Historial de implementaciones movido a /app/memory/CHANGELOG.md (por fechas).
+
+## 2026-06 — Revisión de calidad de código aplicada
+- Eliminados los 6 `exec()` de scripts_lacruz (refactor a imports: nuevo `ecomac_datos_final.py`, guard `__main__` en `analisis_ecomac.py`).
+- Falsos positivos verificados: `eval()` reportados eran funciones `_eval`/`_politica_eval`; XSS reportados ya usaban DOMPurify en todos los puntos; imports circulares ya eran lazy (dentro de funciones); pyflakes confirma 0 variables indefinidas reales.
+- MD5 restantes marcados `usedforsecurity=False` (server.py x2, espejo_postventa.py) sin cambiar valores de hash (no rompe dedup en DB).
+- Hook VictoriaFicha:228 documentado con eslint-disable intencional (agregar la dep borraría ediciones del usuario cada 45s por polling).
+- PENDIENTE (alto riesgo, requiere aprobación): split de ClientesModule (3.952 líneas), App.js MainApp, CentralChat; refactor complejidad adn_clientes/ai_extract; keys por índice en listas render-only.

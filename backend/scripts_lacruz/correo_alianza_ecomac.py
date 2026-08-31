@@ -1,5 +1,5 @@
 """Correo formal Alianza Ecomac (cuerpo persuasivo) + 2 PDFs adjuntos: Felicitaciones y Clientes Enviados."""
-# ruff: noqa: F821
+# ruff: noqa: F821, F403, F405
 import io, base64
 from dotenv import load_dotenv
 load_dotenv("/app/backend/.env")
@@ -7,8 +7,7 @@ import sys
 sys.path.insert(0, "/app/backend")
 from xhtml2pdf import pisa
 
-src = open("/app/backend/scripts_lacruz/pdf_informe_ecomac_final.py").read()
-exec(src.split('CSS = """')[0])
+from ecomac_datos_final import *  # noqa: F403
 
 CSS_BASE = """@page { size: letter; margin: 1.7cm 1.9cm; }
 body { font-family: Helvetica; font-size: 9pt; color: #1a1a1a; line-height: 1.5; }

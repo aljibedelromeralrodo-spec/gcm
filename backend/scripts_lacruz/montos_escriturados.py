@@ -1,13 +1,12 @@
 """Extrae valor de crédito de cada escriturado Ecomac y suma total. Salida: montos_escriturados.json"""
-# ruff: noqa: F821
+# ruff: noqa: F821, F403, F405
 import json, re
 from dotenv import load_dotenv
 load_dotenv("/app/backend/.env")
 import sys
 sys.path.insert(0, "/app/backend")
 
-src = open("/app/backend/scripts_lacruz/pdf_informe_ecomac_final.py").read()
-exec(src.split('CSS = """')[0])
+from ecomac_datos_final import *  # noqa: F403
 
 bodies = json.load(open("/app/backend/scripts_lacruz/esc_bodies.json")) + \
          json.load(open("/app/backend/scripts_lacruz/gerardo_bodies.json"))

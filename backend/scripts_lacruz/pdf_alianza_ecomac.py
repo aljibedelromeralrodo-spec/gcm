@@ -1,5 +1,5 @@
 """PDF 'Central Mutuos – Ecomac: Una Alianza Exitosa' — informe persuasivo para Ecomac."""
-# ruff: noqa: F821
+# ruff: noqa: F821, F403, F405
 import io, base64
 from dotenv import load_dotenv
 load_dotenv("/app/backend/.env")
@@ -7,8 +7,7 @@ import sys
 sys.path.insert(0, "/app/backend")
 from xhtml2pdf import pisa
 
-src = open("/app/backend/scripts_lacruz/pdf_informe_ecomac_final.py").read()
-exec(src.split('CSS = """')[0])
+from ecomac_datos_final import *  # noqa: F403
 
 TDIR = "/app/backend/scripts_lacruz/testimonios"
 IMGS = [("w05.jpg", "Claudia Arias — Los Maitenes, nuestra primera cliente del canal"),

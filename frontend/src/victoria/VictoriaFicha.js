@@ -225,6 +225,8 @@ function Paso1({ det, cargar, docSel, onSetDocSel }) {
 function Paso2({ det, cargar }) {
   const [forms, setForms] = useState(det.formularios_auto || {});
   const [trabajando, setTrabajando] = useState(false);
+  // Reinicia el formulario SOLO al cambiar de cliente (no en cada poll, evitaría perder ediciones)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { setForms(det.formularios_auto || {}); }, [det.cliente.id]);
 
   const guardar = async () => {

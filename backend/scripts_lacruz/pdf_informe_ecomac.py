@@ -1,5 +1,5 @@
 """PDF Informe Histórico Ecomac completo (casilla gerardo.ext) + envío a preview."""
-# ruff: noqa: F821
+# ruff: noqa: F821, F403, F405
 import io, json, re, base64
 from dotenv import load_dotenv
 load_dotenv("/app/backend/.env")
@@ -9,7 +9,7 @@ sys.path.insert(0, "/app/backend/scripts_lacruz")
 from xhtml2pdf import pisa
 from collections import Counter
 
-exec(open("/app/backend/scripts_lacruz/analisis_ecomac.py").read().split("# ── salida")[0])
+from analisis_ecomac import *  # noqa: F403
 
 MESES_ES = {"01": "Ene", "02": "Feb", "03": "Mar", "04": "Abr", "05": "May", "06": "Jun",
             "07": "Jul", "08": "Ago", "09": "Sep", "10": "Oct", "11": "Nov", "12": "Dic"}

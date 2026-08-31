@@ -1,5 +1,5 @@
 """Informe Histórico Ecomac DETALLADO — cliente por cliente + envío a preview."""
-# ruff: noqa: F821
+# ruff: noqa: F821, F403, F405
 import io, re, base64
 from dotenv import load_dotenv
 load_dotenv("/app/backend/.env")
@@ -10,7 +10,7 @@ from collections import Counter
 from pymongo import MongoClient
 import os
 
-exec(open("/app/backend/scripts_lacruz/analisis_ecomac.py").read().split("# ── salida")[0])
+from analisis_ecomac import *  # noqa: F403
 
 MESES_ES = {"01": "Ene", "02": "Feb", "03": "Mar", "04": "Abr", "05": "May", "06": "Jun",
             "07": "Jul", "08": "Ago", "09": "Sep", "10": "Oct", "11": "Nov", "12": "Dic"}

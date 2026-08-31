@@ -163,19 +163,20 @@ for mail, nombre in EJEC.items():
     ejec_stats[nombre] = {"correos": total_mails, "solicitudes": len(ths), "ruts": len(ruts), "aprob_señal": aprob}
 
 # ── salida ─────────────────────────────────────────────────
-out = {
-    "total_correos": len(rows),
-    "solicitudes_por_mes": dict(sorted(sol_mes.items())),
-    "total_solicitudes": len(threads),
-    "ruts_unicos": len(ruts_solicitados),
-    "respondidos": respondidos,
-    "tiempo_mediana_h": sorted(tiempos)[len(tiempos) // 2] if tiempos else None,
-    "tiempo_promedio_h": sum(tiempos) / len(tiempos) if tiempos else None,
-    "aprobaciones_señal_por_mes": dict(sorted(aprob_mes.items())),
-    "esc_clientes_unicos": len(esc),
-    "esc_borrador_por_mes": dict(sorted(esc_borr_mes.items())),
-    "esc_firma_titulos_por_mes": dict(sorted(esc_firma_mes.items())),
-    "ejecutivas": ejec_stats,
-}
-json.dump(out, open("/app/backend/scripts_lacruz/informe_stats.json", "w"), ensure_ascii=False, indent=1, default=str)
-print(json.dumps(out, ensure_ascii=False, indent=1, default=str))
+if __name__ == "__main__":
+    out = {
+        "total_correos": len(rows),
+        "solicitudes_por_mes": dict(sorted(sol_mes.items())),
+        "total_solicitudes": len(threads),
+        "ruts_unicos": len(ruts_solicitados),
+        "respondidos": respondidos,
+        "tiempo_mediana_h": sorted(tiempos)[len(tiempos) // 2] if tiempos else None,
+        "tiempo_promedio_h": sum(tiempos) / len(tiempos) if tiempos else None,
+        "aprobaciones_señal_por_mes": dict(sorted(aprob_mes.items())),
+        "esc_clientes_unicos": len(esc),
+        "esc_borrador_por_mes": dict(sorted(esc_borr_mes.items())),
+        "esc_firma_titulos_por_mes": dict(sorted(esc_firma_mes.items())),
+        "ejecutivas": ejec_stats,
+    }
+    json.dump(out, open("/app/backend/scripts_lacruz/informe_stats.json", "w"), ensure_ascii=False, indent=1, default=str)
+    print(json.dumps(out, ensure_ascii=False, indent=1, default=str))
