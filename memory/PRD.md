@@ -1325,3 +1325,10 @@ PENDIENTE: quedan ~14 correos que mencionan a Gabriela sin procesar (buscador de
 - Para cada cliente en etapa "recibido", _historial_fuera_mes cruza: mesa_enviados de CUALQUIER mes, seguimiento de cualquier mes, flags de carpeta (is_escrituracion, escrituracion_movida_at, estudio_titulo_solicitado_at), docs en 07_estudio_titulo y nombres de archivo con escritur|compraventa|cpv|firma (RX_ESC_DOC — 'notarial' excluido para evitar falsos positivos tipo contrato de arriendo).
 - Resultado: de los 120 "nunca enviados", 14 SÍ avanzaron en otro mes (julio a mesa/aprobados, estudio de título o escritura en carpeta) → marcados avanzo_otro_mes, EXCLUIDOS de recuperables. Quedan 106 genuinamente nunca presentados y 128 recuperables netos.
 - Excel v2 con columna "Avanzó en otro mes" regenerado en Central Mutuos/99_otros/INFORME_EXHAUSTIVO_AGOSTO_2026.xlsx.
+
+## 2026-08-31 — Listado "Solicitaron crédito SIN ir a mesa" (agosto)
+- 106 clientes con las mismas características que los aprobados (RUT validado, ejecutiva, inmobiliaria por dominio del remitente, monto UF, días detenidos, faltantes).
+- Por origen: ECOMAC 52, BOETSCH 13, Maestra 7, La Cruz 4, World Consultores 4, Hip. Gestión 3, otros 3, sin origen 21.
+- 6 registros tenían CELULARES (+569...) guardados como RUT → separados en columna Teléfono en el Excel.
+- Excel: Central Mutuos/99_otros/SOLICITARON_CREDITO_SIN_MESA_AGOSTO_2026.xlsx (filas ≥20 días detenidas en rojo). Subido a búnker.
+- Datos sucios detectados para limpiar a futuro: duplicados (Walter Tuñoque x2, Ezequiel Aguilar x2 con typo GUTIERUTZ), entradas no-cliente ("PRUEBA AUTORIZAR SEGURO", "Liquidacion Julio Priscila", "yanina amiga de kanela"), RUT de empresa en cliente (77.274.888-4 DANIEL ROMERO).
