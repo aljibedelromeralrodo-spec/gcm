@@ -773,6 +773,10 @@ async def startup():
     # 🧠 GUARDIÁN LÓGICO V16.5 — mente humana con backtracking
     import guardian_logico as _guard
     asyncio.create_task(_task_blindada(_guard.guardian_loop, "guardian_logico_10min"))
+    # 🫀 TEMA VIVO V17 — voz proactiva '¿la paso a mesa?' + hambre nocturna 3am
+    import tema_vivo as _tvivo
+    asyncio.create_task(_tvivo.seed_tema_vivo())
+    asyncio.create_task(_task_blindada(_tvivo.tema_vivo_loop, "tema_vivo_2min"))
     # ⚖️ FUENTE DE VERDAD DE MESA (aprobaciones@centralmutuos.cl) — monitoreo permanente
     import mesa_verdad as _mesav
     asyncio.create_task(_task_blindada(_mesav.mesa_verdad_loop, "mesa_verdad"))
@@ -16216,6 +16220,8 @@ import martin_taller as _mtall_mod
 api.include_router(_mtall_mod.martin)
 import guardian_logico as _guard_mod
 api.include_router(_guard_mod.guardian)
+import tema_vivo as _tvivo_mod
+api.include_router(_tvivo_mod.temavivo)
 
 # ⚡ MONITOR DE ENERGÍA — Reserva de funcionamiento
 import energia as _energia_mod

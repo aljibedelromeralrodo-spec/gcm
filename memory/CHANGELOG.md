@@ -452,3 +452,16 @@
   loop 10min, flujo único 8 nodos visual. sistema_backtracking_log + sistema_mapa_logico. Test iteration_66: 100%.
 - FIX DEPLOY: startup ya no bloquea con objstore (bunker en bg + cortacircuito 15 fallos). Redeploy solicitado.
 - REGLA USUARIO: plantillas aprobadas (solicitud docs, gasto operacional) NO se modifican (memory/protected_modules.md).
+
+## 2026-06 (fork) — V17 TEMA VIVO Fase 1 (TESTEADO: backend curl E2E + frontend 100% iteration_67)
+- tema_vivo.py + módulo '🫀 Tema Vivo' (GuardianLogicoModule extendido):
+  · Voz proactiva: carpeta completa → notificaciones_mesa_pendiente con mensaje vivo "Corazón, arreglé…
+    ¿la paso a mesa?" → click chico [Sí] inserta en mesa_entrada_bandeja (YA NO pasa directo a mesa).
+  · Archivo malo→bueno: PDFs corruptos se marcan archivo_malo_ignorado (pypdf check en procesar_correo),
+    espejo registra "lo ignoro"; al llegar el bueno se repara con oro (log reparación).
+  · Espejo pensamiento (tema_vivo_espejo + backtracking_log formateado como pensamientos).
+  · Hambre nocturna 03:00 America/Santiago (tema_vivo_hambre_log, corre revision_completa del guardián)
+    + botón hambre-ahora. Loop tema_vivo_2min.
+  · Permisos Fase 1: pasar_a_mesa/consulta = autorización chica PERMITIDO; enviar_masivo_10 BLOQUEADO.
+  · Barra por protocolo (liq X/6, X/12 codeudor, o docs N/N si independiente).
+- Rutas: /api/tema-vivo/{estado, mesa/{nid}/pasar, mesa/{nid}/mas-tarde, hambre-ahora}.

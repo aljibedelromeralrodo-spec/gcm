@@ -362,15 +362,37 @@ async def procesar_correo(c):
             protocolo_id = doc0.get("protocolo_id") or protocolo_id
     await _asegurar_docs(caso_id, rut, protocolo_id)
     urls = {}
+    malos = set()
     if adj_nombres:
         try:
             atts = await asyncio.to_thread(mail.fetch_attachments_by_id, message_id, None)
             base = ADJ_DIR / (_norm_rut(rut) or "sin_rut")
             base.mkdir(parents=True, exist_ok=True)
             for a in atts or []:
-                fn = re.sub(r"[^\w.\-]+", "_", a.get("filename") or "adjunto.pdf")
-                (base / fn).write_bytes(a.get("content_bytes") or b"")
-                urls[a.get("filename") or fn] = str((base / fn).relative_to(ADJ_DIR.parent))
+                fn0 = a.get("filename") or "adjunto.pdf"
+                fn = re.sub(r"[^\w.\-]+", "_", fn0)
+                data = a.get("content_bytes") or b""
+                if fn.lower().endswith(".pdf"):
+                    try:
+                        from pypdf import PdfReader
+                        import io
+                        if not data or not len(PdfReader(io.BytesIO(data)).pages):
+                            raise ValueError("PDF vacío")
+                    except Exception:
+                        malos.add(fn0)
+                        await _log("archivo_malo_ignorado", {"caso_id": caso_id, "archivo": fn0[:80]},
+                                   correo_entrada_id=reg["id"])
+                        try:
+                            import tema_vivo as tv
+                            await tv.espejo(f"Recibí correo de {rut or remitente[:40]}… el archivo '{fn0[:50]}' "
+                                            "viene malo, no se puede leer… lo ignoro y sigo esperando el bueno.",
+                                            caso_id, rut, "recibir_adjunto", "archivo malo/corrupto",
+                                            "esperar el bueno", "ignorado sin contar")
+                        except Exception:
+                            pass
+                        continue
+                (base / fn).write_bytes(data)
+                urls[fn0] = str((base / fn).relative_to(ADJ_DIR.parent))
                 try:
                     import bunker
                     bunker.subir_archivo_bg(base / fn)
@@ -378,8 +400,9 @@ async def procesar_correo(c):
                     pass
         except Exception as e:
             logging.warning(f"blindaje adjuntos {message_id}: {str(e)[:120]}")
-    enriquecidos = await _enriquecer(caso_id, rut, protocolo_id,
-                                     clasif.get("documentos_adjuntos_detectados"), reg["id"], urls)
+    adj_det = [a for a in (clasif.get("documentos_adjuntos_detectados") or [])
+               if (a.get("filename") or "") not in malos]
+    enriquecidos = await _enriquecer(caso_id, rut, protocolo_id, adj_det, reg["id"], urls)
     if enriquecidos and not nuevo:
         await _log("carpeta_enriquecida", {"caso_id": caso_id, "docs": enriquecidos,
                                            "enriquecido_auto": True}, correo_entrada_id=reg["id"])
@@ -389,16 +412,12 @@ async def procesar_correo(c):
     await _log("entrante_clasificado", {"protocolo": protocolo_id, "caso_id": caso_id,
                                         "nuevo_caso": nuevo, "enriquecidos": enriquecidos}, correo_entrada_id=reg["id"])
     if not est["faltan"]:
-        if not await db.mesa_entrada_bandeja.find_one({"caso_id": caso_id, "estado": "pendiente"}):
-            await db.mesa_entrada_bandeja.insert_one({
-                "id": str(uuid.uuid4()), "correo_id": reg["id"], "caso_id": caso_id,
-                "protocolo_id": protocolo_id, "tipo": "carpeta_completa_lista_mesa",
-                "prioridad": "alta", "estado": "pendiente", "modulo_asignado": est["modulo_mesa"],
-                "requiere_accion": True, "sla_horas": 24,
-                "vence_at": (datetime.now(timezone.utc) + timedelta(hours=24)).isoformat(),
-                "created_at": _now()})
-            await _log("carpeta_completa_lista_mesa", {"caso_id": caso_id, "modulo": est["modulo_mesa"]},
-                       correo_entrada_id=reg["id"])
+        # V17 TEMA VIVO: ya no pasa directo a mesa — pregunta '¿la paso a mesa?' (autorización chica)
+        try:
+            import tema_vivo as tv
+            await tv.notificar_mesa(caso_id, rut, nombre, protocolo_id, est, reg["id"])
+        except Exception as e:
+            logging.warning(f"tema vivo notificar mesa: {str(e)[:120]}")
     else:
         m = RX_EMAIL.search(remitente)
         if m:

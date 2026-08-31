@@ -26,14 +26,18 @@ const ScoreCircular = ({ score }) => {
 
 export default function GuardianLogicoModule() {
   const [data, setData] = useState(null);
+  const [vivo, setVivo] = useState(null);
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState("");
   const [nodoSel, setNodoSel] = useState(null);
 
   const load = useCallback(async () => {
     try {
-      const r = await axios.get(`${API}/api/guardian/estado`);
-      setData(r.data);
+      const [r, v] = await Promise.all([
+        axios.get(`${API}/api/guardian/estado`),
+        axios.get(`${API}/api/tema-vivo/estado`),
+      ]);
+      setData(r.data); setVivo(v.data);
     } catch (e) { setMsg("Error: " + (e.response?.data?.detail || e.message)); }
   }, []);
   useEffect(() => { load(); const t = setInterval(load, 45000); return () => clearInterval(t); }, [load]);
@@ -56,6 +60,27 @@ export default function GuardianLogicoModule() {
     setBusy("");
   };
 
+  const pasarMesa = async (nid) => {
+    setBusy(nid);
+    try {
+      const r = await axios.post(`${API}/api/tema-vivo/mesa/${nid}/pasar`);
+      setMsg(r.data.mensaje); load();
+    } catch (e) { setMsg("Error: " + (e.response?.data?.detail || e.message)); }
+    setBusy("");
+  };
+  const masTarde = async (nid) => {
+    await axios.post(`${API}/api/tema-vivo/mesa/${nid}/mas-tarde`); load();
+  };
+  const hambreAhora = async () => {
+    setBusy("hambre");
+    try {
+      const r = await axios.post(`${API}/api/tema-vivo/hambre-ahora`);
+      setMsg(`🌙 Hambre nocturna: score ${r.data.score_antes}→${r.data.score_despues}. Aprendí: ${r.data.aprendi}`.slice(0, 220));
+      load();
+    } catch (e) { setMsg("Error: " + (e.response?.data?.detail || e.message)); }
+    setBusy("");
+  };
+
   const s = data?.score || {};
   return (
     <div data-testid="guardian-module" style={{ padding: "0.4rem 0" }}>
@@ -63,23 +88,125 @@ export default function GuardianLogicoModule() {
         background: "linear-gradient(135deg, rgba(20,20,24,0.95), rgba(30,35,60,0.4))" }}>
         <ScoreCircular score={s.total ?? 0} />
         <div style={{ flex: 1, minWidth: 260 }}>
-          <h2 style={{ color: ORO, margin: 0, fontSize: "1.1rem" }}>🧠 Guardián Lógico — Mente Humana</h2>
-          <div style={{ color: "#cbd5e1", fontSize: "0.74rem", margin: "4px 0 10px" }}>
+          <h2 style={{ color: ORO, margin: 0, fontSize: "1.1rem" }}>🫀 Tema Vivo — Guardián Lógico</h2>
+          <div style={{ color: "#cbd5e1", fontSize: "0.74rem", margin: "4px 0 6px" }}>
             Sistema simple, sencillo y fluido. Detecta lo que da vueltas, simplifica a una sola verdad
             y <b style={{ color: "#FCF6BA" }}>sabe cuándo retroceder</b>.</div>
+          <div data-testid="banner-fase1" style={{ color: "#FCF6BA", fontSize: "0.64rem", fontWeight: 800,
+            background: "rgba(212,175,55,0.12)", border: "1px solid rgba(212,175,55,0.3)",
+            borderRadius: 8, padding: "0.3rem 0.6rem", marginBottom: 8, display: "inline-block" }}>
+            {vivo?.restriccion || "FASE 1 — Masivo >10 BLOQUEADO"}</div>
           <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: "0.7rem" }}>
-            <span style={{ color: "#4ade80" }}>Simplicidad {s.simplicidad}%</span>
-            <span style={{ color: "#60a5fa" }}>Lógica {s.logica}%</span>
-            <span style={{ color: "#c084fc" }}>Fluidez {s.fluidez}% ({s.fluidez_seg || 0}s entrada→mesa)</span>
+            <span data-testid="kpi-simplicidad" style={{ color: "#4ade80" }}>Simplicidad {s.simplicidad}%</span>
+            <span data-testid="kpi-logica" style={{ color: "#60a5fa" }}>Lógica {s.logica}%</span>
+            <span data-testid="kpi-fluidez" style={{ color: "#c084fc" }}>Fluidez {s.fluidez}% ({s.fluidez_seg || 0}s entrada→mesa)</span>
             <span style={{ color: "#f87171" }}>Nudos activos: {s.nudos ?? 0}</span>
           </div>
         </div>
-        <button data-testid="btn-revisar-todo" onClick={revisarTodo} disabled={busy === "todo"}
-          style={{ background: "linear-gradient(135deg,#BF953F,#FCF6BA)", color: "#0a0a0a", border: "none",
-            borderRadius: 12, padding: "0.8rem 1.4rem", cursor: "pointer", fontWeight: 900, fontSize: "0.78rem" }}>
-          {busy === "todo" ? "🧠 Pensando…" : "🧹 Revisar y Simplificar Todo Ahora"}</button>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <button data-testid="btn-revisar-todo" onClick={revisarTodo} disabled={busy === "todo"}
+            style={{ background: "linear-gradient(135deg,#BF953F,#FCF6BA)", color: "#0a0a0a", border: "none",
+              borderRadius: 12, padding: "0.7rem 1.3rem", cursor: "pointer", fontWeight: 900, fontSize: "0.74rem" }}>
+            {busy === "todo" ? "🧠 Pensando…" : "🧹 Revisar y Simplificar Todo"}</button>
+          <button data-testid="btn-hambre-ahora" onClick={hambreAhora} disabled={busy === "hambre"}
+            style={{ background: "transparent", border: "1px solid rgba(192,132,252,0.5)", color: "#c084fc",
+              borderRadius: 12, padding: "0.55rem 1.3rem", cursor: "pointer", fontWeight: 800, fontSize: "0.7rem" }}>
+            {busy === "hambre" ? "🌙 Aprendiendo…" : "🌙 Hambre nocturna ahora"}</button>
+        </div>
       </div>
       {msg && <div data-testid="guardian-msg" style={{ ...panel, color: "#FCF6BA", fontSize: "0.78rem", padding: "0.6rem 1rem" }}>{msg}</div>}
+
+      <div style={{ ...panel, borderColor: "rgba(212,175,55,0.6)" }} data-testid="seccion-mesa-pendiente">
+        <div style={{ color: ORO, fontSize: "0.72rem", fontWeight: 800, letterSpacing: "0.12em", marginBottom: 8 }}>
+          💬 ¿LA PASO A MESA? — autorización chica, 1 click</div>
+        {!(vivo?.notificaciones || []).length && (
+          <div style={{ color: "#9ca3af", fontSize: "0.74rem" }} data-testid="sin-mesa-pendiente">
+            Sin carpetas esperando tu click. Cuando una llegue a 6/6, Martín te preguntará aquí.</div>)}
+        {(vivo?.notificaciones || []).map(n => (
+          <div key={n.id} data-testid={`mesa-card-${n.id}`} style={{ background: "rgba(212,175,55,0.07)",
+            border: "1.5px solid rgba(212,175,55,0.45)", borderRadius: 12, padding: "0.9rem 1rem", marginBottom: 10 }}>
+            <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 6 }}>
+              <span style={{ fontSize: "1.2rem" }}>🔔</span>
+              <b style={{ color: "#FCF6BA", fontSize: "0.8rem" }}>{n.cliente_nombre || n.cliente_rut}</b>
+              <span style={{ background: "linear-gradient(135deg,#BF953F,#FCF6BA)", color: "#0a0a0a",
+                padding: "0.1rem 0.55rem", borderRadius: 20, fontSize: "0.62rem", fontWeight: 900 }}>{n.barra}</span>
+              {n.reparada_con_oro && <span style={{ color: ORO, fontSize: "0.62rem", fontWeight: 800 }}>✨ Reparada con oro</span>}
+              <span style={{ marginLeft: "auto", color: "#6b7280", fontSize: "0.62rem" }}>
+                {(n.created_at || "").slice(0, 16).replace("T", " ")}</span>
+            </div>
+            <div style={{ color: "#e2e8f0", fontSize: "0.78rem", fontStyle: "italic", marginBottom: 10 }}>
+              “{n.mensaje_vivo}”</div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button data-testid={`btn-si-mesa-${n.id}`} disabled={busy === n.id} onClick={() => pasarMesa(n.id)}
+                style={{ background: "linear-gradient(135deg,#166534,#22c55e)", color: "#fff", border: "none",
+                  borderRadius: 8, padding: "0.5rem 1.2rem", cursor: "pointer", fontWeight: 900, fontSize: "0.72rem" }}>
+                {busy === n.id ? "Pasando…" : "✅ Sí, pásala a mesa"}</button>
+              <button data-testid={`btn-tarde-${n.id}`} onClick={() => masTarde(n.id)}
+                style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.2)", color: "#cbd5e1",
+                  borderRadius: 8, padding: "0.5rem 1rem", cursor: "pointer", fontSize: "0.72rem" }}>⏰ Más tarde</button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={panel} data-testid="seccion-espejo">
+        <div style={{ color: "#60a5fa", fontSize: "0.72rem", fontWeight: 800, letterSpacing: "0.12em", marginBottom: 8 }}>
+          🪞 ESPEJO DE PENSAMIENTO — cómo piensa el sistema</div>
+        <div style={{ maxHeight: 300, overflowY: "auto" }}>
+          {(vivo?.pensamientos || []).map(p => (
+            <div key={p.id} style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "flex-start" }}>
+              <span style={{ fontSize: "0.9rem" }}>{p.origen === "backtracking" ? "↩️" : "💭"}</span>
+              <div style={{ background: "rgba(96,165,250,0.08)", border: "1px solid rgba(96,165,250,0.2)",
+                borderRadius: "2px 12px 12px 12px", padding: "0.45rem 0.7rem", fontSize: "0.7rem",
+                color: "#dbeafe", flex: 1 }}>
+                {p.pensamiento}
+                <div style={{ color: "#6b7280", fontSize: "0.58rem", marginTop: 3 }}>
+                  {(p.created_at || "").slice(0, 16).replace("T", " ")}
+                  {p.retrocedio_a || p.retrocede_a ? " · retrocedió donde había que retroceder ✅" : ""}</div>
+              </div>
+            </div>
+          ))}
+          {!(vivo?.pensamientos || []).length && <div style={{ color: "#6b7280", fontSize: "0.72rem" }}>Aún sin pensamientos registrados.</div>}
+        </div>
+      </div>
+
+      <div style={panel} data-testid="seccion-hambre">
+        <div style={{ color: "#c084fc", fontSize: "0.72rem", fontWeight: 800, letterSpacing: "0.12em", marginBottom: 8 }}>
+          🌙 HAMBRE NOCTURNA 3AM — lo que aprendió solo</div>
+        {(vivo?.hambre || []).map(h => (
+          <div key={h.id} style={{ padding: "0.45rem 0", borderBottom: "1px solid rgba(255,255,255,0.05)", fontSize: "0.7rem" }}>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <b style={{ color: "#e2e8f0" }}>{h.fecha}</b>
+              <span style={{ color: "#c084fc" }}>{h.nudo_detectado}</span>
+              <span style={{ marginLeft: "auto", fontWeight: 900,
+                color: h.score_despues >= h.score_antes ? "#4ade80" : "#fbbf24" }}>
+                {h.score_antes}% → {h.score_despues}% ✨</span>
+            </div>
+            <div style={{ color: "#9ca3af" }}>Aprendí: {h.que_aprendi}</div>
+          </div>
+        ))}
+        {!(vivo?.hambre || []).length && <div style={{ color: "#6b7280", fontSize: "0.72rem" }}>Primera hambre esta madrugada a las 03:00 (o pruébala con el botón 🌙).</div>}
+      </div>
+
+      <div style={{ ...panel, borderColor: "rgba(212,175,55,0.5)" }} data-testid="seccion-orgullo">
+        <div style={{ color: ORO, fontSize: "0.72rem", fontWeight: 800, letterSpacing: "0.12em", marginBottom: 8 }}>
+          🏺 ORGULLO DE ORO — cicatrices doradas, quedó más fuerte</div>
+        <div style={{ maxHeight: 260, overflowY: "auto" }}>
+          {(vivo?.orgullo_oro || []).map(h => (
+            <div key={h.id} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap",
+              fontSize: "0.66rem", padding: "0.35rem 0", borderBottom: "1px solid rgba(212,175,55,0.12)" }}>
+              <span style={{ color: "#6b7280" }}>{(h.created_at || "").slice(0, 16).replace("T", " ")}</span>
+              <span style={{ color: "#fca5a5" }}>{(h.tipo_falla || "").replace(/_/g, " ")}</span>
+              {h.cliente_rut && <b style={{ color: "#e2e8f0" }}>{h.cliente_rut}</b>}
+              <span style={{ color: "#fca5a5", background: "rgba(220,38,38,0.08)", padding: "0.1rem 0.45rem",
+                borderRadius: 6 }}>{JSON.stringify(h.antes || {}).slice(0, 60)}</span>
+              <span style={{ color: ORO, fontWeight: 900 }}>━✨━▶</span>
+              <span style={{ color: "#a7f3d0", background: "rgba(74,222,128,0.08)", padding: "0.1rem 0.45rem",
+                borderRadius: 6 }}>{JSON.stringify(h.despues || {}).slice(0, 60)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
 
       <div style={panel} data-testid="flujo-unico">
         <div style={{ color: ORO, fontSize: "0.72rem", fontWeight: 800, letterSpacing: "0.12em", marginBottom: 10 }}>

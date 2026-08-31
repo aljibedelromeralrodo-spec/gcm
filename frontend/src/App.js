@@ -454,7 +454,7 @@ function MainApp() {
     { key: 'dashai', icon: 'fa-lightbulb-o', label: '🧠 Cerebro DashAI' },
     { key: 'blindaje', icon: 'fa-shield', label: '🛡️ Blindaje Correos' },
     { key: 'martintaller', icon: 'fa-wrench', label: '🔧 Taller Kintsugi' },
-    { key: 'guardian', icon: 'fa-sitemap', label: '🧠 Guardián Lógico' },
+    { key: 'guardian', icon: 'fa-sitemap', label: '🫀 Tema Vivo' },
     { key: 'emmy', icon: 'fa-book', label: '📔 Registro Emmy' },
     { key: 'martinfin', icon: 'fa-heart-o', label: '💛 Martín — Asistente Financiero' },
     { key: 'auditoria', icon: 'fa-balance-scale', label: '📋 Auditoría Forense' },
