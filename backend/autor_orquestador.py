@@ -14,7 +14,7 @@ db = client[os.environ["DB_NAME"]]
 
 BLOQUES = [
     {"id": 1, "nombre": "BLINDAJE - Tests E2E Playwright",
-     "comando": "cd /app/frontend && PLAYWRIGHT_BROWSERS_PATH=/pw-browsers npx playwright test --reporter=list",
+     "comando": "cd /app/frontend && PLAYWRIGHT_BROWSERS_PATH=/app/pw-browsers npx playwright test --reporter=list",
      "timeout": 600, "espera": 15},
     {"id": 2, "nombre": "CORTE - Lint split clientes",
      "comando": "cd /app/frontend && npx eslint src/pages/ClientesModule.js src/pages/clientes --max-warnings=50",
@@ -33,13 +33,13 @@ BLOQUES = [
                  "print(r); assert r['vivo'] and r['martin_taller'] and r['logica_humana']\""),
      "timeout": 90, "espera": 5},
     {"id": 6, "nombre": "CORTE ROWACTIONS - anti-polling",
-     "comando": "cd /app/frontend && PLAYWRIGHT_BROWSERS_PATH=/pw-browsers npx playwright test e2e/ficha-cliente.spec.js --reporter=list",
+     "comando": "cd /app/frontend && PLAYWRIGHT_BROWSERS_PATH=/app/pw-browsers npx playwright test e2e/ficha-cliente.spec.js --reporter=list",
      "timeout": 300, "espera": 5},
     {"id": 7, "nombre": "CORTE 9 - CardContent tarjeta renderiza",
-     "comando": "cd /app/frontend && PLAYWRIGHT_BROWSERS_PATH=/pw-browsers npx playwright test e2e/login-clientes.spec.js --reporter=list",
+     "comando": "cd /app/frontend && PLAYWRIGHT_BROWSERS_PATH=/app/pw-browsers npx playwright test e2e/login-clientes.spec.js --reporter=list",
      "timeout": 200, "espera": 5},
     {"id": 8, "nombre": "CORTE 10 - ReparosAbogado modal",
-     "comando": "cd /app/frontend && PLAYWRIGHT_BROWSERS_PATH=/pw-browsers npx playwright test e2e/login-clientes.spec.js --grep 'TEST REPAROS' --reporter=list",
+     "comando": "cd /app/frontend && PLAYWRIGHT_BROWSERS_PATH=/app/pw-browsers npx playwright test e2e/login-clientes.spec.js --grep 'TEST REPAROS' --reporter=list",
      "timeout": 200, "espera": 5},
     {"id": 9, "nombre": "CIERRE - Docs", "comando": "echo ok", "timeout": 30, "espera": 0},
 ]
@@ -87,7 +87,7 @@ def _autopiloto():
     time.sleep(30)  # webpack recompila el corte
     val = subprocess.run(
         "cd /app/frontend && npx eslint src/pages/ClientesModule.js src/pages/clientes --max-warnings=50 "
-        "&& PLAYWRIGHT_BROWSERS_PATH=/pw-browsers npx playwright test --reporter=list",
+        "&& PLAYWRIGHT_BROWSERS_PATH=/app/pw-browsers npx playwright test --reporter=list",
         shell=True, capture_output=True, text=True, timeout=700)
     lineas = sum(1 for _ in open("/app/frontend/src/pages/ClientesModule.js"))
     if val.returncode == 0:
@@ -104,7 +104,24 @@ def _autopiloto():
         _autopiloto_falla(corte, "tests fallaron tras el corte — REVERTIDO del backup: " + (val.stdout + val.stderr)[-250:])
 
 
+def _esperar_frontend_listo(max_seg=300):
+    """Tras despertar el pod, webpack tarda en compilar: espera a que el frontend responda antes de testear."""
+    import urllib.request
+    t0 = time.time()
+    while time.time() - t0 < max_seg:
+        try:
+            if urllib.request.urlopen("http://localhost:3000", timeout=30).status == 200:
+                print("frontend listo, arrancando bloques", flush=True)
+                return True
+        except Exception:
+            pass
+        time.sleep(10)
+    print("frontend no respondió tras el calentamiento", flush=True)
+    return False
+
+
 def ejecutar_todo_automatico():
+    _esperar_frontend_listo()
     estado = db.autor_estado.find_one({"_id": "progreso"}) or {"bloque_actual": 1}
     inicio = max(1, min(estado.get("bloque_actual", 1), len(BLOQUES)))
     db.autor_estado.update_one({"_id": "progreso"}, {"$set": {"corriendo": True,

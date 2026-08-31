@@ -10,7 +10,7 @@ import PrediccionEspejo from "../components/PrediccionEspejo";
 import CompromisoEditor from "./CompromisoEditor";
 import { secureGet } from "../utils/secureStore";
 import { guardarEstado, leerEstado, tomarRegreso } from "../utils/navegacion";
-import { BrokersPanel, UFAmountInput, ClientesFilters, ClientesRowActions, ClientesCardContent, ReparosAbogado, MoraCMF } from "./clientes";
+import { BrokersPanel, UFAmountInput, ClientesFilters, ClientesRowActions, ClientesCardContent, ReparosAbogado, MoraCMF, DocumentosContador } from "./clientes";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 // Regla #65: validador de dígito verificador (módulo 11) — RUT verificado al 100%
@@ -1609,11 +1609,7 @@ export default function ClientesModule({ onNavigate }) {
                       ✅ ENVIADO (manual)
                     </div>
                   )}
-                  {missing.length > 0 && (
-                    <div title={`Faltan: ${missing.join(", ")}`} style={{ position: "absolute", top: 8, right: 8, background: "#be123c", color: "#fff", borderRadius: "50%", width: 22, height: 22, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, boxShadow: "0 2px 8px rgba(190,18,60,0.5)" }}>
-                      {missing.length}
-                    </div>
-                  )}
+                  <DocumentosContador missing={missing} />
                   <div className="clientes-card-icon"><i className="fa fa-folder"></i></div>
                   <div className="clientes-card-info">
                     <h4 style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>{f.nombre}

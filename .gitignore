@@ -109,3 +109,5 @@ frontend/node_modules/.cache/default-development/0.pack_
 .env.*
 *.env
 frontend/node_modules/.cache/default-development/10.pack
+pw-browsers/
+pw-browsers/chromium_headless_shell-1234/chrome-linux/headless_shell
