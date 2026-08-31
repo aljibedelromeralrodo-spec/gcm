@@ -7,9 +7,11 @@ import uuid
 from datetime import datetime, timezone
 
 from database import db
+from folders_service import scan_archivos as fsvc_scan
 
 ETAPAS = ["recibido", "en_mesa", "observado", "rechazado", "aprobado", "escriturado"]
 RX_ESCRITURA = re.compile(r"escritur|notar[ií]a|firma\b|borrador", re.I)
+RX_ESC_DOC = re.compile(r"escritur|compraventa|\bcpv\b|firma", re.I)
 RX_RUIDO = re.compile(
     r"documentaci|firma|escritur|carpeta|formato|suscripci|google|coursiv|"
     r"respuestas mesa|desconocido|rechazado para|rectificatoria|con documentos|"
@@ -121,6 +123,49 @@ async def generar_informe(mes):
         c["rut"] = c["rut"] or (cc.get("cliente_rut") or "")
 
     hoy = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    # ── VERIFICACIÓN HISTÓRICA (fuera del mes) para los "nunca enviados a mesa" ──
+    folders_by_name = {f["nombre"]: f for f in folders}
+    mesa_hist = {}
+    async for e in db.mesa_enviados.find({}, {"_id": 0, "cliente": 1, "enviado_at": 1}):
+        canon = m.match(e.get("cliente") or "")
+        if canon:
+            mesa_hist.setdefault(canon, []).append(_fecha(e.get("enviado_at")))
+    seg_hist = {}
+    async for s in db.seguimiento.find({}, {"_id": 0, "cliente": 1, "fecha": 1, "estado": 1}):
+        canon = m.match(s.get("cliente") or "")
+        if canon:
+            seg_hist.setdefault(canon, []).append((_fecha(s.get("fecha")), s.get("estado")))
+
+    def _historial_fuera_mes(nombre):
+        """Busca señales de que el cliente avanzó en OTRO mes: mesa, estudio de título,
+        escrituración/firma."""
+        señales = []
+        f = folders_by_name.get(nombre)
+        for fch in mesa_hist.get(nombre, []):
+            if not (ini <= fch < fin):
+                señales.append(f"Enviado a mesa el {fch} (otro mes)")
+        for fch, est in seg_hist.get(nombre, []):
+            if not (ini <= fch < fin):
+                señales.append(f"Respuesta de mesa «{est}» el {fch} (otro mes)")
+        if f:
+            if f.get("is_escrituracion") or f.get("escrituracion_movida_at"):
+                señales.append(f"Carpeta en ESCRITURACIÓN ({_fecha(f.get('escrituracion_movida_at')) or 's/f'})")
+            if f.get("estudio_titulo_solicitado_at"):
+                señales.append(f"Estudio de título solicitado el {_fecha(f.get('estudio_titulo_solicitado_at'))}")
+            try:
+                for a in fsvc_scan(nombre):
+                    if a["subfolder"].startswith("07_estudio_titulo"):
+                        señales.append("Tiene documentos de ESTUDIO DE TÍTULO en carpeta")
+                        break
+                for a in fsvc_scan(nombre):
+                    if RX_ESC_DOC.search(a["nombre"]):
+                        señales.append(f"Doc de escritura/firma en carpeta: {a['nombre'][:60]}")
+                        break
+            except Exception:
+                pass
+        return señales
+
     salida = []
     for c in clientes.values():
         if not c["eventos"]:
@@ -139,10 +184,15 @@ async def generar_informe(mes):
         dias_detenido = (datetime.strptime(hoy, "%Y-%m-%d")
                          - datetime.strptime(ultimo["fecha"], "%Y-%m-%d")).days
         motivo = ""
+        historial_fuera = []
         if etapa == "recibido":
-            motivo = "Documentación recibida pero NUNCA se envió a mesa"
-            if c["faltantes"]:
-                motivo += f" (faltan: {', '.join(c['faltantes'][:4])})"
+            historial_fuera = _historial_fuera_mes(c["cliente"])
+            if historial_fuera:
+                motivo = "AVANZÓ EN OTRO MES: " + " · ".join(historial_fuera[:3])
+            else:
+                motivo = "Documentación recibida pero NUNCA se envió a mesa"
+                if c["faltantes"]:
+                    motivo += f" (faltan: {', '.join(c['faltantes'][:4])})"
         elif etapa == "en_mesa" and tipos[-1] == "enviado_a_mesa":
             motivo = f"Enviado a mesa el {ultimo['fecha']} SIN respuesta registrada"
         elif etapa == "observado":
@@ -153,7 +203,8 @@ async def generar_informe(mes):
             motivo = "RECHAZADO por mesa (terminal, revisar re-evaluación)"
         elif etapa == "escriturado":
             motivo = "En etapa de escrituración/firma"
-        recuperable = etapa not in ("escriturado",) and dias_detenido >= 7
+        recuperable = (etapa not in ("escriturado",) and dias_detenido >= 7
+                       and not historial_fuera)
         accion = ""
         if recuperable:
             accion = {"recibido": "Completar carpeta y enviar a mesa",
@@ -164,6 +215,8 @@ async def generar_informe(mes):
         salida.append({**c, "etapa": etapa, "ultima_actividad": ultimo["fecha"],
                        "dias_sin_movimiento": dias_detenido, "motivo_detencion": motivo,
                        "recuperable": recuperable, "accion_sugerida": accion,
+                       "avanzo_otro_mes": bool(historial_fuera),
+                       "historial_fuera_del_mes": historial_fuera,
                        "n_eventos": len(c["eventos"])})
     salida.sort(key=lambda x: (not x["recuperable"], -x["dias_sin_movimiento"]))
     resumen = {
@@ -173,7 +226,9 @@ async def generar_informe(mes):
         "observados": sum(1 for c in salida if c["etapa"] == "observado"),
         "rechazados": sum(1 for c in salida if c["etapa"] == "rechazado"),
         "escriturados": sum(1 for c in salida if c["etapa"] == "escriturado"),
-        "nunca_enviados_a_mesa": sum(1 for c in salida if c["etapa"] == "recibido"),
+        "nunca_enviados_a_mesa": sum(1 for c in salida if c["etapa"] == "recibido"
+                                     and not c["avanzo_otro_mes"]),
+        "avanzaron_en_otro_mes": sum(1 for c in salida if c["avanzo_otro_mes"]),
         "recuperables": sum(1 for c in salida if c["recuperable"]),
     }
     informe = {"id": str(uuid.uuid4()), "mes": mes, "resumen": resumen, "clientes": salida,
@@ -192,7 +247,8 @@ def informe_a_excel(informe):
     ws = wb.active
     ws.title = "Clientes"
     head = ["Cliente", "RUT", "Etapa", "Última actividad", "Días detenido",
-            "Recuperable", "Motivo detención", "Acción sugerida", "N° eventos"]
+            "Recuperable", "Avanzó en otro mes", "Motivo detención", "Acción sugerida",
+            "N° eventos"]
     ws.append(head)
     for c in ws[1]:
         c.font = Font(bold=True, color="FFFFFF")
@@ -201,11 +257,12 @@ def informe_a_excel(informe):
     for c in informe["clientes"]:
         ws.append([c["cliente"], c["rut"], c["etapa"], c["ultima_actividad"],
                    c["dias_sin_movimiento"], "SÍ" if c["recuperable"] else "no",
+                   " · ".join(c.get("historial_fuera_del_mes") or [])[:200],
                    c["motivo_detencion"], c["accion_sugerida"], c["n_eventos"]])
         if c["recuperable"]:
             for cell in ws[ws.max_row]:
                 cell.fill = verde
-    for col, w in zip("ABCDEFGHI", [38, 14, 13, 15, 13, 12, 55, 45, 10]):
+    for col, w in zip("ABCDEFGHIJ", [38, 14, 13, 15, 13, 12, 50, 55, 45, 10]):
         ws.column_dimensions[col].width = w
     ws2 = wb.create_sheet("Timeline")
     ws2.append(["Cliente", "Fecha", "Evento", "Detalle"])

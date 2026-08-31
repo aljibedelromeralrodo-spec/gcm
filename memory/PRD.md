@@ -1320,3 +1320,8 @@ PENDIENTE: quedan ~14 correos que mencionan a Gabriela sin procesar (buscador de
 - Por cliente: timeline de eventos, etapa (recibido→en_mesa→observado/aprobado/rechazado→escriturado), días sin movimiento, motivo de detención y ACCIÓN SUGERIDA. recuperable = no escriturado y ≥7 días detenido.
 - RESULTADO AGOSTO 2026: 234 clientes con actividad, 114 enviados a mesa, 11 aprobados, 11 observados, 3 rechazados, 9 escriturados, 120 nunca enviados a mesa, 133 RECUPERABLES (56 recibido / 61 en_mesa / 10 aprobado / 5 observado / 1 rechazado).
 - Excel (2 hojas: Clientes con recuperables destacados + Timeline 500+ eventos) guardado en carpeta Central Mutuos/99_otros/INFORME_EXHAUSTIVO_AGOSTO_2026.xlsx y subido al búnker.
+
+## 2026-08-31 — Verificación histórica de los "nunca enviados a mesa" (informe agosto v2)
+- Para cada cliente en etapa "recibido", _historial_fuera_mes cruza: mesa_enviados de CUALQUIER mes, seguimiento de cualquier mes, flags de carpeta (is_escrituracion, escrituracion_movida_at, estudio_titulo_solicitado_at), docs en 07_estudio_titulo y nombres de archivo con escritur|compraventa|cpv|firma (RX_ESC_DOC — 'notarial' excluido para evitar falsos positivos tipo contrato de arriendo).
+- Resultado: de los 120 "nunca enviados", 14 SÍ avanzaron en otro mes (julio a mesa/aprobados, estudio de título o escritura en carpeta) → marcados avanzo_otro_mes, EXCLUIDOS de recuperables. Quedan 106 genuinamente nunca presentados y 128 recuperables netos.
+- Excel v2 con columna "Avanzó en otro mes" regenerado en Central Mutuos/99_otros/INFORME_EXHAUSTIVO_AGOSTO_2026.xlsx.
