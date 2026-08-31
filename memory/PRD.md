@@ -1202,3 +1202,11 @@ actual; todo lo demás permanece intacto.
 - Corte 10: ReparosAbogado.js (botón ⚠️ reparos con openReparos, 9 líneas). ClientesModule: 3.866 líneas. 6 componentes fuera.
 - Nuevo test "TEST REPAROS" en login-clientes.spec.js (abre modal reparos-modal con datos reales: 5 carpetas con reparos_alertas) + Bloque 8 del AUTOR lo corre. AUTOR ahora 9 bloques — corrida 9/9 OK.
 - Programa horario sigue ACTIVO (próxima 06:09 UTC).
+
+## 2026-08-31 — AUTOPILOTO de cortes ACTIVO (validado E2E completo)
+- autor_config._id=cortes en Mongo (no JSON file): cola [13 DocumentosContador bajo, 12 NotificarNoCalifico medio], corridas_verdes, autopiloto_activo.
+- Scripts deterministas en /app/backend/autor_cortes/corte_{11,12,13}.py (backup a /tmp/autopiloto_bak antes de cortar; reversa por copia de archivos, NO git reset).
+- _autopiloto() en el orquestador: 3 verdes seguidas → corta solo el siguiente RIESGO BAJO → valida (lint + playwright completo) → verde=saca de cola y loguea (bloque_id 100+id); rojo=revierte del backup + martin_fallas + se apaga. Riesgo medio: se pausa para aprobación.
+- Comandos Martín: "activa autopiloto...", "detén el autopiloto". "autor dónde va" muestra estado del autopiloto.
+- VALIDADO EN VIVO: cortó MoraCMF.js solo (3.812 líneas) y validó. Bug real cazado: moraMsg sin prop pasó playwright pero no lint → se agregó prop + lint a la validación del autopiloto. La corrida horaria falló B2 y dejó la falla en rojo en el Taller (alerta nocturna FUNCIONÓ); reparada con oro.
+- Estado nocturno: programa 1h activo, autopiloto activo 1/3 verdes, 7 componentes fuera, ClientesModule 3.812 líneas (-168).

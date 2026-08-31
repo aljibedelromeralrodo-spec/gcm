@@ -1883,6 +1883,20 @@ async def _martin_memoria_viva():
         return ""
 
 
+async def _autor_autopiloto_txt():
+    try:
+        cfg = await db.autor_config.find_one({"_id": "cortes"}) or {}
+        if not cfg.get("autopiloto_activo"):
+            return ". Autopiloto: apagado"
+        cola = cfg.get("cortes_pendientes") or []
+        hechos = await db.autor_orquestador_log.count_documents({"bloque_id": {"$gte": 100}, "ok": True})
+        prox = f", próximo: {cola[0]['nombre']} (riesgo {cola[0].get('riesgo')})" if cola else ", cola vacía"
+        return (f". Autopiloto: activo, {cfg.get('corridas_verdes', 0)}/3 verdes seguidas, "
+                f"{hechos} cortes autónomos hechos, {len(cola)} en cola{prox}")
+    except Exception:
+        return ""
+
+
 async def _martin_contexto_extra():
     partes = []
     try:
@@ -1934,6 +1948,29 @@ async def central_chat(payload: dict, request: Request):
     resp = "No puedo responder ahora, intenta de nuevo."
     # Comandos del AUTOR orquestador (sin pasar por el LLM)
     _ml = msg.lower()
+    if "autopiloto" in _ml:
+        if any(p in _ml for p in ("detén", "deten", "apaga", "desactiva", "cancela", "para el")):
+            await db.autor_config.update_one({"_id": "cortes"}, {"$set": {"autopiloto_activo": False}}, upsert=True)
+            resp = "Autopiloto de cortes desactivado. El AUTOR sigue corriendo cada hora, pero no corta solo."
+        else:
+            cfg = await db.autor_config.find_one({"_id": "cortes"}) or {}
+            if not cfg.get("cortes_pendientes"):
+                await db.autor_config.update_one({"_id": "cortes"}, {"$set": {"cortes_pendientes": [
+                    {"id": 11, "nombre": "MoraCMF.js", "src": "banner mora CMF con link de pago", "riesgo": "bajo"},
+                    {"id": 13, "nombre": "DocumentosContador.js", "src": "contador docs faltantes tarjeta", "riesgo": "bajo"},
+                    {"id": 12, "nombre": "NotificarNoCalifico.js", "src": "badge NO CALIFICÓ + notificar (LÓGICA)", "riesgo": "medio"},
+                ]}}, upsert=True)
+            await db.autor_config.update_one({"_id": "cortes"}, {"$set": {
+                "autopiloto_activo": True, "corridas_verdes": 0,
+                "regla_autopiloto": "3 corridas verdes seguidas = corta el siguiente de riesgo bajo; si falla revierte del backup y deja falla en martin_fallas"}}, upsert=True)
+            n = len((await db.autor_config.find_one({"_id": "cortes"}))["cortes_pendientes"])
+            resp = (f"Autopiloto ACTIVADO: con 3 corridas verdes seguidas corta solo el siguiente de riesgo bajo "
+                    f"({n} cortes en cola), valida con los tests y si sale rojo revierte solo y deja la falla en rojo "
+                    "en el Taller Kintsugi. Los de riesgo medio se pausan para tu aprobación. "
+                    "Para apagarlo: 'detén el autopiloto'.")
+        await db.conversaciones.insert_one({"id": str(uuid.uuid4()), "session_id": session,
+            "user_name": payload.get("user_name", ""), "user_msg": msg, "response": resp, "timestamp": now_iso()})
+        return {"response": resp, "session_id": session, "enabled": True}
     if "autor" in _ml and ("programa" in _ml or "programar" in _ml):
         if any(p in _ml for p in ("detén", "deten", "apaga", "desactiva", "cancela")):
             await db.autor_estado.update_one({"_id": "programa"}, {"$set": {"activo": False}}, upsert=True)
@@ -1979,6 +2016,7 @@ async def central_chat(payload: dict, request: Request):
                 + (f". Programa activo cada {prog.get('intervalo_min', 60)} min, próxima corrida {str(prog.get('proxima', ''))[:16].replace('T', ' ')}" if prog.get("activo") else ". Sin programa activo")
                 + f". Histórico: {n_total} bloques corridos, {n_fail} fallidos"
                 + f". ClientesModule: {_lineas} líneas (-{_delta} desde el inicio)"
+                + await _autor_autopiloto_txt()
                 + (f". Últimos: {detalle}" if detalle else ""))
         await db.conversaciones.insert_one({"id": str(uuid.uuid4()), "session_id": session,
             "user_name": payload.get("user_name", ""), "user_msg": msg, "response": resp, "timestamp": now_iso()})

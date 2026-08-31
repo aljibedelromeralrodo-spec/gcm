@@ -45,6 +45,65 @@ BLOQUES = [
 ]
 
 
+def _autopiloto_falla(corte, motivo):
+    import uuid as _uuid
+    db.autor_config.update_one({"_id": "cortes"}, {"$set": {"autopiloto_activo": False, "corridas_verdes": 0}})
+    db.autor_orquestador_log.insert_one({"bloque_id": 100 + corte["id"], "nombre": f"AUTOPILOTO corte {corte['nombre']}",
+        "ok": False, "fecha": datetime.now(timezone.utc).isoformat(), "salida": motivo[-500:]})
+    db.martin_fallas.update_one({"huella": f"autopiloto_c{corte['id']}"}, {"$set": {
+        "id": str(_uuid.uuid4()), "tipo_falla": "autopiloto_corte_fallido", "huella": f"autopiloto_c{corte['id']}",
+        "descripcion": f"Autopiloto corte {corte['nombre']}: {motivo[:300]}",
+        "herramienta_recomendada": "reiniciar_parser_cron", "params": {},
+        "estado": "pendiente", "created_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
+    print(f"AUTOPILOTO: FALLA en corte {corte['nombre']} — autopiloto DETENIDO. {motivo[:200]}", flush=True)
+
+
+def _autopiloto():
+    """Si hay 3 corridas verdes seguidas y cortes en cola: corta, valida y revierte si sale rojo."""
+    import sys
+    import shutil
+    cfg = db.autor_config.find_one({"_id": "cortes"}) or {}
+    if not cfg.get("autopiloto_activo"):
+        return
+    verdes = cfg.get("corridas_verdes", 0) + 1
+    db.autor_config.update_one({"_id": "cortes"}, {"$set": {"corridas_verdes": verdes}}, upsert=True)
+    cola = cfg.get("cortes_pendientes") or []
+    if not cola:
+        print("AUTOPILOTO: cola vacía, nada que cortar", flush=True)
+        return
+    if verdes < 3:
+        print(f"AUTOPILOTO: {verdes}/3 corridas verdes, esperando", flush=True)
+        return
+    corte = cola[0]
+    if corte.get("riesgo") != "bajo":
+        print(f"AUTOPILOTO: corte {corte['nombre']} es riesgo {corte.get('riesgo')} — requiere aprobación manual, en pausa", flush=True)
+        return
+    print(f"AUTOPILOTO: 3 verdes -> aplicando corte {corte['id']} {corte['nombre']}", flush=True)
+    r = subprocess.run([sys.executable, f"/app/backend/autor_cortes/corte_{corte['id']}.py"],
+                       capture_output=True, text=True, timeout=120)
+    if r.returncode != 0:
+        _autopiloto_falla(corte, "el script de corte no aplicó: " + (r.stdout + r.stderr)[-250:])
+        return
+    time.sleep(30)  # webpack recompila el corte
+    val = subprocess.run(
+        "cd /app/frontend && npx eslint src/pages/ClientesModule.js src/pages/clientes --max-warnings=50 "
+        "&& PLAYWRIGHT_BROWSERS_PATH=/pw-browsers npx playwright test --reporter=list",
+        shell=True, capture_output=True, text=True, timeout=700)
+    lineas = sum(1 for _ in open("/app/frontend/src/pages/ClientesModule.js"))
+    if val.returncode == 0:
+        db.autor_config.update_one({"_id": "cortes"}, {"$set": {"corridas_verdes": 0},
+                                                       "$pop": {"cortes_pendientes": -1}})
+        db.autor_orquestador_log.insert_one({"bloque_id": 100 + corte["id"],
+            "nombre": f"AUTOPILOTO corte {corte['nombre']}", "ok": True,
+            "fecha": datetime.now(timezone.utc).isoformat(),
+            "salida": f"corte aplicado y validado — ClientesModule {lineas} líneas"})
+        print(f"AUTOPILOTO: corte {corte['nombre']} VERDE — ClientesModule {lineas} líneas", flush=True)
+    else:
+        shutil.copy("/tmp/autopiloto_bak/ClientesModule.js", "/app/frontend/src/pages/ClientesModule.js")
+        shutil.copy("/tmp/autopiloto_bak/index.js", "/app/frontend/src/pages/clientes/index.js")
+        _autopiloto_falla(corte, "tests fallaron tras el corte — REVERTIDO del backup: " + (val.stdout + val.stderr)[-250:])
+
+
 def ejecutar_todo_automatico():
     estado = db.autor_estado.find_one({"_id": "progreso"}) or {"bloque_actual": 1}
     inicio = max(1, min(estado.get("bloque_actual", 1), len(BLOQUES)))
@@ -83,6 +142,7 @@ def ejecutar_todo_automatico():
     db.autor_estado.update_one({"_id": "progreso"}, {"$set": {"corriendo": False, "bloque_actual": 1,
         "completado_en": datetime.now(timezone.utc).isoformat()}})
     print("AUTOR: TODO TERMINADO AUTOMÁTICO", flush=True)
+    _autopiloto()
 
 
 if __name__ == "__main__":
