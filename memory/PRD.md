@@ -1313,3 +1313,10 @@ PENDIENTE: quedan ~14 correos que mencionan a Gabriela sin procesar (buscador de
 - Por adjunto: OCR → RUTs con DV módulo 11 válido (<50M) → si coincide con EXACTAMENTE una carpeta (titular por .rut o codeudor por .codeudor_rut → 05_codeudor/<nombre> con prefijo CODEUDOR_) lo guarda, sube al búnker, log en logs_permisos, marca proc_queue procesado_martin y correos_pendientes resuelto. Ambiguos (2+ carpetas) y sin RUT legible QUEDAN en el buzón. Reporte en db.martin_rescate_log + alerta resumen al admin.
 - Endpoints: POST /api/martin/orden/rescate-buzon (corre AHORA, bg job) y GET /api/martin/rescate-buzon/estado (último reporte + pendientes + última corrida).
 - Probado E2E: cuarentena sintética con CMF de Fabián (RUT 15965640-3) → enrutada a FABIÁN ESCALANTE/04_cmf con prefijo correcto; los 8 items sin archivo en disco (creados por pod producción) quedan en espera sin tocarse. Artefactos de prueba limpiados.
+
+## 2026-08-31 — INFORME EXHAUSTIVO DE AGOSTO (NUEVO módulo informe_mensual.py)
+- GET /api/informes/mensual?mes=YYYY-MM (&regen=1) y GET /api/informes/mensual/excel?mes= (admin). Cachea en db.informes_mensuales.
+- Fuentes cruzadas: folders (created_at, escrituracion_movida_at, credit_request, faltantes), mesa_enviados, seguimiento (aprobacion/observacion/rechazo + detección escritura por asunto), correos_clasificacion. Matcher de nombres normalizado (sin tildes, subset de palabras → carpeta canónica) + filtro RX_RUIDO para asuntos que no son clientes.
+- Por cliente: timeline de eventos, etapa (recibido→en_mesa→observado/aprobado/rechazado→escriturado), días sin movimiento, motivo de detención y ACCIÓN SUGERIDA. recuperable = no escriturado y ≥7 días detenido.
+- RESULTADO AGOSTO 2026: 234 clientes con actividad, 114 enviados a mesa, 11 aprobados, 11 observados, 3 rechazados, 9 escriturados, 120 nunca enviados a mesa, 133 RECUPERABLES (56 recibido / 61 en_mesa / 10 aprobado / 5 observado / 1 rechazado).
+- Excel (2 hojas: Clientes con recuperables destacados + Timeline 500+ eventos) guardado en carpeta Central Mutuos/99_otros/INFORME_EXHAUSTIVO_AGOSTO_2026.xlsx y subido al búnker.

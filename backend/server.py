@@ -3163,6 +3163,33 @@ async def martin_orden_revisar(payload: dict = None):
     return {"ok": True, "job_id": job_id, "estado": "en_proceso"}
 
 
+@api.get("/informes/mensual")
+async def informe_mensual_get(request: Request, mes: str = "2026-08", regen: int = 0):
+    """Informe exhaustivo del mes: timeline por cliente, envíos a mesa, detenciones,
+    y clientes RECUPERABLES."""
+    _exigir_admin_dash(request)
+    import informe_mensual as _im
+    if not regen:
+        prev = await db.informes_mensuales.find_one({"mes": mes}, {"_id": 0})
+        if prev:
+            return prev
+    return await _im.generar_informe(mes)
+
+
+@api.get("/informes/mensual/excel")
+async def informe_mensual_excel(request: Request, mes: str = "2026-08"):
+    _exigir_admin_dash(request)
+    import informe_mensual as _im
+    informe = await db.informes_mensuales.find_one({"mes": mes}, {"_id": 0}) \
+        or await _im.generar_informe(mes)
+    data = _im.informe_a_excel(informe)
+    from fastapi.responses import Response as _XR
+    return _XR(content=data,
+               media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+               headers={"Content-Disposition":
+                        f'attachment; filename="informe_clientes_{mes}.xlsx"'})
+
+
 @api.post("/martin/orden/rescate-buzon")
 async def martin_orden_rescate_buzon(request: Request):
     """Ejecuta AHORA la revisión del Buzón de Rescate (misma rutina que corre cada
