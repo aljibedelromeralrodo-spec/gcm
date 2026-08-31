@@ -531,6 +531,17 @@ async def normativas_list(request: Request):
                            for d in docs], "total": len(docs)}
 
 
+@api.get("/phone-status")
+async def phone_status(request: Request):
+    _exigir_roles(request, ("admin", "maestro"))
+    import whatsapp_connector as _wac
+    st = await asyncio.to_thread(_wac.estado_sync)
+    ultimo = await db.whatsapp_status_log.find_one({"_id": "actual"}, {"_id": 0})
+    enviados = await db.whatsapp_log.count_documents({"ok": True})
+    fallidos = await db.whatsapp_log.count_documents({"ok": False})
+    return {**st, "ultimo_chequeo_vigia": ultimo, "mensajes_enviados": enviados, "mensajes_fallidos": fallidos}
+
+
 @api.post("/dashai/normativas")
 async def normativas_upsert(payload: dict, request: Request):
     admin = _solo_admin_normativas(request)
@@ -654,6 +665,13 @@ async def startup():
                 logging.warning(f"autor programa loop: {e}")
             await asyncio.sleep(60)
     asyncio.create_task(_autor_programa_loop())
+
+    # 📱 Vigía de conexión WhatsApp (duerme si no hay credenciales)
+    try:
+        import whatsapp_connector as _wac
+        asyncio.create_task(_wac.vigia_conexion(db))
+    except Exception as _e:
+        logging.warning(f"vigía whatsapp no arrancó: {_e}")
     # PASO 1 (obligatorio, antes de cualquier servicio): normativas fijas presentes
     try:
         await _seed_normativas_fijas()
@@ -1883,6 +1901,17 @@ async def _martin_memoria_viva():
         return ""
 
 
+async def _autor_phone_txt():
+    try:
+        import whatsapp_connector as _wac
+        if not _wac._creds():
+            return ". WhatsApp: sin credenciales Twilio (pégalas en el chat para activar)"
+        st = await db.whatsapp_status_log.find_one({"_id": "actual"}) or {}
+        return f". WhatsApp: {st.get('estado', 'sin chequeo aún')} ({st.get('numero', '')})"
+    except Exception:
+        return ""
+
+
 async def _autor_autopiloto_txt():
     try:
         cfg = await db.autor_config.find_one({"_id": "cortes"}) or {}
@@ -2017,6 +2046,7 @@ async def central_chat(payload: dict, request: Request):
                 + f". Histórico: {n_total} bloques corridos, {n_fail} fallidos"
                 + f". ClientesModule: {_lineas} líneas (-{_delta} desde el inicio)"
                 + await _autor_autopiloto_txt()
+                + await _autor_phone_txt()
                 + (f". Últimos: {detalle}" if detalle else ""))
         await db.conversaciones.insert_one({"id": str(uuid.uuid4()), "session_id": session,
             "user_name": payload.get("user_name", ""), "user_msg": msg, "response": resp, "timestamp": now_iso()})
