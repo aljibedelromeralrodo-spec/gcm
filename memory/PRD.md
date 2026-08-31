@@ -1246,3 +1246,18 @@ actual; todo lo demás permanece intacto.
 ## 2026-08-31 — WhatsApp Twilio (parcial)
 - whatsapp_connector.py creado: estado_sync, enviar_whatsapp_sync (3 reintentos+backoff, log whatsapp_log), vigia_conexion (5 min, duerme sin credenciales). GET /api/phone-status (admin). Línea WhatsApp en "autor dónde va".
 - TWILIO_PHONE_NUMBER=whatsapp:+56229148935 guardado. FALTAN TWILIO_ACCOUNT_SID y TWILIO_AUTH_TOKEN (usuario "Erhan" ya logueado en console.twilio.com, guiado a Account Info).
+
+## 2026-08-31 — ANTONIA PÉREZ resuelta (era Antonia, no Antonio)
+- Carpeta "ANTONIO PÉREZ" renombrada a "ANTONIA PÉREZ" (BD + disco). RUT real: 20.825.296-8 (ANTONIA FERNANDA PÉREZ MUÑOZ), source_email gerardo.ext@.
+- Poblada con 26 documentos: 21 del correo "Gaby juntalos en 1 correo Antonia Pérez" (refetch IMAP — los adjuntos ya no estaban en proc ni búnker), 3 del Fwd ya divididos (cédula/liquidaciones/CMF de "Antonia Pérez EV.pdf") y 2 de "Parte 2" (CertMinvu + Cert Número).
+- COMBINADO_PROTOCOLO generado OK.
+- Causa raíz del desvío original: la clasificación IA puso rut basura 50283562 y cliente "Antonia Pérez y Fabian Escalante Junior" → proc_upload_drive enrutó a "Felipe De La Cuadra". PENDIENTE: revisar si Felipe De La Cuadra tiene docs de Fabián Escalante mezclados.
+
+## 2026-08-31 — PermisosMartinV2 implementado + orden de revisión ejecutada
+- /app/backend/permisos_martin.py: permisos totales con 2 frenos (email.enviar / mesa.enviar requieren confirmación), prohibido fs.deletePermanente y bunker.purge, TODO va a storage/papelera/, log obligatorio en Mongo `logs_permisos` (usuario, accion, origen, destino, timestamp, rollback_path). Espejo JS en frontend/src/config/PermisosMartinV2.js.
+- Endpoints: GET /api/martin/permisos (permisos + últimos logs), POST /api/martin/orden/revisar-carpetas (bg job; payload separaciones:[{folder_id, nuevo_nombre, patron}]).
+- CLAVE ANTI-RESURRECCIÓN: al mover archivos, Martín hace bunker.eliminar_bg(origen) + subir_archivo_bg(destino); si el búnker resucita un duplicado cuyo destino ya existe → va a papelera. Sin esto, restaurar_faltantes re-descargaba todo lo movido (pasó 2 veces).
+- CASO BERRÍOS separado en 2 carpetas (orden literal del usuario): 10 archivos de CÉSAR ZAMORA (codeudor) movidos de GABRIELA ALEJANDRA BERRÍOS ROMERO a carpeta nueva "CÉSAR ZAMORA" con clasificación correcta y sin prefijo CODEUDOR_.
+- HÉCTOR DONOSO: 2 archivos CODEUDOR_ (Priscila Herrera) movidos a 05_codeudor/ (protocolo estándar).
+- 105 SOSPECHAS de clasificación informadas SIN mover (conservador): hojas notaría/seguro desgravamen en 99_otros que parecen estudio_titulo, RSH en 99_otros, contratos en 02_liquidaciones, etc. Pendiente que el usuario decida si Martín las corrige.
+- Papelera: 24 archivos (nada borrado). Verificado E2E con curl x3 corridas + estado en disco.

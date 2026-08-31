@@ -3128,6 +3128,27 @@ async def job_estado(job_id: str):
     return clean(doc)
 
 
+@api.get("/martin/permisos")
+async def martin_permisos():
+    import permisos_martin as pm
+    logs = await db.logs_permisos.find({}, {"_id": 0}).sort("timestamp", -1).to_list(20)
+    return {"permisos": pm.PERMISOS, "ultimos_logs": logs}
+
+
+@api.post("/martin/orden/revisar-carpetas")
+async def martin_orden_revisar(payload: dict = None):
+    """Orden a Martín: revisa todas las carpetas, separa RUTs mezclados y corrige
+    clasificación según protocolo. Corre en SEGUNDO PLANO (bg_jobs)."""
+    import permisos_martin as pm
+    payload = payload or {}
+    separaciones = payload.get("separaciones") or []
+    job_id = str(uuid.uuid4())
+    await db.bg_jobs.insert_one({"id": job_id, "tipo": "martin_revision_carpetas",
+                                 "estado": "en_proceso", "inicio": now_iso()})
+    asyncio.create_task(_job_run(job_id, pm.ejecutar_orden_revision(db, separaciones)))
+    return {"ok": True, "job_id": job_id, "estado": "en_proceso"}
+
+
 @api.post("/clientes/folders/forzar")
 async def forzar_folder(payload: dict):
     """Valida y lanza el forzado de carpeta en SEGUNDO PLANO: la búsqueda IMAP puede
