@@ -1149,3 +1149,10 @@ actual; todo lo demás permanece intacto.
 - Bloque memoria liviana: NO APLICA — ecomac_datos_final.py es script one-off, jamás se importa en runtime del servidor (no carga data pesada en memoria del backend).
 - Split incremental ClientesModule iniciado: creado /app/frontend/src/pages/clientes/ con BrokersPanel.js, UFAmountInput.js e index.js (re-exports). ClientesModule.js importa desde ./clientes. El resto (~3.830 líneas) sigue en el archivo viejo hasta tener tests, según patrón aprobado.
 - Smoke test visual OK (login + módulo Clientes renderiza).
+
+## 2026-08-31 — Endpoint diagnóstico Martín (opción c)
+- Nuevo `GET /api/martin/revision-vivo` en martin_taller.py (auth admin/Martín). Checks reales: split frontend (3/3 archivos), reparaciones oro 7d en sistema_reparaciones_log, actividad Tema Vivo (notificaciones_mesa_pendiente) + Guardián (sistema_backtracking_log) + nodos mapa lógico.
+- Resultado en preview: vivo=true, martin_taller=true (6 oro/7d), logica_humana=true. Ya expone `ultimas_3_lineas_oro` (adelanto de opción b).
+- Adaptación: se descartó código Next.js/pymongo del usuario (MONGO_URI, tema_vivo_log no existen); se usaron colecciones y campos reales.
+- PENDIENTE opción b: que DashAI/CentralChat lea las 3 líneas de oro para responder con memoria viva.
+- Tests E2E Playwright creados en /app/frontend/e2e (login-clientes, ficha-cliente anti-polling) — aún sin ejecutar, correr con PLAYWRIGHT_BROWSERS_PATH=/pw-browsers npx playwright test.

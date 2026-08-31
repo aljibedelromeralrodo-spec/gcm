@@ -363,6 +363,48 @@ DISPATCH = {
 }
 
 
+@martin.get("/revision-vivo")
+async def revision_vivo(request: Request):
+    """Diagnóstico real: split frontend vivo, Martín Taller con oro, y lógica humana activa."""
+    _exigir_martin(request)
+    checks = {"vivo": False, "martin_taller": False, "logica_humana": False, "detalle": {}}
+    hace_7d = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+
+    split_files = ["/app/frontend/src/pages/clientes/BrokersPanel.js",
+                   "/app/frontend/src/pages/clientes/UFAmountInput.js",
+                   "/app/frontend/src/pages/clientes/index.js"]
+    existentes = [f for f in split_files if os.path.exists(f)]
+    checks["vivo"] = len(existentes) == len(split_files)
+    checks["detalle"]["split_frontend"] = {"existen": len(existentes), "esperados": len(split_files)}
+
+    oro_recientes = await db.sistema_reparaciones_log.count_documents(
+        {"quedo_con_oro": True, "created_at": {"$gte": hace_7d}})
+    ultimas_oro = await db.sistema_reparaciones_log.find(
+        {"quedo_con_oro": True}, {"_id": 0, "tipo_falla": 1, "accion_reparacion": 1, "created_at": 1}
+    ).sort("created_at", -1).to_list(3)
+    checks["martin_taller"] = oro_recientes > 0
+    checks["detalle"]["martin"] = {"reparaciones_oro_7d": oro_recientes, "ultimas_3_lineas_oro": ultimas_oro}
+
+    tema_vivo_act = await db.notificaciones_mesa_pendiente.count_documents({"created_at": {"$gte": hace_7d}})
+    guardian_act = await db.sistema_backtracking_log.count_documents({"created_at": {"$gte": hace_7d}})
+    mapa_logico = await db.sistema_mapa_logico.count_documents({})
+    checks["logica_humana"] = (tema_vivo_act + guardian_act) > 0
+    checks["detalle"]["logica_humana"] = {
+        "tema_vivo_notificaciones_7d": tema_vivo_act,
+        "guardian_backtracking_7d": guardian_act,
+        "mapa_logico_nodos": mapa_logico}
+
+    faltantes = []
+    if not checks["vivo"]:
+        faltantes.append("Split frontend incompleto: faltan archivos en pages/clientes/")
+    if not checks["martin_taller"]:
+        faltantes.append("Martín no registra reparaciones con oro en 7 días (sin fallas o vigía dormido)")
+    if not checks["logica_humana"]:
+        faltantes.append("Tema Vivo y Guardián sin actividad en 7 días")
+    checks["detalle"]["que_falta"] = faltantes or ["Nada: todo vivo y conectado"]
+    return checks
+
+
 @martin.get("/reparaciones")
 async def taller(request: Request):
     _exigir_martin(request)
