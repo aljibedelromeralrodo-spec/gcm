@@ -3191,25 +3191,70 @@ def _rx_sin_tildes(palabra):
     return "".join(out)
 
 
+def _variantes_nombre(nombre):
+    """FORZAR V3: variantes de búsqueda cuando el nombre literal no encuentra nada.
+    Ej: 'Antonio Pérez Pérez' → [todas], [Antonio, Pérez], [Pérez, Pérez], [Antonio]."""
+    palabras = [p for p in re.split(r"\s+", nombre) if len(p) >= 3]
+    vs = []
+    if palabras:
+        vs.append(palabras)
+        if len(palabras) >= 4:
+            vs.append([palabras[0], palabras[-2]])
+        if len(palabras) >= 3:
+            vs.append([palabras[0], palabras[-1]])
+            vs.append(palabras[-2:])
+        if len(palabras) >= 2:
+            vs.append([max(palabras, key=len)])
+    out, vistos = [], set()
+    for v in vs:
+        k = tuple(w.lower() for w in v)
+        if k not in vistos:
+            vistos.add(k)
+            out.append(v)
+    return out
+
+
 async def _forzar_folder_run(payload):
     """Fuerza la creación manual de una carpeta: busca por NOMBRE y/o RUT en los correos
-    ingresados los datos y descarga los archivos adjuntos."""
+    ingresados los datos y descarga los archivos adjuntos.
+    V3 BLINDADO: búsqueda profunda con variantes del nombre (con/sin tildes, primer
+    nombre + apellido, solo apellidos) en asunto, cuerpo, clasificación y NOMBRES DE
+    ADJUNTOS; nunca falla — la carpeta queda creada aunque venga vacía (por_enriquecer)."""
     nombre = (payload.get("nombre") or "").strip()
     rut = (payload.get("rut") or "").strip()
     palabras = [p for p in re.split(r"\s+", nombre) if len(p) >= 3]
-    conds = [{"$or": [{"subject": {"$regex": _rx_sin_tildes(p), "$options": "i"}},
-                      {"classification.cliente": {"$regex": _rx_sin_tildes(p), "$options": "i"}},
-                      {"body_full": {"$regex": _rx_sin_tildes(p), "$options": "i"}}]}
-             for p in palabras]
-    query = {"$and": conds} if conds else None
+
+    def _conds_variante(pal):
+        return [{"$or": [{"subject": {"$regex": _rx_sin_tildes(p), "$options": "i"}},
+                         {"classification.cliente": {"$regex": _rx_sin_tildes(p), "$options": "i"}},
+                         {"body_full": {"$regex": _rx_sin_tildes(p), "$options": "i"}},
+                         {"attachments": {"$elemMatch": {"$regex": _rx_sin_tildes(p), "$options": "i"}}},
+                         {"classification.documentos.filename": {"$regex": _rx_sin_tildes(p), "$options": "i"}}]}
+                for p in pal]
+
     rut_rx = _rut_regex_flexible(rut)
-    if rut_rx:
+    items, variante_usada = [], ""
+    for var in _variantes_nombre(nombre):
+        items = await db.proc_queue.find({"$and": _conds_variante(var)}).sort("date_iso", 1).to_list(20)
+        if items:
+            variante_usada = " ".join(var)
+            break
+    if not items and rut_rx:
         cond_rut = {"$or": [{"subject": {"$regex": rut_rx, "$options": "i"}},
                             {"body_full": {"$regex": rut_rx, "$options": "i"}},
                             {"campos.rut": {"$regex": rut_rx, "$options": "i"}},
                             {"classification.rut": {"$regex": rut_rx, "$options": "i"}}]}
-        query = {"$or": [query, cond_rut]} if query else cond_rut
-    items = await db.proc_queue.find(query).sort("date_iso", 1).to_list(20) if query else []
+        items = await db.proc_queue.find(cond_rut).sort("date_iso", 1).to_list(20)
+        if items:
+            variante_usada = f"RUT {rut}"
+    # Menciones totales con la variante más laxa: "detecté N correos donde se menciona"
+    menciones = 0
+    if palabras:
+        try:
+            menciones = await db.proc_queue.count_documents(
+                {"$and": _conds_variante([max(palabras, key=len)])})
+        except Exception:
+            menciones = 0
     procesados, errores = [], []
     for it in items:
         try:
@@ -3227,6 +3272,15 @@ async def _forzar_folder_run(payload):
         # (antes matcheaba solo la primera: "Antonio Pérez" caía en "Juan ANTONIO Moya")
         folder = await db.folders.find_one(
             {"$and": [{"nombre": {"$regex": _rx_sin_tildes(p), "$options": "i"}} for p in palabras]})
+        if not folder:
+            # V3: variantes de 2+ palabras — "Antonia Fernanda Pérez Muñoz" matchea "ANTONIA PÉREZ"
+            for var in _variantes_nombre(nombre)[1:]:
+                if len(var) < 2:
+                    continue
+                folder = await db.folders.find_one(
+                    {"$and": [{"nombre": {"$regex": _rx_sin_tildes(p), "$options": "i"}} for p in var]})
+                if folder:
+                    break
     if not folder and rut_rx:
         folder = await db.folders.find_one({"rut": {"$regex": rut_rx, "$options": "i"}})
     if not folder:
@@ -3255,7 +3309,7 @@ async def _forzar_folder_run(payload):
         folder = {"id": str(uuid.uuid4()), "nombre": (nombre or rut).upper(),
                   "rut": rut, "archivos": [],
                   "created_at": now_iso(), "origen": "forzada_manual",
-                  **({"forzada_advertencia": advertencia} if advertencia else {})}
+                  **({"forzada_advertencia": advertencia, "por_enriquecer": True} if advertencia else {})}
         await db.folders.insert_one(dict(folder))
         fsvc.folder_dir(folder["nombre"]).mkdir(parents=True, exist_ok=True)
     elif rut and not folder.get("rut"):
@@ -3271,6 +3325,17 @@ async def _forzar_folder_run(payload):
         else:
             resultados = await asyncio.to_thread(mail.search_attachments_by_person, nombre or rut,
                                                  40, rut, folder.get("source_email"))
+            # V3: si el nombre literal no encuentra nada en IMAP, probar variantes
+            if not resultados and len(palabras) >= 3:
+                for var in _variantes_nombre(nombre)[1:]:
+                    try:
+                        resultados = await asyncio.to_thread(mail.search_attachments_by_person,
+                                                             " ".join(var), 40, rut,
+                                                             folder.get("source_email"))
+                    except Exception:
+                        resultados = []
+                    if resultados:
+                        break
             if rut and nombre:
                 try:
                     resultados += await asyncio.to_thread(mail.search_attachments_by_person, rut,
@@ -3311,8 +3376,14 @@ async def _forzar_folder_run(payload):
         verificacion = await _verificar_identidad_por_cedula(folder)
     except Exception:
         pass
+    if menciones > len(items):
+        extra = (f"Detecté {menciones} correo(s) en la cola que mencionan a este cliente "
+                 f"(se procesaron {len(items)}). Puedes traer el resto con el buscador de correos.")
+        advertencia = f"{advertencia} {extra}".strip() if advertencia else extra
     return {"ok": True, "carpeta": folder.get("nombre", ""),
             "correos_encontrados": len(items), "procesados": procesados,
+            "variante_busqueda": variante_usada or nombre,
+            "menciones_detectadas": menciones,
             "archivos_imap": imap_bajados,
             "docs_aprobacion_descargados": sync_copiados,
             "verificacion_cedula": verificacion,
@@ -5542,10 +5613,15 @@ def _procesar_mesa(destino, cutoff_iso, ejecutivos=None, ya_enviados=None):
                 r"carta|aprobaci[oó]n|aprobacion", (nombre_pdf or "").lower())
             if tipo_doc == "simulacion" and not es_carta:
                 nuevo, orig, removidas = pdfs.dejar_primera_pagina(raw)
+                nuevo, remg, valido_g = pdfs.sanitizar_gastos_operacionales(nuevo)
                 nombre_aj = nombre_pdf.replace(".pdf", "") + "_CM.pdf"
+                if not valido_g:
+                    saved.append({"name": _safe_name(nombre_aj), "type": "simulacion_bloqueada_gastos",
+                                  "error": "Contiene Gastos Operacionales tras la limpieza — NO adjuntada"})
+                    continue
                 _save_pdf(cliente, nombre_aj, nuevo)
                 saved.append({"name": _safe_name(nombre_aj), "type": "simulacion_ajustada",
-                              "pages_original": orig, "pages_removed": removidas})
+                              "pages_original": orig, "pages_removed": removidas + remg})
                 adjuntos.append({"filename": nombre_aj,
                                  "content_b64": _b64(nuevo)})
             else:
@@ -5582,7 +5658,9 @@ def _procesar_mesa(destino, cutoff_iso, ejecutivos=None, ya_enviados=None):
         # se salta sin excepción (el flujo automático jamás reenvía).
         if not _mesa_guard_reservar(r["subject"], r["cliente"]):
             continue
-        res = mail.send_mail(destino, r["subject"], encabezado + cuerpo_html,
+        res = mail.send_mail(destino, r["subject"],
+                             _marco_correo(encabezado + cuerpo_html,
+                                           "aprobacion" if r["es_aprobacion"] else "rechazo" if r.get("es_rechazo") else "info"),
                              r["adjuntos"], desde="secundaria")
         # PREVIEW OBLIGATORIO: la retención en preview NO es un fallo — queda esperando al Admin
         estado = "sent" if res.get("success") else ("en_preview" if res.get("preview") else "failed")
@@ -5785,10 +5863,15 @@ async def ac_manual(cliente: str = Form(...), files: list[UploadFile] = File(...
             tipo_doc = pdfs.clasificar_documento(raw, f.filename)
             if tipo_doc == "simulacion":
                 nuevo, orig, removidas = pdfs.dejar_primera_pagina(raw)
+                nuevo, remg, valido_g = pdfs.sanitizar_gastos_operacionales(nuevo)
                 nombre_aj = f.filename.replace(".pdf", "") + "_CM.pdf"
+                if not valido_g:
+                    errors.append({"file": f.filename,
+                                   "error": "BLOQUEO SANITIZADOR: contiene Gastos Operacionales tras la limpieza"})
+                    continue
                 _save_pdf(cliente, nombre_aj, nuevo)
                 saved.append({"name": _safe_name(nombre_aj), "type": "simulacion_ajustada",
-                              "pages_original": orig, "pages_removed": removidas})
+                              "pages_original": orig, "pages_removed": removidas + remg})
             else:
                 _save_pdf(cliente, f.filename, raw)
                 saved.append({"name": _safe_name(f.filename), "type": tipo_doc})
@@ -6481,6 +6564,24 @@ async def correos_preview_adjunto(pid: str, idx: int, request: Request):
              else "application/octet-stream")
     return Response(content=bytes(a.get("data") or b""), media_type=media,
                     headers={"Content-Disposition": f'inline; filename="{fn}"'})
+
+
+@api.post("/correos-preview/{pid}/adjunto/{idx}/quitar")
+async def correos_preview_quitar_adjunto(pid: str, idx: int, request: Request):
+    """Quita UN adjunto del correo en espera antes de confirmarlo (no toca el resto)."""
+    _exigir_admin_dash(request)
+    doc = await db.correos_preview.find_one({"id": pid, "estado": "esperando_confirmacion"})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Preview no encontrado o ya resuelto")
+    adjs = await db.correos_preview_adj.find({"preview_id": pid}).to_list(50)
+    if idx < 0 or idx >= len(adjs):
+        raise HTTPException(status_code=404, detail="Adjunto no encontrado")
+    quitado = adjs[idx]
+    await db.correos_preview_adj.delete_one({"_id": quitado["_id"]})
+    meta = [{"filename": a.get("filename"), "tamano": len(bytes(a.get("data") or b""))}
+            for j, a in enumerate(adjs) if j != idx]
+    await db.correos_preview.update_one({"id": pid}, {"$set": {"adjuntos": meta}})
+    return {"ok": True, "quitado": quitado.get("filename"), "adjuntos": meta}
 
 
 @api.post("/correos-preview/{pid}/descartar")
@@ -10945,6 +11046,27 @@ async def aprobacion_plantilla_patch(payload: dict):
     return {"ok": True}
 
 
+def _marco_correo(contenido_html, tipo="info"):
+    """IDENTIDAD VISUAL CORPORATIVA: todo correo del sistema lleva el marco oficial
+    Central Mutuos (header negro + dorado, banda de estado por tipo, footer)."""
+    colores = {"aprobacion": "#10b981", "rechazo": "#e11d48", "info": "#d4af37"}
+    c = colores.get(tipo, "#d4af37")
+    return f"""<!DOCTYPE html><html><body style="margin:0;padding:0;background:#eef0f2;font-family:Arial,Helvetica,sans-serif">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef0f2"><tr><td align="center" style="padding:22px 10px">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:640px;background:#ffffff;border:1px solid #e2e4e9">
+<tr><td style="background:#111318;padding:22px 26px;text-align:center">
+<div style="color:#d4af37;font-size:16px;letter-spacing:5px;font-weight:700">CENTRAL MUTUOS</div>
+<div style="color:#9aa3b5;font-size:11px;letter-spacing:3px;margin-top:4px">CON CRECES</div></td></tr>
+<tr><td style="background:{c};height:4px;font-size:0;line-height:0">&nbsp;</td></tr>
+<tr><td style="padding:24px 26px;color:#1a1f2e;font-size:14px;line-height:1.6">{contenido_html}</td></tr>
+<tr><td style="background:#f4f5f7;border-top:1px solid #e2e4e9;padding:14px 26px">
+<p style="margin:0;color:#2b3245;font-size:13px"><b>Central Mutuos</b></p>
+<p style="margin:3px 0 0;color:#6b7280;font-size:11px">Especialistas en cr&eacute;ditos hipotecarios</p></td></tr>
+<tr><td style="background:#111318;padding:10px 20px;text-align:center">
+<span style="color:#8a93a3;font-size:10px">Informaci&oacute;n confidencial dirigida exclusivamente a su destinatario.</span></td></tr>
+</table></td></tr></table></body></html>"""
+
+
 def _aprobacion_html(payload):
     nombre = payload.get("nombre", "")
     rut = payload.get("rut", "")
@@ -11082,6 +11204,15 @@ async def aprobacion_enviar(payload: dict):
                 raw, _orig, _rem = pdfs.dejar_primera_pagina(raw)
             except Exception:
                 pass
+            # 🧼 SANITIZADOR GASTOS OPERACIONALES: valida el CONTENIDO del PDF; si tras la
+            # limpieza aún contiene esas palabras, el envío se BLOQUEA (regla crítica).
+            limpio, _remg, valido = pdfs.sanitizar_gastos_operacionales(raw)
+            if not valido:
+                raise HTTPException(status_code=409, detail=(
+                    f"BLOQUEO SANITIZADOR: la simulación «{p.name}» todavía contiene "
+                    "'Gastos Operacionales' después de la limpieza — envío abortado. "
+                    "Revise el PDF antes de reenviar."))
+            raw = limpio
         adjuntos.append({"filename": _nombre_cliente_pdf(p.name), "content_b64": _b64(raw)})
     # BOTÓN 'DESEO CONTINUAR CON EL PROCESO DE ESCRITURACIÓN': link con token único
     # que registra la confirmación en la carpeta y avisa al ejecutivo automáticamente
@@ -11333,29 +11464,29 @@ def _rechazo_sanear_motivo(motivo):
 
 
 def _rechazo_html(nombre, motivo, boton_url=""):
-    """DISEÑO QUIRÚRGICO: HTML minimalista, negro sobre blanco, sin logos ni colores."""
+    """IDENTIDAD CORPORATIVA: rechazo al cliente con el marco oficial Central Mutuos
+    (banda roja). El motivo va saneado (sin referencias a Mesa ni correos externos)."""
     boton = ""
     if boton_url:
         boton = (f'<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 16px"><tr>'
-                 f'<td style="border:2px solid #000000;background:#000000">'
+                 f'<td style="border:2px solid #111318;background:#111318">'
                  f'<a href="{boton_url}" style="display:inline-block;padding:12px 26px;color:#ffffff;'
                  f'font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:bold;'
                  f'text-decoration:none;letter-spacing:0.5px">TENGO CODEUDOR — SOLICITO RECONTACTO</a>'
                  f'</td></tr></table>'
                  f'<p style="margin:0 0 16px;font-size:13px;color:#333333">Si cuenta con un codeudor que pueda '
                  f'fortalecer su solicitud, presione el botón anterior y un ejecutivo le contactará a la brevedad.</p>')
-    return f"""<!DOCTYPE html><html><body style="margin:0;padding:0;background:#ffffff">
-<div style="max-width:560px;margin:0 auto;padding:32px 24px;font-family:Arial,Helvetica,sans-serif;color:#000000;background:#ffffff;font-size:15px;line-height:1.6">
+    contenido = f"""
 <p style="margin:0 0 16px">Estimado/a <b>{html.escape(nombre)}</b>:</p>
 <p style="margin:0 0 16px">Le informamos el resultado de la evaluación de su solicitud de crédito hipotecario.</p>
-<div style="border:1px solid #000000;padding:14px 18px;margin:0 0 16px">
-<p style="margin:0 0 6px"><b>Estado del trámite:</b> No aprobado en esta instancia.</p>
-<p style="margin:0"><b>Motivo:</b> {html.escape(motivo)}</p>
+<div style="border:1px solid #e11d48;border-left:5px solid #e11d48;background:#fef2f2;padding:14px 18px;margin:0 0 16px">
+<p style="margin:0 0 6px;color:#7f1d1d"><b>Estado del trámite:</b> No aprobado en esta instancia.</p>
+<p style="margin:0;color:#7f1d1d"><b>Motivo:</b> {html.escape(motivo)}</p>
 </div>
 <p style="margin:0 0 16px">Este resultado no impide una futura reevaluación si sus antecedentes cambian. Nuestro equipo queda a su disposición para orientarle sobre los pasos a seguir.</p>
 {boton}
-<p style="margin:24px 0 0">Atentamente,<br/>Equipo Central Mutuos</p>
-</div></body></html>"""
+<p style="margin:24px 0 0">Atentamente,<br/>Equipo Central Mutuos</p>"""
+    return _marco_correo(contenido, "rechazo")
 
 
 def _rechazo_purificar(subject, cuerpo_html):

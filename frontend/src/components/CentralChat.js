@@ -135,6 +135,19 @@ function formatTime(date) {
   return date.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" });
 }
 
+// ===== "MUÉSTRAME EN PANTALLA": detección local del comando (voz o texto) =====
+function detectarComandoPantalla(texto) {
+  const t = (texto || "").toLowerCase().trim();
+  if (!/mu[eé]strame|ens[eé][ñn]ame|[aá]brelo en pantalla|abre en pantalla|en pantalla/.test(t)) return null;
+  let m;
+  if (/correo|correos|mail/.test(t)) return { tipo: "correo", query: "" };
+  if ((m = t.match(/simulaci[oó]n\s+(?:de\s+|del?\s+)?(.+)$/))) return { tipo: "simulacion", query: m[1].trim() };
+  if ((m = t.match(/carpeta\s+(?:de\s+|del?\s+)?(.+)$/))) return { tipo: "carpeta", query: m[1].trim() };
+  if ((m = t.match(/documento\s+(?:de\s+|del?\s+)?(.+)$/))) return { tipo: "carpeta", query: m[1].trim() };
+  const resto = t.replace(/.*?(?:mu[eé]strame|ens[eé][ñn]ame|abre)\s*(?:en pantalla)?\s*(?:a\s+|la\s+|el\s+)?/, "").trim();
+  return resto.length > 2 ? { tipo: "carpeta", query: resto } : null;
+}
+
 export default function CentralChat({ userName, activeModule }) {
   const [open, setOpen] = useState(false);
   const [msgs, setMsgs] = useState([]);
@@ -153,6 +166,7 @@ export default function CentralChat({ userName, activeModule }) {
   const [conversationMode, setConversationMode] = useState(false);
   const [sessionId] = useState(() => `c-${Date.now()}-${Math.random().toString(36).slice(2,8)}`);
   const [vigilia, setVigilia] = useState(false);
+  const [pantallaAbierta, setPantallaAbierta] = useState(false);
   const wakeSinComandoRef = useRef(0);
   const endRef = useRef(null);
   const recRef = useRef(null);
@@ -266,6 +280,18 @@ export default function CentralChat({ userName, activeModule }) {
   const sendMsg = useCallback(async (text, withVoice = false) => {
     const t = (text || "").trim();
     if (!t && attachedFiles.length === 0) return;
+
+    // "Muéstrame en pantalla...": toma el control visual sin pasar por el LLM
+    const pantalla = detectarComandoPantalla(t);
+    if (pantalla && attachedFiles.length === 0) {
+      stopSpeaking();
+      setSpeaking(false);
+      setMsgs(prev => [...prev, { role: "user", text: t, time: new Date() },
+        { role: "assistant", text: `🖥 Abriendo en pantalla: ${pantalla.query || "correos en espera"}...`, time: new Date() }]);
+      setInput("");
+      window.dispatchEvent(new CustomEvent("martin-pantalla", { detail: pantalla }));
+      return;
+    }
 
     const timestamp = new Date();
     const msgObj = { role: "user", text: t, time: timestamp };
@@ -474,8 +500,17 @@ export default function CentralChat({ userName, activeModule }) {
   }, [recording, stopRecording, startRecording]);
 
   // ===== VIGILIA: manos libres con palabra de activación «Martín» =====
+  // La pantalla Martín (overlay) tiene su propio control por voz: la vigilia se pausa.
   useEffect(() => {
-    if (!vigilia || recording || speaking || loading) return;
+    const abre = () => setPantallaAbierta(true);
+    const cierra = () => setPantallaAbierta(false);
+    window.addEventListener("martin-pantalla", abre);
+    window.addEventListener("martin-pantalla-cerrada", cierra);
+    return () => { window.removeEventListener("martin-pantalla", abre); window.removeEventListener("martin-pantalla-cerrada", cierra); };
+  }, []);
+
+  useEffect(() => {
+    if (!vigilia || recording || speaking || loading || pantallaAbierta) return;
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) return;
     let activo = true;
@@ -510,7 +545,7 @@ export default function CentralChat({ userName, activeModule }) {
     rec.onerror = () => {};
     const t = setTimeout(() => { try { rec.start(); } catch (err) { console.error(err); } }, 350);
     return () => { activo = false; clearTimeout(t); try { rec.abort(); } catch (err) { console.error(err); } };
-  }, [vigilia, recording, speaking, loading, sendMsg, userName]);
+  }, [vigilia, recording, speaking, loading, pantallaAbierta, sendMsg, userName]);
 
   const toggleVigilia = useCallback(async () => {
     if (vigilia) { setVigilia(false); return; }

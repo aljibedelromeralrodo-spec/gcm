@@ -27,6 +27,18 @@ export default function CorreosPreview() {
     setBusy("");
   };
 
+  const quitarAdjunto = async (pid, idx, filename) => {
+    if (!window.confirm(`¿Quitar «${filename}» de este correo? El correo se enviará SIN este adjunto.`)) return;
+    setBusy(`quitar${pid}${idx}`);
+    try {
+      const r = await axios.post(`${API}/api/correos-preview/${pid}/adjunto/${idx}/quitar`);
+      setMsg(`🗑 Adjunto quitado: ${r.data.quitado}`);
+      if (adjunto && adjunto.pid === pid) { URL.revokeObjectURL(adjunto.url); setAdjunto(null); }
+      cargar();
+    } catch (e) { setMsg(`🚨 ${e.response?.data?.detail || "No se pudo quitar el adjunto"}`); }
+    setBusy("");
+  };
+
   const cargar = useCallback(() => {
     axios.get(`${API}/api/correos-preview`)
       .then(r => setData(r.data))
@@ -92,11 +104,19 @@ export default function CorreosPreview() {
             {(c.adjuntos || []).length > 0 && (
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
                 {(c.adjuntos || []).map((a, j) => (
-                  <button key={j} data-testid={`preview-adjunto-${i}-${j}`} disabled={!!busy}
-                    style={btn(adjunto && adjunto.pid === c.id && adjunto.idx === j ? "#10d98e" : "#8ab4f8")}
-                    onClick={() => verAdjunto(c.id, j, a.filename)}>
-                    {busy === `adj${c.id}${j}` ? <i className="fa fa-spinner fa-spin" /> : <i className="fa fa-paperclip" />} {a.filename}
-                  </button>
+                  <span key={j} style={{ display: "inline-flex", alignItems: "stretch" }}>
+                    <button data-testid={`preview-adjunto-${i}-${j}`} disabled={!!busy}
+                      style={{ ...btn(adjunto && adjunto.pid === c.id && adjunto.idx === j ? "#10d98e" : "#8ab4f8"), borderRight: "none" }}
+                      onClick={() => verAdjunto(c.id, j, a.filename)}>
+                      {busy === `adj${c.id}${j}` ? <i className="fa fa-spinner fa-spin" /> : <i className="fa fa-paperclip" />} {a.filename}
+                    </button>
+                    <button data-testid={`preview-adjunto-quitar-${i}-${j}`} disabled={!!busy}
+                      title={`Quitar ${a.filename} del correo`}
+                      style={{ ...btn("#e11d48"), padding: "0.3rem 0.5rem" }}
+                      onClick={() => quitarAdjunto(c.id, j, a.filename)}>
+                      <i className="fa fa-times" />
+                    </button>
+                  </span>
                 ))}
               </div>
             )}

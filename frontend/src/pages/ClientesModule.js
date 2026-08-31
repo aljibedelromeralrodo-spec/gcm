@@ -2118,8 +2118,23 @@ export default function ClientesModule({ onNavigate }) {
           )}
 
           {currentFolder.codeudor_nombre && (
-            <div className="clientes-codeudor-badge">
+            <div className="clientes-codeudor-badge" data-testid="codeudor-badge" role="button"
+              title="Ver los archivos del codeudor"
+              style={{ cursor: "pointer" }}
+              onClick={() => {
+                const el = document.querySelector('[data-testid="codeudor-subfolder"]');
+                if (el) {
+                  el.scrollIntoView({ behavior: "smooth", block: "center" });
+                  el.style.boxShadow = "0 0 0 3px rgba(46,92,230,0.55)";
+                  setTimeout(() => { el.style.boxShadow = ""; }, 1800);
+                } else {
+                  const cod = (currentFolder.archivos || []).find(a => (a.subfolder || "").startsWith("05_codeudor") || a.nombre.toUpperCase().startsWith("CODEUDOR_"));
+                  if (cod) openPreview(currentFolder.id, cod.ruta, cod.nombre);
+                  else alert(`El codeudor ${currentFolder.codeudor_nombre} aún no tiene archivos en la subcarpeta 05_codeudor.`);
+                }
+              }}>
               <i className="fa fa-user-plus"></i> Codeudor: {currentFolder.codeudor_nombre} {currentFolder.codeudor_rut && `(${currentFolder.codeudor_rut})`}
+              <span style={{ marginLeft: 8, fontSize: 11, opacity: 0.8 }}><i className="fa fa-eye"></i> ver archivos</span>
             </div>
           )}
 
@@ -3469,7 +3484,22 @@ export default function ClientesModule({ onNavigate }) {
                   )}
                   {emailModal.preview.attachments?.length > 0 && (
                     <div style={{ marginTop: 8, fontSize: 12, color: "#d4af37" }}>
-                      <b>Adjuntos:</b> {emailModal.preview.attachments.map(a => `📎 ${a}`).join("  ·  ")}
+                      <b>Adjuntos (click para ver preview):</b>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
+                        {emailModal.preview.attachments.map((a, ai) => {
+                          const nombreAdj = typeof a === "string" ? a : (a.filename || "");
+                          return (
+                            <button key={ai} data-testid={`email-adj-preview-${ai}`}
+                              onClick={() => {
+                                const arch = (emailModal.folder.archivos || []).find(x => x.nombre === nombreAdj);
+                                openPreview(emailModal.folder.id, arch ? arch.ruta : nombreAdj, nombreAdj);
+                              }}
+                              style={{ background: "rgba(212,175,55,0.12)", border: "1px solid rgba(212,175,55,0.5)", color: "#d4af37", borderRadius: 0, padding: "5px 10px", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
+                              <i className="fa fa-eye" /> 📎 {nombreAdj}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
                 </div>

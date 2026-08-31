@@ -142,6 +142,11 @@ async def _reenviar_aprobacion_gerardo(msg, f_caso, subject):
             f"({MESA_EMAIL}){' · Cliente: <b>' + nombre + '</b>' if nombre else ''}</p>"
             f"<hr style='border:none;border-top:1px solid #d4af37;margin:10px 0'>"
             f"<div style='white-space:pre-wrap'>{cuerpo_original}</div>")
+    try:
+        from server import _marco_correo
+        html = _marco_correo(html, "aprobacion")
+    except Exception:
+        pass
     res = await asyncio.to_thread(mail.send_mail, destino, f"✅ APROBACIÓN MESA — {subject[:140]}",
                                   html, adjuntos, "principal")
     # PREVIEW OBLIGATORIO: retenido en preview = entregado al Admin (no es fallo)

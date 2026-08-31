@@ -51,6 +51,43 @@ def clasificar_documento(pdf_bytes, filename=""):
     return "otro"
 
 
+PAT_GASTOS_OP = re.compile(r"gastos?\s+operacionales?|costos?\s+operacionales?", re.I)
+
+
+def sanitizar_gastos_operacionales(pdf_bytes):
+    """SANITIZADOR (regla crítica): elimina las páginas que mencionan Gastos/Costos
+    Operacionales y VALIDA que el PDF final no contenga esas palabras.
+    Devuelve (bytes_limpios, paginas_removidas, valido). valido=False → BLOQUEAR envío."""
+    try:
+        reader = PdfReader(io.BytesIO(pdf_bytes), strict=False)
+    except Exception:
+        return pdf_bytes, 0, False
+    writer = PdfWriter()
+    removidas = 0
+    for p in reader.pages:
+        try:
+            txt = p.extract_text() or ""
+        except Exception:
+            txt = ""
+        if PAT_GASTOS_OP.search(txt):
+            removidas += 1
+            continue
+        writer.add_page(p)
+    if len(writer.pages) == 0:
+        return pdf_bytes, removidas, False
+    buf = io.BytesIO()
+    writer.write(buf)
+    limpio = buf.getvalue()
+    try:
+        for p in PdfReader(io.BytesIO(limpio), strict=False).pages:
+            if PAT_GASTOS_OP.search(p.extract_text() or ""):
+                return limpio, removidas, False
+    except Exception:
+        return limpio, removidas, False
+    return limpio, removidas, True
+
+
+
 def dejar_primera_pagina(pdf_bytes):
     """Genera un PDF nuevo con SOLO la primera pagina.
 

@@ -1,0 +1,22 @@
+{
+  "summary": "Iter68 — Suite completa (backend + frontend). Backend 8/8 pytest OK: sanitizador PDF Gastos Operacionales (pág 2 con 'GASTOS OPERACIONALES' → válido=True, 1 pág; TODAS con 'Costos Operacionales' → válido=False que bloquea envío); GET /api/martin/permisos devuelve {permisos, ultimos_logs}; GET /api/correos-preview lista correos; flujo completo con preview de PRUEBA creado vía email_service.send_mail(confirmado=False) → GET /adjunto/{idx} devuelve application/pdf inline con contenido %PDF-, POST /adjunto/{idx}/quitar OK y actualiza meta, POST /descartar OK (jamás confirmé/envié correos reales); POST /api/clientes/folders/forzar con clave 0586 y 'Antonia Fernanda Perez Muñoz' — job terminó en <3min, matcheó carpeta EXISTENTE 'ANTONIA PÉREZ' (SIN crear duplicado 'ANTONIA FERNANDA PEREZ MUÑOZ'), respuesta trae variante_busqueda y menciones_detectadas; regresión login+listar folders (ANTONIA + CÉSAR ZAMORA presentes). Frontend Playwright: login admin OK, tour+briefing dismisseables, panel correos-preview-panel visible con 100 correos, chip preview-adjunto-i-j + botón preview-adjunto-quitar-i-j presentes, preview-adjunto-visor-i abre iframe con PDF (probado en correo con adjunto, sin quitar ni confirmar reales); vigilia-btn visible junto al fab, primer click → vigilia-label='VIGILIA ACTIVA · di «Martín»', segundo click apaga (label desaparece); central-fab abre chat, comando 'muéstrame la carpeta de antonia perez' abre overlay pantalla-martin con pantalla-grilla y 32 documentos, click en doc[0] abre pantalla-visor-doc, botones pantalla-volver-carpeta y pantalla-cerrar funcionan; comando 'muéstrame los correos' abre pantalla-correo con botón pantalla-enviar-correo (ENVÍALO) visible — NO fue clickeado. Nota: pantalla-zoom-mas/menos solo renderizan cuando modo !== 'carpeta' (esperado por diseño, línea 209 PantallaMartin.js).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter68_pantalla_sanitizador.py",
+    "/app/test_reports/pytest/iter68.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py sigue creciendo (>16700 líneas) — el módulo permisos_martin y los endpoints /correos-preview están limpios pero el archivo raíz debería dividirse. No bloqueante para este iter.",
+    "email_service._encolar_preview y correos_preview_confirmar hacen doble lectura de attachments (content_bytes + content_b64) — funciona pero conviene normalizar a un solo campo."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter68_pantalla_sanitizador.py"],
+  "success_rate": {"backend": "100% (8/8)", "frontend": "100%"},
+  "test_credentials": "administrador / 141617575 · MASTER_PIN 0586",
+  "seed_data_creation": "1 preview de prueba (subject 'TEST_ITER68 preview — NO ENVIAR') creado vía email_service.send_mail(confirmado=False) y descartado en el mismo test — no queda residuo. Ningún correo real enviado ni confirmado. Job de forzado creó/mantuvo la carpeta ANTONIA PÉREZ (existente, sin duplicado).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Para tests de correos-preview desde pytest: importar email_service DESPUÉS de load_dotenv('/app/backend/.env') (sino configured() = False y send_mail devuelve error antes de encolar). El parámetro de la cuenta es 'desde', no 'cuenta'. pantalla-zoom-mas/menos NO existen en modo 'carpeta' (solo documento/correo) — no reportar como bug. Panel correos-preview está en el dashboard, hay ~100 correos reales esperando confirmación en la cola; NO tocar (usar solo previews con subject 'TEST_...' creados por uno mismo).",
+  "rca of the issue": "N/A — no se encontraron bugs. Único ajuste durante el testing: agregar load_dotenv en el test de correos-preview para que email_service.configured() sea True dentro del proceso pytest (el backend FastAPI ya lo carga vía uvicorn, pero pytest no)."
+}

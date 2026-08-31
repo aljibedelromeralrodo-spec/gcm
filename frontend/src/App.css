@@ -1110,6 +1110,52 @@ body { font-family: 'Inter', sans-serif; background: var(--bg-dark); color: var(
 .merge-actions { display: flex; gap: 0.8rem; justify-content: flex-end; }
 
 
+/* ===== PANTALLA MARTÍN — "Muéstrame en pantalla" (overlay fullscreen) ===== */
+.pantalla-martin {
+  position: fixed; inset: 0; z-index: 10050; background: #05070c;
+  display: flex; flex-direction: column;
+}
+.pantalla-topbar {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  padding: 10px 18px; background: rgba(0,20,8,0.95);
+  border-bottom: 2px solid rgba(0,255,136,0.5);
+}
+.pantalla-titulo { color: #00ff88; font-weight: 900; font-size: 0.95rem; letter-spacing: 0.06em; flex: 1; min-width: 260px; }
+.pantalla-voz-hint { color: rgba(0,255,136,0.65); font-size: 0.68rem; font-weight: 700; letter-spacing: 0.05em; }
+.pantalla-botones { display: flex; align-items: center; gap: 8px; }
+.pantalla-botones button {
+  background: transparent; border: 1px solid rgba(0,255,136,0.5); color: #00ff88;
+  padding: 6px 12px; font-weight: 800; font-size: 0.72rem; cursor: pointer;
+  transition: background-color 0.15s;
+}
+.pantalla-botones button:hover { background: rgba(0,255,136,0.12); }
+.pantalla-botones .pantalla-enviar { background: rgba(0,255,136,0.15); border-color: #00ff88; }
+.pantalla-botones .pantalla-cerrar { border-color: #e11d48; color: #ff6b8a; }
+.pantalla-zoom { color: #00ff88; font-size: 0.72rem; font-weight: 800; min-width: 40px; text-align: center; }
+.pantalla-aviso { padding: 8px 18px; color: #F5E7B8; font-size: 0.8rem; background: rgba(245,158,11,0.08); }
+.pantalla-cuerpo { flex: 1; overflow: auto; padding: 16px; }
+.pantalla-grilla {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px;
+}
+.pantalla-doc-card {
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(0,255,136,0.25);
+  color: #e8e8e8; padding: 18px 14px; cursor: pointer; text-align: left;
+  display: flex; flex-direction: column; gap: 8px; transition: border-color 0.15s, transform 0.15s;
+}
+.pantalla-doc-card:hover { border-color: #00ff88; transform: translateY(-2px); }
+.pantalla-doc-card i { font-size: 1.6rem; color: #00ff88; }
+.pantalla-doc-nombre { font-size: 0.78rem; font-weight: 700; word-break: break-all; }
+.pantalla-doc-sub { font-size: 0.62rem; color: #888; letter-spacing: 0.05em; }
+.pantalla-visor-wrap { height: 100%; display: flex; justify-content: center; overflow: auto; }
+.pantalla-visor { border: none; background: #fff; min-height: 100%; transition: width 0.2s; }
+.pantalla-correo { max-width: 1100px; margin: 0 auto; }
+.pantalla-correo-meta {
+  background: rgba(0,20,8,0.8); border: 1px solid rgba(0,255,136,0.3);
+  color: #d8ffe9; font-size: 0.82rem; padding: 12px 16px; margin-bottom: 12px;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.pantalla-correo-body { width: 100%; height: 70vh; background: #fff; border: 1px solid rgba(0,255,136,0.3); }
+
 /* ===== VIGILIA (manos libres, wake word «Martín») ===== */
 .vigilia-wrap { position: fixed; bottom: 36px; right: 92px; z-index: 9999; display: flex; align-items: center; gap: 10px; }
 .vigilia-btn {
