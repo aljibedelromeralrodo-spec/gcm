@@ -2,3 +2,4 @@
 // se extraen componentes uno a uno; el resto sigue en el archivo viejo hasta que tenga test.
 export { default as BrokersPanel } from "./BrokersPanel";
 export { default as UFAmountInput } from "./UFAmountInput";
+export { default as ClientesFilters } from "./ClientesFilters";

@@ -1168,3 +1168,9 @@ actual; todo lo demás permanece intacto.
 - Fixes de entorno E2E: instalado chromium_headless_shell-1234 en /pw-browsers (el rev 1208 causaba clicks fantasma por mismatch de protocolo); abrirModulo con reintentos verificados.
 - Usuario QA creado: qa.victoria / QaVictoria2026 (solo_modulo=victoria) para testear VictoriaFicha — registrado en test_credentials.md.
 - Test anti-polling VERDE: la edición "TEST EDICION NO BORRAR" sobrevive el ciclo de 45s. ClientesModule listo para el próximo corte con blindaje.
+
+## 2026-08-31 — Corte 7: ClientesFilters.js
+- Extraído buscador + toolbar (cloud sync, correos, ajustes, nueva/forzar carpeta, compromiso) + tabs a pages/clientes/ClientesFilters.js (70 líneas, solo presentación, 14 props).
+- Validado por AUTOR 6/6 (tests E2E verdes: btn-new-folder dentro del nuevo componente). ClientesModule ahora ~3.916 líneas.
+- .gitignore: test_credentials.md ya estaba ignorado (líneas 79-81), no trackeado. qa.victoria solo existe en DB preview (prod tiene DB separada) — se mantiene para QA.
+- Próximo: Corte 8 ClientesRow (una fila de carpeta sin acciones).
