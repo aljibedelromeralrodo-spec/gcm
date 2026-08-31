@@ -1362,7 +1362,11 @@ export default function ClientesModule({ onNavigate }) {
       const suffix = isSelfSend
         ? `\n\n📥 AUTO-ENVÍO: revisá la carpeta "Enviados" de Gmail (no aparece en Bandeja de Entrada porque enviaste a tu propia dirección).`
         : "";
-      alert(`✅ Correo enviado a ${r.data.to}\nAdjuntos: ${r.data.attachments.length}\nDesde: ${r.data.sender}${suffix}`);
+      if (r.data.en_proceso) {
+        alert(`📤 Correo EN PROCESO de envío a ${r.data.to}\nAdjuntos: ${r.data.attachments.length}\nDesde: ${r.data.sender}\n\nEl envío corre en segundo plano: la carpeta quedará marcada "Enviado a mesa" al completarse (refresca en unos segundos).${suffix}`);
+      } else {
+        alert(`✅ Correo enviado a ${r.data.to}\nAdjuntos: ${r.data.attachments.length}\nDesde: ${r.data.sender}${suffix}`);
+      }
       closeEmailModal();
     } catch (err) {
       const det = err.response?.data?.detail || err.message;

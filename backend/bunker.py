@@ -106,10 +106,10 @@ def _get(rel):
     path = f"{APP_PREFIX}/{rel}"
     try:
         r = requests.get(f"{STORAGE_URL}/objects/{path}",
-                         headers={"X-Storage-Key": _skey()}, timeout=(8, 60))
+                         headers={"X-Storage-Key": _skey()}, timeout=(5, 30))
         if r.status_code == 404:
             r = requests.get(f"{STORAGE_URL}/objects/{path}",
-                             headers={"X-Storage-Key": _skey(force=True)}, timeout=(8, 60))
+                             headers={"X-Storage-Key": _skey(force=True)}, timeout=(5, 30))
             if r.status_code == 404:
                 _cb_ok()
                 return None

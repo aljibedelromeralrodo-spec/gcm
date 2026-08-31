@@ -1210,3 +1210,11 @@ actual; todo lo demás permanece intacto.
 - Comandos Martín: "activa autopiloto...", "detén el autopiloto". "autor dónde va" muestra estado del autopiloto.
 - VALIDADO EN VIVO: cortó MoraCMF.js solo (3.812 líneas) y validó. Bug real cazado: moraMsg sin prop pasó playwright pero no lint → se agregó prop + lint a la validación del autopiloto. La corrida horaria falló B2 y dejó la falla en rojo en el Taller (alerta nocturna FUNCIONÓ); reparada con oro.
 - Estado nocturno: programa 1h activo, autopiloto activo 1/3 verdes, 7 componentes fuera, ClientesModule 3.812 líneas (-168).
+
+## 2026-08-31 — FIX 502 Cloudflare envío de correos (producción)
+- RCA del deployer: descargas síncronas de adjuntos objstore + SMTP dentro del request superaban el timeout de origen de Cloudflare. NO era Gmail/OVERQUOTA.
+- Fix 1: /api/clientes/folders/{fid}/send-email con confirm:true ahora responde INMEDIATO (en_proceso:true) y el envío corre en asyncio.create_task; resultado queda en folders (mesa_enviado_at o mesa_envio_error). Frontend muestra "EN PROCESO" y la tarjeta se marca al completarse.
+- Fix 2: bunker._get timeouts (8,60)→(5,30) por objeto (cortacircuito de 5 min ya existía).
+- Fix 3: resumen_diario ya no reintenta cada 60s cuando el error es "PREVIEW OBLIGATORIO" (correo ya encolado esperando al Admin) — mantiene el claim del día.
+- Probado en preview: preview de envío responde en 0.25s. Envío real NO probado (regla: no enviar correos reales en tests).
+- ⚠️ REQUIERE DEPLOY para llegar a producción. Upstream: objstore de Emergent devolvía 500/503 — reportado en RCA, fuera de nuestro control.

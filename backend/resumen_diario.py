@@ -262,8 +262,11 @@ async def resumen_diario_loop():
                     continue
                 r = await _enviar()
                 if not r.get("success"):
-                    await db.config.update_one({"_key": KEY, "last_sent_date": hoy},
-                                               {"$set": {"last_sent_date": st.get("last_sent_date")}})
+                    # PREVIEW OBLIGATORIO = el correo YA está encolado esperando al Admin:
+                    # se mantiene el claim del día para NO reintentar cada 60s (bucle infinito)
+                    if "PREVIEW OBLIGATORIO" not in str(r.get("error") or ""):
+                        await db.config.update_one({"_key": KEY, "last_sent_date": hoy},
+                                                   {"$set": {"last_sent_date": st.get("last_sent_date")}})
                 logging.info(f"📬 Resumen diario 8AM: {r}")
         except asyncio.CancelledError:
             break

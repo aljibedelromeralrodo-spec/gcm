@@ -4667,23 +4667,33 @@ async def folder_send_email(fid: str, payload: dict):
                             detail="Envío a Mesa YA en proceso — intento simultáneo bloqueado por el cerrojo atómico.")
     from email.utils import make_msgid
     mid = make_msgid(domain="centralmutuos.cl")
-    try:
-        res = await asyncio.to_thread(mail.send_mail, to, subject, cuerpo, adjuntos,
-                                      "secundaria", None, {"Message-ID": mid})
-    except Exception:
-        await db.folders.update_one({"id": fid}, {"$unset": {"mesa_envio_lock": "", "mesa_envio_lock_at": ""}})
-        raise
-    if not res.get("success"):
-        await db.folders.update_one({"id": fid}, {"$unset": {"mesa_envio_lock": "", "mesa_envio_lock_at": ""}})
-        raise HTTPException(status_code=502, detail=res.get("error", "Error de envío"))
-    # HUELLA DE ENVÍO: Message-ID guardado en la carpeta — prohibe re-envíos de este ciclo
-    await db.folders.update_one({"id": fid}, {
-        "$inc": {"emails_sent_count": 1},
-        "$set": {"last_email_sent_at": now_iso(), "mesa_enviado_at": now_iso(),
-                 "mesa_message_id": mid},
-        "$unset": {"mesa_envio_lock": "", "mesa_envio_lock_at": ""}})
+
+    # 🛡 ANTI-502 CLOUDFLARE: el SMTP con adjuntos pesados sale del request.
+    # Se responde de inmediato y el envío corre en segundo plano; el resultado
+    # queda en la carpeta (mesa_enviado_at / mesa_envio_error).
+    async def _mesa_envio_bg():
+        try:
+            res = await asyncio.to_thread(mail.send_mail, to, subject, cuerpo, adjuntos,
+                                          "secundaria", None, {"Message-ID": mid})
+        except Exception as e:
+            res = {"success": False, "error": str(e)[:200]}
+        if res.get("success"):
+            await db.folders.update_one({"id": fid}, {
+                "$inc": {"emails_sent_count": 1},
+                "$set": {"last_email_sent_at": now_iso(), "mesa_enviado_at": now_iso(),
+                         "mesa_message_id": mid},
+                "$unset": {"mesa_envio_lock": "", "mesa_envio_lock_at": "", "mesa_envio_error": ""}})
+            logging.info(f"📤 Mesa bg: enviado {nombre} → {to}")
+        else:
+            await db.folders.update_one({"id": fid}, {
+                "$set": {"mesa_envio_error": str(res.get("error", "error de envío"))[:300]},
+                "$unset": {"mesa_envio_lock": "", "mesa_envio_lock_at": ""}})
+            logging.warning(f"📤 Mesa bg FALLÓ {nombre}: {res.get('error', '')[:150]}")
+
+    asyncio.create_task(_mesa_envio_bg())
     return {"to": to, "subject": subject, "attachments": attach_names,
-            "message_id": mid, "sender": res.get("desde", sender)}
+            "message_id": mid, "sender": sender, "en_proceso": True,
+            "detalle": "Envío en proceso en segundo plano — la carpeta quedará marcada como enviada al completarse"}
 
 
 @api.post("/clientes/folders/{fid}/send-missing-docs")
