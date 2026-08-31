@@ -8,3 +8,4 @@ export { default as ClientesCardContent } from "./ClientesCardContent";
 export { default as ReparosAbogado } from "./ReparosAbogado";
 export { default as MoraCMF } from "./MoraCMF";
 export { default as DocumentosContador } from "./DocumentosContador";
+export { default as NotificarNoCalifico } from "./NotificarNoCalifico";

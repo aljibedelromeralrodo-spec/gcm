@@ -1224,3 +1224,7 @@ actual; todo lo demás permanece intacto.
 - Fix: migrados a `bunker._db()` en folders_service.py (x2), ai_extract.py, server.py:13263.
 - Verificado: combinado de Rodrigo Jara Bustamante regenerado con 16 PDFs incluyendo 99_otros/Informe_Arriendos_Rodrigo_Jara.pdf.
 - ⚠️ Este fix TAMBIÉN requiere deploy (producción tiene el mismo bug).
+
+## 2026-08-31 — Corte 12 aprobado y aplicado: NotificarNoCalifico.js
+- Aprobado por el usuario, aplicado supervisado: 21 líneas movidas, lint OK, 3/3 tests E2E verdes. ClientesModule: 3.792 líneas (-188). 9 componentes fuera. Cola del autopiloto VACÍA.
+- Deploy a producción en curso (fixes correos 502 + combinado + memoria viva + AUTOR).

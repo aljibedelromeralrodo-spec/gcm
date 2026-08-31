@@ -10,7 +10,7 @@ import PrediccionEspejo from "../components/PrediccionEspejo";
 import CompromisoEditor from "./CompromisoEditor";
 import { secureGet } from "../utils/secureStore";
 import { guardarEstado, leerEstado, tomarRegreso } from "../utils/navegacion";
-import { BrokersPanel, UFAmountInput, ClientesFilters, ClientesRowActions, ClientesCardContent, ReparosAbogado, MoraCMF, DocumentosContador } from "./clientes";
+import { BrokersPanel, UFAmountInput, ClientesFilters, ClientesRowActions, ClientesCardContent, ReparosAbogado, MoraCMF, DocumentosContador, NotificarNoCalifico } from "./clientes";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 // Regla #65: validador de dígito verificador (módulo 11) — RUT verificado al 100%
@@ -1623,27 +1623,7 @@ export default function ClientesModule({ onNavigate }) {
                           style={{ fontSize: 13 }}>✅</span>
                       )}
                       <ReparosAbogado f={f} openReparos={openReparos} />
-                      {evalNeg[f.id] && (
-                        <>
-                          <span data-testid={`no-califico-${f.id}`}
-                            title={`Última evaluación del Motor (${evalNeg[f.id].fecha}): resultado negativo`}
-                            style={{ background: "#7f1d1d", color: "#fecaca", fontWeight: 900, fontSize: 10,
-                              letterSpacing: 1, padding: "2px 9px", border: "1px solid #ef4444" }}>
-                            ⛔ NO CALIFICÓ
-                          </span>
-                          <button data-testid={`btn-notificar-nc-${f.id}`}
-                            disabled={notificandoNC === f.id}
-                            onClick={(ev) => { ev.stopPropagation(); notificarNoCalifico(f); }}
-                            title={f.no_califico_notificado_at
-                              ? `Ya notificado el ${String(f.no_califico_notificado_at).slice(0, 16).replace("T", " ")}`
-                              : "Enviar correo al ejecutivo/solicitante informando el resultado negativo"}
-                            style={{ cursor: "pointer", border: "1px solid rgba(239,68,68,0.5)", borderRadius: 0,
-                              fontWeight: 800, fontSize: 10, padding: "2px 8px",
-                              background: "transparent", color: "#f87171" }}>
-                            {notificandoNC === f.id ? "Enviando…" : (f.no_califico_notificado_at ? "✓ Notificado" : "📧 Notificar al ejecutivo")}
-                          </button>
-                        </>
-                      )}
+                      <NotificarNoCalifico f={f} evalNeg={evalNeg} notificandoNC={notificandoNC} notificarNoCalifico={notificarNoCalifico} />
                     </h4>
                     <ClientesCardContent f={f} hasFin={hasFin} rutValido={rutValido} fmtAct={fmtAct} />
                     <MoraCMF f={f} moraUp={moraUp} moraMsg={moraMsg} enviarLinkPagoMora={enviarLinkPagoMora} subirComprobanteMora={subirComprobanteMora} />
