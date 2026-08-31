@@ -1156,3 +1156,7 @@ actual; todo lo demás permanece intacto.
 - Adaptación: se descartó código Next.js/pymongo del usuario (MONGO_URI, tema_vivo_log no existen); se usaron colecciones y campos reales.
 - PENDIENTE opción b: que DashAI/CentralChat lea las 3 líneas de oro para responder con memoria viva.
 - Tests E2E Playwright creados en /app/frontend/e2e (login-clientes, ficha-cliente anti-polling) — aún sin ejecutar, correr con PLAYWRIGHT_BROWSERS_PATH=/pw-browsers npx playwright test.
+
+## 2026-08-31 — Opción b: Memoria Viva conectada a Martín (DashAI)
+- Nuevo `_martin_memoria_viva()` en server.py: lee las 3 últimas reparaciones `quedo_con_oro` de sistema_reparaciones_log y las inyecta en el system prompt de `/api/central/chat`.
+- Probado E2E: pregunta "muéstrame las 3 líneas de oro" → Martín respondió con las reparaciones reales (autorización chica + 2 archivo_malo_luego_bueno). Ciclo Vivo + Taller + Lógica humana visible COMPLETO.

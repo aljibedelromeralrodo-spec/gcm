@@ -1845,6 +1845,22 @@ async def _martin_preparar_correo(session, texto_llm):
         return "No pude preparar el correo. Repíteme el destinatario, el asunto y el mensaje, por favor."
 
 
+async def _martin_memoria_viva():
+    try:
+        oro = await db.sistema_reparaciones_log.find(
+            {"quedo_con_oro": True}, {"_id": 0, "tipo_falla": 1, "accion_reparacion": 1, "created_at": 1}
+        ).sort("created_at", -1).to_list(3)
+        if not oro:
+            return ""
+        lineas = "\n".join(f"- {r.get('accion_reparacion','')} (falla: {r.get('tipo_falla','')}, {str(r.get('created_at',''))[:16]})" for r in oro)
+        return ("MEMORIA VIVA — 3 ÚLTIMAS REPARACIONES ORO (lógica humana real del Taller Kintsugi):\n"
+                f"{lineas}\n"
+                "Usa esta memoria para responder. Si te preguntan qué reparaste, qué sabes o por las líneas de oro, "
+                "menciona estas 3 como ejemplo de lógica humana aplicada.")
+    except Exception:
+        return ""
+
+
 async def _martin_contexto_extra():
     partes = []
     try:
@@ -1933,6 +1949,7 @@ async def central_chat(payload: dict, request: Request):
                           + (f". Estados: {'; '.join(estados)}" if estados else ""))
         contexto = "\n".join(lineas[:60])
         extra = await _martin_contexto_extra()
+        memoria_viva = await _martin_memoria_viva()
         historial = await db.conversaciones.find({"session_id": session}).sort("timestamp", -1).limit(6).to_list(6)
         hist_txt = "\n".join(f"Usuario: {h.get('user_msg','')}\nMartin: {h.get('response','')}"
                              for h in reversed(historial))
@@ -1964,6 +1981,7 @@ async def central_chat(payload: dict, request: Request):
                   "sin ningún otro texto. Si falta cualquiera de esos datos, pregunta primero (no emitas la acción). "
                   "El sistema pedirá la confirmación verbal por ti.\n\n"
                   f"CARPETAS ACTUALES:\n{contexto}\n\n"
+                  + (f"{memoria_viva}\n\n" if memoria_viva else "")
                   + (f"{extra}\n\n" if extra else "")
                   + (f"CONVERSACIÓN PREVIA:\n{hist_txt}" if hist_txt else ""))
         from emergentintegrations.llm.chat import LlmChat, UserMessage
