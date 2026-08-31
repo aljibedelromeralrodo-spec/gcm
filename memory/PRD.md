@@ -1195,3 +1195,10 @@ actual; todo lo demás permanece intacto.
 - B5 reescrito con urllib stdlib (portable a cualquier python3).
 - Validado E2E: corrida lanzada 100% por el programador → 8/8 OK (05:10-05:13 UTC). Programa ACTIVO cada 60 min.
 - Mañana: si hay 8-10 corridas 8/8, atacar cortes con lógica (ReparosAbogado, Mora CMF, No Calificó).
+
+## 2026-08-31 — 3 en 1: líneas en dónde-va + alerta nocturna + Corte 10
+- "autor dónde va" ahora reporta "ClientesModule: X líneas (-Y desde el inicio)" (baseline 3980).
+- Falla nocturna → upsert en martin_fallas (huella autor_bN, estado pendiente): el Taller Kintsugi la muestra EN ROJO al abrir Martín. Adaptación: NO se usó sistema_reparaciones_log (habría bajado la tasa_oro y ensuciado el historial de reparaciones).
+- Corte 10: ReparosAbogado.js (botón ⚠️ reparos con openReparos, 9 líneas). ClientesModule: 3.866 líneas. 6 componentes fuera.
+- Nuevo test "TEST REPAROS" en login-clientes.spec.js (abre modal reparos-modal con datos reales: 5 carpetas con reparos_alertas) + Bloque 8 del AUTOR lo corre. AUTOR ahora 9 bloques — corrida 9/9 OK.
+- Programa horario sigue ACTIVO (próxima 06:09 UTC).

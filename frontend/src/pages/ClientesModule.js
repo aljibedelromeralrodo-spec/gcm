@@ -10,7 +10,7 @@ import PrediccionEspejo from "../components/PrediccionEspejo";
 import CompromisoEditor from "./CompromisoEditor";
 import { secureGet } from "../utils/secureStore";
 import { guardarEstado, leerEstado, tomarRegreso } from "../utils/navegacion";
-import { BrokersPanel, UFAmountInput, ClientesFilters, ClientesRowActions, ClientesCardContent } from "./clientes";
+import { BrokersPanel, UFAmountInput, ClientesFilters, ClientesRowActions, ClientesCardContent, ReparosAbogado } from "./clientes";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 // Regla #65: validador de dígito verificador (módulo 11) — RUT verificado al 100%
@@ -1622,15 +1622,7 @@ export default function ClientesModule({ onNavigate }) {
                           title={`Informe recibido${f.tasacion_informe_recibido_at ? " · Tasación " + String(f.tasacion_informe_recibido_at).slice(0, 10) : ""}${f.estudio_recibido_at ? " · Títulos " + String(f.estudio_recibido_at).slice(0, 10) : ""}`}
                           style={{ fontSize: 13 }}>✅</span>
                       )}
-                      {((f.reparos_alertas || []).length + ((f.estudio_reparos || {}).items || []).length) > 0 && (
-                        <button data-testid={`reparos-btn-${f.id}`}
-                          onClick={(ev) => { ev.stopPropagation(); openReparos(f); }}
-                          title="Reparos del abogado — pinche para leer el texto íntegro"
-                          style={{ cursor: "pointer", border: "none", borderRadius: 8, fontWeight: 800,
-                            fontSize: 10, padding: "2px 7px", background: "rgba(239,68,68,0.18)", color: "#ef4444" }}>
-                          ⚠️ {(f.reparos_alertas || []).length + ((f.estudio_reparos || {}).items || []).length} reparo(s)
-                        </button>
-                      )}
+                      <ReparosAbogado f={f} openReparos={openReparos} />
                       {evalNeg[f.id] && (
                         <>
                           <span data-testid={`no-califico-${f.id}`}

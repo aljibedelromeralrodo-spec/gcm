@@ -38,7 +38,10 @@ BLOQUES = [
     {"id": 7, "nombre": "CORTE 9 - CardContent tarjeta renderiza",
      "comando": "cd /app/frontend && PLAYWRIGHT_BROWSERS_PATH=/pw-browsers npx playwright test e2e/login-clientes.spec.js --reporter=list",
      "timeout": 200, "espera": 5},
-    {"id": 8, "nombre": "CIERRE - Docs", "comando": "echo ok", "timeout": 30, "espera": 0},
+    {"id": 8, "nombre": "CORTE 10 - ReparosAbogado modal",
+     "comando": "cd /app/frontend && PLAYWRIGHT_BROWSERS_PATH=/pw-browsers npx playwright test e2e/login-clientes.spec.js --grep 'TEST REPAROS' --reporter=list",
+     "timeout": 200, "espera": 5},
+    {"id": 9, "nombre": "CIERRE - Docs", "comando": "echo ok", "timeout": 30, "espera": 0},
 ]
 
 
@@ -64,6 +67,16 @@ def ejecutar_todo_automatico():
         if not ok:
             print(f"BLOQUE {bloque['id']} FALLÓ, se detiene\n{salida}", flush=True)
             db.autor_estado.update_one({"_id": "progreso"}, {"$set": {"corriendo": False}})
+            try:
+                import uuid as _uuid
+                db.martin_fallas.update_one({"huella": f"autor_b{bloque['id']}"}, {"$set": {
+                    "id": str(_uuid.uuid4()), "tipo_falla": "autor_fallo_nocturno",
+                    "huella": f"autor_b{bloque['id']}",
+                    "descripcion": f"AUTOR bloque {bloque['id']} ({bloque['nombre']}) falló: {salida[-300:]}",
+                    "herramienta_recomendada": "reiniciar_parser_cron", "params": {},
+                    "estado": "pendiente", "created_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
+            except Exception:
+                pass
             return
         print(f"BLOQUE {bloque['id']} OK -> espera {bloque['espera']}s y sigue solo...", flush=True)
         time.sleep(bloque["espera"])

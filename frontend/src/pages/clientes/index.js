@@ -5,3 +5,4 @@ export { default as UFAmountInput } from "./UFAmountInput";
 export { default as ClientesFilters } from "./ClientesFilters";
 export { default as ClientesRowActions } from "./ClientesRowActions";
 export { default as ClientesCardContent } from "./ClientesCardContent";
+export { default as ReparosAbogado } from "./ReparosAbogado";

@@ -1967,11 +1967,18 @@ async def central_chat(payload: dict, request: Request):
         detalle = "; ".join(f"B{registro['bloque_id']} {registro['nombre'].split(' - ')[0]}: {'OK' if registro['ok'] else 'FALLÓ'}" for registro in reversed(logs))
         n_total = await db.autor_orquestador_log.count_documents({})
         n_fail = await db.autor_orquestador_log.count_documents({"ok": False})
+        try:
+            with open("/app/frontend/src/pages/ClientesModule.js", encoding="utf-8", errors="ignore") as _fmod:
+                _lineas = sum(1 for _ in _fmod)
+        except Exception:
+            _lineas = -1
+        _delta = 3980 - _lineas if _lineas > 0 else 0
         resp = (f"El AUTOR va en el bloque {est.get('bloque_actual', 1)}"
                 + (", corriendo ahora" if est.get("corriendo") else ", detenido")
                 + (f". Último: {est.get('ultimo_nombre')} {'OK' if est.get('ultimo_ok') else 'FALLÓ'}" if est.get("ultimo_nombre") else "")
                 + (f". Programa activo cada {prog.get('intervalo_min', 60)} min, próxima corrida {str(prog.get('proxima', ''))[:16].replace('T', ' ')}" if prog.get("activo") else ". Sin programa activo")
                 + f". Histórico: {n_total} bloques corridos, {n_fail} fallidos"
+                + f". ClientesModule: {_lineas} líneas (-{_delta} desde el inicio)"
                 + (f". Últimos: {detalle}" if detalle else ""))
         await db.conversaciones.insert_one({"id": str(uuid.uuid4()), "session_id": session,
             "user_name": payload.get("user_name", ""), "user_msg": msg, "response": resp, "timestamp": now_iso()})

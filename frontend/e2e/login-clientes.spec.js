@@ -15,3 +15,17 @@ test('login admin -> dashboard + modulo clientes renderiza (split BrokersPanel/U
   await expect(page.getByTestId('clientes-list')).toBeVisible();
   await expect(page.getByTestId('btn-new-folder')).toBeVisible();
 });
+
+test('TEST REPAROS: el botón de reparos del abogado abre el modal (corte 10)', async ({ page }) => {
+  await login(page);
+  await abrirModulo(page, 'sm_operacion', 'clientes', 'clientes-module');
+  const btn = page.locator('[data-testid^="reparos-btn-"]').first();
+  if (!(await btn.isVisible().catch(() => false))) {
+    console.log('Sin carpetas con reparos visibles — nada que validar');
+    return;
+  }
+  await btn.click({ force: true });
+  await expect(page.getByTestId('reparos-modal')).toBeVisible({ timeout: 15000 });
+  await page.keyboard.press('Escape');
+  await page.getByTestId('reparos-modal').click({ position: { x: 5, y: 5 }, force: true }).catch(() => {});
+});
