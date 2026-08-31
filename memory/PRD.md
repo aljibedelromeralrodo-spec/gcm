@@ -1307,3 +1307,9 @@ PENDIENTE: quedan ~14 correos que mencionan a Gabriela sin procesar (buscador de
 - RUT_EN_TEXTO_RX (server.py) ahora tolera comas del OCR («19,448.446-1»), igual que folders_service.
 - Carpeta Gabriela COMPLETA: cédula, liquidaciones, AFP, CMF, cert. laboral, título, cotización + 3 docs codeudor + combinado regenerado.
 - NOTA ARQUITECTURA: producción y preview comparten MongoDB — los archivos de storage/proc de cuarentenas creadas en producción NO existen en el disco del preview.
+
+## 2026-08-31 — Buzón de Rescate Automático nocturno (NUEVO módulo rescate_buzon.py)
+- Loop nocturno 03:00 Chile (leader guard + claim atómico db.config _key rescate_buzon_nocturno): revisa cuarentenas proc_queue id ^rescate-ley-rut- status revisar.
+- Por adjunto: OCR → RUTs con DV módulo 11 válido (<50M) → si coincide con EXACTAMENTE una carpeta (titular por .rut o codeudor por .codeudor_rut → 05_codeudor/<nombre> con prefijo CODEUDOR_) lo guarda, sube al búnker, log en logs_permisos, marca proc_queue procesado_martin y correos_pendientes resuelto. Ambiguos (2+ carpetas) y sin RUT legible QUEDAN en el buzón. Reporte en db.martin_rescate_log + alerta resumen al admin.
+- Endpoints: POST /api/martin/orden/rescate-buzon (corre AHORA, bg job) y GET /api/martin/rescate-buzon/estado (último reporte + pendientes + última corrida).
+- Probado E2E: cuarentena sintética con CMF de Fabián (RUT 15965640-3) → enrutada a FABIÁN ESCALANTE/04_cmf con prefijo correcto; los 8 items sin archivo en disco (creados por pod producción) quedan en espera sin tocarse. Artefactos de prueba limpiados.

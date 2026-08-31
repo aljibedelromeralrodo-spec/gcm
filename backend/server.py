@@ -789,6 +789,8 @@ async def startup():
         logging.warning(f"seed regla oro 75: {_e}")
     import resumen_diario as _resdia
     asyncio.create_task(_task_blindada(_resdia.resumen_diario_loop, "resumen_diario_8am"))
+    import rescate_buzon as _resbuz
+    asyncio.create_task(_task_blindada(_resbuz.rescate_buzon_loop, "rescate_buzon_nocturno"))
     import espejo_aprendizaje as _espia
     asyncio.create_task(_task_blindada(_espia.espejo_aprendizaje_loop, "espejo_aprendizaje"))
     asyncio.create_task(_task_blindada(_notif_pace_loop, "notif_pace"))
@@ -3159,6 +3161,31 @@ async def martin_orden_revisar(payload: dict = None):
                                  "estado": "en_proceso", "inicio": now_iso()})
     asyncio.create_task(_job_run(job_id, pm.ejecutar_orden_revision(db, separaciones)))
     return {"ok": True, "job_id": job_id, "estado": "en_proceso"}
+
+
+@api.post("/martin/orden/rescate-buzon")
+async def martin_orden_rescate_buzon(request: Request):
+    """Ejecuta AHORA la revisión del Buzón de Rescate (misma rutina que corre cada
+    noche a las 03:00): enruta adjuntos en cuarentena con RUT de match único."""
+    _exigir_admin_dash(request)
+    import rescate_buzon as _resbuz
+    job_id = str(uuid.uuid4())
+    await db.bg_jobs.insert_one({"id": job_id, "tipo": "rescate_buzon_manual",
+                                 "estado": "en_proceso", "inicio": now_iso()})
+    asyncio.create_task(_job_run(job_id, _resbuz.procesar_buzon()))
+    return {"ok": True, "job_id": job_id, "estado": "en_proceso"}
+
+
+@api.get("/martin/rescate-buzon/estado")
+async def martin_rescate_buzon_estado(request: Request):
+    """Último reporte nocturno del Buzón de Rescate + pendientes en cuarentena."""
+    _exigir_admin_dash(request)
+    ultimo = await db.martin_rescate_log.find_one({}, {"_id": 0}, sort=[("fecha", -1)])
+    pendientes = await db.proc_queue.count_documents(
+        {"id": {"$regex": "^rescate-ley-rut-"}, "status": "revisar"})
+    cfg = await db.config.find_one({"_key": "rescate_buzon_nocturno"}, {"_id": 0}) or {}
+    return {"ultimo_reporte": ultimo, "en_cuarentena": pendientes,
+            "ultima_corrida_nocturna": cfg.get("last_run", "nunca")}
 
 
 @api.post("/martin/orden/aplicar-correcciones")
