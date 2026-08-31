@@ -13,7 +13,7 @@ from database import db
 guardian = APIRouter(prefix="/guardian")
 
 FLUJO_UNICO = [
-    {"paso": "entrada", "icono": "📥", "nombre": "Entrada correo gerardo.ext", "detalle": "IMAP cada 90s, dedup por message_id"},
+    {"paso": "entrada", "icono": "📥", "nombre": "Entrada correo gerardo.ext", "detalle": "IMAP cada 5 min (cuida la cuota de Google), dedup por message_id"},
     {"paso": "clasifica", "icono": "🧠", "nombre": "¿Solicitud de crédito?", "detalle": "Claude clasifica protocolo + docs adjuntos; NO → archiva"},
     {"paso": "carpeta", "icono": "📁", "nombre": "¿Carpeta existe por RUT?", "detalle": "NO → crea con 6 liquidaciones + docs del protocolo faltantes"},
     {"paso": "enriquece", "icono": "⚡", "nombre": "¿Adjuntos traen docs faltantes?", "detalle": "Enriquece auto (incluye PDF 6-en-1) → recalcula 0/6→6/6"},

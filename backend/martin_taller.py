@@ -296,12 +296,12 @@ async def diagnostico_vigia():
     hb = await db.config.find_one({"_key": "blindaje_heartbeat"}) or {}
     try:
         ultimo = datetime.fromisoformat(hb.get("ultimo_run"))
-        vencido = (datetime.now(timezone.utc) - ultimo) > timedelta(minutes=5)
+        vencido = (datetime.now(timezone.utc) - ultimo) > timedelta(minutes=12)
     except (TypeError, ValueError):
         vencido = bool(hb)
     if vencido and hb:
         nuevas += await _detectar_falla("parser_caido", f"parser_{_now()[:13]}",
-                                        f"El parser de correos no corre desde {str(hb.get('ultimo_run'))[:16]}",
+                                        f"El parser de correos no corre desde {str(hb.get('ultimo_run'))[:16]} (umbral 12 min)",
                                         "reiniciar_parser_cron")
     from criterios_data import DEFAULT_TASAS
     cfg = await db.config.find_one({"_key": "tasas"}) or {}

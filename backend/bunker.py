@@ -7,6 +7,7 @@
 """
 import os
 import re
+import time
 import logging
 import threading
 from pathlib import Path
@@ -56,31 +57,67 @@ def _skey(force=False):
     return _storage_key
 
 
+_cb = {"fails": 0, "hasta": 0.0}
+
+
+def _cb_check():
+    """Cortacircuito global: si el almacén durable falla repetido, se pausa 5 min."""
+    import time as _t
+    if _t.time() < _cb["hasta"]:
+        raise RuntimeError("objstore en pausa (cortacircuito 5 min)")
+
+
+def _cb_fallo():
+    import time as _t
+    _cb["fails"] += 1
+    if _cb["fails"] >= 5:
+        _cb["hasta"] = _t.time() + 300
+        _cb["fails"] = 0
+        logging.warning("🏦 BÚNKER: cortacircuito activado — objstore pausado 5 min")
+
+
+def _cb_ok():
+    _cb["fails"] = 0
+
+
 def _put(rel, data):
+    _cb_check()
     path = f"{APP_PREFIX}/{rel}"
-    r = requests.put(f"{STORAGE_URL}/objects/{path}",
-                     headers={"X-Storage-Key": _skey(),
-                              "Content-Type": "application/octet-stream"},
-                     data=data, timeout=180)
-    if r.status_code == 404:
+    try:
         r = requests.put(f"{STORAGE_URL}/objects/{path}",
-                         headers={"X-Storage-Key": _skey(force=True),
+                         headers={"X-Storage-Key": _skey(),
                                   "Content-Type": "application/octet-stream"},
-                         data=data, timeout=180)
-    r.raise_for_status()
+                         data=data, timeout=(8, 120))
+        if r.status_code == 404:
+            r = requests.put(f"{STORAGE_URL}/objects/{path}",
+                             headers={"X-Storage-Key": _skey(force=True),
+                                      "Content-Type": "application/octet-stream"},
+                             data=data, timeout=(8, 120))
+        r.raise_for_status()
+    except Exception:
+        _cb_fallo()
+        raise
+    _cb_ok()
     return r.json()
 
 
 def _get(rel):
+    _cb_check()
     path = f"{APP_PREFIX}/{rel}"
-    r = requests.get(f"{STORAGE_URL}/objects/{path}",
-                     headers={"X-Storage-Key": _skey()}, timeout=120)
-    if r.status_code == 404:
+    try:
         r = requests.get(f"{STORAGE_URL}/objects/{path}",
-                         headers={"X-Storage-Key": _skey(force=True)}, timeout=120)
+                         headers={"X-Storage-Key": _skey()}, timeout=(8, 60))
         if r.status_code == 404:
-            return None
-    r.raise_for_status()
+            r = requests.get(f"{STORAGE_URL}/objects/{path}",
+                             headers={"X-Storage-Key": _skey(force=True)}, timeout=(8, 60))
+            if r.status_code == 404:
+                _cb_ok()
+                return None
+        r.raise_for_status()
+    except Exception:
+        _cb_fallo()
+        raise
+    _cb_ok()
     return r.content
 
 
@@ -206,6 +243,7 @@ def restaurar_si_vacio():
         if _bajar_entry(rel, meta.get("mtime")):
             n += 1
             fallos = 0
+            time.sleep(0.05)
         else:
             fallos += 1
             if fallos >= MAX_FALLOS_SEGUIDOS:
@@ -229,6 +267,7 @@ def restaurar_faltantes():
         if _bajar_entry(rel, meta.get("mtime")):
             n += 1
             fallos = 0
+            time.sleep(0.05)
         else:
             fallos += 1
             if fallos >= MAX_FALLOS_SEGUIDOS:
@@ -325,6 +364,10 @@ def migrar_legado():
         return {"skipped": True}
     try:
         cfg = _db()["config"]
+        prev = cfg.find_one({"_key": "objstore_migracion"}) or {}
+        if prev.get("estado") == "completada" and prev.get("total_manifiesto"):
+            logging.info("🚚 MIGRACIÓN objstore: ya completada — no se repite en este arranque")
+            return {"skipped": True, "estado": "completada"}
         man = _manifest()
         ya = {d["filename"] for d in man.find({}, {"filename": 1})}
         movidos, errores = 0, 0
@@ -341,6 +384,7 @@ def migrar_legado():
                                          "is_deleted": False}}, upsert=True)
                 ya.add(rel)
                 movidos += 1
+                time.sleep(0.05)
                 if movidos % 200 == 0:
                     logging.warning(f"🚚 MIGRACIÓN objstore: {movidos} archivos subidos…")
                     cfg.update_one({"_key": "objstore_migracion"},

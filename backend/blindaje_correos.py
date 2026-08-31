@@ -504,18 +504,24 @@ async def blindaje_parser_loop():
     import email_service as mail
     await asyncio.sleep(120)
     while True:
+        espera = 300
         try:
             await db.config.update_one({"_key": "blindaje_heartbeat"},
                                        {"$set": {"ultimo_run": _now()}}, upsert=True)
-            correos = await asyncio.to_thread(mail.fetch_recent_full, 15)
+            correos = await asyncio.to_thread(mail.fetch_recent_full, 10)
             for c in correos or []:
                 try:
                     await procesar_correo(c)
                 except Exception as e:
                     logging.warning(f"blindaje procesar {c.get('id')}: {str(e)[:150]}")
         except Exception as e:
-            logging.warning(f"blindaje parser loop: {str(e)[:150]}")
-        await asyncio.sleep(90)
+            err = str(e)
+            if "OVERQUOTA" in err or "bandwidth" in err.lower():
+                espera = 900
+                logging.warning("blindaje parser: OVERQUOTA de Google — retrocedo 15 min para soltar la cuota")
+            else:
+                logging.warning(f"blindaje parser loop: {err[:150]}")
+        await asyncio.sleep(espera)
 
 
 async def blindaje_retry_loop():
@@ -646,7 +652,14 @@ async def dashboard(request: Request):
             "log": log, "cola": cola, "checklist": await _checklist_dns()}
 
 
+_dns_cache = {"ts": 0, "data": None}
+
+
 async def _checklist_dns():
+    import time as _t
+    if _dns_cache["data"] and _t.time() - _dns_cache["ts"] < 600:
+        return _dns_cache["data"]
+
     def _txt(nombre):
         try:
             import dns.resolver

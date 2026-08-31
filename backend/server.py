@@ -671,16 +671,26 @@ async def startup():
         await db.set_credito.create_index("nombre")
     except Exception as e:
         logging.warning(f"indices: {e}")
-    # PASO 2 — BÚNKER DE ARCHIVOS: la restauración corre EN SEGUNDO PLANO para que
-    # el arranque NUNCA dependa del Object Store (el puerto 8001 abre de inmediato;
-    # la Regla #13 restaura on-demand cualquier archivo que aún no haya bajado).
+    # PASO 2 — BÚNKER DE ARCHIVOS: restauración EN SEGUNDO PLANO con reintentos.
+    # El arranque NUNCA depende del Object Store; si el almacén falla, el bucle
+    # reintenta cada 10 min hasta que el disco quede completo (autosanación prod).
     async def _bunker_restore_bg():
-        try:
-            n_full = await asyncio.to_thread(bunker.restaurar_si_vacio)
-            n_falt = await asyncio.to_thread(bunker.restaurar_faltantes)
-            logging.info(f"🏦 BÚNKER arranque (bg): {n_full} restaurados (pod nuevo) + {n_falt} faltantes bajados")
-        except Exception as e:
-            logging.warning(f"BÚNKER restore bg falló: {e}")
+        primera = True
+        while True:
+            try:
+                n_full = await asyncio.to_thread(bunker.restaurar_si_vacio)
+                n_falt = await asyncio.to_thread(bunker.restaurar_faltantes)
+                if n_full or n_falt:
+                    logging.info(f"🏦 BÚNKER restore bg: {n_full} completos + {n_falt} faltantes bajados")
+                elif not primera:
+                    logging.info("🏦 BÚNKER restore bg: disco completo — bucle finalizado")
+                    return
+                if primera and not n_full and not n_falt:
+                    return
+                primera = False
+            except Exception as e:
+                logging.warning(f"BÚNKER restore bg: {str(e)[:150]}")
+            await asyncio.sleep(600)
     asyncio.create_task(_bunker_restore_bg())
     # Liberar candado obsoleto: ningún procesamiento sobrevive a un reinicio
     # BLINDAJE 24/7: 'Correo a Mesa' SIEMPRE arranca activado por defecto, sin clics.
