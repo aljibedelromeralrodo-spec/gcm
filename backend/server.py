@@ -3133,15 +3133,29 @@ async def forzar_folder(payload: dict):
     return {"ok": True, "job_id": job_id, "estado": "en_proceso"}
 
 
+def _rx_sin_tildes(palabra):
+    """Regex insensible a tildes: 'pérez' matchea 'Perez' y 'PÉREZ'."""
+    mapa = {"a": "[aá]", "e": "[eé]", "i": "[ií]", "o": "[oó]", "u": "[uúü]", "n": "[nñ]"}
+    out = []
+    for ch in palabra.lower():
+        base = ch
+        for plano, clase in mapa.items():
+            if ch in clase:
+                base = clase
+                break
+        out.append(base if base != ch else re.escape(ch))
+    return "".join(out)
+
+
 async def _forzar_folder_run(payload):
     """Fuerza la creación manual de una carpeta: busca por NOMBRE y/o RUT en los correos
     ingresados los datos y descarga los archivos adjuntos."""
     nombre = (payload.get("nombre") or "").strip()
     rut = (payload.get("rut") or "").strip()
     palabras = [p for p in re.split(r"\s+", nombre) if len(p) >= 3]
-    conds = [{"$or": [{"subject": {"$regex": re.escape(p), "$options": "i"}},
-                      {"classification.cliente": {"$regex": re.escape(p), "$options": "i"}},
-                      {"body_full": {"$regex": re.escape(p), "$options": "i"}}]}
+    conds = [{"$or": [{"subject": {"$regex": _rx_sin_tildes(p), "$options": "i"}},
+                      {"classification.cliente": {"$regex": _rx_sin_tildes(p), "$options": "i"}},
+                      {"body_full": {"$regex": _rx_sin_tildes(p), "$options": "i"}}]}
              for p in palabras]
     query = {"$and": conds} if conds else None
     rut_rx = _rut_regex_flexible(rut)
@@ -3162,14 +3176,19 @@ async def _forzar_folder_run(payload):
         except Exception as e:
             errores.append(f"{(it.get('subject') or '')[:50]}: {str(e)[:80]}")
     folder = None
+    advertencia = ""
+    resultados_pre = None
     if palabras:
+        # La carpeta existente debe contener TODAS las palabras del nombre buscado
+        # (antes matcheaba solo la primera: "Antonio Pérez" caía en "Juan ANTONIO Moya")
         folder = await db.folders.find_one(
-            {"nombre": {"$regex": re.escape(palabras[0]), "$options": "i"}})
+            {"$and": [{"nombre": {"$regex": _rx_sin_tildes(p), "$options": "i"}} for p in palabras]})
     if not folder and rut_rx:
         folder = await db.folders.find_one({"rut": {"$regex": rut_rx, "$options": "i"}})
     if not folder:
-        # 🔒 REGLA CONSTITUCIONAL #67 — validar 3 documentos mínimos ANTES de crear la carpeta
-        resultados_pre = None
+        # Regla #67 (3 docs mínimos) rige el flujo AUTOMÁTICO; el FORZADO es una orden
+        # directa del Admin con clave: la carpeta se crea SIEMPRE, aunque venga vacía
+        # o con un solo PDF conjunto — se registra la advertencia para completarla después.
         try:
             mids0 = [m_ for m_ in (payload.get("message_ids") or []) if m_]
             if mids0:
@@ -3180,11 +3199,19 @@ async def _forzar_folder_run(payload):
         except Exception:
             resultados_pre = []
         nombres_pre = [p.get("filename") or "" for r_ in (resultados_pre or []) for p in (r_.get("pdfs") or [])]
-        if len(fsvc.docs_apertura_cats(nombres_pre)) < 3:
-            raise HTTPException(status_code=422, detail=fsvc.MSG_DOC_INSUFICIENTE)
+        cats_pre = fsvc.docs_apertura_cats(nombres_pre)
+        if len(cats_pre) < 3:
+            if nombres_pre:
+                advertencia = (f"Carpeta FORZADA con {len(nombres_pre)} archivo(s) pero solo "
+                               f"{len(cats_pre)} categoría(s) de apertura — puede ser un PDF conjunto "
+                               "(varios documentos en un solo archivo): revisar y completar.")
+            else:
+                advertencia = ("Carpeta FORZADA VACÍA (sin archivos encontrados en el correo) — "
+                               "queda creada con el nombre para ir llenándola después.")
         folder = {"id": str(uuid.uuid4()), "nombre": (nombre or rut).upper(),
                   "rut": rut, "archivos": [],
-                  "created_at": now_iso(), "origen": "forzada_manual"}
+                  "created_at": now_iso(), "origen": "forzada_manual",
+                  **({"forzada_advertencia": advertencia} if advertencia else {})}
         await db.folders.insert_one(dict(folder))
         fsvc.folder_dir(folder["nombre"]).mkdir(parents=True, exist_ok=True)
     elif rut and not folder.get("rut"):
@@ -3193,7 +3220,9 @@ async def _forzar_folder_run(payload):
     imap_bajados = []
     try:
         mids = [m_ for m_ in (payload.get("message_ids") or []) if m_]
-        if mids:
+        if resultados_pre is not None:
+            resultados = resultados_pre  # reutiliza la búsqueda IMAP ya hecha (evita doble espera)
+        elif mids:
             resultados = await asyncio.to_thread(mail.fetch_attachments_by_message_ids, mids)
         else:
             resultados = await asyncio.to_thread(mail.search_attachments_by_person, nombre or rut,
@@ -3243,6 +3272,7 @@ async def _forzar_folder_run(payload):
             "archivos_imap": imap_bajados,
             "docs_aprobacion_descargados": sync_copiados,
             "verificacion_cedula": verificacion,
+            "advertencia": advertencia,
             "errores": errores}
 
 

@@ -1499,7 +1499,7 @@ export default function ClientesModule({ onNavigate }) {
       const imap = res.archivos_imap || [];
       const ver = res.verificacion_cedula;
       setForzarModal(prev => ({ ...prev, forzando: false,
-        msg: `✅ Carpeta: ${res.carpeta} · Correos: ${res.correos_encontrados} · Adjuntos descargados: ${imap.length}${ver && Object.keys(ver.cambios || {}).length ? ` · 🪪 Corregido con cédula: ${Object.entries(ver.cambios).map(([k, v]) => `${k}→${v}`).join(", ")}` : ""}` }));
+        msg: `✅ Carpeta: ${res.carpeta} · Correos: ${res.correos_encontrados} · Adjuntos descargados: ${imap.length}${ver && Object.keys(ver.cambios || {}).length ? ` · 🪪 Corregido con cédula: ${Object.entries(ver.cambios).map(([k, v]) => `${k}→${v}`).join(", ")}` : ""}${res.advertencia ? `\n⚠️ ${res.advertencia}` : ""}` }));
       loadFolders();
     } catch (e) {
       setForzarModal(prev => ({ ...prev, forzando: false, msg: "Error: " + (e.response?.data?.detail || e.message) }));
