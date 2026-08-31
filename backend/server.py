@@ -7055,7 +7055,7 @@ async def proc_ordenar_docs(qid: str, payload: dict):
             "carpeta_regenerada": bool(regenerado)}
 
 
-RUT_EN_TEXTO_RX = re.compile(r"\b\d{1,2}\.?\d{3}\.?\d{3}\s?-\s?[\dkK]\b")
+RUT_EN_TEXTO_RX = re.compile(r"\b\d{1,2}[.,]?\d{3}[.,]?\d{3}\s?-\s?[\dkK]\b")
 
 
 def _ruts_de_pdf(pdf_bytes):

@@ -1300,3 +1300,10 @@ ACCIONES EJECUTADAS:
 - Combinado regenerado: 7 docs en orden 01→99, cotización AL FINAL (ya no antes del carnet). Sin exclusiones.
 - Combinado de Felipe De La Cuadra regenerado sin docs de Escalante (viejo Carpeta_*.pdf a papelera).
 PENDIENTE: quedan ~14 correos que mencionan a Gabriela sin procesar (buscador de correos si el usuario quiere traer más). 2 correos de ella esperan confirmación en el panel de previews.
+
+## 2026-08-31 — Correos restantes de Gabriela procesados + codeudor registrado
+- De los 33 correos en cola que mencionaban a Berríos: 28 eran cuarentenas «LEY DEL RUT sin match» creadas por el pod de PRODUCCIÓN (comparte Mongo; archivos no están en el disco del preview) — todos eran DUPLICADOS de docs de César Zamora ya archivados → resueltos como duplicado_resuelto y alertas marcadas leídas. 2 correos EVALUACIÓN CONCRECES → contenido 100% ya archivado → procesado_martin. 3 restantes son de OTROS clientes (2 Jocelyn Bello con sus 14 docs ya en su carpeta, 1 Rodrigo Farías escritura con documentacion_insuficiente).
+- RUT del codeudor obtenido por OCR del CMF: César Antonio Zamora Herrera = 13362857-6 (DV validado). Seteado en carpeta CÉSAR ZAMORA (.rut) y como codeudor_rut/codeudor_nombre en la carpeta de Gabriela → RUT COMO BRÚJULA ahora enruta sus docs a 05_codeudor automáticamente (fin de los rechazos LEY DEL RUT).
+- RUT_EN_TEXTO_RX (server.py) ahora tolera comas del OCR («19,448.446-1»), igual que folders_service.
+- Carpeta Gabriela COMPLETA: cédula, liquidaciones, AFP, CMF, cert. laboral, título, cotización + 3 docs codeudor + combinado regenerado.
+- NOTA ARQUITECTURA: producción y preview comparten MongoDB — los archivos de storage/proc de cuarentenas creadas en producción NO existen en el disco del preview.
