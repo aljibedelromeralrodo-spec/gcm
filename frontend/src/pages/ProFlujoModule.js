@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
-import { API_URL } from "../utils/formatters";
+import { API_URL, htmlConContrasteCorreo } from "../utils/formatters";
 
 const COL_COLOR = {
   captacion: "#7c3aed",
@@ -228,7 +228,7 @@ export default function ProFlujoModule({ onNavigate }) {
           {pv.body && (
             <div style={{ maxHeight: 180, overflow: "auto", background: "#fff", color: "#111",
               padding: 8, fontSize: 12, margin: "6px 0 10px" }}
-              dangerouslySetInnerHTML={{ __html: pv.body }} />
+              dangerouslySetInnerHTML={{ __html: htmlConContrasteCorreo(pv.body) }} />
           )}
           {ficha.accion === "enviar_tasacion" && (
             <label style={{ display: "block", color: "#94a3b8", fontSize: 11, fontWeight: 700 }}>

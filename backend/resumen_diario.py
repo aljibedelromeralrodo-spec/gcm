@@ -14,7 +14,7 @@ resdia = APIRouter()
 DESTINO = "gerardo.ext@centralmutuos.cl"
 TZ_CL = ZoneInfo("America/Santiago")
 KEY = "resumen_diario_8am"
-ORO, NEGRO = "#b8860b", "#0b0b0d"
+ORO, NEGRO = "#C9A227", "#111827"
 
 
 def _exigir(request):
@@ -158,19 +158,26 @@ async def _datos_digest():
 # ── HTML ──
 def _tabla(filas, columnas):
     if not filas:
-        return "<p style='color:#8a7a5a;font-size:13px;margin:4px 0 14px'>Sin registros.</p>"
-    head = "".join(f"<th style='padding:6px 10px;text-align:left;color:#FCF6BA'>{t}</th>" for t, _ in columnas)
+        return "<p style='color:#6b7280;font-size:13px;margin:4px 0 14px'>Sin registros.</p>"
+    head = "".join(
+        f"<th style='padding:8px 10px;text-align:left;color:#374151;font-size:11px;"
+        f"font-weight:700;background:#f9fafb;border-bottom:2px solid #e5e7eb'>{t}</th>"
+        for t, _ in columnas)
     rows = ""
     for i, f in enumerate(filas):
-        bg = "#141416" if i % 2 == 0 else "#0f0f11"
-        tds = "".join(f"<td style='padding:6px 10px;color:#e8e2cf'>{fn(f)}</td>" for _, fn in columnas)
-        rows += f"<tr style='background:{bg};border-bottom:1px solid #26241c'>{tds}</tr>"
-    return (f"<table style='border-collapse:collapse;font-size:13px;width:100%;margin:4px 0 16px'>"
-            f"<tr style='background:{NEGRO}'>{head}</tr>{rows}</table>")
+        bg = "#ffffff" if i % 2 else "#f9fafb"
+        tds = "".join(
+            f"<td style='padding:8px 10px;color:#111827;border-bottom:1px solid #e5e7eb'>{fn(f)}</td>"
+            for _, fn in columnas)
+        rows += f"<tr style='background:{bg}'>{tds}</tr>"
+    return (f"<table style='border-collapse:collapse;font-size:13px;width:100%;margin:4px 0 16px;"
+            f"border:1px solid #e5e7eb'>"
+            f"<tr>{head}</tr>{rows}</table>")
 
 
 def _seccion(titulo, contenido):
-    return f"<h3 style='color:{ORO};margin:18px 0 4px;font-size:15px'>{titulo}</h3>{contenido}"
+    return (f"<h3 style='color:#111827;margin:18px 0 6px;font-size:15px;"
+            f"border-left:4px solid {ORO};padding-left:10px'>{titulo}</h3>{contenido}")
 
 
 COLS_CARPETA = [("Cliente", lambda f: f"<b>{f['nombre']}</b>"),
@@ -180,14 +187,14 @@ COLS_CARPETA = [("Cliente", lambda f: f"<b>{f['nombre']}</b>"),
 
 
 def _html_arranque(d):
-    return (f"<p style='margin:0 0 10px;color:#e8e2cf'>Correo de arranque del sistema de resúmenes diarios. "
+    return (f"<p style='margin:0 0 10px;color:#111827'>Correo de arranque del sistema de resúmenes diarios. "
             f"Listado completo de clientes con carpetas de las últimas dos semanas:</p>"
             + _tabla(d["carpetas"], COLS_CARPETA)
-            + "<p style='color:#8a7a5a;font-size:12px'>Desde mañana recibirá un único resumen diario a las 8:00 AM.</p>")
+            + "<p style='color:#4b5563;font-size:12px'>Desde mañana recibirá un único resumen diario a las 8:00 AM.</p>")
 
 
 def _html_digest(d):
-    h = f"<p style='margin:0 0 10px;color:#8a7a5a;font-size:12px'>Período: {d['desde']} → {d['hasta']} (hora de Chile)</p>"
+    h = f"<p style='margin:0 0 10px;color:#4b5563;font-size:12px'>Período: {d['desde']} → {d['hasta']} (hora de Chile)</p>"
     h += _seccion(f"📁 Carpetas nuevas recibidas ayer ({len(d['nuevas'])})", _tabla(d["nuevas"], COLS_CARPETA))
     h += _seccion(f"⏸ Pendientes sin movimiento +2 días hábiles ({len(d['sin_movimiento'])})",
                   _tabla(d["sin_movimiento"], COLS_CARPETA))
@@ -207,8 +214,8 @@ def _html_digest(d):
                   _tabla(d["documentos_faltantes"], COLS_CARPETA))
     h += _seccion(f"⚖ Cambios de tasas o criterios desde mesa ({len(d['cambios_mesa'])})",
                   _tabla(d["cambios_mesa"], [("Detalle", lambda f: f["detalle"])]))
-    alertas = "".join(f"<li style='color:#f4b1b8;margin:3px 0'>{a}</li>" for a in d["alertas"]) \
-        or "<li style='color:#8a7a5a'>Sin alertas activas.</li>"
+    alertas = "".join(f"<li style='color:#b91c1c;margin:3px 0'>{a}</li>" for a in d["alertas"]) \
+        or "<li style='color:#4b5563'>Sin alertas activas.</li>"
     h += _seccion(f"🚨 Alertas activas del sistema ({len(d['alertas'])})",
                   f"<ul style='margin:4px 0 14px;padding-left:20px'>{alertas}</ul>")
     return h

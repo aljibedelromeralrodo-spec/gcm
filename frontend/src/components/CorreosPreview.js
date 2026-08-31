@@ -1,26 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
+import { htmlConContrasteCorreo } from "../utils/formatters";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 const ORO = "#d4af37";
-
-const CSS_CONTRASTE = `<style id="cm-contraste">
-  tr[style*="#141416"], tr[style*="#0f0f11"] { background:#f3f4f6 !important; }
-  td[style*="color:#FCF6BA"], td[style*="color:#fcf6ba"],
-  td[style*="color:#e8e2cf"], td[style*="color:#E8E2CF"],
-  td[style*="color:#F5E7B8"], td[style*="color:#8a7a5a"],
-  td[style*="color:#b8860b"], td[style*="color:#d4af37"],
-  h3[style*="color:#b8860b"] { color:#111827 !important; }
-  td[style*="background:#0a0a0a"], td[style*="background:#0a0a0a"] * { color:#F5E7B8 !important; }
-  td[style*="background:#1a1f2e"], td[style*="background:#1a1f2e"] * { color:#F5E7B8 !important; }
-</style>`;
-
-function htmlConContraste(html) {
-  if (!html) return "";
-  if (html.includes("id=\"cm-contraste\"") || html.includes("id='cm-contraste'")) return html;
-  if (/<head/i.test(html)) return html.replace(/<head([^>]*)>/i, `<head$1>${CSS_CONTRASTE}`);
-  return `${CSS_CONTRASTE}${html}`;
-}
 const btn = (c) => ({ background: "transparent", color: c, border: `1px solid ${c}`, cursor: "pointer",
   padding: "0.3rem 0.8rem", fontWeight: 700, fontSize: "0.72rem" });
 
@@ -98,7 +81,7 @@ export default function CorreosPreview() {
                 <div style={{ color: "#374151", fontSize: 11, fontWeight: 700, marginBottom: 6, letterSpacing: "0.04em" }}>
                   VISTA DEL CORREO · tal como lo recibe el destinatario
                 </div>
-                <iframe data-testid={`preview-cuerpo-${i}`} title={`preview-${i}`} srcDoc={htmlConContraste(c.body_html)}
+                <iframe data-testid={`preview-cuerpo-${i}`} title={`preview-${i}`} srcDoc={htmlConContrasteCorreo(c.body_html)}
                   style={{ width: "100%", height: 520, background: "#fff", border: "1px solid #9ca3af" }} />
               </div>
             )}

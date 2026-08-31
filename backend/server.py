@@ -2722,7 +2722,11 @@ def _email_institucional(nombre, cuerpo_html, firmante="Sistema de Gestión Cent
     cierre con fecha DD/MM/AAAA y pie de confidencialidad fijo."""
     hoy = datetime.now(timezone.utc).strftime("%d/%m/%Y")
     return f"""<!DOCTYPE html><html><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  body, td, p, li, th {{ color:#1f2937; }}
+  h3 {{ color:#111827; }}
+</style></head>
 <body style="margin:0;padding:0;background:#f4f4f4">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f4;padding:16px 0">
 <tr><td align="center">
@@ -6660,7 +6664,7 @@ async def _aviso_recepcion_incompleta(item, analisis_ocr):
     cuerpo = (f"<p>Estimado/a,</p><p>Recibimos su correo «{(item.get('subject') or '')[:90]}». "
               "Para avanzar con la evaluación necesitamos lo siguiente:</p>" + "".join(partes)
               + "<p>Muchas gracias,<br><b>Equipo Central Mutuos</b></p>"
-              + (f"<p style='color:#8a7a5a'>{nota_prueba}</p>" if nota_prueba else ""))
+              + (f"<p style='color:#4b5563'>{nota_prueba}</p>" if nota_prueba else ""))
     res = await asyncio.to_thread(
         mail.send_mail, destino,
         f"Re: {(item.get('subject') or 'su envío')[:110]} — documentación recibida incompleta",
@@ -9434,7 +9438,9 @@ def _marca_wrap(inner, subtitulo=""):
   body {{ margin:0; padding:0; width:100% !important; background:#ffffff; }}
   .cm-wrap {{ width:100%; max-width:600px; margin:0 auto; }}
   .cm-pad {{ padding:28px 32px; }}
-  .cm-body {{ font-size:14px; line-height:1.65; word-break:break-word; overflow-wrap:break-word; }}
+  .cm-body {{ font-size:14px; line-height:1.65; word-break:break-word; overflow-wrap:break-word; color:#111827; }}
+  .cm-body p, .cm-body td, .cm-body th, .cm-body li {{ color:#111827; }}
+  .cm-body h3 {{ color:#111827; }}
   img {{ max-width:100%; height:auto; }}
   table {{ width:100% !important; border-collapse:collapse; }}
   @media only screen and (max-width:480px) {{

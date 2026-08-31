@@ -1375,35 +1375,64 @@ _CONTRASTE_TEXTO = (
     ("color:#fcf6ba", "color:#111827"), ("color:#e8e2cf", "color:#111827"),
     ("color:#E8E2CF", "color:#111827"), ("color:#F5E7B8", "color:#111827"),
     ("color:#8a7a5a", "color:#374151"), ("color:#b8860b", "color:#111827"),
+    ("color:#f4b1b8", "color:#b91c1c"),
 )
 _CONTRASTE_FONDO_FILA = (
     ("#141416", "#f3f4f6"),
     ("#0f0f11", "#ffffff"),
+    ("#26241c", "#e5e7eb"),
 )
+CSS_CONTRASTE_CORREO = """<style id="cm-contraste">
+  .cm-body, .cm-body p, .cm-body td, .cm-body th, .cm-body li { color:#111827; }
+  tr[style*="#141416"], tr[style*="#0f0f11"] { background:#f3f4f6 !important; }
+  td[style*="color:#FCF6BA"], td[style*="color:#fcf6ba"],
+  td[style*="color:#e8e2cf"], td[style*="color:#E8E2CF"],
+  td[style*="color:#F5E7B8"], td[style*="color:#8a7a5a"],
+  td[style*="color:#b8860b"], td[style*="color:#d4af37"],
+  th[style*="color:#FCF6BA"], h3[style*="color:#b8860b"] { color:#111827 !important; }
+  td[style*="background:#0a0a0a"], td[style*="background:#0a0a0a"] *,
+  div[style*="background:#0a0a0a"], div[style*="background:#0a0a0a"] * { color:#C9A227 !important; }
+  td[style*="background:#1a1f2e"], td[style*="background:#1a1f2e"] *,
+  tr[style*="background:#1a1f2e"] td { color:#F5E7B8 !important; }
+</style>"""
+
+
+def _es_plantilla_oscura(html):
+    """Campañas VIP / publicidad en negro+oro: no se reescriben."""
+    s = (html or "")[:6000].lower()
+    if "background:#000000" in s or "background:#050505" in s:
+        return True
+    if re.search(r"<body[^>]{0,160}background[^#]{0,24}#0[0-9a-f]{5}", s):
+        return True
+    oscuros = s.count("background:#0a0a0a") + s.count("background-color:#0a0a0a")
+    return oscuros >= 4
 
 
 def forzar_contraste_html(html):
-    """Deja el cuerpo del correo legible: tinta oscura sobre blanco.
-
-    No toca el encabezado institucional (#0a0a0a) ni filas TOTAL de GOP (#1a1f2e).
-    """
+    """Tinta oscura sobre blanco en correos operativos. No toca campañas oscuras,
+    el encabezado institucional ni el TOTAL de GOP."""
     if not html:
         return html or ""
+    if _es_plantilla_oscura(html):
+        return html
     s = str(html)
     for a, b in _CONTRASTE_FONDO_FILA:
         s = s.replace(a, b)
     for a, b in _CONTRASTE_TEXTO:
         s = s.replace(a, b)
-    # Oro como color de texto en celdas de archivo (después de aclarar filas negras).
-    # No reemplaza color:#d4af37 en filas TOTAL (background:#1a1f2e).
     s = re.sub(
-        r"(background:#(?:f3f4f6|ffffff|f9fafb|fff)[^>]{0,180})color:#d4af37",
+        r"(background:#(?:f3f4f6|ffffff|f9fafb|fff|f8f9fc)[^>]{0,180})color:#d4af37",
         r"\1color:#111827",
         s,
         flags=re.I,
     )
     s = s.replace("color:#d4af37'><b>", "color:#111827'><b>")
     s = s.replace('color:#d4af37"><b>', 'color:#111827"><b>')
+    if 'id="cm-contraste"' not in s and "id='cm-contraste'" not in s:
+        if re.search(r"<head", s, re.I):
+            s = re.sub(r"<head([^>]*)>", r"<head\1>" + CSS_CONTRASTE_CORREO, s, count=1, flags=re.I)
+        else:
+            s = CSS_CONTRASTE_CORREO + s
     return s
 
 
@@ -1669,6 +1698,7 @@ def send_mail(to, subject, body_html, attachments=None, desde="secundaria", cc=N
     attachments: [{filename, content_b64}]. desde: 'secundaria' o 'principal'."""
     if not configured():
         return {"success": False, "error": "Correo no configurado"}
+    body_html = forzar_contraste_html(body_html)
     # ⛔ NORMATIVA CONSTITUCIONAL — PREVIEW OBLIGATORIO (INAMOVIBLE): NINGÚN correo sale
     # sin confirmación explícita del Administrador. Solo el endpoint de confirmación
     # (que muestra destinatario, asunto, cuerpo completo y adjuntos) pasa confirmado=True.
