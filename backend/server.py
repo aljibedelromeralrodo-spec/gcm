@@ -6720,6 +6720,12 @@ async def correos_preview_lista(request: Request):
     _exigir_admin_dash(request)
     docs = await db.correos_preview.find({"estado": "esperando_confirmacion"},
                                          {"_id": 0, "huella": 0}).sort("creado", -1).to_list(100)
+    # Los HTML viejos (oro/crema sobre blanco) se reescriben al servirlos.
+    for d in docs:
+        html = mail.forzar_contraste_html(d.get("body_html") or "")
+        if html != (d.get("body_html") or ""):
+            d["body_html"] = html
+            await db.correos_preview.update_one({"id": d.get("id")}, {"$set": {"body_html": html}})
     return {"total": len(docs), "correos": docs}
 
 
@@ -6734,8 +6740,9 @@ async def correos_preview_confirmar(pid: str, request: Request):
     async for a in db.correos_preview_adj.find({"preview_id": pid}):
         adjs.append({"filename": a.get("filename"),
                      "content_b64": _b64.b64encode(bytes(a.get("data") or b"")).decode()})
+    cuerpo = mail.forzar_contraste_html(doc.get("body_html") or "")
     res = await asyncio.to_thread(functools.partial(
-        mail.send_mail, doc["to"], doc["subject"], doc["body_html"], adjs, "secundaria",
+        mail.send_mail, doc["to"], doc["subject"], cuerpo, adjs, "secundaria",
         cc=doc.get("cc") or None, bcc=doc.get("bcc") or None,
         confirmado=True, permitir_duplicado=True, hilo_nuevo=True, from_name="Central Mutuos"))
     ok = bool(res.get("success"))

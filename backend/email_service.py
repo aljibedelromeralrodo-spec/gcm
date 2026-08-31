@@ -1369,12 +1369,51 @@ def _envio_duplicado(huella):
         return False
 
 
+# Texto oro/crema pensado para fondo negro: ilegible sobre el cuerpo blanco del correo.
+_CONTRASTE_TEXTO = (
+    ("color:#FCF6BA", "color:#111827"), ("color: #FCF6BA", "color:#111827"),
+    ("color:#fcf6ba", "color:#111827"), ("color:#e8e2cf", "color:#111827"),
+    ("color:#E8E2CF", "color:#111827"), ("color:#F5E7B8", "color:#111827"),
+    ("color:#8a7a5a", "color:#374151"), ("color:#b8860b", "color:#111827"),
+)
+_CONTRASTE_FONDO_FILA = (
+    ("#141416", "#f3f4f6"),
+    ("#0f0f11", "#ffffff"),
+)
+
+
+def forzar_contraste_html(html):
+    """Deja el cuerpo del correo legible: tinta oscura sobre blanco.
+
+    No toca el encabezado institucional (#0a0a0a) ni filas TOTAL de GOP (#1a1f2e).
+    """
+    if not html:
+        return html or ""
+    s = str(html)
+    for a, b in _CONTRASTE_FONDO_FILA:
+        s = s.replace(a, b)
+    for a, b in _CONTRASTE_TEXTO:
+        s = s.replace(a, b)
+    # Oro como color de texto en celdas de archivo (después de aclarar filas negras).
+    # No reemplaza color:#d4af37 en filas TOTAL (background:#1a1f2e).
+    s = re.sub(
+        r"(background:#(?:f3f4f6|ffffff|f9fafb|fff)[^>]{0,180})color:#d4af37",
+        r"\1color:#111827",
+        s,
+        flags=re.I,
+    )
+    s = s.replace("color:#d4af37'><b>", "color:#111827'><b>")
+    s = s.replace('color:#d4af37"><b>', 'color:#111827"><b>')
+    return s
+
+
 def _encolar_preview(to, subject, body_html, attachments, cc, bcc):
     """⛔ NORMATIVA CONSTITUCIONAL — PREVIEW OBLIGATORIO: todo correo saliente queda en
     espera de confirmación EXPLÍCITA del Administrador. Sin confirmación, no sale nada."""
     import uuid as _uuid
     from datetime import datetime, timezone
     from bson.binary import Binary
+    body_html = forzar_contraste_html(body_html)
     h = huella_correo(to, subject, body_html, attachments)
     col = _db_sync()["correos_preview"]
     ya = col.find_one({"huella": h, "estado": "esperando_confirmacion"})
