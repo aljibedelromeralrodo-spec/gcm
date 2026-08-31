@@ -1,4 +1,4 @@
-export const API_URL = process.env.REACT_APP_BACKEND_URL;
+export const API_URL = process.env.REACT_APP_BACKEND_URL || "";
 
 export const formatCurrency = (amount) => {
   if (!amount && amount !== 0) return "$0";

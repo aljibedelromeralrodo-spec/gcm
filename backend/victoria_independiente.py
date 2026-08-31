@@ -1128,7 +1128,8 @@ async def fragmento_documento(did: str, request: Request, q: str = "", pagina: i
 
 
 # ══════════ DEMO MÓDULO VICTORIA: video descargable y envío por correo ══════════
-DEMOS_DIR = Path("/app/backend/demos")
+_ROOT = Path("/app/backend") if Path("/app/backend").is_dir() else Path(__file__).resolve().parent
+DEMOS_DIR = _ROOT / "demos"
 DEMOS_DIR.mkdir(parents=True, exist_ok=True)
 
 

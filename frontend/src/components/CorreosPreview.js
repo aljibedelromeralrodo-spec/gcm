@@ -76,8 +76,13 @@ export default function CorreosPreview() {
               </button>
             </div>
             {abierto === c.id && (
-              <iframe data-testid={`preview-cuerpo-${i}`} title={`preview-${i}`} srcDoc={c.body_html}
-                style={{ width: "100%", height: 380, background: "#fff", border: "1px solid rgba(245,158,11,0.3)", marginTop: 8 }} />
+              <div style={{ marginTop: 10, background: "#e5e7eb", padding: 10, border: "1px solid #d1d5db" }}>
+                <div style={{ color: "#374151", fontSize: 11, fontWeight: 700, marginBottom: 6, letterSpacing: "0.04em" }}>
+                  VISTA DEL CORREO · tal como lo recibe el destinatario
+                </div>
+                <iframe data-testid={`preview-cuerpo-${i}`} title={`preview-${i}`} srcDoc={c.body_html}
+                  style={{ width: "100%", height: 520, background: "#fff", border: "1px solid #9ca3af" }} />
+              </div>
             )}
           </div>
         ))}

@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import axios from "axios";
 import { secureGet } from "../utils/secureStore";
+import BlindajeCorreosPanel from "./BlindajeCorreosPanel";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -39,6 +40,7 @@ export default function EmailProcessingModule() {
   const [alertas, setAlertas] = useState([]);
   const [reglasAuto, setReglasAuto] = useState(null);
   const [reglasMsg, setReglasMsg] = useState("");
+  const [vista, setVista] = useState(() => (typeof sessionStorage !== "undefined" && sessionStorage.getItem("cm_abrir_auth_id") ? "blindaje" : "ingesta"));
 
   const loadReglasAuto = async () => {
     try {
@@ -307,6 +309,18 @@ export default function EmailProcessingModule() {
           <p style={{ margin: "4px 0 0", color: "#64748b", fontSize: 13 }}>
             Monitoreo 24/7, detección de solicitudes e hitos (Mesa, tasación, estudio, escritura), adjuntos en búnker y preview sin descargar
           </p>
+          <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+            <button data-testid="vista-ingesta" onClick={() => setVista("ingesta")}
+              style={{ border: "1px solid #d4af37", padding: "4px 10px", fontWeight: 800, cursor: "pointer",
+                background: vista === "ingesta" ? "#d4af37" : "#fff", color: vista === "ingesta" ? "#0a0a0a" : "#92400e" }}>
+              Ingesta
+            </button>
+            <button data-testid="vista-blindaje" onClick={() => setVista("blindaje")}
+              style={{ border: "1px solid #d4af37", padding: "4px 10px", fontWeight: 800, cursor: "pointer",
+                background: vista === "blindaje" ? "#d4af37" : "#fff", color: vista === "blindaje" ? "#0a0a0a" : "#92400e" }}>
+              Blindaje V15.9
+            </button>
+          </div>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button data-testid="btn-ingest" onClick={ingest} disabled={busy}
@@ -334,6 +348,10 @@ export default function EmailProcessingModule() {
         </div>
       </div>
 
+      {vista === "blindaje" ? (
+        <BlindajeCorreosPanel />
+      ) : (
+      <>
       {/* PANEL AUTOMÁTICO 24/7 */}
       <div data-testid="auto-panel" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "10px 14px", borderRadius: 0, marginBottom: 16, background: auto?.enabled ? "#dcfce7" : "#f1f5f9", border: `1px solid ${auto?.enabled ? "#10d98e" : "#cbd5e1"}` }}>
         <span style={{ fontSize: 14, fontWeight: 700, color: auto?.enabled ? "#166534" : "#475569" }}>
@@ -506,6 +524,8 @@ export default function EmailProcessingModule() {
                      onUploadDrive={uploadToDrive} onExtractText={extractText}
                      onEnviarAutocorreo={enviarAutocorreo} onAttachManual={attachManual}
                      driveConfigured={driveConfigured} busy={busy} />
+      )}
+      </>
       )}
     </div>
   );

@@ -31,7 +31,9 @@ axios.interceptors.response.use(
   (r) => r,
   (err) => {
     const status = err?.response?.status;
-    if (status === 401 && !_redirigiendo && !err?.config?.skipAuthRedirect) {
+    const url = String(err?.config?.url || "");
+    const esLogin = /\/auth\/login|\/auth\/crear-clave|\/auth\/logout/.test(url);
+    if (status === 401 && !_redirigiendo && !err?.config?.skipAuthRedirect && !esLogin) {
       _redirigiendo = true;
       secureRemove("token");
       secureRemove("user");

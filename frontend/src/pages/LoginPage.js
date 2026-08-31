@@ -26,7 +26,11 @@ export default function LoginPage({ onLogin }) {
     setLoading(true);
     setError("");
     try {
-      const res = await axios.post(`${API_URL}/api/auth/login`, { rut, password });
+      const res = await axios.post(
+        `${API_URL}/api/auth/login`,
+        { rut, password },
+        { skipAuthRedirect: true },
+      );
       if (res.data.requiere_crear_clave) {
         setCrearClave({ codigo: res.data.codigo, nombre: res.data.nombre });
         setPassword(""); setClave2("");
@@ -37,10 +41,18 @@ export default function LoginPage({ onLogin }) {
       } else {
         entrar(res.data);
       }
-    } catch {
-      setError("Credenciales inválidas");
+    } catch (err) {
+      const d = err?.response?.data?.detail;
+      if (!err?.response) {
+        setError("Sin conexión con el servidor. El backend no está en línea.");
+      } else if (typeof d === "string" && d.trim()) {
+        setError(d);
+      } else {
+        setError("Credenciales inválidas");
+      }
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleCrearClave = async (e) => {

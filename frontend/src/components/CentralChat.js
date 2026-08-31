@@ -42,6 +42,32 @@ function restartSpeaking() {
   }
 }
 
+function ResumenDiarioCard({ secciones, hoy, total, fallback }) {
+  if (!secciones || !secciones.length) {
+    return <div className="central-msg-text">{renderTextWithLinks(fallback)}</div>;
+  }
+  return (
+    <div className="central-briefing" data-testid="central-briefing">
+      <div className="central-briefing-hi">Buenos días. Soy Martín.</div>
+      <div className="central-briefing-meta">Resumen {hoy} · {total} pendiente{total === 1 ? "" : "s"}</div>
+      {secciones.map((s) => (
+        <div key={s.clave} className={`central-briefing-sec ${s.tono || ""}`} data-testid={`briefing-sec-${s.clave}`}>
+          <h4>{s.icono} {s.titulo} <span>{s.total}</span></h4>
+          {(s.items || []).map((it, i) => (
+            <div key={`${s.clave}-${i}`} className="central-briefing-item">
+              <div className="central-briefing-name">{it.nombre}</div>
+              {s.clave !== "listas" && it.detalle ? (
+                <div className="central-briefing-det">{it.detalle}</div>
+              ) : null}
+            </div>
+          ))}
+          {s.mas > 0 && <div className="central-briefing-more">+{s.mas} más en la lista</div>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function renderTextWithLinks(text) {
   if (!text) return text;
   // Detect http(s) URLs AND absolute API paths like /api/...; transform both
@@ -173,17 +199,25 @@ export default function CentralChat({ userName, activeModule }) {
     if (open && !greeted && msgs.length === 0) {
       setGreeted(true);
       const hoy = new Date().toISOString().slice(0, 10);
-      const yaResumen = localStorage.getItem("martin_resumen_dia") === hoy;
+      const yaResumen = localStorage.getItem("martin_resumen_dia_v2") === hoy;
       const url = yaResumen ? `${API}/api/central/proactive` : `${API}/api/central/resumen-diario`;
       axios.get(url).then(r => {
         const texto = r.data?.resumen || r.data?.message;
         if (texto) {
-          if (!yaResumen) localStorage.setItem("martin_resumen_dia", hoy);
-          const greetMsg = { role: "assistant", text: texto, time: new Date() };
+          if (!yaResumen) localStorage.setItem("martin_resumen_dia_v2", hoy);
+          const greetMsg = {
+            role: "assistant",
+            text: texto,
+            hablado: r.data?.hablado || texto,
+            secciones: r.data?.secciones || null,
+            hoy: r.data?.hoy,
+            total: r.data?.acciones,
+            time: new Date(),
+          };
           setMsgs([greetMsg]);
           if (autoVoice) {
             setSpeaking(true);
-            speakText(texto, () => setSpeaking(false));
+            speakText(greetMsg.hablado, () => setSpeaking(false));
           }
         }
       }).catch((e) => console.error(e));
@@ -634,7 +668,11 @@ export default function CentralChat({ userName, activeModule }) {
                       ))}
                     </div>
                   )}
-                  <div className="central-msg-text">{renderTextWithLinks(m.text)}</div>
+                  {m.secciones ? (
+                    <ResumenDiarioCard secciones={m.secciones} hoy={m.hoy} total={m.total} fallback={m.text} />
+                  ) : (
+                    <div className="central-msg-text">{renderTextWithLinks(m.text)}</div>
+                  )}
                   {m.generatedFile && (
                     <div className="central-generated-file" data-testid="central-generated-file">
                       <div className="central-gen-header">
@@ -663,7 +701,7 @@ export default function CentralChat({ userName, activeModule }) {
                         </button>
                         <button className="central-meta-btn" onClick={() => {
                           setSpeaking(true);
-                          speakText(m.text, () => setSpeaking(false));
+                          speakText(m.hablado || m.text, () => setSpeaking(false));
                         }} title="Escuchar" data-testid={`replay-msg-${i}`}>
                           <i className="fa fa-volume-up"></i>
                         </button>

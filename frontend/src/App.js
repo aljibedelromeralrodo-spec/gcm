@@ -22,6 +22,7 @@ const HistorialModule = lazy(() => import("./pages/HistorialModule"));
 const CalculadoraModule = lazy(() => import("./pages/CalculadoraModule"));
 const FormatoModule = lazy(() => import("./pages/FormatoModule"));
 const ClientesModule = lazy(() => import("./pages/ClientesModule"));
+const ProFlujoModule = lazy(() => import("./pages/ProFlujoModule"));
 const CentralChat = lazy(() => import("./components/CentralChat"));
 const MartinProactivo = lazy(() => import("./components/MartinProactivo"));
 const SeguimientoModule = lazy(() => import("./pages/SeguimientoModule"));
@@ -83,6 +84,7 @@ const MODULE_TITLES = {
   calculadora: 'Calculadora de Dividendo',
   formato: 'Formato',
   clientes: 'Carpeta Clientes',
+  proflujo: 'Pro Flujo operativo',
   seguimiento: 'Seguimiento de Operaciones',
   usuarios: 'Gestion de Usuarios',
   criterios: 'Criterios de Evaluacion',
@@ -133,7 +135,7 @@ const SUPERMODULOS = [
   { key: 'sm_ventas', icon: 'fa-diamond', label: 'Ventas', mods: ['ventas_ws', 'oportunidades', 'cierres', 'aprobacion', 'seguimiento'] },
   { key: 'sm_simulacion', icon: 'fa-calculator', label: 'Simulación y Análisis', mods: ['simulador', 'concreces', 'calculadora', 'historial', 'formato', 'setcredito'] },
   { key: 'sm_captacion', icon: 'fa-bullhorn', label: 'Captación y Publicidad', mods: ['publicidad', 'brokers', 'aprendizaje', 'martinfin'] },
-  { key: 'sm_operacion', icon: 'fa-folder-open', label: 'Operación y Clientes', mods: ['clientes', 'supercarpeta', 'tasacion', 'estudio', 'escritura', 'gastos', 'procesamiento', 'rescate', 'autocorreo', 'micorreo', 'crece'] },
+  { key: 'sm_operacion', icon: 'fa-folder-open', label: 'Operación y Clientes', mods: ['proflujo', 'clientes', 'supercarpeta', 'tasacion', 'estudio', 'escritura', 'gastos', 'procesamiento', 'rescate', 'autocorreo', 'micorreo', 'crece'] },
   { key: 'sm_control', icon: 'fa-shield', label: 'Control y Postventa', mods: ['postventa', 'contralor', 'contraloria', 'auditoria', 'gerencia', 'mod_daniela', 'mod_victoria'] },
   { key: 'sm_sistema', icon: 'fa-cogs', label: 'Administración y Sistema', mods: ['dashboard', 'usuarios', 'criterios', 'administracion', 'dashai', 'emmy', 'whatsapp', 'basehistorica', 'salud', 'despacho'] },
 ];
@@ -460,6 +462,7 @@ function MainApp() {
   // El ingreso a un módulo no autorizado muestra el aviso, jamás un error técnico.
   const navItems = [
     { key: 'dashboard', icon: 'fa-th-large', label: 'Dashboard' },
+    { key: 'proflujo', icon: 'fa-sitemap', label: 'Pro Flujo' },
     { key: 'clientes', icon: 'fa-folder-open', label: 'Carpeta Clientes' },
     { key: 'simulador', icon: 'fa-calculator', label: 'Simulador Inmobiliario' },
     { key: 'concreces', icon: 'fa-university', label: 'Concreces Motor V7' },
@@ -777,6 +780,7 @@ function MainApp() {
         {activeModule === 'historial' && <HistorialModule valorUF={valorUF} onLoadSimulation={handleLoadSimulation} />}
         {activeModule === 'calculadora' && <CalculadoraModule valorUF={valorUF} />}
         {activeModule === 'formato' && <FormatoModule />}
+        {activeModule === 'proflujo' && <ProFlujoModule onNavigate={setActiveModule} />}
         {activeModule === 'clientes' && <ClientesModule onNavigate={setActiveModule} />}
         {activeModule === 'seguimiento' && <SeguimientoModule />}
         {activeModule === 'usuarios' && <UsuariosModule />}

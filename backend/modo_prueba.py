@@ -47,9 +47,41 @@ async def activo():
     return True
 
 
-def _fila(label, valor):
-    return (f"<tr><td style='padding:5px 10px;color:#FCF6BA;white-space:nowrap'><b>{label}</b></td>"
-            f"<td style='padding:5px 10px;color:#e8e2cf'>{valor}</td></tr>")
+# Correo interno: fondo blanco. Oro solo como acento, nunca como texto sobre blanco.
+_TIPO_BADGE = {
+    "cedula": ("#14532d", "#dcfce7", "Cédula"),
+    "liquidacion": ("#1e3a8a", "#dbeafe", "Liquidación"),
+    "afp": ("#1e3a8a", "#dbeafe", "AFP"),
+    "cmf": ("#7c2d12", "#ffedd5", "CMF / deudas"),
+    "certificado_smf": ("#7c2d12", "#ffedd5", "CMF / deudas"),
+    "imp_renta": ("#4a044e", "#f3e8ff", "Renta / F22"),
+    "f29": ("#4a044e", "#f3e8ff", "F29"),
+    "boletas": ("#4a044e", "#f3e8ff", "Boletas"),
+    "contrato": ("#134e4a", "#ccfbf1", "Contrato"),
+    "licencia": ("#9a3412", "#ffedd5", "Licencia"),
+    "codeudor": ("#1e3a8a", "#dbeafe", "Codeudor"),
+    "otro": ("#1f2937", "#e5e7eb", "Sin clasificar"),
+}
+
+
+def _fila(label, valor, alerta=False):
+    color = "#991b1b" if alerta else "#111827"
+    peso = "700" if alerta else "600"
+    return (
+        f"<tr>"
+        f"<td style='padding:9px 12px;width:34%;color:#4b5563;font-size:12px;"
+        f"border-bottom:1px solid #e5e7eb;vertical-align:top'>{label}</td>"
+        f"<td style='padding:9px 12px;color:{color};font-size:13px;font-weight:{peso};"
+        f"border-bottom:1px solid #e5e7eb;vertical-align:top'>{valor}</td>"
+        f"</tr>"
+    )
+
+
+def _badge_tipo(tipo):
+    t = (tipo or "otro").strip().lower()
+    fg, bg, label = _TIPO_BADGE.get(t, _TIPO_BADGE["otro"])
+    return (f"<span style='display:inline-block;background:{bg};color:{fg};font-weight:700;"
+            f"font-size:11px;letter-spacing:0.02em;padding:3px 8px'>{label}</span>")
 
 
 async def _faltantes_de(item):
@@ -79,26 +111,57 @@ async def reportar_item(item):
     cl = item.get("classification") or {}
     docs = cl.get("documentos") or []
     faltantes = await _faltantes_de(item)
+    cliente = cl.get("cliente") or "No detectado"
+    rut = cl.get("rut") or "—"
     filas_docs = "".join(
-        f"<tr style='background:{'#141416' if i % 2 == 0 else '#0f0f11'}'>"
-        f"<td style='padding:5px 10px;color:#e8e2cf'>{d.get('filename','')}</td>"
-        f"<td style='padding:5px 10px;color:#d4af37'><b>{d.get('tipo','—')}</b></td>"
-        f"<td style='padding:5px 10px;color:#8a7a5a'>{d.get('metodo','')} · conf {d.get('confianza','—')}</td></tr>"
-        for i, d in enumerate(docs)) or "<tr><td colspan=3 style='padding:5px 10px;color:#8a7a5a'>Sin adjuntos clasificados</td></tr>"
+        f"<tr style='background:{'#f9fafb' if i % 2 == 0 else '#ffffff'}'>"
+        f"<td style='padding:8px 10px;color:#111827;font-size:13px;border-bottom:1px solid #e5e7eb'>"
+        f"{d.get('filename') or '—'}</td>"
+        f"<td style='padding:8px 10px;border-bottom:1px solid #e5e7eb;white-space:nowrap'>"
+        f"{_badge_tipo(d.get('tipo'))}</td>"
+        f"<td style='padding:8px 10px;color:#6b7280;font-size:12px;border-bottom:1px solid #e5e7eb;"
+        f"white-space:nowrap'>{d.get('metodo') or '—'} · {d.get('confianza') or '—'}</td></tr>"
+        for i, d in enumerate(docs)
+    ) or ("<tr><td colspan='3' style='padding:10px;color:#6b7280'>Sin adjuntos clasificados</td></tr>")
+    hay_faltan = bool(faltantes)
+    caja_faltan = (
+        "<div style='background:#fef2f2;border-left:4px solid #b91c1c;padding:10px 14px;margin:0 0 16px'>"
+        "<div style='color:#7f1d1d;font-size:11px;font-weight:700;letter-spacing:0.04em'>DOCUMENTOS FALTANTES</div>"
+        f"<div style='color:#111827;font-size:13px;font-weight:600;margin-top:4px'>{', '.join(faltantes)}</div>"
+        "</div>"
+        if hay_faltan else
+        "<div style='background:#f0fdf4;border-left:4px solid #15803d;padding:10px 14px;margin:0 0 16px'>"
+        "<div style='color:#14532d;font-size:13px;font-weight:700'>Set documental completo</div>"
+        "</div>"
+    )
     cuerpo = (
-        "<p style='margin:0 0 12px'>🧪 <b>MODO PRUEBA DE CLASIFICACIÓN</b> — resultado del "
-        "procesamiento automático (el cliente NO fue notificado).</p>"
-        "<table style='border-collapse:collapse;font-size:13px;width:100%;margin:4px 0 14px'>"
-        + _fila("👤 Cliente detectado", f"{cl.get('cliente') or '⚠️ NO DETECTADO'}"
-                + (f" · RUT {cl.get('rut')}" if cl.get('rut') else ""))
-        + _fila("✉ Correo origen", f"{item.get('sender','')} — «{(item.get('subject') or '')[:110]}»")
-        + _fila("📊 Estado del ítem", item.get("status", ""))
-        + _fila("📁 Carpeta", item.get("drive_folder_id") or "no creada")
-        + _fila("📄 Documentos recibidos", str(len(docs)))
-        + _fila("❌ Documentos faltantes", ", ".join(faltantes) or "Ninguno — set completo")
+        "<div style='background:#fffbeb;border-left:4px solid #C9A227;padding:10px 14px;margin:0 0 18px'>"
+        "<div style='color:#111827;font-size:14px;font-weight:700'>Modo prueba de clasificación</div>"
+        "<div style='color:#4b5563;font-size:12px;margin-top:2px'>"
+        "Resultado del procesamiento automático. El cliente no fue notificado.</div></div>"
+        "<table role='presentation' width='100%' cellpadding='0' cellspacing='0' "
+        "style='border:1px solid #e5e7eb;margin:0 0 16px'>"
+        + _fila("Cliente", cliente)
+        + _fila("RUT", rut, alerta=(not cl.get("rut")))
+        + _fila("Correo de origen", f"{item.get('sender') or '—'}<br>"
+                f"<span style='color:#6b7280;font-weight:400'>{(item.get('subject') or '')[:110]}</span>")
+        + _fila("Estado", item.get("status") or "—")
+        + _fila("Carpeta", item.get("drive_folder_id") or "No creada",
+                alerta=not item.get("drive_folder_id"))
+        + _fila("Documentos recibidos", str(len(docs)))
         + "</table>"
-        "<h3 style='color:#b8860b;font-size:14px;margin:12px 0 4px'>Clasificación por archivo</h3>"
-        f"<table style='border-collapse:collapse;font-size:13px;width:100%'>{filas_docs}</table>")
+        + caja_faltan
+        + "<div style='color:#111827;font-size:13px;font-weight:700;margin:0 0 8px'>Clasificación por archivo</div>"
+        + "<table role='presentation' width='100%' cellpadding='0' cellspacing='0' "
+        "style='border:1px solid #e5e7eb'>"
+        + "<tr style='background:#f3f4f6'>"
+        "<th style='text-align:left;padding:8px 10px;color:#374151;font-size:11px;font-weight:700'>Archivo</th>"
+        "<th style='text-align:left;padding:8px 10px;color:#374151;font-size:11px;font-weight:700'>Tipo</th>"
+        "<th style='text-align:left;padding:8px 10px;color:#374151;font-size:11px;font-weight:700'>Método</th>"
+        "</tr>"
+        + filas_docs
+        + "</table>"
+    )
     html = _email_institucional("Administración", cuerpo)
     asunto = f"🧪 PRUEBA CLASIFICACIÓN — {cl.get('cliente') or 'Cliente no detectado'} · {item.get('id','')[:8]}"
     res = await asyncio.to_thread(mail.send_mail, destino, asunto, html, [], "principal")

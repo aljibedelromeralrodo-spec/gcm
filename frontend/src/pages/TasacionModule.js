@@ -64,8 +64,17 @@ export const VipVacio = ({ texto, testId }) => (
 export default function TasacionModule() {
   const { carpetas, loading, error, reload } = useCarpetasVIP("tasacion/carpetas");
   const [visitas, setVisitas] = useState({});
+  const [prefill, setPrefill] = useState(null);
   useEffect(() => {
     axios.get(`${API}/api/flujos/contactos-visita`).then(r => setVisitas(r.data.contactos || {})).catch(() => {});
+  }, []);
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem("cm_prefill_cliente");
+      if (!raw) return;
+      sessionStorage.removeItem("cm_prefill_cliente");
+      setPrefill(JSON.parse(raw));
+    } catch { /* */ }
   }, []);
   return (
     <div style={{ padding: "2rem", maxWidth: "1100px" }} data-testid="tasacion-module">
@@ -73,6 +82,11 @@ export default function TasacionModule() {
       <button onClick={reload} data-testid="tasacion-reload" style={{ ...vipGoldBtn, marginBottom: "1.5rem", padding: "0.5rem 1rem", fontSize: "0.82rem" }}>
         <i className="fa fa-refresh" style={{ marginRight: 6 }} />Actualizar
       </button>
+      {prefill?.nombre && (
+        <div style={{ ...vipCard, marginBottom: "1rem", color: "#fff" }}>
+          Pro Flujo: {prefill.nombre}. Si aún no hay tasación, volvé al tablero y usá «Solicitar tasación».
+        </div>
+      )}
       {error && <div style={{ color: "#ff6b8a", marginBottom: "1rem", fontWeight: 600 }}>⚠ {error}</div>}
       {loading ? <VipVacio texto="Cargando fichas…" testId="tasacion-loading" /> :
         carpetas.length === 0 ? <VipVacio texto="No hay tasaciones solicitadas todavía." testId="tasacion-vacio" /> :

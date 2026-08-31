@@ -2333,42 +2333,166 @@ async def central_tts(payload: dict):
         raise HTTPException(status_code=503, detail=f"TTS no disponible: {str(e)[:100]}")
 
 
-async def _acciones_pendientes():
+_FALTA_CORTO = {
+    "Cédula de identidad": "cédula",
+    "Liquidaciones de sueldo": "liquidaciones",
+    "Cotizaciones AFP": "AFP",
+    "Cotizaciones previsionales AFP": "AFP",
+    "Informe CMF": "CMF",
+    "Documentos del codeudor": "codeudor",
+    "Certificado AFP": "cert. AFP",
+    "Declaración de impuestos": "F29",
+    "Formulario F29": "F29",
+    "Boletas de honorarios": "boletas",
+    "Boletas de honorarios / DAI": "boletas",
+    "Impuesto a la renta": "renta",
+    "Carpeta tributaria / Formulario F22": "F22",
+    "Contrato de trabajo": "contrato",
+    "Renta vitalicia / pensión": "pensión",
+}
+
+_SECCIONES_RESUMEN = (
+    ("listas", "Listas para Mesa", "ok", "📤"),
+    ("faltantes", "Faltan documentos", "warn", "📄"),
+    ("tasacion", "Tasación sin fecha", "warn", "📐"),
+    ("firma", "Firma sin confirmar", "warn", "🖊"),
+    ("reparos", "Reparos de estudio", "warn", "⚖"),
+)
+
+
+def _nombre_ficha(nombre):
+    t = " ".join((nombre or "").split())
+    if not t:
+        return ""
+    minus = {"de", "del", "la", "las", "los", "y", "e"}
+    parts = t.lower().split()
+    out = []
+    for i, p in enumerate(parts):
+        out.append(p if i and p in minus else (p[:1].upper() + p[1:]))
+    return " ".join(out)
+
+
+def _falta_corta(nombre):
+    n = (nombre or "").strip()
+    if n in _FALTA_CORTO:
+        return _FALTA_CORTO[n]
+    if n.startswith("Codeudor"):
+        return "codeudor"
+    if n.startswith("Formulario F29"):
+        return "F29"
+    return n
+
+
+def _faltas_cortas(nombres):
+    return [_falta_corta(n) for n in nombres]
+
+
+async def _acciones_pendientes_grupos():
     folders = await db.folders.find({}).sort("created_at", -1).limit(100).to_list(100)
-    acciones = []
+    grupos = {k: [] for k, *_ in _SECCIONES_RESUMEN}
     for f in folders:
-        nombre = f.get("nombre", "")
+        nombre = _nombre_ficha(f.get("nombre", ""))
         faltan = [c["nombre"] for c in _criterios_folder(f)
                   if not c["ok"] and c["nombre"] not in ("Enviada a mesa", "Datos financieros completos")]
         if faltan:
-            acciones.append(f"📄 {nombre}: faltan {', '.join(faltan)}")
+            grupos["faltantes"].append({"nombre": nombre, "detalle": ", ".join(_faltas_cortas(faltan))})
         elif not f.get("emails_sent_count"):
-            acciones.append(f"📤 {nombre}: carpeta completa, lista para enviar a mesa")
+            grupos["listas"].append({"nombre": nombre, "detalle": "lista para Mesa"})
         if f.get("tasacion_solicitada_at") and not f.get("tasacion_fecha"):
-            acciones.append(f"📐 {nombre}: tasación solicitada, aún sin fecha de Value Property")
+            grupos["tasacion"].append({"nombre": nombre, "detalle": "sin fecha de Value Property"})
         if f.get("escritura_solicitada_at") and not f.get("escritura_confirmada_at"):
-            acciones.append(f"🖊 {nombre}: aviso de firma enviado, el cliente aún no confirma")
+            grupos["firma"].append({"nombre": nombre, "detalle": "el cliente aún no confirma"})
         rep = f.get("estudio_reparos") or {}
         pend = [i for i in (rep.get("items") or []) if not i.get("satisfecho")]
         if pend and rep.get("estado") != "satisfecho":
-            acciones.append(f"⚖ {nombre}: {len(pend)} reparo(s) de estudio de título pendiente(s)")
-    return acciones
+            n = len(pend)
+            grupos["reparos"].append({"nombre": nombre, "detalle": f"{n} reparo{'s' if n != 1 else ''}"})
+    return grupos
+
+
+async def _acciones_pendientes():
+    """Lista plana (correo semanal). El chat usa _acciones_pendientes_grupos."""
+    grupos = await _acciones_pendientes_grupos()
+    out = []
+    for clave, titulo, _tono, icono in _SECCIONES_RESUMEN:
+        for it in grupos[clave]:
+            det = it.get("detalle") or ""
+            out.append(f"{icono} {it['nombre']}" + (f": {det}" if det else ""))
+    return out
+
+
+def _secciones_resumen(grupos, limite=8):
+    secciones = []
+    for clave, titulo, tono, icono in _SECCIONES_RESUMEN:
+        items = grupos.get(clave) or []
+        if not items:
+            continue
+        secciones.append({
+            "clave": clave, "titulo": titulo, "tono": tono, "icono": icono,
+            "total": len(items), "items": items[:limite],
+            "mas": max(0, len(items) - limite),
+        })
+    return secciones
+
+
+def _resumen_texto(secciones, hoy, total):
+    if not total:
+        return f"¡Buenos días! Soy Martín.\nHoy {hoy} no hay carpetas que necesiten acción. Todo al día."
+    lineas = [f"¡Buenos días! Soy Martín.", f"Resumen {hoy} · {total} pendiente{'s' if total != 1 else ''}.", ""]
+    for s in secciones:
+        lineas.append(f"{s['icono']} {s['titulo'].upper()} ({s['total']})")
+        for it in s["items"]:
+            det = it.get("detalle") or ""
+            if s["clave"] == "listas":
+                lineas.append(f"  · {it['nombre']}")
+            else:
+                lineas.append(f"  · {it['nombre']}" + (f" — {det}" if det else ""))
+        if s["mas"]:
+            lineas.append(f"  · +{s['mas']} más")
+        lineas.append("")
+    return "\n".join(lineas).rstrip()
+
+
+def _resumen_hablado(grupos, hoy, total):
+    if not total:
+        return f"Buenos días. Hoy {hoy} no hay carpetas que necesiten acción. Todo al día."
+    bits = []
+    n = len(grupos.get("listas") or [])
+    if n:
+        bits.append(f"{n} lista{'s' if n != 1 else ''} para Mesa")
+    n = len(grupos.get("faltantes") or [])
+    if n:
+        bits.append(f"{n} con documentos faltantes")
+    n = len(grupos.get("tasacion") or [])
+    if n:
+        bits.append(f"{n} tasación{'es' if n != 1 else ''} sin fecha")
+    n = len(grupos.get("firma") or [])
+    if n:
+        bits.append(f"{n} firma{'s' if n != 1 else ''} sin confirmar")
+    n = len(grupos.get("reparos") or [])
+    if n:
+        bits.append(f"{n} con reparos de estudio")
+    cuerpo = ", ".join(bits) if bits else "hay pendientes"
+    return f"Buenos días. Resumen de hoy {hoy}: {cuerpo}. El detalle está en pantalla."
 
 
 @api.get("/central/resumen-diario")
 async def central_resumen_diario():
-    acciones = await _acciones_pendientes()
+    grupos = await _acciones_pendientes_grupos()
+    total = sum(len(v) for v in grupos.values())
     hoy = datetime.now(_tz_chile()).strftime("%d/%m/%Y")
-    # AUDITORÍA EFICIENCIA: registro idempotente — el resumen se genera 1 sola vez por jornada
     dia = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     await db.system_log.update_one({"tipo": "resumen_diario_generado", "dia": dia},
                                    {"$setOnInsert": {"generado": now_iso()}}, upsert=True)
-    if acciones:
-        texto = (f"¡Buenos días! Soy Martín ☀️ Resumen de hoy {hoy}:\n\n" + "\n".join(acciones[:12])
-                 + ("\n\n…y más carpetas en la lista." if len(acciones) > 12 else ""))
-    else:
-        texto = f"¡Buenos días! Soy Martín ☀️ Hoy {hoy} no hay carpetas que necesiten acción. Todo al día 💪"
-    return {"resumen": texto, "acciones": len(acciones)}
+    secciones = _secciones_resumen(grupos)
+    texto = _resumen_texto(secciones, hoy, total)
+    return {
+        "resumen": texto,
+        "hablado": _resumen_hablado(grupos, hoy, total),
+        "acciones": total,
+        "hoy": hoy,
+        "secciones": secciones,
+    }
 
 
 async def _resumen_semanal_html():
@@ -2607,7 +2731,7 @@ def _email_institucional(nombre, cuerpo_html, firmante="Sistema de Gestión Cent
 <tr><td style="background:#0a0a0a;padding:20px 28px;text-align:center">
   <img src="{os.environ.get('PUBLIC_BASE_URL', '').rstrip('/')}/logo-horizontal.png" alt="Central Mutuos — Con Creces"
     width="280" style="display:block;margin:0 auto;max-width:280px;width:100%;height:auto;border:0" /></td></tr>
-<tr><td style="padding:26px 28px;color:#1f2937;font-size:14px;line-height:1.65;text-align:justify">
+<tr><td style="padding:26px 28px;color:#1f2937;font-size:14px;line-height:1.65;text-align:left">
   <p style="margin:0 0 14px">Estimado/a <b>{nombre}</b>,</p>
   {cuerpo_html}
   <p style="margin:20px 0 0">Atentamente,<br><b>{firmante}</b><br>
@@ -7870,6 +7994,14 @@ async def proc_upload_drive(qid: str, force: bool = False, clave: str = ""):
         "drive_folder_id": _safe_name(cliente), "status": "clasificado",
         "checklist_completo": completo, "faltantes": faltantes}})
     # Los documentos faltantes se piden SOLO en forma manual (regla del usuario 2026-08-02)
+    # V15.9: enriquecer slots del protocolo y dejar el pedido en bandeja de autorización.
+    try:
+        import blindaje_correos as _bl
+        fd_bl = await db.folders.find_one({"nombre": cliente})
+        if fd_bl:
+            await _bl.enriquecer_desde_ingesta(fd_bl, item)
+    except Exception as _e_bl:
+        logging.warning(f"blindaje V15.9: {_e_bl}")
     return {"folder_name": _safe_name(cliente), "uploaded": uploaded,
             "skipped_duplicates": [], "dropped_originals": [],
             "checklist_completo": completo, "faltantes": faltantes, "tipo_cliente": tipo_cliente}
@@ -16878,6 +17010,10 @@ api.include_router(_hist_mod.historia)
 api.include_router(_adn_mod.adn)
 import loops_guard as _loops_mod
 api.include_router(_loops_mod.loops_r)
+import blindaje_correos as _blin_mod
+api.include_router(_blin_mod.blindaje)
+import pro_flujo as _pflujo_mod
+api.include_router(_pflujo_mod.flujo)
 
 
 @api.get("/constitucion")
