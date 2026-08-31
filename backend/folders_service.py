@@ -258,14 +258,14 @@ def _norm_rut_fs(r):
 
 def ruts_de_pdf_cache(path):
     """RUTs de un PDF con caché Mongo (path+size+mtime): no repite OCR jamás."""
-    from bunker import _fs
+    from bunker import _db as _bdb
     p = Path(path)
     try:
         st = p.stat()
     except OSError:
         return set()
     try:
-        _f, db = _fs()
+        db = _bdb()
         key = {"path": str(p), "size": st.st_size, "mtime": int(st.st_mtime)}
         hit = db.ocr_rut_cache.find_one(key)
         if hit is not None:
@@ -302,9 +302,8 @@ def _ruts_personas(ruts):
 
 def _rut_titular_de(nombre):
     try:
-        from bunker import _fs
-        _f, db = _fs()
-        d = db.folders.find_one({"nombre": nombre}, {"rut": 1}) or {}
+        from bunker import _db
+        d = _db().folders.find_one({"nombre": nombre}, {"rut": 1}) or {}
         return _norm_rut_fs(d.get("rut", ""))
     except Exception:
         return ""

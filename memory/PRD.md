@@ -1218,3 +1218,9 @@ actual; todo lo demás permanece intacto.
 - Fix 3: resumen_diario ya no reintenta cada 60s cuando el error es "PREVIEW OBLIGATORIO" (correo ya encolado esperando al Admin) — mantiene el claim del día.
 - Probado en preview: preview de envío responde en 0.25s. Envío real NO probado (regla: no enviar correos reales en tests).
 - ⚠️ REQUIERE DEPLOY para llegar a producción. Upstream: objstore de Emergent devolvía 500/503 — reportado en RCA, fuera de nuestro control.
+
+## 2026-08-31 — BUG CRÍTICO: combinado bloqueado para TODOS (Rodrigo Jara)
+- Causa: 4 sitios importaban `bunker._fs`, función ELIMINADA en la refactorización del objstore → ImportError silencioso → RUT titular leído como "" → REGLA IVANA bloqueaba merge_protocol para todas las carpetas (y merge de SETs, caché OCR de RUTs, caché ai_extract).
+- Fix: migrados a `bunker._db()` en folders_service.py (x2), ai_extract.py, server.py:13263.
+- Verificado: combinado de Rodrigo Jara Bustamante regenerado con 16 PDFs incluyendo 99_otros/Informe_Arriendos_Rodrigo_Jara.pdf.
+- ⚠️ Este fix TAMBIÉN requiere deploy (producción tiene el mismo bug).

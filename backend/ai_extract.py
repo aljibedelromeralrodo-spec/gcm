@@ -361,8 +361,8 @@ async def clasificar_y_extraer(texto, filename=""):
     key = _llm_key()
     cache_id = hashlib.sha256(f"{filename}\n{texto}".encode()).hexdigest()
     try:
-        from bunker import _fs
-        _f, _dbs = _fs()
+        from bunker import _db as _bdb
+        _dbs = _bdb()
         hit = _dbs.ai_extract_cache.find_one({"_id": cache_id})
         if hit and hit.get("data"):
             return dict(hit["data"])

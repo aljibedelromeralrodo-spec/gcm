@@ -13260,8 +13260,8 @@ def _set_combinar(nombre):
     from pypdf import PdfReader, PdfWriter
     rut_t = ""
     try:
-        from bunker import _fs as _bfs
-        _f, _dbs = _bfs()
+        from bunker import _db as _bdb
+        _dbs = _bdb()
         _doc = (_dbs.folders.find_one({"nombre": nombre}, {"rut": 1})
                 or _dbs.set_credito.find_one({"nombre": nombre}, {"rut": 1}) or {})
         rut_t = _norm_rut(_doc.get("rut", "") or "")
