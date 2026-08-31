@@ -1286,3 +1286,17 @@ actual; todo lo demás permanece intacto.
 - FIX detección de sospechas (_sin_prefijo en permisos_martin.py): los prefijos completos conocidos (03_Resumen_Impuestos_, 02_Impuesto_Renta_, etc.) se quitan enteros antes de releer categoría — eliminó 39 falsos positivos (boletas marcadas como imp_renta). Además pago_licencia/licencia comparten 06_licencias → ya no se marcan entre sí (se compara subcarpeta destino, no categoría).
 - APLICADAS 67 correcciones reales (de las 105/106 originales, el resto eran falsos positivos): POST /api/martin/orden/aplicar-correcciones (bg job, admin) — mueve a subcarpeta correcta con prefijo correcto, log en logs_permisos con rollback_path, bunker sync. Re-scan final: 0 sospechas restantes. NO toca combinados/07_estudio_titulo/05_codeudor.
 - LIMPIEZA Felipe De La Cuadra: POST /api/martin/orden/mover-docs {origen,destino,rutas} (bg job) movió 7 liquidaciones «Escalante» + 04_CMF_informe_deudas_15965640-3.pdf (RUT de Fabián) → FABIÁN ESCALANTE (mismas subcarpetas). Originales en papelera con timestamp (rollback). Quedan en Felipe: cédulas CI 1/CI 2, AFP y 2 cartolas — dueño ambiguo, NO se movieron (informado al usuario). El combinado Carpeta_Felipe De La Cuadra.pdf quedó DESACTUALIZADO (incluye docs de Escalante).
+
+## 2026-08-31 — Caso Gabriela Berríos: 3 bugs de clasificación resueltos
+POR QUÉ PASÓ: (1) su dossier llegó como UN solo PDF fusionado de 12 páginas («GABRIELA BERRIOS.pdf») que quedó sin clasificar en la raíz; (2) la regex de AFP incluía `cotizaci` → la COTIZACIÓN comercial 2330UF cayó en 03_afp con prefijo equivocado; (3) el OCR leía su RUT como «19.4438.446-1» (garble) y la REGLA IVANA excluía su certificado AFP del combinado.
+FIXES (folders_service.py):
+- cat_de_texto: COTIZACIÓN comercial (sin certificado/previsional/afp) → extras 99_otros. cedula += `identificaci[oó]n|inchl` (MRZ de la cédula, robusto a OCR). contrato += `certificado laboral|se desempe[ñn]a`.
+- RUT_RX acepta comas (OCR «19,448.446-1») y _norm_rut_fs las limpia.
+- _ruts_personas ahora VALIDA dígito verificador módulo 11 (_rut_dv_ok): los RUT garbleados por OCR ya no excluyen documentos del combinado (REGLA IVANA solo con RUTs válidos).
+ACCIONES EJECUTADAS:
+- Cotización reubicada 03_afp → 99_otros (nombre limpio).
+- Forzar Carpeta V3 sobre Gabriela (19 menciones, 5 correos procesados): descargó los 3 docs del codeudor a 05_codeudor/César Antonio Zamora Herrera/ (además existe carpeta separada CÉSAR ZAMORA con los 10 docs — orden literal previa del usuario).
+- split_bundled dividió el dossier en 6 documentos por protocolo; 2 páginas reubicadas a mano tras verificación OCR (cédula real desde extras; certificado laboral Obispado desde 01_cedula → 05_contratos). Original a papelera (rollback).
+- Combinado regenerado: 7 docs en orden 01→99, cotización AL FINAL (ya no antes del carnet). Sin exclusiones.
+- Combinado de Felipe De La Cuadra regenerado sin docs de Escalante (viejo Carpeta_*.pdf a papelera).
+PENDIENTE: quedan ~14 correos que mencionan a Gabriela sin procesar (buscador de correos si el usuario quiere traer más). 2 correos de ella esperan confirmación en el panel de previews.

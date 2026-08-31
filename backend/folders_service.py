@@ -63,9 +63,9 @@ CAT_KEYWORDS = [
     ("estudio_titulo", r"estudio de t[ií]tulo|dominio vigente|hipotecas? y grav|grav[aá]men|prohibici[oó]n|expropiaci|conservador de bienes|\bcbr\b|escritura de compraventa|copia de escritura|inscripci[oó]n de dominio"),
     ("pago_licencia", r"pago\s+de\s+licencia|subsidio\s+de\s+incapacidad|\bccaf\b|caja\s+los\s+andes|caja\s+los\s+h[eé]roes|subsidio\s+maternal"),
     ("licencia", r"licencia\s+m[eé]dica|reposo\s+(laboral|m[eé]dico)|pre.?natal|post.?natal"),
-    ("contrato", r"contrato\s+de\s+trabajo|anexo\s+de\s+contrato|antig[üu]edad\s+laboral"),
+    ("contrato", r"contrato\s+de\s+trabajo|anexo\s+de\s+contrato|antig[üu]edad\s+laboral|certificado\s+laboral|se\s+desempe[ñn]a"),
     ("rsh", r"registro\s+social\s+de\s+hogares|\brsh\b|calificaci[oó]n\s+socioecon[oó]mica"),
-    ("cedula", r"c[eé]?dula|carnet|identidad|registro civil"),
+    ("cedula", r"c[eé]?dula|carnet|identidad|registro civil|identificaci[oó]n|inchl"),
     ("liquidacion", r"liquidaci[oó]?n|sueldo|remuneraci|haberes|\bliq[\d_ ]|^liq"),
     ("afp", r"afp|cotizaci|previred|afiliaci|habitat|provida|planvital|cuprum|capital"),
     ("cmf", r"\bcmf\b|\bsmf\b|\bsbif\b|informe[_ ]de[_ ]deuda|informe_deudas|certificado[_ ]de[_ ]deuda|deuda consolidada"),
@@ -145,6 +145,10 @@ def cat_de_archivo(nombre, subfolder=""):
 def cat_de_texto(texto):
     low = (texto or "").lower()
     if re.search(r"infnomat|no[_ ]matrimonio|matrimonio|uni[oó]n civil", low):
+        return "extras"
+    if re.search(r"cotizaci[oó]n\b", low) and not re.search(
+            r"certificado|cotizaciones|previsional|previred|afp", low):
+        # COTIZACIÓN comercial (UF/PV/vivienda) ≠ cotizaciones previsionales AFP
         return "extras"
     for cat, pat in CAT_KEYWORDS:
         if re.search(pat, low):
@@ -272,11 +276,11 @@ def guardar_archivo(nombre_carpeta, filename, raw, subfolder=""):
     return f"{sub}/{fn}" if sub else fn
 
 
-RUT_RX = re.compile(r"\b\d{1,2}\.?\d{3}\.?\d{3}\s?-\s?[\dkK]\b")
+RUT_RX = re.compile(r"\b\d{1,2}[.,]?\d{3}[.,]?\d{3}\s?-\s?[\dkK]\b")
 
 
 def _norm_rut_fs(r):
-    return re.sub(r"[.\-\s]", "", (r or "")).lower()
+    return re.sub(r"[.,\-\s]", "", (r or "")).lower()
 
 
 def ruts_de_pdf_cache(path):
@@ -309,14 +313,30 @@ def ruts_de_pdf_cache(path):
     return set(ruts)
 
 
+def _rut_dv_ok(num, dv):
+    """Valida dígito verificador módulo 11: descarta RUTs mal leídos por OCR."""
+    try:
+        s, f = 0, 2
+        for c in reversed(num):
+            s += int(c) * f
+            f = 2 if f == 7 else f + 1
+        r = 11 - (s % 11)
+        esperado = "0" if r == 11 else "k" if r == 10 else str(r)
+        return esperado == (dv or "").lower()
+    except (ValueError, TypeError):
+        return False
+
+
 def _ruts_personas(ruts):
-    """Filtra solo RUTs de personas naturales (< 50.000.000). Los RUT de empresas
-    (empleadores, AFP, municipalidades) no cuentan para exclusión."""
+    """Filtra solo RUTs de personas naturales (< 50.000.000) con dígito verificador
+    VÁLIDO (módulo 11). Los RUT de empresas y los garbles de OCR no cuentan."""
     out = set()
     for r in ruts:
-        num = re.sub(r"[^0-9]", "", (r or "")[:-1])
+        limpio = _norm_rut_fs(r)
+        num, dv = limpio[:-1], limpio[-1:]
+        num = re.sub(r"[^0-9]", "", num)
         try:
-            if num and int(num) < 50000000:
+            if num and int(num) < 50000000 and _rut_dv_ok(num, dv):
                 out.add(r)
         except ValueError:
             continue
