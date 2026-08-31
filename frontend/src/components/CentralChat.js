@@ -152,6 +152,8 @@ export default function CentralChat({ userName, activeModule }) {
   const [autoVoice, setAutoVoice] = useState(true);
   const [conversationMode, setConversationMode] = useState(false);
   const [sessionId] = useState(() => `c-${Date.now()}-${Math.random().toString(36).slice(2,8)}`);
+  const [vigilia, setVigilia] = useState(false);
+  const wakeSinComandoRef = useRef(0);
   const endRef = useRef(null);
   const recRef = useRef(null);
   const silenceRef = useRef(null);
@@ -471,6 +473,59 @@ export default function CentralChat({ userName, activeModule }) {
     else startRecording();
   }, [recording, stopRecording, startRecording]);
 
+  // ===== VIGILIA: manos libres con palabra de activación «Martín» =====
+  useEffect(() => {
+    if (!vigilia || recording || speaking || loading) return;
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) return;
+    let activo = true;
+    const rec = new SR();
+    rec.lang = "es-CL";
+    rec.continuous = true;
+    rec.interimResults = false;
+    rec.onresult = (e) => {
+      const last = (e.results[e.results.length - 1][0].transcript || "").trim().toLowerCase();
+      const m = last.match(/mart[ií]n[,.\s]*(.*)$/);
+      if (!m) return;
+      const comando = (m[1] || "").trim();
+      axios.post(`${API}/api/central/vigilia-log`, { texto: last, comando, user_name: userName || "" }).catch(() => {});
+      activo = false;
+      try { rec.abort(); } catch (err) { console.error(err); }
+      setOpen(true);
+      if (comando.length > 2) {
+        wakeSinComandoRef.current = 0;
+        sendMsg(comando, true);
+      } else {
+        wakeSinComandoRef.current += 1;
+        if (wakeSinComandoRef.current >= 3) {
+          wakeSinComandoRef.current = 0;
+          setSpeaking(true);
+          speakText("¿Sí? Te escucho", () => { setSpeaking(false); setTimeout(() => startRecordingRef.current?.(), 300); });
+        } else {
+          setTimeout(() => startRecordingRef.current?.(), 200);
+        }
+      }
+    };
+    rec.onend = () => { if (activo) setTimeout(() => { try { rec.start(); } catch (err) { console.error(err); } }, 400); };
+    rec.onerror = () => {};
+    const t = setTimeout(() => { try { rec.start(); } catch (err) { console.error(err); } }, 350);
+    return () => { activo = false; clearTimeout(t); try { rec.abort(); } catch (err) { console.error(err); } };
+  }, [vigilia, recording, speaking, loading, sendMsg, userName]);
+
+  const toggleVigilia = useCallback(async () => {
+    if (vigilia) { setVigilia(false); return; }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach(tr => tr.stop());
+    } catch (e) {
+      console.error("Vigilia: microfono denegado", e);
+      return;
+    }
+    setAutoVoice(true);
+    wakeSinComandoRef.current = 0;
+    setVigilia(true);
+  }, [vigilia]);
+
   // ===== TEXT HANDLERS =====
   const handleSend = () => { const v = input.trim(); if (v) sendMsg(v, false); };
   const handleKey = (e) => { if (e.key === "Enter" && !loading) handleSend(); };
@@ -510,6 +565,22 @@ export default function CentralChat({ userName, activeModule }) {
 
   return (
     <>
+      {/* BOTÓN VIGILIA — manos libres, al lado de la cara de Martín */}
+      <div className={`vigilia-wrap ${vigilia ? "activa" : ""}`}>
+        {vigilia && (
+          <span className="vigilia-label" data-testid="vigilia-label">
+            {recording ? "TE ESCUCHO..." : speaking ? "MARTÍN HABLANDO..." : "VIGILIA ACTIVA · di «Martín»"}
+          </span>
+        )}
+        <button className={`vigilia-btn ${vigilia ? "activa" : ""}`} onClick={toggleVigilia}
+          data-testid="vigilia-btn"
+          title={vigilia ? "Silenciar vigilia (un toque)" : "Activar VIGILIA manos libres"}>
+          <i className={`fa ${vigilia ? "fa-microphone" : "fa-microphone-slash"}`}></i>
+          <span className="vigilia-txt">{vigilia ? "VIGILIA" : "OFF"}</span>
+          {vigilia && <><span className="vigilia-onda o1" /><span className="vigilia-onda o2" /></>}
+        </button>
+      </div>
+
       {/* FAB */}
       <button className={`central-fab ${open ? "active" : ""}`}
         onClick={() => setOpen(o => !o)} data-testid="central-fab">

@@ -1261,3 +1261,8 @@ actual; todo lo demás permanece intacto.
 - HÉCTOR DONOSO: 2 archivos CODEUDOR_ (Priscila Herrera) movidos a 05_codeudor/ (protocolo estándar).
 - 105 SOSPECHAS de clasificación informadas SIN mover (conservador): hojas notaría/seguro desgravamen en 99_otros que parecen estudio_titulo, RSH en 99_otros, contratos en 02_liquidaciones, etc. Pendiente que el usuario decida si Martín las corrige.
 - Papelera: 24 archivos (nada borrado). Verificado E2E con curl x3 corridas + estado en disco.
+
+## 2026-08-31 — Preview de adjuntos + VIGILIA manos libres
+- Correos en espera: nuevo GET /api/correos-preview/{pid}/adjunto/{idx} (PDF/imagen inline, solo admin) + visor en pantalla en CorreosPreview.js (botones por adjunto, iframe PDF / img). Probado E2E con preview real (descartado sin enviar).
+- VIGILIA (CentralChat.js): botón verde junto a la cara de Martín (data-testid vigilia-btn). Activo = pulso verde + ondas + etiqueta de estado. Reconocimiento continuo es-CL con wake word «Martín»: comando en la misma frase → se envía directo; «Martín» solo → abre mic (push-to-talk existente); 3 despertares sin comando → Martín dice «¿Sí? Te escucho». Fuerza autoVoice (respuesta hablada = bidireccional). Un toque apaga (silenciar). Log de cada despertar en Mongo `martin_voz_log` vía POST /api/central/vigilia-log.
+- NOTA: el wake-word usa el mismo SpeechRecognition del navegador ya probado (Chrome); el recognizer de vigilia se pausa mientras Martín graba o habla para no chocar con los otros recognizers.

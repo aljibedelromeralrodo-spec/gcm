@@ -2191,6 +2191,18 @@ async def central_tts(payload: dict):
         raise HTTPException(status_code=503, detail=f"TTS no disponible: {str(e)[:100]}")
 
 
+@api.post("/central/vigilia-log")
+async def central_vigilia_log(payload: dict):
+    """Log en Mongo de las conversaciones por voz del modo VIGILIA (manos libres)."""
+    p = payload or {}
+    await db.martin_voz_log.insert_one({
+        "id": str(uuid.uuid4()), "texto": (p.get("texto") or "")[:500],
+        "comando": (p.get("comando") or "")[:500],
+        "user_name": (p.get("user_name") or "")[:80],
+        "origen": "vigilia", "timestamp": now_iso()})
+    return {"ok": True}
+
+
 async def _acciones_pendientes():
     folders = await db.folders.find({}).sort("created_at", -1).limit(100).to_list(100)
     acciones = []
@@ -6451,6 +6463,24 @@ async def correos_preview_confirmar(pid: str, request: Request):
     if not ok:
         raise HTTPException(status_code=409, detail=f"Confirmado pero el envío falló: {res.get('error','')[:150]}")
     return {"ok": True, "enviado": True, "to": doc["to"], "subject": doc["subject"]}
+
+
+@api.get("/correos-preview/{pid}/adjunto/{idx}")
+async def correos_preview_adjunto(pid: str, idx: int, request: Request):
+    """Devuelve el archivo adjunto N del preview para verlo en pantalla antes de confirmar."""
+    _exigir_admin_dash(request)
+    adjs = await db.correos_preview_adj.find({"preview_id": pid}).to_list(50)
+    if idx < 0 or idx >= len(adjs):
+        raise HTTPException(status_code=404, detail="Adjunto no encontrado")
+    a = adjs[idx]
+    fn = a.get("filename") or "adjunto"
+    low = fn.lower()
+    media = ("application/pdf" if low.endswith(".pdf")
+             else "image/jpeg" if low.endswith((".jpg", ".jpeg"))
+             else "image/png" if low.endswith(".png")
+             else "application/octet-stream")
+    return Response(content=bytes(a.get("data") or b""), media_type=media,
+                    headers={"Content-Disposition": f'inline; filename="{fn}"'})
 
 
 @api.post("/correos-preview/{pid}/descartar")

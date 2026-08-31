@@ -9,9 +9,23 @@ const btn = (c) => ({ background: "transparent", color: c, border: `1px solid ${
 export default function CorreosPreview() {
   const [data, setData] = useState(null);
   const [abierto, setAbierto] = useState(null);
+  const [adjunto, setAdjunto] = useState(null);
   const [oculto, setOculto] = useState(false);
   const [busy, setBusy] = useState("");
   const [msg, setMsg] = useState("");
+
+  const verAdjunto = async (pid, idx, filename) => {
+    if (adjunto && adjunto.pid === pid && adjunto.idx === idx) {
+      URL.revokeObjectURL(adjunto.url); setAdjunto(null); return;
+    }
+    setBusy(`adj${pid}${idx}`);
+    try {
+      const r = await axios.get(`${API}/api/correos-preview/${pid}/adjunto/${idx}`, { responseType: "blob" });
+      if (adjunto) URL.revokeObjectURL(adjunto.url);
+      setAdjunto({ pid, idx, filename, url: URL.createObjectURL(r.data), tipo: r.data.type });
+    } catch (e) { setMsg("🚨 No se pudo cargar el adjunto"); }
+    setBusy("");
+  };
 
   const cargar = useCallback(() => {
     axios.get(`${API}/api/correos-preview`)
@@ -75,6 +89,28 @@ export default function CorreosPreview() {
                 <i className="fa fa-times" /> Descartar
               </button>
             </div>
+            {(c.adjuntos || []).length > 0 && (
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
+                {(c.adjuntos || []).map((a, j) => (
+                  <button key={j} data-testid={`preview-adjunto-${i}-${j}`} disabled={!!busy}
+                    style={btn(adjunto && adjunto.pid === c.id && adjunto.idx === j ? "#10d98e" : "#8ab4f8")}
+                    onClick={() => verAdjunto(c.id, j, a.filename)}>
+                    {busy === `adj${c.id}${j}` ? <i className="fa fa-spinner fa-spin" /> : <i className="fa fa-paperclip" />} {a.filename}
+                  </button>
+                ))}
+              </div>
+            )}
+            {adjunto && adjunto.pid === c.id && (
+              <div data-testid={`preview-adjunto-visor-${i}`} style={{ marginTop: 8 }}>
+                <div style={{ fontSize: "0.72rem", color: "#8ab4f8", marginBottom: 4 }}>
+                  <i className="fa fa-paperclip" /> Adjunto: {adjunto.filename}
+                </div>
+                {adjunto.tipo.startsWith("image/")
+                  ? <img src={adjunto.url} alt={adjunto.filename} style={{ maxWidth: "100%", maxHeight: 420, border: "1px solid rgba(138,180,248,0.4)" }} />
+                  : <iframe title={`adj-${i}`} src={adjunto.url}
+                      style={{ width: "100%", height: 420, background: "#fff", border: "1px solid rgba(138,180,248,0.4)" }} />}
+              </div>
+            )}
             {abierto === c.id && (
               <iframe data-testid={`preview-cuerpo-${i}`} title={`preview-${i}`} srcDoc={c.body_html}
                 style={{ width: "100%", height: 380, background: "#fff", border: "1px solid rgba(245,158,11,0.3)", marginTop: 8 }} />

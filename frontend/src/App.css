@@ -1110,6 +1110,33 @@ body { font-family: 'Inter', sans-serif; background: var(--bg-dark); color: var(
 .merge-actions { display: flex; gap: 0.8rem; justify-content: flex-end; }
 
 
+/* ===== VIGILIA (manos libres, wake word «Martín») ===== */
+.vigilia-wrap { position: fixed; bottom: 36px; right: 92px; z-index: 9999; display: flex; align-items: center; gap: 10px; }
+.vigilia-btn {
+  width: 56px; height: 56px; border-radius: 50%; position: relative;
+  background: #333; color: #888; border: 2px solid #555; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  font-size: 1rem; transition: background-color 0.25s, box-shadow 0.25s, transform 0.25s;
+}
+.vigilia-btn .vigilia-txt { font-size: 0.42rem; font-weight: 900; letter-spacing: 0.08em; margin-top: 2px; }
+.vigilia-btn:hover { transform: scale(1.06); }
+.vigilia-btn.activa {
+  background: radial-gradient(circle at 35% 30%, #00ff88, #00a650);
+  color: #fff; border-color: #00ff88; transform: scale(1.12);
+  animation: vigiliaPulse 1.5s infinite;
+}
+@keyframes vigiliaPulse {
+  0%, 100% { box-shadow: 0 0 18px rgba(0,255,136,0.6); }
+  50% { box-shadow: 0 0 42px #00ff88, 0 0 80px rgba(0,255,136,0.4); }
+}
+.vigilia-onda { position: absolute; inset: -6px; border: 2px solid rgba(0,255,136,0.4); border-radius: 50%; animation: vigiliaOnda 1.8s infinite; pointer-events: none; }
+.vigilia-onda.o2 { animation-delay: 0.9s; }
+@keyframes vigiliaOnda { 0% { transform: scale(1); opacity: 0.8; } 100% { transform: scale(1.9); opacity: 0; } }
+.vigilia-label {
+  background: rgba(0,20,8,0.92); border: 1px solid rgba(0,255,136,0.55); color: #00ff88;
+  font-size: 0.62rem; font-weight: 800; letter-spacing: 0.08em; padding: 5px 10px; white-space: nowrap;
+}
+
 /* ===== CENTRAL AI CHAT ===== */
 .central-fab {
   position: fixed; bottom: 36px; right: 24px; z-index: 9999;
