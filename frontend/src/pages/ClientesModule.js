@@ -10,7 +10,7 @@ import PrediccionEspejo from "../components/PrediccionEspejo";
 import CompromisoEditor from "./CompromisoEditor";
 import { secureGet } from "../utils/secureStore";
 import { guardarEstado, leerEstado, tomarRegreso } from "../utils/navegacion";
-import { BrokersPanel, UFAmountInput, ClientesFilters } from "./clientes";
+import { BrokersPanel, UFAmountInput, ClientesFilters, ClientesRowActions } from "./clientes";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 // Regla #65: validador de dígito verificador (módulo 11) — RUT verificado al 100%
@@ -1801,31 +1801,7 @@ export default function ClientesModule({ onNavigate }) {
                       </div>
                     </div>
                   )}
-                  <div className="clientes-card-actions">
-                    <button
-                      className="docs-btn"
-                      data-testid={`btn-envio-manual-${f.id}`}
-                      onClick={() => toggleEnvioManual(f)}
-                      title={enviadoManual ? "Marcar como NO enviado" : "Marcar como ENVIADO (pinta la carpeta roja)"}
-                      style={enviadoManual
-                        ? { background: "#fff", color: "#be123c", border: "1px solid #fff", fontWeight: 800 }
-                        : { background: "rgba(190,18,60,0.1)", color: "#be123c", border: "1px solid #be123c", fontWeight: 700 }}>
-                      <i className={`fa ${enviadoManual ? "fa-check-square" : "fa-square-o"}`}></i> {enviadoManual ? "Enviado" : "No enviado"}
-                    </button>
-                    {f.is_ready_to_send && (
-                      <button className="docs-btn" onClick={() => openFolder(f.id, "email")} data-testid={`btn-enviar-ya-${f.id}`}
-                        title="Lista para enviar: abre la carpeta y prepara el autocorreo con preview automático"
-                        style={{ background: "#10d98e", color: "#fff", border: "1px solid #0e9f6e", fontWeight: 700, boxShadow: "0 2px 8px rgba(16,217,142,0.4)" }}>
-                        <i className="fa fa-paper-plane"></i> 🚀 Enviar Ya
-                      </button>
-                    )}
-                    <button className="docs-btn primary" onClick={() => openFolder(f.id)} data-testid={`btn-open-${f.id}`}>
-                      <i className="fa fa-folder-open"></i> Abrir
-                    </button>
-                    <button className="clientes-delete-btn" onClick={() => deleteFolder(f.id)}>
-                      <i className="fa fa-trash"></i>
-                    </button>
-                  </div>
+                  <ClientesRowActions f={f} enviadoManual={enviadoManual} toggleEnvioManual={toggleEnvioManual} openFolder={openFolder} deleteFolder={deleteFolder} />
                   <div data-testid={`modulos-carpeta-${f.id}`} style={{ width: "100%", display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10, paddingTop: 10, borderTop: enviadoManual ? "1px solid rgba(255,255,255,0.3)" : "1px solid rgba(46,92,230,0.25)" }}>
                     <button data-testid={`btn-aprobacion-${f.id}`} onClick={() => irAModulo("aprobacion")}
                       title={`Enviar aprobación al cliente ${f.nombre}`}

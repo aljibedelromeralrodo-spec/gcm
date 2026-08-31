@@ -1174,3 +1174,9 @@ actual; todo lo demás permanece intacto.
 - Validado por AUTOR 6/6 (tests E2E verdes: btn-new-folder dentro del nuevo componente). ClientesModule ahora ~3.916 líneas.
 - .gitignore: test_credentials.md ya estaba ignorado (líneas 79-81), no trackeado. qa.victoria solo existe en DB preview (prod tiene DB separada) — se mantiene para QA.
 - Próximo: Corte 8 ClientesRow (una fila de carpeta sin acciones).
+
+## 2026-08-31 — Corte 8: ClientesRowActions.js + Bloque 7 del AUTOR
+- Extraídas las acciones de la tarjeta de carpeta (Enviado/No enviado, 🚀 Enviar Ya, Abrir, eliminar — 25 líneas, 0 lógica) a pages/clientes/ClientesRowActions.js. Testids intactos. ClientesModule: 3.893 líneas.
+- AUTOR ampliado a 7 bloques (nuevo B6: re-corre el test anti-polling tras cortes). Corrida completa 7/7 OK.
+- Adaptación: el ejemplo del usuario (Editar/Ver con Tailwind) no coincidía con la UI real; se extrajo el bloque real de acciones con sus estilos y testids.
+- Próximo: Corte 9 ClientesRow (tarjeta completa).

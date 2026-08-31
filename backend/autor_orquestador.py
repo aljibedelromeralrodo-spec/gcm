@@ -31,7 +31,10 @@ BLOQUES = [
                  "r=requests.get('http://localhost:8001/api/martin/revision-vivo',headers={'Authorization':'Bearer '+t}).json(); "
                  "print(r); assert r['vivo'] and r['martin_taller'] and r['logica_humana']\""),
      "timeout": 90, "espera": 5},
-    {"id": 6, "nombre": "CIERRE - Docs", "comando": "echo ok", "timeout": 30, "espera": 0},
+    {"id": 6, "nombre": "CORTE ROWACTIONS - anti-polling",
+     "comando": "cd /app/frontend && PLAYWRIGHT_BROWSERS_PATH=/pw-browsers npx playwright test e2e/ficha-cliente.spec.js --reporter=list",
+     "timeout": 300, "espera": 5},
+    {"id": 7, "nombre": "CIERRE - Docs", "comando": "echo ok", "timeout": 30, "espera": 0},
 ]
 
 
