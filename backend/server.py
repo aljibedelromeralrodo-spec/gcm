@@ -3161,6 +3161,35 @@ async def martin_orden_revisar(payload: dict = None):
     return {"ok": True, "job_id": job_id, "estado": "en_proceso"}
 
 
+@api.post("/martin/orden/aplicar-correcciones")
+async def martin_orden_aplicar_correcciones(request: Request):
+    """LUZ VERDE: aplica las correcciones de clasificación (sospechas del modo nocturno).
+    Corre en SEGUNDO PLANO (bg_jobs)."""
+    _exigir_admin_dash(request)
+    import permisos_martin as pm
+    job_id = str(uuid.uuid4())
+    await db.bg_jobs.insert_one({"id": job_id, "tipo": "martin_aplicar_correcciones",
+                                 "estado": "en_proceso", "inicio": now_iso()})
+    asyncio.create_task(_job_run(job_id, pm.aplicar_correcciones_clasificacion(db)))
+    return {"ok": True, "job_id": job_id, "estado": "en_proceso"}
+
+
+@api.post("/martin/orden/mover-docs")
+async def martin_orden_mover_docs(request: Request, payload: dict = Body(...)):
+    """Mueve archivos puntuales de una carpeta cliente a otra (limpieza de mezclas)."""
+    _exigir_admin_dash(request)
+    import permisos_martin as pm
+    origen, destino = payload.get("origen"), payload.get("destino")
+    rutas = payload.get("rutas") or []
+    if not origen or not destino or not rutas:
+        raise HTTPException(status_code=400, detail="Indica origen, destino y rutas")
+    job_id = str(uuid.uuid4())
+    await db.bg_jobs.insert_one({"id": job_id, "tipo": "martin_mover_docs",
+                                 "estado": "en_proceso", "inicio": now_iso()})
+    asyncio.create_task(_job_run(job_id, pm.mover_docs_a_carpeta(db, origen, destino, rutas)))
+    return {"ok": True, "job_id": job_id, "estado": "en_proceso"}
+
+
 @api.post("/clientes/folders/forzar")
 async def forzar_folder(payload: dict):
     """Valida y lanza el forzado de carpeta en SEGUNDO PLANO: la búsqueda IMAP puede
