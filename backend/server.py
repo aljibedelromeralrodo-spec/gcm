@@ -11383,7 +11383,9 @@ async def descarga_segura(token: str):
     d = await db.descargas_seguras.find_one({"token": token})
     if not d or not Path(d["path"]).exists():
         raise HTTPException(status_code=404, detail="Enlace de descarga no válido o expirado")
-    return FileResponse(d["path"], media_type="application/pdf", filename=d.get("filename", "documento.pdf"))
+    import mimetypes
+    mime = d.get("mime") or mimetypes.guess_type(d["path"])[0] or "application/pdf"
+    return FileResponse(d["path"], media_type=mime, filename=d.get("filename", "documento.pdf"))
 
 
 async def _autocorreo_cliente_aprobado(seg, forzar=False):
