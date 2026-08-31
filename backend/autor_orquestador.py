@@ -34,7 +34,10 @@ BLOQUES = [
     {"id": 6, "nombre": "CORTE ROWACTIONS - anti-polling",
      "comando": "cd /app/frontend && PLAYWRIGHT_BROWSERS_PATH=/pw-browsers npx playwright test e2e/ficha-cliente.spec.js --reporter=list",
      "timeout": 300, "espera": 5},
-    {"id": 7, "nombre": "CIERRE - Docs", "comando": "echo ok", "timeout": 30, "espera": 0},
+    {"id": 7, "nombre": "CORTE 9 - CardContent tarjeta renderiza",
+     "comando": "cd /app/frontend && PLAYWRIGHT_BROWSERS_PATH=/pw-browsers npx playwright test e2e/login-clientes.spec.js --reporter=list",
+     "timeout": 200, "espera": 5},
+    {"id": 8, "nombre": "CIERRE - Docs", "comando": "echo ok", "timeout": 30, "espera": 0},
 ]
 
 

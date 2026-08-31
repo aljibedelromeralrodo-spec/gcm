@@ -32,19 +32,19 @@ export async function dismissModals(page) {
 
 // Abre un módulo del sidebar expandiendo su supermódulo si hace falta (con reintentos verificados)
 export async function abrirModulo(page, smKey, modKey, targetTestId) {
-  for (let intento = 0; intento < 4; intento++) {
+  for (let intento = 0; intento < 6; intento++) {
     await dismissModals(page);
     const nav = page.getByTestId(`nav-${modKey}`);
     if (!(await nav.isVisible().catch(() => false))) {
-      await page.getByTestId(`sm-toggle-${smKey}`).click({ force: true });
-      await page.waitForTimeout(600);
+      await page.getByTestId(`sm-toggle-${smKey}`).click({ force: true, timeout: 5000 }).catch(() => {});
+      await page.waitForTimeout(700);
     }
-    await nav.click({ force: true });
-    await page.waitForTimeout(1500);
+    await nav.click({ force: true, timeout: 5000 }).catch(() => {});
     await dismissModals(page);
     if (!targetTestId) return;
-    if (await page.getByTestId(targetTestId).isVisible().catch(() => false)) return;
-    await page.waitForTimeout(2000);
-    if (await page.getByTestId(targetTestId).isVisible().catch(() => false)) return;
+    // espera hasta 8s a que el módulo (lazy) termine de cargar
+    const ok = await page.getByTestId(targetTestId).waitFor({ state: 'visible', timeout: 8000 })
+      .then(() => true).catch(() => false);
+    if (ok) return;
   }
 }

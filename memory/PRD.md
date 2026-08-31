@@ -1180,3 +1180,11 @@ actual; todo lo demás permanece intacto.
 - AUTOR ampliado a 7 bloques (nuevo B6: re-corre el test anti-polling tras cortes). Corrida completa 7/7 OK.
 - Adaptación: el ejemplo del usuario (Editar/Ver con Tailwind) no coincidía con la UI real; se extrajo el bloque real de acciones con sus estilos y testids.
 - Próximo: Corte 9 ClientesRow (tarjeta completa).
+
+## 2026-08-31 — Corte 9: ClientesCardContent.js + Bloque 8 del AUTOR — 8/8 VERDE
+- Extraído contenido informativo de la tarjeta (RUT+validación, codeudor, contador archivos, chips: Lista para enviar / Enviado a mesa / Datos financieros / Entrega) a pages/clientes/ClientesCardContent.js (20 líneas, 0 lógica, props: f, hasFin, rutValido, fmtAct). ClientesModule: 3.874 líneas.
+- Adaptación: el "contenido" completo de la tarjeta real incluye lógica (reparos, mora CMF, notificar NC) — se cortó solo la parte 100% presentacional.
+- AUTOR ampliado a 8 bloques (B7 valida que la tarjeta renderiza vía login-clientes.spec). Corrida 8/8 OK.
+- Fix flakiness E2E: abrirModulo con timeouts propios por click + waitFor de 8s para chunks lazy (3/3 corridas estables).
+- 5 componentes fuera: BrokersPanel, UFAmountInput, ClientesFilters, ClientesRowActions, ClientesCardContent.
+- Próximo: Corte 10 podría ser la tarjeta completa (ClientesCard) o el bloque de mora CMF.
