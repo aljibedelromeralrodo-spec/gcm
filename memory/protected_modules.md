@@ -12,3 +12,7 @@
      Clave Única y códigos en el flujo eCert.
   4. Mensaje de éxito DORADO (negro carbono + borde #D4AF37 + texto #F5E7B8).
 - Cualquier edición futura en server.py debe dejar intactas las líneas de esta sección.
+
+## REGLA USUARIO (2026-06): PLANTILLAS APROBADAS — NO MODIFICAR
+- Las plantillas de solicitud de documentos, gasto operacional y formas de envío existentes están APROBADAS.
+- PROHIBIDO modificarlas en pruebas o features nuevas. Features nuevas usan plantillas propias separadas.

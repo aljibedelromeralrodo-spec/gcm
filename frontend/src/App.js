@@ -50,6 +50,9 @@ const EstudioTituloModule = lazy(() => import("./pages/EstudioTituloModule"));
 const EscrituraModule = lazy(() => import("./pages/EscrituraModule"));
 const ContraloriaModule = lazy(() => import("./pages/ContraloriaModule"));
 const CerebroDashAIModule = lazy(() => import("./pages/CerebroDashAIModule"));
+const BlindajeCorreosModule = lazy(() => import("./pages/BlindajeCorreosModule"));
+const MartinTallerModule = lazy(() => import("./pages/MartinTallerModule"));
+const GuardianLogicoModule = lazy(() => import("./pages/GuardianLogicoModule"));
 const ContralorModule = lazy(() => import("./pages/ContralorModule"));
 const PostventaModule = lazy(() => import("./pages/PostventaModule"));
 const RoleDashboard = lazy(() => import("./pages/RoleDashboards"));
@@ -134,7 +137,7 @@ const SUPERMODULOS = [
   { key: 'sm_captacion', icon: 'fa-bullhorn', label: 'Captación y Publicidad', mods: ['publicidad', 'brokers', 'aprendizaje', 'martinfin'] },
   { key: 'sm_operacion', icon: 'fa-folder-open', label: 'Operación y Clientes', mods: ['clientes', 'supercarpeta', 'tasacion', 'estudio', 'escritura', 'gastos', 'procesamiento', 'rescate', 'autocorreo', 'micorreo', 'crece'] },
   { key: 'sm_control', icon: 'fa-shield', label: 'Control y Postventa', mods: ['postventa', 'contralor', 'contraloria', 'auditoria', 'gerencia', 'mod_daniela', 'mod_victoria'] },
-  { key: 'sm_sistema', icon: 'fa-cogs', label: 'Administración y Sistema', mods: ['dashboard', 'usuarios', 'criterios', 'administracion', 'dashai', 'emmy', 'whatsapp', 'basehistorica', 'salud', 'despacho'] },
+  { key: 'sm_sistema', icon: 'fa-cogs', label: 'Administración y Sistema', mods: ['dashboard', 'usuarios', 'criterios', 'administracion', 'dashai', 'blindaje', 'martintaller', 'guardian', 'emmy', 'whatsapp', 'basehistorica', 'salud', 'despacho'] },
 ];
 
 // ═══ PERFILES DE ACCESO (los módulos no listados NO se ven ni se pueden abrir) ═══
@@ -449,6 +452,9 @@ function MainApp() {
     { key: 'contralor', icon: 'fa-eye', label: 'Módulo Contralor' },
     { key: 'postventa', icon: 'fa-heart', label: 'Postventa' },
     { key: 'dashai', icon: 'fa-lightbulb-o', label: '🧠 Cerebro DashAI' },
+    { key: 'blindaje', icon: 'fa-shield', label: '🛡️ Blindaje Correos' },
+    { key: 'martintaller', icon: 'fa-wrench', label: '🔧 Taller Kintsugi' },
+    { key: 'guardian', icon: 'fa-sitemap', label: '🧠 Guardián Lógico' },
     { key: 'emmy', icon: 'fa-book', label: '📔 Registro Emmy' },
     { key: 'martinfin', icon: 'fa-heart-o', label: '💛 Martín — Asistente Financiero' },
     { key: 'auditoria', icon: 'fa-balance-scale', label: '📋 Auditoría Forense' },
@@ -760,6 +766,9 @@ function MainApp() {
         {activeModule === 'contralor' && <ContralorModule user={uEff} />}
         {activeModule === 'postventa' && <PostventaModule user={uEff} />}
         {activeModule === 'dashai' && <CerebroDashAIModule />}
+        {activeModule === 'blindaje' && <BlindajeCorreosModule />}
+        {activeModule === 'martintaller' && <MartinTallerModule />}
+        {activeModule === 'guardian' && <GuardianLogicoModule />}
         {activeModule === 'auditoria' && <AuditoriaForenseModule />}
         {activeModule === 'despacho' && <DespachoModule />}
         {activeModule === 'publicidad' && <PublicidadModule />}

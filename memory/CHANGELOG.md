@@ -433,3 +433,22 @@
 - El usuario pidió el listado de TODAS las reglas instauradas, con explicación breve, SOLO en el chat (sin crear pantalla nueva).
 - Se extrajo el inventario real desde código + BD viva: 51 Reglas de Oro (constitucion.py / db.config constitucion_maestra), ORO-71..75 (espejo_postventa, manual_concreces, publicidad), 10 Reglas ConCreces, 8 Reglas Victoria, 25 Normativas Fijas (server.py NORMATIVAS_FIJAS + dashai_normativas_fijas), 6 Reglas de Eficiencia, 10 proc_rules aprendidas. Total ~105.
 - Sin cambios de código. Fuentes: constitucion.py, server.py L436-460, espejo_postventa.py L1958+, manual_concreces.py L26+, mutuos_victoria.py L230+, publicidad.py L39+.
+
+## 2026-06 (fork) — V16 Blindaje + V16.4 Taller Kintsugi + V16.5 Guardián Lógico (TESTEADO 100%)
+- V16 BLINDAJE (blindaje_correos.py + BlindajeCorreosModule.js, módulo 'blindaje'):
+  5 protocolos crédito (dependiente_simple 6 liq / independiente / mixto / con_codeudor 12 liq / con_licencia),
+  parser loop 90s (Claude sonnet-4-6, heartbeat en config blindaje_heartbeat), carpeta docs por caso
+  (clientes_carpetas_documentos, 1 RUT=1 caso, reutiliza folders), enriquecimiento auto (PDF 6-en-1),
+  anti-mezcla determinística (nunca_pedir), correo faltantes → bandeja autorización admin (JAMÁS envía solo),
+  envío Resend si RESEND_API_KEY sino SMTP gerardo.ext (confirmado=True), retry 3min tope 5, alerta 24h,
+  checklist DNS SPF/DKIM/DMARC real (dnspython). Rutas /api/blindaje/*. Test iteration_65: 100%.
+- V16.4 TALLER KINTSUGI (martin_taller.py + MartinTallerModule.js, módulo 'martintaller'):
+  17 herramientas (libres/protegidas), vigía 10min (parser caído, tasas rotas 1-10%, conteos desalineados,
+  cola errores), reparadoras con log oro (sistema_reparaciones_log antes/después), protegidas (enviar_masivo etc)
+  crean solicitud en bandeja SIN ejecutar. Mejora libre → inyecta a base_conocimiento del clasificador.
+- V16.5 GUARDIÁN LÓGICO (guardian_logico.py + GuardianLogicoModule.js, módulo 'guardian'):
+  validar_caso con BACKTRACKING máx 3 niveles (docs prohibidos, liq>tope, correo pide recibidos → regenera,
+  mesa con faltantes → retira, loop → corta), detectar_nudos desde datos reales, score simplicidad/lógica/fluidez,
+  loop 10min, flujo único 8 nodos visual. sistema_backtracking_log + sistema_mapa_logico. Test iteration_66: 100%.
+- FIX DEPLOY: startup ya no bloquea con objstore (bunker en bg + cortacircuito 15 fallos). Redeploy solicitado.
+- REGLA USUARIO: plantillas aprobadas (solicitud docs, gasto operacional) NO se modifican (memory/protected_modules.md).

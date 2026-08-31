@@ -761,6 +761,18 @@ async def startup():
     asyncio.create_task(_task_blindada(_hib.espejo_hibrido_loop, "espejo_hibrido"))
     import gestion_ejecutivos as _gest
     asyncio.create_task(_task_blindada(_gest.gestion_harvest_loop, "gestion_ejecutivos"))
+    # 🛡️ BLINDAJE CORREOS V16: protocolos + 6 liquidaciones + bandeja autorización admin
+    import blindaje_correos as _blin
+    asyncio.create_task(_blin.seed_blindaje())
+    asyncio.create_task(_task_blindada(_blin.blindaje_parser_loop, "blindaje_parser_90s"))
+    asyncio.create_task(_task_blindada(_blin.blindaje_retry_loop, "blindaje_retry_3min"))
+    # 🔧 MARTÍN VIGÍA V16.4 — Taller de Reparación Kintsugi
+    import martin_taller as _mtall
+    asyncio.create_task(_mtall.seed_martin())
+    asyncio.create_task(_task_blindada(_mtall.martin_vigia_loop, "martin_vigia_10min"))
+    # 🧠 GUARDIÁN LÓGICO V16.5 — mente humana con backtracking
+    import guardian_logico as _guard
+    asyncio.create_task(_task_blindada(_guard.guardian_loop, "guardian_logico_10min"))
     # ⚖️ FUENTE DE VERDAD DE MESA (aprobaciones@centralmutuos.cl) — monitoreo permanente
     import mesa_verdad as _mesav
     asyncio.create_task(_task_blindada(_mesav.mesa_verdad_loop, "mesa_verdad"))
@@ -16198,6 +16210,12 @@ async def calificar_recientes():
 # 🧠 CONEXIÓN CONTRALORA — Cerebro exportable (Contralor + DashAI)
 import brain_export as _brain
 api.include_router(_brain.brain)
+import blindaje_correos as _blin_mod
+api.include_router(_blin_mod.blindaje)
+import martin_taller as _mtall_mod
+api.include_router(_mtall_mod.martin)
+import guardian_logico as _guard_mod
+api.include_router(_guard_mod.guardian)
 
 # ⚡ MONITOR DE ENERGÍA — Reserva de funcionamiento
 import energia as _energia_mod
