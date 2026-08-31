@@ -1,0 +1,4 @@
+// Split incremental de ClientesModule (patrón aprobado 30/8/2026):
+// se extraen componentes uno a uno; el resto sigue en el archivo viejo hasta que tenga test.
+export { default as BrokersPanel } from "./BrokersPanel";
+export { default as UFAmountInput } from "./UFAmountInput";

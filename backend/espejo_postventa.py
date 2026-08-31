@@ -297,7 +297,7 @@ async def _sync_concreces_core():
     folders = await db.folders.find({}, {"id": 1, "nombre": 1, "rut": 1, "nro_operacion": 1}).to_list(1500)
     actualizadas, sin_clasificar, ahora = 0, 0, _now()
     for c in correos:
-        firma = hashlib.md5(f"{c.get('subject')}|{c.get('fecha')}".encode(), usedforsecurity=False).hexdigest()
+        firma = hashlib.md5(f"{c.get('subject')}|{c.get('fecha')}".encode(), usedforsecurity=False).hexdigest()  # nosec - hash legacy compatible DB, no auth nueva
         if await db.espejo_sync_log.find_one({"firma": firma}):
             continue
         datos = _extraer_datos_operacion(c)

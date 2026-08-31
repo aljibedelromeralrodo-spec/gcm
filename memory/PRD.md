@@ -1143,3 +1143,9 @@ actual; todo lo demás permanece intacto.
 - MD5 restantes marcados `usedforsecurity=False` (server.py x2, espejo_postventa.py) sin cambiar valores de hash (no rompe dedup en DB).
 - Hook VictoriaFicha:228 documentado con eslint-disable intencional (agregar la dep borraría ediciones del usuario cada 45s por polling).
 - PENDIENTE (alto riesgo, requiere aprobación): split de ClientesModule (3.952 líneas), App.js MainApp, CentralChat; refactor complejidad adn_clientes/ai_extract; keys por índice en listas render-only.
+
+## 2026-08-31 — Plan 3 bloques (post-revisión) aplicado
+- Bloque 1: MD5 con `# nosec - hash legacy compatible DB, no auth nueva` (server.py x2, espejo_postventa.py); eslint-disable de VictoriaFicha con razón explícita del polling 45s. Verificado: py_compile OK, pyflakes 0 undefined, webpack OK, login 200.
+- Bloque memoria liviana: NO APLICA — ecomac_datos_final.py es script one-off, jamás se importa en runtime del servidor (no carga data pesada en memoria del backend).
+- Split incremental ClientesModule iniciado: creado /app/frontend/src/pages/clientes/ con BrokersPanel.js, UFAmountInput.js e index.js (re-exports). ClientesModule.js importa desde ./clientes. El resto (~3.830 líneas) sigue en el archivo viejo hasta tener tests, según patrón aprobado.
+- Smoke test visual OK (login + módulo Clientes renderiza).

@@ -1147,7 +1147,7 @@ async def paridad_check():
     c = await db.config.find_one({"_key": "criterios"}) or {}
     btg = c.get("btg_pactual") or {}
     reglas = await db.proc_rules.find({}, {"_id": 0, "name": 1, "pattern": 1}).sort("name", 1).to_list(200)
-    hash_reglas = hashlib.md5("|".join(f"{r['name']}::{r.get('pattern', '')}" for r in reglas).encode(), usedforsecurity=False).hexdigest()[:12]
+    hash_reglas = hashlib.md5("|".join(f"{r['name']}::{r.get('pattern', '')}" for r in reglas).encode(), usedforsecurity=False).hexdigest()[:12]  # nosec - hash legacy compatible DB, no auth nueva
     dashai = {}
     for m in ("regla_oro", "regla_inviolable", "regla_operativa", "regla_eficiencia", "normativa"):
         dashai[m] = await db.dashai_eventos.count_documents({"motivo": m})
@@ -1164,7 +1164,7 @@ async def paridad_check():
         "proc_rules": {"total": len(reglas), "hash": hash_reglas},
         "dashai_eventos": dashai,
         "contralor": {"espejo_criterios": await db.espejo_criterios.count_documents({}),
-                      "oro71_hash": hashlib.md5((oro71.get("patron") or "").encode(), usedforsecurity=False).hexdigest()[:12],
+                      "oro71_hash": hashlib.md5((oro71.get("patron") or "").encode(), usedforsecurity=False).hexdigest()[:12],  # nosec - hash legacy compatible DB, no auth nueva
                       "espejo_mesa_listo": bool(((await db.config.find_one({"_key": "espejo_mesa_modelo"})) or {}).get("listo"))},
         "ventana_antianulacion_min": int((((await db.config.find_one({"_key": "mesa_verdad"})) or {}).get("ventana_antianulacion_min")) or 45),
     }
