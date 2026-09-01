@@ -1454,24 +1454,143 @@ async def get_seguros():
 CALC_MAX_CLAVE = os.environ.get("CALC_MAX_CLAVE", "")
 
 
-def _calcmax_exigir(clave):
+def _calcmax_gen_clave(n):
+    """Clave inicial 0587; luego el algoritmo sube la dificultad: más dígitos y sin patrones."""
+    if n == 0:
+        return "0587"
+    import random
+    largo = 4 + min(n // 3, 4)
+    while True:
+        c = "".join(random.choices("0123456789", k=largo))
+        difs = {abs(int(c[i + 1]) - int(c[i])) for i in range(len(c) - 1)}
+        if len(set(c)) >= 3 and difs != {1} and c != "0587":
+            return c
+
+
+def _calcmax_exigir_master(clave):
     if not CALC_MAX_CLAVE or clave != CALC_MAX_CLAVE:
-        raise HTTPException(status_code=401, detail="Clave de ejecutivo incorrecta")
+        raise HTTPException(status_code=401, detail="Clave maestra incorrecta")
+
+
+async def _calcmax_exigir(clave_o_token):
+    """Acepta la clave maestra del .env o un token de sesión vigente. Devuelve identidad."""
+    v = (clave_o_token or "").strip()
+    if CALC_MAX_CLAVE and v == CALC_MAX_CLAVE:
+        return {"rut": "MASTER", "nombre": "Administrador"}
+    s = await db.calcmax_sesiones.find_one({"token": v})
+    if not s or s.get("expira", "") < now_iso():
+        raise HTTPException(status_code=401, detail="Sesión no válida o expirada — vuelva a ingresar")
+    return {"rut": s.get("rut", ""), "nombre": s.get("nombre", "")}
+
+
+def _rut_valido_str(rut):
+    n = re.sub(r"[^0-9kK]", "", rut or "").lower()
+    return len(n) >= 8 and fsvc._rut_dv_ok(n[:-1], n[-1])
+
+
+@api.post("/calcmax/admin/generar")
+async def calcmax_admin_generar(payload: dict = Body(...)):
+    """Genera una nueva clave de ejecutivo (progresivamente más difícil) + link."""
+    _calcmax_exigir_master(payload.get("master") or "")
+    n = await db.calcmax_ejecutivos.count_documents({})
+    while True:
+        clave = _calcmax_gen_clave(n)
+        if not await db.calcmax_ejecutivos.find_one({"clave": clave}):
+            break
+        n += 1
+    doc = {"id": str(uuid.uuid4()), "clave": clave, "nombre": "", "rut": "",
+           "registrado": False, "activo": True, "creado": now_iso(), "ultimo_acceso": ""}
+    await db.calcmax_ejecutivos.insert_one(dict(doc))
+    return {"ok": True, "clave": clave, "link": "/calculadora", "id": doc["id"]}
+
+
+@api.post("/calcmax/admin/ejecutivos")
+async def calcmax_admin_ejecutivos(payload: dict = Body(...)):
+    _calcmax_exigir_master(payload.get("master") or "")
+    lista = await db.calcmax_ejecutivos.find({}, {"_id": 0}).sort("creado", -1).to_list(200)
+    accesos = await db.calcmax_accesos.find({}, {"_id": 0}).sort("fecha", -1).to_list(50)
+    return {"ejecutivos": lista, "ultimos_accesos": accesos}
+
+
+@api.post("/calcmax/admin/toggle")
+async def calcmax_admin_toggle(payload: dict = Body(...)):
+    _calcmax_exigir_master(payload.get("master") or "")
+    e = await db.calcmax_ejecutivos.find_one({"id": payload.get("id")})
+    if not e:
+        raise HTTPException(status_code=404, detail="No existe")
+    await db.calcmax_ejecutivos.update_one({"id": e["id"]}, {"$set": {"activo": not e.get("activo")}})
+    return {"ok": True, "activo": not e.get("activo")}
 
 
 @api.post("/calcmax/login")
 async def calcmax_login(payload: dict = Body(...)):
-    _calcmax_exigir((payload.get("clave") or "").strip())
+    """Login ejecutivo: clave + RUT obligatorio. Primer ingreso exige nombre completo
+    y permite cambiar la clave. Deja registro de quién usa el servicio."""
+    clave = (payload.get("clave") or "").strip()
+    rut = (payload.get("rut") or "").strip()
     cfg = await db.config.find_one({"_key": "uf"}) or {}
-    return {"ok": True, "valor_uf": float(cfg.get("valor_uf") or 0),
-            "dia_uf": cfg.get("uf_day", "")}
+    if CALC_MAX_CLAVE and clave == CALC_MAX_CLAVE:
+        token = str(uuid.uuid4())
+        await db.calcmax_sesiones.insert_one({"token": token, "rut": "MASTER",
+            "nombre": "Administrador", "creado": now_iso(),
+            "expira": (datetime.now(timezone.utc) + timedelta(hours=12)).isoformat()})
+        return {"ok": True, "token": token, "nombre": "Administrador",
+                "valor_uf": float(cfg.get("valor_uf") or 0)}
+    e = await db.calcmax_ejecutivos.find_one({"clave": clave, "activo": True})
+    if not e:
+        raise HTTPException(status_code=401, detail="Clave de ejecutivo incorrecta o desactivada")
+    if not _rut_valido_str(rut):
+        raise HTTPException(status_code=422, detail="Debe ingresar un RUT válido para usar el servicio")
+    rut_norm = re.sub(r"[^0-9kK]", "", rut).lower()
+    if not e.get("registrado"):
+        nombre = (payload.get("nombre") or "").strip()
+        if len(nombre.split()) < 2:
+            raise HTTPException(status_code=428, detail="registro_requerido")
+        upd = {"registrado": True, "nombre": nombre, "rut": rut_norm,
+               "ultimo_acceso": now_iso()}
+        nueva = re.sub(r"\D", "", payload.get("nueva_clave") or "")
+        if nueva:
+            if not (4 <= len(nueva) <= 8):
+                raise HTTPException(status_code=422, detail="La nueva clave debe tener entre 4 y 8 dígitos")
+            if await db.calcmax_ejecutivos.find_one({"clave": nueva, "id": {"$ne": e["id"]}}):
+                raise HTTPException(status_code=422, detail="Esa clave ya está en uso, elija otra")
+            upd["clave"] = nueva
+        await db.calcmax_ejecutivos.update_one({"id": e["id"]}, {"$set": upd})
+        e = {**e, **upd}
+    else:
+        if e.get("rut") and e["rut"] != rut_norm:
+            raise HTTPException(status_code=403, detail="Esta clave pertenece a otro RUT — solicite su propia clave")
+        await db.calcmax_ejecutivos.update_one({"id": e["id"]}, {"$set": {"ultimo_acceso": now_iso()}})
+    token = str(uuid.uuid4())
+    await db.calcmax_sesiones.insert_one({"token": token, "rut": rut_norm, "nombre": e.get("nombre", ""),
+        "clave_id": e["id"], "creado": now_iso(),
+        "expira": (datetime.now(timezone.utc) + timedelta(hours=12)).isoformat()})
+    await db.calcmax_accesos.insert_one({"id": str(uuid.uuid4()), "rut": rut_norm,
+        "nombre": e.get("nombre", ""), "fecha": now_iso()})
+    return {"ok": True, "token": token, "nombre": e.get("nombre", ""),
+            "valor_uf": float(cfg.get("valor_uf") or 0)}
+
+
+@api.post("/calcmax/cambiar-clave")
+async def calcmax_cambiar_clave(payload: dict = Body(...)):
+    ident = await _calcmax_exigir(payload.get("token") or "")
+    nueva = re.sub(r"\D", "", payload.get("nueva_clave") or "")
+    if not (4 <= len(nueva) <= 8):
+        raise HTTPException(status_code=422, detail="La clave debe tener entre 4 y 8 dígitos")
+    if await db.calcmax_ejecutivos.find_one({"clave": nueva}):
+        raise HTTPException(status_code=422, detail="Esa clave ya está en uso, elija otra")
+    r = await db.calcmax_ejecutivos.update_one({"rut": ident["rut"], "registrado": True},
+                                               {"$set": {"clave": nueva}})
+    if not r.modified_count:
+        raise HTTPException(status_code=404, detail="No se encontró su registro")
+    return {"ok": True}
 
 
 @api.post("/calcmax/ocr")
 async def calcmax_ocr(clave: str = Form(...), tipo: str = Form("documento"),
                       foto: UploadFile = File(...)):
     """Foto/PDF de un documento del cliente → OCR → campos de la calculadora."""
-    _calcmax_exigir(clave.strip())
+    ident = await _calcmax_exigir(clave.strip())
     import ocr_service
     import ai_extract
     raw = await foto.read()
@@ -1520,7 +1639,7 @@ async def calcmax_calcular(payload: dict = Body(...)):
     REGLA CARGA CMF (definición del dueño): el total de deuda CMF (+PAV) se prorratea
     a 36 meses al 2% anual → cuota mensual = carga financiera PRESENTE. La carga total
     = presente + futura (dividendo del nuevo crédito)."""
-    _calcmax_exigir((payload.pop("clave", "") or "").strip())
+    ident = await _calcmax_exigir((payload.pop("clave", "") or "").strip())
     cfg = await db.config.find_one({"_key": "uf"}) or {}
     payload.setdefault("valor_uf", float(cfg.get("valor_uf") or 0))
     deuda_total = sum(float(payload.pop(k, 0) or 0) for k in
@@ -1560,6 +1679,9 @@ async def calcmax_calcular(payload: dict = Body(...)):
         tasa_origen = "automática — con subsidio < 2.000 UF"
         result = ce.simular_credito(payload)
     result["tasa_origen"] = tasa_origen
+    result["motor_espejo"] = {"sincronizado": True,
+                              "constitucion_version": cons.get("version") or cons.get("actualizado") or "vigente",
+                              "umbrales_vivos": u, "fuente": "constitución DashAI + tasas/seguros/UF en vivo"}
     if credito_efectivo is not None:
         result["credito_efectivo_uf"] = round(credito_efectivo, 2)
     # DIVIDENDO FINAL CON SEGUROS (desgravamen x2 si hay codeudor + incendio)
@@ -1583,6 +1705,8 @@ async def calcmax_calcular(payload: dict = Body(...)):
     result["carga_futura_clp"] = result.get("dividendo_credito_clp", 0)
     result["carga_total_clp"] = round(cuota_cmf) + (result.get("dividendo_credito_clp") or 0)
     await db.calcmax_log.insert_one({"id": str(uuid.uuid4()), "timestamp": now_iso(),
+                                     "ejecutivo_rut": ident.get("rut", ""),
+                                     "ejecutivo_nombre": ident.get("nombre", ""),
                                      "entrada": {k: v for k, v in payload.items() if k != "clave"},
                                      "credito_maximo_uf": result.get("credito_maximo_uf")})
     return clean(result)

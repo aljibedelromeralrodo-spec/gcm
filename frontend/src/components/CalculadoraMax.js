@@ -48,6 +48,12 @@ const pct = (n) => `${(Number(n || 0) * 100).toFixed(1)}%`;
 
 export default function CalculadoraMax() {
   const [clave, setClave] = useState("");
+  const [rut, setRut] = useState("");
+  const [nombre, setNombre] = useState("");
+  const [nuevaClave, setNuevaClave] = useState("");
+  const [registro, setRegistro] = useState(false);
+  const [token, setToken] = useState("");
+  const [quien, setQuien] = useState("");
   const [auth, setAuth] = useState(false);
   const [uf, setUf] = useState(0);
   const [f, setF] = useState({ plazo_anos: 25, tasa_pct: "", tasa_manual: false, tipo_deudor: 1, continuidad_laboral: true });
@@ -61,10 +67,23 @@ export default function CalculadoraMax() {
   const login = async () => {
     setBusy("login"); setMsg("");
     try {
-      const r = await axios.post(`${API}/api/calcmax/login`, { clave });
-      setUf(r.data.valor_uf); setAuth(true);
-    } catch (e) { setMsg(e.response?.data?.detail || "Error de conexión"); }
+      const r = await axios.post(`${API}/api/calcmax/login`,
+        { clave, rut, nombre, nueva_clave: nuevaClave });
+      setUf(r.data.valor_uf); setToken(r.data.token); setQuien(r.data.nombre); setAuth(true);
+    } catch (e) {
+      if (e.response?.status === 428) { setRegistro(true); setMsg("Primer ingreso: complete su nombre y (opcional) elija su clave personal"); }
+      else setMsg(e.response?.data?.detail || "Error de conexión");
+    }
     setBusy("");
+  };
+
+  const cambiarClave = async () => {
+    const nueva = window.prompt("Nueva clave (4 a 8 dígitos):");
+    if (!nueva) return;
+    try {
+      await axios.post(`${API}/api/calcmax/cambiar-clave`, { token, nueva_clave: nueva });
+      setMsg("✅ Clave cambiada — úsela en su próximo ingreso");
+    } catch (e) { setMsg(`🚨 ${e.response?.data?.detail || "No se pudo cambiar la clave"}`); }
   };
 
   const subirFoto = async (tipo, file) => {
@@ -72,7 +91,7 @@ export default function CalculadoraMax() {
     setBusy(tipo); setMsg("");
     try {
       const fd = new FormData();
-      fd.append("clave", clave); fd.append("tipo", tipo); fd.append("foto", file);
+      fd.append("clave", token); fd.append("tipo", tipo); fd.append("foto", file);
       const r = await axios.post(`${API}/api/calcmax/ocr`, fd, { timeout: 120000 });
       const c = r.data.campos || {};
       setF(prev => ({ ...prev, ...c }));
@@ -86,7 +105,7 @@ export default function CalculadoraMax() {
   const calcular = async () => {
     setBusy("calc"); setMsg(""); setRes(null);
     try {
-      const payload = { clave, ...f };
+      const payload = { clave: token, ...f };
       delete payload.tasa_pct; delete payload.tasa_manual;
       if (f.tasa_manual && Number(f.tasa_pct) > 0) payload.tasa_anual = Number(f.tasa_pct) / 100;
       const r = await axios.post(`${API}/api/calcmax/calcular`, payload);
@@ -103,11 +122,23 @@ export default function CalculadoraMax() {
         <div style={S.sub}>Calculadora de Crédito Máximo — Ejecutivos</div>
         <input data-testid="calcmax-clave" style={{ ...S.input, textAlign: "center", letterSpacing: "0.3em" }}
           type="password" placeholder="Clave de acceso" value={clave} autoFocus
-          onChange={e => setClave(e.target.value)} onKeyDown={e => e.key === "Enter" && login()} />
+          onChange={e => setClave(e.target.value)} />
+        <input data-testid="calcmax-rut" style={{ ...S.input, textAlign: "center" }}
+          type="text" placeholder="Su RUT (ej: 12.345.678-9)" value={rut}
+          onChange={e => setRut(e.target.value)} onKeyDown={e => e.key === "Enter" && login()} />
+        {registro && (
+          <>
+            <input data-testid="calcmax-nombre" style={S.input} type="text"
+              placeholder="Nombre completo" value={nombre} onChange={e => setNombre(e.target.value)} />
+            <input data-testid="calcmax-nueva-clave" style={S.input} type="text" inputMode="numeric"
+              placeholder="Nueva clave personal (opcional, 4-8 dígitos)" value={nuevaClave}
+              onChange={e => setNuevaClave(e.target.value)} />
+          </>
+        )}
         <button data-testid="calcmax-entrar" style={S.boton} disabled={!!busy} onClick={login}>
-          {busy ? "Verificando…" : "ENTRAR"}
+          {busy ? "Verificando…" : registro ? "REGISTRARME Y ENTRAR" : "ENTRAR"}
         </button>
-        {msg && <div data-testid="calcmax-login-msg" style={{ color: "#e35d6a", marginTop: 12, fontSize: "0.85rem" }}>{msg}</div>}
+        {msg && <div data-testid="calcmax-login-msg" style={{ color: registro ? "#F5E7B8" : "#e35d6a", marginTop: 12, fontSize: "0.85rem" }}>{msg}</div>}
       </div>
     </div>
   );
@@ -115,7 +146,11 @@ export default function CalculadoraMax() {
   return (
     <div style={S.page}>
       <div style={{ ...S.titulo, ...textoMetal }}>💰 CRÉDITO MÁXIMO</div>
-      <div style={S.sub}>Algoritmo Espejo · UF del día: <b style={{ color: ORO }}>${fmt(uf, 2)}</b></div>
+      <div style={S.sub}>
+        Algoritmo Espejo (sincronizado en vivo) · UF: <b style={{ color: ORO }}>${fmt(uf, 2)}</b>
+        {quien && <> · {quien}</>} · <span data-testid="calcmax-cambiar-clave" onClick={cambiarClave}
+          style={{ color: "#8ab4f8", cursor: "pointer", textDecoration: "underline" }}>cambiar clave</span>
+      </div>
 
       <div style={S.card}>
         <span style={S.label}>📸 Capturar documentos con la cámara</span>
