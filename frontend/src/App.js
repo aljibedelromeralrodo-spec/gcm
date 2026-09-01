@@ -2,6 +2,7 @@ import { useState, useEffect, lazy, Suspense } from "react";
 import VistaPreviaRol from "./components/VistaPreviaRol";
 import HeliceADN from "./components/HeliceADN";
 import CorreosPreview from "./components/CorreosPreview";
+import CalculadoraMax from "./components/CalculadoraMax";
 import ProtectorPantalla from "./components/ProtectorPantalla";
 import axios from "axios";
 import "./App.css";
@@ -186,6 +187,7 @@ function App() {
   const path = window.location.pathname;
   if (path === "/predic") return <CentralPredic />;
   if (path === "/portal") return <PortalCliente />;
+  if (path === "/calculadora") return <CalculadoraMax />;
   if (path === "/share-target") return <ShareTargetPage />;
   return <MainApp />;
 }

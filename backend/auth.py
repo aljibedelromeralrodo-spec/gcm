@@ -80,6 +80,7 @@ PUBLIC_PREFIXES = (
     "/api/firma/",                 # Portal de Firma (token de firma en la URL)
     "/api/oportunidades/track",    # Pixeles/clics de correos comerciales
     "/api/descarga-segura/",       # Links seguros de descarga para clientes (token único)
+    "/api/calcmax",                # Calculadora de Crédito Máximo para ejecutivos (clave propia por request)
     "/api/escrituracion/confirmar/",  # Confirmación de escrituración desde el correo de aprobación (token único)
     "/api/brain/",                 # Conexión Contralora (exige BRAIN_ACCESS_KEY dentro del módulo)
     "/api/energia",                # Monitor de energía (indicador de saldo del topbar)

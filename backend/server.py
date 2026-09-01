@@ -1449,6 +1449,101 @@ async def get_seguros():
 
 
 # ---------------------------------------------------------------------------
+# 📱 CALCULADORA DE CRÉDITO MÁXIMO — link directo para ejecutivos (clave propia)
+# ---------------------------------------------------------------------------
+CALC_MAX_CLAVE = os.environ.get("CALC_MAX_CLAVE", "")
+
+
+def _calcmax_exigir(clave):
+    if not CALC_MAX_CLAVE or clave != CALC_MAX_CLAVE:
+        raise HTTPException(status_code=401, detail="Clave de ejecutivo incorrecta")
+
+
+@api.post("/calcmax/login")
+async def calcmax_login(payload: dict = Body(...)):
+    _calcmax_exigir((payload.get("clave") or "").strip())
+    cfg = await db.config.find_one({"_key": "uf"}) or {}
+    return {"ok": True, "valor_uf": float(cfg.get("valor_uf") or 0),
+            "dia_uf": cfg.get("uf_day", "")}
+
+
+@api.post("/calcmax/ocr")
+async def calcmax_ocr(clave: str = Form(...), tipo: str = Form("documento"),
+                      foto: UploadFile = File(...)):
+    """Foto/PDF de un documento del cliente → OCR → campos de la calculadora."""
+    _calcmax_exigir(clave.strip())
+    import ocr_service
+    import ai_extract
+    raw = await foto.read()
+    if len(raw) > 15 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Archivo demasiado grande (máx 15MB)")
+    fn = foto.filename or "captura.jpg"
+    try:
+        if fn.lower().endswith(".pdf") or raw[:4] == b"%PDF":
+            texto, _m = await asyncio.to_thread(ocr_service.extraer_texto, raw, fn)
+        else:
+            from PIL import Image
+            import io as _io
+            im = Image.open(_io.BytesIO(raw))
+            texto, _conf = await asyncio.to_thread(ocr_service.ocr_imagen, im)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"No se pudo leer el documento: {str(e)[:100]}")
+    if not (texto or "").strip():
+        raise HTTPException(status_code=422, detail="No se detectó texto legible — intente con mejor luz/enfoque")
+    datos = await ai_extract.extraer_datos_financieros(texto, cliente="")
+    rut = ai_extract._rut_regex(texto)
+    tipo_doc = ai_extract._fallback_clasificar(texto, fn)
+    campos = {}
+    mapa = {"renta_liquida": "renta_titular", "renta_codeudor": "renta_codeudor",
+            "deuda_cmf_total": "deuda_cmf_total", "deuda_cmf_codeudor": "deuda_cmf_codeudor",
+            "credito_interno_pav": "credito_interno_pav", "edad": "edad_cliente",
+            "monto_credito": "credito_solicitado_uf"}
+    for k, dest in mapa.items():
+        v = datos.get(k)
+        if isinstance(v, (int, float)) and v > 0:
+            campos[dest] = v
+    if rut:
+        campos["rut"] = rut
+    if datos.get("con_subsidio"):
+        campos["con_subsidio"] = True
+    return {"ok": True, "tipo_detectado": tipo_doc, "campos": campos,
+            "metodo": datos.get("metodo", "reglas"), "caracteres_leidos": len(texto)}
+
+
+@api.post("/calcmax/calcular")
+async def calcmax_calcular(payload: dict = Body(...)):
+    """Algoritmo espejo completo → crédito máximo posible con desglose.
+    REGLA CARGA CMF (definición del dueño): el total de deuda CMF (+PAV) se prorratea
+    a 36 meses al 2% anual → cuota mensual = carga financiera PRESENTE. La carga total
+    = presente + futura (dividendo del nuevo crédito)."""
+    _calcmax_exigir((payload.pop("clave", "") or "").strip())
+    cfg = await db.config.find_one({"_key": "uf"}) or {}
+    payload.setdefault("valor_uf", float(cfg.get("valor_uf") or 0))
+    deuda_total = sum(float(payload.pop(k, 0) or 0) for k in
+                      ("deuda_cmf_total", "deuda_cmf_codeudor", "credito_interno_pav"))
+    r_mensual = (1 + 0.02) ** (1 / 12) - 1
+    cuota_cmf = deuda_total * (r_mensual * (1 + r_mensual) ** 36) / ((1 + r_mensual) ** 36 - 1) \
+        if deuda_total > 0 else 0.0
+    payload["carga_financiera"] = round(cuota_cmf) + float(payload.get("carga_financiera") or 0)
+    cons = await _constitucion_dashai()
+    u = cons["umbrales"]
+    payload.setdefault("umbral_btg_div_renta", u["div_renta_max_btg"])
+    payload.setdefault("umbral_btg_carga_fin", u["carga_maxima"])
+    payload.setdefault("umbral_btg_ltv", u["ltv_maximo"])
+    payload.setdefault("umbral_btg_edad_plazo", u["edad_plazo_max"])
+    result = ce.simular_credito(payload)
+    result["deuda_cmf_considerada_clp"] = round(deuda_total)
+    result["cuota_cmf_36m_clp"] = round(cuota_cmf)
+    result["carga_presente_clp"] = round(cuota_cmf)
+    result["carga_futura_clp"] = result.get("dividendo_credito_clp", 0)
+    result["carga_total_clp"] = round(cuota_cmf) + (result.get("dividendo_credito_clp") or 0)
+    await db.calcmax_log.insert_one({"id": str(uuid.uuid4()), "timestamp": now_iso(),
+                                     "entrada": {k: v for k, v in payload.items() if k != "clave"},
+                                     "credito_maximo_uf": result.get("credito_maximo_uf")})
+    return clean(result)
+
+
+# ---------------------------------------------------------------------------
 # Simulador (main platform)
 # ---------------------------------------------------------------------------
 @api.post("/simular-credito")
