@@ -3,6 +3,9 @@ import axios from "axios";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 const ORO = "#d4af37";
+const METAL = "linear-gradient(135deg,#8a6d1f 0%,#d4af37 22%,#f9eeb0 50%,#d4af37 78%,#8a6d1f 100%)";
+const textoMetal = { backgroundImage: METAL, WebkitBackgroundClip: "text", backgroundClip: "text",
+  WebkitTextFillColor: "transparent", color: "transparent" };
 const S = {
   page: { minHeight: "100vh", background: "#0a0a0a", color: "#fff",
     fontFamily: "'Segoe UI', system-ui, sans-serif", padding: "1rem", maxWidth: 560, margin: "0 auto" },
@@ -13,8 +16,9 @@ const S = {
   input: { width: "100%", boxSizing: "border-box", background: "#161616", color: "#fff",
     border: `1px solid rgba(212,175,55,0.35)`, padding: "0.85rem", fontSize: "1rem",
     borderRadius: 4, outline: "none", marginBottom: "0.9rem" },
-  boton: { width: "100%", background: ORO, color: "#0a0a0a", border: "none", fontWeight: 800,
-    fontSize: "1.05rem", padding: "1rem", borderRadius: 4, cursor: "pointer", letterSpacing: "0.05em" },
+  boton: { width: "100%", background: METAL, color: "#0a0a0a", border: "none", fontWeight: 800,
+    fontSize: "1.05rem", padding: "1rem", borderRadius: 4, cursor: "pointer", letterSpacing: "0.05em",
+    boxShadow: "0 2px 14px rgba(212,175,55,0.35)" },
   botonSec: { background: "transparent", color: ORO, border: `1px solid ${ORO}`, fontWeight: 700,
     fontSize: "0.8rem", padding: "0.7rem 0.5rem", borderRadius: 4, cursor: "pointer", width: "100%" },
   card: { background: "#121212", border: "1px solid rgba(212,175,55,0.25)", borderRadius: 6,
@@ -95,7 +99,7 @@ export default function CalculadoraMax() {
   if (!auth) return (
     <div style={S.page}>
       <div style={{ textAlign: "center", marginTop: "18vh" }}>
-        <div style={{ ...S.titulo, fontSize: "1.6rem" }}>CENTRAL MUTUOS</div>
+        <div style={{ ...S.titulo, ...textoMetal, fontSize: "1.6rem" }}>MUTUARIAS Y LEASING</div>
         <div style={S.sub}>Calculadora de Crédito Máximo — Ejecutivos</div>
         <input data-testid="calcmax-clave" style={{ ...S.input, textAlign: "center", letterSpacing: "0.3em" }}
           type="password" placeholder="Clave de acceso" value={clave} autoFocus
@@ -110,7 +114,7 @@ export default function CalculadoraMax() {
 
   return (
     <div style={S.page}>
-      <div style={S.titulo}>💰 CRÉDITO MÁXIMO</div>
+      <div style={{ ...S.titulo, ...textoMetal }}>💰 CRÉDITO MÁXIMO</div>
       <div style={S.sub}>Algoritmo Espejo · UF del día: <b style={{ color: ORO }}>${fmt(uf, 2)}</b></div>
 
       <div style={S.card}>
@@ -195,7 +199,7 @@ export default function CalculadoraMax() {
         <div id="resultado-calcmax" style={{ ...S.card, border: `1.5px solid ${ORO}` }}>
           <div style={{ textAlign: "center", padding: "0.5rem 0 1rem" }}>
             <div style={S.label}>CRÉDITO MÁXIMO POSIBLE</div>
-            <div data-testid="calcmax-resultado-uf" style={{ color: ORO, fontSize: "2.6rem", fontWeight: 900 }}>
+            <div data-testid="calcmax-resultado-uf" style={{ ...textoMetal, fontSize: "2.6rem", fontWeight: 900 }}>
               UF {fmt(res.credito_maximo_uf, 2)}
             </div>
             <div style={{ fontSize: "0.95rem", opacity: 0.8 }}>≈ ${fmt(res.credito_maximo_uf * res.valor_uf)}</div>
@@ -248,7 +252,7 @@ export default function CalculadoraMax() {
         </div>
       )}
       <div style={{ textAlign: "center", fontSize: "0.65rem", opacity: 0.35, padding: "1rem 0 2rem" }}>
-        Central Mutuos · Algoritmo Espejo · Uso exclusivo de ejecutivos
+        Mutuarias y Leasing · Algoritmo Espejo · Uso exclusivo de ejecutivos
       </div>
     </div>
   );

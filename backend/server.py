@@ -1549,6 +1549,8 @@ async def calcmax_calcular(payload: dict = Body(...)):
         tasa_origen = "automática — con subsidio < 2.000 UF"
         result = ce.simular_credito(payload)
     result["tasa_origen"] = tasa_origen
+    for k in ("eval_btg", "eval_ameris", "eval_btg_razones", "eval_ameris_razones"):
+        result.pop(k, None)
     result["deuda_cmf_considerada_clp"] = round(deuda_total)
     result["cuota_cmf_36m_clp"] = round(cuota_cmf)
     result["carga_presente_clp"] = round(cuota_cmf)

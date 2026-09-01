@@ -1347,3 +1347,8 @@ PENDIENTE: quedan ~14 correos que mencionan a Gabriela sin procesar (buscador de
 - BTG/AMERIS ELIMINADOS del desglose (solo algoritmo espejo manda).
 - TASA AUTOMÁTICA (db.config _key "tasas"): sin subsidio 5,90% · con subsidio ≥2.000 UF 6,40% · con subsidio <2.000 UF 6,50% (recalcula si el máximo cae bajo 2.000). Selector Automática/Manual en UI + checkbox "Cliente CON subsidio". Desglose muestra "Tasa aplicada X% (origen)".
 - Probado curl (3 escenarios de tasa correctos) + screenshot móvil (sin BTG/AMERIS/precalif, nota legal visible).
+
+## 2026-09-01 — Calculadora v3: marca MUTUARIAS Y LEASING + dorado metalizado
+- Portada y pie dicen "MUTUARIAS Y LEASING" (nada de Central Mutuos en la calculadora).
+- eval_btg/eval_ameris eliminados también de la RESPUESTA del endpoint /calcmax/calcular (no solo del UI).
+- Dorado metalizado (gradiente #8a6d1f→#d4af37→#f9eeb0) en títulos, monto resultado y botón ENTRAR/CALCULAR (via WebkitBackgroundClip text). Verificado con screenshot móvil.
