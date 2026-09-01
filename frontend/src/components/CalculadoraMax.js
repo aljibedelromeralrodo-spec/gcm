@@ -46,7 +46,7 @@ export default function CalculadoraMax() {
   const [clave, setClave] = useState("");
   const [auth, setAuth] = useState(false);
   const [uf, setUf] = useState(0);
-  const [f, setF] = useState({ plazo_anos: 25, tasa_pct: 6.35, tipo_deudor: 1, continuidad_laboral: true });
+  const [f, setF] = useState({ plazo_anos: 25, tasa_pct: "", tasa_manual: false, tipo_deudor: 1, continuidad_laboral: true });
   const [res, setRes] = useState(null);
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState("");
@@ -82,7 +82,9 @@ export default function CalculadoraMax() {
   const calcular = async () => {
     setBusy("calc"); setMsg(""); setRes(null);
     try {
-      const payload = { clave, ...f, tasa_anual: Number(f.tasa_pct || 6.35) / 100 };
+      const payload = { clave, ...f };
+      delete payload.tasa_pct; delete payload.tasa_manual;
+      if (f.tasa_manual && Number(f.tasa_pct) > 0) payload.tasa_anual = Number(f.tasa_pct) / 100;
       const r = await axios.post(`${API}/api/calcmax/calcular`, payload);
       setRes(r.data); setUf(r.data.valor_uf);
       setTimeout(() => document.getElementById("resultado-calcmax")?.scrollIntoView({ behavior: "smooth" }), 150);
@@ -152,9 +154,16 @@ export default function CalculadoraMax() {
             </select>
           </div>
           <div>
-            <span style={{ ...S.label, color: "rgba(255,255,255,0.6)", textTransform: "none" }}>Tasa anual (%)</span>
-            <input data-testid="calcmax-tasa" style={S.input} inputMode="decimal" type="number" step="0.01"
-              value={f.tasa_pct} onChange={e => set("tasa_pct", e.target.value)} />
+            <span style={{ ...S.label, color: "rgba(255,255,255,0.6)", textTransform: "none" }}>Tasa anual</span>
+            <select data-testid="calcmax-tasa-modo" style={S.input} value={f.tasa_manual ? "manual" : "auto"}
+              onChange={e => set("tasa_manual", e.target.value === "manual")}>
+              <option value="auto">Automática (subsidio y tramo 2.000 UF)</option>
+              <option value="manual">Manual</option>
+            </select>
+            {f.tasa_manual && (
+              <input data-testid="calcmax-tasa" style={S.input} inputMode="decimal" type="number" step="0.01"
+                placeholder="% anual" value={f.tasa_pct} onChange={e => set("tasa_pct", e.target.value)} />
+            )}
           </div>
         </div>
         <span style={{ ...S.label, color: "rgba(255,255,255,0.6)", textTransform: "none" }}>Tipo de deudor</span>
@@ -164,7 +173,8 @@ export default function CalculadoraMax() {
           <option value={2}>Tipo 2 — Dependiente renta variable (−15%)</option>
           <option value={3}>Tipo 3 — Independiente / honorarios (−20%)</option>
         </select>
-        {[["morosidad_dicom", "Morosidad vigente en DICOM"],
+        {[["con_subsidio", "Cliente CON subsidio habitacional"],
+          ["morosidad_dicom", "Morosidad vigente en DICOM"],
           ["protestos_vigentes", "Protestos vigentes"],
           ["continuidad_laboral", "Continuidad laboral"]].map(([k, lbl]) => (
           <label key={k} style={{ display: "flex", alignItems: "center", gap: 10, padding: "0.5rem 0",
@@ -191,7 +201,7 @@ export default function CalculadoraMax() {
             <div style={{ fontSize: "0.95rem", opacity: 0.8 }}>≈ ${fmt(res.credito_maximo_uf * res.valor_uf)}</div>
             <div style={{ marginTop: 8, fontSize: "0.85rem",
               color: res.precalificacion_aprobada ? "#10d98e" : "#e35d6a", fontWeight: 700 }}>
-              {res.precalificacion_aprobada ? "✅ PRECALIFICACIÓN APROBADA" : "❌ NO PRECALIFICA"}
+              {res.precalificacion_aprobada ? "✅ VIABILIDAD POSITIVA" : "⚠️ SIN VIABILIDAD POR AHORA"}
             </div>
           </div>
           <div style={S.label}>Desglose del cálculo</div>
@@ -210,13 +220,12 @@ export default function CalculadoraMax() {
             ["LTV (crédito/propiedad)", res.valor_propiedad_uf > 0 ? pct(res.ltv) : "sin valor propiedad"],
             ["Edad + plazo", res.edad_plazo],
             ["Valor máximo de compra", `UF ${fmt(res.valor_maximo_compra_uf, 2)}`],
-            ["Evaluación BTG", res.eval_btg],
-            ["Evaluación AMERIS", res.eval_ameris]].map(([k, v], i) => (
+            ["Tasa aplicada", `${(Number(res.tasa_anual || 0) * 100).toFixed(2)}% (${res.tasa_origen || "manual"})`]].map(([k, v], i) => (
             <div key={i} style={S.fila}><span style={{ opacity: 0.65 }}>{k}</span><b>{v}</b></div>
           ))}
           {res.razones_rechazo?.length > 0 && (
             <div style={{ marginTop: 10 }}>
-              <div style={{ ...S.label, color: "#e35d6a" }}>Motivos de rechazo</div>
+              <div style={{ ...S.label, color: "#e35d6a" }}>Observaciones de viabilidad</div>
               {res.razones_rechazo.map((r, i) => (
                 <div key={i} style={{ fontSize: "0.8rem", color: "#e35d6a", padding: "2px 0" }}>• {r}</div>
               ))}
@@ -225,10 +234,17 @@ export default function CalculadoraMax() {
           {res.credito_solicitado_uf > 0 && (
             <div style={{ marginTop: 10, fontSize: "0.85rem" }}>
               Crédito solicitado UF {fmt(res.credito_solicitado_uf, 2)}: {res.credito_viable
-                ? <b style={{ color: "#10d98e" }}>VIABLE</b> : <b style={{ color: "#e35d6a" }}>NO VIABLE</b>}
+                ? <b style={{ color: "#10d98e" }}>POSIBLE VIABILIDAD</b> : <b style={{ color: "#e35d6a" }}>SIN VIABILIDAD</b>}
               {res.pie_requerido_uf > 0 && ` · Pie requerido: UF ${fmt(res.pie_requerido_uf, 2)}`}
             </div>
           )}
+          <div data-testid="calcmax-nota-legal" style={{ marginTop: 14, padding: "0.7rem",
+            background: "rgba(212,175,55,0.07)", border: "1px solid rgba(212,175,55,0.25)",
+            fontSize: "0.68rem", lineHeight: 1.5, color: "rgba(255,255,255,0.65)" }}>
+            <b style={{ color: ORO }}>NOTA LEGAL:</b> Esta información es solo referencial y NO constituye
+            ningún tipo de aprobación ni preaprobación. La aprobación debe realizarse en forma directa y
+            ser enviada con la documentación correspondiente, según la normativa vigente.
+          </div>
         </div>
       )}
       <div style={{ textAlign: "center", fontSize: "0.65rem", opacity: 0.35, padding: "1rem 0 2rem" }}>

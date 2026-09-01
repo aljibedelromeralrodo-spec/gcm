@@ -1340,3 +1340,10 @@ PENDIENTE: quedan ~14 correos que mencionan a Gabriela sin procesar (buscador de
 - Frontend CalculadoraMax.js (móvil 390px, #0a0a0a/#d4af37/blanco): gate de clave → 4 botones cámara (capture="environment": liquidación/cédula/AFP/CMF) → autopobla campos → formulario completo (rentas, edades, deudas, propiedad, plazo, tasa %, tipo deudor 1/2/3, DICOM/protestos/continuidad) → resultado UF gigante + desglose 14 líneas + razones rechazo + viabilidad del solicitado. Ruta agregada en App.js (path === "/calculadora").
 - PROBADO E2E: curl login/clave mala/calcular (cuota 36m@2% $85.904 sobre $3M ✓, tope $334.096 ✓) + OCR con liquidación real de Gabriela (extrajo renta $1.035.326 y RUT) + screenshot móvil completo.
 - NOTA: hubo deploy iniciado antes de este módulo — se requiere NUEVO deploy para que /calculadora exista en producción.
+
+## 2026-09-01 — Calculadora v2: viabilidad, tasa automática, nota legal, sin BTG/Ameris
+- PROHIBIDO "preaprobación/precalificación" en la calculadora → textos cambiados a "VIABILIDAD POSITIVA / SIN VIABILIDAD POR AHORA / POSIBLE VIABILIDAD / Observaciones de viabilidad".
+- NOTA LEGAL fija bajo el resultado: información referencial, NO constituye aprobación ni preaprobación; la aprobación debe realizarse en forma directa y enviarse con la documentación correspondiente según normativa vigente.
+- BTG/AMERIS ELIMINADOS del desglose (solo algoritmo espejo manda).
+- TASA AUTOMÁTICA (db.config _key "tasas"): sin subsidio 5,90% · con subsidio ≥2.000 UF 6,40% · con subsidio <2.000 UF 6,50% (recalcula si el máximo cae bajo 2.000). Selector Automática/Manual en UI + checkbox "Cliente CON subsidio". Desglose muestra "Tasa aplicada X% (origen)".
+- Probado curl (3 escenarios de tasa correctos) + screenshot móvil (sin BTG/AMERIS/precalif, nota legal visible).

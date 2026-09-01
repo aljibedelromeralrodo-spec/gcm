@@ -1525,6 +1525,17 @@ async def calcmax_calcular(payload: dict = Body(...)):
     cuota_cmf = deuda_total * (r_mensual * (1 + r_mensual) ** 36) / ((1 + r_mensual) ** 36 - 1) \
         if deuda_total > 0 else 0.0
     payload["carga_financiera"] = round(cuota_cmf) + float(payload.get("carga_financiera") or 0)
+    # TASA AUTOMÁTICA según subsidio y tramo 2.000 UF (tasas oficiales en db.config)
+    tasa_origen = "manual"
+    if not payload.get("tasa_anual"):
+        t = await db.config.find_one({"_key": "tasas"}) or {}
+        con_sub = bool(payload.get("con_subsidio")) or float(payload.get("subsidio_uf") or 0) > 0
+        if not con_sub:
+            payload["tasa_anual"] = float(t.get("tasa_sin_subsidio") or 0.059)
+            tasa_origen = "automática — sin subsidio"
+        else:
+            payload["tasa_anual"] = float(t.get("tasa_subsidio_mayor_2000") or 0.064)
+            tasa_origen = "automática — con subsidio ≥ 2.000 UF"
     cons = await _constitucion_dashai()
     u = cons["umbrales"]
     payload.setdefault("umbral_btg_div_renta", u["div_renta_max_btg"])
@@ -1532,6 +1543,12 @@ async def calcmax_calcular(payload: dict = Body(...)):
     payload.setdefault("umbral_btg_ltv", u["ltv_maximo"])
     payload.setdefault("umbral_btg_edad_plazo", u["edad_plazo_max"])
     result = ce.simular_credito(payload)
+    if tasa_origen.startswith("automática — con subsidio") and (result.get("credito_maximo_uf") or 0) < 2000:
+        t = await db.config.find_one({"_key": "tasas"}) or {}
+        payload["tasa_anual"] = float(t.get("tasa_subsidio_menor_2000") or 0.065)
+        tasa_origen = "automática — con subsidio < 2.000 UF"
+        result = ce.simular_credito(payload)
+    result["tasa_origen"] = tasa_origen
     result["deuda_cmf_considerada_clp"] = round(deuda_total)
     result["cuota_cmf_36m_clp"] = round(cuota_cmf)
     result["carga_presente_clp"] = round(cuota_cmf)
