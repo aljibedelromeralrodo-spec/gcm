@@ -13,9 +13,9 @@ CLAVE = os.environ["CALC_MAX_CLAVE"]
 CASOS = [
     ("Cristian Pavez", "aprobacion", 1800, False, 0),
     ("Franco Bahamondes", "aprobacion", 2150, True, 0),
-    ("KEVIN MACAYA", "aprobacion", 2150, True, 0),
+    ("KEVIN MACAYA", "aprobacion", 1522.08, True, 0),
     ("NICOLAS SAAVEDRA", "aprobacion", 2856, False, 3571),
-    ("ROLANDO RIVERA", "aprobacion", 1995, True, 0),
+    ("ROLANDO RIVERA", "aprobacion", 1995.19, True, 0),
     ("Francisca Hernandez", "aprobacion", 2150, True, 0),
     ("JOHN DIAZ", "observacion", 1890, True, 2700),
     ("Yarelly Sandoval", "observacion", 2151, True, 0),
@@ -41,20 +41,28 @@ def leer(nombre, pref, maxdocs):
     return out
 
 async def caso(nombre, real, monto, subsidio, vprop):
-    rentas, deudas, edades = [], [], []
+    rentas, deudas, edades, rentas_cod = [], [], [], []
     for t in leer(nombre, "02_liq", 2):
         d = await ai_extract.extraer_datos_financieros(t, cliente=nombre)
         if d.get("renta_liquida"): rentas.append(float(d["renta_liquida"]))
         if d.get("edad"): edades.append(float(d["edad"]))
     for t in leer(nombre, "04_cmf", 1):
         d = await ai_extract.extraer_datos_financieros(t, cliente=nombre)
-        if d.get("deuda_cmf_total"): deudas.append(float(d["deuda_cmf_total"]))
+        v = float(d.get("deuda_cmf_total") or 0)
+        if 0 < v < 500_000_000: deudas.append(v)
+    for t in leer(nombre, "05_codeudor", 2):
+        d = await ai_extract.extraer_datos_financieros(t, cliente=nombre)
+        if d.get("renta_liquida"): rentas_cod.append(float(d["renta_liquida"]))
     renta = round(sum(rentas) / len(rentas)) if rentas else 0
+    renta_cod = round(max(rentas_cod)) if rentas_cod else 0
+    # (renta codeudor solo si distinta de la del titular)
+    renta_cod = 0 if abs(renta_cod - renta) < 1000 else renta_cod
     deuda = max(deudas) if deudas else 0
     edad = int(edades[0]) if edades else 38
     if not renta:
         return {"cliente": nombre, "real": real, "error": "no se pudo leer renta de las liquidaciones"}
-    payload = {"clave": CLAVE, "renta_titular": renta, "edad_cliente": edad,
+    payload = {"clave": CLAVE, "renta_titular": renta, "renta_codeudor": renta_cod,
+               "edad_cliente": edad, "edad_codeudor": 38 if renta_cod else 0,
                "deuda_cmf_total": deuda, "plazo_anos": 25, "tipo_deudor": 1,
                "continuidad_laboral": True, "con_subsidio": subsidio,
                "credito_solicitado_uf": monto, "valor_propiedad_uf": vprop}

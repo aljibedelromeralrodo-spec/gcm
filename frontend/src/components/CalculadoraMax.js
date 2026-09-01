@@ -238,6 +238,11 @@ export default function CalculadoraMax() {
               ))}
             </div>
           )}
+          {res.credito_efectivo_uf > 0 && (
+            <div style={{ margin: "8px 0", fontSize: "0.78rem", color: "#8ab4f8" }}>
+              ℹ️ Crédito efectivo calculado como mesa: propiedad − subsidio − pie/ahorro = UF {fmt(res.credito_efectivo_uf, 2)}
+            </div>
+          )}
           {res.credito_solicitado_uf > 0 && (
             <div style={{ marginTop: 10, fontSize: "0.85rem" }}>
               Crédito solicitado UF {fmt(res.credito_solicitado_uf, 2)}: {res.credito_viable

@@ -1529,6 +1529,13 @@ async def calcmax_calcular(payload: dict = Body(...)):
     cuota_cmf = deuda_total * (r_mensual * (1 + r_mensual) ** 36) / ((1 + r_mensual) ** 36 - 1) \
         if deuda_total > 0 else 0.0
     payload["carga_financiera"] = round(cuota_cmf) + float(payload.get("carga_financiera") or 0)
+    # CRÉDITO EFECTIVO (regla mesa): propiedad − subsidio − pie/ahorro
+    credito_efectivo = None
+    if not payload.get("credito_solicitado_uf") and float(payload.get("valor_propiedad_uf") or 0) > 0:
+        credito_efectivo = max(0.0, float(payload["valor_propiedad_uf"])
+                               - float(payload.get("subsidio_uf") or 0)
+                               - float(payload.get("ahorro_uf") or 0))
+        payload["credito_solicitado_uf"] = round(credito_efectivo, 2)
     # TASA AUTOMÁTICA según subsidio y tramo 2.000 UF (tasas oficiales en db.config)
     tasa_origen = "manual"
     if not payload.get("tasa_anual"):
@@ -1553,6 +1560,8 @@ async def calcmax_calcular(payload: dict = Body(...)):
         tasa_origen = "automática — con subsidio < 2.000 UF"
         result = ce.simular_credito(payload)
     result["tasa_origen"] = tasa_origen
+    if credito_efectivo is not None:
+        result["credito_efectivo_uf"] = round(credito_efectivo, 2)
     # DIVIDENDO FINAL CON SEGUROS (desgravamen x2 si hay codeudor + incendio)
     seg = await db.config.find_one({"_key": "seguros"}) or {}
     desg_base = float(seg.get("seguro_desgravamen") or 10245)

@@ -2,21 +2,7 @@
  {
   "cliente": "Cristian Pavez",
   "real": "aprobacion",
-  "renta_leida": 1158429,
-  "deuda_cmf_leida": 1181856.0,
-  "edad": 38,
-  "solicitado_uf": 1800,
-  "max_uf_calculadora": 1445.68,
-  "viable_calculadora": false,
-  "dividendo_final_clp": 405554,
-  "tasa": "automática — sin subsidio",
-  "observaciones": [
-   "DIV/Renta 39.9% supera maximo 35%",
-   "Carga financiera 42.9% supera maximo 40%",
-   "DIV/Renta 39.9% supera maximo 30%",
-   "Carga financiera 42.9% supera maximo 35%"
-  ],
-  "coincide_con_mesa": false
+  "error": "no se pudo leer renta de las liquidaciones"
  },
  {
   "cliente": "Franco Bahamondes",
@@ -40,19 +26,19 @@
  {
   "cliente": "KEVIN MACAYA",
   "real": "aprobacion",
-  "renta_leida": 934853,
+  "renta_leida": 931294,
   "deuda_cmf_leida": 490945.0,
   "edad": 38,
-  "solicitado_uf": 2150,
-  "max_uf_calculadora": 1154.42,
+  "solicitado_uf": 1522.08,
+  "max_uf_calculadora": 1149.83,
   "viable_calculadora": false,
-  "dividendo_final_clp": 347086,
+  "dividendo_final_clp": 345841,
   "tasa": "automática — con subsidio < 2.000 UF",
   "observaciones": [
-   "DIV/Renta 62.4% supera maximo 35%",
-   "Carga financiera 63.9% supera maximo 40%",
-   "DIV/Renta 62.4% supera maximo 30%",
-   "Carga financiera 63.9% supera maximo 35%"
+   "DIV/Renta 44.3% supera maximo 35%",
+   "Carga financiera 45.8% supera maximo 40%",
+   "DIV/Renta 44.3% supera maximo 30%",
+   "Carga financiera 45.8% supera maximo 35%"
   ],
   "coincide_con_mesa": false
  },
@@ -60,7 +46,7 @@
   "cliente": "NICOLAS SAAVEDRA",
   "real": "aprobacion",
   "renta_leida": 1925184,
-  "deuda_cmf_leida": 114744816000.0,
+  "deuda_cmf_leida": 114744816.0,
   "edad": 38,
   "solicitado_uf": 2856,
   "max_uf_calculadora": 0.0,
@@ -69,23 +55,23 @@
   "tasa": "automática — sin subsidio",
   "observaciones": [
    "DIV/Renta 38.1% supera maximo 35%",
-   "Carga financiera 170706.5% supera maximo 40%",
+   "Carga financiera 208.8% supera maximo 40%",
    "LTV 80.0% supera maximo 80%",
    "DIV/Renta 38.1% supera maximo 30%",
-   "Carga financiera 170706.5% supera maximo 35%"
+   "Carga financiera 208.8% supera maximo 35%"
   ],
   "coincide_con_mesa": false
  },
  {
   "cliente": "ROLANDO RIVERA",
   "real": "aprobacion",
-  "renta_leida": 2142997,
+  "renta_leida": 2291914,
   "deuda_cmf_leida": 0,
   "edad": 38,
-  "solicitado_uf": 1995,
-  "max_uf_calculadora": 2789.69,
+  "solicitado_uf": 1995.19,
+  "max_uf_calculadora": 2983.55,
   "viable_calculadora": true,
-  "dividendo_final_clp": 783995,
+  "dividendo_final_clp": 836117,
   "tasa": "automática — con subsidio ≥ 2.000 UF",
   "observaciones": [],
   "coincide_con_mesa": true
@@ -93,13 +79,13 @@
  {
   "cliente": "Francisca Hernandez",
   "real": "aprobacion",
-  "renta_leida": 1576212,
+  "renta_leida": 1576230,
   "deuda_cmf_leida": 1965950.0,
   "edad": 38,
   "solicitado_uf": 2150,
-  "max_uf_calculadora": 1826.27,
+  "max_uf_calculadora": 1826.29,
   "viable_calculadora": false,
-  "dividendo_final_clp": 529326,
+  "dividendo_final_clp": 529332,
   "tasa": "automática — con subsidio < 2.000 UF",
   "observaciones": [
    "DIV/Renta 37.0% supera maximo 35%",
@@ -131,13 +117,13 @@
  {
   "cliente": "Yarelly Sandoval",
   "real": "observacion",
-  "renta_leida": 2061255,
+  "renta_leida": 2003743,
   "deuda_cmf_leida": 0,
   "edad": 38,
   "solicitado_uf": 2151,
-  "max_uf_calculadora": 2683.28,
+  "max_uf_calculadora": 2608.41,
   "viable_calculadora": true,
-  "dividendo_final_clp": 755385,
+  "dividendo_final_clp": 735255,
   "tasa": "automática — con subsidio ≥ 2.000 UF",
   "observaciones": [],
   "coincide_con_mesa": false
@@ -145,19 +131,19 @@
  {
   "cliente": "GABRIELA ALEJANDRA BERRÍOS ROMERO",
   "real": "observacion",
-  "renta_leida": 1039386,
+  "renta_leida": 1035251,
   "deuda_cmf_leida": 2756982.0,
   "edad": 38,
   "solicitado_uf": 2330,
-  "max_uf_calculadora": 1050.09,
+  "max_uf_calculadora": 1044.75,
   "viable_calculadora": false,
-  "dividendo_final_clp": 318786,
+  "dividendo_final_clp": 317337,
   "tasa": "automática — con subsidio < 2.000 UF",
   "observaciones": [
-   "DIV/Renta 60.8% supera maximo 35%",
-   "Carga financiera 68.4% supera maximo 40%",
-   "DIV/Renta 60.8% supera maximo 30%",
-   "Carga financiera 68.4% supera maximo 35%"
+   "DIV/Renta 61.0% supera maximo 35%",
+   "Carga financiera 68.7% supera maximo 40%",
+   "DIV/Renta 61.0% supera maximo 30%",
+   "Carga financiera 68.7% supera maximo 35%"
   ],
   "coincide_con_mesa": true
  },
