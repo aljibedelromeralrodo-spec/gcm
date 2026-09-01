@@ -1,0 +1,178 @@
+[
+ {
+  "cliente": "Cristian Pavez",
+  "real": "aprobacion",
+  "renta_leida": 1158429,
+  "deuda_cmf_leida": 1181856.0,
+  "edad": 38,
+  "solicitado_uf": 1800,
+  "max_uf_calculadora": 1445.68,
+  "viable_calculadora": false,
+  "dividendo_final_clp": 405554,
+  "tasa": "automática — sin subsidio",
+  "observaciones": [
+   "DIV/Renta 39.9% supera maximo 35%",
+   "Carga financiera 42.9% supera maximo 40%",
+   "DIV/Renta 39.9% supera maximo 30%",
+   "Carga financiera 42.9% supera maximo 35%"
+  ],
+  "coincide_con_mesa": false
+ },
+ {
+  "cliente": "Franco Bahamondes",
+  "real": "aprobacion",
+  "renta_leida": 1539951,
+  "deuda_cmf_leida": 8764133.0,
+  "edad": 38,
+  "solicitado_uf": 2150,
+  "max_uf_calculadora": 1061.83,
+  "viable_calculadora": false,
+  "dividendo_final_clp": 321970,
+  "tasa": "automática — con subsidio < 2.000 UF",
+  "observaciones": [
+   "DIV/Renta 37.9% supera maximo 35%",
+   "Carga financiera 54.2% supera maximo 40%",
+   "DIV/Renta 37.9% supera maximo 30%",
+   "Carga financiera 54.2% supera maximo 35%"
+  ],
+  "coincide_con_mesa": false
+ },
+ {
+  "cliente": "KEVIN MACAYA",
+  "real": "aprobacion",
+  "renta_leida": 934853,
+  "deuda_cmf_leida": 490945.0,
+  "edad": 38,
+  "solicitado_uf": 2150,
+  "max_uf_calculadora": 1154.42,
+  "viable_calculadora": false,
+  "dividendo_final_clp": 347086,
+  "tasa": "automática — con subsidio < 2.000 UF",
+  "observaciones": [
+   "DIV/Renta 62.4% supera maximo 35%",
+   "Carga financiera 63.9% supera maximo 40%",
+   "DIV/Renta 62.4% supera maximo 30%",
+   "Carga financiera 63.9% supera maximo 35%"
+  ],
+  "coincide_con_mesa": false
+ },
+ {
+  "cliente": "NICOLAS SAAVEDRA",
+  "real": "aprobacion",
+  "renta_leida": 1925184,
+  "deuda_cmf_leida": 114744816000.0,
+  "edad": 38,
+  "solicitado_uf": 2856,
+  "max_uf_calculadora": 0.0,
+  "viable_calculadora": false,
+  "dividendo_final_clp": 33947,
+  "tasa": "automática — sin subsidio",
+  "observaciones": [
+   "DIV/Renta 38.1% supera maximo 35%",
+   "Carga financiera 170706.5% supera maximo 40%",
+   "LTV 80.0% supera maximo 80%",
+   "DIV/Renta 38.1% supera maximo 30%",
+   "Carga financiera 170706.5% supera maximo 35%"
+  ],
+  "coincide_con_mesa": false
+ },
+ {
+  "cliente": "ROLANDO RIVERA",
+  "real": "aprobacion",
+  "renta_leida": 2142997,
+  "deuda_cmf_leida": 0,
+  "edad": 38,
+  "solicitado_uf": 1995,
+  "max_uf_calculadora": 2789.69,
+  "viable_calculadora": true,
+  "dividendo_final_clp": 783995,
+  "tasa": "automática — con subsidio ≥ 2.000 UF",
+  "observaciones": [],
+  "coincide_con_mesa": true
+ },
+ {
+  "cliente": "Francisca Hernandez",
+  "real": "aprobacion",
+  "renta_leida": 1576212,
+  "deuda_cmf_leida": 1965950.0,
+  "edad": 38,
+  "solicitado_uf": 2150,
+  "max_uf_calculadora": 1826.27,
+  "viable_calculadora": false,
+  "dividendo_final_clp": 529326,
+  "tasa": "automática — con subsidio < 2.000 UF",
+  "observaciones": [
+   "DIV/Renta 37.0% supera maximo 35%",
+   "Carga financiera 40.6% supera maximo 40%",
+   "DIV/Renta 37.0% supera maximo 30%",
+   "Carga financiera 40.6% supera maximo 35%"
+  ],
+  "coincide_con_mesa": false
+ },
+ {
+  "cliente": "JOHN DIAZ",
+  "real": "observacion",
+  "renta_leida": 1086276,
+  "deuda_cmf_leida": 1738780.0,
+  "edad": 38,
+  "solicitado_uf": 1890,
+  "max_uf_calculadora": 1218.08,
+  "viable_calculadora": false,
+  "dividendo_final_clp": 364353,
+  "tasa": "automática — con subsidio < 2.000 UF",
+  "observaciones": [
+   "DIV/Renta 47.2% supera maximo 35%",
+   "Carga financiera 51.8% supera maximo 40%",
+   "DIV/Renta 47.2% supera maximo 30%",
+   "Carga financiera 51.8% supera maximo 35%"
+  ],
+  "coincide_con_mesa": true
+ },
+ {
+  "cliente": "Yarelly Sandoval",
+  "real": "observacion",
+  "renta_leida": 2061255,
+  "deuda_cmf_leida": 0,
+  "edad": 38,
+  "solicitado_uf": 2151,
+  "max_uf_calculadora": 2683.28,
+  "viable_calculadora": true,
+  "dividendo_final_clp": 755385,
+  "tasa": "automática — con subsidio ≥ 2.000 UF",
+  "observaciones": [],
+  "coincide_con_mesa": false
+ },
+ {
+  "cliente": "GABRIELA ALEJANDRA BERRÍOS ROMERO",
+  "real": "observacion",
+  "renta_leida": 1039386,
+  "deuda_cmf_leida": 2756982.0,
+  "edad": 38,
+  "solicitado_uf": 2330,
+  "max_uf_calculadora": 1050.09,
+  "viable_calculadora": false,
+  "dividendo_final_clp": 318786,
+  "tasa": "automática — con subsidio < 2.000 UF",
+  "observaciones": [
+   "DIV/Renta 60.8% supera maximo 35%",
+   "Carga financiera 68.4% supera maximo 40%",
+   "DIV/Renta 60.8% supera maximo 30%",
+   "Carga financiera 68.4% supera maximo 35%"
+  ],
+  "coincide_con_mesa": true
+ },
+ {
+  "cliente": "FABIÁN ESCALANTE",
+  "real": "observacion",
+  "renta_leida": 1768010,
+  "deuda_cmf_leida": 4473641.0,
+  "edad": 38,
+  "solicitado_uf": 2000,
+  "max_uf_calculadora": 1809.02,
+  "viable_calculadora": false,
+  "dividendo_final_clp": 524647,
+  "tasa": "automática — con subsidio < 2.000 UF",
+  "observaciones": [],
+  "coincide_con_mesa": true
+ }
+]

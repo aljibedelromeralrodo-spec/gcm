@@ -1501,6 +1501,10 @@ async def calcmax_ocr(clave: str = Form(...), tipo: str = Form("documento"),
     for k, dest in mapa.items():
         v = datos.get(k)
         if isinstance(v, (int, float)) and v > 0:
+            if dest in ("deuda_cmf_total", "deuda_cmf_codeudor", "credito_interno_pav") and v > 500_000_000:
+                continue  # garble de OCR: deuda inverosímil
+            if dest in ("renta_titular", "renta_codeudor") and v > 50_000_000:
+                continue
             campos[dest] = v
     if rut:
         campos["rut"] = rut
@@ -1549,6 +1553,19 @@ async def calcmax_calcular(payload: dict = Body(...)):
         tasa_origen = "automática — con subsidio < 2.000 UF"
         result = ce.simular_credito(payload)
     result["tasa_origen"] = tasa_origen
+    # DIVIDENDO FINAL CON SEGUROS (desgravamen x2 si hay codeudor + incendio)
+    seg = await db.config.find_one({"_key": "seguros"}) or {}
+    desg_base = float(seg.get("seguro_desgravamen") or 10245)
+    incendio = float(seg.get("seguro_incendio") or 23702)
+    tiene_cod = float(payload.get("renta_codeudor") or 0) > 0 or float(payload.get("edad_codeudor") or 0) > 0
+    desg = desg_base * 2 if tiene_cod else desg_base
+    total_seg = desg + incendio
+    div_clp = float(result.get("dividendo_credito_clp") or 0)
+    vuf = float(result.get("valor_uf") or 1) or 1
+    result["seguros"] = {"seguro_desgravamen": round(desg), "seguro_incendio": round(incendio),
+                         "total_seguros": round(total_seg), "codeudor_duplica_desgravamen": tiene_cod}
+    result["dividendo_final_clp"] = round(div_clp + total_seg)
+    result["dividendo_final_uf"] = round((div_clp + total_seg) / vuf, 2)
     for k in ("eval_btg", "eval_ameris", "eval_btg_razones", "eval_ameris_razones"):
         result.pop(k, None)
     result["deuda_cmf_considerada_clp"] = round(deuda_total)

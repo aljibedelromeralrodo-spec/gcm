@@ -1352,3 +1352,9 @@ PENDIENTE: quedan ~14 correos que mencionan a Gabriela sin procesar (buscador de
 - Portada y pie dicen "MUTUARIAS Y LEASING" (nada de Central Mutuos en la calculadora).
 - eval_btg/eval_ameris eliminados también de la RESPUESTA del endpoint /calcmax/calcular (no solo del UI).
 - Dorado metalizado (gradiente #8a6d1f→#d4af37→#f9eeb0) en títulos, monto resultado y botón ENTRAR/CALCULAR (via WebkitBackgroundClip text). Verificado con screenshot móvil.
+
+## 2026-09-01 — Calculadora v4: dividendo con seguros + comparación 10 casos de mesa
+- Dividendo final CON SEGUROS en /calcmax/calcular: desgravamen (db.config seguros, x2 si hay codeudor) + incendio → dividendo_final_clp/uf. Fila destacada "POSIBLE DIVIDENDO TOTAL (con seguros)" en UI. Probado curl (codeudor duplica desgravamen ✓).
+- /calcmax/ocr con topes de sanidad: deuda >$500M o renta >$50M leída por OCR se descarta (garble).
+- COMPARACIÓN 10 CASOS REALES DE MESA (script /app/memory/scripts/comparar_mesa.py, resultados en comparacion_mesa.json): leyó liquidaciones+CMF por OCR+IA y corrió la calculadora. Coincidencia exacta 4/10. Análisis: Rolando Rivera coincide perfecto (aprobado y viable); observados John Díaz/Gabriela/Fabián coinciden (no viables por carga). Discrepancias EXPLICABLES: (1) en DS19 con subsidio el monto solicitado incluye subsidio+pie → sobreestima dividendo si no se descuenta; (2) rentas de codeudor/complemento no leídas (Kevin Macaya, Francisca "y complemento"); (3) OCR garble en CMF de Nicolás Saavedra ($114 mil millones — ahora bloqueado por tope); (4) observación de Yarelly fue documental, no financiera.
+- CONCLUSIÓN: el motor espejo calcula bien; la precisión depende de ingresar renta conjunta y descontar subsidio del monto solicitado. Ejecutivos deben ingresar el CRÉDITO efectivo (sin subsidio/pie).
