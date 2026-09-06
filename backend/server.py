@@ -31,6 +31,7 @@ import functools
 import email_service as mail
 import folders_service as fsvc
 import clasificador_correo as _clasif_ia
+import adjuntos_vinculo as _vinculo
 from database import client, db
 import sales_engine
 import mesa_brain
@@ -702,6 +703,7 @@ async def startup():
         await db.clasificaciones_ia.create_index("huella")
         await db["bunker.files"].create_index("filename")
         await db.ocr_rut_cache.create_index("path")
+        await db.ocr_rut_cache.create_index("created_at", expireAfterSeconds=2592000)
         await db.set_credito.create_index("nombre")
         await db.adn_clientes_360.create_index("rut_norm")
         await db.adn_clientes_360.create_index("codeudor_rut_norm")
@@ -3456,8 +3458,9 @@ async def _forzar_folder_run(payload):
             if mids0:
                 resultados_pre = await asyncio.to_thread(mail.fetch_attachments_by_message_ids, mids0)
             else:
-                resultados_pre = await asyncio.to_thread(mail.search_attachments_by_person,
-                                                         nombre or rut, 40, rut, None)
+                resultados_pre = await asyncio.to_thread(
+                    mail.search_attachments_by_person, nombre or rut, 40, rut, None,
+                    fallback_ocr_rut=True, extraer_ruts_pdf=_ruts_de_pdf_cached, max_pdfs_ocr=3)
         except Exception:
             resultados_pre = []
         nombres_pre = [p.get("filename") or "" for r_ in (resultados_pre or []) for p in (r_.get("pdfs") or [])]
@@ -3477,12 +3480,14 @@ async def _forzar_folder_run(payload):
         if mids:
             resultados = await asyncio.to_thread(mail.fetch_attachments_by_message_ids, mids)
         else:
-            resultados = await asyncio.to_thread(mail.search_attachments_by_person, nombre or rut,
-                                                 40, rut, folder.get("source_email"))
+            resultados = await asyncio.to_thread(
+                mail.search_attachments_by_person, nombre or rut, 40, rut, folder.get("source_email"),
+                fallback_ocr_rut=True, extraer_ruts_pdf=_ruts_de_pdf_cached, max_pdfs_ocr=3)
             if rut and nombre:
                 try:
-                    resultados += await asyncio.to_thread(mail.search_attachments_by_person, rut,
-                                                          40, rut, folder.get("source_email"))
+                    resultados += await asyncio.to_thread(
+                        mail.search_attachments_by_person, rut, 40, rut, folder.get("source_email"),
+                        fallback_ocr_rut=True, extraer_ruts_pdf=_ruts_de_pdf_cached, max_pdfs_ocr=3)
                 except Exception:
                     pass
         if resultados and not (folder.get("source_email") or "").strip():
@@ -3616,12 +3621,14 @@ async def folder_enriquecer(fid: str, payload: dict = None):
     if mids:
         resultados = await asyncio.to_thread(mail.fetch_attachments_by_message_ids, mids)
     else:
-        resultados = await asyncio.to_thread(mail.search_attachments_by_person, nombre,
-                                             40, rut, doc.get("source_email"))
+        resultados = await asyncio.to_thread(
+            mail.search_attachments_by_person, nombre, 40, rut, doc.get("source_email"),
+            fallback_ocr_rut=True, extraer_ruts_pdf=_ruts_de_pdf_cached, max_pdfs_ocr=3)
         if rut:
             try:
-                resultados += await asyncio.to_thread(mail.search_attachments_by_person, rut,
-                                                      40, rut, doc.get("source_email"))
+                resultados += await asyncio.to_thread(
+                    mail.search_attachments_by_person, rut, 40, rut, doc.get("source_email"),
+                    fallback_ocr_rut=True, extraer_ruts_pdf=_ruts_de_pdf_cached, max_pdfs_ocr=3)
             except Exception:
                 pass
     if resultados and not (doc.get("source_email") or "").strip():
@@ -4170,14 +4177,57 @@ async def save_attachment(payload: dict):
     return {"ok": True, "saved": saved}
 
 
+async def _persistir_job_adjuntos(job_id, doc, payload):
+    payload = dict(payload)
+    payload.setdefault("descartes", [])
+    payload["texto_descartes"] = _vinculo.texto_resumen_descartes(payload.get("descartes"))
+    payload["resumen_descartes"] = _vinculo.resumen_descartes(payload.get("descartes"))
+    fid = (doc or {}).get("id")
+    if fid:
+        await db.folders.update_one({"id": fid}, {"$set": {
+            "adjuntos_ultimo_job": {
+                "en": now_iso(),
+                "total_found": payload.get("total_found", 0),
+                "total_saved": payload.get("total_saved", 0),
+                "bloqueado": payload.get("bloqueado") or "",
+                "mensaje": payload.get("mensaje") or "",
+                "descartes": payload.get("descartes") or [],
+                "texto_descartes": payload.get("texto_descartes") or "",
+            }}})
+    await db.save_jobs.update_one({"id": job_id}, {"$set": payload})
+
+
 async def _save_all_attachments_job(job_id, doc, person):
+    fid = doc.get("id")
     try:
-        correos = await asyncio.to_thread(mail.search_attachments_by_person, person, 40,
-                                          doc.get("rut"), doc.get("source_email"))
+        if not _vinculo.nucleo_rut_carpeta(doc.get("rut")):
+            logging.info(f"adjuntos folder_id={fid} motivo=carpeta_sin_rut")
+            await _persistir_job_adjuntos(job_id, doc, {
+                "status": "done", "total_found": 0, "total_saved": 0, "saved": [],
+                "bloqueado": "carpeta_sin_rut",
+                "mensaje": _vinculo.MSG_CARPETA_SIN_RUT,
+                "descartes": [_vinculo.item_descarte(
+                    "carpeta_sin_rut", detalle=_vinculo.MSG_CARPETA_SIN_RUT)]})
+            return
+        descartes_search = []
+        correos = await asyncio.to_thread(
+            mail.search_attachments_by_person, person, 40,
+            doc.get("rut"), doc.get("source_email"),
+            fallback_ocr_rut=True, extraer_ruts_pdf=_ruts_de_pdf_cached,
+            max_pdfs_ocr=3, descartes=descartes_search)
+        for d in descartes_search:
+            logging.info(f"adjuntos folder_id={fid} motivo={d.get('motivo')} "
+                         f"subject={(d.get('subject') or '')[:80]}")
         existentes = {a["nombre"] for a in fsvc.scan_archivos(doc.get("nombre", ""))}
         total_found, total_saved, saved = 0, 0, []
+        descartes = list(descartes_search)
         for c in correos:
             if not _remitente_autorizado(c.get("from"), doc):
+                item = _vinculo.item_descarte(
+                    "remitente_no_reconocido", c.get("subject"), c.get("from"))
+                descartes.append(item)
+                logging.info(f"adjuntos folder_id={fid} motivo=remitente_no_reconocido "
+                             f"subject={(c.get('subject') or '')[:80]}")
                 continue
             for pdf in c.get("pdfs", []):
                 total_found += 1
@@ -4187,9 +4237,15 @@ async def _save_all_attachments_job(job_id, doc, person):
                 except ValueError:
                     pass
                 if fsvc.safe_name(nombre_a) in existentes:
+                    descartes.append(_vinculo.item_descarte(
+                        "duplicado", c.get("subject"), c.get("from"), nombre_a))
+                    logging.info(f"adjuntos folder_id={fid} motivo=duplicado filename={nombre_a}")
                     continue
                 rel = await _guardar_con_ley_rut(doc, nombre_a, raw, "")
                 if not rel:
+                    descartes.append(_vinculo.item_descarte(
+                        "ley_del_rut", c.get("subject"), c.get("from"), nombre_a))
+                    logging.info(f"adjuntos folder_id={fid} motivo=ley_del_rut filename={nombre_a}")
                     continue
                 existentes.add(fsvc.safe_name(nombre_a))
                 saved.append(rel)
@@ -4198,9 +4254,9 @@ async def _save_all_attachments_job(job_id, doc, person):
             await db.folders.update_one({"id": doc["id"]}, {"$set": {"source_email": correos[0].get("from", "")}})
         if total_saved:
             asyncio.create_task(_regen_combinado_bg(doc))
-        await db.save_jobs.update_one({"id": job_id}, {"$set": {
+        await _persistir_job_adjuntos(job_id, doc, {
             "status": "done", "total_found": total_found,
-            "total_saved": total_saved, "saved": saved}})
+            "total_saved": total_saved, "saved": saved, "descartes": descartes})
     except Exception as e:
         await db.save_jobs.update_one({"id": job_id}, {"$set": {
             "status": "error", "error": str(e)[:200],
@@ -4213,6 +4269,19 @@ async def save_all_attachments(payload: dict):
     person = payload.get("person_name", "")
     if not person.strip():
         raise HTTPException(status_code=400, detail="Falta el nombre de la persona")
+    if not _vinculo.nucleo_rut_carpeta(doc.get("rut")):
+        logging.info(f"adjuntos folder_id={doc.get('id')} motivo=carpeta_sin_rut")
+        await db.folders.update_one({"id": doc["id"]}, {"$set": {
+            "adjuntos_ultimo_job": {
+                "en": now_iso(), "total_found": 0, "total_saved": 0,
+                "bloqueado": "carpeta_sin_rut",
+                "mensaje": _vinculo.MSG_CARPETA_SIN_RUT,
+                "descartes": [_vinculo.item_descarte(
+                    "carpeta_sin_rut", detalle=_vinculo.MSG_CARPETA_SIN_RUT)],
+                "texto_descartes": _vinculo.texto_resumen_descartes(
+                    [_vinculo.item_descarte("carpeta_sin_rut")]),
+            }}})
+        raise HTTPException(status_code=400, detail=_vinculo.MSG_CARPETA_SIN_RUT)
     job_id = str(uuid.uuid4())
     corte = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
     await db.save_jobs.delete_many({"created_at": {"$lt": corte}})
@@ -7302,6 +7371,33 @@ def _ruts_de_pdf(pdf_bytes):
     except Exception:
         texto = ""
     return {_norm_rut(r) for r in RUT_EN_TEXTO_RX.findall(texto or "")}
+
+
+def _ruts_de_pdf_cached(pdf_bytes):
+    """RUTs de un PDF en memoria. Cache Mongo por sha256: sobrevive corridas futuras."""
+    import hashlib
+    raw = pdf_bytes or b""
+    h = hashlib.sha256(raw).hexdigest()
+    sdb = None
+    try:
+        from bunker import _fs
+        _f, sdb = _fs()
+        hit = sdb.ocr_rut_cache.find_one({"sha256": h})
+        if hit is not None:
+            return set(hit.get("ruts") or [])
+    except Exception:
+        sdb = None
+    ruts = _ruts_de_pdf(raw)
+    if sdb is not None:
+        try:
+            sdb.ocr_rut_cache.replace_one(
+                {"sha256": h},
+                {"sha256": h, "ruts": sorted(ruts),
+                 "created_at": datetime.now(timezone.utc)},
+                upsert=True)
+        except Exception:
+            pass
+    return ruts
 
 
 def _ley_rut_ok(pdf_bytes, ruts_permitidos):

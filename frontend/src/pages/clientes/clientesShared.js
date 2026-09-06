@@ -11,3 +11,27 @@ export const rutValido = (rut) => {
   return dv === dvC;
 };
 export const CAT_LABELS = { cedula: "Cédula", liquidacion: "Liquidaciones", afp: "AFP", cmf: "CMF", imp_renta: "F22 / Carpeta tributaria", boletas: "Boletas / DAI", f29: "F29", contrato: "Contrato" };
+
+export const MSG_CARPETA_SIN_RUT =
+  "Esta carpeta no tiene RUT registrado. No puedo buscar adjuntos solo por nombre (hay personas con el mismo nombre). Cargá el RUT del cliente o usá «Importar desde correo».";
+
+export const MOTIVO_ADJUNTOS_LABELS = {
+  carpeta_sin_rut: "carpeta sin RUT",
+  rut_ausente_en_texto: "sin RUT en el correo ni en el PDF",
+  nombre_no_coincide: "el nombre no coincide",
+  remitente_no_reconocido: "remitente no reconocido",
+  ley_del_rut: "el RUT del PDF no coincide con el de la carpeta",
+  duplicado: "ya estaba en la carpeta",
+};
+
+export function textoDescartesAdjuntos(descartes) {
+  const counts = {};
+  (descartes || []).forEach((d) => {
+    const m = d.motivo || "otro";
+    counts[m] = (counts[m] or 0) + 1;
+  });
+  const partes = Object.entries(counts).map(
+    ([m, n]) => `${n} ${MOTIVO_ADJUNTOS_LABELS[m] || m}`
+  );
+  return partes.length ? `No se guardaron: ${partes.join(", ")}.` : "";
+}

@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { secureGet } from "../utils/secureStore";
 import { guardarEstado, leerEstado, tomarRegreso } from "../utils/navegacion";
-import { API } from "./clientes/clientesShared";
+import { API, textoDescartesAdjuntos } from "./clientes/clientesShared";
 import { ClientesCtx } from "./clientes/clientesCtx";
 import ClientesLista from "./clientes/ClientesLista";
 import ClientesFicha from "./clientes/ClientesFicha";
@@ -1055,12 +1055,24 @@ export default function ClientesModule({ onNavigate }) {
         alert("Error buscando adjuntos: " + (job.error || "desconocido"));
       } else if (job.status === "running") {
         alert("La búsqueda sigue en segundo plano. Refrescá la carpeta en unos minutos.");
+      } else if (job.bloqueado === "carpeta_sin_rut") {
+        alert(job.mensaje || "Esta carpeta no tiene RUT registrado. No puedo buscar adjuntos solo por nombre (hay personas con el mismo nombre). Cargá el RUT del cliente o usá «Importar desde correo».");
       } else {
-        alert(`Se encontraron ${job.total_found} adjuntos. Se guardaron ${job.total_saved}.`);
+        let msg = `Se encontraron ${job.total_found} adjuntos. Se guardaron ${job.total_saved}.`;
+        const desglose = job.texto_descartes || textoDescartesAdjuntos(job.descartes);
+        if (desglose) msg += "\n\n" + desglose;
+        alert(msg);
       }
       const reload = await axios.get(`${API}/api/clientes/folders/${currentFolder.id}`);
       setCurrentFolder(reload.data);
-    } catch (err) { alert("Error buscando/guardando adjuntos"); }
+    } catch (err) {
+      const det = err?.response?.data?.detail;
+      alert(typeof det === "string" ? det : "Error buscando/guardando adjuntos");
+      try {
+        const reload = await axios.get(`${API}/api/clientes/folders/${currentFolder.id}`);
+        setCurrentFolder(reload.data);
+      } catch (_e) { /* ficha se refresca al reabrir */ }
+    }
     setLoading(false);
   };
 

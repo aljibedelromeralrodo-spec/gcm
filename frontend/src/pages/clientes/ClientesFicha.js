@@ -5,7 +5,7 @@ import EnviarResultadoEjecutivo from "../../components/EnviarResultadoEjecutivo"
 import PanelEstadoCarpeta from "../../components/PanelEstadoCarpeta";
 import PrediccionEspejo from "../../components/PrediccionEspejo";
 import CompromisoEditor from "../CompromisoEditor";
-import { API } from "./clientesShared";
+import { API, textoDescartesAdjuntos } from "./clientesShared";
 import { useClientes } from "./clientesCtx";
 
 export default function ClientesFicha() {
@@ -384,6 +384,25 @@ export default function ClientesFicha() {
               <i className="fa fa-user-plus"></i> Codeudor: {currentFolder.codeudor_nombre} {currentFolder.codeudor_rut && `(${currentFolder.codeudor_rut})`}
             </div>
           )}
+
+          {(() => {
+            const job = currentFolder.adjuntos_ultimo_job;
+            if (!job) return null;
+            const hayDescartes = (job.descartes || []).length > 0 || job.bloqueado;
+            if (!hayDescartes && !(job.total_found > 0 && job.total_saved === 0)) return null;
+            const desglose = job.texto_descartes || textoDescartesAdjuntos(job.descartes);
+            const texto = job.bloqueado === "carpeta_sin_rut"
+              ? (job.mensaje || "Esta carpeta no tiene RUT registrado. No puedo buscar adjuntos solo por nombre (hay personas con el mismo nombre). Cargá el RUT del cliente o usá «Importar desde correo».")
+              : `Última búsqueda de adjuntos: se guardaron ${job.total_saved || 0} de ${job.total_found || 0}. ${desglose}`.trim();
+            return (
+              <div data-testid="banner-adjuntos-descartes"
+                style={{ margin: "12px 0", padding: "10px 14px", background: "rgba(245,158,11,0.12)",
+                  border: "1px solid #f59e0b", color: "#fbbf24", fontSize: 13, fontWeight: 600, lineHeight: 1.45 }}>
+                <i className="fa fa-exclamation-triangle" style={{ marginRight: 8 }} />
+                {texto}
+              </div>
+            );
+          })()}
 
           <div className="clientes-files-list">
             {(!currentFolder.archivos || currentFolder.archivos.length === 0) && (

@@ -891,20 +891,28 @@ def search_email_headers_by_person(person_name, limit=10):
     return out
 
 
-def search_attachments_by_person(person_name, limit=40, rut=None, correo_origen=None):
+def search_attachments_by_person(person_name, limit=40, rut=None, correo_origen=None,
+                                 fallback_ocr_rut=False, extraer_ruts_pdf=None,
+                                 max_pdfs_ocr=3, descartes=None):
     """Busca correos que mencionen a la persona (SEARCH en servidor) y trae sus adjuntos.
     SEGURIDAD ESTRICTA: exige que TODOS los tokens del nombre coincidan y, si se
-    entrega rut/correo_origen de la carpeta, el correo debe estar vinculado a ellos."""
+    entrega rut de la carpeta, el correo debe estar vinculado a ese RUT (en texto
+    o, si fallback_ocr_rut, en el PDF con match exacto ≥7 caracteres).
+    Si se pasa `descartes` (lista), se registran los rechazos con motivo."""
+    import adjuntos_vinculo as _vin
     name = _sin_acentos(person_name).strip()
     if not name:
         return []
     tokens = [t for t in name.split() if len(t) > 2] or [name]
-    rut_nucleo = re.sub(r"[.\-\s]", "", (rut or "")).lower()
+    rut_nucleo = _vin.nucleo_rut_carpeta(rut)
     # LEY DEL RUT: sin RUT de carpeta NO se vinculan correos por nombre. Punto.
-    if not rut_nucleo or len(rut_nucleo) < 7:
+    if not rut_nucleo:
+        if descartes is not None:
+            descartes.append(_vin.item_descarte(
+                "carpeta_sin_rut", detalle=_vin.MSG_CARPETA_SIN_RUT))
         return []
     mm_origen = re.search(r"[\w.+-]+@[\w-]+\.[\w.]+", (correo_origen or "").lower())
-    origen_mail = mm_origen.group(0) if mm_origen else ""
+    origen_mail = mm_origen.group(0) if mm_origen else ""  # noqa: F841 — contrato histórico
     CAPTURA_EXT = (".pdf", ".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp")
     exactos = []
     for acc in ACCOUNTS:
@@ -932,15 +940,34 @@ def search_attachments_by_person(person_name, limit=40, rut=None, correo_origen=
                 if not msgdata or not isinstance(msgdata[0], tuple):
                     continue
                 info = _parse_full_message(email.message_from_bytes(msgdata[0][1]), with_bytes=True)
-                blob = _sin_acentos(f"{info['subject']} {info['from']} {info['body']}")
-                hits = sum(1 for t in tokens if t in blob)
-                # ESTRICTO: TODOS los tokens del nombre deben coincidir
-                if hits < len(tokens):
-                    continue
-                # LEY DEL RUT: el correo DEBE contener el RUT de la carpeta.
-                # El remitente ya NO basta como vínculo.
-                blob_rut = re.sub(r"[.\-\s]", "", blob)
-                if rut_nucleo not in blob_rut:
+                ok, motivo = _vin.evaluar_vinculo_correo(
+                    info["subject"], info["from"], info["body"], tokens, rut_nucleo)
+                if (not ok and motivo == "rut_ausente_en_texto"
+                        and fallback_ocr_rut and extraer_ruts_pdf):
+                    ruts_por_pdf, n_ocr = [], 0
+                    for a in info.get("attachments") or []:
+                        if n_ocr >= max(0, int(max_pdfs_ocr or 0)):
+                            break
+                        fn = (a.get("filename") or "").lower()
+                        raw = a.get("content_bytes")
+                        if not raw or not fn.endswith(CAPTURA_EXT):
+                            continue
+                        n_ocr += 1
+                        try:
+                            ruts_por_pdf.append(set(extraer_ruts_pdf(raw) or []))
+                        except Exception:
+                            ruts_por_pdf.append(set())
+                    ok, motivo = _vin.evaluar_vinculo_correo(
+                        info["subject"], info["from"], info["body"], tokens, rut_nucleo,
+                        ruts_por_pdf=ruts_por_pdf, fallback_ocr_rut=True)
+                if not ok:
+                    if descartes is not None:
+                        descartes.append(_vin.item_descarte(
+                            motivo or "rut_ausente_en_texto",
+                            info.get("subject"), info.get("from")))
+                    logging.info(
+                        f"adjuntos motivo={motivo or 'rut_ausente_en_texto'} "
+                        f"subject={(info.get('subject') or '')[:80]}")
                     continue
                 pdfs = [{"filename": a["filename"], "content_bytes": a["content_bytes"]}
                         for a in info["attachments"]
