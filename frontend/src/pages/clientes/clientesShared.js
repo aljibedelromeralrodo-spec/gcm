@@ -28,7 +28,7 @@ export function textoDescartesAdjuntos(descartes) {
   const counts = {};
   (descartes || []).forEach((d) => {
     const m = d.motivo || "otro";
-    counts[m] = (counts[m] or 0) + 1;
+    counts[m] = (counts[m] || 0) + 1;
   });
   const partes = Object.entries(counts).map(
     ([m, n]) => `${n} ${MOTIVO_ADJUNTOS_LABELS[m] || m}`
