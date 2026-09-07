@@ -6,8 +6,8 @@
 ## ORO-73 — Gestión de Pago de Mora (autovalidada)
 En la ficha del cliente moroso, el ejecutivo dispone de **tres acciones**:
 1. **Enviar link/instrucciones de pago al cliente**: correo con el monto exacto de la mora y los
-   datos oficiales de transferencia (MUTUARIAS Y LEASING LIMITADA · RUT 77.771.552-6 · Mercado Pago ·
-   Cuenta Vista 1030937838 · gerardo.ext@centralmutuos.cl), con referencia única MORA-XXXXXXXX.
+   datos oficiales de transferencia (MUTUARIAS Y LEASING LIMITADA · RUT 77.771.552-6 · Banco Bci / Mach ·
+   Cuenta corriente 79851588 · ethangerardobarr@gmail.com), con referencia única MORA-XXXXXXXX.
 2. **Subir comprobante de pago**: validación automática — legibilidad OCR + palabras de pago +
    monto detectado ≥ 95% de la mora registrada en el CMF.
 3. **Subir formulario manual de regularización**: validación automática — legibilidad OCR +

@@ -2112,8 +2112,8 @@ async def seed_paridad_produccion():
     # 3) Cuenta bancaria oficial única (mandato del Administrador 2026-08-22):
     #    reemplaza cualquier cuenta anterior en config y plantillas de gastos.
     cuenta_oficial = {"nombre": "MUTUARIAS Y LEASING LIMITADA", "rut": "77.771.552-6",
-                      "banco": "Mercado Pago", "tipo_cuenta": "Cuenta Vista",
-                      "numero_cuenta": "1030937838", "email": "gerardo.ext@centralmutuos.cl"}
+                      "banco": "Banco Bci / Mach", "tipo_cuenta": "Cuenta corriente",
+                      "numero_cuenta": "79851588", "email": "ethangerardobarr@gmail.com"}
     g = await db.config.find_one({"_key": "gastos_op"}) or {}
     if (g.get("datos_pago") or {}) != cuenta_oficial:
         await db.config.update_one({"_key": "gastos_op"},

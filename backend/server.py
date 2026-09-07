@@ -470,7 +470,7 @@ async def _task_blindada(coro_fn, nombre):
 NORMATIVAS_FIJAS = [
     ("NAVEGACION VOLVER", "NORMATIVA FIJA — NAVEGACIÓN UNIVERSAL E INAMOVIBLE: cada vez que el usuario presione 'Volver' en cualquier parte del sistema, debe regresar exactamente al estado anterior: misma pantalla, mismo scroll, mismo filtro activo, mismo día del calendario, misma carpeta seleccionada. El sistema nunca reinicia una vista al volver, solo retrocede un paso en el estado exacto en que estaba. Aplica a todos los módulos: calendario, carpetas, dashboard, visualizador cognitivo y cualquier módulo futuro."),
     ("CORREOS DEL SISTEMA", "NORMATIVA FIJA — CORREOS DEL SISTEMA (PERMANENTE E INAMOVIBLE): PROHIBIDO enviar correos automáticos de prueba, notificaciones individuales de estado, avisos de errores de entrega o cualquier correo operacional durante el día. Solo se permite el resumen diario o una respuesta directa a un cliente o ejecutivo. Direcciones con dominio de prueba (test.cl, qa.audit, example) están BLOQUEADAS a nivel de envío. EXCEPCIÓN DE ARRANQUE (única e irrepetible): el primer correo se envía a las 8:00 AM a gerardo.ext@centralmutuos.cl con el listado completo de clientes con carpetas pendientes de las últimas dos semanas (nombre, estado, días sin movimiento, documentos faltantes). DESDE EL DÍA SIGUIENTE: todos los días a las 8:00 AM UN SOLO correo a gerardo.ext@centralmutuos.cl con: carpetas nuevas de ayer, pendientes sin movimiento +2 días hábiles, correos que no generaron carpeta, aprobaciones y rechazos enviados, documentos faltantes por solicitar, cambios de tasas o criterios desde mesa y alertas activas. Un solo correo diario, ordenado, sin repeticiones ni correos de prueba."),
-    ("AISLAMIENTO GASTO OPERACIONAL", "NORMATIVA CONSTITUCIONAL — SEGURIDAD FINANCIERA (INAMOVIBLE, mandato del Administrador): PROHIBIDO que el módulo de Servicio al Cliente o cualquier otro módulo fuera de Gasto Operacional genere, sugiera o procese vouchers de pago, transferencias o cualquier movimiento financiero vinculado a las fuentes de pago operacional de Mutuaria y Leasing (Mercado Pago, MUTUARIAS Y LEASING LIMITADA). Ante cualquier intento fuera del módulo correcto el sistema BLOQUEA la acción y muestra: 'Esta acción solo puede realizarse desde el módulo de Gasto Operacional.' Solo el Administrador y Deisy Salazar pueden generar y enviar gastos operacionales desde su módulo; ningún otro rol tiene acceso. Todo envío o procesamiento de un gasto operacional vinculado a Mercado Pago, Mutuaria o Leasing Ilimitada exige el MASTER_PIN como confirmación final: sin PIN la operación queda bloqueada sin excepción, para todos los roles."),
+    ("AISLAMIENTO GASTO OPERACIONAL", "NORMATIVA CONSTITUCIONAL — SEGURIDAD FINANCIERA (INAMOVIBLE, mandato del Administrador): PROHIBIDO que el módulo de Servicio al Cliente o cualquier otro módulo fuera de Gasto Operacional genere, sugiera o procese vouchers de pago, transferencias o cualquier movimiento financiero vinculado a las fuentes de pago operacional de Mutuaria y Leasing (Banco Bci / Mach, MUTUARIAS Y LEASING LIMITADA). Ante cualquier intento fuera del módulo correcto el sistema BLOQUEA la acción y muestra: 'Esta acción solo puede realizarse desde el módulo de Gasto Operacional.' Solo el Administrador y Deisy Salazar pueden generar y enviar gastos operacionales desde su módulo; ningún otro rol tiene acceso. Todo envío o procesamiento de un gasto operacional vinculado a Banco Bci / Mach, Mutuaria o Leasing Ilimitada exige el MASTER_PIN como confirmación final: sin PIN la operación queda bloqueada sin excepción, para todos los roles."),
     ("FLUJO APROBACION MESA", "NORMATIVA CONSTITUCIONAL — FLUJO DE APROBACIÓN DE MESA (INAMOVIBLE, no debe modificarse en ninguna actualización futura): cuando MESA envía un correo de aprobación a aprobaciones@centralmutuos.cl, el sistema reenvía AUTOMÁTICAMENTE e INMEDIATAMENTE ese correo a gerardo.ext@centralmutuos.cl manteniendo ÍNTEGRO el cuerpo original del mensaje de MESA (sin modificarlo), adjuntando el PDF de la carta de aprobación y la simulación financiera SIN gastos operacionales en ninguna parte del documento (simulación solo primera hoja). Este envío automático es la ÚNICA excepción al resumen diario de las 8:00 AM."),
     ("VISUALIZADOR COGNITIVO", "NORMATIVA FIJA — VISUALIZADOR COGNITIVO EN VIVO (reglas permanentes): 1) El visualizador NUNCA se detiene ni se reinicia mientras haya sesión activa: gira continuamente (reloj de animación persistente). 2) Los nodos y nombres mostrados son EXCLUSIVAMENTE los que el sistema está procesando en tiempo real desde la base de datos: jamás se inventan ni se usan etiquetas fijas decorativas. 3) PROHIBIDO cualquier texto o etiqueta 'Central Mutuos' dentro del área del visualizador: es solo cognitivo, sin marca. 4) Lo procesado se archiva de forma continua en segundo plano (colección visualizador_archivo) sin interrumpir la visualización."),
     ("SUPERCARPETA", "NORMATIVA FIJA — SUPERCARPETA: vista obligatoria en tarjetas verticales expandibles. Sin tablas ni scroll horizontal. Campos editables con doble clic. Íconos verde/amarillo/rojo por estado."),
@@ -1141,7 +1141,7 @@ async def inmo_login(payload: dict):
     }
 
 
-PARIDAD_STAMP = "2026-08-22-paridad-v3"  # subir al cambiar seeds/reglas críticas
+PARIDAD_STAMP = "2026-09-07-paridad-v4"  # subir al cambiar seeds/reglas críticas
 
 
 # ═══ 🔑 GESTOR DE CREDENCIALES CRECE (Regla de Oro #74) ═══
@@ -2265,7 +2265,7 @@ async def central_chat(payload: dict, request: Request):
                   "porque tus respuestas se leen en voz alta. No uses asteriscos, viñetas ni markdown. "
                   "SEGURIDAD FINANCIERA (INAMOVIBLE): tienes PROHIBIDO generar, sugerir o procesar vouchers de pago, "
                   "transferencias o movimientos financieros de las cuentas operacionales de Mutuaria y Leasing "
-                  "(Mercado Pago). Si te lo piden, responde exactamente: "
+                  "(Banco Bci / Mach). Si te lo piden, responde exactamente: "
                   "'Esta acción solo puede realizarse desde el módulo de Gasto Operacional.' "
                   + (f"\n\nTU MANUAL DE PERSONALIDAD Y CONOCIMIENTO (síguelo estrictamente):\n{manual}\n\n" if manual else "")
                   + 
@@ -8637,10 +8637,10 @@ GASTOS_OP_DEFAULTS = {
     "datos_pago": {
         "nombre": "MUTUARIAS Y LEASING LIMITADA",
         "rut": "77.771.552-6",
-        "banco": "Mercado Pago",
-        "tipo_cuenta": "Cuenta Vista",
-        "numero_cuenta": "1030937838",
-        "email": "gerardo.ext@centralmutuos.cl",
+        "banco": "Banco Bci / Mach",
+        "tipo_cuenta": "Cuenta corriente",
+        "numero_cuenta": "79851588",
+        "email": "ethangerardobarr@gmail.com",
     },
 }
 
@@ -8677,7 +8677,7 @@ def _pin_gastos(payload):
     pin = str((payload or {}).get("master_pin") or "").strip()
     if not pin_ok or pin != pin_ok:
         raise HTTPException(status_code=403, detail=(
-            "🏛 SEGURIDAD FINANCIERA (ORO-75): ningún gasto operacional vinculado a Mercado Pago / "
+            "🏛 SEGURIDAD FINANCIERA (ORO-75): ningún gasto operacional vinculado a Banco Bci / Mach / "
             "Mutuaria y Leasing Ilimitada se envía ni procesa sin el MASTER_PIN como confirmación "
             "final del Administrador o de Deisy Salazar. Operación bloqueada sin excepción."))
 
@@ -8737,9 +8737,10 @@ async def _cobro_ai_clasificar(texto, subject=""):
 TASACION_CUENTA = {
     "nombre": "MUTUARIAS Y LEASING LIMITADA",
     "rut": "77.771.552-6",
-    "banco": "Mercado Pago",
-    "tipo_cuenta": "Cuenta Vista",
-    "numero_cuenta": "1030937838",
+    "banco": "Banco Bci / Mach",
+    "tipo_cuenta": "Cuenta corriente",
+    "numero_cuenta": "79851588",
+    "email": "ethangerardobarr@gmail.com",
 }
 
 
@@ -8752,7 +8753,8 @@ async def _cobro_tasacion_html(cliente=""):
         f"<td style='padding:5px 0;color:#1a1f2e;font-size:13px;font-weight:600'>{val}</td></tr>"
         for lbl, val in [("Nombre", dp.get("nombre", "")), ("RUT", dp.get("rut", "")),
                          ("Banco", dp.get("banco", "")), ("Tipo de cuenta", dp.get("tipo_cuenta", "")),
-                         ("N° de cuenta", dp.get("numero_cuenta", ""))] if val)
+                         ("N° de cuenta", dp.get("numero_cuenta", "")),
+                         ("Correo", dp.get("email", ""))] if val)
     datos = ["Nombre completo y RUT del cliente (comprador)",
              "Dirección completa de la propiedad (calle, número, depto/casa y comuna)",
              "Rol de Avalúo de la propiedad",

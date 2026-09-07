@@ -47,7 +47,7 @@ HALLAZGOS_BASE = {
     ],
     "mora": [
         H("ORO-73 — Gestión de pago de mora autovalidada",
-          "En la ficha del cliente moroso el ejecutivo dispone de 3 acciones: (1) enviar link/instrucciones de pago con el monto exacto y los datos oficiales MUTUARIAS Y LEASING LIMITADA (Mercado Pago, Cta Vista 1030937838) con referencia única MORA-XXXXXXXX; (2) subir comprobante de pago; (3) subir formulario manual de regularización.",
+          "En la ficha del cliente moroso el ejecutivo dispone de 3 acciones: (1) enviar link/instrucciones de pago con el monto exacto y los datos oficiales MUTUARIAS Y LEASING LIMITADA (Banco Bci / Mach, Cta corriente 79851588, ethangerardobarr@gmail.com) con referencia única MORA-XXXXXXXX; (2) subir comprobante de pago; (3) subir formulario manual de regularización.",
           "regla", "REGLAS_MAESTRAS.md · Regla de Oro #73"),
         H("Validación automática del comprobante de pago",
           "El comprobante se valida sin intervención humana: legibilidad OCR + palabras de pago + monto detectado ≥ 95% de la mora registrada en el CMF. Si valida, el sistema cierra la alerta solo, archiva en 04_cmf y marca cmf_morosidad.aclarada. Si falla, el ejecutivo recibe el motivo exacto del rechazo.",
