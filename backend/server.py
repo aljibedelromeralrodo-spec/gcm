@@ -6845,6 +6845,8 @@ async def correos_preview_lista(request: Request):
         cat = d.get("categoria") or mail.clasificar_preview(
             d.get("subject") or "", d.get("body_html") or "", d.get("adjuntos") or [])
         d["categoria"] = cat
+        d["estado_negocio"] = mail.clasificar_negocio_preview(
+            d.get("subject") or "", d.get("body_html") or "", d.get("adjuntos") or [])
         d["caduca_el"] = d.get("caduca_el") or mail.caduca_preview(d.get("creado"), cat)
         if cat == "preaprobacion":
             n_pre += 1

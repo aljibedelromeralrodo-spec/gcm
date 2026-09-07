@@ -34,6 +34,29 @@ def test_otro_resumen_martin():
     assert mail.clasificar_preview("Resumen Semanal de Martín — 09/07/2026") == "otro"
 
 
+def test_negocio_aprobado_mesa():
+    assert mail.clasificar_negocio_preview(
+        "APROBACIÓN MESA — Re: Camila Guajardo (DS19- FUTURA - ANGELES)") == "aprobado"
+
+
+def test_negocio_en_curso_ds19():
+    assert mail.clasificar_negocio_preview(
+        "Re: Camila Guajardo (DS19- FUTURA - ANGELES)") == "en_curso"
+
+
+def test_negocio_preaprobacion():
+    assert mail.clasificar_negocio_preview("Pre-aprobación cliente Ricardo") == "preaprobacion"
+
+
+def test_negocio_rechazado():
+    assert mail.clasificar_negocio_preview(
+        "Rechazo mesa — no califica", "no cumple parámetros objetivos mínimos") == "rechazado"
+
+
+def test_negocio_otro_resumen():
+    assert mail.clasificar_negocio_preview("Resumen Semanal de Martín — 07/09/2026") == "otro"
+
+
 def test_caduca_otro_7_dias():
     creado = datetime(2026, 9, 1, tzinfo=timezone.utc).isoformat()
     cad = mail._parse_iso_preview(mail.caduca_preview(creado, "otro"))

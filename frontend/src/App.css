@@ -130,6 +130,25 @@ body { font-family: 'Inter', sans-serif; background: var(--bg-dark); color: var(
   cursor: pointer; padding: 0.28rem 0.6rem; font-weight: 700; font-size: 0.68rem; white-space: nowrap;
 }
 .correos-dock-msg { font-size: 0.76rem; color: #F5E7B8; padding: 0.45rem 1rem; flex-shrink: 0; }
+.correos-dock-filtros {
+  display: flex; flex-wrap: wrap; gap: 5px;
+  padding: 0.4rem 0.7rem 0.5rem;
+  border-bottom: 1px solid rgba(245,158,11,0.2);
+  flex-shrink: 0;
+}
+.correos-dock-filtro {
+  background: transparent; color: #e7cf7a;
+  border: 1px solid rgba(245,158,11,0.32);
+  cursor: pointer; padding: 0.16rem 0.48rem;
+  font-weight: 700; font-size: 0.6rem; letter-spacing: 0.02em;
+  white-space: nowrap; display: inline-flex; align-items: center; gap: 4px;
+}
+.correos-dock-filtro.is-on {
+  background: rgba(212,175,55,0.22); border-color: #d4af37; color: #FCF6BA;
+}
+.correos-dock-filtro-n { opacity: 0.65; font-weight: 800; }
+.correos-dock-filtro.is-on .correos-dock-filtro-n { opacity: 0.9; }
+.correos-dock-vacio { font-size: 0.72rem; color: #e7cf7a; opacity: 0.65; padding: 0.8rem 0.2rem; }
 .correos-dock-list { flex: 1; min-height: 0; overflow-y: auto; padding: 0.55rem 0.7rem; display: flex; flex-direction: column; gap: 0.45rem; }
 .correos-dock-grupo {
   font-size: 0.68rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;
@@ -139,8 +158,20 @@ body { font-family: 'Inter', sans-serif; background: var(--bg-dark); color: var(
 .correos-dock-card.is-sel { border-color: rgba(212,175,55,0.7); background: rgba(212,175,55,0.07); }
 .correos-dock-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .correos-dock-vista { flex-shrink: 0; height: 42vh; min-height: 220px; max-height: 380px; display: flex; flex-direction: column;
-  background: #e5e7eb; border-top: 1px solid #d1d5db; }
-.correos-dock-vista-label { color: #374151; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; padding: 6px 10px 4px; }
+  background: #fff; border-top: 1px solid rgba(245,158,11,0.45); }
+.correos-dock-vista-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 7px 10px; flex-shrink: 0;
+  background: #1a1206; border-bottom: 1px solid rgba(245,158,11,0.35);
+}
+.correos-dock-vista-label { color: #e7cf7a; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; min-width: 0; }
+.correos-dock-vista-cerrar {
+  background: #d4af37; color: #1a1206; border: 1px solid #d4af37;
+  cursor: pointer; padding: 0.28rem 0.75rem; font-weight: 800; font-size: 0.7rem;
+  white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
+  letter-spacing: 0.02em;
+}
+.correos-dock-vista-cerrar:hover { background: #f5b942; color: #0c0802; }
 .correos-dock-iframe { flex: 1; width: 100%; border: none; background: #fff; }
 @media (max-width: 768px) {
   .correos-dock { width: 100vw; }

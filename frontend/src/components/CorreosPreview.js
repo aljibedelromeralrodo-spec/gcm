@@ -5,8 +5,26 @@ import { htmlConContrasteCorreo } from "../utils/formatters";
 const API = process.env.REACT_APP_BACKEND_URL;
 const ORO = "#d4af37";
 const LS_ABIERTO = "cm_correos_preview_dock";
+const FILTROS_NEGOCIO = [
+  { id: "todos", label: "Todos" },
+  { id: "en_curso", label: "En curso" },
+  { id: "preaprobacion", label: "Pre aprobación" },
+  { id: "aprobado", label: "Aprobados" },
+  { id: "rechazado", label: "Rechazados" },
+];
 const btn = (c) => ({ background: "transparent", color: c, border: `1px solid ${c}`, cursor: "pointer",
   padding: "0.28rem 0.7rem", fontWeight: 700, fontSize: "0.7rem" });
+
+function estadoNegocio(c) {
+  if (c?.estado_negocio) return c.estado_negocio;
+  const nombres = (c?.adjuntos || []).map((a) => a.filename || a.name || "").join(" ");
+  const t = `${c?.subject || ""} ${nombres}`.toLowerCase();
+  if (/rechaz|no califica|no cumple par[aá]metros|reprobado|denegad/.test(t)) return "rechazado";
+  if (/pre[-\s]?aprob|preaprobaci[oó]n|precalific/.test(t)) return "preaprobacion";
+  if (/aprobaci[oó]n\s+mesa|agrado de informar|ha sido aprobad|califica para un mutuo|carta[_\s-]?aprobaci[oó]n|hipotecario endosable/.test(t)) return "aprobado";
+  if (/\bds19\b|simulador|solicitud|evaluar|evaluaci[oó]n|entrega inmediata|antecedentes|\(\s*(sin|con)\s+subsidio/.test(t)) return "en_curso";
+  return "otro";
+}
 
 function leerDock() {
   try { return localStorage.getItem(LS_ABIERTO) !== "0"; } catch { return true; }
@@ -19,6 +37,7 @@ export default function CorreosPreview() {
   const [dockAbierto, setDockAbierto] = useState(leerDock);
   const [busy, setBusy] = useState("");
   const [msg, setMsg] = useState("");
+  const [filtro, setFiltro] = useState("todos");
 
   const cargar = useCallback(() => {
     axios.get(`${API}/api/correos-preview`)
@@ -27,6 +46,19 @@ export default function CorreosPreview() {
   }, []);
 
   useEffect(() => { cargar(); const t = setInterval(cargar, 20000); return () => clearInterval(t); }, [cargar]);
+
+  useEffect(() => {
+    if (!abierto) return undefined;
+    const onKey = (e) => { if (e.key === "Escape") setAbierto(null); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [abierto]);
+
+  useEffect(() => {
+    if (!abierto || filtro === "todos" || !data) return;
+    const sigue = (data.correos || []).some((c) => c.id === abierto && estadoNegocio(c) === filtro);
+    if (!sigue) setAbierto(null);
+  }, [filtro, abierto, data]);
 
   const setDock = (v) => {
     setDockAbierto(v);
@@ -58,8 +90,13 @@ export default function CorreosPreview() {
     return Math.max(0, Math.ceil((t - Date.now()) / 86400000));
   };
 
-  const pre = (data.correos || []).filter((c) => c.categoria === "preaprobacion");
-  const otros = (data.correos || []).filter((c) => c.categoria !== "preaprobacion");
+  const todos = data.correos || [];
+  const visibles = filtro === "todos" ? todos : todos.filter((c) => estadoNegocio(c) === filtro);
+  const nNegocio = (id) => (id === "todos" ? todos.length : todos.filter((c) => estadoNegocio(c) === id).length);
+  const preAll = todos.filter((c) => c.categoria === "preaprobacion");
+  const otrosAll = todos.filter((c) => c.categoria !== "preaprobacion");
+  const pre = visibles.filter((c) => c.categoria === "preaprobacion");
+  const otros = visibles.filter((c) => c.categoria !== "preaprobacion");
 
   const renderCard = (c, i) => {
     const dias = diasRestantes(c.caduca_el);
@@ -114,7 +151,7 @@ export default function CorreosPreview() {
             <div style={{ flex: 1, minWidth: 0 }}>
               <b>Buzón de correos ({data.total})</b>
               <div className="correos-dock-sub">
-                Preaprobaciones {pre.length} · 2 meses · Otros {otros.length} · 1 semana
+                Preaprobaciones {preAll.length} · 2 meses · Otros {otrosAll.length} · 1 semana
               </div>
             </div>
             <button type="button" data-testid="correos-preview-ocultar" className="correos-dock-hide"
@@ -123,15 +160,36 @@ export default function CorreosPreview() {
             </button>
           </div>
           {msg && <div data-testid="preview-msg" className="correos-dock-msg">{msg}</div>}
+          <div className="correos-dock-filtros" data-testid="preview-filtros-negocio" role="tablist" aria-label="Filtrar por etapa del negocio">
+            {FILTROS_NEGOCIO.map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                role="tab"
+                aria-selected={filtro === f.id}
+                data-testid={`preview-filtro-${f.id}`}
+                className={`correos-dock-filtro ${filtro === f.id ? "is-on" : ""}`}
+                onClick={() => setFiltro(f.id)}
+              >
+                {f.label}
+                <span className="correos-dock-filtro-n">{nNegocio(f.id)}</span>
+              </button>
+            ))}
+          </div>
           <div className="correos-dock-list">
-            {pre.length > 0 && (
+            {filtro === "todos" && pre.length > 0 && (
               <div data-testid="preview-grupo-preaprobacion" className="correos-dock-grupo">Preaprobaciones · caducan a los 2 meses</div>
             )}
             {pre.map((c) => renderCard(c, (data.correos || []).indexOf(c)))}
-            {otros.length > 0 && (
+            {filtro === "todos" && otros.length > 0 && (
               <div data-testid="preview-grupo-otros" className="correos-dock-grupo">Otros · se eliminan a la semana</div>
             )}
             {otros.map((c) => renderCard(c, (data.correos || []).indexOf(c)))}
+            {visibles.length === 0 && (
+              <div data-testid="preview-filtro-vacio" className="correos-dock-vacio">
+                No hay correos en esta etapa.
+              </div>
+            )}
           </div>
           {abierto && (() => {
             const i = data.correos.findIndex((c) => c.id === abierto);
@@ -139,7 +197,19 @@ export default function CorreosPreview() {
             if (!c) return null;
             return (
               <div className="correos-dock-vista">
-                <div className="correos-dock-vista-label">VISTA DEL CORREO · tal como lo recibe el destinatario</div>
+                <div className="correos-dock-vista-bar">
+                  <div className="correos-dock-vista-label">Vista del correo · tal como lo recibe el destinatario</div>
+                  <button
+                    type="button"
+                    data-testid="preview-cerrar-vista"
+                    className="correos-dock-vista-cerrar"
+                    aria-label="Cerrar vista del correo"
+                    title="Cerrar vista del correo (Esc)"
+                    onClick={() => setAbierto(null)}
+                  >
+                    <i className="fa fa-times" /> Cerrar
+                  </button>
+                </div>
                 <iframe data-testid={`preview-cuerpo-${i}`} title={`preview-${i}`} srcDoc={htmlConContrasteCorreo(c.body_html)}
                   className="correos-dock-iframe" />
               </div>

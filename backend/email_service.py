@@ -1472,18 +1472,55 @@ _PREAPROB_RX = re.compile(
     r"carta de aprobaci[oó]n",
     re.I,
 )
+_NEGOCIO_RECHAZO_RX = re.compile(
+    r"rechaz|no califica|no cumple par[aá]metros|reprobado|denegad|"
+    r"ingresos no son suficientes|muy pasado en carga|no podemos considerar",
+    re.I,
+)
+_NEGOCIO_PREAPROB_RX = re.compile(
+    r"pre[-\s]?aprob|preaprobaci[oó]n|precalific",
+    re.I,
+)
+_NEGOCIO_APROBADO_RX = re.compile(
+    r"aprobaci[oó]n\s+mesa|agrado de informar|ha sido aprobad|"
+    r"califica para un mutuo|carta[_\s-]?aprobaci[oó]n|"
+    r"carta de aprobaci[oó]n|hipotecario endosable",
+    re.I,
+)
+_NEGOCIO_CURSO_RX = re.compile(
+    r"\bds19\b|simulador|solicitud|evaluar|evaluaci[oó]n|"
+    r"entrega inmediata|antecedentes|\(\s*(sin|con)\s+subsidio",
+    re.I,
+)
 
 
-def clasificar_preview(subject="", body_html="", adjuntos=None):
-    """Separa preaprobaciones (carta/simulación/DS19) del resto del buzón."""
+def _texto_preview(subject="", body_html="", adjuntos=None):
     nombres = []
     for a in adjuntos or []:
         if isinstance(a, dict):
             nombres.append(a.get("filename") or a.get("name") or "")
         else:
             nombres.append(str(a or ""))
-    texto = " ".join((subject or "", re.sub(r"<[^>]+>", " ", body_html or "")[:2500], " ".join(nombres)))
-    return "preaprobacion" if _PREAPROB_RX.search(texto) else "otro"
+    return " ".join((subject or "", re.sub(r"<[^>]+>", " ", body_html or "")[:2500], " ".join(nombres)))
+
+
+def clasificar_preview(subject="", body_html="", adjuntos=None):
+    """Separa preaprobaciones (carta/simulación/DS19) del resto del buzón."""
+    return "preaprobacion" if _PREAPROB_RX.search(_texto_preview(subject, body_html, adjuntos)) else "otro"
+
+
+def clasificar_negocio_preview(subject="", body_html="", adjuntos=None):
+    """Etapa del negocio para el filtro del buzón: en_curso, preaprobacion, aprobado, rechazado u otro."""
+    texto = _texto_preview(subject, body_html, adjuntos)
+    if _NEGOCIO_RECHAZO_RX.search(texto):
+        return "rechazado"
+    if _NEGOCIO_PREAPROB_RX.search(texto):
+        return "preaprobacion"
+    if _NEGOCIO_APROBADO_RX.search(texto):
+        return "aprobado"
+    if _NEGOCIO_CURSO_RX.search(texto):
+        return "en_curso"
+    return "otro"
 
 
 def _parse_iso_preview(s):
@@ -1547,6 +1584,7 @@ def _encolar_preview(to, subject, body_html, attachments, cc, bcc):
                     "body_html": body_html or "", "adjuntos": adj_meta,
                     "estado": "esperando_confirmacion",
                     "categoria": categoria,
+                    "estado_negocio": clasificar_negocio_preview(subject, body_html, adj_meta),
                     "caduca_el": caduca_preview(ahora, categoria),
                     "creado": ahora})
     logging.info(f"👁 PREVIEW: correo «{(subject or '')[:60]}» → {to} [{categoria}]")
