@@ -757,6 +757,7 @@ async def startup():
     asyncio.create_task(_task_blindada(_periodic_mesa_loop, "mesa"))
     # 🛠 AUTORREPARACIÓN INTELIGENTE (normativa constitucional): vigilancia permanente
     asyncio.create_task(_task_blindada(_autorreparacion_loop, "autorreparacion"))
+    asyncio.create_task(_task_blindada(_correos_preview_ttl_loop, "correos_preview_ttl"))
     # DESACTIVADO (normativa un-solo-correo): reporte 10AM consolidado en el resumen 8AM
     # asyncio.create_task(_task_blindada(_daily_report_loop, "reporte_diario"))
     try:
@@ -6788,18 +6789,68 @@ async def carpetas_faltantes(request: Request, limit: int = 150):
     return {"total": len(out), "carpetas": out[:limit]}
 
 
+async def _purgar_correos_preview():
+    """Buzón ágil: otros a 7 días, preaprobaciones a 60 días. Borra HTML + adjuntos."""
+    from datetime import datetime, timezone
+    ahora = datetime.now(timezone.utc)
+    ahora_iso = ahora.isoformat()
+    n = 0
+    async for d in db.correos_preview.find({"estado": "esperando_confirmacion"}):
+        cat = d.get("categoria") or mail.clasificar_preview(
+            d.get("subject") or "", d.get("body_html") or "", d.get("adjuntos") or [])
+        caduca = d.get("caduca_el") or mail.caduca_preview(d.get("creado"), cat)
+        upd = {}
+        if d.get("categoria") != cat:
+            upd["categoria"] = cat
+        if d.get("caduca_el") != caduca:
+            upd["caduca_el"] = caduca
+        if upd:
+            await db.correos_preview.update_one({"id": d["id"]}, {"$set": upd})
+        dt = mail._parse_iso_preview(caduca)
+        if dt is None or dt > ahora:
+            continue
+        await db.correos_preview_adj.delete_many({"preview_id": d["id"]})
+        await db.correos_preview.delete_one({"id": d["id"]})
+        n += 1
+    if n:
+        logging.info(f"🧹 Preview: {n} correo(s) vencido(s) eliminado(s) ({ahora_iso[:16]})")
+    return n
+
+
+async def _correos_preview_ttl_loop():
+    while True:
+        try:
+            await _purgar_correos_preview()
+        except Exception as e:
+            logging.warning(f"preview ttl: {e}")
+        await asyncio.sleep(3600)
+
+
 @api.get("/correos-preview")
 async def correos_preview_lista(request: Request):
     _exigir_admin_dash(request)
+    try:
+        await _purgar_correos_preview()
+    except Exception as e:
+        logging.warning(f"preview purge on list: {e}")
     docs = await db.correos_preview.find({"estado": "esperando_confirmacion"},
-                                         {"_id": 0, "huella": 0}).sort("creado", -1).to_list(100)
+                                         {"_id": 0, "huella": 0}).sort("creado", -1).to_list(400)
     # Los HTML viejos (oro/crema sobre blanco) se reescriben al servirlos.
+    n_pre, n_otro = 0, 0
     for d in docs:
         html = mail.forzar_contraste_html(d.get("body_html") or "")
         if html != (d.get("body_html") or ""):
             d["body_html"] = html
             await db.correos_preview.update_one({"id": d.get("id")}, {"$set": {"body_html": html}})
-    return {"total": len(docs), "correos": docs}
+        cat = d.get("categoria") or mail.clasificar_preview(
+            d.get("subject") or "", d.get("body_html") or "", d.get("adjuntos") or [])
+        d["categoria"] = cat
+        d["caduca_el"] = d.get("caduca_el") or mail.caduca_preview(d.get("creado"), cat)
+        if cat == "preaprobacion":
+            n_pre += 1
+        else:
+            n_otro += 1
+    return {"total": len(docs), "preaprobacion": n_pre, "otros": n_otro, "correos": docs}
 
 
 @api.post("/correos-preview/{pid}/confirmar")

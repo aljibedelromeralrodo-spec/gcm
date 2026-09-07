@@ -4,13 +4,19 @@ import { htmlConContrasteCorreo } from "../utils/formatters";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 const ORO = "#d4af37";
+const LS_ABIERTO = "cm_correos_preview_dock";
 const btn = (c) => ({ background: "transparent", color: c, border: `1px solid ${c}`, cursor: "pointer",
-  padding: "0.3rem 0.8rem", fontWeight: 700, fontSize: "0.72rem" });
+  padding: "0.28rem 0.7rem", fontWeight: 700, fontSize: "0.7rem" });
+
+function leerDock() {
+  try { return localStorage.getItem(LS_ABIERTO) !== "0"; } catch { return true; }
+}
 
 export default function CorreosPreview() {
   const [data, setData] = useState(null);
   const [abierto, setAbierto] = useState(null);
   const [oculto, setOculto] = useState(false);
+  const [dockAbierto, setDockAbierto] = useState(leerDock);
   const [busy, setBusy] = useState("");
   const [msg, setMsg] = useState("");
 
@@ -22,6 +28,11 @@ export default function CorreosPreview() {
 
   useEffect(() => { cargar(); const t = setInterval(cargar, 20000); return () => clearInterval(t); }, [cargar]);
 
+  const setDock = (v) => {
+    setDockAbierto(v);
+    try { localStorage.setItem(LS_ABIERTO, v ? "1" : "0"); } catch { /* ignore */ }
+  };
+
   if (oculto || !data || !data.total) return null;
 
   const accion = async (pid, tipo, confirmar) => {
@@ -29,65 +40,113 @@ export default function CorreosPreview() {
     setBusy(pid + tipo); setMsg("");
     try {
       const r = await axios.post(`${API}/api/correos-preview/${pid}/${tipo}`);
-      setMsg(r.data.enviado ? `✅ Correo enviado a ${r.data.to}` : "🗑 Correo descartado sin enviar");
+      setMsg(r.data.enviado ? `✅ Correo enviado a ${r.data.to}` : "🗑 Correo descartado");
       setAbierto(null);
       cargar();
     } catch (e) { setMsg(`🚨 ${e.response?.data?.detail || "Error"}`); }
     setBusy("");
   };
 
+  const verCorreo = (id) => {
+    setAbierto((prev) => (prev === id ? null : id));
+    if (!dockAbierto) setDock(true);
+  };
+
+  const diasRestantes = (iso) => {
+    const t = Date.parse(iso || "");
+    if (!Number.isFinite(t)) return null;
+    return Math.max(0, Math.ceil((t - Date.now()) / 86400000));
+  };
+
+  const pre = (data.correos || []).filter((c) => c.categoria === "preaprobacion");
+  const otros = (data.correos || []).filter((c) => c.categoria !== "preaprobacion");
+
+  const renderCard = (c, i) => {
+    const dias = diasRestantes(c.caduca_el);
+    return (
+      <div key={c.id} data-testid={`preview-correo-${i}`}
+        className={`correos-dock-card ${abierto === c.id ? "is-sel" : ""}`}>
+        <div style={{ fontSize: "0.8rem", color: "#F5E7B8", fontWeight: 700, lineHeight: 1.35 }}>
+          {c.subject || "(sin asunto)"}
+        </div>
+        <div data-testid={`preview-destinatario-${i}`} style={{ fontSize: "0.7rem", opacity: 0.75, marginTop: 3 }}>
+          <i className="fa fa-envelope" style={{ color: ORO, marginRight: 5 }} />
+          Para: {Array.isArray(c.to) ? c.to.join(", ") : c.to}{c.cc ? ` · CC: ${c.cc}` : ""}
+        </div>
+        <div style={{ fontSize: "0.66rem", opacity: 0.55, marginTop: 2 }}>
+          {(c.creado || "").slice(0, 16).replace("T", " ")} · {(c.adjuntos || []).length} adjunto(s)
+          {(c.adjuntos || []).length > 0 && `: ${(c.adjuntos || []).map(a => a.filename).join(", ").slice(0, 90)}`}
+          {dias != null && ` · caduca en ${dias} día${dias === 1 ? "" : "s"}`}
+        </div>
+        <div className="correos-dock-actions">
+          <button data-testid={`preview-ver-${i}`} style={btn(ORO)}
+            onClick={() => verCorreo(c.id)}>
+            <i className="fa fa-eye" /> {abierto === c.id ? "Ocultar" : "Ver correo"}
+          </button>
+          <button data-testid={`preview-descartar-${i}`} disabled={!!busy} style={btn("#e11d48")}
+            onClick={() => accion(c.id, "descartar", "¿Descartar este correo?")}>
+            <i className="fa fa-times" /> Descartar
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   return (
-    <div data-testid="correos-preview-panel" style={{ background: "rgba(20,12,2,0.95)",
-      border: "1.5px solid rgba(245,158,11,0.6)", padding: "1rem 1.3rem", marginBottom: "1rem" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <i className="fa fa-eye" style={{ color: "#f59e0b" }} />
-        <b style={{ color: "#f5b942", fontSize: "0.9rem", letterSpacing: "0.06em" }}>
-          👁 Correos esperando SU confirmación ({data.total})
-        </b>
-        <span style={{ fontSize: "0.7rem", opacity: 0.6 }}>Normativa: ningún correo sale sin su aprobación explícita</span>
-      </div>
-      {msg && <div data-testid="preview-msg" style={{ fontSize: "0.78rem", color: "#F5E7B8", margin: "0.5rem 0" }}>{msg}</div>}
-      <div style={{ marginTop: "0.7rem", display: "flex", flexDirection: "column", gap: "0.5rem", maxHeight: 460, overflowY: "auto" }}>
-        {data.correos.map((c, i) => (
-          <div key={c.id} data-testid={`preview-correo-${i}`} style={{ background: "rgba(255,255,255,0.03)",
-            border: "1px solid rgba(245,158,11,0.25)", padding: "0.6rem 0.9rem" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-              <div style={{ flex: 1, minWidth: 240 }}>
-                <div style={{ fontSize: "0.82rem", color: "#F5E7B8", fontWeight: 700 }}>{c.subject || "(sin asunto)"}</div>
-                <div data-testid={`preview-destinatario-${i}`} style={{ fontSize: "0.72rem", opacity: 0.75 }}>
-                  <i className="fa fa-envelope" style={{ color: ORO, marginRight: 5 }} />
-                  Para: {Array.isArray(c.to) ? c.to.join(", ") : c.to}{c.cc ? ` · CC: ${c.cc}` : ""}
-                </div>
-                <div style={{ fontSize: "0.68rem", opacity: 0.55 }}>
-                  {(c.creado || "").slice(0, 16).replace("T", " ")} · {(c.adjuntos || []).length} adjunto(s)
-                  {(c.adjuntos || []).length > 0 && `: ${(c.adjuntos || []).map(a => a.filename).join(", ").slice(0, 90)}`}
-                </div>
+    <>
+      <button
+        type="button"
+        data-testid="correos-preview-tab"
+        className={`correos-dock-tab ${dockAbierto ? "is-open" : ""}`}
+        aria-expanded={dockAbierto}
+        aria-controls="correos-preview-panel"
+        title={dockAbierto ? "Ocultar correos" : "Mostrar correos pendientes"}
+        onClick={() => setDock(!dockAbierto)}
+      >
+        <i className={`fa ${dockAbierto ? "fa-chevron-right" : "fa-envelope"}`} />
+        <span>Correos ({data.total})</span>
+      </button>
+
+      {dockAbierto && (
+        <aside id="correos-preview-panel" data-testid="correos-preview-panel" className="correos-dock" role="complementary" aria-label="Buzón de correos">
+          <div className="correos-dock-head">
+            <i className="fa fa-eye" style={{ color: "#f59e0b" }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <b>Buzón de correos ({data.total})</b>
+              <div className="correos-dock-sub">
+                Preaprobaciones {pre.length} · 2 meses · Otros {otros.length} · 1 semana
               </div>
-              <button data-testid={`preview-ver-${i}`} style={btn(ORO)}
-                onClick={() => setAbierto(abierto === c.id ? null : c.id)}>
-                <i className="fa fa-eye" /> {abierto === c.id ? "Ocultar" : "Ver correo"}
-              </button>
-              <button data-testid={`preview-confirmar-${i}`} disabled={!!busy} style={btn("#10d98e")}
-                onClick={() => accion(c.id, "confirmar", `¿CONFIRMA el envío de «${c.subject}» a ${Array.isArray(c.to) ? c.to.join(", ") : c.to}?`)}>
-                {busy === c.id + "confirmar" ? <i className="fa fa-spinner fa-spin" /> : <i className="fa fa-paper-plane" />} Confirmar y enviar
-              </button>
-              <button data-testid={`preview-descartar-${i}`} disabled={!!busy} style={btn("#e11d48")}
-                onClick={() => accion(c.id, "descartar", "¿Descartar este correo SIN enviarlo?")}>
-                <i className="fa fa-times" /> Descartar
-              </button>
             </div>
-            {abierto === c.id && (
-              <div style={{ marginTop: 10, background: "#e5e7eb", padding: 10, border: "1px solid #d1d5db" }}>
-                <div style={{ color: "#374151", fontSize: 11, fontWeight: 700, marginBottom: 6, letterSpacing: "0.04em" }}>
-                  VISTA DEL CORREO · tal como lo recibe el destinatario
-                </div>
-                <iframe data-testid={`preview-cuerpo-${i}`} title={`preview-${i}`} srcDoc={htmlConContrasteCorreo(c.body_html)}
-                  style={{ width: "100%", height: 520, background: "#fff", border: "1px solid #9ca3af" }} />
-              </div>
-            )}
+            <button type="button" data-testid="correos-preview-ocultar" className="correos-dock-hide"
+              onClick={() => setDock(false)} title="Ocultar panel">
+              <i className="fa fa-times" /> Ocultar
+            </button>
           </div>
-        ))}
-      </div>
-    </div>
+          {msg && <div data-testid="preview-msg" className="correos-dock-msg">{msg}</div>}
+          <div className="correos-dock-list">
+            {pre.length > 0 && (
+              <div data-testid="preview-grupo-preaprobacion" className="correos-dock-grupo">Preaprobaciones · caducan a los 2 meses</div>
+            )}
+            {pre.map((c) => renderCard(c, (data.correos || []).indexOf(c)))}
+            {otros.length > 0 && (
+              <div data-testid="preview-grupo-otros" className="correos-dock-grupo">Otros · se eliminan a la semana</div>
+            )}
+            {otros.map((c) => renderCard(c, (data.correos || []).indexOf(c)))}
+          </div>
+          {abierto && (() => {
+            const i = data.correos.findIndex((c) => c.id === abierto);
+            const c = i >= 0 ? data.correos[i] : null;
+            if (!c) return null;
+            return (
+              <div className="correos-dock-vista">
+                <div className="correos-dock-vista-label">VISTA DEL CORREO · tal como lo recibe el destinatario</div>
+                <iframe data-testid={`preview-cuerpo-${i}`} title={`preview-${i}`} srcDoc={htmlConContrasteCorreo(c.body_html)}
+                  className="correos-dock-iframe" />
+              </div>
+            );
+          })()}
+        </aside>
+      )}
+    </>
   );
 }

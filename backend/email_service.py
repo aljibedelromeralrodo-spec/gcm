@@ -1463,6 +1463,52 @@ def forzar_contraste_html(html):
     return s
 
 
+# Preaprobaciones viven 2 meses en el buzón; el resto, 1 semana.
+TTL_PREVIEW_DIAS = {"preaprobacion": 60, "otro": 7}
+_PREAPROB_RX = re.compile(
+    r"pre.?aprob|carta[_\s-]?aprobaci[oó]n|aprobaci[oó]n\s+(mesa|central\s*mutuos)|"
+    r"aprobaci[oó]n[_\s-]?centralmutuos|califica para un mutuo|hipotecario endosable|"
+    r"\bds19\b|\(\s*(sin|con)\s+subsidio|simulador|"
+    r"carta de aprobaci[oó]n",
+    re.I,
+)
+
+
+def clasificar_preview(subject="", body_html="", adjuntos=None):
+    """Separa preaprobaciones (carta/simulación/DS19) del resto del buzón."""
+    nombres = []
+    for a in adjuntos or []:
+        if isinstance(a, dict):
+            nombres.append(a.get("filename") or a.get("name") or "")
+        else:
+            nombres.append(str(a or ""))
+    texto = " ".join((subject or "", re.sub(r"<[^>]+>", " ", body_html or "")[:2500], " ".join(nombres)))
+    return "preaprobacion" if _PREAPROB_RX.search(texto) else "otro"
+
+
+def _parse_iso_preview(s):
+    if not s:
+        return None
+    try:
+        from datetime import datetime, timezone
+        dt = datetime.fromisoformat(str(s).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except Exception:
+        return None
+
+
+def caduca_preview(creado, categoria="otro"):
+    from datetime import timedelta, timezone
+    dt = _parse_iso_preview(creado)
+    if dt is None:
+        from datetime import datetime as _dt
+        dt = _dt.now(timezone.utc)
+    dias = TTL_PREVIEW_DIAS.get(categoria) or TTL_PREVIEW_DIAS["otro"]
+    return (dt + timedelta(days=dias)).isoformat()
+
+
 def _encolar_preview(to, subject, body_html, attachments, cc, bcc):
     """⛔ NORMATIVA CONSTITUCIONAL — PREVIEW OBLIGATORIO: todo correo saliente queda en
     espera de confirmación EXPLÍCITA del Administrador. Sin confirmación, no sale nada."""
@@ -1493,13 +1539,17 @@ def _encolar_preview(to, subject, body_html, attachments, cc, bcc):
             adj_meta.append({"filename": a.get("filename") or "adjunto", "tamano": len(data)})
         except Exception as e:
             logging.warning(f"preview adj: {e}")
+    ahora = datetime.now(timezone.utc).isoformat()
+    categoria = clasificar_preview(subject, body_html, adj_meta)
     col.insert_one({"id": pid, "huella": h,
                     "to": to if isinstance(to, str) else list(to),
                     "cc": cc or "", "bcc": bcc or "", "subject": subject or "",
                     "body_html": body_html or "", "adjuntos": adj_meta,
                     "estado": "esperando_confirmacion",
-                    "creado": datetime.now(timezone.utc).isoformat()})
-    logging.info(f"👁 PREVIEW: correo «{(subject or '')[:60]}» → {to} en espera de confirmación")
+                    "categoria": categoria,
+                    "caduca_el": caduca_preview(ahora, categoria),
+                    "creado": ahora})
+    logging.info(f"👁 PREVIEW: correo «{(subject or '')[:60]}» → {to} [{categoria}]")
     return {"success": False, "preview": True, "preview_id": pid,
             "error": "PREVIEW OBLIGATORIO: correo en espera de confirmación del Administrador"}
 

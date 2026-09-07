@@ -99,6 +99,9 @@ CATALOGO = {
     "cierre_fallidos": {
         "titulo": "Cierre SMTP fallidos", "imap": False, "pausable": False, "riesgo": "bajo",
         "solapa": [], "motivo": "Cierra envíos fallidos >24 h."},
+    "correos_preview_ttl": {
+        "titulo": "Caducidad buzón preview", "imap": False, "pausable": False, "riesgo": "bajo",
+        "solapa": [], "motivo": "Borra otros a 7 días y preaprobaciones a 60 días."},
     "buzon_aprendizaje": {
         "titulo": "Buzón aprendizaje (solo lectura)", "imap": True, "pausable": True, "riesgo": "bajo",
         "solapa": ["ingesta_carpetas"], "motivo": "IMAP RO del 2º buzón. Candidato a pausa."},
