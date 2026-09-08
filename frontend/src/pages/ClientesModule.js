@@ -920,8 +920,7 @@ export default function ClientesModule({ onNavigate }) {
       try {
         const fd = new FormData();
         fd.append("file", file);
-        // subfolder queda vacío → el clasificador lo pondrá en la subcarpeta correcta
-        // en un pipeline futuro. Por ahora va a la raíz de la carpeta.
+        // subfolder vacío → el backend clasifica (OCR/IA) y guarda en 01–08 o 99_otros.
         await axios.post(`${API}/api/clientes/folders/${currentFolder.id}/upload-file`, fd, {
           headers: { "Content-Type": "multipart/form-data" },
           timeout: 120000,

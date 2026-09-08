@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import CalendarioCarpetas from "../../components/CalendarioCarpetas";
 import { CAT_LABELS, rutValido } from "./clientesShared";
 import { useClientes } from "./clientesCtx";
@@ -51,6 +52,15 @@ export default function ClientesLista() {
     view,
     onNavigate
   } = useClientes();
+  const [masOpen, setMasOpen] = useState(false);
+  const masRef = useRef(null);
+  useEffect(() => {
+    const onDoc = (e) => {
+      if (masRef.current && !masRef.current.contains(e.target)) setMasOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
   return (
         <div data-testid="clientes-list">
           <div className="clientes-toolbar">
@@ -60,36 +70,43 @@ export default function ClientesLista() {
                 onChange={e => setSearchQuery(e.target.value)} data-testid="clientes-search" />
             </div>
             <div className="clientes-toolbar-actions">
-              <button className="docs-btn" data-testid="btn-cloud-sync" onClick={cloudSync} disabled={syncing}
-                title="Para sincronizar cambios de diseño o nuevas funciones, use el botón Re-publish de la plataforma"
-                style={{ background: "linear-gradient(135deg, #BF953F, #FCF6BA, #B38728)", color: "#0a0a0a", fontWeight: 800, border: "none", borderRadius: 0, opacity: syncing ? 0.6 : 1 }}>
-                <i className={`fa ${syncing ? "fa-spinner fa-spin" : "fa-gem"}`}></i> {syncing ? "Sincronizando…" : "💎 Sincronizar Datos (Cloud Sync)"}
-              </button>
-              <span data-testid="cloud-sync-status"
-                title="Para sincronizar cambios de diseño o nuevas funciones, use el botón Re-publish de la plataforma"
-                style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: "0.72rem", fontWeight: 700, letterSpacing: "0.5px", color: "#10d98e", border: "1px solid rgba(16,217,142,0.35)", padding: "0.35rem 0.7rem", cursor: "help" }}>
-                <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#10d98e", boxShadow: "0 0 6px #10d98e" }}></span>
-                Sincronización: {window.location.hostname.includes("preview") ? "Preview" : "Live"} · Conexión Protegida
-              </span>
-              <button className="docs-btn secondary" onClick={loadEmails} data-testid="btn-view-emails">
-                <i className="fa fa-envelope"></i> Ver Correos
-              </button>
-              <button className="docs-btn secondary" onClick={loadAjustes} data-testid="btn-ajustes">
-                <i className="fa fa-sliders"></i> Ajustes
-              </button>
               <button className="docs-btn primary" onClick={() => setShowCreate(true)} data-testid="btn-new-folder">
                 <i className="fa fa-plus"></i> Nueva Carpeta
               </button>
-              <button className="docs-btn secondary" data-testid="btn-forzar-folder"
-                onClick={() => setForzarModal({ nombre: "", rut: "", sug: null, buscando: false, forzando: false, msg: "" })}
-                style={{ borderColor: "#f59e0b", color: "#f59e0b" }}>
-                <i className="fa fa-bolt"></i> Forzar Carpeta
+              <button className="clientes-icon-btn" onClick={loadEmails} data-testid="btn-view-emails" title="Ver Correos">
+                <i className="fa fa-envelope"></i>
               </button>
-              <button className="docs-btn secondary" data-testid="btn-compromiso-independiente"
-                onClick={() => setCompromisoLibre({ id: `libre-${Date.now()}`, nombre: "Compromiso Independiente" })}
-                style={{ borderColor: "var(--gold, #d4af37)", color: "var(--gold, #d4af37)" }}>
-                <i className="fa fa-file-text-o"></i> Compromiso Compraventa
-              </button>
+              <div className="clientes-overflow" ref={masRef}>
+                <button type="button" className="clientes-icon-btn" data-testid="btn-clientes-mas"
+                  aria-expanded={masOpen} title="Más acciones" onClick={() => setMasOpen((v) => !v)}>
+                  <i className="fa fa-ellipsis-v"></i>
+                </button>
+                {masOpen && (
+                  <div className="clientes-overflow-menu" role="menu">
+                    <button className="docs-btn" data-testid="btn-cloud-sync" onClick={() => { setMasOpen(false); cloudSync(); }} disabled={syncing}
+                      title="Para sincronizar cambios de diseño o nuevas funciones, use el botón Re-publish de la plataforma">
+                      <i className={`fa ${syncing ? "fa-spinner fa-spin" : "fa-gem"}`}></i> {syncing ? "Sincronizando…" : "Sincronizar Datos (Cloud Sync)"}
+                    </button>
+                    <span data-testid="cloud-sync-status"
+                      title="Para sincronizar cambios de diseño o nuevas funciones, use el botón Re-publish de la plataforma"
+                      className="clientes-sync-pill">
+                      <span className="clientes-sync-dot"></span>
+                      Sincronización: {window.location.hostname.includes("preview") ? "Preview" : "Live"} · Conexión Protegida
+                    </span>
+                    <button className="docs-btn secondary" onClick={() => { setMasOpen(false); loadAjustes(); }} data-testid="btn-ajustes">
+                      <i className="fa fa-sliders"></i> Ajustes
+                    </button>
+                    <button className="docs-btn secondary" data-testid="btn-forzar-folder"
+                      onClick={() => { setMasOpen(false); setForzarModal({ nombre: "", rut: "", sug: null, buscando: false, forzando: false, msg: "" }); }}>
+                      <i className="fa fa-bolt"></i> Forzar Carpeta
+                    </button>
+                    <button className="docs-btn secondary" data-testid="btn-compromiso-independiente"
+                      onClick={() => { setMasOpen(false); setCompromisoLibre({ id: `libre-${Date.now()}`, nombre: "Compromiso Independiente" }); }}>
+                      <i className="fa fa-file-text-o"></i> Compromiso Compraventa
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -183,31 +200,32 @@ export default function ClientesLista() {
                 : missingCats.map(m => CAT_LABELS[m] || m);
               const hasFin = f.datos_financieros && f.datos_financieros.valor_propiedad;
               const enviadoManual = f.envio_manual === true;
-              const cardStyle = enviadoManual
-                ? { position: "relative", background: "#be123c", borderLeft: "5px solid #7f1d1d", color: "#fff", flexWrap: "wrap" }
-                : { position: "relative", flexWrap: "wrap", borderLeft: (f.emails_sent_count > 0) ? "5px solid #d4af37" : (f.is_ready_to_send ? "5px solid #10d98e" : (f.codeudor_nombre ? "5px solid #2e5ce6" : "")), background: (f.emails_sent_count > 0) ? "rgba(212,175,55,0.06)" : (f.is_ready_to_send ? "rgba(16,217,142,0.06)" : undefined) };
+              const docsTotal = required.length || 0;
+              const docsOk = Math.max(0, docsTotal - missingCats.length);
+              const pctDocs = docsTotal ? Math.round((docsOk / docsTotal) * 100) : 0;
               const irAModulo = (mod) => {
                 sessionStorage.setItem("cm_prefill_cliente", JSON.stringify({ nombre: f.nombre, rut: f.rut || "" }));
                 onNavigate && onNavigate(mod);
               };
               const modBtn = (bg, border, color, big) => ({
-                display: "flex", alignItems: "center", gap: 6, padding: big ? "0.55rem 1rem" : "0.45rem 0.8rem",
-                borderRadius: 0, border: `1.5px solid ${border}`, background: bg, color,
-                fontWeight: 800, fontSize: big ? 13 : 11.5, cursor: "pointer", whiteSpace: "nowrap",
+                display: "flex", alignItems: "center", gap: 6, padding: big ? "0.4rem 0.75rem" : "0.32rem 0.65rem",
+                borderRadius: 0, border: `1px solid ${border}`, background: "transparent", color,
+                fontWeight: 700, fontSize: big ? 12 : 11, cursor: "pointer", whiteSpace: "nowrap",
               });
+              const cls = [
+                "clientes-card", "clientes-card-scan",
+                enviadoManual ? "is-enviado" : "",
+                f.emails_sent_count > 0 ? "is-mesa" : "",
+                f.is_ready_to_send ? "is-lista" : "",
+                f.codeudor_nombre && !enviadoManual ? "is-codeudor" : "",
+              ].filter(Boolean).join(" ");
               return (
-                <div key={f.id} className="clientes-card" data-testid={`folder-${f.id}`} style={cardStyle}>
+                <div key={f.id} className={cls} data-testid={`folder-${f.id}`}>
                   {enviadoManual && (
-                    <div style={{ position: "absolute", top: 8, left: 8, background: "#fff", color: "#be123c", borderRadius: 0, padding: "2px 8px", fontSize: 10, fontWeight: 800 }} data-testid={`badge-enviado-${f.id}`}>
-                      ✅ ENVIADO (manual)
+                    <div className="clientes-badge-enviado" data-testid={`badge-enviado-${f.id}`}>
+                      Enviado (manual)
                     </div>
                   )}
-                  {missing.length > 0 && (
-                    <div title={`Faltan: ${missing.join(", ")}`} style={{ position: "absolute", top: 8, right: 8, background: "#be123c", color: "#fff", borderRadius: "50%", width: 22, height: 22, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, boxShadow: "0 2px 8px rgba(190,18,60,0.5)" }}>
-                      {missing.length}
-                    </div>
-                  )}
-                  <div className="clientes-card-icon"><i className="fa fa-folder"></i></div>
                   <div className="clientes-card-info">
                     <h4 style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>{f.nombre}
                       {(f.tasacion_informe_recibido_at || f.estudio_recibido_at) && (
@@ -250,20 +268,14 @@ export default function ClientesLista() {
                       <b title="RUT verificado al 100% (dígito verificador módulo 11)" style={{ color: "#22c55e", marginLeft: 4 }}>✓100%</b>}</span>}
                     {f.codeudor_nombre && <span className="clientes-codeudor"><i className="fa fa-user-plus"></i> {f.codeudor_nombre}</span>}
                     <span className="clientes-file-count">{f.total_archivos || 0} archivos</span>
-                    <div style={{ display: "flex", gap: 6, marginTop: 4, flexWrap: "wrap" }}>
-                      {f.is_ready_to_send && (
-                        <span style={{ fontSize: 10, background: "rgba(16,217,142,0.25)", color: "#0e9f6e", padding: "2px 6px", borderRadius: 0, fontWeight: 700 }}>🎯 Lista para enviar</span>
-                      )}
-                      {f.emails_sent_count > 0 && (
-                        <span title={`Último envío: ${(f.last_email_sent_at || "").slice(0,19).replace('T',' ')}`} style={{ fontSize: 10, background: "rgba(212,175,55,0.2)", color: "#0a3d91", padding: "2px 6px", borderRadius: 0, fontWeight: 700 }}>📧 Enviado a mesa × {f.emails_sent_count}{f.last_email_sent_at ? ` · ${fmtAct(f.last_email_sent_at)}` : ""}</span>
-                      )}
+                    <div className="clientes-card-meta">
                       {hasFin ? (
-                        <span style={{ fontSize: 10, background: "rgba(16,217,142,0.15)", color: "#10c98a", padding: "2px 6px", borderRadius: 0 }}>💰 Datos OK</span>
+                        <span>Datos financieros OK</span>
                       ) : (
-                        <span style={{ fontSize: 10, background: "rgba(250,204,21,0.15)", color: "#a16207", padding: "2px 6px", borderRadius: 0 }}>💰 Sin datos financieros</span>
+                        <span>Sin datos financieros</span>
                       )}
                       {f.datos_financieros?.fecha_entrega && (
-                        <span data-testid={`badge-entrega-${f.id}`} style={{ fontSize: 10, background: "rgba(46,92,230,0.15)", color: "#1e46c0", padding: "2px 6px", borderRadius: 0, fontWeight: 700 }}>🏠 Entrega {f.datos_financieros.fecha_entrega}</span>
+                        <span data-testid={`badge-entrega-${f.id}`}>Entrega {f.datos_financieros.fecha_entrega}</span>
                       )}
                     </div>
                     {(f.cmf_morosidad?.morosidad_clp > 0) && (
@@ -321,87 +333,99 @@ export default function ClientesLista() {
                         )}
                       </div>
                     )}
-                    {missing.length > 0 && (
-                      <div data-testid={`missing-docs-${f.id}`} style={{ display: "flex", gap: 4, marginTop: 5, flexWrap: "wrap", alignItems: "center" }}>
-                        <span style={{ fontSize: 10, fontWeight: 800, color: enviadoManual ? "#fff" : "#be123c" }}>⚠️ FALTA:</span>
-                        {missing.map((m, i) => (
-                          <span key={`${m}-${i}`} style={{ fontSize: 10, fontWeight: 700, background: enviadoManual ? "rgba(255,255,255,0.25)" : "rgba(190,18,60,0.15)", color: enviadoManual ? "#fff" : "#be123c", padding: "2px 7px", borderRadius: 0, border: enviadoManual ? "1px solid rgba(255,255,255,0.4)" : "1px solid rgba(190,18,60,0.35)" }}>
-                            {m}
+                    <div className="clientes-docs-resumen">
+                      <div className="clientes-docs-row">
+                        <span className="clientes-docs-label">Documentación: {docsOk}/{docsTotal || "—"}</span>
+                        <span className="clientes-docs-bar" aria-hidden="true">
+                          <span className="clientes-docs-bar-fill" style={{ width: `${pctDocs}%` }} />
+                        </span>
+                        {missing.length > 0 && (
+                          <span className="clientes-docs-chip" title={`Faltan: ${missing.join(", ")}`}>
+                            ⚠️ Faltan {missing.length} documento{missing.length === 1 ? "" : "s"}
                           </span>
-                        ))}
+                        )}
                       </div>
-                    )}
-                    {(f.criterios || []).length > 0 && (
-                      <div data-testid={`criterios-list-${f.id}`} style={{ display: "flex", gap: 4, marginTop: 5, flexWrap: "wrap", alignItems: "center" }}>
-                        {f.criterios.map(c => (
-                          <span key={c.nombre} title={c.nombre} style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 0,
-                            background: enviadoManual ? "rgba(255,255,255,0.2)" : (c.ok ? "rgba(16,217,142,0.12)" : "rgba(148,163,184,0.12)"),
-                            color: enviadoManual ? "#fff" : (c.ok ? "#10c98a" : "#94a3b8"),
-                            border: `1px solid ${c.ok ? "rgba(16,217,142,0.4)" : "rgba(148,163,184,0.3)"}` }}>
-                            {c.ok ? "✓" : "✗"} {c.nombre}
-                          </span>
-                        ))}
+                      {(missing.length > 0 || (f.criterios || []).length > 0) && (
+                      <div className="clientes-docs-detalle">
+                        {missing.length > 0 && (
+                          <div data-testid={`missing-docs-${f.id}`}>
+                            <span className="clientes-docs-detalle-k">Falta:</span>
+                            {missing.map((m, i) => (
+                              <span key={`${m}-${i}`}>{m}</span>
+                            ))}
+                          </div>
+                        )}
+                        {(f.criterios || []).length > 0 && (
+                          <div data-testid={`criterios-list-${f.id}`}>
+                            {f.criterios.map(c => (
+                              <span key={c.nombre} title={c.nombre} className={c.ok ? "is-ok" : "is-off"}>
+                                {c.ok ? "✓" : "✗"} {c.nombre}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                    )}
+                      )}
+                    </div>
                     <div style={{ display: "flex", gap: 8, marginTop: 5, alignItems: "center", flexWrap: "wrap" }}>
                       {f.source_email && (
-                        <span data-testid={`recibido-de-${f.id}`} style={{ fontSize: 10.5, opacity: 0.75, color: enviadoManual ? "#fff" : undefined }}>
+                        <span data-testid={`recibido-de-${f.id}`} style={{ fontSize: 10.5, opacity: 0.75 }}>
                           📥 Solicitud recibida de: <b>{f.source_email}</b>
                         </span>
                       )}
                       {missing.length > 0 && f.source_email && (
                         <button data-testid={`btn-pedir-faltantes-${f.id}`} onClick={() => openPedirFaltantes(f)}
                           style={{ fontSize: 10.5, fontWeight: 800, padding: "3px 10px", borderRadius: 0, cursor: "pointer",
-                            background: "rgba(190,18,60,0.12)", color: enviadoManual ? "#fff" : "#be123c", border: "1.5px solid rgba(190,18,60,0.5)" }}>
+                            background: "transparent", color: "#fda4af", border: "1px solid rgba(225,29,72,0.4)" }}>
                           📩 Pedir faltantes al remitente{f.faltantes_pedidos_at ? ` ✓ Solicitado ${fmtAct(f.faltantes_pedidos_at)}` : ""}
                         </button>
                       )}
                     </div>
 
                   </div>
-                  {f.prob_aprobacion && f.prob_aprobacion.porcentaje != null && (
-                    <div style={{ display: "flex", gap: 8, alignItems: "stretch", flexShrink: 0 }}>
+                  <div className="clientes-card-status">
+                    {f.prob_aprobacion && f.prob_aprobacion.porcentaje != null && (
                       <div data-testid={`prob-aprobacion-${f.id}`}
-                        title={`Posibilidades de aprobación\n${(f.prob_aprobacion.factores || []).join("\n")}`}
-                        style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minWidth: 88, padding: "6px 10px", borderRadius: 0,
-                          background: enviadoManual ? "rgba(255,255,255,0.15)" : (f.prob_aprobacion.porcentaje >= 75 ? "rgba(16,217,142,0.12)" : f.prob_aprobacion.porcentaje >= 50 ? "rgba(250,204,21,0.18)" : "rgba(190,18,60,0.12)") }}>
-                        <span style={{ fontSize: 36, fontWeight: 900, lineHeight: 1,
-                          color: enviadoManual ? "#fff" : (f.prob_aprobacion.porcentaje >= 75 ? "#10c98a" : f.prob_aprobacion.porcentaje >= 50 ? "#a16207" : "#be123c") }}>
-                          {f.prob_aprobacion.porcentaje}%
-                        </span>
-                        <span style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, opacity: 0.85, color: enviadoManual ? "#fff" : undefined }}>aprobación</span>
+                        className="clientes-prob"
+                        title={`Posibilidades de aprobación\n${(f.prob_aprobacion.factores || []).join("\n")}`}>
+                        <span className="clientes-prob-n">{f.prob_aprobacion.porcentaje}%</span>
+                        <span className="clientes-prob-k">aprobación</span>
                         {f.techo_uf != null && (
                           <span data-testid={`techo-max-${f.id}`}
                             title={`Techo Hipotecario (máximo crédito posible) — mejor escenario: ${f.techo_banco || ""}`}
-                            style={{ fontSize: 10, fontWeight: 900, marginTop: 3, whiteSpace: "nowrap", color: enviadoManual ? "#fff" : "#d4af37" }}>
-                            ▲ Techo {Math.round(f.techo_uf).toLocaleString("es-CL")} UF
+                            className="clientes-prob-techo">
+                            Techo {Math.round(f.techo_uf).toLocaleString("es-CL")} UF
                           </span>
                         )}
                         {f.prob_aprobacion?.concreces?.disponible && f.prob_aprobacion.concreces.porcentaje != null && (
                           <span data-testid={`espejo-concreces-${f.id}`}
                             title={f.prob_aprobacion.discrepancia?.mensaje || "Espejo Concreces"}
-                            style={{ fontSize: 9, fontWeight: 800, marginTop: 2, whiteSpace: "nowrap",
-                              color: enviadoManual ? "#fff" : (f.prob_aprobacion.discrepancia?.hay ? "#ea580c" : "#94a3b8") }}>
+                            className="clientes-prob-espejo">
                             Concreces {f.prob_aprobacion.concreces.porcentaje}%
                           </span>
                         )}
                       </div>
-                      <div data-testid={`mesa-criterios-${f.id}`}
-                        style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minWidth: 92, padding: "6px 10px", borderRadius: 0,
-                          background: f.mesa_respuesta === "aprobada" ? "rgba(16,217,142,0.15)" : (f.mesa_respuesta === "rechazada" ? "rgba(190,18,60,0.15)" : "rgba(148,163,184,0.1)"),
-                          border: f.mesa_respuesta ? "1.5px solid " + (f.mesa_respuesta === "aprobada" ? "#10d98e" : "#be123c") : "1px dashed rgba(148,163,184,0.4)" }}>
-                        <span style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, opacity: 0.8, color: enviadoManual ? "#fff" : undefined }}>Mesa</span>
-                        {f.mesa_respuesta === "aprobada" && <span style={{ fontSize: 13, fontWeight: 900, color: "#10c98a" }}>✅ APROBADA</span>}
-                        {f.mesa_respuesta === "rechazada" && <span style={{ fontSize: 13, fontWeight: 900, color: "#be123c" }}>❌ RECHAZADA</span>}
-                        {!f.mesa_respuesta && <span style={{ fontSize: 11, fontWeight: 700, opacity: 0.6, color: enviadoManual ? "#fff" : undefined }}>Sin respuesta</span>}
-                        {(f.criterios || []).length > 0 && (
-                          <span style={{ fontSize: 10, fontWeight: 700, marginTop: 2, color: enviadoManual ? "#fff" : ((f.criterios.filter(c => c.ok).length === f.criterios.length) ? "#10c98a" : "#a16207") }}>
-                            criterios {f.criterios.filter(c => c.ok).length}/{f.criterios.length}
-                          </span>
-                        )}
-                      </div>
+                    )}
+                    <div data-testid={`mesa-criterios-${f.id}`} className={`clientes-mesa ${f.mesa_respuesta || "pendiente"}`}>
+                      {f.mesa_respuesta === "aprobada" && <span>Mesa · Aprobada</span>}
+                      {f.mesa_respuesta === "rechazada" && <span>Mesa · Rechazada</span>}
+                      {!f.mesa_respuesta && <span>Mesa · Sin respuesta</span>}
+                      {(f.criterios || []).length > 0 && (
+                        <span className="clientes-mesa-crit">
+                          criterios {f.criterios.filter(c => c.ok).length}/{f.criterios.length}
+                        </span>
+                      )}
                     </div>
-                  )}
+                    {f.emails_sent_count > 0 ? (
+                      <span title={`Último envío: ${(f.last_email_sent_at || "").slice(0,19).replace('T',' ')}`} className="clientes-estado">
+                        Enviada a mesa{f.last_email_sent_at ? ` · ${fmtAct(f.last_email_sent_at)}` : ""}
+                      </span>
+                    ) : f.is_ready_to_send ? (
+                      <span className="clientes-estado is-lista">Lista para enviar</span>
+                    ) : (
+                      <span className="clientes-estado is-off">En gestión</span>
+                    )}
+                  </div>
                   <div className="clientes-card-actions">
                     <button
                       className="docs-btn"
@@ -409,14 +433,14 @@ export default function ClientesLista() {
                       onClick={() => toggleEnvioManual(f)}
                       title={enviadoManual ? "Marcar como NO enviado" : "Marcar como ENVIADO (pinta la carpeta roja)"}
                       style={enviadoManual
-                        ? { background: "#fff", color: "#be123c", border: "1px solid #fff", fontWeight: 800 }
-                        : { background: "rgba(190,18,60,0.1)", color: "#be123c", border: "1px solid #be123c", fontWeight: 700 }}>
+                        ? { background: "transparent", color: "#e7cf7a", border: "1px solid rgba(212,175,55,0.45)", fontWeight: 700 }
+                        : { background: "transparent", color: "#94a3b8", border: "1px solid rgba(148,163,184,0.35)", fontWeight: 700 }}>
                       <i className={`fa ${enviadoManual ? "fa-check-square" : "fa-square-o"}`}></i> {enviadoManual ? "Enviado" : "No enviado"}
                     </button>
                     {f.is_ready_to_send && (
                       <button className="docs-btn" onClick={() => openFolder(f.id, "email")} data-testid={`btn-enviar-ya-${f.id}`}
                         title="Lista para enviar: abre la carpeta y prepara el autocorreo con preview automático"
-                        style={{ background: "#10d98e", color: "#fff", border: "1px solid #0e9f6e", fontWeight: 700, boxShadow: "0 2px 8px rgba(16,217,142,0.4)" }}>
+                        style={{ background: "transparent", color: "#86efac", border: "1px solid rgba(16,185,129,0.45)", fontWeight: 700 }}>
                         <i className="fa fa-paper-plane"></i> 🚀 Enviar Ya
                       </button>
                     )}
@@ -427,7 +451,9 @@ export default function ClientesLista() {
                       <i className="fa fa-trash"></i>
                     </button>
                   </div>
-                  <div data-testid={`modulos-carpeta-${f.id}`} style={{ width: "100%", display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10, paddingTop: 10, borderTop: enviadoManual ? "1px solid rgba(255,255,255,0.3)" : "1px solid rgba(46,92,230,0.25)" }}>
+                  <details data-testid={`modulos-carpeta-${f.id}`} className="clientes-card-mods">
+                    <summary>Más acciones</summary>
+                    <div className="clientes-card-mods-body">
                     <button data-testid={`btn-aprobacion-${f.id}`} onClick={() => irAModulo("aprobacion")}
                       title={`Enviar aprobación al cliente ${f.nombre}`}
                       style={modBtn("rgba(16,217,142,0.12)", "#10d98e", enviadoManual ? "#fff" : "#10c98a")}>
@@ -435,7 +461,7 @@ export default function ClientesLista() {
                     </button>
                     <button data-testid={`btn-gastos-${f.id}`} onClick={() => irAModulo("gastos")}
                       title={`Gasto operacional para ${f.nombre}`}
-                      style={modBtn("var(--gold, #d4af37)", "var(--gold, #d4af37)", "#0a0e17", true)}>
+                      style={modBtn("transparent", "var(--gold, #d4af37)", "#d4af37", true)}>
                       <i className="fa fa-money"></i> GASTO OPERACIONAL
                     </button>
                     <button data-testid={`btn-setcredito-${f.id}`} onClick={() => irAModulo("setcredito")}
@@ -503,7 +529,8 @@ export default function ClientesLista() {
                       style={modBtn("rgba(212,175,55,0.10)", "#d4af37", enviadoManual ? "#fff" : "#b8912e")}>
                       <i className="fa fa-history"></i> Historial
                     </button>
-                  </div>
+                    </div>
+                  </details>
                 </div>
               );
             })}
