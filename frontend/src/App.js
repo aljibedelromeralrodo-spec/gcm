@@ -237,6 +237,16 @@ function MainApp() {
   };
   const [showTour, setShowTour] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try { return localStorage.getItem("cm_sidebar_collapsed") === "1"; } catch { return false; }
+  });
+  const toggleSidebarCollapsed = () => {
+    setSidebarCollapsed(v => {
+      const next = !v;
+      try { localStorage.setItem("cm_sidebar_collapsed", next ? "1" : "0"); } catch { /* ignore */ }
+      return next;
+    });
+  };
   const [openSM, setOpenSM] = useState(null);
   const [energia, setEnergia] = useState(null);
   const [showCargarSaldo, setShowCargarSaldo] = useState(false);
@@ -531,7 +541,7 @@ function MainApp() {
             fontSize: "0.7rem", whiteSpace: "nowrap" }}>⬅ Volver a Admin</button>
       </div>
     )}
-    <div className="dashboard-layout" data-testid="dashboard" style={uEff?._sim ? { paddingTop: 40 } : undefined}>
+    <div className={`dashboard-layout${sidebarCollapsed ? " sidebar-is-collapsed" : ""}`} data-testid="dashboard" style={uEff?._sim ? { paddingTop: 40 } : undefined}>
       <ProtectorPantalla user={user} />
       {fullscreen && (
         <div data-testid="fs-hover-zone" onMouseEnter={() => setFsMenuVisible(true)}
@@ -544,7 +554,7 @@ function MainApp() {
           data-testid="mobile-backdrop"
         />
       )}
-      <aside className={`sidebar ${sidebarOpen ? 'open' : ''} ${fullscreen ? 'fs-auto' : ''} ${fullscreen && fsMenuVisible ? 'fs-visible' : ''}`}
+      <aside id="sidebar" className={`sidebar ${sidebarOpen ? 'open' : ''} ${sidebarCollapsed ? 'is-collapsed' : ''} ${fullscreen ? 'fs-auto' : ''} ${fullscreen && fsMenuVisible ? 'fs-visible' : ''}`}
         data-testid="sidebar" onMouseLeave={() => fullscreen && setFsMenuVisible(false)}>
         <div className="sidebar-brand" data-testid="sidebar-logo" style={{ background: "#0a0a0a",
           borderRadius: 10, padding: "0.95rem 0.5rem", textAlign: "center",
@@ -609,8 +619,17 @@ function MainApp() {
           <button onClick={logout} className="sidebar-logout" data-testid="btn-logout">Cerrar Sesión</button>
         </div>
       </aside>
+      <button type="button" className={`sidebar-collapse-tab${sidebarCollapsed ? " is-collapsed" : ""}`}
+        data-testid="sidebar-collapse-tab"
+        aria-expanded={!sidebarCollapsed}
+        aria-controls="sidebar"
+        aria-label={sidebarCollapsed ? "Mostrar menú" : "Ocultar menú"}
+        title={sidebarCollapsed ? "Mostrar menú" : "Ocultar menú"}
+        onClick={toggleSidebarCollapsed}>
+        <i className={`fa ${sidebarCollapsed ? "fa-chevron-right" : "fa-chevron-left"}`} aria-hidden="true"></i>
+      </button>
 
-      <main className={`main-content ${fullscreen ? 'fs-full' : ''}`}>
+      <main className={`main-content ${fullscreen || sidebarCollapsed ? 'fs-full' : ''}`}>
         <header className="topbar">
           <button
             className="mobile-menu-btn"

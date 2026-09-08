@@ -80,7 +80,36 @@ body { font-family: 'Inter', sans-serif; background: var(--bg-dark); color: var(
 .dashboard-layout { display: flex; min-height: 100vh; }
 
 /* Sidebar */
-.sidebar { width: 280px; background: rgba(14,14,16,0.78); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); border-right: 1px solid rgba(212,175,55,0.22); box-shadow: 8px 0 40px -20px rgba(5,5,5,0.8); display: flex; flex-direction: column; position: fixed; top: 0; bottom: 0; left: 0; z-index: 100; }
+.sidebar { width: 280px; background: rgba(14,14,16,0.78); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); border-right: 1px solid rgba(212,175,55,0.22); box-shadow: 8px 0 40px -20px rgba(5,5,5,0.8); display: flex; flex-direction: column; position: fixed; top: 0; bottom: 0; left: 0; z-index: 100; transition: transform 0.3s ease; }
+.sidebar.is-collapsed { transform: translateX(-100%); box-shadow: none; }
+.sidebar-collapse-tab {
+  position: fixed; top: 50%; left: 272px; z-index: 110;
+  display: flex; align-items: center; justify-content: center;
+  width: 10px; height: 56px; padding: 0; margin: 0;
+  transform: translateY(-50%);
+  background: rgba(20,12,2,0.35); color: rgba(245,185,66,0.65);
+  border: 1px solid rgba(245,158,11,0.22); border-left: none;
+  border-radius: 0 4px 4px 0;
+  cursor: pointer; font-size: 0.48rem; line-height: 1;
+  box-shadow: none; opacity: 0.4;
+  transition: background 0.2s, color 0.2s, opacity 0.2s, width 0.2s;
+}
+.sidebar-collapse-tab::before {
+  content: ""; position: absolute; top: -10px; bottom: -10px; left: -4px; right: -8px;
+}
+.sidebar-collapse-tab:hover,
+.sidebar-collapse-tab:focus-visible {
+  width: 14px; opacity: 1;
+  background: rgba(40,24,4,0.92); color: #FCF6BA;
+  outline: none;
+}
+.dashboard-layout.sidebar-is-collapsed .sidebar-collapse-tab,
+.sidebar-collapse-tab.is-collapsed {
+  left: 0;
+  border-left: 1px solid rgba(245,158,11,0.22);
+  opacity: 0.55;
+}
+.sidebar.fs-auto ~ .sidebar-collapse-tab { display: none; }
 .sidebar-brand { padding: 1rem 1.5rem; border-bottom: 2px solid var(--border-gold); }
 .sidebar-title { font-family: 'Playfair Display', serif; font-size: 1.55rem; font-weight: 800; letter-spacing: 1.5px; line-height: 1.1; background: linear-gradient(135deg, #BF953F, #FCF6BA, #B38728, #FBF5B7, #AA771C); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; filter: drop-shadow(0 1px 12px rgba(191,149,63,0.55)); }
 .sidebar-sub { font-family: 'Playfair Display', serif; font-size: 0.9rem; color: var(--gold); letter-spacing: 4px; text-transform: uppercase; margin-top: 0.35rem; opacity: 0.85; position: relative; padding-top: 0.35rem; }
@@ -97,7 +126,7 @@ body { font-family: 'Inter', sans-serif; background: var(--bg-dark); color: var(
 .sidebar-logout:hover { background: rgba(225,29,72,0.2); }
 
 /* Main Content */
-.main-content { margin-left: 280px; flex: 1; min-width: 0; min-height: 100vh; background: var(--bg-dark); }
+.main-content { margin-left: 280px; flex: 1; min-width: 0; min-height: 100vh; background: var(--bg-dark); transition: margin-left 0.3s ease; }
 
 /* Correos pendientes: ventana derecha + pestaña para ocultar */
 .correos-dock-tab {
@@ -579,6 +608,9 @@ body { font-family: 'Inter', sans-serif; background: var(--bg-dark); color: var(
   .sidebar-item span:not(.sidebar-icon) { display: inline; }
   .main-content { margin-left: 0; }
   .mobile-menu-btn { display: flex !important; }
+  .sidebar-collapse-tab { display: none !important; }
+  .sidebar.is-collapsed { transform: translateX(-100%); }
+  .sidebar.open.is-collapsed { transform: translateX(0); }
   .mobile-backdrop {
     position: fixed; inset: 0; background: rgba(0,0,0,0.6);
     z-index: 99; backdrop-filter: blur(2px);
@@ -1423,9 +1455,34 @@ body { font-family: 'Inter', sans-serif; background: var(--bg-dark); color: var(
 .clientes-form-actions { display: flex; gap: 0.5rem; justify-content: flex-end; }
 
 /* Detail */
-.clientes-detail-header { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
-.clientes-detail-header h3 { flex: 1; color: var(--gold); font-size: 1.1rem; display: flex; align-items: center; gap: 0.5rem; }
-.clientes-detail-actions { display: flex; gap: 0.5rem; }
+.clientes-detail-header { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.75rem; flex-wrap: wrap; }
+.clientes-detail-header h3 { flex: 0 1 auto; min-width: 0; color: var(--gold); font-size: 1.05rem; display: flex; align-items: center; gap: 0.5rem; }
+.clientes-detail-actions { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; margin-left: auto; }
+.ficha-dd { position: relative; }
+.ficha-dd > summary { list-style: none; }
+.ficha-dd > summary::-webkit-details-marker, .ficha-dd > summary::marker { display: none; content: none; }
+.ficha-dd-menu {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 160;
+  min-width: 260px; display: flex; flex-direction: column; gap: 2px;
+  padding: 8px; background: rgba(12,8,2,0.98);
+  border: 1px solid rgba(245,158,11,0.4); border-radius: 8px;
+  box-shadow: 0 16px 40px rgba(0,0,0,0.5);
+}
+.ficha-dd-menu button,
+.ficha-dd-menu [data-testid^="importar-correo-btn"] {
+  width: 100% !important; justify-content: flex-start !important; text-align: left !important;
+  display: flex !important; align-items: center !important; gap: 0.5rem !important;
+  font-size: 0.8125rem !important; font-weight: 600 !important;
+  padding: 0.5rem 0.75rem !important; border-radius: 6px !important;
+  background: transparent !important; color: #e7e5e4 !important;
+  border: none !important; box-shadow: none !important; cursor: pointer;
+}
+.ficha-dd-menu button:hover,
+.ficha-dd-menu [data-testid^="importar-correo-btn"]:hover { background: rgba(255,255,255,0.08) !important; }
+.ficha-dd-menu button:disabled { opacity: 0.55; cursor: wait; }
+@media (max-width: 768px) {
+  .ficha-dd-menu { left: 0; right: auto; max-width: calc(100vw - 24px); }
+}
 .clientes-codeudor-badge { background: rgba(212,175,55,0.08); border: 1px solid rgba(212,175,55,0.2); border-radius: 0px; padding: 0.5rem 1rem; margin-bottom: 1rem; color: var(--gold-light); font-size: 0.82rem; }
 
 .clientes-files-list { display: flex; flex-direction: column; gap: 0.7rem; }

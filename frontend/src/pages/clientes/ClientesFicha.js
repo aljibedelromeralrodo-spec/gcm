@@ -50,87 +50,113 @@ export default function ClientesFicha() {
   return (
         <div data-testid="clientes-detail">
           <div className="clientes-detail-header">
-            <button className="docs-btn secondary" onClick={() => { setView("list"); setCurrentFolder(null); }} data-testid="btn-back-clientes">
-              <i className="fa fa-arrow-left"></i> Volver
-            </button>
-            <h3><i className="fa fa-folder-open"></i> {currentFolder.nombre}</h3>
-            {/* PRIMERA CATEGORÍA VISIBLE: resolución SERVIU (solo ventas con subsidio) */}
-            {(() => {
-              const df = currentFolder.datos_financieros || {};
-              const conSub = df.con_subsidio ?? (currentFolder.credit_request?.subsidy?.tipo === "con_subsidio");
-              const st = { display: "inline-block", padding: "0.35rem 0.9rem", borderRadius: 8, fontWeight: 900, fontSize: 13, letterSpacing: 0.5, whiteSpace: "nowrap" };
-              if (!conSub) return (
-                <span data-testid="badge-serviu" title="La resolución SERVIU aplica solo a ventas con subsidio"
-                  style={{ ...st, background: "rgba(148,163,184,0.12)", color: "#94a3b8", border: "1px dashed #64748b" }}>
-                  SIN SUBSIDIO · SERVIU NO APLICA</span>);
-              return df.resolucion_serviu
-                ? <span data-testid="badge-serviu" style={{ ...st, background: "rgba(34,197,94,0.18)", color: "#22c55e", border: "1px solid #22c55e" }}>✅ CON RESOLUCIÓN SERVIU</span>
-                : <span data-testid="badge-serviu" style={{ ...st, background: "rgba(239,68,68,0.18)", color: "#f87171", border: "1px solid #ef4444" }}>⛔ SIN RESOLUCIÓN SERVIU</span>;
-            })()}
+            <div className="flex items-center gap-3 min-w-0 flex-wrap">
+              <button type="button"
+                className="inline-flex items-center gap-2 py-2 px-4 text-sm rounded-md bg-transparent text-slate-300 border border-white/20 hover:bg-white/5 cursor-pointer"
+                onClick={() => { setView("list"); setCurrentFolder(null); }} data-testid="btn-back-clientes">
+                <i className="fa fa-arrow-left"></i> Volver
+              </button>
+              <h3 className="truncate m-0"><i className="fa fa-folder-open"></i> {currentFolder.nombre}</h3>
+              {/* PRIMERA CATEGORÍA VISIBLE: resolución SERVIU (solo ventas con subsidio) */}
+              {(() => {
+                const df = currentFolder.datos_financieros || {};
+                const conSub = df.con_subsidio ?? (currentFolder.credit_request?.subsidy?.tipo === "con_subsidio");
+                const st = { display: "inline-block", padding: "0.35rem 0.9rem", borderRadius: 8, fontWeight: 900, fontSize: 13, letterSpacing: 0.5, whiteSpace: "nowrap" };
+                if (!conSub) return (
+                  <span data-testid="badge-serviu" title="La resolución SERVIU aplica solo a ventas con subsidio"
+                    style={{ ...st, background: "rgba(148,163,184,0.12)", color: "#94a3b8", border: "1px dashed #64748b" }}>
+                    SIN SUBSIDIO · SERVIU NO APLICA</span>);
+                return df.resolucion_serviu
+                  ? <span data-testid="badge-serviu" style={{ ...st, background: "rgba(34,197,94,0.18)", color: "#22c55e", border: "1px solid #22c55e" }}>✅ CON RESOLUCIÓN SERVIU</span>
+                  : <span data-testid="badge-serviu" style={{ ...st, background: "rgba(239,68,68,0.18)", color: "#f87171", border: "1px solid #ef4444" }}>⛔ SIN RESOLUCIÓN SERVIU</span>;
+              })()}
+            </div>
+
             <div className="clientes-detail-actions">
-              <button className="docs-btn secondary" onClick={saveAllAttachments} disabled={loading} data-testid="btn-fetch-attachments">
-                <i className={`fa ${loading ? "fa-spinner fa-spin" : "fa-envelope"}`}></i> Buscar Adjuntos
-              </button>
-              <button className="docs-btn secondary" onClick={() => document.getElementById('manual-upload-input').click()} disabled={uploadingManual} data-testid="btn-upload-manual"
-                style={{ background: "rgba(46,92,230,0.15)", border: "1px solid #2e5ce6", color: "#a78bfa" }}>
-                <i className={`fa ${uploadingManual ? "fa-spinner fa-spin" : "fa-upload"}`}></i> {uploadingManual ? "Subiendo…" : "Subir Archivo"}
-              </button>
               <input id="manual-upload-input" type="file" multiple style={{ display: "none" }} onChange={handleManualUpload}
                 accept=".pdf,.jpg,.jpeg,.png,.heic,.heif,.docx,.doc,.xlsx" data-testid="manual-upload-input" />
-              <ImportarCorreo destino="carpeta" destinoId={currentFolder.id} nombre={currentFolder.nombre}
-                label="Importar desde correo"
-                onDone={async () => { const r = await axios.get(`${API}/api/clientes/folders/${currentFolder.id}`); setCurrentFolder(r.data); }} />
-              <ImportarCorreo destino="estudio_titulo" destinoId={currentFolder.id} nombre={currentFolder.nombre}
-                label="Importar a Estudio de Título" style={{ background: "rgba(13,148,136,0.25)" }}
-                onDone={async () => { const r = await axios.get(`${API}/api/clientes/folders/${currentFolder.id}`); setCurrentFolder(r.data); }} />
-              <button className="docs-btn secondary" onClick={regenerateCombined} disabled={mergingProto === currentFolder.id} data-testid="btn-regen-combined"
-                style={{ background: "rgba(234,88,12,0.15)", border: "1px solid #ea580c", color: "#fb923c" }}>
-                <i className={`fa ${mergingProto === currentFolder.id ? "fa-spinner fa-spin" : "fa-file-pdf-o"}`}></i> {mergingProto === currentFolder.id ? "Combinando…" : "Regenerar Combinado"}
-              </button>
-              <button className="docs-btn secondary" onClick={() => openFinPanel(currentFolder)} data-testid="btn-fin-detail"
-                style={{ background: "rgba(212,175,55,0.15)", border: "1px solid #d4af37", color: "#b8942e" }}>
-                <i className="fa fa-dollar"></i> Datos Financieros
-              </button>
-              <button className="docs-btn secondary shimmer-oro" onClick={() => calcularTecho(currentFolder)} disabled={techoBusy} data-testid="btn-techo-hipotecario"
-                style={{ backgroundImage: "linear-gradient(135deg, #BF953F, #FCF6BA 45%, #B38728, #FBF5B7 80%, #AA771C)", border: "none", color: "#0a0a0a", fontWeight: 800 }}>
+
+              <details className="ficha-dd" name="clientes-ficha-ab">
+                <summary className="inline-flex items-center gap-1.5 py-2 px-4 text-sm font-semibold rounded-md bg-transparent text-[#e7cf7a] border border-[rgba(245,158,11,0.4)] cursor-pointer hover:bg-[rgba(212,175,55,0.1)]">
+                  <i className="fa fa-plus"></i> Añadir <i className="fa fa-chevron-down text-[10px] opacity-70"></i>
+                </summary>
+                <div className="ficha-dd-menu">
+                  <button type="button" onClick={saveAllAttachments} disabled={loading} data-testid="btn-fetch-attachments">
+                    <i className={`fa ${loading ? "fa-spinner fa-spin" : "fa-envelope"}`}></i> Buscar Adjuntos
+                  </button>
+                  <button type="button" onClick={() => document.getElementById('manual-upload-input').click()} disabled={uploadingManual} data-testid="btn-upload-manual">
+                    <i className={`fa ${uploadingManual ? "fa-spinner fa-spin" : "fa-upload"}`}></i> {uploadingManual ? "Subiendo…" : "Subir Archivo"}
+                  </button>
+                  <ImportarCorreo destino="carpeta" destinoId={currentFolder.id} nombre={currentFolder.nombre}
+                    label="Importar desde correo"
+                    style={{ background: "transparent", border: "none", color: "#e7e5e4", borderRadius: 6, padding: "0.5rem 0.75rem", fontWeight: 600, fontSize: "0.8125rem", width: "100%", textAlign: "left", display: "flex" }}
+                    onDone={async () => { const r = await axios.get(`${API}/api/clientes/folders/${currentFolder.id}`); setCurrentFolder(r.data); }} />
+                  <ImportarCorreo destino="estudio_titulo" destinoId={currentFolder.id} nombre={currentFolder.nombre}
+                    label="Importar a Estudio de Título"
+                    style={{ background: "transparent", border: "none", color: "#e7e5e4", borderRadius: 6, padding: "0.5rem 0.75rem", fontWeight: 600, fontSize: "0.8125rem", width: "100%", textAlign: "left", display: "flex" }}
+                    onDone={async () => { const r = await axios.get(`${API}/api/clientes/folders/${currentFolder.id}`); setCurrentFolder(r.data); }} />
+                </div>
+              </details>
+
+              <details className="ficha-dd" name="clientes-ficha-ab">
+                <summary className="inline-flex items-center gap-1.5 py-2 px-4 text-sm font-semibold rounded-md bg-transparent text-[#e7cf7a] border border-[rgba(245,158,11,0.4)] cursor-pointer hover:bg-[rgba(212,175,55,0.1)]">
+                  <i className="fa fa-file-text-o"></i> Generar / Exportar <i className="fa fa-chevron-down text-[10px] opacity-70"></i>
+                </summary>
+                <div className="ficha-dd-menu">
+                  <button type="button" onClick={regenerateCombined} disabled={mergingProto === currentFolder.id} data-testid="btn-regen-combined">
+                    <i className={`fa ${mergingProto === currentFolder.id ? "fa-spinner fa-spin" : "fa-file-pdf-o"}`}></i> {mergingProto === currentFolder.id ? "Combinando…" : "Regenerar Combinado"}
+                  </button>
+                  <button type="button" onClick={() => openFinPanel(currentFolder)} data-testid="btn-fin-detail">
+                    <i className="fa fa-dollar"></i> Datos Financieros
+                  </button>
+                  <button type="button" onClick={() => window.open(`${API}/api/informes/vip/${currentFolder.id}/pdf`, "_blank")} data-testid={`btn-informe-vip-${currentFolder.id}`}>
+                    <i className="fa fa-file-pdf-o"></i> Informe VIP
+                  </button>
+                  <button type="button" onClick={() => downloadAll(currentFolder.id)} data-testid="btn-download-all">
+                    <i className="fa fa-download"></i> Descargar Todo
+                  </button>
+                </div>
+              </details>
+
+              <details className="ficha-dd" name="clientes-ficha-ab">
+                <summary className="inline-flex items-center gap-1.5 py-2 px-4 text-sm font-semibold rounded-md bg-transparent text-[#e7cf7a] border border-[rgba(245,158,11,0.4)] cursor-pointer hover:bg-[rgba(212,175,55,0.1)]">
+                  <i className="fa fa-ellipsis-v"></i> Acciones <i className="fa fa-chevron-down text-[10px] opacity-70"></i>
+                </summary>
+                <div className="ficha-dd-menu">
+                  <button type="button" data-testid="btn-reenviar-notificacion"
+                    onClick={async () => {
+                      if (!window.confirm(`📧 ¿Re-enviar la notificación de aprobación a ${currentFolder.nombre}?\nSe saltará el bloqueo de duplicados (para cuando el cliente dice que no le llegó).`)) return;
+                      try {
+                        const r = await axios.post(`${API}/api/clientes/folders/${currentFolder.id}/reenviar-notificacion`);
+                        window.alert(`✅ Notificación re-enviada a ${r.data.to}${(r.data.adjuntos || []).length ? ` con ${r.data.adjuntos.length} adjunto(s)` : r.data.con_links ? " con links de descarga segura" : ""} (BCC cuenta comercial)`);
+                      } catch (e) { window.alert(`🚨 ${e.response?.data?.detail || "Error al re-enviar la notificación"}`); }
+                    }}>
+                    <i className="fa fa-bell"></i> Re-enviar Notificación
+                  </button>
+                  <button type="button" data-testid="btn-compromiso" onClick={() => setShowCompromiso(true)}>
+                    <i className="fa fa-file-text-o"></i> Ver/Editar Compromiso de Compraventa
+                  </button>
+                  <button type="button" onClick={() => openMissingDocsModal(currentFolder)} data-testid="btn-missing-docs-detail"
+                    title={(currentFolder.alertas_documentales || []).join("\n") || "Solicitar documentos faltantes"}>
+                    <i className="fa fa-exclamation-triangle"></i> Documento Faltante
+                  </button>
+                  <button type="button" onClick={() => agregarCodeudor(currentFolder)} data-testid={`btn-agregar-codeudor-${currentFolder.id}`}>
+                    <i className="fa fa-user-plus"></i> Agregar Codeudor
+                  </button>
+                  <EnviarResultadoEjecutivo folder={currentFolder} />
+                </div>
+              </details>
+
+              <button type="button"
+                className="inline-flex items-center gap-2 py-2 px-4 text-sm font-semibold rounded-md bg-transparent text-[#e7cf7a] border border-[rgba(245,158,11,0.5)] hover:bg-[rgba(212,175,55,0.1)] cursor-pointer disabled:opacity-60"
+                onClick={() => calcularTecho(currentFolder)} disabled={techoBusy} data-testid="btn-techo-hipotecario">
                 <i className={`fa ${techoBusy ? "fa-spinner fa-spin" : "fa-bar-chart"}`}></i> {techoBusy ? "Calculando…" : "Calcular Alcance Máximo"}
               </button>
-              <button className="docs-btn secondary shimmer-oro" onClick={() => openEmailModal(currentFolder)} data-testid="btn-send-autocorreo-detail"
-                style={{ background: "#10c98a", border: "1px solid #0e9f6e", color: "#fff", fontWeight: 600 }}>
+              <button type="button"
+                className="inline-flex items-center gap-2 py-2 px-4 text-sm font-extrabold rounded-md cursor-pointer border-0"
+                onClick={() => openEmailModal(currentFolder)} data-testid="btn-send-autocorreo-detail"
+                style={{ background: "#d4af37", color: "#0a0a0a" }}>
                 <i className="fa fa-paper-plane"></i> Enviar a Mesa
-              </button>
-              <button className="docs-btn secondary" data-testid="btn-reenviar-notificacion"
-                onClick={async () => {
-                  if (!window.confirm(`📧 ¿Re-enviar la notificación de aprobación a ${currentFolder.nombre}?\nSe saltará el bloqueo de duplicados (para cuando el cliente dice que no le llegó).`)) return;
-                  try {
-                    const r = await axios.post(`${API}/api/clientes/folders/${currentFolder.id}/reenviar-notificacion`);
-                    window.alert(`✅ Notificación re-enviada a ${r.data.to}${(r.data.adjuntos || []).length ? ` con ${r.data.adjuntos.length} adjunto(s)` : r.data.con_links ? " con links de descarga segura" : ""} (BCC cuenta comercial)`);
-                  } catch (e) { window.alert(`🚨 ${e.response?.data?.detail || "Error al re-enviar la notificación"}`); }
-                }}
-                style={{ background: "rgba(59,130,246,0.15)", border: "1px solid #3b82f6", color: "#93c5fd" }}>
-                <i className="fa fa-bell"></i> Re-enviar Notificación
-              </button>
-              <button className="docs-btn secondary shimmer-oro" data-testid="btn-compromiso"
-                onClick={() => setShowCompromiso(true)}
-                style={{ background: "rgba(212,175,55,0.18)", border: "1px solid #d4af37", color: "#d4af37", fontWeight: 700 }}>
-                <i className="fa fa-file-text-o"></i> Ver/Editar Compromiso de Compraventa
-              </button>
-              <button className="docs-btn secondary" onClick={() => openMissingDocsModal(currentFolder)} data-testid="btn-missing-docs-detail"
-                title={(currentFolder.alertas_documentales || []).join("\n") || "Solicitar documentos faltantes"}
-                style={{ background: "rgba(225,29,72,0.15)", border: "1px solid rgba(225,29,72,0.5)", color: "#fb7185" }}>
-                <i className="fa fa-exclamation-triangle"></i> Documento Faltante
-              </button>
-              <button className="docs-btn secondary" onClick={() => agregarCodeudor(currentFolder)} data-testid={`btn-agregar-codeudor-${currentFolder.id}`}
-                style={{ background: "rgba(251,146,60,0.15)", border: "1px solid rgba(251,146,60,0.5)", color: "#fdba74" }}>
-                <i className="fa fa-user-plus"></i> Agregar Codeudor
-              </button>
-              <button className="docs-btn secondary" onClick={() => window.open(`${API}/api/informes/vip/${currentFolder.id}/pdf`, "_blank")} data-testid={`btn-informe-vip-${currentFolder.id}`}
-                style={{ background: "rgba(212,175,55,0.12)", border: "1px solid rgba(212,175,55,0.5)", color: "#d4af37" }}>
-                <i className="fa fa-file-pdf-o"></i> Informe VIP
-              </button>
-              <EnviarResultadoEjecutivo folder={currentFolder} />
-              <button className="docs-btn primary" onClick={() => downloadAll(currentFolder.id)} data-testid="btn-download-all">
-                <i className="fa fa-download"></i> Descargar Todo
               </button>
             </div>
           </div>
