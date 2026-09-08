@@ -100,7 +100,15 @@ export default function ProFlujoModule({ onNavigate }) {
     if (!ficha) return;
     const accion = ficha.accion;
     if (accion?.startsWith("abrir_") || accion === "sincronizar") {
-      ir(accion === "abrir_carpeta" || accion === "sincronizar" ? "clientes" : ficha.modulo, ficha);
+      if (accion === "abrir_carpeta" || accion === "sincronizar") {
+        ir("clientes", { ...ficha, cm_abrir_folder_id: ficha.id });
+        return;
+      }
+      if (accion === "abrir_escritura") {
+        ir("escritura", { ...ficha, cm_abrir_folder_id: ficha.id });
+        return;
+      }
+      ir(ficha.modulo, ficha);
       return;
     }
     if (accion === "registrar_gop") {
@@ -307,7 +315,18 @@ export default function ProFlujoModule({ onNavigate }) {
                 )}
               </>
             )}
-            <button onClick={() => ir(ficha.modulo, ficha)} style={ghost}>Abrir {ficha.modulo}</button>
+            <button
+              onClick={() => {
+                if (ficha.etapa === "escrituracion" || ficha.accion === "abrir_escritura") {
+                  ir("escritura", { ...ficha, cm_abrir_folder_id: ficha.id });
+                  return;
+                }
+                ir(ficha.modulo, { ...ficha, cm_abrir_folder_id: ficha.id });
+              }}
+              style={ghost}
+            >
+              Abrir {ficha.etapa === "escrituracion" || ficha.accion === "abrir_escritura" ? "escritura" : ficha.modulo}
+            </button>
           </div>
         </div>
       )}

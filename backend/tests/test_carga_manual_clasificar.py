@@ -93,7 +93,9 @@ def test_hito_ruteo_no_cae_en_99():
     assert fsvc.subfolder_de_hito("rechazo_mesa") == "11_resoluciones"
     assert fsvc.subfolder_de_hito("estudio_titulo") == "07_estudio_titulo"
     assert fsvc.subfolder_de_hito("solicitud_credito") == ""
-    assert fsvc.subfolder_de_hito("faltantes") == "99_otros"
+    assert fsvc.subfolder_de_hito("faltantes") == ""
+    assert fsvc.subfolder_de_hito("gop") == "12_gop"
+    assert fsvc.HITO_A_SUBFOLDER["faltantes"] == fsvc.CLASIFICAR_POR_OCR
 
 
 def test_ocr_rescate_solo_si_nombre_no_clasifica():

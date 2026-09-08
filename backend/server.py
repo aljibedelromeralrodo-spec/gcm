@@ -7384,7 +7384,8 @@ async def proc_vincular_carpeta(qid: str, payload: dict, request: Request):
             continue
         raw_h = src.read_bytes()
         fn_dest, sub_arch = src.name, sub
-        if not (sub_arch or "").strip():
+        # Faltantes (y cualquier hito sin sub fija): OCR → 01–04, nunca 99 por omisión.
+        if (hito or "") == "faltantes" or not (sub_arch or "").strip():
             fn_dest, sub_arch = await _clasificar_ubicacion_manual(src.name, raw_h)
         rel = await asyncio.to_thread(
             fsvc.guardar_archivo, doc.get("nombre", ""), fn_dest, raw_h, sub_arch)

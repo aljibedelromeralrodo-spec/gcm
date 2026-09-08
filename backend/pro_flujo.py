@@ -131,7 +131,7 @@ def _modulo_de(etapa):
         "listo_mesa": "clientes",
         "gop": "gastos",
         "en_mesa": "supercarpeta",
-        "escrituracion": "supercarpeta",
+        "escrituracion": "escritura",
         "cerrado": "postventa",
     }.get(etapa, "clientes")
 
@@ -383,6 +383,7 @@ async def api_actuar(payload: dict, request: Request):
     nombre = (fd or {}).get("nombre") or ""
 
     if accion in ("armar_borrador", "sincronizar"):
+        import asyncio
         import blindaje_correos as bl
         dest = _email_de(fd)
         if not dest:
@@ -392,24 +393,24 @@ async def api_actuar(payload: dict, request: Request):
         fd_mail = dict(fd)
         if not (fd_mail.get("source_email") or "").strip():
             fd_mail["source_email"] = dest
-        inv = await bl.enriquecer_desde_ingesta(fd_mail, None)
+        analisis = {}
+        try:
+            analisis = await bl._analisis_thread(fd_mail)
+        except Exception:
+            analisis = {}
+        inv = bl.inventario_protocolo(fd_mail, analisis=analisis)
+        await bl.sincronizar_documentos(fd_mail, inv)
         if inv.get("completo"):
             return {"ok": True, "resultado": "protocolo_completo",
                     "faltan": [], "completo": True,
                     "mensaje": "Protocolo completo. No hay faltantes que pedir."}
-        auth = await db.correos_autorizacion_admin.find_one(
-            {"estado": "pendiente", "$or": [{"folder_id": fid}, {"caso_id": fid}]},
-            {"_id": 0, "id": 1})
-        if not auth:
-            raise HTTPException(
-                status_code=400,
-                detail="No se pudo armar el borrador de faltantes. Revisá el inventario de la carpeta.")
+        asyncio.create_task(bl.encolar_faltantes(fd_mail, inv))
         return {"ok": True, "resultado": "borrador_faltantes",
                 "protocolo": inv.get("protocolo_nombre"),
                 "faltan": inv.get("documentos_faltan") or [],
-                "completo": False, "auth_id": auth.get("id"),
-                "mensaje": ("Borrador de faltantes armado. Quedó en autorización; "
-                            "no se envió. Pasá a la columna Autorizar mail.")}
+                "completo": False,
+                "mensaje": ("Borrador de faltantes en segundo plano. "
+                            "Queda en Autorizar mail; no se envía solo.")}
 
     if accion == "autorizar_faltantes":
         aid = (payload.get("auth_id") or "").strip()

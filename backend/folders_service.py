@@ -72,14 +72,18 @@ SUBFOLDER_A_CAT = {
     "11_resoluciones": "resolucion", "12_gop": "gop",
 }
 
-# Hito de la cola de correos → subcarpeta. solicitud_credito = "" (clasifica por archivo).
+# Hito de la cola de correos → subcarpeta.
+# "" / "clasificar_por_ocr" = cada PDF pasa por OCR (01–04), no a 99_otros.
+CLASIFICAR_POR_OCR = "clasificar_por_ocr"
 HITO_A_SUBFOLDER = {
     "estudio_titulo": "07_estudio_titulo",
     "tasacion": "09_tasacion",
     "escritura": "10_escritura",
     "aprobacion_mesa": "11_resoluciones",
     "rechazo_mesa": "11_resoluciones",
-    "faltantes": "99_otros",
+    "gop": "12_gop",
+    "gastos_operacionales": "12_gop",
+    "faltantes": CLASIFICAR_POR_OCR,
     "solicitud_credito": "",
 }
 
@@ -262,8 +266,11 @@ def asegurar_estructura(nombre):
 
 
 def subfolder_de_hito(hito):
-    """Subcarpeta al vincular un hito de la cola. '' = clasificar cada archivo."""
-    return HITO_A_SUBFOLDER.get((hito or "").strip().lower(), "99_otros")
+    """Subcarpeta al vincular un hito. '' = clasificar cada PDF por OCR/nombre."""
+    sub = HITO_A_SUBFOLDER.get((hito or "").strip().lower(), "99_otros")
+    if sub in ("", CLASIFICAR_POR_OCR):
+        return ""
+    return sub
 
 
 def necesita_ocr_rescate(filename, tipo_ia=""):

@@ -153,6 +153,18 @@ def _es_admin(request):
     return c
 
 
+def _puede_autorizar(request):
+    """es_admin (admin/maestro) o gerencia: autorizar correos de faltantes."""
+    c = getattr(request.state, "user", {}) or {}
+    rol = (c.get("rol") or "").strip().lower()
+    es_admin = rol in ("admin", "maestro")
+    if not (es_admin or rol == "gerencia"):
+        raise HTTPException(
+            status_code=403,
+            detail="No tienes permisos para autorizar correos.")
+    return c
+
+
 def protocolo_por_id(pid):
     for p in PROTOCOLOS:
         if p["id"] == pid:
@@ -485,7 +497,7 @@ async def api_protocolos(request: Request):
 
 @blindaje.get("/autorizaciones")
 async def api_autorizaciones(request: Request, estado: str = "pendiente"):
-    _es_admin(request)
+    _puede_autorizar(request)
     q = {}
     if estado and estado != "todas":
         q["estado"] = estado
@@ -534,7 +546,7 @@ async def api_sync_carpeta(fid: str, request: Request):
 
 @blindaje.post("/autorizaciones/{aid}/decidir")
 async def api_decidir(aid: str, payload: dict, request: Request):
-    user = _es_admin(request)
+    user = _puede_autorizar(request)
     doc = await db.correos_autorizacion_admin.find_one({"id": aid})
     if not doc:
         raise HTTPException(status_code=404, detail="Autorización no encontrada")

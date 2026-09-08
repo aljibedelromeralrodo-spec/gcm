@@ -31,6 +31,11 @@ class TestDetectarHito:
         h = c.detectar_hito("", "Confección borrador escritura Pérez", "notaria@sada.cl", "", [])
         assert h == "escritura"
 
+    def test_gop_por_texto(self):
+        h = c.detectar_hito("", "Gastos operacionales Pérez", "ops@centralmutuos.cl", "", [])
+        assert h == "gop"
+        assert "gop" in c.HITOS_CAPTURAR
+
     def test_spam_no_se_captura(self):
         h = c.detectar_hito("no_relacionado", "50% OFF", "promo@shop.com", "", [])
         assert h == "otro"

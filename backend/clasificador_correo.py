@@ -18,11 +18,11 @@ CATEGORIAS = ("solicitud_nueva", "consulta_administrativa", "aprobacion_mesa",
 # Solo estos se capturan en cola además de solicitud_nueva.
 HITOS = (
     "solicitud_credito", "aprobacion_mesa", "rechazo_mesa", "tasacion",
-    "estudio_titulo", "escritura", "faltantes", "administrativo", "otro",
+    "estudio_titulo", "escritura", "faltantes", "gop", "administrativo", "otro",
 )
 HITOS_CAPTURAR = frozenset((
     "solicitud_credito", "aprobacion_mesa", "rechazo_mesa", "tasacion",
-    "estudio_titulo", "escritura", "faltantes",
+    "estudio_titulo", "escritura", "faltantes", "gop",
 ))
 HITO_LABELS = {
     "solicitud_credito": "Solicitud de crédito",
@@ -32,6 +32,7 @@ HITO_LABELS = {
     "estudio_titulo": "Estudio de títulos",
     "escritura": "Escritura",
     "faltantes": "Petición de documentos",
+    "gop": "Gasto operacional",
     "administrativo": "Administrativo",
     "otro": "Otro",
 }
@@ -43,6 +44,8 @@ _RX_ESTUDIO = re.compile(
     r"inscripci[oó]n\s+de\s+dominio|cbr\b|conservador", re.I)
 _RX_ESCRITURA = re.compile(
     r"escritur|notar[ií]a|repertorio|firma\s+de\s+escritura|confecci[oó]n\s+de\s+borrador", re.I)
+_RX_GOP = re.compile(
+    r"gastos?\s+operacional|\bgop\b|voucher\s+(de\s+)?(gasto|gop)", re.I)
 
 
 def detectar_hito(categoria="", subject="", sender="", body="", adjuntos=None):
@@ -66,6 +69,8 @@ def detectar_hito(categoria="", subject="", sender="", body="", adjuntos=None):
         return "estudio_titulo"
     if _RX_ESCRITURA.search(txt):
         return "escritura"
+    if _RX_GOP.search(txt):
+        return "gop"
     if cat == "consulta_administrativa":
         return "administrativo"
     if cat == "no_relacionado":

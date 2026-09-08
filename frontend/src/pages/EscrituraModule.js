@@ -1,7 +1,31 @@
+import { useEffect, useState } from "react";
 import { vipCard, vipTitle, useCarpetasVIP, VipHeader, VipVacio, FechaFmt, Semaforo } from "./TasacionModule";
 
 export default function EscrituraModule({ onNavigate }) {
   const { carpetas, loading, error, reload } = useCarpetasVIP("escrituracion/carpetas");
+  const [abrirId, setAbrirId] = useState("");
+
+  useEffect(() => {
+    let fid = "";
+    try {
+      fid = sessionStorage.getItem("cm_abrir_folder_id") || "";
+      if (fid) sessionStorage.removeItem("cm_abrir_folder_id");
+      if (!fid) {
+        const raw = sessionStorage.getItem("cm_prefill_cliente");
+        if (raw) {
+          const p = JSON.parse(raw);
+          fid = p.folder_id || "";
+        }
+      }
+    } catch { /* */ }
+    if (fid) setAbrirId(fid);
+  }, []);
+
+  useEffect(() => {
+    if (!abrirId) return;
+    const el = document.querySelector(`[data-folder-id="${abrirId}"]`);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [abrirId, carpetas]);
 
   const firmaVIP = (c) => {
     sessionStorage.setItem("cm_prefill_firma", JSON.stringify({ nombre: c.nombre, rut: c.rut, folder_id: c.id }));
@@ -18,7 +42,10 @@ export default function EscrituraModule({ onNavigate }) {
       {loading ? <VipVacio texto="Cargando fichas…" testId="escritura-loading" /> :
         carpetas.length === 0 ? <VipVacio texto="No hay carpetas en escrituración todavía." testId="escritura-vacio" /> :
         carpetas.map((c, i) => (
-          <div key={c.id} data-testid={`escritura-ficha-${i}`} style={{ ...vipCard, marginBottom: "1.4rem" }}>
+          <div key={c.id} data-folder-id={c.id} data-testid={`escritura-ficha-${i}`} style={{
+            ...vipCard, marginBottom: "1.4rem",
+            outline: abrirId && c.id === abrirId ? "2px solid #d4af37" : undefined,
+          }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1.2rem" }}>
               <div>
                 <h3 style={vipTitle}>{c.nombre}</h3>
