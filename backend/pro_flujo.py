@@ -92,6 +92,19 @@ def inventario_faltantes(fd):
     return [vdoc.LABELS.get(c, c) for c in cats][:8]
 
 
+def faltan_para_tablero(fd):
+    """Faltantes del tablero sin escanear disco (el GET no puede bloquear el API)."""
+    fd = fd or {}
+    if fd.get("protocolo_completo"):
+        return []
+    raw = fd.get("protocolo_faltan")
+    if isinstance(raw, list):
+        return [str(x) for x in raw if x][:8]
+    if isinstance(raw, str) and raw.strip():
+        return [raw.strip()]
+    return ["Documentación por revisar"]
+
+
 def accion_de(etapa, fd, *, gop_enviado=False):
     """Qué botón mostrar. No envía nada por sí sola."""
     if etapa == "clasificar":
@@ -171,7 +184,7 @@ async def api_tablero(request: Request):
 
     cols = {k: [] for k, *_ in COLUMNAS}
     for fd in folders:
-        faltan = inventario_faltantes(fd)
+        faltan = faltan_para_tablero(fd)
         g = gop_por_nombre.get((fd.get("nombre") or "").strip().lower()) or {}
         gop_env = bool(g.get("enviado_en"))
         gop_ok = bool(g.get("pagado") or (g.get("estado_pago") or "").upper() == "PAGADO")

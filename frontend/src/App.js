@@ -323,8 +323,14 @@ function MainApp() {
       clearTimeout(t);
       t = setTimeout(() => setApiError(""), 8000);
     };
+    const ok = () => { clearTimeout(t); setApiError(""); };
     window.addEventListener("cm-api-error", fn);
-    return () => { window.removeEventListener("cm-api-error", fn); clearTimeout(t); };
+    window.addEventListener("cm-api-ok", ok);
+    return () => {
+      window.removeEventListener("cm-api-error", fn);
+      window.removeEventListener("cm-api-ok", ok);
+      clearTimeout(t);
+    };
   }, []);
 
   useEffect(() => {

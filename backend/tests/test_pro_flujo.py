@@ -8,7 +8,13 @@ os.environ.setdefault("DB_NAME", "test_database")
 os.environ.setdefault("JWT_SECRET", "test-secret")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from pro_flujo import etapa_operacion, accion_de
+from pro_flujo import etapa_operacion, accion_de, faltan_para_tablero
+
+
+def test_tablero_usa_protocolo_sin_disco():
+    assert faltan_para_tablero({"protocolo_completo": True, "protocolo_faltan": ["CI"]}) == []
+    assert faltan_para_tablero({"protocolo_faltan": ["CI", "Renta"]}) == ["CI", "Renta"]
+    assert faltan_para_tablero({}) == ["Documentación por revisar"]
 
 
 def test_faltantes_antes_que_mesa():

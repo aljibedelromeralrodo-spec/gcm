@@ -19,21 +19,41 @@ function _detalleError(err) {
   const d = err?.response?.data?.detail;
   if (typeof d === "string" && d.trim()) return d.slice(0, 180);
   if (Array.isArray(d) && d.length) return (d.map(x => x.msg || x).join("; ")).slice(0, 180);
-  if (!err?.response && (err?.message === "Network Error" || err?.code === "ERR_NETWORK")) {
+  if (!err?.response && (err?.message === "Network Error" || err?.code === "ERR_NETWORK" || err?.code === "ECONNABORTED")) {
     return "Sin conexión con el servidor.";
   }
   return "";
 }
 
+function _esCaidaTemporal(err) {
+  const status = err?.response?.status;
+  if (status === 502 || status === 503 || status === 504) return true;
+  if (!err?.response && (err?.message === "Network Error" || err?.code === "ERR_NETWORK" || err?.code === "ECONNABORTED")) {
+    return true;
+  }
+  return false;
+}
+
 let _redirigiendo = false;
 let _ultimoAviso = { t: 0, msg: "" };
 axios.interceptors.response.use(
-  (r) => r,
-  (err) => {
+  (r) => {
+    try { window.dispatchEvent(new Event("cm-api-ok")); } catch { /* */ }
+    return r;
+  },
+  async (err) => {
+    const cfg = err?.config || {};
+    const method = String(cfg.method || "get").toLowerCase();
+    const retries = cfg.__cmRetries || 0;
+    if (_esCaidaTemporal(err) && ["get", "head", "options"].includes(method) && retries < 3) {
+      cfg.__cmRetries = retries + 1;
+      await new Promise((ok) => setTimeout(ok, 800 * cfg.__cmRetries));
+      return axios(cfg);
+    }
     const status = err?.response?.status;
-    const url = String(err?.config?.url || "");
+    const url = String(cfg.url || "");
     const esLogin = /\/auth\/login|\/auth\/crear-clave|\/auth\/logout/.test(url);
-    if (status === 401 && !_redirigiendo && !err?.config?.skipAuthRedirect && !esLogin) {
+    if (status === 401 && !_redirigiendo && !cfg.skipAuthRedirect && !esLogin) {
       _redirigiendo = true;
       secureRemove("token");
       secureRemove("user");
@@ -43,7 +63,7 @@ axios.interceptors.response.use(
       return Promise.reject(err);
     }
     // Sondeos del topbar marcan silent:true para no inundar. El resto avisa una vez cada 12 s.
-    if (!err?.config?.silent && status !== 401) {
+    if (!cfg.silent && status !== 401) {
       const msg = _detalleError(err) || (status >= 500 ? "El servidor no respondió correctamente." : "");
       const ahora = Date.now();
       if (msg && (msg !== _ultimoAviso.msg || ahora - _ultimoAviso.t > 12000)) {
