@@ -49,13 +49,39 @@ def test_aprobada_va_a_escrituracion():
 
 
 def test_acciones_siguientes():
-    assert accion_de("clasificar", {}) == "sincronizar"
+    assert accion_de("clasificar", {}) == "abrir_carpeta"
     assert accion_de("autorizar", {}) == "autorizar_faltantes"
     assert accion_de("gop", {}, gop_enviado=False) == "enviar_gop"
     assert accion_de("gop", {"mesa_enviado_at": "x"}, gop_enviado=True) == "registrar_gop"
     assert accion_de("listo_mesa", {}) == "enviar_mesa"
     assert accion_de("escrituracion", {}) == "enviar_tasacion"
     assert accion_de("escrituracion", {"tasacion_solicitada_at": "x"}) == "enviar_estudio"
+
+
+def test_inventario_ignora_99_y_codeudor():
+    import tempfile
+    from pathlib import Path
+    import folders_service as fsvc
+    import pro_flujo as pf
+    prev = fsvc.CLIENTES_DIR
+    td = Path(tempfile.mkdtemp())
+    try:
+        fsvc.CLIENTES_DIR = td
+        nombre = "JUAN PRUEBA"
+        dest = td / fsvc.safe_name(nombre)
+        (dest / "01_cedula").mkdir(parents=True)
+        (dest / "01_cedula" / "01_Cedula_x.pdf").write_bytes(b"%PDF-1.4 extra")
+        (dest / "99_otros").mkdir()
+        (dest / "99_otros" / "scan.pdf").write_bytes(b"%PDF-1.4 extra")
+        (dest / "05_codeudor").mkdir()
+        (dest / "05_codeudor" / "CODEUDOR_cmf.pdf").write_bytes(b"%PDF-1.4 extra")
+        fd = {"nombre": nombre, "credit_request": {"client_type": "dependiente"}}
+        faltan = pf.inventario_faltantes(fd)
+        joined = " ".join(faltan).lower()
+        assert "cmf" in joined or "informe" in joined
+        assert "liquidaci" in joined
+    finally:
+        fsvc.CLIENTES_DIR = prev
 
 
 def test_firma_cierra():

@@ -15,6 +15,7 @@ const COL_COLOR = {
 
 const CTA = {
   sincronizar: "Clasificar carpeta",
+  abrir_carpeta: "Clasificar carpeta",
   autorizar_faltantes: "Autorizar mail de faltantes",
   enviar_gop: "Enviar gasto operacional",
   registrar_gop: "Registrar pago GOP",
@@ -50,6 +51,10 @@ export default function ProFlujoModule({ onNavigate }) {
       ir("publicidad", it);
       return;
     }
+    if (it.accion === "abrir_carpeta" || it.accion === "sincronizar") {
+      ir("clientes", it);
+      return;
+    }
     setMsg("");
     setPin("");
     try {
@@ -71,8 +76,8 @@ export default function ProFlujoModule({ onNavigate }) {
   const actuar = async (confirm) => {
     if (!ficha) return;
     const accion = ficha.accion;
-    if (accion?.startsWith("abrir_")) {
-      ir(ficha.modulo, ficha);
+    if (accion?.startsWith("abrir_") || accion === "sincronizar") {
+      ir(accion === "abrir_carpeta" || accion === "sincronizar" ? "clientes" : ficha.modulo, ficha);
       return;
     }
     if (accion === "registrar_gop") {
@@ -195,6 +200,9 @@ export default function ProFlujoModule({ onNavigate }) {
                     <div style={{ fontWeight: 800 }}>{it.nombre}</div>
                     {it.protocolo ? <div style={{ color: "#94a3b8", fontSize: 11 }}>{it.protocolo}</div> : null}
                     <div style={{ color: "#fde68a", fontSize: 11, marginTop: 3 }}>{it.siguiente}</div>
+                    {it.faltan?.length ? (
+                      <div style={{ color: "#fdba74", fontSize: 10, marginTop: 3 }}>{it.faltan.slice(0, 3).join(" · ")}</div>
+                    ) : null}
                     {it.hitos?.length ? (
                       <div style={{ color: "#86efac", fontSize: 10, marginTop: 2 }}>{it.hitos.join(" · ")}</div>
                     ) : null}
@@ -246,7 +254,7 @@ export default function ProFlujoModule({ onNavigate }) {
           )}
           {msg && <p style={{ color: msg.toLowerCase().includes("error") || msg.toLowerCase().includes("falta") ? "#f87171" : "#86efac", fontWeight: 700, fontSize: 13 }}>{msg}</p>}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
-            {["abrir_publicidad", "abrir_postventa", "abrir_supercarpeta", "abrir_escritura", "registrar_gop"].includes(ficha.accion) ? (
+            {["abrir_publicidad", "abrir_postventa", "abrir_supercarpeta", "abrir_escritura", "abrir_carpeta", "sincronizar", "registrar_gop"].includes(ficha.accion) ? (
               <button disabled={busy} onClick={() => actuar(false)} style={btn}>
                 {CTA[ficha.accion] || "Abrir módulo"}
               </button>

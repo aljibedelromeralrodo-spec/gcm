@@ -65,10 +65,37 @@ def etapa_operacion(fd, *, faltan, auth_pend, gop_enviado, gop_pagado, carta):
     return "listo_mesa", "Enviar carpeta a Mesa de aprobación."
 
 
+def _archivos_base(nombre):
+    """Archivos que cuentan para el set 01–04. Ignora 99_otros y 05_codeudor."""
+    import folders_service as fsvc
+    out = []
+    for a in fsvc.scan_archivos(nombre or ""):
+        sub = (a.get("subfolder") or "").split("/")[0]
+        nom = a.get("nombre") or ""
+        if sub in ("99_otros", "05_codeudor") or sub.startswith("05_codeudor"):
+            continue
+        if nom.upper().startswith("CODEUDOR_") or nom.startswith("."):
+            continue
+        out.append(a)
+    return out
+
+
+def inventario_faltantes(fd):
+    """Misma validacion_documental de la ficha: qué falta de verdad en 01–04."""
+    import validacion_documental as vdoc
+    fd = fd or {}
+    val = vdoc.validar_folder(fd, _archivos_base(fd.get("nombre") or ""), permitir_ocr=False)
+    msgs = vdoc.textos_faltantes(val)
+    if msgs:
+        return msgs[:8]
+    cats = val.get("cats_faltantes") or []
+    return [vdoc.LABELS.get(c, c) for c in cats][:8]
+
+
 def accion_de(etapa, fd, *, gop_enviado=False):
     """Qué botón mostrar. No envía nada por sí sola."""
     if etapa == "clasificar":
-        return "sincronizar"
+        return "abrir_carpeta"
     if etapa == "autorizar":
         return "autorizar_faltantes"
     if etapa == "gop":
@@ -144,12 +171,7 @@ async def api_tablero(request: Request):
 
     cols = {k: [] for k, *_ in COLUMNAS}
     for fd in folders:
-        if fd.get("protocolo_faltan") is None and fd.get("protocolo_completo") is None:
-            faltan = ["pendiente_clasificacion"]
-        else:
-            faltan = list(fd.get("protocolo_faltan") or [])
-            if fd.get("protocolo_completo") is False and not faltan:
-                faltan = ["revisar"]
+        faltan = inventario_faltantes(fd)
         g = gop_por_nombre.get((fd.get("nombre") or "").strip().lower()) or {}
         gop_env = bool(g.get("enviado_en"))
         gop_ok = bool(g.get("pagado") or (g.get("estado_pago") or "").upper() == "PAGADO")
@@ -251,9 +273,7 @@ async def api_ficha(fid: str, request: Request):
     g = await db.gastos_op_log.find_one(
         {"nombre": {"$regex": f"^{re.escape(fd.get('nombre') or '')}$", "$options": "i"}},
         {"_id": 0}) or {}
-    faltan = list(fd.get("protocolo_faltan") or [])
-    if fd.get("protocolo_faltan") is None and fd.get("protocolo_completo") is None:
-        faltan = ["pendiente_clasificacion"]
+    faltan = inventario_faltantes(fd)
     gop_env = bool(g.get("enviado_en"))
     gop_ok = bool(g.get("pagado") or (str(g.get("estado_pago") or "")).upper() == "PAGADO")
     cr = fd.get("credit_request") or {}
