@@ -5,7 +5,7 @@ import EnviarResultadoEjecutivo from "../../components/EnviarResultadoEjecutivo"
 import PanelEstadoCarpeta from "../../components/PanelEstadoCarpeta";
 import PrediccionEspejo from "../../components/PrediccionEspejo";
 import CompromisoEditor from "../CompromisoEditor";
-import { API, textoDescartesAdjuntos } from "./clientesShared";
+import { API, textoDescartesAdjuntos, PROTOCOLO_GRUPOS, grupoProtocolo } from "./clientesShared";
 import { useClientes } from "./clientesCtx";
 
 export default function ClientesFicha() {
@@ -412,11 +412,13 @@ export default function ClientesFicha() {
               </div>
             )}
             {(() => {
-              const esCod = (a) => a.subfolder === "05_codeudor" || /^CODEUDOR_/i.test(a.nombre || "");
-              const esEstudio = (a) => (a.subfolder || "").startsWith("07_estudio_titulo");
-              const titularFiles = (currentFolder.archivos || []).filter(a => !esCod(a) && !esEstudio(a));
-              const codFiles = (currentFolder.archivos || []).filter(esCod);
-              const estudioFiles = (currentFolder.archivos || []).filter(a => esEstudio(a) && !esCod(a));
+              const archivos = (currentFolder.archivos || []).filter((a) => !/^\./.test(a.nombre || ""));
+              const idxDe = (file) => archivos.findIndex((a) => a.ruta === file.ruta);
+              const porGrupo = {};
+              archivos.forEach((a) => {
+                const g = grupoProtocolo(a);
+                (porGrupo[g] = porGrupo[g] || []).push(a);
+              });
               const renderFile = (file, i) => (
               <div key={file.ruta || i} className="clientes-file-item" data-testid={`file-${i}`}>
                 <i className={`fa ${file.nombre.endsWith('.pdf') ? 'fa-file-pdf-o' : file.nombre.match(/\.(jpg|png|jpeg)$/i) ? 'fa-file-image-o' : file.nombre.match(/\.(doc|docx)$/i) ? 'fa-file-word-o' : 'fa-file-o'}`}></i>
@@ -460,30 +462,31 @@ export default function ClientesFicha() {
                 </button>
               </div>
               );
+              const bloque = (id, titulo, files, extra) => {
+                if (!files || !files.length) return null;
+                return (
+                  <div key={id} data-testid={id === "codeudor" ? "codeudor-subfolder" : id === "07_estudio_titulo" ? "estudio-subfolder" : `grupo-docs-${id}`} className={`clientes-proto-grupo ${id === "sin_clasificar" ? "is-sin-clasificar" : ""}`}>
+                    <div className="clientes-proto-head">
+                      <span>{titulo}</span>
+                      <span className="clientes-proto-n">{files.length}</span>
+                    </div>
+                    {extra}
+                    {files.map((f) => renderFile(f, idxDe(f)))}
+                  </div>
+                );
+              };
               return (
                 <>
-                  {titularFiles.map(renderFile)}
-                  {codFiles.length > 0 && (
-                    <div data-testid="codeudor-subfolder" style={{ marginTop: 14, border: "1.5px dashed #2e5ce6", borderRadius: 0, padding: "10px 12px", background: "rgba(46,92,230,0.06)" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, color: "#1e46c0", fontWeight: 800, fontSize: 13 }}>
-                        <i className="fa fa-folder"></i> Subcarpeta Codeudor{currentFolder.codeudor_nombre ? `: ${currentFolder.codeudor_nombre}` : ""}
-                        <span style={{ fontWeight: 600, opacity: 0.7 }}>({codFiles.length} archivo{codFiles.length !== 1 ? "s" : ""})</span>
-                      </div>
-                      {codFiles.map((f2, j) => renderFile(f2, titularFiles.length + j))}
-                    </div>
-                  )}
-                  {estudioFiles.length > 0 && (
-                    <div data-testid="estudio-subfolder" style={{ marginTop: 14, border: "1.5px dashed #14b8a6", borderRadius: 0, padding: "10px 12px", background: "rgba(20,184,166,0.06)" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, color: "#0d9488", fontWeight: 800, fontSize: 13 }}>
-                        <i className="fa fa-balance-scale"></i> Carpeta Estudio de Título (separada)
-                        <span style={{ fontWeight: 600, opacity: 0.7 }}>({estudioFiles.length} archivo{estudioFiles.length !== 1 ? "s" : ""})</span>
-                      </div>
-                      <div style={{ fontSize: 11, color: "#5eead4", marginBottom: 8 }}>
-                        🔒 Regla inviolable: estos documentos pertenecen al Estudio de Título de la propiedad y NUNCA se combinan ni se envían con la solicitud de crédito.
-                      </div>
-                      {estudioFiles.map((f2, j) => renderFile(f2, titularFiles.length + codFiles.length + j))}
-                    </div>
-                  )}
+                  {PROTOCOLO_GRUPOS.map((g) => bloque(g.id, g.label, porGrupo[g.id]))}
+                  {bloque("codeudor",
+                    `Subcarpeta Codeudor${currentFolder.codeudor_nombre ? `: ${currentFolder.codeudor_nombre}` : ""}`,
+                    porGrupo.codeudor)}
+                  {bloque("07_estudio_titulo", "07 · Estudio de Título (separada)", porGrupo["07_estudio_titulo"],
+                    <div style={{ fontSize: 11, color: "#5eead4", margin: "0 0 8px" }}>
+                      🔒 Regla inviolable: estos documentos pertenecen al Estudio de Título de la propiedad y NUNCA se combinan ni se envían con la solicitud de crédito.
+                    </div>)}
+                  {bloque("combinado", "Carpeta combinada", porGrupo.combinado)}
+                  {bloque("sin_clasificar", "Sin clasificar", porGrupo.sin_clasificar)}
                 </>
               );
             })()}

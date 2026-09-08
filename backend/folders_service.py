@@ -99,7 +99,87 @@ PREFIJO_POR_CAT = {
     "cedula": "01_Cedula", "liquidacion": "02_Liquidaciones",
     "afp": "03_Certificado_AFP", "cmf": "04_CMF",
     "imp_renta": "02_Impuesto_Renta", "boletas": "03_Resumen_Impuestos",
+    "f29": "02_Impuesto_Renta", "renta_vitalicia": "02_Renta_Vitalicia",
+    "contrato": "05_Contrato", "licencia": "06_Licencia", "pago_licencia": "06_Licencia",
+    "rsh": "08_RSH", "estudio_titulo": "07_Estudio_Titulo", "extras": "99_Otros",
 }
+
+# tipo_documento de ai_extract.clasificar_y_extraer → categoría de carpeta
+TIPO_IA_A_CAT = {
+    "cedula": "cedula", "liquidacion": "liquidacion",
+    "cotizacion_afp": "afp", "certificado_afp": "afp",
+    "certificado_smf": "cmf", "boleta_honorarios": "boletas",
+    "impuesto_renta": "imp_renta", "otro": "extras",
+    "simulacion": "extras", "carta_aprobacion": "extras",
+}
+
+PROTOCOLO_SUBS = (
+    "01_cedula", "02_liquidaciones", "02_impuesto_renta", "02_renta_vitalicia",
+    "03_afp", "03_boletas", "04_cmf", "05_contratos", "06_licencias",
+    "07_estudio_titulo", "08_rsh", "99_otros",
+)
+
+RX_NOMBRE_GENERICO = re.compile(
+    r"^(scan|scanned?|documento?|archivo|image\d*|img|foto|whatsapp.*|"
+    r"att(achment)?|file|unnamed|download)([\s_\-]|\d|\.)*$",
+    re.I,
+)
+
+
+def nombre_generico(filename):
+    """True si el nombre no aporta tipo (scan001.pdf, documento.pdf, image.jpg)."""
+    stem = Path(filename or "").stem.strip()
+    return (not stem) or bool(RX_NOMBRE_GENERICO.match(stem))
+
+
+def subfolder_de_cat(cat):
+    if not cat or cat == "extras":
+        return "99_otros"
+    return CAT_A_SUBFOLDER.get(cat) or "99_otros"
+
+
+def subfolder_de_nombre(filename):
+    """Si el archivo ya trae prefijo 01_…99_, devuelve la subcarpeta protocolo."""
+    m = re.match(r"^(\d{2})_", filename or "")
+    if not m:
+        return ""
+    pref = m.group(1)
+    if pref == "99":
+        return "99_otros"
+    candidatos = [s for s in PROTOCOLO_SUBS if s.startswith(pref + "_")]
+    if not candidatos:
+        return ""
+    if len(candidatos) == 1:
+        return candidatos[0]
+    low = (filename or "").lower()
+    for s in candidatos:
+        clave = s.split("_", 1)[1]
+        if clave in low or clave.replace("_", " ") in low:
+            return s
+    return candidatos[0]
+
+
+def ubicar_carga_manual(filename, tipo_ia="", texto_ocr=""):
+    """Resuelve (nombre_con_prefijo, subcarpeta) para subida manual / Buscar Adjuntos.
+    No se usa en la ingesta IMAP 24/7. Sin tipo → 99_otros."""
+    fn = safe_name(filename or "archivo")
+    if fn.upper().startswith("CODEUDOR_"):
+        return fn, ""
+    ya = subfolder_de_nombre(fn)
+    if ya:
+        return fn, ya
+    cat = cat_de_texto(fn)
+    if (not cat or cat == "extras") and (texto_ocr or "").strip():
+        cat = cat_de_texto(texto_ocr[:2500]) or cat
+    if (not cat or cat == "extras") and tipo_ia:
+        cat = TIPO_IA_A_CAT.get(tipo_ia, "extras")
+    if cat == "estudio_titulo":
+        sub = "07_estudio_titulo"
+    else:
+        sub = subfolder_de_cat(cat)
+    cat_pref = "extras" if sub == "99_otros" else cat
+    fn = safe_name(nombre_con_prefijo(fn, cat_pref))
+    return fn, sub
 
 
 def orden_numerico(nombre, subfolder=""):

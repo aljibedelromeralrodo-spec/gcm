@@ -3366,12 +3366,14 @@ async def _correos_importar_run(payload):
                 fn = fsvc.safe_name(p.get("filename") or "")
                 if not p.get("content_bytes") or fn.lower() in existentes or _PAT_FIRMA_CORREO.match(fn):
                     continue
+                raw = p["content_bytes"]
                 if destino == "estudio_titulo":
-                    sub = "07_estudio_titulo"
+                    fn, sub = fn, "07_estudio_titulo"
                 else:
-                    cat = fsvc.cat_de_texto(fn)
-                    sub = "07_estudio_titulo" if cat == "estudio_titulo" else ""
-                rel = await _guardar_con_ley_rut(folder, fn, p["content_bytes"], sub)
+                    fn, sub = await _clasificar_ubicacion_manual(fn, raw)
+                if fn.lower() in existentes:
+                    continue
+                rel = await _guardar_con_ley_rut(folder, fn, raw, sub)
                 if not rel:
                     continue
                 existentes.add(fn.lower())
@@ -3504,9 +3506,11 @@ async def _forzar_folder_run(payload):
                 fn = fsvc.safe_name(p["filename"])
                 if fn.lower() in existentes or not p.get("content_bytes") or _PAT_FIRMA_CORREO.match(fn):
                     continue
-                cat = fsvc.cat_de_texto(fn)
-                sub = "07_estudio_titulo" if cat == "estudio_titulo" else ""
-                rel = await _guardar_con_ley_rut(folder, fn, p["content_bytes"], sub)
+                raw = p["content_bytes"]
+                fn, sub = await _clasificar_ubicacion_manual(fn, raw)
+                if fn.lower() in existentes:
+                    continue
+                rel = await _guardar_con_ley_rut(folder, fn, raw, sub)
                 if not rel:
                     continue
                 existentes.add(fn.lower())
@@ -3643,15 +3647,17 @@ async def folder_enriquecer(fid: str, payload: dict = None):
             fn = fsvc.safe_name(p["filename"])
             if fn.lower() in existentes or not p.get("content_bytes") or _PAT_FIRMA_CORREO.match(fn):
                 continue
+            raw = p["content_bytes"]
             cat = fsvc.cat_de_texto(fn)
             if modo == "estudio":
                 if not mids and cat not in ("estudio_titulo", "extras"):
                     continue
-                rel = await _guardar_con_ley_rut(doc, fn, p["content_bytes"],
-                                                 subfolder="07_estudio_titulo")
+                rel = await _guardar_con_ley_rut(doc, fn, raw, subfolder="07_estudio_titulo")
             else:
-                sub = "07_estudio_titulo" if cat == "estudio_titulo" else ""
-                rel = await _guardar_con_ley_rut(doc, fn, p["content_bytes"], subfolder=sub)
+                fn, sub = await _clasificar_ubicacion_manual(fn, raw)
+                if fn.lower() in existentes:
+                    continue
+                rel = await _guardar_con_ley_rut(doc, fn, raw, subfolder=sub)
             if not rel:
                 continue
             existentes.add(fn.lower())
@@ -4049,6 +4055,32 @@ async def _rescate_codeudor_bg(doc, cod_nom, cod_rut):
         logger.warning(f"Búsqueda retroactiva codeudor: {e}")
 
 
+async def _clasificar_ubicacion_manual(filename, raw):
+    """OCR + clasificar_y_extraer (misma vía que la ingesta) SOLO para carga manual
+    y Buscar Adjuntos. No se llama desde el loop IMAP 24/7 ni altera la Ley del RUT."""
+    fn = fsvc.safe_name(filename or "archivo")
+    if fn.upper().startswith("CODEUDOR_") or fsvc.subfolder_de_nombre(fn):
+        return fsvc.ubicar_carga_manual(fn)
+    tipo_ia, texto = "", ""
+    if raw and (fsvc.nombre_generico(fn) or fsvc.cat_de_texto(fn) in ("extras", "")):
+        try:
+            import ocr_service
+            import ai_extract
+            texto, _met = await asyncio.to_thread(ocr_service.extraer_texto, raw, fn)
+            info = await ai_extract.clasificar_y_extraer(texto or "", fn)
+            tipo_ia = (info or {}).get("tipo_documento") or ""
+        except Exception as e:
+            logging.warning(f"clasificar carga manual {fn}: {e}")
+    return fsvc.ubicar_carga_manual(fn, tipo_ia=tipo_ia, texto_ocr=texto or "")
+
+
+async def _guardar_en_carpeta_protocolo(folder, fn, raw, subfolder=""):
+    """Todo adjunto a 01–08 o 99_otros, con Ley del RUT. No usar en la ingesta IMAP 24/7."""
+    if not (subfolder or "").strip():
+        fn, subfolder = await _clasificar_ubicacion_manual(fn, raw)
+    return await _guardar_con_ley_rut(folder, fn, raw, subfolder)
+
+
 @api.post("/clientes/folders/{fid}/upload-file")
 async def folder_upload_file(fid: str, request: Request, file: UploadFile = File(...), subfolder: str = Form(""),
                              route_to_codeudor: str = Form(""), categoria: str = Form(""),
@@ -4064,6 +4096,8 @@ async def folder_upload_file(fid: str, request: Request, file: UploadFile = File
         pass  # formato no convertible: se guarda tal cual
     es_codeudor = str(route_to_codeudor).lower() in ("true", "1", "si", "sí") or bool(codeudor_nombre.strip())
     categoria = (categoria or "").strip().lower()
+    if not es_codeudor and not categoria and not (subfolder or "").strip():
+        nombre_archivo, subfolder = await _clasificar_ubicacion_manual(nombre_archivo, raw)
     if es_codeudor:
         cod_nom = codeudor_nombre.strip() or (doc.get("codeudor_nombre") or "").strip()
         subfolder = f"05_codeudor/{fsvc.safe_name(cod_nom)}" if cod_nom else "05_codeudor"
@@ -4172,7 +4206,8 @@ async def save_attachment(payload: dict):
             raw, nombre_a, _ = pdfs.convertir_a_pdf(raw, nombre_a)
         except ValueError:
             pass
-        rel = await asyncio.to_thread(fsvc.guardar_archivo, doc.get("nombre", ""), nombre_a, raw, "")
+        nombre_a, sub = await _clasificar_ubicacion_manual(nombre_a, raw)
+        rel = await asyncio.to_thread(fsvc.guardar_archivo, doc.get("nombre", ""), nombre_a, raw, sub)
         saved.append(rel)
     asyncio.create_task(_regen_combinado_bg(doc))
     return {"ok": True, "saved": saved}
@@ -4237,12 +4272,13 @@ async def _save_all_attachments_job(job_id, doc, person):
                     raw, nombre_a, _ = pdfs.convertir_a_pdf(raw, nombre_a)
                 except ValueError:
                     pass
+                nombre_a, sub_cls = await _clasificar_ubicacion_manual(nombre_a, raw)
                 if fsvc.safe_name(nombre_a) in existentes:
                     descartes.append(_vinculo.item_descarte(
                         "duplicado", c.get("subject"), c.get("from"), nombre_a))
                     logging.info(f"adjuntos folder_id={fid} motivo=duplicado filename={nombre_a}")
                     continue
-                rel = await _guardar_con_ley_rut(doc, nombre_a, raw, "")
+                rel = await _guardar_con_ley_rut(doc, nombre_a, raw, sub_cls)
                 if not rel:
                     descartes.append(_vinculo.item_descarte(
                         "ley_del_rut", c.get("subject"), c.get("from"), nombre_a))

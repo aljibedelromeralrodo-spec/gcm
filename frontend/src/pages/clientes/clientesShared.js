@@ -24,6 +24,37 @@ export const MOTIVO_ADJUNTOS_LABELS = {
   duplicado: "ya estaba en la carpeta",
 };
 
+export const PROTOCOLO_GRUPOS = [
+  { id: "01_cedula", label: "01 · Cédula" },
+  { id: "02_liquidaciones", label: "02 · Liquidaciones" },
+  { id: "02_impuesto_renta", label: "02 · Impuesto renta" },
+  { id: "02_renta_vitalicia", label: "02 · Renta vitalicia" },
+  { id: "03_afp", label: "03 · AFP" },
+  { id: "03_boletas", label: "03 · Boletas / DAI" },
+  { id: "04_cmf", label: "04 · CMF" },
+  { id: "05_contratos", label: "05 · Contratos" },
+  { id: "06_licencias", label: "06 · Licencias" },
+  { id: "08_rsh", label: "08 · Registro Social de Hogares" },
+];
+
+export function grupoProtocolo(file) {
+  const nom = file?.nombre || "";
+  const sub = (file?.subfolder || "").split("/")[0];
+  if (sub === "05_codeudor" || /^CODEUDOR_/i.test(nom)) return "codeudor";
+  if (sub.startsWith("07_estudio_titulo") || /^07_/.test(nom)) return "07_estudio_titulo";
+  if (/^combinado/i.test(nom) || (nom.toLowerCase().startsWith("carpeta_") && !/tributar/i.test(nom))) {
+    return "combinado";
+  }
+  if (sub && PROTOCOLO_GRUPOS.some((g) => g.id === sub)) return sub;
+  if (sub === "99_otros" || /^99_/.test(nom)) return "sin_clasificar";
+  const m = /^(0[1-8])_/.exec(nom);
+  if (m) {
+    const hit = PROTOCOLO_GRUPOS.find((g) => g.id.startsWith(`${m[1]}_`));
+    return hit ? hit.id : "sin_clasificar";
+  }
+  return "sin_clasificar";
+}
+
 export function textoDescartesAdjuntos(descartes) {
   const counts = {};
   (descartes || []).forEach((d) => {
