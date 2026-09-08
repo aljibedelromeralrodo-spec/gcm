@@ -128,7 +128,7 @@ def _modulo_de(etapa):
         "captacion": "publicidad",
         "clasificar": "clientes",
         "autorizar": "procesamiento",
-        "listo_mesa": "autocorreo",
+        "listo_mesa": "clientes",
         "gop": "gastos",
         "en_mesa": "supercarpeta",
         "escrituracion": "supercarpeta",
@@ -304,11 +304,11 @@ async def _preview(fid, fd, accion, auth, request):
                 "faltan": auth.get("documentos_faltan") or [],
                 "hint": "El Admin autoriza. Recién ahí sale el correo (V15.9).",
             }
-        if accion in ("sincronizar", "pedir_faltantes"):
+        if accion in ("abrir_carpeta", "armar_borrador", "sincronizar", "pedir_faltantes"):
             r = await s.folder_pedir_faltantes(fid, {"confirm": False})
             return {"tipo": "mail", "to": r.get("to"), "subject": r.get("subject"),
                     "body": r.get("body"), "faltan": r.get("faltantes") or [],
-                    "hint": "Primero se sincroniza el protocolo. El mail queda en autorización, no sale solo."}
+                    "hint": "Clasificá la carpeta o armá el mail de faltantes. El borrador queda en autorización, no sale solo."}
         if accion == "enviar_mesa":
             r = await s.folder_send_email(fid, {"confirm": False})
             return {"tipo": "mail", "to": r.get("to") or r.get("destino"),
@@ -382,16 +382,34 @@ async def api_actuar(payload: dict, request: Request):
     import server as s
     nombre = (fd or {}).get("nombre") or ""
 
-    if accion == "sincronizar":
+    if accion in ("armar_borrador", "sincronizar"):
         import blindaje_correos as bl
-        inv = await bl.enriquecer_desde_ingesta(fd, None)
-        return {"ok": True, "resultado": "protocolo_sincronizado",
+        dest = _email_de(fd)
+        if not dest:
+            raise HTTPException(
+                status_code=400,
+                detail="Esta carpeta no tiene correo de origen. Cargá el mail del remitente en la ficha.")
+        fd_mail = dict(fd)
+        if not (fd_mail.get("source_email") or "").strip():
+            fd_mail["source_email"] = dest
+        inv = await bl.enriquecer_desde_ingesta(fd_mail, None)
+        if inv.get("completo"):
+            return {"ok": True, "resultado": "protocolo_completo",
+                    "faltan": [], "completo": True,
+                    "mensaje": "Protocolo completo. No hay faltantes que pedir."}
+        auth = await db.correos_autorizacion_admin.find_one(
+            {"estado": "pendiente", "$or": [{"folder_id": fid}, {"caso_id": fid}]},
+            {"_id": 0, "id": 1})
+        if not auth:
+            raise HTTPException(
+                status_code=400,
+                detail="No se pudo armar el borrador de faltantes. Revisá el inventario de la carpeta.")
+        return {"ok": True, "resultado": "borrador_faltantes",
                 "protocolo": inv.get("protocolo_nombre"),
                 "faltan": inv.get("documentos_faltan") or [],
-                "completo": inv.get("completo"),
-                "mensaje": ("Protocolo " + (inv.get("protocolo_nombre") or "")
-                            + (". Listo para Mesa." if inv.get("completo")
-                               else ". Faltantes en bandeja de autorización."))}
+                "completo": False, "auth_id": auth.get("id"),
+                "mensaje": ("Borrador de faltantes armado. Quedó en autorización; "
+                            "no se envió. Pasá a la columna Autorizar mail.")}
 
     if accion == "autorizar_faltantes":
         aid = (payload.get("auth_id") or "").strip()

@@ -50,12 +50,23 @@ def test_aprobada_va_a_escrituracion():
 
 def test_acciones_siguientes():
     assert accion_de("clasificar", {}) == "abrir_carpeta"
+    src = Path(__file__).resolve().parents[1] / "pro_flujo.py"
+    assert 'accion in ("armar_borrador", "sincronizar")' in src.read_text()
     assert accion_de("autorizar", {}) == "autorizar_faltantes"
     assert accion_de("gop", {}, gop_enviado=False) == "enviar_gop"
     assert accion_de("gop", {"mesa_enviado_at": "x"}, gop_enviado=True) == "registrar_gop"
     assert accion_de("listo_mesa", {}) == "enviar_mesa"
     assert accion_de("escrituracion", {}) == "enviar_tasacion"
     assert accion_de("escrituracion", {"tasacion_solicitada_at": "x"}) == "enviar_estudio"
+    assert accion_de("escrituracion", {
+        "tasacion_solicitada_at": "x",
+        "estudio_titulo_solicitado_at": "y",
+    }) == "mover_escrituracion"
+    assert accion_de("escrituracion", {
+        "tasacion_solicitada_at": "x",
+        "estudio_titulo_solicitado_at": "y",
+        "escritura_solicitada_at": "z",
+    }) == "abrir_escritura"
 
 
 def test_inventario_ignora_99_y_codeudor():

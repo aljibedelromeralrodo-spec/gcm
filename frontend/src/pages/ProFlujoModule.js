@@ -16,6 +16,7 @@ const COL_COLOR = {
 const CTA = {
   sincronizar: "Clasificar carpeta",
   abrir_carpeta: "Clasificar carpeta",
+  armar_borrador: "Armar mail de faltantes",
   autorizar_faltantes: "Autorizar mail de faltantes",
   enviar_gop: "Enviar gasto operacional",
   registrar_gop: "Registrar pago GOP",
@@ -51,10 +52,6 @@ export default function ProFlujoModule({ onNavigate }) {
       ir("publicidad", it);
       return;
     }
-    if (it.accion === "abrir_carpeta" || it.accion === "sincronizar") {
-      ir("clientes", it);
-      return;
-    }
     setMsg("");
     setPin("");
     try {
@@ -66,9 +63,35 @@ export default function ProFlujoModule({ onNavigate }) {
     }
   };
 
+  const apiActuar = async (fid, accion) => {
+    if (!fid || !accion) return;
+    setBusy(true);
+    setMsg("");
+    try {
+      const r = await axios.post(`${API_URL}/api/pro-flujo/actuar`, {
+        fid,
+        accion,
+        confirm: true,
+        auth_id: ficha?.auth_id,
+        master_pin: pin,
+        direccion,
+        email: ficha?.email,
+      });
+      setMsg(r.data.mensaje || "Listo");
+      load();
+      if (fid) {
+        const nf = await axios.get(`${API_URL}/api/pro-flujo/ficha/${fid}`);
+        setFicha(nf.data);
+      }
+    } catch (e) {
+      setMsg(e.response?.data?.detail || e.message);
+    } finally { setBusy(false); }
+  };
+
   const ir = (mod, it) => {
-    if (it?.id && !it.prospecto) sessionStorage.setItem("cm_abrir_folder_id", it.id);
-    if (it?.nombre) sessionStorage.setItem("cm_prefill_cliente", JSON.stringify({ nombre: it.nombre, rut: it.rut || "", folder_id: it.id }));
+    const fid = it?.cm_abrir_folder_id || (!it?.prospecto && it?.id) || "";
+    if (fid) sessionStorage.setItem("cm_abrir_folder_id", fid);
+    if (it?.nombre) sessionStorage.setItem("cm_prefill_cliente", JSON.stringify({ nombre: it.nombre, rut: it.rut || "", folder_id: it.id || fid }));
     if (it?.auth_id) sessionStorage.setItem("cm_abrir_auth_id", it.auth_id);
     if (onNavigate) onNavigate(mod);
   };
@@ -255,9 +278,23 @@ export default function ProFlujoModule({ onNavigate }) {
           {msg && <p style={{ color: msg.toLowerCase().includes("error") || msg.toLowerCase().includes("falta") ? "#f87171" : "#86efac", fontWeight: 700, fontSize: 13 }}>{msg}</p>}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
             {["abrir_publicidad", "abrir_postventa", "abrir_supercarpeta", "abrir_escritura", "abrir_carpeta", "sincronizar", "registrar_gop"].includes(ficha.accion) ? (
-              <button disabled={busy} onClick={() => actuar(false)} style={btn}>
-                {CTA[ficha.accion] || "Abrir módulo"}
-              </button>
+              <>
+                <button disabled={busy} onClick={() => actuar(false)} style={btn}>
+                  {CTA[ficha.accion] || "Abrir módulo"}
+                </button>
+                {ficha.etapa === "clasificar" && (
+                  <button
+                    type="button"
+                    className="btn-secundario"
+                    data-testid="pro-flujo-armar-borrador"
+                    disabled={busy}
+                    style={ghost}
+                    onClick={() => apiActuar(ficha.id, "armar_borrador")}
+                  >
+                    Armar mail de faltantes
+                  </button>
+                )}
+              </>
             ) : (
               <>
                 <button disabled={busy} onClick={() => actuar(false)} style={ghost}>

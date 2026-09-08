@@ -8,6 +8,7 @@ const LS_ABIERTO = "cm_correos_preview_dock";
 const FILTROS_NEGOCIO = [
   { id: "todos", label: "Todos" },
   { id: "en_curso", label: "En curso" },
+  { id: "faltantes", label: "Documentos faltantes" },
   { id: "preaprobacion", label: "Pre aprobación" },
   { id: "aprobado", label: "Aprobados" },
   { id: "rechazado", label: "Rechazados" },
@@ -22,6 +23,7 @@ function estadoNegocio(c) {
   if (/rechaz|no califica|no cumple par[aá]metros|reprobado|denegad/.test(t)) return "rechazado";
   if (/pre[-\s]?aprob|preaprobaci[oó]n|precalific/.test(t)) return "preaprobacion";
   if (/aprobaci[oó]n\s+mesa|agrado de informar|ha sido aprobad|califica para un mutuo|carta[_\s-]?aprobaci[oó]n|hipotecario endosable/.test(t)) return "aprobado";
+  if (/documentos?\s+faltantes|faltantes\s+[—\-]|necesitamos (?:que nos hagan llegar )?los siguientes documentos/.test(t)) return "faltantes";
   if (/\bds19\b|simulador|solicitud|evaluar|evaluaci[oó]n|entrega inmediata|antecedentes|\(\s*(sin|con)\s+subsidio/.test(t)) return "en_curso";
   return "otro";
 }
@@ -94,9 +96,11 @@ export default function CorreosPreview() {
   const visibles = filtro === "todos" ? todos : todos.filter((c) => estadoNegocio(c) === filtro);
   const nNegocio = (id) => (id === "todos" ? todos.length : todos.filter((c) => estadoNegocio(c) === id).length);
   const preAll = todos.filter((c) => c.categoria === "preaprobacion");
-  const otrosAll = todos.filter((c) => c.categoria !== "preaprobacion");
+  const rechAll = todos.filter((c) => estadoNegocio(c) === "rechazado");
+  const otrosAll = todos.filter((c) => c.categoria !== "preaprobacion" && estadoNegocio(c) !== "rechazado");
   const pre = visibles.filter((c) => c.categoria === "preaprobacion");
-  const otros = visibles.filter((c) => c.categoria !== "preaprobacion");
+  const rechazados = visibles.filter((c) => estadoNegocio(c) === "rechazado");
+  const otros = visibles.filter((c) => c.categoria !== "preaprobacion" && estadoNegocio(c) !== "rechazado");
 
   const renderCard = (c, i) => {
     const dias = diasRestantes(c.caduca_el);
@@ -151,7 +155,7 @@ export default function CorreosPreview() {
             <div style={{ flex: 1, minWidth: 0 }}>
               <b>Buzón de correos ({data.total})</b>
               <div className="correos-dock-sub">
-                Preaprobaciones {preAll.length} · 2 meses · Otros {otrosAll.length} · 1 semana
+                Preaprobaciones {preAll.length} · 2 meses · Rechazados {rechAll.length} · 3 días · Otros {otrosAll.length} · 1 semana
               </div>
             </div>
             <button type="button" data-testid="correos-preview-ocultar" className="correos-dock-hide"
@@ -181,6 +185,10 @@ export default function CorreosPreview() {
               <div data-testid="preview-grupo-preaprobacion" className="correos-dock-grupo">Preaprobaciones · caducan a los 2 meses</div>
             )}
             {pre.map((c) => renderCard(c, (data.correos || []).indexOf(c)))}
+            {(filtro === "todos" || filtro === "rechazado") && rechazados.length > 0 && (
+              <div data-testid="preview-grupo-rechazados" className="correos-dock-grupo">Rechazados · se eliminan a los 3 días</div>
+            )}
+            {rechazados.map((c) => renderCard(c, (data.correos || []).indexOf(c)))}
             {filtro === "todos" && otros.length > 0 && (
               <div data-testid="preview-grupo-otros" className="correos-dock-grupo">Otros · se eliminan a la semana</div>
             )}

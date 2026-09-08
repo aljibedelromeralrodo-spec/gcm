@@ -3578,11 +3578,15 @@ async def _verificar_identidad_por_cedula(folder):
 @api.post("/clientes/folders/{fid}/escrituracion")
 async def folder_toggle_escrituracion(fid: str, payload: dict = None):
     """Mueve la carpeta al módulo Escrituración o la devuelve a Solicitudes de Crédito."""
-    await _get_folder_doc(fid)
+    doc = await _get_folder_doc(fid)
     activar = bool((payload or {}).get("activar", True))
-    await db.folders.update_one({"id": fid}, {"$set": {
+    upd = {
         "is_escrituracion": activar,
-        "escrituracion_movida_at": now_iso() if activar else None}})
+        "escrituracion_movida_at": now_iso() if activar else None,
+    }
+    if activar and not doc.get("escritura_solicitada_at"):
+        upd["escritura_solicitada_at"] = now_iso()
+    await db.folders.update_one({"id": fid}, {"$set": upd})
     return {"ok": True, "is_escrituracion": activar}
 
 
@@ -3592,7 +3596,11 @@ async def folder_enviar_escrituracion(fid: str):
     doc = await _get_folder_doc(fid)
     nombre = (doc.get("nombre") or "").strip()
     rut = (doc.get("rut") or "").strip()
-    upd = {"is_escrituracion": True, "escrituracion_movida_at": now_iso()}
+    upd = {
+        "is_escrituracion": True,
+        "escrituracion_movida_at": now_iso(),
+        "escritura_solicitada_at": doc.get("escritura_solicitada_at") or now_iso(),
+    }
     if not doc.get("estudio_titulo_solicitado_at"):
         upd["estudio_titulo_solicitado_at"] = now_iso()
     await db.folders.update_one({"id": fid}, {"$set": upd})
@@ -6826,18 +6834,23 @@ async def carpetas_faltantes(request: Request, limit: int = 150):
 
 
 async def _purgar_correos_preview():
-    """Buzón ágil: otros a 7 días, preaprobaciones a 60 días. Borra HTML + adjuntos."""
+    """Buzón ágil: otros 7 días, rechazos 3 días, preaprobaciones 60. Borra HTML + adjuntos."""
     from datetime import datetime, timezone
     ahora = datetime.now(timezone.utc)
     ahora_iso = ahora.isoformat()
     n = 0
     async for d in db.correos_preview.find({"estado": "esperando_confirmacion"}):
-        cat = d.get("categoria") or mail.clasificar_preview(
-            d.get("subject") or "", d.get("body_html") or "", d.get("adjuntos") or [])
-        caduca = d.get("caduca_el") or mail.caduca_preview(d.get("creado"), cat)
+        subj = d.get("subject") or ""
+        html = d.get("body_html") or ""
+        adjs = d.get("adjuntos") or []
+        cat = d.get("categoria") or mail.clasificar_preview(subj, html, adjs)
+        est = d.get("estado_negocio") or mail.clasificar_negocio_preview(subj, html, adjs)
+        caduca = mail.caduca_preview(d.get("creado"), cat, est)
         upd = {}
         if d.get("categoria") != cat:
             upd["categoria"] = cat
+        if d.get("estado_negocio") != est:
+            upd["estado_negocio"] = est
         if d.get("caduca_el") != caduca:
             upd["caduca_el"] = caduca
         if upd:
@@ -6883,7 +6896,7 @@ async def correos_preview_lista(request: Request):
         d["categoria"] = cat
         d["estado_negocio"] = mail.clasificar_negocio_preview(
             d.get("subject") or "", d.get("body_html") or "", d.get("adjuntos") or [])
-        d["caduca_el"] = d.get("caduca_el") or mail.caduca_preview(d.get("creado"), cat)
+        d["caduca_el"] = mail.caduca_preview(d.get("creado"), cat, d["estado_negocio"])
         if cat == "preaprobacion":
             n_pre += 1
         else:

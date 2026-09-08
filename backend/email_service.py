@@ -1463,8 +1463,8 @@ def forzar_contraste_html(html):
     return s
 
 
-# Preaprobaciones viven 2 meses en el buzón; el resto, 1 semana.
-TTL_PREVIEW_DIAS = {"preaprobacion": 60, "otro": 7}
+# Preaprobaciones 2 meses; rechazos 3 días (no acumular); el resto 1 semana.
+TTL_PREVIEW_DIAS = {"preaprobacion": 60, "rechazado": 3, "otro": 7}
 _PREAPROB_RX = re.compile(
     r"pre.?aprob|carta[_\s-]?aprobaci[oó]n|aprobaci[oó]n\s+(mesa|central\s*mutuos)|"
     r"aprobaci[oó]n[_\s-]?centralmutuos|califica para un mutuo|hipotecario endosable|"
@@ -1485,6 +1485,11 @@ _NEGOCIO_APROBADO_RX = re.compile(
     r"aprobaci[oó]n\s+mesa|agrado de informar|ha sido aprobad|"
     r"califica para un mutuo|carta[_\s-]?aprobaci[oó]n|"
     r"carta de aprobaci[oó]n|hipotecario endosable",
+    re.I,
+)
+_NEGOCIO_FALTANTES_RX = re.compile(
+    r"documentos?\s+faltantes|faltantes\s+[—\-]|solicitud de documentos faltantes|"
+    r"necesitamos (?:que nos hagan llegar )?los siguientes documentos",
     re.I,
 )
 _NEGOCIO_CURSO_RX = re.compile(
@@ -1510,7 +1515,7 @@ def clasificar_preview(subject="", body_html="", adjuntos=None):
 
 
 def clasificar_negocio_preview(subject="", body_html="", adjuntos=None):
-    """Etapa del negocio para el filtro del buzón: en_curso, preaprobacion, aprobado, rechazado u otro."""
+    """Etapa del negocio para el filtro del buzón: en_curso, faltantes, preaprobacion, aprobado, rechazado u otro."""
     texto = _texto_preview(subject, body_html, adjuntos)
     if _NEGOCIO_RECHAZO_RX.search(texto):
         return "rechazado"
@@ -1518,6 +1523,8 @@ def clasificar_negocio_preview(subject="", body_html="", adjuntos=None):
         return "preaprobacion"
     if _NEGOCIO_APROBADO_RX.search(texto):
         return "aprobado"
+    if _NEGOCIO_FALTANTES_RX.search(texto):
+        return "faltantes"
     if _NEGOCIO_CURSO_RX.search(texto):
         return "en_curso"
     return "otro"
@@ -1536,13 +1543,45 @@ def _parse_iso_preview(s):
         return None
 
 
-def caduca_preview(creado, categoria="otro"):
+_RX_RESUMEN_SEMANAL_MARTIN = re.compile(r"resumen\s+semanal\s+de\s+mart[ií]n", re.I)
+
+
+def familia_preview(subject=""):
+    """Familia de buzón que se reemplaza al generar el siguiente (no acumular)."""
+    if _RX_RESUMEN_SEMANAL_MARTIN.search(subject or ""):
+        return "resumen_semanal_martin"
+    return ""
+
+
+def _retirar_preview_familia(familia):
+    """Saca del buzón los preview pendientes de la misma familia (el nuevo los reemplaza)."""
+    if not familia:
+        return 0
+    col = _db_sync()["correos_preview"]
+    adj = _db_sync()["correos_preview_adj"]
+    q = {"estado": "esperando_confirmacion",
+         "$or": [
+             {"familia": familia},
+             {"subject": {"$regex": r"Resumen Semanal de Mart", "$options": "i"}},
+         ]}
+    n = 0
+    for v in col.find(q, {"id": 1}):
+        adj.delete_many({"preview_id": v["id"]})
+        col.delete_one({"id": v["id"]})
+        n += 1
+    if n:
+        logging.info(f"👁 PREVIEW: {n} resumen(es) semanal(es) anterior(es) reemplazado(s)")
+    return n
+
+
+def caduca_preview(creado, categoria="otro", estado_negocio=""):
     from datetime import timedelta, timezone
     dt = _parse_iso_preview(creado)
     if dt is None:
         from datetime import datetime as _dt
         dt = _dt.now(timezone.utc)
-    dias = TTL_PREVIEW_DIAS.get(categoria) or TTL_PREVIEW_DIAS["otro"]
+    clave = "rechazado" if (estado_negocio or "") == "rechazado" else (categoria or "otro")
+    dias = TTL_PREVIEW_DIAS.get(clave) or TTL_PREVIEW_DIAS["otro"]
     return (dt + timedelta(days=dias)).isoformat()
 
 
@@ -1559,6 +1598,9 @@ def _encolar_preview(to, subject, body_html, attachments, cc, bcc):
     if ya:
         return {"success": False, "preview": True, "preview_id": ya["id"],
                 "error": "PREVIEW OBLIGATORIO: este correo ya espera confirmación del Administrador"}
+    familia = familia_preview(subject)
+    if familia:
+        _retirar_preview_familia(familia)
     pid = str(_uuid.uuid4())
     adj_meta = []
     for a in (attachments or []):
@@ -1578,14 +1620,16 @@ def _encolar_preview(to, subject, body_html, attachments, cc, bcc):
             logging.warning(f"preview adj: {e}")
     ahora = datetime.now(timezone.utc).isoformat()
     categoria = clasificar_preview(subject, body_html, adj_meta)
+    estado_neg = clasificar_negocio_preview(subject, body_html, adj_meta)
     col.insert_one({"id": pid, "huella": h,
                     "to": to if isinstance(to, str) else list(to),
                     "cc": cc or "", "bcc": bcc or "", "subject": subject or "",
                     "body_html": body_html or "", "adjuntos": adj_meta,
                     "estado": "esperando_confirmacion",
                     "categoria": categoria,
-                    "estado_negocio": clasificar_negocio_preview(subject, body_html, adj_meta),
-                    "caduca_el": caduca_preview(ahora, categoria),
+                    "estado_negocio": estado_neg,
+                    "familia": familia,
+                    "caduca_el": caduca_preview(ahora, categoria, estado_neg),
                     "creado": ahora})
     logging.info(f"👁 PREVIEW: correo «{(subject or '')[:60]}» → {to} [{categoria}]")
     return {"success": False, "preview": True, "preview_id": pid,

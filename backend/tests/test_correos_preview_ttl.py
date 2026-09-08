@@ -34,6 +34,13 @@ def test_otro_resumen_martin():
     assert mail.clasificar_preview("Resumen Semanal de Martín — 09/07/2026") == "otro"
 
 
+def test_familia_resumen_semanal_se_reemplaza():
+    assert mail.familia_preview("📊 Resumen Semanal de Martín — 07/09/2026") == "resumen_semanal_martin"
+    assert mail.familia_preview("Resumen Semanal de Martin — 14/09/2026") == "resumen_semanal_martin"
+    assert mail.familia_preview("Resumen Diario Central Mutuos — 09/07/2026") == ""
+    assert mail.familia_preview("Documentos faltantes — JUAN PEREZ") == ""
+
+
 def test_negocio_aprobado_mesa():
     assert mail.clasificar_negocio_preview(
         "APROBACIÓN MESA — Re: Camila Guajardo (DS19- FUTURA - ANGELES)") == "aprobado"
@@ -57,6 +64,14 @@ def test_negocio_otro_resumen():
     assert mail.clasificar_negocio_preview("Resumen Semanal de Martín — 07/09/2026") == "otro"
 
 
+def test_negocio_faltantes_antes_que_solicitud():
+    assert mail.clasificar_negocio_preview(
+        "Documentos faltantes — Solicitud de crédito JUAN PEREZ") == "faltantes"
+    assert mail.clasificar_negocio_preview(
+        "Documentos faltantes — ANA LOPEZ · Dependiente",
+        "Para continuar la evaluación necesitamos los siguientes documentos") == "faltantes"
+
+
 def test_caduca_otro_7_dias():
     creado = datetime(2026, 9, 1, tzinfo=timezone.utc).isoformat()
     cad = mail._parse_iso_preview(mail.caduca_preview(creado, "otro"))
@@ -67,3 +82,10 @@ def test_caduca_preaprobacion_60_dias():
     creado = datetime(2026, 9, 1, tzinfo=timezone.utc).isoformat()
     cad = mail._parse_iso_preview(mail.caduca_preview(creado, "preaprobacion"))
     assert cad - datetime(2026, 9, 1, tzinfo=timezone.utc) == timedelta(days=60)
+
+
+def test_caduca_rechazado_3_dias():
+    creado = datetime(2026, 9, 1, tzinfo=timezone.utc).isoformat()
+    cad = mail._parse_iso_preview(mail.caduca_preview(creado, "otro", "rechazado"))
+    assert cad - datetime(2026, 9, 1, tzinfo=timezone.utc) == timedelta(days=3)
+    assert mail.TTL_PREVIEW_DIAS["rechazado"] == 3
