@@ -3359,7 +3359,7 @@ async def _correos_importar_run(payload):
             folder = {"id": str(uuid.uuid4()), "nombre": nombre.upper(), "rut": "",
                       "archivos": [], "created_at": now_iso(), "origen": "importado_correo"}
             await db.folders.insert_one(dict(folder))
-            fsvc.folder_dir(folder["nombre"]).mkdir(parents=True, exist_ok=True)
+            fsvc.asegurar_estructura(folder["nombre"])
         existentes = {a["nombre"].lower() for a in fsvc.scan_archivos(folder["nombre"])}
         for r in resultados:
             for p in r.get("pdfs") or []:
@@ -3473,7 +3473,7 @@ async def _forzar_folder_run(payload):
                   "rut": rut, "archivos": [],
                   "created_at": now_iso(), "origen": "forzada_manual"}
         await db.folders.insert_one(dict(folder))
-        fsvc.folder_dir(folder["nombre"]).mkdir(parents=True, exist_ok=True)
+        fsvc.asegurar_estructura(folder["nombre"])
     elif rut and not folder.get("rut"):
         await db.folders.update_one({"id": folder["id"]}, {"$set": {"rut": rut}})
     # Buscar adjuntos directamente en el correo (IMAP) por nombre y por RUT
@@ -3784,7 +3784,7 @@ async def create_folder(payload: dict, request: Request):
         doc["broker_codigo"] = claims.get("sub") or ""
         doc["broker_origen"] = claims.get("nombre") or claims.get("sub") or ""
     await db.folders.insert_one(dict(doc))
-    fsvc.folder_dir(doc["nombre"]).mkdir(parents=True, exist_ok=True)
+    fsvc.asegurar_estructura(doc["nombre"])
     return _folder_public(doc)
 
 
@@ -4056,8 +4056,8 @@ async def _rescate_codeudor_bg(doc, cod_nom, cod_rut):
 
 
 async def _clasificar_ubicacion_manual(filename, raw):
-    """OCR + clasificar_y_extraer (misma vía que la ingesta) SOLO para carga manual
-    y Buscar Adjuntos. No se llama desde el loop IMAP 24/7 ni altera la Ley del RUT."""
+    """OCR + clasificar_y_extraer: carga manual, Buscar Adjuntos y rescate IMAP
+    cuando el nombre no clasifica. No altera la Ley del RUT."""
     fn = fsvc.safe_name(filename or "archivo")
     if fn.upper().startswith("CODEUDOR_") or fsvc.subfolder_de_nombre(fn):
         return fsvc.ubicar_carga_manual(fn)
@@ -4075,7 +4075,7 @@ async def _clasificar_ubicacion_manual(filename, raw):
 
 
 async def _guardar_en_carpeta_protocolo(folder, fn, raw, subfolder=""):
-    """Todo adjunto a 01–08 o 99_otros, con Ley del RUT. No usar en la ingesta IMAP 24/7."""
+    """Todo adjunto a 01–12 o 99_otros, con Ley del RUT."""
     if not (subfolder or "").strip():
         fn, subfolder = await _clasificar_ubicacion_manual(fn, raw)
     return await _guardar_con_ley_rut(folder, fn, raw, subfolder)
@@ -6004,7 +6004,7 @@ async def _asegurar_carpeta_aprobacion(nombre):
         folder = {"id": str(uuid.uuid4()), "nombre": nombre.upper(), "rut": "",
                   "archivos": [], "created_at": now_iso(), "origen": "aprobacion_mesa"}
         await db.folders.insert_one(dict(folder))
-        fsvc.folder_dir(folder["nombre"]).mkdir(parents=True, exist_ok=True)
+        fsvc.asegurar_estructura(folder["nombre"])
         await db.alertas.insert_one({
             "id": str(uuid.uuid4()), "tipo": "carpeta_aprobacion",
             "cliente": folder["nombre"], "folder_id": folder["id"],
@@ -7359,15 +7359,8 @@ async def proc_vincular_carpeta(qid: str, payload: dict, request: Request):
             status_code=404,
             detail="No hay carpeta de cliente que coincida. Indique nombre o RUT de una carpeta existente.")
     hito = item.get("hito") or ""
-    sub = {
-        "estudio_titulo": "07_estudio_titulo",
-        "tasacion": "99_otros",
-        "escritura": "99_otros",
-        "aprobacion_mesa": "99_otros",
-        "rechazo_mesa": "99_otros",
-        "faltantes": "99_otros",
-        "solicitud_credito": "",
-    }.get(hito, "99_otros")
+    sub = fsvc.subfolder_de_hito(hito)
+    fsvc.asegurar_estructura(doc.get("nombre", ""))
     src_base = Path(item.get("attachments_bytes_dir") or (PROC_DIR / qid))
     copiados = []
     for fn in item.get("attachments") or []:
@@ -7376,8 +7369,12 @@ async def proc_vincular_carpeta(qid: str, payload: dict, request: Request):
             src = PROC_DIR / qid / Path(fn).name
         if not src.is_file():
             continue
+        raw_h = src.read_bytes()
+        fn_dest, sub_arch = src.name, sub
+        if not (sub_arch or "").strip():
+            fn_dest, sub_arch = await _clasificar_ubicacion_manual(src.name, raw_h)
         rel = await asyncio.to_thread(
-            fsvc.guardar_archivo, doc.get("nombre", ""), src.name, src.read_bytes(), sub)
+            fsvc.guardar_archivo, doc.get("nombre", ""), fn_dest, raw_h, sub_arch)
         copiados.append(rel)
     if not copiados:
         raise HTTPException(status_code=400, detail="Este correo no tiene adjuntos recuperables en el búnker")
@@ -7903,7 +7900,6 @@ async def proc_upload_drive(qid: str, force: bool = False, clave: str = ""):
         if desde_asunto not in ("", "Desconocido") and len(desde_asunto.split()) >= 2:
             cliente = desde_asunto
     tipo_cliente = cl.get("tipo_cliente", "dependiente")
-    orden = _orden_por_tipo(tipo_cliente)
     docs = []
     vistos = set()
     for d in cl.get("documentos", []):
@@ -7979,18 +7975,8 @@ async def proc_upload_drive(qid: str, force: bool = False, clave: str = ""):
         if not ok_regla:
             raise HTTPException(status_code=412,
                                 detail=f"REGLA: no se arma carpeta — {motivo}")
-    dest = CLIENTES_DIR / _safe_name(cliente)
-    dest.mkdir(parents=True, exist_ok=True)
+    dest = fsvc.asegurar_estructura(cliente)
     uploaded = []
-    _cat_a_tipo = {"cedula": "cedula", "liquidacion": "liquidacion", "afp": "cotizacion_afp",
-                   "cmf": "certificado_smf", "imp_renta": "impuesto_renta",
-                   "boletas": "boleta_honorarios"}
-
-    def _tipo_efectivo(d):
-        t = d["tipo"]
-        if t not in orden:
-            t = _cat_a_tipo.get(fsvc.cat_de_texto(d.get("filename", "")), t)
-        return t
     # Copiar documentos a subcarpetas protocolo (01_cedula, 02_liquidaciones, ...)
     from pypdf import PdfReader, PdfWriter
     # LEY DEL RUT: al vincular a una carpeta EXISTENTE, cada archivo se escanea con OCR;
@@ -8015,6 +8001,7 @@ async def proc_upload_drive(qid: str, force: bool = False, clave: str = ""):
                 match_solo_codeudor = (len(_rc) >= 7 and _rc in ruts_arch
                                        and not (_rt and _rt in ruts_arch))
             fn_orig = d["filename"]
+            raw_b = p.read_bytes()
             es_cod_arch = (match_solo_codeudor or es_correo_codeudor
                            or bool(re.search(r"co-?deudor", fn_orig, re.I)))
             if es_cod_arch:
@@ -8022,12 +8009,14 @@ async def proc_upload_drive(qid: str, force: bool = False, clave: str = ""):
                 sub = f"05_codeudor/{_safe_name(cod_nombre)}" if cod_nombre else "05_codeudor"
                 fn_dest = fn_orig if fn_orig.upper().startswith("CODEUDOR_") else f"CODEUDOR_{fn_orig}"
             else:
-                tipo_ef = _tipo_efectivo(d)
-                sub = fsvc.SUBFOLDER_POR_TIPO.get(tipo_ef, "99_otros")
-                fn_dest = fsvc.nombre_con_prefijo(fn_orig, fsvc.SUBFOLDER_A_CAT.get(sub, ""))
+                tipo_ia = d.get("tipo") or ""
+                if fsvc.necesita_ocr_rescate(fn_orig, tipo_ia):
+                    fn_dest, sub = await _clasificar_ubicacion_manual(fn_orig, raw_b)
+                else:
+                    fn_dest, sub = fsvc.ubicar_carga_manual(fn_orig, tipo_ia=tipo_ia)
             sd = dest / sub
             sd.mkdir(parents=True, exist_ok=True)
-            (sd / fn_dest).write_bytes(p.read_bytes())
+            (sd / fn_dest).write_bytes(raw_b)
             # si el mismo archivo quedó antes en otra subcarpeta, quitarlo (evita duplicados)
             for viejo in list(dest.rglob(fn_orig)) + list(dest.rglob(fn_dest)):
                 if viejo.parent != sd or viejo.name != fn_dest:
@@ -12500,7 +12489,7 @@ async def martin_abrir_carpeta(payload: dict):
         raise HTTPException(status_code=422, detail=fsvc.MSG_DOC_INSUFICIENTE)
     sim = p.get("simulacion") or {}
     fid = str(uuid.uuid4())
-    fsvc.folder_dir(nombre).mkdir(parents=True, exist_ok=True)
+    fsvc.asegurar_estructura(nombre)
     await db.folders.insert_one({
         "id": fid, "nombre": nombre, "rut": rut, "etiqueta": "Lead de Inmobiliaria",
         "origen": "simulador_martin", "archivos": [],
@@ -16827,7 +16816,7 @@ async def calificar_subir(oid: str,
               "proyecto": op.get("proyecto") or "",
               "credit_request": {"client_type": perfil}}
         await db.folders.insert_one(dict(fd))
-        fsvc.folder_dir(nombre).mkdir(parents=True, exist_ok=True)
+        fsvc.asegurar_estructura(nombre)
     else:
         await db.folders.update_one({"id": fd["id"]},
                                     {"$set": {"credit_request.client_type": perfil}})
@@ -17011,7 +17000,7 @@ async def calificar_solicitar_llamada(oid: str, payload: dict, request: Request)
             "id": str(uuid.uuid4()), "nombre": nombre, "rut": op.get("rut") or "",
             "telefono": telefono, "archivos": [], "created_at": now_iso(),
             "origen": "solicitud_llamada", "proyecto": op.get("proyecto") or ""})
-        fsvc.folder_dir(nombre).mkdir(parents=True, exist_ok=True)
+        fsvc.asegurar_estructura(nombre)
     else:
         await db.folders.update_one({"id": fd["id"]}, {"$set": {"telefono": telefono}})
     await db.solicitudes_llamada.insert_one({

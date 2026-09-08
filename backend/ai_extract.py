@@ -32,7 +32,9 @@ async def _enviar(chat, um):
 
 TIPOS = ["cedula", "liquidacion", "cotizacion_afp", "certificado_afp",
          "certificado_smf", "boleta_honorarios", "impuesto_renta",
-         "simulacion", "carta_aprobacion", "otro"]
+         "licencia_medica", "pago_licencia", "contrato_trabajo",
+         "registro_social_hogares", "tasacion", "escritura",
+         "gastos_operacionales", "simulacion", "carta_aprobacion", "otro"]
 
 
 def _rut_regex(texto):
@@ -46,18 +48,25 @@ def _email_regex(texto):
 
 
 def _fallback_clasificar(texto, filename=""):
-    t = (texto + " " + filename).lower()
+    t = re.sub(r"[\s_\-]+", " ", f"{texto or ''} {filename or ''}".lower()).strip()
     if re.search(r"informe de no matrimonio|infnomat|acuerdo de uni[oó]n civil", t):
         return "otro"
     reglas = [
-        ("cedula", r"c[eé]dula de identidad|rep[uú]blica de chile|servicio de registro civil"),
+        ("cedula", r"c[eé]dula de identidad|rep[uú]blica de chile|servicio de registro civil|(?:^| )ci (titular|codeudor|anverso|reverso|frontal)"),
         ("liquidacion", r"liquidaci[oó]n de (remuneraci|sueldo)|haberes|l[ií]quido a pagar"),
         ("cotizacion_afp", r"cotizaci|afp|capital|provida|habitat|planvital|cuprum|modelo|uno"),
         ("certificado_afp", r"certificado.*afp|certificado de afiliaci"),
-        ("certificado_smf", r"informe de deudas|comisi[oó]n para el mercado financiero|\bcmf\b|\bsbif\b|deuda consolidada|certificado de deuda"),
+        ("certificado_smf", r"informe de deudas|comisi[oó]n para el mercado financiero|\bcmf\b|\bsmf\b|\bsbif\b|deuda consolidada|certificado de deuda"),
         ("boleta_honorarios", r"boleta de honorarios|honorarios electr"),
-        ("impuesto_renta", r"impuesto a la renta|declaraci[oó]n de renta|formulario 22|sii"),
-        ("simulacion", r"simulaci[oó]n|dividendo|gastos operacionales"),
+        ("impuesto_renta", r"impuesto a la renta|declaraci[oó]n de renta|formulario 22|\bf22\b|sii"),
+        ("licencia_medica", r"licencia m[eé]dica|reposo (laboral|m[eé]dico)|pre.?natal|post.?natal"),
+        ("pago_licencia", r"pago de licencia|subsidio de incapacidad|\bccaf\b|subsidio maternal"),
+        ("contrato_trabajo", r"contrato (de )?trabajo|anexo de contrato"),
+        ("registro_social_hogares", r"registro social (de )?hogares|\brsh\b"),
+        ("tasacion", r"tasaci[oó]n|aval[uú]o comercial|value ?property"),
+        ("escritura", r"escritur|notar[ií]a|repertorio"),
+        ("gastos_operacionales", r"gastos? operacional|\bgop\b"),
+        ("simulacion", r"simulaci[oó]n|dividendo"),
         ("carta_aprobacion", r"agrado de informar|ha sido aprobad|carta de aprobaci"),
     ]
     for tipo, pat in reglas:

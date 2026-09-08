@@ -196,12 +196,12 @@ def folder_necesita_backfill(fd):
 def hito_de_rel(rel, nombre=""):
     """Clasifica un archivo de carpeta como hito de tasación/estudio/escritura."""
     blob = f"{rel or ''} {nombre or ''}".lower().replace("\\", "/")
-    if "tasac" in blob or "/tasacion" in blob or blob.startswith("tasacion"):
+    if "09_tasacion" in blob or "tasac" in blob or "/tasacion" in blob or blob.startswith("tasacion"):
         return "tasacion"
     if "07_estudio_titulo" in blob or "estudio_titulo" in blob or "estudio_" in blob.split("/")[-1]:
         return "estudio_titulo"
     fn = blob.split("/")[-1]
-    if fn.startswith("escritura") or "notaria" in blob or "repertorio" in blob:
+    if "10_escritura" in blob or fn.startswith("escritura") or "notaria" in blob or "repertorio" in blob:
         return "escritura"
     return ""
 

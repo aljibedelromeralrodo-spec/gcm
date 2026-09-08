@@ -40,6 +40,13 @@ SUBFOLDER_POR_TIPO = {
     "pago_licencia": "06_licencias",
     "contrato_trabajo": "05_contratos",
     "registro_social_hogares": "08_rsh",
+    "tasacion": "09_tasacion",
+    "escritura": "10_escritura",
+    "carta_aprobacion": "11_resoluciones",
+    "rechazo_mesa": "11_resoluciones",
+    "resolucion": "11_resoluciones",
+    "gastos_operacionales": "12_gop",
+    "gop": "12_gop",
 }
 
 CAT_A_SUBFOLDER = {
@@ -51,7 +58,8 @@ CAT_A_SUBFOLDER = {
     "estudio_titulo": "07_estudio_titulo",
     "licencia": "06_licencias", "pago_licencia": "06_licencias",
     "contrato": "05_contratos", "rsh": "08_rsh",
-    "renta_vitalicia": "02_renta_vitalicia",
+    "tasacion": "09_tasacion", "escritura": "10_escritura",
+    "resolucion": "11_resoluciones", "gop": "12_gop",
 }
 SUBFOLDER_A_CAT = {
     "01_cedula": "cedula", "02_liquidaciones": "liquidacion",
@@ -60,22 +68,49 @@ SUBFOLDER_A_CAT = {
     "05_codeudor": "codeudor", "07_estudio_titulo": "estudio_titulo",
     "06_licencias": "licencia", "05_contratos": "contrato", "08_rsh": "rsh",
     "02_renta_vitalicia": "renta_vitalicia",
+    "09_tasacion": "tasacion", "10_escritura": "escritura",
+    "11_resoluciones": "resolucion", "12_gop": "gop",
 }
 
+# Hito de la cola de correos → subcarpeta. solicitud_credito = "" (clasifica por archivo).
+HITO_A_SUBFOLDER = {
+    "estudio_titulo": "07_estudio_titulo",
+    "tasacion": "09_tasacion",
+    "escritura": "10_escritura",
+    "aprobacion_mesa": "11_resoluciones",
+    "rechazo_mesa": "11_resoluciones",
+    "faltantes": "99_otros",
+    "solicitud_credito": "",
+}
+
+# No entran al combinado de solicitud ni al inventario 01–04.
+SUBS_NO_SET_CREDITO = frozenset({
+    "99_otros", "05_codeudor", "07_estudio_titulo",
+    "09_tasacion", "10_escritura", "11_resoluciones", "12_gop",
+})
+CATS_NO_COMBINADO = frozenset({
+    "combinado", "codeudor", "estudio_titulo",
+    "tasacion", "escritura", "resolucion", "gop",
+})
+
 CAT_KEYWORDS = [
-    ("estudio_titulo", r"estudio de t[ií]tulo|dominio vigente|hipotecas? y grav|grav[aá]men|prohibici[oó]n|expropiaci|conservador de bienes|\bcbr\b|escritura de compraventa|copia de escritura|inscripci[oó]n de dominio"),
-    ("pago_licencia", r"pago\s+de\s+licencia|subsidio\s+de\s+incapacidad|\bccaf\b|caja\s+los\s+andes|caja\s+los\s+h[eé]roes|subsidio\s+maternal"),
+    ("estudio_titulo", r"estudio\s+(de\s+)?t[ií]tulos?|dominio vigente|hipotecas? y grav|grav[aá]men|prohibici[oó]n|expropiaci|conservador de bienes|\bcbr\b|escritura de compraventa|copia de escritura|inscripci[oó]n de dominio"),
+    ("pago_licencia", r"pago\s+(de\s+)?licencia|subsidio\s+(de\s+)?incapacidad|\bccaf\b|caja\s+los\s+andes|caja\s+los\s+h[eé]roes|subsidio\s+maternal"),
     ("licencia", r"licencia\s+m[eé]dica|reposo\s+(laboral|m[eé]dico)|pre.?natal|post.?natal"),
-    ("contrato", r"contrato\s+de\s+trabajo|anexo\s+de\s+contrato|antig[üu]edad\s+laboral"),
+    ("contrato", r"contrato\s+(de\s+)?trabajo|anexo\s+(de\s+)?contrato|antig[üu]edad\s+laboral"),
     ("renta_vitalicia", r"renta\s+vitalicia|pensi[oó]n\s+(de\s+)?vejez|liquidaci[oó]n\s+de\s+pensi[oó]n"),
-    ("rsh", r"registro\s+social\s+de\s+hogares|\brsh\b|calificaci[oó]n\s+socioecon[oó]mica"),
-    ("cedula", r"c[eé]?dula|carnet|identidad|registro civil"),
-    ("liquidacion", r"liquidaci[oó]?n|sueldo|remuneraci|haberes|\bliq[\d_ ]|^liq"),
+    ("rsh", r"registro\s+social\s+(de\s+)?hogares|\brsh\b|calificaci[oó]n\s+socioecon[oó]mica"),
+    ("tasacion", r"tasaci[oó]n|aval[uú]o comercial|value\s*property"),
+    ("gop", r"gastos?\s+operacional|\bgop\b|voucher\s+(de\s+)?(gasto|gop)"),
+    ("resolucion", r"carta\s+(de\s+)?aprobaci|carta aprobacion|resoluci[oó]n(?:\s+mesa)?|rechazo\s+mesa"),
+    ("escritura", r"escritur|notar[ií]a|repertorio"),
+    ("cedula", r"c[eé]?dula|carnet|identidad|registro civil|(?:^| )ci (titular|codeudor|anverso|reverso|frontal)|(?:^| )ci(?:\.|$)"),
+    ("liquidacion", r"liquidaci[oó]?n|sueldo|remuneraci|haberes|\bliq[\d ]|^liq"),
     ("afp", r"afp|cotizaci|previred|afiliaci|habitat|provida|planvital|cuprum|capital"),
-    ("cmf", r"\bcmf\b|\bsmf\b|\bsbif\b|informe[_ ]de[_ ]deuda|informe_deudas|certificado[_ ]de[_ ]deuda|deuda consolidada"),
-    ("boletas", r"boleta|honorario|(?:^|[\s_\-])dai(?:[\s_\-.]|$)|declaraci[oó]n anual de ingresos"),
-    ("f29", r"formulario[\s_\-]?29|(?:^|[\s_\-])f29(?:[\s_\-.]|$)"),
-    ("imp_renta", r"impuesto|renta|formulario[\s_\-]?22|f22|carpeta[\s_]?tributaria|declaraci[oó]n"),
+    ("cmf", r"\bcmf\b|\bsmf\b|\bsbif\b|informe\s+de\s+deuda|certificado\s+de\s+deuda|deuda consolidada"),
+    ("boletas", r"boleta|honorario|(?:^| )dai(?: |\.|$)|declaraci[oó]n anual de ingresos"),
+    ("f29", r"formulario\s*29|(?:^| )f29(?: |\.|$)"),
+    ("imp_renta", r"impuesto|renta|formulario\s*22|f22|carpeta\s*tributaria|declaraci[oó]n"),
 ]
 
 MISSING_LABELS = {
@@ -101,7 +136,9 @@ PREFIJO_POR_CAT = {
     "imp_renta": "02_Impuesto_Renta", "boletas": "03_Resumen_Impuestos",
     "f29": "02_Impuesto_Renta", "renta_vitalicia": "02_Renta_Vitalicia",
     "contrato": "05_Contrato", "licencia": "06_Licencia", "pago_licencia": "06_Licencia",
-    "rsh": "08_RSH", "estudio_titulo": "07_Estudio_Titulo", "extras": "99_Otros",
+    "rsh": "08_RSH", "estudio_titulo": "07_Estudio_Titulo",
+    "tasacion": "09_Tasacion", "escritura": "10_Escritura",
+    "resolucion": "11_Resolucion", "gop": "12_GOP", "extras": "99_Otros",
 }
 
 # tipo_documento de ai_extract.clasificar_y_extraer → categoría de carpeta
@@ -110,13 +147,20 @@ TIPO_IA_A_CAT = {
     "cotizacion_afp": "afp", "certificado_afp": "afp",
     "certificado_smf": "cmf", "boleta_honorarios": "boletas",
     "impuesto_renta": "imp_renta", "otro": "extras",
-    "simulacion": "extras", "carta_aprobacion": "extras",
+    "simulacion": "extras",
+    "licencia_medica": "licencia", "pago_licencia": "pago_licencia",
+    "contrato_trabajo": "contrato", "registro_social_hogares": "rsh",
+    "tasacion": "tasacion", "escritura": "escritura",
+    "carta_aprobacion": "resolucion", "rechazo_mesa": "resolucion",
+    "gastos_operacionales": "gop",
 }
 
 PROTOCOLO_SUBS = (
     "01_cedula", "02_liquidaciones", "02_impuesto_renta", "02_renta_vitalicia",
     "03_afp", "03_boletas", "04_cmf", "05_contratos", "06_licencias",
-    "07_estudio_titulo", "08_rsh", "99_otros",
+    "07_estudio_titulo", "08_rsh",
+    "09_tasacion", "10_escritura", "11_resoluciones", "12_gop",
+    "99_otros",
 )
 
 RX_NOMBRE_GENERICO = re.compile(
@@ -160,8 +204,8 @@ def subfolder_de_nombre(filename):
 
 
 def ubicar_carga_manual(filename, tipo_ia="", texto_ocr=""):
-    """Resuelve (nombre_con_prefijo, subcarpeta) para subida manual / Buscar Adjuntos.
-    No se usa en la ingesta IMAP 24/7. Sin tipo → 99_otros."""
+    """Resuelve (nombre_con_prefijo, subcarpeta) para carga manual, Buscar Adjuntos
+    e ingesta IMAP (rescate OCR). Sin tipo reconocible → 99_otros."""
     fn = safe_name(filename or "archivo")
     if fn.upper().startswith("CODEUDOR_"):
         return fn, ""
@@ -207,6 +251,34 @@ def folder_dir(nombre):
     return CLIENTES_DIR / safe_name(nombre)
 
 
+def asegurar_estructura(nombre):
+    """Crea la carpeta del cliente y las subcarpetas protocolo 01–12 + 99 + codeudor."""
+    base = folder_dir(nombre)
+    base.mkdir(parents=True, exist_ok=True)
+    for sub in PROTOCOLO_SUBS:
+        (base / sub).mkdir(parents=True, exist_ok=True)
+    (base / "05_codeudor").mkdir(parents=True, exist_ok=True)
+    return base
+
+
+def subfolder_de_hito(hito):
+    """Subcarpeta al vincular un hito de la cola. '' = clasificar cada archivo."""
+    return HITO_A_SUBFOLDER.get((hito or "").strip().lower(), "99_otros")
+
+
+def necesita_ocr_rescate(filename, tipo_ia=""):
+    """True si el nombre no clasifica y el tipo IA no alcanza: hay que leer el PDF."""
+    fn = filename or ""
+    if fn.upper().startswith("CODEUDOR_") or subfolder_de_nombre(fn):
+        return False
+    cat = cat_de_texto(fn)
+    if cat and cat != "extras":
+        return False
+    if tipo_ia and TIPO_IA_A_CAT.get(tipo_ia, "extras") != "extras":
+        return False
+    return True
+
+
 def required_cats(client_type, exento_afp=False):
     """Requisitos estrictos por perfil. Mixto = ambos conjuntos. Desconocido = solo comunes."""
     import validacion_documental as vdoc
@@ -235,8 +307,9 @@ def cat_de_archivo(nombre, subfolder=""):
 
 
 def cat_de_texto(texto):
-    low = (texto or "").lower()
-    if re.search(r"infnomat|no[_ ]matrimonio|matrimonio|uni[oó]n civil", low):
+    """Clasifica por nombre o texto OCR. Normaliza _ y - a espacio (informe_CMF, CI_TITULAR)."""
+    low = re.sub(r"[\s_\-]+", " ", (texto or "").lower()).strip()
+    if re.search(r"infnomat|no matrimonio|matrimonio|uni[oó]n civil", low):
         return "extras"
     for cat, pat in CAT_KEYWORDS:
         if re.search(pat, low):
@@ -419,7 +492,7 @@ def merge_protocol(nombre, client_type="dependiente", include_extras=True, order
         if not a["nombre"].lower().endswith(".pdf"):
             continue
         cat = cat_de_archivo(a["nombre"], a["subfolder"])
-        if cat in ("combinado", "codeudor", "estudio_titulo"):
+        if cat in CATS_NO_COMBINADO:
             continue
         if cat not in order:
             if not include_extras:

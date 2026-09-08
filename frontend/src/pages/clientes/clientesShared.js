@@ -35,6 +35,10 @@ export const PROTOCOLO_GRUPOS = [
   { id: "05_contratos", label: "05 · Contratos" },
   { id: "06_licencias", label: "06 · Licencias" },
   { id: "08_rsh", label: "08 · Registro Social de Hogares" },
+  { id: "09_tasacion", label: "09 · Tasación" },
+  { id: "10_escritura", label: "10 · Escritura" },
+  { id: "11_resoluciones", label: "11 · Resoluciones Mesa" },
+  { id: "12_gop", label: "12 · Gastos operacionales" },
 ];
 
 export function grupoProtocolo(file) {
@@ -47,10 +51,11 @@ export function grupoProtocolo(file) {
   }
   if (sub && PROTOCOLO_GRUPOS.some((g) => g.id === sub)) return sub;
   if (sub === "99_otros" || /^99_/.test(nom)) return "sin_clasificar";
-  const m = /^(0[1-8])_/.exec(nom);
-  if (m) {
+  const m = /^(\d{2})_/.exec(nom);
+  if (m && m[1] !== "99") {
     const hit = PROTOCOLO_GRUPOS.find((g) => g.id.startsWith(`${m[1]}_`));
-    return hit ? hit.id : "sin_clasificar";
+    if (hit) return hit.id;
+    if (m[1] === "07") return "07_estudio_titulo";
   }
   return "sin_clasificar";
 }

@@ -72,7 +72,7 @@ def _archivos_base(nombre):
     for a in fsvc.scan_archivos(nombre or ""):
         sub = (a.get("subfolder") or "").split("/")[0]
         nom = a.get("nombre") or ""
-        if sub in ("99_otros", "05_codeudor") or sub.startswith("05_codeudor"):
+        if sub in fsvc.SUBS_NO_SET_CREDITO or sub.startswith("05_codeudor"):
             continue
         if nom.upper().startswith("CODEUDOR_") or nom.startswith("."):
             continue

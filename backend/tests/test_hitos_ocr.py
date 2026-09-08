@@ -79,8 +79,10 @@ class TestBackfill:
 
     def test_hito_de_archivo_protocolo(self):
         assert h.hito_de_rel("99_otros/TASACION_informe.pdf") == "tasacion"
+        assert h.hito_de_rel("09_tasacion/informe.pdf") == "tasacion"
         assert h.hito_de_rel("07_estudio_titulo/ESTUDIO_dominio.pdf") == "estudio_titulo"
         assert h.hito_de_rel("99_otros/escritura_borrador.pdf") == "escritura"
+        assert h.hito_de_rel("10_escritura/borrador.pdf") == "escritura"
         assert h.hito_de_rel("02_liquidaciones/liq_abril.pdf") == ""
 
     def test_patch_no_pisa_renta_ni_ocr_lleno(self):
